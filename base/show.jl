@@ -2392,8 +2392,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif isa(ft, DataType) && ft.name === Type.body.name &&
-        (f = ft.parameters[1]; !isa(f, TypeVar))
+    elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
@@ -2566,8 +2565,8 @@ module IRShow
     using Core.IR
     import ..Base
     import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument,
-        isexpr, compute_basic_blocks, block_for_inst,
-        TriState, Effects, ALWAYS_TRUE, ALWAYS_FALSE, TRISTATE_UNKNOWN
+        isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
+        Effects, ALWAYS_TRUE, ALWAYS_FALSE
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)

@@ -1419,7 +1419,6 @@ public:
     jl_code_info_t *source = NULL;
     jl_array_t *code = NULL;
     size_t world = 0;
-    jl_array_t *roots = NULL;
     const char *name = NULL;
     StringRef file{};
     ssize_t *line = NULL;
@@ -1463,7 +1462,6 @@ public:
     }
 
     ~jl_codectx_t() {
-        assert(this->roots == NULL);
         // Transfer local delayed calls to the global queue
         for (auto call_target : call_targets)
             emission_context.workqueue.push_back(call_target);
@@ -2119,6 +2117,9 @@ static void jl_init_function(Function *F)
     attr.addAttribute("probe-stack", "inline-asm");
     //attr.addAttribute("stack-probe-size", "4096"); // can use this to change the default
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_)
+    attr.addAttribute(Attribute::SanitizeAddress);
+#endif
 #if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);
 #else
@@ -2529,27 +2530,27 @@ static void simple_use_analysis(jl_codectx_t &ctx, jl_value_t *expr)
 
 // ---- Get Element Pointer (GEP) instructions within the GC frame ----
 
-static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
+static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val)
 {
-    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) || val == jl_nothing ||
-            val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
-        return;
-    JL_GC_PUSH1(&val);
-    if (ctx.roots == NULL) {
-        ctx.roots = jl_alloc_vec_any(1);
-        jl_array_ptr_set(ctx.roots, 0, val);
-    }
-    else {
-        size_t rlen = jl_array_dim0(ctx.roots);
-        for (size_t i = 0; i < rlen; i++) {
-            if (jl_array_ptr_ref(ctx.roots,i) == val) {
-                JL_GC_POP();
-                return;
+    if (jl_is_globally_rooted(val))
+        return val;
+    jl_method_t *m = ctx.linfo->def.method;
+    if (jl_is_method(m)) {
+        // the method might have a root for this already; use it if so
+        JL_LOCK(&m->writelock);
+        if (m->roots) {
+            size_t i, len = jl_array_dim0(m->roots);
+            for (i = 0; i < len; i++) {
+                jl_value_t *mval = jl_array_ptr_ref(m->roots, i);
+                if (mval == val || jl_egal(mval, val)) {
+                    JL_UNLOCK(&m->writelock);
+                    return mval;
+                }
             }
         }
-        jl_array_ptr_1d_push(ctx.roots, val);
+        JL_UNLOCK(&m->writelock);
     }
-    JL_GC_POP();
+    return jl_as_global_root(val);
 }
 
 // --- generating function calls ---
@@ -3637,7 +3638,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             // don't bother codegen constant-folding for toplevel.
             jl_value_t *ty = static_apply_type(ctx, argv, nargs + 1);
             if (ty != NULL) {
-                jl_add_method_root(ctx, ty);
+                ty = jl_ensure_rooted(ctx, ty);
                 *ret = mark_julia_const(ctx, ty);
                 return true;
             }
@@ -4839,13 +4840,18 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     jl_method_instance_t *mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
     jl_code_instance_t *ci = (jl_code_instance_t*)jl_rettype_inferred(mi, ctx.world, ctx.world);
 
-    if (ci == NULL || (jl_value_t*)ci == jl_nothing || ci->inferred == NULL || ci->inferred == jl_nothing) {
+    if (ci == NULL || (jl_value_t*)ci == jl_nothing) {
+        JL_GC_POP();
+        return std::make_pair((Function*)NULL, (Function*)NULL);
+    }
+    auto inferred = jl_atomic_load_relaxed(&ci->inferred);
+    if (!inferred || inferred == jl_nothing) {
         JL_GC_POP();
         return std::make_pair((Function*)NULL, (Function*)NULL);
     }
     ++EmittedOpaqueClosureFunctions;
 
-    ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)ci->inferred);
+    ir = jl_uncompress_ir(closure_method, ci, (jl_array_t*)inferred);
 
     // TODO: Emit this inline and outline it late using LLVM's coroutine support.
     orc::ThreadSafeModule closure_m = jl_create_llvm_module(
@@ -4926,35 +4932,12 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1), &skip);
     }
     if (!jl_is_expr(expr)) {
-        int needroot = true;
-        if (jl_is_quotenode(expr)) {
-            expr = jl_fieldref_noalloc(expr,0);
-        }
-        // numeric literals
-        if (jl_is_int32(expr)) {
-            int32_t val = jl_unbox_int32(expr);
-            if ((uint32_t)(val+512) < 1024) {
-                // this can be gotten from the box cache
-                needroot = false;
-                expr = jl_box_int32(val);
-            }
-        }
-        else if (jl_is_int64(expr)) {
-            uint64_t val = jl_unbox_uint64(expr);
-            if ((uint64_t)(val+512) < 1024) {
-                // this can be gotten from the box cache
-                needroot = false;
-                expr = jl_box_int64(val);
-            }
-        }
-        else if (jl_is_uint8(expr)) {
-            expr = jl_box_uint8(jl_unbox_uint8(expr));
-            needroot = false;
-        }
-        if (needroot && jl_is_method(ctx.linfo->def.method)) { // toplevel exprs and some integers are already rooted
-            jl_add_method_root(ctx, expr);
-        }
-        return mark_julia_const(ctx, expr);
+        jl_value_t *val = expr;
+        if (jl_is_quotenode(expr))
+            val = jl_fieldref_noalloc(expr, 0);
+        if (jl_is_method(ctx.linfo->def.method)) // toplevel exprs are already rooted
+            val = jl_ensure_rooted(ctx, val);
+        return mark_julia_const(ctx, val);
     }
 
     jl_expr_t *ex = (jl_expr_t*)expr;
@@ -6133,7 +6116,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
         return jl_cgval_t();
     }
     if (rt != declrt && rt != (jl_value_t*)jl_any_type)
-        jl_add_method_root(ctx, rt);
+        rt = jl_ensure_rooted(ctx, rt);
 
     function_sig_t sig("cfunction", lrt, rt, retboxed, argt, unionall_env, false, CallingConv::C, false, &ctx.emission_context);
     assert(sig.fargt.size() + sig.sret == sig.fargt_sig.size());
@@ -6206,7 +6189,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
             for (size_t i = 0; i < n; i++) {
                 jl_svecset(fill, i, jl_array_ptr_ref(closure_types, i));
             }
-            jl_add_method_root(ctx, (jl_value_t*)fill);
+            fill = (jl_svec_t*)jl_ensure_rooted(ctx, (jl_value_t*)fill);
         }
         Type *T_htable = ArrayType::get(getSizeTy(ctx.builder.getContext()), sizeof(htable_t) / sizeof(void*));
         Value *cache = new GlobalVariable(*jl_Module, T_htable, false,
@@ -6427,7 +6410,6 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
         }
     }
     ctx.builder.CreateRet(boxed(ctx, retval));
-    assert(!ctx.roots);
     return w;
 }
 
@@ -6632,7 +6614,7 @@ static jl_llvm_functions_t
     jl_llvm_functions_t declarations;
     jl_codectx_t ctx(*params.tsctx.getContext(), params);
     jl_datatype_t *vatyp = NULL;
-    JL_GC_PUSH3(&ctx.code, &ctx.roots, &vatyp);
+    JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;
 
     std::map<int, BasicBlock*> labels;
@@ -7055,7 +7037,7 @@ static jl_llvm_functions_t
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
+            Value *lv = new AllocaInst(vtype, M->getDataLayout().getAllocaAddrSpace(), NULL, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.topalloca);
             if (CountTrackedPointers(vtype).count) {
                 StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
                 SI->insertAfter(ctx.topalloca);
@@ -8108,33 +8090,6 @@ static jl_llvm_functions_t
         }
     }
 
-    // copy ctx.roots into m->roots
-    // if we created any new roots during codegen
-    if (ctx.roots) {
-        jl_method_t *m = lam->def.method;
-        JL_LOCK(&m->writelock);
-        if (m->roots == NULL) {
-            m->roots = ctx.roots;
-            jl_gc_wb(m, m->roots);
-        }
-        else {
-            size_t i, ilen = jl_array_dim0(ctx.roots);
-            size_t j, jlen = jl_array_dim0(m->roots);
-            for (i = 0; i < ilen; i++) {
-                jl_value_t *ival = jl_array_ptr_ref(ctx.roots, i);
-                for (j = 0; j < jlen; j++) {
-                    jl_value_t *jval = jl_array_ptr_ref(m->roots, j);
-                    if (ival == jval)
-                        break;
-                }
-                if (j == jlen) // not found - add to array
-                    jl_add_method_root(m, jl_precompile_toplevel_module, ival);
-            }
-        }
-        ctx.roots = NULL;
-        JL_UNLOCK(&m->writelock);
-    }
-
     // link the dependent llvmcall modules, but switch their function's linkage to internal
     // so that they don't conflict when they show up in the execution engine.
     for (auto &TSMod : ctx.llvmcall_modules) {
@@ -8223,7 +8178,7 @@ jl_llvm_functions_t jl_emit_codeinst(
     JL_TIMING(CODEGEN);
     JL_GC_PUSH1(&src);
     if (!src) {
-        src = (jl_code_info_t*)codeinst->inferred;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_t *def = codeinst->def->def.method;
         if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def))
             src = jl_uncompress_ir(def, codeinst, (jl_array_t*)src);
@@ -8254,36 +8209,38 @@ jl_llvm_functions_t jl_emit_codeinst(
                 jl_add_code_in_flight(f, codeinst, DL);
         }
 
-        if (// don't alter `inferred` when the code is not directly being used
-            params.world &&
+        if (params.world) {// don't alter `inferred` when the code is not directly being used
+            auto inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             // don't change inferred state
-            codeinst->inferred) {
-            jl_method_t *def = codeinst->def->def.method;
-            if (// keep code when keeping everything
-                !(JL_DELETE_NON_INLINEABLE) ||
-                // aggressively keep code when debugging level >= 2
-                jl_options.debug_level > 1) {
-                // update the stored code
-                if (codeinst->inferred != (jl_value_t*)src) {
-                    if (jl_is_method(def)) {
-                        src = (jl_code_info_t*)jl_compress_ir(def, src);
-                        assert(jl_typeis(src, jl_array_uint8_type));
-                        codeinst->relocatability = ((uint8_t*)jl_array_data(src))[jl_array_len(src)-1];
+            if (inferred) {
+                jl_method_t *def = codeinst->def->def.method;
+                if (// keep code when keeping everything
+                    !(JL_DELETE_NON_INLINEABLE) ||
+                    // aggressively keep code when debugging level >= 2
+                    jl_options.debug_level > 1) {
+                    // update the stored code
+                    if (inferred != (jl_value_t*)src) {
+                        if (jl_is_method(def)) {
+                            src = (jl_code_info_t*)jl_compress_ir(def, src);
+                            assert(jl_typeis(src, jl_array_uint8_type));
+                            codeinst->relocatability = ((uint8_t*)jl_array_data(src))[jl_array_len(src)-1];
+                        }
+                        jl_atomic_store_release(&codeinst->inferred, (jl_value_t*)src);
+                        jl_gc_wb(codeinst, src);
                     }
-                    codeinst->inferred = (jl_value_t*)src;
-                    jl_gc_wb(codeinst, src);
                 }
-            }
-            else if (// don't delete toplevel code
-                     jl_is_method(def) &&
-                     // and there is something to delete (test this before calling jl_ir_flag_inlineable)
-                     codeinst->inferred != jl_nothing &&
-                     // don't delete inlineable code, unless it is constant
-                     (codeinst->invoke == jl_fptr_const_return_addr || !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) &&
-                     // don't delete code when generating a precompile file
-                     !(params.imaging || jl_options.incremental)) {
-                // if not inlineable, code won't be needed again
-                codeinst->inferred = jl_nothing;
+                else if (jl_is_method(def)) {// don't delete toplevel code
+                    if (// and there is something to delete (test this before calling jl_ir_inlining_cost)
+                            inferred != jl_nothing &&
+                            // don't delete inlineable code, unless it is constant
+                            (codeinst->invoke == jl_fptr_const_return_addr ||
+                                (jl_ir_inlining_cost((jl_array_t*)inferred) == UINT16_MAX)) &&
+                            // don't delete code when generating a precompile file
+                            !(params.imaging || jl_options.incremental)) {
+                        // if not inlineable, code won't be needed again
+                        jl_atomic_store_release(&codeinst->inferred, jl_nothing);
+                    }
+                }
             }
         }
     }
@@ -8336,7 +8293,7 @@ void jl_compile_workqueue(
                 // Reinfer the function. The JIT came along and removed the inferred
                 // method body. See #34993
                 if (policy != CompilationPolicy::Default &&
-                    codeinst->inferred && codeinst->inferred == jl_nothing) {
+                    jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
                     src = jl_type_infer(codeinst->def, jl_atomic_load_acquire(&jl_world_counter), 0);
                     if (src) {
                         orc::ThreadSafeModule result_m =
@@ -8603,7 +8560,7 @@ extern "C" void jl_init_llvm(void)
     defined(JL_USE_OPROFILE_JITEVENTS) || \
     defined(JL_USE_PERF_JITEVENTS)
 #ifdef JL_USE_JITLINK
-#error "JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink"
+#pragma message("JIT profiling support (JL_USE_*_JITEVENTS) not yet available on platforms that use JITLink")
 #else
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
 
@@ -8625,6 +8582,7 @@ extern "C" void jl_init_llvm(void)
     }
 #endif
 
+#ifndef JL_USE_JITLINK
 #ifdef JL_USE_INTEL_JITEVENTS
     if (jl_using_intel_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createIntelJITEventListener());
@@ -8638,6 +8596,7 @@ extern "C" void jl_init_llvm(void)
 #ifdef JL_USE_PERF_JITEVENTS
     if (jl_using_perf_jitevents)
         jl_ExecutionEngine->RegisterJITEventListener(JITEventListener::createPerfJITEventListener());
+#endif
 #endif
 #endif
 #endif

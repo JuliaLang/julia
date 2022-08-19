@@ -2380,3 +2380,33 @@ Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
 @test Base.alignment(stdout, ⛵()) == (0, 2)
 @test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
 @test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
+
+# `show` implementations for `Method`
+let buf = IOBuffer()
+
+    # single line printing by default
+    show(buf, only(methods(sin, (Float64,))))
+    @test !occursin('\n', String(take!(buf)))
+
+    # two-line printing for rich display
+    show(buf, MIME("text/plain"), only(methods(sin, (Float64,))))
+    @test occursin('\n', String(take!(buf)))
+end
+
+@testset "basic `show_ir` functionality tests" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            let io = IOBuffer()
+                for i = 1:10
+                    # make sure we don't error on printing IRs at any optimization level
+                    ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
+                    @test try; show(io, ir); true; catch; false; end
+                    compact = Core.Compiler.IncrementalCompact(ir)
+                    @test try; show(io, compact); true; catch; false; end
+                end
+            end
+        end
+        close(io)
+        @test isempty(read(f, String)) # make sure we don't unnecessarily lean anything into `stdout`
+    end
+end

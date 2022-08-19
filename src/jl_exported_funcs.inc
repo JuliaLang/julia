@@ -275,7 +275,7 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
-    XX(jl_ir_flag_inlineable) \
+    XX(jl_ir_inlining_cost) \
     XX(jl_ir_flag_pure) \
     XX(jl_ir_nslots) \
     XX(jl_ir_slotflag) \
@@ -413,6 +413,7 @@
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
+    XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \

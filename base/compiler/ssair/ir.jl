@@ -499,10 +499,10 @@ end
 
 # This function is used from the show code, which may have a different
 # `push!`/`used` type since it's in Base.
-scan_ssa_use!(push!, used, @nospecialize(stmt)) = foreachssa(ssa -> push!(used, ssa.id), stmt)
+scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 # Manually specialized copy of the above with push! === Compiler.push!
-scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa -> push!(used, ssa.id), stmt)
+scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false)
     node = add!(ir.new_nodes, pos, attach_after)

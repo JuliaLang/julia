@@ -689,7 +689,7 @@ SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-fra
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
 endif
 ifeq ($(SANITIZE_ADDRESS),1)
-SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
 endif
 ifeq ($(SANITIZE_THREAD),1)

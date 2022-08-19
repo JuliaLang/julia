@@ -832,7 +832,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
                 et !== nothing && push!(et, mi)
                 return ConstantCase(quoted(code.rettype_const))
             else
-                src = code.inferred
+                src = @atomic :monotonic code.inferred
             end
             effects = decode_effects(code.ipo_purity_bits)
         else # fallback pass for external AbstractInterpreter cache

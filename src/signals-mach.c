@@ -167,6 +167,8 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
+#define MIG_DESTROY_REQUEST -309
+
 static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
                              void (*fptr)(void))
 {
@@ -332,9 +334,7 @@ kern_return_t catch_mach_exception_raise(
         return KERN_SUCCESS;
     }
     else {
-        thread0_exit_count++;
-        jl_exit_thread0(128 + SIGSEGV, NULL, 0);
-        return KERN_SUCCESS;
+        return MIG_DESTROY_REQUEST;
     }
 }
 
