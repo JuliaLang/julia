@@ -2469,7 +2469,7 @@ julia> issubseq("el", "Hello")
 true
 ```
 """
-function issubseq(B::AbstractArray, A::AbstractArray)::Bool
+function issubseq(B::AbstractArray, A::AbstractArray)
     BinA = findall(isequal(B[1]), A)
     for i in BinA
         if lastindex(A)-i+1 < length(B) continue end
