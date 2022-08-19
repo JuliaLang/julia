@@ -1003,7 +1003,7 @@ end
         isnan(y) && return y
         y = sign(y)*0x1.8p62
     end
-    yint = unsafe_trunc(Int, y) # This is actually safe since julia freezes the result
+    yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
     y == yint && return x^yint
     x<0 && throw_exp_domainerror(x)
     !isfinite(x) && return x*(y>0 || isnan(x))
