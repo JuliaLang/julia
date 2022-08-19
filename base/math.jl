@@ -1106,7 +1106,7 @@ end
         isnan(y) && return y
         y = sign(y)*0x1.8p62
     end
-    yint = unsafe_trunc(Int, y) # This is actually safe since julia freezes the result
+    yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
     y == yint && return @noinline x^yint
     2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x==0
     x<0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
