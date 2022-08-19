@@ -62,7 +62,7 @@ end
 
 struct InliningCase
     sig  # Type
-    item # Union{InliningTodo, MethodInstance, ConstantCase}
+    item # Union{InliningTodo, InvokeCase, ConstantCase}
     function InliningCase(@nospecialize(sig), @nospecialize(item))
         @assert isa(item, Union{InliningTodo, InvokeCase, ConstantCase}) "invalid inlining item"
         return new(sig, item)
@@ -693,7 +693,11 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
         for ((old_idx, idx), stmt) in compact
             if old_idx == inline_idx
                 stmt = stmt::Expr
-                argexprs = copy(stmt.args)
+                if stmt.head === :invoke
+                    argexprs = stmt.args[2:end]
+                else
+                    argexprs = copy(stmt.args)
+                end
                 refinish = false
                 if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
                     compact.active_result_bb -= 1
@@ -896,6 +900,35 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
 end
 
+function resolve_todo(mi::MethodInstance, argtypes::Vector{Any}, state::InliningState, flag::UInt8)
+    if !state.params.inlining || is_stmt_noinline(flag)
+        return nothing
+    end
+
+    et = state.et
+    code = get(state.mi_cache, mi, nothing)
+    if code isa CodeInstance
+        if use_const_api(code)
+            # in this case function can be inlined to a constant
+            et !== nothing && push!(et, mi)
+            return ConstantCase(quoted(code.rettype_const))
+        else
+            src = code.inferred
+        end
+        effects = decode_effects(code.ipo_purity_bits)
+    else # fallback pass for external AbstractInterpreter cache
+        effects = Effects()
+        src = code
+    end
+
+    src = inlining_policy(state.interp, src, flag, mi, argtypes)
+
+    src === nothing && return nothing
+
+    et !== nothing && push!(et, mi)
+    return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
+end
+
 function resolve_todo((; fully_covered, atype, cases, #=bbs=#)::UnionSplit, state::InliningState, flag::UInt8)
     ncases = length(cases)
     newcases = Vector{InliningCase}(undef, ncases)
@@ -1068,14 +1101,21 @@ end
 
 function call_sig(ir::IRCode, stmt::Expr)
     isempty(stmt.args) && return nothing
-    ft = argextype(stmt.args[1], ir)
+    if stmt.head === :call
+        offset = 1
+    elseif stmt.head === :invoke
+        offset = 2
+    else
+        return nothing
+    end
+    ft = argextype(stmt.args[offset], ir)
     has_free_typevars(ft) && return nothing
     f = singleton_type(ft)
     f === Core.Intrinsics.llvmcall && return nothing
     f === Core.Intrinsics.cglobal && return nothing
     argtypes = Vector{Any}(undef, length(stmt.args))
     argtypes[1] = ft
-    for i = 2:length(stmt.args)
+    for i = (offset+1):length(stmt.args)
         a = argextype(stmt.args[i], ir)
         (a === Bottom || isvarargtype(a)) && return nothing
         argtypes[i] = a
@@ -1244,6 +1284,10 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
             inline_splatnew!(ir, idx, stmt, rt)
         elseif head === :new_opaque_closure
             narrow_opaque_closure!(ir, stmt, ir.stmts[idx][:info], state)
+        elseif head === :invoke
+            sig = call_sig(ir, stmt)
+            sig === nothing && return nothing
+            return stmt, sig
         end
         check_effect_free!(ir, idx, stmt, rt)
         return nothing
@@ -1659,6 +1703,14 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             handle_const_call!(
                 ir, idx, stmt, info, flag,
                 sig, state, todo)
+            continue
+        end
+
+        if isa(stmt, Expr) && stmt.head === :invoke
+            case = resolve_todo(stmt.args[1], sig.argtypes, state, flag)
+            if case !== nothing
+                push!(todo, idx=>(case::InliningTodo))
+            end
             continue
         end
 
