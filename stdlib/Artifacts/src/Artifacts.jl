@@ -59,7 +59,7 @@ end
 """
     ARTIFACT_OVERRIDES
 
-Artifact locations can be overridden by writing `Override.toml` files within the artifact
+Artifact locations can be overridden by writing `Overrides.toml` files within the artifact
 directories of Pkg depots.  For example, in the default depot `~/.julia`, one may create
 a `~/.julia/artifacts/Overrides.toml` file with the following contents:
 
@@ -313,7 +313,7 @@ end
 """
     process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 
-When loading an `Artifacts.toml` file, we must check `Override.toml` files to see if any
+When loading an `Artifacts.toml` file, we must check `Overrides.toml` files to see if any
 of the artifacts within it have been overridden by UUID.  If they have, we honor the
 overrides by inspecting the hashes of the targeted artifacts, then overriding them to
 point to the given override, punting the actual redirection off to the hash-based
