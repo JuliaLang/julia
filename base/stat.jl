@@ -158,6 +158,13 @@ macro stat_call!(stat_buf, sym, arg1type, arg)
     end
 end
 
+"""
+    stat!(stat_buf::Vector{UInt8}, file)
+
+Like [`stat`](@ref), but avoids internal allocations by using a pre-allocated buffer,
+`stat_buf`.  For a small performance gain over `stat`, consecutive calls to `stat!` can use
+the same `stat_buf`.  See also [`Base.Filesystem.get_stat_buf`](@ref).
+"""
 stat!(stat_buf::Vector{UInt8}, fd::OS_HANDLE)         = @stat_call! stat_buf jl_fstat OS_HANDLE fd
 stat!(stat_buf::Vector{UInt8}, path::AbstractString)  = @stat_call! stat_buf jl_stat  Cstring path
 lstat!(stat_buf::Vector{UInt8}, path::AbstractString) = @stat_call! stat_buf jl_lstat Cstring path
@@ -169,6 +176,11 @@ stat!(stat_buf::Vector{UInt8}, fd::Integer)           = stat!(stat_buf, RawFD(fd
 stat(x) = stat!(get_stat_buf(), x)
 lstat(x) = lstat!(get_stat_buf(), x)
 
+"""
+    get_stat_buf()
+
+Return a buffer of bytes of the right size for [`stat!`](@ref).
+"""
 get_stat_buf() = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
 
 """
