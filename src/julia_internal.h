@@ -65,6 +65,24 @@ static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) {
 static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf) JL_NOTSAFEPOINT {}
 static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) JL_NOTSAFEPOINT {}
 #endif
+#ifdef _COMPILER_MSAN_ENABLED_
+void __msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFEPOINT;
+void __msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT;
+void __msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT;
+static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {
+    __msan_allocated_memory(a, size);
+}
+static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFEPOINT {
+    __msan_unpoison(a, size);
+}
+static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {
+    __msan_unpoison_string(a);
+}
+#else
+static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
+static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
+static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {}
+#endif
 #ifdef _COMPILER_TSAN_ENABLED_
 void *__tsan_create_fiber(unsigned flags);
 void *__tsan_get_current_fiber(void);

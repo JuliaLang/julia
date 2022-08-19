@@ -6,7 +6,7 @@
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_DISABLE_FPO
 #endif
 
@@ -2119,6 +2119,9 @@ static void jl_init_function(Function *F)
 #endif
 #if defined(_COMPILER_ASAN_ENABLED_)
     attr.addAttribute(Attribute::SanitizeAddress);
+#endif
+#if defined(_COMPILER_MSAN_ENABLED_)
+    attr.addAttribute(Attribute::SanitizeMemory);
 #endif
 #if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);
