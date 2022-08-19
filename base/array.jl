@@ -2413,7 +2413,7 @@ findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
 findall(p::Fix2{typeof(in)}, x::Number) = x in p.x ? [1] : Vector{Int}()
 
 """
-    findsubseq(A,B)
+    findsubseq(B,A)
 
 Return the indices of one or many existing subsequences B in A.
 A and B may be of type AbstractString or AbstractArray.
@@ -2423,33 +2423,33 @@ See also: [`issubseq`](@ref).
 
 # Examples
 ```jldoctest
-julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8], [7, 8])
+julia> findsubseq([7, 8], [7, 2, 7, 8, 5, 9, 7, 8])
 2-element Vector{Int64}:
  3
  7
 
-julia> findsubseq([7, 2, 7, 8, 5, 9, 7, 8], [4, 6])
+julia> findsubseq([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
 Int64[]
 
-julia> findsubseq("Hello","el")
+julia> findsubseq("el", "Hello")
 1-element Vector{Int64}:
  2
 ```
 
 """
-function findsubseq(A::AbstractArray, B::AbstractArray)
+function findsubseq(B::AbstractArray, A::AbstractArray)
     BinA = findall(isequal(B[1]), A)
     matchFirstIndex = eltype(eachindex(A))[]
     for i in BinA
-        if length(A[i:end]) < length(B) continue end
-        if A[i:i + length(B) - 1] == B push!(matchFirstIndex, i) end
+        if lastindex(A)-i+1 < length(B) continue end
+        if (@view A[i:i + length(B) - 1]) == B push!(matchFirstIndex, i) end
     end
     return matchFirstIndex
 end
-findsubseq(A::AbstractString, B::AbstractString) = findsubseq(collect(A),collect(B))
+findsubseq(B::AbstractString,A::AbstractString) = findsubseq(collect(B),collect(A))
 
 """
-    issubseq(A,B)
+    issubseq(B,A)
 
 Return true if one or many subsequences B exist in A.
 A and B may be of type AbstractString or AbstractArray.
@@ -2459,20 +2459,25 @@ See also: [`findsubseq`](@ref).
 
 # Examples
 ```jldoctest
-julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8], [7, 8])
+julia> issubseq([7, 8], [7, 2, 7, 8, 5, 9, 7, 8])
 true
 
-julia> issubseq([7, 2, 7, 8, 5, 9, 7, 8], [4, 6])
+julia> issubseq([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
 false
 
-julia> issubseq("Hello","el")
+julia> issubseq("el", "Hello")
 true
 ```
 """
-function issubseq(A::AbstractArray, B::AbstractArray)::Bool
-    length(findsubseq(A,B))≠0
+function issubseq(B::AbstractArray, A::AbstractArray)::Bool
+    BinA = findall(isequal(B[1]), A)
+    for i in BinA
+        if lastindex(A)-i+1 < length(B) continue end
+        if (@view A[i:i + length(B) - 1]) == B return true end
+    end
+    return false
 end
-issubseq(A::AbstractString, B::AbstractString) = issubseq(collect(A),collect(B))
+issubseq(B::AbstractString, A::AbstractString) = issubseq(collect(B),collect(A))
 
 # similar to Matlab's ismember
 """
