@@ -1098,14 +1098,17 @@ end
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive function ^(x::Float64, y::Float64)
-    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
-    y == yint && return x^yint
-    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
-    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
+    # Exponents greater than this will always overflow or underflow.
+    # Note that NaN can pass through this, but that will end up fine.
+    if abs(y)>0x1.8p62
+        y = sign(y)*0x1.8p62
+    end
+    yint = unsafe_trunc(Int, y) # This is actually safe since julia freezes the result
+    y == yint && return @noinline x^yint
     xu = reinterpret(UInt64, x)
-    x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
-    x === 1.0 && return 1.0
-    x==0 && return abs(y)*Inf*(!(y>0))
+    x<0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    xu == reinterpret(UInt64, 1.0) && return 1.0
+    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x==0
     !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
