@@ -144,14 +144,13 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 # stat & lstat functions
 
-macro stat_call(sym, arg1type, arg)
+macro stat_call!(stat_buf, sym, arg1type, arg)
     return quote
-        stat_buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
-        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
+        r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), $(esc(stat_buf)))
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
             uv_error(string("stat(", repr($(esc(arg))), ")"), r)
         end
-        st = StatStruct($(esc(arg)), stat_buf)
+        st = StatStruct($(esc(arg)), $(esc(stat_buf)))
         if ispath(st) != (r == 0)
             error("stat returned zero type for a valid path")
         end
@@ -159,13 +158,18 @@ macro stat_call(sym, arg1type, arg)
     end
 end
 
-stat(fd::OS_HANDLE)         = @stat_call jl_fstat OS_HANDLE fd
-stat(path::AbstractString)  = @stat_call jl_stat  Cstring path
-lstat(path::AbstractString) = @stat_call jl_lstat Cstring path
+stat!(stat_buf::Vector{UInt8}, fd::OS_HANDLE)         = @stat_call! stat_buf jl_fstat OS_HANDLE fd
+stat!(stat_buf::Vector{UInt8}, path::AbstractString)  = @stat_call! stat_buf jl_stat  Cstring path
+lstat!(stat_buf::Vector{UInt8}, path::AbstractString) = @stat_call! stat_buf jl_lstat Cstring path
 if RawFD !== OS_HANDLE
-    global stat(fd::RawFD)  = stat(Libc._get_osfhandle(fd))
+    global stat!(stat_buf::Vector{UInt8}, fd::RawFD)  = stat!(stat_buf, Libc._get_osfhandle(fd))
 end
-stat(fd::Integer)           = stat(RawFD(fd))
+stat!(stat_buf::Vector{UInt8}, fd::Integer)           = stat!(stat_buf, RawFD(fd))
+
+stat(x) = stat!(get_stat_buf(), x)
+lstat(x) = lstat!(get_stat_buf(), x)
+
+get_stat_buf() = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
 
 """
     stat(file)
