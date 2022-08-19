@@ -1138,7 +1138,7 @@ end
     end
     yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
     y == yint && return x^yint
-    x < 0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x < 0 && throw_exp_domainerror(x)
     !isfinite(x) && return x*(y>0 || isnan(x))
     x==0 && return abs(y)*T(Inf)*(!(y>0))
     return pow_body(x, y)
