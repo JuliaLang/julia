@@ -8,6 +8,7 @@
 #include "llvm-version.h"
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/Twine.h>
 #include <llvm/Support/raw_ostream.h>
 
 #include "julia.h"
@@ -44,26 +45,37 @@ static uint64_t *allocLine(std::vector<logdata_block*> &vec, int line)
 // Code coverage
 
 static logdata_t coverageData;
+// TODO fix this ugly buffer
+SmallVector<char, 1000> base_filename_buffer;
 
-JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line)
+JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line, bool is_user_code)
+{
+    if (is_user_code)
+        return allocLine(coverageData[filename], line);
+    else {
+        StringRef _filename = Twine("base/", filename).toStringRef(base_filename_buffer);
+        uint64_t *r = allocLine(coverageData[_filename], line);
+        base_filename_buffer.clear();
+        return r;
+    }
+}
+
+JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line, bool is_user_code)
 {
     assert(!codegen_imaging_mode());
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    allocLine(coverageData[filename], line);
+    jl_coverage_data_pointer(filename, line, is_user_code);
 }
 
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line)
-{
-    return allocLine(coverageData[filename], line);
-}
-
-extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_t len_filename, int line)
+extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_t len_filename, int line, bool is_user_code)
 {
     StringRef filename = StringRef(filename_, len_filename);
     if (codegen_imaging_mode() || filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    std::vector<logdata_block*> &vec = coverageData[filename];
+    StringRef _filename = is_user_code ? filename : Twine("base/", filename).toStringRef(base_filename_buffer);
+    std::vector<logdata_block*> &vec = coverageData[_filename];
+    base_filename_buffer.clear();
     uint64_t *ptr = allocLine(vec, line);
     (*ptr)++;
 }
@@ -72,9 +84,16 @@ extern "C" JL_DLLEXPORT void jl_coverage_visit_line(const char *filename_, size_
 
 static logdata_t mallocData;
 
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line)
+JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line, bool is_user_code)
 {
-    return allocLine(mallocData[filename], line);
+    if (is_user_code)
+        return allocLine(mallocData[filename], line);
+    else {
+        StringRef _filename = Twine("base/", filename).toStringRef(base_filename_buffer);
+        uint64_t *r = allocLine(mallocData[_filename], line);
+        base_filename_buffer.clear();
+        return r;
+    }
 }
 
 // Resets the malloc counts.

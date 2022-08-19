@@ -2191,9 +2191,9 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
 
 // Logging for code coverage and memory allocation
 
-JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line);
-JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line);
-JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line);
+JL_DLLEXPORT void jl_coverage_alloc_line(StringRef filename, int line, bool is_user_code);
+JL_DLLEXPORT uint64_t *jl_coverage_data_pointer(StringRef filename, int line, bool is_user_code);
+JL_DLLEXPORT uint64_t *jl_malloc_data_pointer(StringRef filename, int line, bool is_user_code);
 
 static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const char *name)
 {
@@ -2208,17 +2208,17 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 // Code coverage
 
-static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
+static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code)
 {
     assert(!ctx.emission_context.imaging);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
-    visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
+    visitLine(ctx, jl_coverage_data_pointer(filename, line, is_user_code), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
 }
 
 // Memory allocation log (malloc_log)
 
-static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
+static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, bool is_user_code, Value *sync)
 {
     assert(!ctx.emission_context.imaging);
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
@@ -2226,7 +2226,7 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
     Value *addend = sync
         ? ctx.builder.CreateCall(prepare_call(sync_gc_total_bytes_func), {sync})
         : ctx.builder.CreateCall(prepare_call(diff_gc_total_bytes_func), {});
-    visitLine(ctx, jl_malloc_data_pointer(filename, line), addend, "bytecnt");
+    visitLine(ctx, jl_malloc_data_pointer(filename, line, is_user_code), addend, "bytecnt");
 }
 
 // --- constant determination ---
@@ -7546,7 +7546,7 @@ static jl_llvm_functions_t
                 current_lineinfo[dbg] = newdbg;
                 const auto &info = linetable.at(newdbg);
                 if (do_coverage(info.is_user_code, info.is_tracked))
-                    coverageVisitLine(ctx, info.file, info.line);
+                    coverageVisitLine(ctx, info.file, info.line, info.is_user_code);
             }
         }
         new_lineinfo.clear();
@@ -7559,13 +7559,13 @@ static jl_llvm_functions_t
         }
         while (linetable.at(dbg).inlined_at)
             dbg = linetable.at(dbg).inlined_at;
-        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line, sync);
+        mallocVisitLine(ctx, ctx.file, linetable.at(dbg).line, linetable.at(dbg).is_user_code, sync);
     };
     if (coverage_mode != JL_LOG_NONE) {
         // record all lines that could be covered
         for (const auto &info : linetable)
             if (do_coverage(info.is_user_code, info.is_tracked))
-                jl_coverage_alloc_line(info.file, info.line);
+                jl_coverage_alloc_line(info.file, info.line, info.is_user_code);
     }
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
@@ -7628,7 +7628,7 @@ static jl_llvm_functions_t
                 current_lineinfo.push_back(1);
         }
         if (do_coverage(topinfo.is_user_code, topinfo.is_tracked))
-            coverageVisitLine(ctx, topinfo.file, topinfo.line);
+            coverageVisitLine(ctx, topinfo.file, topinfo.line, topinfo.is_user_code);
     }
 
     find_next_stmt(0);

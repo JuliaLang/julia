@@ -28,9 +28,9 @@
     jlbacktrace;
     jlbacktracet;
     _IO_stdin_used;
-    _Z24jl_coverage_data_pointerN4llvm9StringRefEi;
-    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi;
-    _Z22jl_malloc_data_pointerN4llvm9StringRefEi;
+    _Z24jl_coverage_data_pointerN4llvm9StringRefEi*;
+    _Z22jl_coverage_alloc_lineN4llvm9StringRefEi*;
+    _Z22jl_malloc_data_pointerN4llvm9StringRefEi*;
     LLVMExtra*;
     llvmGetPassPluginInfo;
 
