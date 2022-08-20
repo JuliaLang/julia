@@ -803,7 +803,7 @@ end
 
 function invoke_signature(invokesig::Vector{Any})
     ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
-    return rewrap_unionall(Tuple{typeof(f), unwrap_unionall(argtyps).parameters...}, argtyps)
+    return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
 end
 
 function concrete_eval_call(interp::AbstractInterpreter,

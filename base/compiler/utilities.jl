@@ -228,12 +228,10 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 #############
 
 """
-    BackedgeIterator(mi::MethodInstance)
     BackedgeIterator(backedges::Vector{Any})
 
-Return an iterator over a list of backedges, which may be extracted
-from `mi`. Iteration returns `(sig, caller)` elements, which will be one of
-the following:
+Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
+which will be one of the following:
 
 - `(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
 - `(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
@@ -254,7 +252,7 @@ julia> callyou(2.0)
 julia> mi = first(which(callme, (Any,)).specializations)
 MethodInstance for callme(::Float64)
 
-julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi)
+julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi.backedges)
            println(sig)
            println(caller)
        end

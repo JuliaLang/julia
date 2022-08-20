@@ -791,7 +791,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 // it will be the signature supplied in an `invoke` call.
 // If you don't need `invokesig`, you can set it to NULL on input.
 // Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
-int get_next_backedge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
 {
     jl_value_t *item = jl_array_ptr_ref(list, i);
     if (jl_is_method_instance(item)) {
@@ -811,7 +811,7 @@ int get_next_backedge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method
     return i + 2;
 }
 
-int set_next_backedge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
 {
     if (invokesig)
         jl_array_ptr_set(list, i++, invokesig);
@@ -819,7 +819,7 @@ int set_next_backedge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_
     return i;
 }
 
-void push_backedge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
 {
     if (invokesig)
         jl_array_ptr_1d_push(list, invokesig);

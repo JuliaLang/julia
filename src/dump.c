@@ -340,7 +340,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
     size_t i = 0, n = jl_array_len(mi->backedges);
     jl_method_instance_t *be;
     while (i < n) {
-        i = get_next_backedge(mi->backedges, i, NULL, &be);
+        i = get_next_edge(mi->backedges, i, NULL, &be);
         if (has_backedge_to_worklist(be, visited)) {
             bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
             *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
@@ -954,7 +954,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             jl_value_t *invokeTypes;
             jl_method_instance_t *backedge;
             while (i < l) {
-                i = get_next_backedge(backedges, i, &invokeTypes, &backedge);
+                i = get_next_edge(backedges, i, &invokeTypes, &backedge);
                 if (module_in_worklist(backedge->def.method->module) || method_instance_in_queue(backedge)) {
                     if (invokeTypes)
                         b_edges[ins++] = invokeTypes;
@@ -1176,7 +1176,7 @@ static void jl_collect_missing_backedges_to_mod(jl_methtable_t *mt)
                 *edges = jl_alloc_vec_any(0);
             // To stay synchronized with the format from MethodInstances (specifically for `invoke`d calls),
             // we have to push a pair of values. But in this case the callee is unknown, so we leave it NULL.
-            push_backedge(*edges, missing_callee, NULL);
+            push_edge(*edges, missing_callee, NULL);
         }
     }
 }
@@ -1190,11 +1190,11 @@ static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
         jl_value_t *invokeTypes;
         jl_method_instance_t *caller;
         while (i < l) {
-            i = get_next_backedge(backedges, i, &invokeTypes, &caller);
+            i = get_next_edge(backedges, i, &invokeTypes, &caller);
             jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, caller);
             if (*edges == HT_NOTFOUND)
                 *edges = jl_alloc_vec_any(0);
-            push_backedge(*edges, invokeTypes, callee);
+            push_edge(*edges, invokeTypes, callee);
         }
     }
 }
@@ -1301,7 +1301,7 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_
         jl_method_instance_t *c;
         jl_value_t *invokeTypes;
         while (i < l) {
-            i = get_next_backedge(callees, i, &invokeTypes, &c);
+            i = get_next_edge(callees, i, &invokeTypes, &c);
             register_backedge(all_callees, invokeTypes, (jl_value_t*)c);
             if (c && jl_is_method_instance(c)) {
                 jl_collect_backedges_to((jl_method_instance_t*)c, all_callees);
@@ -1334,7 +1334,7 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
         if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller)) {
             size_t i = 0, l = jl_array_len(callees);
             while (i < l) {
-                i = get_next_backedge(callees, i, &invokeTypes, &c);
+                i = get_next_edge(callees, i, &invokeTypes, &c);
                 register_backedge(&all_callees, invokeTypes, (jl_value_t*)c);
                 if (jl_is_method_instance(c)) {
                     jl_collect_backedges_to((jl_method_instance_t*)c, &all_callees);
@@ -2347,7 +2347,7 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                         size_t jins = 0, j0, j = 0, nbe = jl_array_len(mi->backedges);
                         while (j < nbe) {
                             j0 = j;
-                            j = get_next_backedge(mi->backedges, j, &invokeTypes, &caller);
+                            j = get_next_edge(mi->backedges, j, &invokeTypes, &caller);
                             if (invokeTypes) {
                                 struct jl_typemap_assoc search = {invokeTypes, world, NULL, 0, ~(size_t)0};
                                 entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
@@ -2418,11 +2418,11 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                     milive->backedges = jl_alloc_vec_any(n);
                     jl_gc_wb(milive, milive->backedges);
                     while (j < n) {
-                        j = get_next_backedge(mi->backedges, j, &invokeTypes, &be);
+                        j = get_next_edge(mi->backedges, j, &invokeTypes, &be);
                         belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
                         if (belive == HT_NOTFOUND)
                             belive = be;
-                        jlive = set_next_backedge(milive->backedges, jlive, invokeTypes, belive);
+                        jlive = set_next_edge(milive->backedges, jlive, invokeTypes, belive);
                     }
                 } else {
                     // Copy the missing backedges (this is an O(N^2) algorithm, but many methods have few MethodInstances)
@@ -2430,21 +2430,21 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                     jl_value_t *invokeTypes2;
                     jl_method_instance_t *belive2;
                     while (j < n) {
-                        j = get_next_backedge(mi->backedges, j, &invokeTypes, &be);
+                        j = get_next_edge(mi->backedges, j, &invokeTypes, &be);
                         belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
                         if (belive == HT_NOTFOUND)
                             belive = be;
                         int found = 0;
                         k = 0;
                         while (k < nlive) {
-                            k = get_next_backedge(milive->backedges, k, &invokeTypes2, &belive2);
-                            if (belive == belive2 && invokeTypes == invokeTypes2) {
+                            k = get_next_edge(milive->backedges, k, &invokeTypes2, &belive2);
+                            if (belive == belive2 && jl_egal(invokeTypes, invokeTypes2)) {
                                 found = 1;
                                 break;
                             }
                         }
                         if (!found)
-                            push_backedge(milive->backedges, invokeTypes, belive);
+                            push_edge(milive->backedges, invokeTypes, belive);
                     }
                 }
             }

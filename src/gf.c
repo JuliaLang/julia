@@ -1458,7 +1458,7 @@ static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method
         size_t i = 0, l = jl_array_len(backedges);
         jl_method_instance_t *replaced;
         while (i < l) {
-            i = get_next_backedge(backedges, i, NULL, &replaced);
+            i = get_next_edge(backedges, i, NULL, &replaced);
             invalidate_method_instance(f, replaced, max_world, depth + 1);
         }
         JL_GC_POP();
@@ -1474,12 +1474,14 @@ void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *
     if (backedges) {
         // invalidate callers (if any)
         replaced_mi->backedges = NULL;
+        JL_GC_PUSH1(&backedges);
         size_t i = 0, l = jl_array_len(backedges);
         jl_method_instance_t *replaced;
         while (i < l) {
-            i = get_next_backedge(backedges, i, NULL, &replaced);
+            i = get_next_edge(backedges, i, NULL, &replaced);
             invalidate_method_instance(f, replaced, max_world, 1);
         }
+        JL_GC_POP();
     }
     JL_UNLOCK(&replaced_mi->def.method->writelock);
     if (why && _jl_debug_method_invalidation) {
@@ -1501,7 +1503,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
         // lazy-init the backedges array
         callee->backedges = jl_alloc_vec_any(0);
         jl_gc_wb(callee, callee->backedges);
-        push_backedge(callee->backedges, invokesig, caller);
+        push_edge(callee->backedges, invokesig, caller);
     }
     else {
         size_t i = 0, l = jl_array_len(callee->backedges);
@@ -1509,7 +1511,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
         jl_value_t *invokeTypes;
         jl_method_instance_t *mi;
         while (i < l) {
-            i = get_next_backedge(callee->backedges, i, &invokeTypes, &mi);
+            i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
             // TODO: it would be better to canonicalize (how?) the Tuple-type so
             // that we don't have to call `jl_egal`
             if (mi == caller && ((invokesig == NULL && invokeTypes == NULL) ||
@@ -1519,7 +1521,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
             }
         }
         if (!found) {
-            push_backedge(callee->backedges, invokesig, caller);
+            push_edge(callee->backedges, invokesig, caller);
         }
     }
     JL_UNLOCK(&callee->def.method->writelock);
