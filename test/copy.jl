@@ -262,6 +262,9 @@ end
     @test typeof(a) === typeof(b)
     @test a != b
     @test a !== b
+    @test typeof(a.lock) === typeof(b.lock)
+    @test a.lock != b.lock
+    @test a.lock !== b.lock
     @test islocked(a.lock)
     @test !islocked(b.lock)
 end
