@@ -3082,7 +3082,7 @@ concatenated along the remaining dimensions.
 For example, if `dims = [1,2]` and `A` is 4-dimensional, then `f` is called on `x = A[:,:,i,j]`
 for all `i` and `j`, and `f(x)` becomes `R[:,:,i,j]` in the result `R`.
 
-See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapreduce`](@ref).
+See also [`eachcol`](@ref) or [`eachslice`](@ref), used with [`map`](@ref) or [`stack`](@ref).
 
 # Examples
 ```jldoctest
@@ -3102,7 +3102,7 @@ julia> A = reshape(1:30,(2,5,3))
 
 julia> f(x::Matrix) = fill(x[1,1], 1,4);  # returns a 1×4 matrix
 
-julia> mapslices(f, A, dims=(1,2))
+julia> B = mapslices(f, A, dims=(1,2))
 1×4×3 Array{$Int, 3}:
 [:, :, 1] =
  1  1  1  1
@@ -3112,6 +3112,11 @@ julia> mapslices(f, A, dims=(1,2))
 
 [:, :, 3] =
  21  21  21  21
+
+julia> f(x::AbstractMatrix) = fill(x[1,1], 1,4);
+
+julia> B == stack(f, eachslice(A, dims=3))
+true
 
 julia> g(x) = x[begin] // x[end-1];  # returns a number
 
