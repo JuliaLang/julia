@@ -1845,7 +1845,7 @@ julia> vcat(range(1, 2, length=3))  # collects lazy ranges
  1.5
  2.0
 
-julia> vcat(3, [], [4.5;;])  # empty vector Any[] affects the eltype 
+julia> vcat(3, [], [4.5;;])  # empty vector Any[] affects the eltype
 2×1 Matrix{Any}:
  3
  4.5
@@ -1869,9 +1869,9 @@ julia> reduce(vcat, vs)  # more efficient than vcat(vs...)
  4
  5
  6
- 
+
 julia> ans == collect(Iterators.flatten(vs))
-true 
+true
 ```
 """
 vcat(X...) = cat(X...; dims=Val(1))
@@ -1938,14 +1938,14 @@ typed_hcat(::Type{T}, X...) where T = _cat_t(Val(2), T, X...)
 Concatenate the input arrays along the dimensions specified in `dims`.
 
 Along a dimension `d in dims`, the size of the output array is `sum(size(a,d) for
-a in A)`. 
+a in A)`.
 Along other dimensions, all input arrays should have the same size,
 which will also be the size of the output array along those dimensions.
 
-If `dims` is a single number, the different arrays are tightly packed along that dimension. 
+If `dims` is a single number, the different arrays are tightly packed along that dimension.
 If `dims` is an iterable containing several dimensions, the positions along these dimensions
 are increased simultaneously for each input array, filling with zero elsewhere.
-This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(1,2))`, 
+This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(1,2))`,
 and their higher-dimensional analogues.
 
 The keyword also accepts `Val(dims)`.

@@ -382,7 +382,7 @@ The associativity of the reduction is implementation-dependent; if you need a pa
 associativity, e.g. left-to-right, you should write your own loop or consider using
 [`foldl`](@ref) or [`foldr`](@ref). See documentation for [`reduce`](@ref).
 
-There are special efficient methods for `reduce(`[`vcat`](@ref)`, xs)` and 
+There are special efficient methods for `reduce(`[`vcat`](@ref)`, xs)` and
 `reduce(`[`hcat`](@ref)`, xs)` for certain arrays of arrays; see also [`stack`](@ref).
 
 # Examples
