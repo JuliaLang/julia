@@ -68,6 +68,9 @@ New library functions
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)`. ([#45607])
+* New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
+  and allows any iterators of iterators. Method `stack(f, x)` generalises `mapreduce(f, hcat, x)` and
+  is efficient. ([#43334])
 
 Library changes
 ---------------
