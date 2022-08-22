@@ -115,7 +115,7 @@ static inline uintptr_t RoundUpTo(uintptr_t size, uintptr_t boundary) {
 static inline uintptr_t RoundDownTo(uintptr_t x, uintptr_t boundary) {
   return x & ~(boundary - 1);
 }
-void ForEachMappedRegion(struct link_map *map, void (*cb)(const void *, uintptr_t)) {
+void ForEachMappedRegion(struct link_map *map, void (*cb)(const volatile void *, uintptr_t)) {
 #if !defined(_OS_FREEBSD_)
   typedef ElfW(Phdr) Elf_Phdr;
   typedef ElfW(Ehdr) Elf_Ehdr;
@@ -207,7 +207,7 @@ JL_DLLEXPORT JL_NO_SANITIZE void *jl_dlopen(const char *filename, unsigned flags
 #endif
                   );
 #if defined(_COMPILER_MSAN_ENABLED_) && defined(__GLIBC__)
-    link_map *map = (link_map*)handle;
+    struct link_map *map = (struct link_map*)hnd;
     if (filename && map)
       ForEachMappedRegion(map, __msan_unpoison);
 #endif

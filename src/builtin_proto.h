@@ -72,9 +72,6 @@ JL_CALLABLE(jl_f__setsuper);
 JL_CALLABLE(jl_f__equiv_typedef);
 JL_CALLABLE(jl_f_get_binding_type);
 JL_CALLABLE(jl_f_set_binding_type);
-JL_CALLABLE(jl_f_donotdelete);
-JL_CALLABLE(jl_f_setglobal);
-JL_CALLABLE(jl_f_finalizer);
 
 #ifdef __cplusplus
 }
