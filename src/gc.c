@@ -2576,7 +2576,7 @@ STATIC_INLINE void gc_mark_loop_master(jl_ptls_t ptls)
 {
     jl_atomic_fetch_add(&nworkers_marking, 1);
     uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
-    gc_wake_workers(ptls);
+    // gc_wake_workers(ptls);
     gc_mark_loop_(ptls, &ptls->mark_queue);
     gc_drain_own_chunkqueue(ptls, &ptls->mark_queue);
     gc_drain_all_queues(ptls, &ptls->mark_queue);
@@ -2834,10 +2834,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
                             (collection));
     }
     gc_mark_loop_master(ptls);
-    // Other workers may still be marking, so put
-    // this barrier to ensure we don't sweep prematurely
-    // jl_spinmaster_wait_pmark();
-    // main mark-loop is over
 
     // 4. check for objects to finalize
     clear_weak_refs();

@@ -151,7 +151,7 @@ int jl_spinmaster_all_workers_done(jl_ptls_t ptls)
 int64_t jl_spinmaster_count_work(jl_ptls_t ptls)
 {
     int64_t work = 0;
-    for (int i = 0; i < jl_n_threads; i++) {
+    for (int i = jl_n_threads; i < jl_n_threads + NUM_GC_THREADS; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         jl_gc_markqueue_t *mq2 = &ptls2->mark_queue;
         ws_queue_t *q2 = &mq2->q;
@@ -166,7 +166,7 @@ int64_t jl_spinmaster_count_work(jl_ptls_t ptls)
 
 void jl_spinmaster_notify_all(jl_ptls_t ptls)
 {
-    for (int i = 0; i < jl_n_threads; i++) {
+    for (int i = jl_n_threads; i < jl_n_threads + NUM_GC_THREADS; i++) {
         if (i == ptls->tid)
             continue;
         uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
@@ -175,7 +175,7 @@ void jl_spinmaster_notify_all(jl_ptls_t ptls)
 
 void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers)
 {
-    for (int i = 0; i < jl_n_threads && nworkers > 0; i++) {
+    for (int i = jl_n_threads; i < jl_n_threads + NUM_GC_THREADS && nworkers > 0; i++) {
         if (i == ptls->tid)
             continue;
         jl_ptls_t ptls2 = jl_all_tls_states[i];
@@ -245,17 +245,16 @@ void jl_gc_threadfun(void *arg)
 
     // initialize this thread (set tid, create heap, set up root task)
     jl_ptls_t ptls = jl_init_threadtls(targ->tid);
-    
-    // wait for all threads
+
     uv_barrier_wait(targ->barrier);
 
     // free the thread argument here
     free(targ);
 
-    while (1) {
-        // jl_spinmaster_wait_pmark();
-        jl_spinmaster_wait_sweeping();
-    }
+    // while (1) {
+    //     jl_spinmaster_wait_pmark();
+    //     jl_spinmaster_wait_sweeping();
+    // }
 }
 
 int jl_running_under_rr(int recheck)

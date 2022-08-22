@@ -28,6 +28,8 @@ void jl_init_threadinginfra(void);
 void jl_threadfun(void *arg);
 void jl_gc_threadfun(void *arg);
 
+#define NUM_GC_THREADS                  2
+
 #ifdef __cplusplus
 }
 #endif

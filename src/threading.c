@@ -522,7 +522,7 @@ void jl_init_threading(void)
     jl_n_threads_per_pool[1] = nthreadsi;
 
 #ifndef __clang_gcanalyzer__
-    jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads, sizeof(void*));
+    jl_all_tls_states = (jl_ptls_t*)calloc(jl_n_threads + NUM_GC_THREADS, sizeof(void*));
 #endif
 }
 
@@ -561,8 +561,7 @@ void jl_start_threads(void)
 
     // The analyzer doesn't know jl_n_threads doesn't change, help it
     size_t n_threads = jl_n_threads;
-    size_t n_gc_threads = 2;
-    size_t tot_n_threads = n_threads + n_gc_threads;
+    size_t tot_n_threads = n_threads + NUM_GC_THREADS;
 
     // create threads
     uv_barrier_init(&thread_init_done, tot_n_threads);

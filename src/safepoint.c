@@ -94,6 +94,7 @@ void jl_safepoint_init(void)
 {
     uv_mutex_init(&safepoint_lock);
     uv_cond_init(&safepoint_cond);
+    // init vars used by gc threads
     jl_mutex_init(&spinmaster_lock);
     uv_mutex_init(&sweep_lock);
     uv_cond_init(&sweep_cond);

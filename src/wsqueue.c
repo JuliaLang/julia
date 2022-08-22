@@ -10,8 +10,8 @@ extern "C" {
 
 ws_array_t *create_ws_array(size_t capacity, size_t eltsz)
 {
-    ws_array_t *a = (ws_array_t *)malloc(sizeof(ws_array_t));
-    a->buffer = (void **)malloc(capacity * eltsz);
+    ws_array_t *a = (ws_array_t *)malloc_s(sizeof(ws_array_t));
+    a->buffer = (void **)malloc_s(capacity * eltsz);
     a->capacity = capacity;
     return a;
 }
