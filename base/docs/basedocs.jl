@@ -3061,7 +3061,7 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
-    donotdelete(args...)
+    Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
@@ -3078,9 +3078,10 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
-**Note**: `donotdelete` does not affect constant folding. For example, in
-          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
-          the code is semantically equivalent to `donotdelete(2).`
+!!! note
+    `donotdelete` does not affect constant folding. For example, in
+    `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+    the code is semantically equivalent to `donotdelete(2).`
 
 # Examples
 
@@ -3096,6 +3097,62 @@ end
 ```
 """
 Base.donotdelete
+
+"""
+    Base.compilerbarrier(setting::Symbol, val)
+
+This function puts a barrier at a specified compilation phase.
+It is supposed to influence the compilation behaviour only according to `setting`,
+and its runtime semantics is just to return the second argument `val` (except
+this function will perform additional checks on `setting` in a case when `setting`
+isn't known precisely at compile-time.)
+
+Currently either of the following `setting`s is allowed:
+- Barriers on abstract interpretation:
+  * `:type`: the return type of this function call will be inferred as `Any` always
+    (the strongest barrier on abstract interpretation)
+  * `:const`: the return type of this function call will be inferred with widening
+    constant information on `val`
+  * `:conditional`: the return type of this function call will be inferred with widening
+    conditional information on `val` (see the example below)
+- Any barriers on optimization aren't implemented yet
+
+!!! note
+    Generally this function is supposed to be used _with `setting` known precisely at compile-time_.
+    Note that in a case the `setting` isn't known precisely at compile-time, the compiler
+    currently will put the most strongest barrier(s) rather than emitting a compile-time check.
+
+# Examples
+
+```julia
+julia> Base.return_types((Int,)) do a
+           x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+           return x
+       end |> only
+Any
+
+julia> Base.return_types() do
+           x = compilerbarrier(:const, 42)
+           if x == 42 # no constant information here, so inference also accounts for the else branch
+               return x # but `x` is still inferred as `x::Int` at least here
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+
+julia> Base.return_types((Union{Int,Nothing},)) do a
+           if compilerbarrier(:conditional, isa(a, Int))
+               # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+               return a
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+```
+"""
+Base.compilerbarrier
 
 """
     Core.finalizer(f, o)
