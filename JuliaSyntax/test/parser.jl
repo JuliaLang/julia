@@ -602,6 +602,7 @@ tests = [
         "[x,]"      =>  "(vect x)"
         "[x]"       =>  "(vect x)"
         "[x \n ]"   =>  "(vect x)"
+        "[x \n, ]"  =>  "(vect x)"
         "[x"        =>  "(vect x (error-t))"
         "[x \n\n ]" =>  "(vect x)"
         "[x for a in as]"  =>  "(comprehension (generator x (= a as)))"
@@ -616,6 +617,8 @@ tests = [
         # parse_vect
         "[x, y]"        =>  "(vect x y)"
         "[x, y]"        =>  "(vect x y)"
+        "[x,\n y]"      =>  "(vect x y)"
+        "[x\n, y]"      =>  "(vect x y)"
         "[x,y ; z]"     =>  "(vect x y (parameters z))"
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
@@ -830,4 +833,3 @@ end
     @test test_parse(JuliaSyntax.parse_eq, "a \u2212= b") == "(-= a b)"
     @test test_parse(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
 end
-

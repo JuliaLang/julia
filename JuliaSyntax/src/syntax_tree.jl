@@ -256,4 +256,3 @@ function highlight(code::String, node, path::Int...; color=(40,40,70))
     _printstyled(stdout, code[p:q-1]; bgcolor=color)
     print(stdout, code[q:end])
 end
-
