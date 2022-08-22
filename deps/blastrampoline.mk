@@ -11,7 +11,7 @@ $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPO
 	echo 1 > $@
 
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
-	cd $(dir $@)/src && $(MAKE) $(MAKE_COMMON)
+	cd $(dir $@)/src && $(MAKE) $(MAKE_COMMON) CC="$(CC) $(SANITIZE_OPTS)"
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
