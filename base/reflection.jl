@@ -411,7 +411,7 @@ function aligned_sizeof(@nospecialize T::Type)
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
         return LLT_ALIGN(sz, al)
-    elseif allocatedinline(T)
+    elseif isa(T, DataType) && allocatedinline(T)
         al = datatype_alignment(T)
         return LLT_ALIGN(Core.sizeof(T), al)
     else

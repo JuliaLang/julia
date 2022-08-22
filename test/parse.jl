@@ -308,6 +308,8 @@ end
     @test eltype([tryparse(Int, s, base=16) for s in String[]]) == Union{Nothing, Int}
     @test eltype([tryparse(Float64, s) for s in String[]]) == Union{Nothing, Float64}
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
+    # JET.@test_opt parse(UInt8, "12")
+    # JET.@test_opt parse(BigInt, "12")
 end
 
 @testset "issue #29980" begin
