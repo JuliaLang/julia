@@ -782,6 +782,10 @@ broken_tests = [
     ]
 ]
 
+@testset "Invalid syntax" begin
+    @test !isempty(JuliaSyntax.parse(JuliaSyntax.GreenNode, """[ [],,[] ]""")[2])
+end
+
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
         @testset "$(repr(input))" for (input,output) in test_specs

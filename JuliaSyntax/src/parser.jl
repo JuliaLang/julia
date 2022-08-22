@@ -2798,7 +2798,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     if k == K"," || (is_closing_token(ps, k) && k != K";")
         if k == K","
             # [x,]  ==>  (vect x)
-            bump(ps, TRIVIA_FLAG)
+            bump(ps, TRIVIA_FLAG; skip_newlines = true)
         end
         # [x]      ==>  (vect x)
         # [x \n ]  ==>  (vect x)
@@ -2957,9 +2957,6 @@ function parse_brackets(after_parse::Function,
             num_semis += 1
             bump(ps, TRIVIA_FLAG)
             bump_trivia(ps)
-        elseif k == K","
-            had_commas = true
-            bump(ps, TRIVIA_FLAG)
         elseif is_closing_token(ps, k)
             # Error; handled below in bump_closing_token
             break
