@@ -19,16 +19,13 @@ If the string does not contain a valid number, an error is raised.
 
 !!! warning
 
-    parsing a string of floating-points numbers (written with the numeric literals Julia provides)
-    works for all floating-point types except for the Float32 `f` numeric literal. This is because
-    the `f` syntax is Julia specific. When this is desired still, then use the `$` operator to
-    interpolate the string.
+    `str` can be a string of any numeric literals Julia supports EXCEPT the `f` literal used
+    to construct Float32 types. This is because the `f` syntax is Julia specific, so using this
+    throws an `ArgumentError`. When not sure of the literal being used, then interpolate the
+    string with the `$` operator.
     ```jldoctest    
     julia> parse(Float16, "0x1p2")
     Float16(4.0)
-
-    julia> parse(Float64, "1.23e-4")
-    0.000123
 
     julia> parse(Float32, "24.9f-3")
     ERROR: ArgumentError: cannot parse "24.9f-3" as Float32
