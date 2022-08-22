@@ -21,6 +21,11 @@ end
 
     is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
 
+    function julia_libdir()
+        libname = is_debug() ? "libjulia-debug" : "libjulia"
+        return dirname(abspath(Libdl.dlpath(libname)))
+    end
+
     function get_llvm_cmd(exe) # Not all binaries are exported from LLVM_full_jll
         a = LLVM_full_jll.clang()
         name_replace(path) = joinpath(dirname(path), replace(basename(path), "clang" => exe))
@@ -63,10 +68,9 @@ end
                     incremental=true)
             # Use the newly compiled sysimage
             sysimage_path = tempname() * ".$(Libdl.dlext)"
-            LIBDIR = joinpath(Sys.BINDIR, "..", "lib")
             LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
             OBJECT = `--whole-archive $object_file --no-whole-archive`
-            run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(LIBDIR) $LIBS`)
+            run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(julia_libdir()) $LIBS`)
         end
         dir = mktempdir()
         dir = mkpath("chained")
