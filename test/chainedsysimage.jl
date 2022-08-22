@@ -5,16 +5,22 @@ using Test, Libdl
 try
     # TODO - This is not perfect because the test depends on an external package
     using LLVM_full_jll
+    using LLD_jll
     using PackageCompiler
 catch
     using Pkg
     Pkg.add("LLVM_full_jll")
     using LLVM_full_jll
+    Pkg.add("LLD_jll")
+    using LLD_jll
     Pkg.add("PackageCompiler")
     using PackageCompiler
 end
 
 @testset "empty chained sysimage" begin
+
+    is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
+
     function get_llvm_cmd(exe) # Not all binaries are exported from LLVM_full_jll
         a = LLVM_full_jll.clang()
         name_replace(path) = joinpath(dirname(path), replace(basename(path), "clang" => exe))
@@ -23,13 +29,13 @@ end
 
     ar = get_llvm_cmd("llvm-ar")
     objcopy = get_llvm_cmd("llvm-objcopy")
-    clang = LLVM_full_jll.clang()
+    ld = LLD_jll.lld()
 
     binariesavailable = false
     try
         @assert success(`$ar --version`)
         @assert success(`$objcopy --version`)
-        @assert success(`$clang --version`)
+        @assert success(`$ld -flavor gnu --version`)
         binariesavailable = true
     catch
     end
@@ -39,11 +45,13 @@ end
     else
         sysimage_path = Base.unsafe_string(Base.JLOptions().image_file)
         object_file = replace(sysimage_path, ".$(Libdl.dlext)" => "-o.a")
-        if !isfile(object_file)
+        # Speed up local testing (reuse the original sysimage)
+        # TODO - remove this before merging
+        if true || !isfile(object_file)
             # Compile julia sysimage because `sys-o.a` file is not distributed
-            object_file = tempname() * ".o"
+            object_file = joinpath(tempdir(), "chainedsysimage-test-sys.o")
             # Use the default values from PackageCompiler for incremental sysimage build (without re-using native code
-            PackageCompiler.create_sysimg_object_file(object_file, String[], Set{Base.PkgId}();
+            isfile(object_file) || PackageCompiler.create_sysimg_object_file(object_file, String[], Set{Base.PkgId}();
                     project=dirname(Base.active_project()),
                     base_sysimage=sysimage_path,
                     precompile_execution_file=String[],
@@ -55,18 +63,10 @@ end
                     incremental=true)
             # Use the newly compiled sysimage
             sysimage_path = tempname() * ".$(Libdl.dlext)"
-            compat_level="major"
-            version=nothing
-            soname=nothing
-            # Prevent compiler from stripping all symbols from the shared lib.
-            o_file_flags = Sys.isapple() ? `-Wl,-all_load $object_file` : `-Wl,--whole-archive $object_file -Wl,--no-whole-archive`
-            extra = PackageCompiler.get_extra_linker_flags(version, compat_level, soname)
-            cmd = `$clang -shared \
-                    -L$(PackageCompiler.julia_libdir()) \
-                    -L$(PackageCompiler.julia_private_libdir()) \
-                    -o $sysimage_path $o_file_flags \
-                    $(Base.shell_split(PackageCompiler.ldlibs())) $extra`
-            run(cmd)
+            LIBDIR = joinpath(Sys.BINDIR, "..", "lib")
+            LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
+            OBJECT = `--whole-archive $object_file --no-whole-archive`
+            run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(LIBDIR) $LIBS`)
         end
         dir = mktempdir()
         dir = mkpath("chained")
@@ -89,7 +89,7 @@ end;
             run(`$(Base.julia_cmd()) --sysimage-native-code=chained --startup-file=no --sysimage=$sysimage_path --output-o chained.o.a -e $source_txt`)
             run(`$ar x chained.o.a`) # Extract new sysimage files
             #@show `$clang -shared -o chained.$(Libdl.dlext) text.o data.o text-old.o`
-            run(`$clang -shared -o chained.$(Libdl.dlext) text.o data.o text-old.o`)
+            run(`$ld -flavor gnu --shared -output chained.$(Libdl.dlext) text.o data.o text-old.o`)
 
             # Test if "println(0.1, 1, 0x2)" is precompiled
             source_txt2 = """
