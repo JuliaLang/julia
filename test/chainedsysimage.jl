@@ -78,7 +78,7 @@ end
             run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(julia_libdir()) -L$(julia_private_libdir()) $LIBS`)
         end
         dir = mktempdir()
-        dir = mkpath("chained")
+        #dir = mkpath("chained")
         cd(dir) do
             cp("$object_file", "sys-o.a", force=true)
             run(`$ar x sys-o.a`)
@@ -95,20 +95,19 @@ module PrecompileStagingArea;
 end;
 """
 
+            chained_sysimage = "chained.$(Libdl.dlext)"
             run(`$(Base.julia_cmd()) --sysimage-native-code=chained --startup-file=no --sysimage=$sysimage_path --output-o chained.o.a -e $source_txt`)
             run(`$ar x chained.o.a`) # Extract new sysimage files
-            #@show `$clang -shared -o chained.$(Libdl.dlext) text.o data.o text-old.o`
-            run(`$ld -flavor gnu --shared -output chained.$(Libdl.dlext) text.o data.o text-old.o`)
+            run(`$ld -flavor gnu --shared --output $chained_sysimage text.o data.o text-old.o`)
 
             # Test if "println(0.1, 1, 0x2)" is precompiled
             source_txt2 = """
 a = @allocated println(0.1, 1, 0x2);
 b = @allocated println(0.1, 1, 0x2);
-@show a, b
 @assert a + 1000 > b;
 """
 
-            @test run(`$(Base.julia_cmd()) --sysimage=chained.$(Libdl.dlext) -e $source_txt2`).exitcode == 0
+            @test run(`$(Base.julia_cmd()) --sysimage=$chained_sysimage -e $source_txt2`).exitcode == 0
         end
     end
 end
