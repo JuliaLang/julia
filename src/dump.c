@@ -1312,7 +1312,7 @@ static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_
 
 // Extract `edges` and `ext_targets` from `edges_map`
 // This identifies internal->external edges in the call graph, pulling them out for special treatment.
-static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ jl_array_t *t)
+static void jl_collect_backedges(jl_array_t *edges, jl_array_t *ext_targets)
 {
     htable_t all_targets;         // target => tgtindex mapping
     htable_t all_callees;         // MIs called by worklist methods (eff. Set{MethodInstance})
@@ -1336,7 +1336,7 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
             while (i < l) {
                 i = get_next_edge(callees, i, &invokeTypes, &c);
                 register_backedge(&all_callees, invokeTypes, (jl_value_t*)c);
-                if (jl_is_method_instance(c)) {
+                if (c && jl_is_method_instance(c)) {
                     jl_collect_backedges_to((jl_method_instance_t*)c, &all_callees);
                 }
             }
@@ -1344,6 +1344,7 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
             void **pc = all_callees.table;
             size_t j;
             int valid = 1;
+            int mode;
             for (j = 0; valid && j < all_callees.size; j += 2) {
                 if (pc[j + 1] != HT_NOTFOUND) {
                     jl_value_t *callee = (jl_value_t*)pc[j];
@@ -1352,9 +1353,12 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
                         jl_value_t *sig;
                         if (jl_is_method_instance(callee)) {
                             sig = ((jl_method_instance_t*)callee)->specTypes;
+                            mode = 1;
                         }
                         else {
                             sig = callee;
+                            callee = (jl_value_t*)pc[j+1];
+                            mode = 2;
                         }
                         size_t min_valid = 0;
                         size_t max_valid = ~(size_t)0;
@@ -1369,9 +1373,10 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
                             jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
                             jl_array_ptr_set(matches, k, match->method);
                         }
-                        jl_array_ptr_1d_push(t, callee);
-                        jl_array_ptr_1d_push(t, matches);
-                        target = (char*)HT_NOTFOUND + jl_array_len(t) / 2;
+                        jl_array_ptr_1d_push(ext_targets, mode == 1 ? NULL : sig);
+                        jl_array_ptr_1d_push(ext_targets, callee);
+                        jl_array_ptr_1d_push(ext_targets, matches);
+                        target = (char*)HT_NOTFOUND + jl_array_len(ext_targets) / 3;
                         ptrhash_put(&all_targets, (void*)callee, target);
                     }
                     jl_array_grow_end(callees, 1);
@@ -1380,8 +1385,8 @@ static void jl_collect_backedges( /* edges */ jl_array_t *s, /* ext_targets */ j
             }
             htable_reset(&all_callees, 100);
             if (valid) {
-                jl_array_ptr_1d_push(s, (jl_value_t*)caller);
-                jl_array_ptr_1d_push(s, (jl_value_t*)callees);
+                jl_array_ptr_1d_push(edges, (jl_value_t*)caller);
+                jl_array_ptr_1d_push(edges, (jl_value_t*)callees);
             }
         }
     }
@@ -2471,23 +2476,24 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
 // verify that these edges intersect with the same methods as before
 static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
 {
-    size_t i, l = jl_array_len(targets) / 2;
+    size_t i, l = jl_array_len(targets) / 3;
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
     jl_value_t *loctag = NULL;
     JL_GC_PUSH1(&loctag);
     *pvalids = valids;
     for (i = 0; i < l; i++) {
-        jl_value_t *callee = jl_array_ptr_ref(targets, i * 2);
+        jl_value_t *invokesig = jl_array_ptr_ref(targets, i * 3);
+        jl_value_t *callee = jl_array_ptr_ref(targets, i * 3 + 1);
         jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
         jl_value_t *sig;
-        if (jl_is_method_instance(callee)) {
-            sig = callee_mi->specTypes;
+        if (callee && jl_is_method_instance(callee)) {
+            sig = invokesig == NULL ? callee_mi->specTypes : invokesig;
         }
         else {
-            sig = callee;
+            sig = callee == NULL ? invokesig : callee;
         }
-        jl_array_t *expected = (jl_array_t*)jl_array_ptr_ref(targets, i * 2 + 1);
+        jl_array_t *expected = (jl_array_t*)jl_array_ptr_ref(targets, i * 3 + 2);
         assert(jl_is_array(expected));
         int valid = 1;
         size_t min_valid = 0;
@@ -2527,20 +2533,20 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
 }
 
 // Restore backedges to external targets
-// `targets` is [callee1, matches1, ...], the global set of non-worklist callees of worklist-owned methods.
-// `list` = [caller1, targets_indexes1, ...], the list of worklist-owned methods calling external methods.
-static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
+// `edges` = [caller1, targets_indexes1, ...], the list of worklist-owned methods calling external methods.
+// `ext_targets` is [invokesig1, callee1, matches1, ...], the global set of non-worklist callees of worklist-owned methods.
+static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
 {
-    // map(enable, ((list[i] => targets[list[i + 1] .* 2]) for i in 1:2:length(list) if all(valids[list[i + 1]])))
-    size_t i, l = jl_array_len(list);
+    // foreach(enable, ((edges[2i-1] => ext_targets[edges[2i] .* 3]) for i in 1:length(edges)÷2 if all(valids[edges[2i]])))
+    size_t i, l = jl_array_len(edges);
     jl_array_t *valids = NULL;
     jl_value_t *loctag = NULL;
     JL_GC_PUSH2(&valids, &loctag);
-    jl_verify_edges(targets, &valids);
+    jl_verify_edges(ext_targets, &valids);
     for (i = 0; i < l; i += 2) {
-        jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, i);
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
-        jl_array_t *idxs_array = (jl_array_t*)jl_array_ptr_ref(list, i + 1);
+        jl_array_t *idxs_array = (jl_array_t*)jl_array_ptr_ref(edges, i + 1);
         assert(jl_isa((jl_value_t*)idxs_array, jl_array_int32_type));
         int32_t *idxs = (int32_t*)jl_array_data(idxs_array);
         int valid = 1;
@@ -2553,18 +2559,20 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             // if this callee is still valid, add all the backedges
             for (j = 0; j < jl_array_len(idxs_array); j++) {
                 int32_t idx = idxs[j];
-                jl_value_t *callee = jl_array_ptr_ref(targets, idx * 2);
-                if (jl_is_method_instance(callee)) {
-                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, NULL, caller);
+                jl_value_t *callee = jl_array_ptr_ref(ext_targets, idx * 3 + 1);
+                if (callee && jl_is_method_instance(callee)) {
+                    jl_value_t *invokesig = jl_array_ptr_ref(ext_targets, idx * 3);
+                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, invokesig, caller);
                 }
                 else {
-                    jl_methtable_t *mt = jl_method_table_for(callee);
+                    jl_value_t *sig = callee == NULL ? jl_array_ptr_ref(ext_targets, idx * 3) : callee;
+                    jl_methtable_t *mt = jl_method_table_for(sig);
                     // FIXME: rarely, `callee` has an unexpected `Union` signature,
                     // see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1030329344
                     // Fix the issue and turn this back into an `assert((jl_value_t*)mt != jl_nothing)`
                     // This workaround exposes us to (rare) 265-violations.
                     if ((jl_value_t*)mt != jl_nothing)
-                        jl_method_table_add_backedge(mt, callee, (jl_value_t*)caller);
+                        jl_method_table_add_backedge(mt, sig, (jl_value_t*)caller);
                 }
             }
             // then enable it
@@ -2812,7 +2820,10 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
     jl_array_t *extext_methods = jl_alloc_vec_any(0);  // [method1, simplesig1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
-    jl_array_t *ext_targets = jl_alloc_vec_any(0);     // [callee1, matches1, ...] non-worklist callees of worklist-owned methods
+    jl_array_t *ext_targets = jl_alloc_vec_any(0);     // [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
+                                                       // ordinary dispatch: invokesig=NULL, callee is MethodInstance
+                                                       // `invoke` dispatch: invokesig is signature, callee is MethodInstance
+                                                       // abstract call: callee is signature
     jl_array_t *edges = jl_alloc_vec_any(0);           // [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
 
     int n_ext_mis = queue_external_mis(newly_inferred);
