@@ -34,8 +34,10 @@ using LinearAlgebra: Givens, Rotation
             end
         end
         @test (R')' === R
-        @test R * Ac ≈ (Ac' * R')'
-        @test Ac * R ≈ (R' * Ac')'
+        @test R * A ≈ (A' * R')' ≈ lmul!(R, copy(A))
+        @test A * R ≈ (R' * A')' ≈ rmul!(copy(A), R)
+        @test R' * A ≈ lmul!(R', copy(A))
+        @test A * R' ≈ rmul!(copy(A), R')
         @test_throws ArgumentError givens(A, 3, 3, 2)
         @test_throws ArgumentError givens(one(elty),zero(elty),2,2)
         G, _ = givens(one(elty),zero(elty),11,12)
