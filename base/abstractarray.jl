@@ -55,6 +55,9 @@ julia> A = fill(1, (5,6,7));
 
 julia> axes(A, 2)
 Base.OneTo(6)
+
+julia> axes(A, 4) == 1:1  # all dimensions d > ndims(A) have size 1
+true
 ```
 
 # Usage note
@@ -322,17 +325,21 @@ if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
 otherwise).
 If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
+
+See also [`pairs`](@ref)`(A)` to iterate over indices and values together,
+and [`axes`](@ref)`(A, 2)` for valid indices along one dimension.
+
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4];
+julia> A = [10 20; 30 40];
 
 julia> for i in eachindex(A) # linear indexing
-           println(i)
+           println("A[", i, "] == ", A[i])
        end
-1
-2
-3
-4
+A[1] == 10
+A[2] == 30
+A[3] == 20
+A[4] == 40
 
 julia> for i in eachindex(view(A, 1:2, 1:1)) # Cartesian indexing
            println(i)
