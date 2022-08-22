@@ -659,6 +659,8 @@ end
     D2 = Diagonal(randn(10))
     @test D * A * D2 ≈ D * (A * D2)
     @test D * A * D2 ≈ (D * A) * D2
+    @test_throws DimensionMismatch Diagonal(ones(9)) * A * D2
+    @test_throws DimensionMismatch D * A * Diagonal(ones(9))
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
