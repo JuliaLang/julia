@@ -18,50 +18,27 @@ catch
 end
 
 @testset "empty chained sysimage" begin
-
     is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
-
-    function julia_libdir()
-        libname = is_debug() ? "libjulia-debug" : "libjulia"
-        return dirname(abspath(Libdl.dlpath(libname)))
-    end
-
-    function julia_private_libdir()
-        libname = is_debug() ? "libjulia-internal-debug" : "libjulia-internal"
-        return dirname(abspath(Libdl.dlpath(libname)))
-    end
+    libdir(name) = dirname(abspath(Libdl.dlpath(is_debug() ? "$name-debug" : name)))
 
     function get_llvm_cmd(exe) # Not all binaries are exported from LLVM_full_jll
         a = LLVM_full_jll.clang()
         name_replace(path) = joinpath(dirname(path), replace(basename(path), "clang" => exe))
         return Cmd(Cmd(name_replace.(a.exec)); env = a.env)
     end
-
     ar = get_llvm_cmd("llvm-ar")
     objcopy = get_llvm_cmd("llvm-objcopy")
     ld = LLD_jll.lld()
 
-    binariesavailable = false
-    try
-        @assert success(`$ar --version`)
-        @assert success(`$objcopy --version`)
-        @assert success(`$ld -flavor gnu --version`)
-        binariesavailable = true
-    catch
-    end
-
-    if !binariesavailable
-        @test_broken false # This test is not yet supported by this OS
-    else
+    if success(`$ar --version`) && success(`$objcopy --version`) && success(`$ld -flavor gnu --version`)
+        dir = mktempdir() # Create directory for the compilation
         sysimage_path = Base.unsafe_string(Base.JLOptions().image_file)
         object_file = replace(sysimage_path, ".$(Libdl.dlext)" => "-o.a")
-        # Speed up local testing (reuse the original sysimage)
-        # TODO - remove this before merging
         if true || !isfile(object_file)
             # Compile julia sysimage because `sys-o.a` file is not distributed
-            object_file = joinpath(tempdir(), "chainedsysimage-test-sys.o")
+            object_file = joinpath(dir, "chainedsysimage-test-sys.o")
             # Use the default values from PackageCompiler for incremental sysimage build (without re-using native code
-            isfile(object_file) || PackageCompiler.create_sysimg_object_file(object_file, String[], Set{Base.PkgId}();
+            PackageCompiler.create_sysimg_object_file(object_file, String[], Set{Base.PkgId}();
                     project=dirname(Base.active_project()),
                     base_sysimage=sysimage_path,
                     precompile_execution_file=String[],
@@ -75,39 +52,46 @@ end
             sysimage_path = tempname() * ".$(Libdl.dlext)"
             LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
             OBJECT = `--whole-archive $object_file --no-whole-archive`
-            run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(julia_libdir()) -L$(julia_private_libdir()) $LIBS`)
+            run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
         end
-        dir = mktempdir()
-        #dir = mkpath("chained")
         cd(dir) do
             cp("$object_file", "sys-o.a", force=true)
             run(`$ar x sys-o.a`)
             rm("data.o")
             mv("text.o", "text-old.o", force = true)
             run(`$objcopy --remove-section .data.jl.sysimg_link text-old.o`)
-
-            source_txt = """
+            source1 = tempname(dir)
+            open(source1, "w") do file
+                write(file,
+"""
 Base.__init_build();
 module PrecompileStagingArea;
-    using Printf;
+    using Printf; # Not tested, only loaded
     @ccall jl_precompiles_for_sysimage(1::Cuchar)::Cvoid;
     println(0.1, 1, 0x2);
 end;
 """
-
+                )
+            end
             chained_sysimage = "chained.$(Libdl.dlext)"
-            run(`$(Base.julia_cmd()) --sysimage-native-code=chained --startup-file=no --sysimage=$sysimage_path --output-o chained.o.a -e $source_txt`)
+            run(`$(Base.julia_cmd()) --sysimage-native-code=chained --startup-file=no --sysimage=$sysimage_path --output-o chained.o.a $source1`)
             run(`$ar x chained.o.a`) # Extract new sysimage files
-            run(`$ld -flavor gnu --shared --output $chained_sysimage text.o data.o text-old.o`)
+            run(`$ld -flavor gnu --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
 
             # Test if "println(0.1, 1, 0x2)" is precompiled
-            source_txt2 = """
+            source2 = tempname(dir)
+            open(source2, "w") do file
+                write(file,
+"""
 a = @allocated println(0.1, 1, 0x2);
 b = @allocated println(0.1, 1, 0x2);
 @assert a + 1000 > b;
 """
-
-            @test run(`$(Base.julia_cmd()) --sysimage=$chained_sysimage -e $source_txt2`).exitcode == 0
+                )
+            end
+            @test run(`$(Base.julia_cmd()) --sysimage=$chained_sysimage --startup-file=no $source2`).exitcode == 0
         end
+    else
+        @test_broken false # This test is not yet supported by this OS
     end
 end
