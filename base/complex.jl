@@ -126,7 +126,7 @@ real(C::Type{<:Complex}) = fieldtype(C, 1)
 
 Test whether `x` or all its elements are numerically equal to some real number
 including infinities and NaNs. `isreal(x)` is true if `isequal(x, real(x))`
-is true - this means, for `Complex` types, isreal(x) is only `true` when the
+is true - this means, for `Complex` numbers, `isreal(x)` would `true` if the
 imaginary part is `0`.
 
 # Examples
