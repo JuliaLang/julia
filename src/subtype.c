@@ -2165,7 +2165,9 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
         offset = -othervar->offset;
     assert(!othervar || othervar->offset == -offset);
     if (bb->lb == jl_bottom_type && bb->ub == (jl_value_t*)jl_any_type) {
-        if (jl_is_long(v)) {
+        if (offset == 0)
+            bb->lb = bb->ub = v;
+        else if (jl_is_long(v)) {
             size_t iv = jl_unbox_long(v);
             v = jl_box_long(iv + offset);
             bb->lb = bb->ub = v;
@@ -2174,7 +2176,7 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
                 return jl_box_long(iv);
         }
         else
-            bb->lb = bb->ub = v;
+            return jl_bottom_type;
     }
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
         if (jl_unbox_long(v) + offset != jl_unbox_long(bb->lb))
@@ -3048,14 +3050,14 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     lb = ylb;
                 else
                     lb = simple_join(xlb, ylb);
-                if (yy) {
+                if (yy && yy->offset == 0) {
                     yy->lb = lb;
                     if (!reachable_var(ub, (jl_tvar_t*)y, e))
                         yy->ub = ub;
                     assert(yy->ub != y);
                     assert(yy->lb != y);
                 }
-                if (xx && !reachable_var(y, (jl_tvar_t*)x, e)) {
+                if (xx && xx->offset == 0 && !reachable_var(y, (jl_tvar_t*)x, e)) {
                     xx->lb = y;
                     xx->ub = y;
                     assert(xx->ub != x);
