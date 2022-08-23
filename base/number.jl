@@ -100,7 +100,7 @@ function getindex(x::Number, i::Integer)
 end
 function getindex(x::Number, I::Integer...)
     @inline
-    @boundscheck all(isone, I) || throw(BoundsError(x, i))
+    @boundscheck all(isone, I) || throw(BoundsError(x, I))
     x
 end
 get(x::Number, i::Integer, default) = isone(i) ? x : default
