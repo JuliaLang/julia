@@ -485,6 +485,7 @@ typedef struct {
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
+    uint8_t _reserved:5;
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
 } jl_typename_t;
 
@@ -1279,7 +1280,7 @@ STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
             !jl_is_primitivetype(v));
 }
 
-STATIC_INLINE int jl_isbits(void *t) JL_NOTSAFEPOINT // corresponding to isbits() in julia
+STATIC_INLINE int jl_isbits(void *t) JL_NOTSAFEPOINT // corresponding to isbitstype() in julia
 {
     return (jl_is_datatype(t) && ((jl_datatype_t*)t)->isbitstype);
 }
@@ -1624,6 +1625,7 @@ JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
+JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void jl_declare_constant(jl_binding_t *b);
@@ -1644,6 +1646,7 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 // eq hash tables
 JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *inserted);
 JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
+jl_value_t *jl_eqtable_getkey(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
 
 // system information
 JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT;
@@ -1984,7 +1987,13 @@ void (ijl_longjmp)(jmp_buf _Buf, int _Value);
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
+#if defined(_COMPILER_ASAN_ENABLED_) && __GLIBC__
+// Bypass the ASAN longjmp wrapper - we're unpoisoning the stack ourselves.
+extern int __attribute__ ((nothrow)) (__libc_siglongjmp)(jl_jmp_buf buf, int val);
+#define jl_longjmp(a,b) __libc_siglongjmp(a,b)
+#else
 #define jl_longjmp(a,b) siglongjmp(a,b)
+#endif
 #endif
 
 

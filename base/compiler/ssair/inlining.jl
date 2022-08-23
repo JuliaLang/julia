@@ -1560,6 +1560,18 @@ function early_inline_special_case(
             end
         end
     end
+    if f === compilerbarrier
+        # check if this `compilerbarrier` has already imposed a barrier on abstract interpretation
+        # so that it can be eliminated here
+        length(argtypes) == 3 || return nothing
+        setting = argtypes[2]
+        isa(setting, Const) || return nothing
+        setting = setting.val
+        isa(setting, Symbol) || return nothing
+        setting === :const || setting === :conditional || setting === :type || return nothing
+        # barrierred successfully already, eliminate it
+        return SomeCase(stmt.args[3])
+    end
     return nothing
 end
 

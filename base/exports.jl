@@ -445,6 +445,7 @@ export
     sortperm!,
     sortslices,
     dropdims,
+    stack,
     step,
     stride,
     strides,
