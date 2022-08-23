@@ -600,6 +600,7 @@ tests = [
         # parse_cat
         "[]"        =>  "(vect)"
         "[x,]"      =>  "(vect x)"
+        "[x\n,,]"   =>  "(vect x (error-t ✘))"
         "[x]"       =>  "(vect x)"
         "[x \n ]"   =>  "(vect x)"
         "[x \n, ]"  =>  "(vect x)"
@@ -619,6 +620,7 @@ tests = [
         "[x, y]"        =>  "(vect x y)"
         "[x,\n y]"      =>  "(vect x y)"
         "[x\n, y]"      =>  "(vect x y)"
+        "[x\n,, y]"     =>  "(vect x (error-t ✘ y))"
         "[x,y ; z]"     =>  "(vect x y (parameters z))"
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
@@ -781,10 +783,6 @@ broken_tests = [
         "10.x" => "(error (call * 10.0 x))"
     ]
 ]
-
-@testset "Invalid syntax" begin
-    @test !isempty(JuliaSyntax.parse(JuliaSyntax.GreenNode, """[ [],,[] ]""")[2])
-end
 
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
