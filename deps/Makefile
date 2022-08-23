@@ -85,7 +85,7 @@ DEP_LIBS += dsfmt
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
-DEP_LIBS += llvm
+DEP_LIBS += llvm lld
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
@@ -168,7 +168,7 @@ endif
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv mbedtls libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
-	libsuitesparse
+	libsuitesparse lld
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
