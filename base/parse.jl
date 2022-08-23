@@ -102,9 +102,17 @@ end
         _a <= _c <= _z ? _c-_a+a           : UInt32(base)
 end
 
-# `@constprop :aggressive` here to make sure we const-prop' `raise` argument to obtain
-# the return-type stability for the `raise === true` case
-@constprop :aggressive function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool) where T<:Integer
+"""
+    tryparse_internal(T, s, startpos, endpos, [base,] raise::Val{true}) -> T or throw
+    tryparse_internal(T, s, startpos, endpos, [base,] raise::Val{false}) -> Union{T, Nothing}
+
+An internal interface used by `parse` and `tryparse`.
+`tryparse_internal` should use `raise::Val{[true|false]}` pattern to branch
+throwable/unthrowable cases so that we can get type stability for the unthrowable case.
+"""
+function tryparse_internal end
+
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, ::Val{raise}) where T<:Integer where raise
     sgn, base, i = parseint_preamble(T<:Signed, Int(base_), s, startpos, endpos)
     if sgn == 0 && base == 0 && i == 0
         raise && throw(ArgumentError("input string is empty or only contains whitespace"))
@@ -178,14 +186,14 @@ end
 end
 
 function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
-        startpos::Int, endpos::Int, base::Integer, raise::Bool)
+        startpos::Int, endpos::Int, base::Integer, ::Val{raise}) where raise
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
         return nothing
     end
 
     if isnumeric(sbuff[1])
-        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, false)
+        intres = tryparse_internal(UInt8, sbuff, startpos, endpos, base, Val(false))
         (intres == 1) && return true
         (intres == 0) && return false
         raise && throw(ArgumentError("invalid Bool representation: $(repr(sbuff))"))
@@ -240,12 +248,12 @@ or [`nothing`](@ref) if the string does not contain a valid number.
 """
 function tryparse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     # Zero base means, "figure it out"
-    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), false)
+    tryparse_internal(T, s, firstindex(s), lastindex(s), base===nothing ? 0 : check_valid_base(base), Val(false))
 end
 
 function parse(::Type{T}, s::AbstractString; base::Union{Nothing,Integer} = nothing) where {T<:Integer}
     convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s),
-                                 base===nothing ? 0 : check_valid_base(base), true))
+                                 base===nothing ? 0 : check_valid_base(base), Val(true)))
 end
 
 ## string to float functions ##
@@ -298,7 +306,7 @@ tryparse_internal(::Type{Float16}, s::AbstractString, startpos::Int, endpos::Int
 
 ## string to complex functions ##
 
-function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, raise::Bool) where {T<:Real}
+function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}}, i::Int, e::Int, _raise::Val{raise}) where {T<:Real} where raise
     # skip initial whitespace
     while i ≤ e && isspace(s[i])
         i = nextind(s, i)
@@ -329,11 +337,11 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
 
     if i₊ == 0 # purely real or imaginary value
         if iᵢ > i && !(iᵢ == i+1 && s[i] in ('+','-')) # purely imaginary (not "±inf")
-            x = tryparse_internal(T, s, i, iᵢ-1, raise)
+            x = tryparse_internal(T, s, i, iᵢ-1, _raise)
             x === nothing && return nothing
             return Complex{T}(zero(x),x)
         else # purely real
-            x = tryparse_internal(T, s, i, e, raise)
+            x = tryparse_internal(T, s, i, e, _raise)
             x === nothing && return nothing
             return Complex{T}(x)
         end
@@ -345,31 +353,31 @@ function tryparse_internal(::Type{Complex{T}}, s::Union{String,SubString{String}
     end
 
     # parse real part
-    re = tryparse_internal(T, s, i, i₊-1, raise)
+    re = tryparse_internal(T, s, i, i₊-1, _raise)
     re === nothing && return nothing
 
     # parse imaginary part
-    im = tryparse_internal(T, s, i₊+1, iᵢ-1, raise)
+    im = tryparse_internal(T, s, i₊+1, iᵢ-1, _raise)
     im === nothing && return nothing
 
     return Complex{T}(re, s[i₊]=='-' ? -im : im)
 end
 
 # the ±1 indexing above for ascii chars is specific to String, so convert:
-tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Bool) where S<:Real =
+tryparse_internal(T::Type{Complex{S}}, s::AbstractString, i::Int, e::Int, raise::Val) where S<:Real =
     tryparse_internal(T, String(s), i, e, raise)
 
 # fallback methods for tryparse_internal
 tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int) where T<:Real =
     startpos == firstindex(s) && endpos == lastindex(s) ? tryparse(T, s) : tryparse(T, SubString(s, startpos, endpos))
-function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Real
+function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, ::Val{raise}) where T<:Real where raise
     result = tryparse_internal(T, s, startpos, endpos)
     if raise && result === nothing
         _parse_failure(T, s, startpos, endpos)
     end
     return result
 end
-function tryparse_internal(::Type{T}, s::AbstractString, raise::Bool; kwargs...) where T<:Real
+function tryparse_internal(::Type{T}, s::AbstractString, ::Val{raise}; kwargs...) where T<:Real where raise
     result = tryparse(T, s; kwargs...)
     if raise && result === nothing
         _parse_failure(T, s)
@@ -379,13 +387,13 @@ end
 @noinline _parse_failure(T, s::AbstractString, startpos = firstindex(s), endpos = lastindex(s)) =
     throw(ArgumentError("cannot parse $(repr(s[startpos:endpos])) as $T"))
 
-tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Bool) where T<:Integer =
+tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, raise::Val) where T<:Integer =
     tryparse_internal(T, s, startpos, endpos, 10, raise)
 
 parse(::Type{T}, s::AbstractString; kwargs...) where T<:Real =
-    convert(T, tryparse_internal(T, s, true; kwargs...))
+    convert(T, tryparse_internal(T, s, Val(true); kwargs...))
 parse(::Type{T}, s::AbstractString) where T<:Complex =
-    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), true))
+    convert(T, tryparse_internal(T, s, firstindex(s), lastindex(s), Val(true)))
 
 tryparse(T::Type{Complex{S}}, s::AbstractString) where S<:Real =
-    tryparse_internal(T, s, firstindex(s), lastindex(s), false)
+    tryparse_internal(T, s, firstindex(s), lastindex(s), Val(false))

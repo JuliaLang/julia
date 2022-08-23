@@ -83,15 +83,15 @@ Base.:(==)(::SubString{InlineStringIssue57}, x::String) = x == "true"
 
     # Test `tryparse_internal` with part of a string
     let b = "                   "
-        result = @test_throws ArgumentError Base.tryparse_internal(Bool, b, 7, 11, 0, true)
+        result = @test_throws ArgumentError Base.tryparse_internal(Bool, b, 7, 11, 0, Val(true))
         exception_bool = result.value
         @test exception_bool.msg == "input string only contains whitespace"
 
-        result = @test_throws ArgumentError Base.tryparse_internal(Int, b, 7, 11, 0, true)
+        result = @test_throws ArgumentError Base.tryparse_internal(Int, b, 7, 11, 0, Val(true))
         exception_int = result.value
         @test exception_int.msg == "input string is empty or only contains whitespace"
 
-        result = @test_throws ArgumentError Base.tryparse_internal(UInt128, b, 7, 11, 0, true)
+        result = @test_throws ArgumentError Base.tryparse_internal(UInt128, b, 7, 11, 0, Val(true))
         exception_uint = result.value
         @test exception_uint.msg == "input string is empty or only contains whitespace"
     end
@@ -99,7 +99,7 @@ Base.:(==)(::SubString{InlineStringIssue57}, x::String) = x == "true"
     # Test that the entire input string appears in error messages
     let s = "     false    true     "
         result = @test_throws(ArgumentError,
-            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, true))
+            Base.tryparse_internal(Bool, s, firstindex(s), lastindex(s), 0, Val(true)))
         @test result.value.msg == "invalid Bool representation: $(repr(s))"
     end
 
@@ -259,7 +259,7 @@ for T in (Int32, BigInt), base in (0,1,100)
 end
 
 # error throwing branch from #10560
-@test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, true)
+@test_throws ArgumentError Base.tryparse_internal(Bool, "foo", 1, 2, 10, Val(true))
 
 @test tryparse(Float64, "1.23") === 1.23
 @test tryparse(Float32, "1.23") === 1.23f0
