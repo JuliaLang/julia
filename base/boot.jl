@@ -827,7 +827,7 @@ Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 # The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
 
-_setparser!(parser) = setglobal!(@__MODULE__, :_parse, parser)
+_setparser!(parser) = setglobal!(Core, :_parse, parser)
 
 # support for deprecated uses of internal _apply function
 _apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
