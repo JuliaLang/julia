@@ -38,7 +38,7 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
-    setindex(c::Tuple, v, i::Integer)
+    setindex(x::Tuple, v, i::Integer)
 
 Creates a new tuple similar to `x` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
@@ -58,6 +58,31 @@ end
 function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
     return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
+end
+
+"""
+    delete(x::Tuple, i::Integer)
+
+Creates a new tuple similar to `x` with the value at index `i` removed.
+Throws a `BoundsError` when out of bounds.
+
+# Examples
+```jldoctest
+julia> Base.delete((1, 2, 3), 3) == (1, 2)
+true
+
+julia> Base.delete((1, 2, 3), 4)
+ERROR: BoundsError: attempt to access Tuple{Int64, Int64, Int64} at index [4]
+[...]
+```
+"""
+function delete(x::Tuple, i::Integer)
+    @boundscheck 1 <= i <= length(x) || throw(BoundsError(x, i))
+    _delete(i, x...)
+end
+function _delete(i::Integer, args::Vararg{Any,N}) where {N}
+    @inline
+    return ntuple(j -> ifelse(j < i, args[j], args[j+1]), Val{N-1}())
 end
 
 

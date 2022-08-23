@@ -380,6 +380,32 @@ function setindex(nt::NamedTuple, v, idx::Symbol)
 end
 
 """
+    delete(nt::NamedTuple, key::Symbol)
+
+Constructs a new `NamedTuple` with the field corresponding to `key` removed.
+If no field corresponds to `key`, `nt` is returned.
+
+```jldoctest
+julia> nt = (a = 1, b = 2, c = 3)
+(a = 1, b = 2, c = 3)
+
+julia> Base.delete(nt, :b)
+(a = 1, c = 3)
+
+julia> Base.delete(nt, :z)
+(a = 1, b = 2, c = 3)
+```
+"""
+function delete(nt::NamedTuple{names}, i::Symbol) where {names}
+    fidx = fieldindex(typeof(nt), i, false)
+    if fidx === 0
+        nt
+    else
+        NamedTuple{_delete(fidx, names...)}(_delete(fidx, Tuple(nt)...))
+    end
+end
+
+"""
     @NamedTuple{key1::Type1, key2::Type2, ...}
     @NamedTuple begin key1::Type1; key2::Type2; ...; end
 
