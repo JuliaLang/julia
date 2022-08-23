@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, arrayref
+import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
 
 const Callable = Union{Function,Type}
 
@@ -846,8 +846,7 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
 end
 
-# TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
+inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
     isempty(collection) -> Bool

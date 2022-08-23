@@ -1604,6 +1604,19 @@ JL_CALLABLE(jl_f_donotdelete)
     return jl_nothing;
 }
 
+JL_CALLABLE(jl_f_compilerbarrier)
+{
+    JL_NARGS(compilerbarrier, 2, 2);
+    JL_TYPECHK(compilerbarrier, symbol, args[0])
+    jl_sym_t *setting = (jl_sym_t*)args[0];
+    if (!(setting == jl_symbol("type") ||
+          setting == jl_symbol("const") ||
+          setting == jl_symbol("conditional")))
+        jl_error("The first argument of `compilerbarrier` must be either of `:type`, `:const` or `:conditional`.");
+    jl_value_t *val = args[1];
+    return val;
+}
+
 JL_CALLABLE(jl_f_finalizer)
 {
     // NOTE the compiler may temporarily insert additional argument for the later inlining pass
@@ -1983,6 +1996,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
+    jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);
     add_builtin_func("finalizer", jl_f_finalizer);
 
     // builtin types
