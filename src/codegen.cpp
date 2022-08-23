@@ -6,7 +6,7 @@
 #if defined(_CPU_X86_)
 #define JL_NEED_FLOATTEMP_VAR 1
 #endif
-#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_)
+#if defined(_OS_WINDOWS_) || defined(_OS_FREEBSD_) || defined(_COMPILER_MSAN_ENABLED_)
 #define JL_DISABLE_FPO
 #endif
 
@@ -1175,6 +1175,7 @@ static const auto &builtin_func_map() {
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
           { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
+          { jl_f_compilerbarrier_addr,    new JuliaFunction{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
           { jl_f_finalizer_addr,          new JuliaFunction{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} }
         };
     return builtins;
@@ -2119,6 +2120,9 @@ static void jl_init_function(Function *F)
 #endif
 #if defined(_COMPILER_ASAN_ENABLED_)
     attr.addAttribute(Attribute::SanitizeAddress);
+#endif
+#if defined(_COMPILER_MSAN_ENABLED_)
+    attr.addAttribute(Attribute::SanitizeMemory);
 #endif
 #if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);

@@ -42,7 +42,7 @@ elseif Sys.isapple()
     #    char filename[max_filename_length];
     # };
     # Buffer buf;
-    # getattrlist(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isaccessiblefile(path) || return false
         path_basename = String(basename(path))
@@ -813,7 +813,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "src", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 

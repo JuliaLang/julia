@@ -1325,8 +1325,12 @@ end
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
-                got, expected = T(x)^T(y), T(big(x))^T(y)
-                @test isnan_type(T, got) && isnan_type(T, expected) || (got === expected)
+                got, expected = T(x)^T(y), T(big(x)^T(y))
+                if isnan(expected)
+                    @test isnan_type(T, got) || T.((x,y))
+                else
+                    @test got == expected || T.((x,y))
+                end
             end
         end
         for _ in 1:2^16

@@ -316,6 +316,10 @@ void jl_gc_free_page(void *p) JL_NOTSAFEPOINT
 #else
     madvise(p, decommit_size, MADV_DONTNEED);
 #endif
+    /* TODO: Should we leave this poisoned and rather allow the GC to read poisoned pointers from
+     *       the page when it sweeps pools?
+     */
+    msan_unpoison(p, decommit_size);
 
 no_decommit:
     // new pages are now available starting at max of lb and pagetable_i32
