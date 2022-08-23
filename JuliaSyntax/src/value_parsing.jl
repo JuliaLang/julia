@@ -228,7 +228,7 @@ function utf8proc_decompose(str, options, buffer, nwords)
     ret = ccall(:utf8proc_decompose_custom, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Int, Cint, Ptr{Cvoid}, Ptr{Cvoid}),
                 str, sizeof(str), buffer, nwords, options,
                 @cfunction(utf8proc_custom_func, UInt32, (UInt32, Ptr{Cvoid})), C_NULL)
-    ret < 0 && utf8proc_error(ret)
+    ret < 0 && Base.Unicode.utf8proc_error(ret)
     return ret
 end
 
@@ -237,7 +237,7 @@ function utf8proc_map(str::Union{String,SubString{String}}, options::Integer)
     buffer = Base.StringVector(nwords*4)
     nwords = utf8proc_decompose(str, options, buffer, nwords)
     nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
-    nbytes < 0 && utf8proc_error(nbytes)
+    nbytes < 0 && Base.Unicode.utf8proc_error(nbytes)
     return String(resize!(buffer, nbytes))
 end
 
@@ -245,4 +245,3 @@ function normalize_identifier(str)
     flags = Base.Unicode.UTF8PROC_STABLE | Base.Unicode.UTF8PROC_COMPOSE
     utf8proc_map(str, flags)
 end
-

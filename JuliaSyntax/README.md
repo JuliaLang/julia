@@ -471,7 +471,7 @@ There's arguably a few downsides:
 Practically the flisp parser is not quite a classic [recursive descent
 parser](https://en.wikipedia.org/wiki/Recursive_descent_parser), because it
 often looks back and modifies the output tree it has already produced. We've
-tried to eliminate this pattern it favor of lookahead where possible because
+tried to eliminate this pattern in favor of lookahead where possible because
 
 * It works poorly when the parser is emitting a stream of node spans with
   strict source ordering constraints.

@@ -9,7 +9,7 @@ else
         # incremental compilation. (Ideally we'd just arrange for Core._parse to be
         # set to the JuliaSyntax parser. But how do we signal that to the dumping
         # code outside of the initial creation of Core?)
-        i = findfirst(==(:incremental), fieldnames(Base.JLOptions))
+        i = Base.fieldindex(Base.JLOptions, :incremental)
         ptr = convert(Ptr{fieldtype(Base.JLOptions, i)},
                       cglobal(:jl_options, Base.JLOptions) + fieldoffset(Base.JLOptions, i))
         incremental = unsafe_load(ptr)
@@ -173,4 +173,3 @@ function enable_in_core!(enable=true; freeze_world_age = true,
     _set_core_parse_hook(enable ? core_parser_hook : _default_parser)
     nothing
 end
-
