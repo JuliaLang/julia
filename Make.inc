@@ -1242,7 +1242,7 @@ ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functi
 JLIBLDFLAGS += -Wl,-Bsymbolic-functions
 endif
 ifeq (--enable-new-dtags, $(shell $(LD) --help | grep -o -e "--enable-new-dtags"))
-JLIBLDFLAGS += -Wl,--enable-new-dtags 
+JLIBLDFLAGS += -Wl,--enable-new-dtags
 endif
 
 # Linker doesn't detect automatically that Julia doesn't need executable stack
