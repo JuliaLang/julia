@@ -1,7 +1,9 @@
 # This file provides an adaptor to match the API expected by the Julia runtime
 # code in the binding Core._parse
 
-if isdefined(Core, :set_parser)
+@static if isdefined(Core, :_setparser!)
+    const _set_core_parse_hook = Core._setparser!
+elseif isdefined(Core, :set_parser)
     const _set_core_parse_hook = Core.set_parser
 else
     function _set_core_parse_hook(parser)
