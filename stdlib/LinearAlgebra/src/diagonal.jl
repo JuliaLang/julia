@@ -590,7 +590,19 @@ end
     return C
 end
 
-kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
+kron(A::Diagonal, B::Diagonal) = Diagonal(kron(A.diag, B.diag))
+
+function kron(A::Diagonal, B::SymTridiagonal)
+    kdv = kron(diag(A), B.dv)
+    kev = _droplast(kron(diag(A), _pushzero(B.ev)))
+    SymTridiagonal(kdv, kev)
+end
+function kron(A::Diagonal, B::Tridiagonal)
+    kd = kron(diag(A), B.d)
+    kdl = _droplast(kron(diag(A), _pushzero(B.dl)))
+    kdu = _droplast(kron(diag(A), _pushzero(B.du)))
+    Tridiagonal(kdl, kd, kdu)
+end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     require_one_based_indexing(B)

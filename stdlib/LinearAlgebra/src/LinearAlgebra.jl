@@ -468,6 +468,10 @@ _evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
+# append a zero element / drop the last element
+_pushzero(A) = (B = similar(A, length(A)+1); B[begin:end-1] .= A; B[end] = zero(eltype(B)); B)
+_droplast(A) = (pop!(A); A)
+
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
 # which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
