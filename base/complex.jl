@@ -126,12 +126,16 @@ real(C::Type{<:Complex}) = fieldtype(C, 1)
 
 Test whether `x` or all its elements are numerically equal to some real number
 including infinities and NaNs. `isreal(x)` is true if `isequal(x, real(x))`
-is true.
+is true - this means, for `Complex` types, isreal(x) is only `true` when the
+imaginary part is `0`.
 
 # Examples
 ```jldoctest
 julia> isreal(5.)
 true
+                
+julia> isreal(1 - 3im)
+false
 
 julia> isreal(Inf + 0im)
 true
