@@ -3102,8 +3102,8 @@ Base.donotdelete
     Base.compilerbarrier(setting::Symbol, val)
 
 This function puts a barrier at a specified compilation phase.
-It is supposed to influence the compilation behaviour only according to `setting`,
-and its runtime semantics is just to return the second argument `val` (except
+It is supposed to only influence the compilation behavior according to `setting`,
+and its runtime semantics is just to return the second argument `val` (except that
 this function will perform additional checks on `setting` in a case when `setting`
 isn't known precisely at compile-time.)
 
@@ -3118,9 +3118,9 @@ Currently either of the following `setting`s is allowed:
 - Any barriers on optimization aren't implemented yet
 
 !!! note
-    Generally this function is supposed to be used _with `setting` known precisely at compile-time_.
-    Note that in a case the `setting` isn't known precisely at compile-time, the compiler
-    currently will put the most strongest barrier(s) rather than emitting a compile-time check.
+    This function is supposed to be used _with `setting` known precisely at compile-time_.
+    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
+    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
 
 # Examples
 
