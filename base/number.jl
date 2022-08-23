@@ -95,12 +95,12 @@ keys(::Number) = OneTo(1)
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
     @inline
-    @boundscheck i == 1 || throw(BoundsError())
+    @boundscheck i == 1 || throw(BoundsError(x, i))
     x
 end
 function getindex(x::Number, I::Integer...)
     @inline
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @boundscheck all(isone, I) || throw(BoundsError(x, i))
     x
 end
 get(x::Number, i::Integer, default) = isone(i) ? x : default
