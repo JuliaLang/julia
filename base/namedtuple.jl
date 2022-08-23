@@ -385,6 +385,9 @@ end
 Constructs a new `NamedTuple` with the field corresponding to `key` removed.
 If no field corresponds to `key`, `nt` is returned.
 
+See also: [`delete!`](@ref)
+
+# Examples
 ```jldoctest
 julia> nt = (a = 1, b = 2, c = 3)
 (a = 1, b = 2, c = 3)

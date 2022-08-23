@@ -492,6 +492,7 @@ export
 # dequeues
     append!,
     insert!,
+    insert,
     pop!,
     popat!,
     prepend!,
@@ -512,7 +513,9 @@ export
     count!,
     count,
     delete!,
+    delete,
     deleteat!,
+    deleteat,
     keepat!,
     eltype,
     empty!,
