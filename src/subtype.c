@@ -2165,13 +2165,22 @@ static jl_value_t *set_var_to_const(jl_varbinding_t *bb, jl_value_t *v JL_MAYBE_
         offset = -othervar->offset;
     assert(!othervar || othervar->offset == -offset);
     if (bb->lb == jl_bottom_type && bb->ub == (jl_value_t*)jl_any_type) {
-        if (jl_is_long(v))
-            v = jl_box_long(jl_unbox_long(v) + offset);
-        bb->lb = bb->ub = v;
+        if (jl_is_long(v)) {
+            size_t iv = jl_unbox_long(v);
+            v = jl_box_long(iv + offset);
+            bb->lb = bb->ub = v;
+            // Here we always return the shorter `Vararg`'s length.
+            if (offset > 0)
+                return jl_box_long(iv);
+        }
+        else
+            bb->lb = bb->ub = v;
     }
     else if (jl_is_long(v) && jl_is_long(bb->lb)) {
         if (jl_unbox_long(v) + offset != jl_unbox_long(bb->lb))
             return jl_bottom_type;
+        // Here we always return the shorter `Vararg`'s length.
+        if (offset < 0) return bb->lb;
     }
     else if (!jl_egal(v, bb->lb)) {
         return jl_bottom_type;
@@ -2186,11 +2195,13 @@ static jl_value_t *bound_var_below(jl_tvar_t *tv, jl_varbinding_t *bb, jl_stenv_
         return jl_bottom_type;
     record_var_occurrence(bb, e, 2);
     if (jl_is_long(bb->lb)) {
-        if (bb->offset == 0)
-            return bb->lb;
-        if (jl_unbox_long(bb->lb) < bb->offset)
+        ssize_t blb = jl_unbox_long(bb->lb);
+        if ((blb < bb->offset) || (blb < 0))
             return jl_bottom_type;
-        return jl_box_long(jl_unbox_long(bb->lb) - bb->offset);
+        // Here we always return the shorter `Vararg`'s length.
+        if (bb->offset <= 0)
+            return bb->lb;
+        return jl_box_long(blb - bb->offset);
     }
     return (jl_value_t*)tv;
 }
@@ -3050,6 +3061,9 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     assert(xx->ub != x);
                 }
                 JL_GC_POP();
+                // Here we always return the shorter `Vararg`'s length.
+                if ((xx && xx->offset < 0) || (yy && yy->offset > 0))
+                    return x;
                 return y;
             }
             record_var_occurrence(xx, e, param);
