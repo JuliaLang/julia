@@ -74,8 +74,10 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif is_syntax_kind(raw)
             nothing
         else
-            error("Leaf node of kind $k unknown to SyntaxNode")
-            val = nothing
+            # FIXME: this allows us to recover from trivia is_error nodes
+            # that we insert below
+            @debug "Leaf node of kind $k unknown to SyntaxNode"
+            ErrorVal()
         end
         return SyntaxNode(source, raw, position, nothing, true, val)
     else
