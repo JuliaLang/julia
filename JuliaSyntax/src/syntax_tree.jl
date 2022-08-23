@@ -118,13 +118,13 @@ function interpolate_literal(node::SyntaxNode, val)
     SyntaxNode(node.source, node.raw, node.position, node.parent, true, val)
 end
 
-function _show_syntax_node(io, current_filename, node, indent)
+function _show_syntax_node(io, current_filename, node::SyntaxNode, indent)
     fname = node.source.filename
     line, col = source_location(node.source, node.position)
     posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node)-1,6))│"
-    nodestr = haschildren(node)   ?  "[$(untokenize(head(node)))]" :
-              node.val isa Symbol ? string(node.val) :
-              repr(node.val)
+    val = node.val
+    nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
+              isa(val, Symbol) ? string(val) : repr(val)
     treestr = string(indent, nodestr)
     # Add filename if it's changed from the previous node
     if fname != current_filename[]
@@ -141,12 +141,13 @@ function _show_syntax_node(io, current_filename, node, indent)
     end
 end
 
-function _show_syntax_node_sexpr(io, node)
+function _show_syntax_node_sexpr(io, node::SyntaxNode)
     if !haschildren(node)
         if is_error(node)
             print(io, "(", untokenize(head(node)), ")")
         else
-            print(io, node.val isa Symbol ? string(node.val) : repr(node.val))
+            val = node.val
+            print(io, val isa Symbol ? string(val) : repr(val))
         end
     else
         print(io, "(", untokenize(head(node)))
@@ -256,4 +257,3 @@ function highlight(code::String, node, path::Int...; color=(40,40,70))
     _printstyled(stdout, code[p:q-1]; bgcolor=color)
     print(stdout, code[q:end])
 end
-

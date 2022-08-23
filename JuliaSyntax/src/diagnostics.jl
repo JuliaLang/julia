@@ -32,7 +32,7 @@ end
 function Diagnostic(first_byte, last_byte; error=nothing, warning=nothing)
     message = !isnothing(error)   ? error :
               !isnothing(warning) ? warning :
-              error("No message in diagnostic")
+              Base.error("No message in diagnostic")
     level = !isnothing(error) ? :error : :warning
     Diagnostic(first_byte, last_byte, level, message)
 end
@@ -48,11 +48,12 @@ function show_diagnostic(io::IO, diagnostic::Diagnostic, source::SourceFile)
                    (:normal, "Info")
     line, col = source_location(source, first_byte(diagnostic))
     linecol = "$line:$col"
-    if !isnothing(source.filename)
-        locstr = "$(source.filename):$linecol"
+    filename = source.filename
+    if !isnothing(filename)
+        locstr = "$filename:$linecol"
         if get(io, :color, false)
             # Also add hyperlinks in color terminals
-            url = "file://$(abspath(source.filename))#$linecol"
+            url = "file://$(abspath(filename))#$linecol"
             locstr = "\e]8;;$url\e\\$locstr\e]8;;\e\\"
         end
     else

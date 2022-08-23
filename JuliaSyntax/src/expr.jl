@@ -8,19 +8,20 @@ end
 
 function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
     if !haschildren(node)
-        if node.val isa Union{Int128,UInt128,BigInt}
+        val = node.val
+        if val isa Union{Int128,UInt128,BigInt}
             # Ignore the values of large integers and convert them back to
             # symbolic/textural form for compatibility with the Expr
             # representation of these.
             str = replace(sourcetext(node), '_'=>"")
             headsym = :macrocall
             k = kind(node)
-            macname = node.val isa Int128  ? Symbol("@int128_str")  :
-                      node.val isa UInt128 ? Symbol("@uint128_str") :
+            macname = val isa Int128  ? Symbol("@int128_str")  :
+                      val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
             return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
         else
-            return node.val
+            return val
         end
     end
     headstr = untokenize(head(node), include_flag_suff=false)
@@ -165,7 +166,8 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
         args[1] = Expr(:block, loc, args[1])
     elseif headsym == :(->)
         if Meta.isexpr(args[2], :block)
-            if node.parent isa SyntaxNode && kind(node.parent) != K"do"
+            parent = node.parent
+            if parent isa SyntaxNode && kind(parent) != K"do"
                 pushfirst!(args[2].args, loc)
             end
         else
@@ -207,4 +209,3 @@ Base.Expr(node::SyntaxNode) = _to_expr(node)
 function build_tree(::Type{Expr}, stream::ParseStream; kws...)
     Expr(build_tree(SyntaxNode, stream; kws...))
 end
-

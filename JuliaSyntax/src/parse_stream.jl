@@ -61,7 +61,7 @@ function Base.summary(head::SyntaxHead)
 end
 
 function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
-    str = is_error(kind(head)) ? "error" : untokenize(kind(head); unique=unique)
+    str = is_error(kind(head)) ? "error" : untokenize(kind(head); unique=unique)::String
     if is_dotted(head)
         str = "."*str
     end
@@ -281,7 +281,7 @@ function release_positions(stream, positions)
 end
 
 #-------------------------------------------------------------------------------
-# Return true when a token was emitted last at stream position `pos` 
+# Return true when a token was emitted last at stream position `pos`
 function token_is_last(stream, pos)
     return pos.range_index == 0 ||
            pos.token_index > stream.ranges[pos.range_index].last_token
@@ -872,8 +872,9 @@ stream's text buffer. Note that this leaves the `ParseStream` in an invalid
 state for further parsing.
 """
 function sourcetext(stream::ParseStream; steal_textbuf=false)
-    if stream.text_root isa AbstractString && codeunit(stream.text_root) == UInt8
-        return stream.text_root
+    root = stream.text_root
+    if root isa AbstractString && codeunit(root) == UInt8
+        return root
     elseif steal_textbuf
         return String(stream.textbuf)
     else
