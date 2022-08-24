@@ -49,6 +49,9 @@ mutable struct Prompt <: TextInterface
     prompt_prefix::Union{String,Function}
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
+    output_prefix::Union{String,Function}
+    output_prefix_prefix::Union{String,Function}
+    output_prefix_suffix::Union{String,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -1447,7 +1450,6 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
-
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
@@ -1456,6 +1458,17 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     width = write_prompt(terminal, p.prompt, color)
     color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    return width
+end
+
+function write_output_prefix(io::IO, p::Prompt, color::Bool)
+    prefix = prompt_string(p.output_prefix_prefix)
+    suffix = prompt_string(p.output_prefix_suffix)
+    print(io, prefix)
+    color && write(io, Base.text_colors[:bold])
+    width = write_prompt(io, p.output_prefix, color)
+    color && write(io, Base.text_colors[:normal])
+    print(io, suffix)
     return width
 end
 
@@ -2586,6 +2599,9 @@ function Prompt(prompt
     ;
     prompt_prefix = "",
     prompt_suffix = "",
+    output_prefix = "",
+    output_prefix_prefix = "",
+    output_prefix_suffix = "",
     keymap_dict = default_keymap_dict,
     repl = nothing,
     complete = EmptyCompletionProvider(),
@@ -2594,8 +2610,8 @@ function Prompt(prompt
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    return Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, repl,
-        complete, on_enter, on_done, hist, sticky)
+    return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing
