@@ -133,11 +133,16 @@ function _core_parser_hook(code, filename, lineno, offset, options)
                offset=offset,
                code=code)
 
-        if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
-            return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
-        else
-            return Core.Compiler.fl_parse(code, filename, offset, options)
-        end
+        _fl_parse_hook(code, filename, lineno, offset, options)
+    end
+end
+
+# Call the flisp parser
+function _fl_parse_hook(code, filename, lineno, offset, options)
+    @static if VERSION >= v"1.8.0-DEV.1370" # https://github.com/JuliaLang/julia/pull/43876
+        return Core.Compiler.fl_parse(code, filename, lineno, offset, options)
+    else
+        return Core.Compiler.fl_parse(code, filename, offset, options)
     end
 end
 
