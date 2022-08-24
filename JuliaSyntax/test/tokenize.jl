@@ -4,6 +4,7 @@ module TokenizeTests
 using Test
 
 using JuliaSyntax:
+    JuliaSyntax,
     @K_str,
     Kind,
     kind,
@@ -693,13 +694,9 @@ for op in ops
 
     for (arity, container) in strs
         for str in container
-            expr = Meta.parse(str, raise = false)
+            expr = JuliaSyntax.fl_parse(str, raise = false)
             if VERSION < v"1.7" && str == "a .&& b"
                 expr = Expr(Symbol(".&&"), :a, :b)
-            end
-            if str in (".>:b", ".<:b")
-                # HACK! See https://github.com/JuliaLang/JuliaSyntax.jl/issues/38
-                continue
             end
             if expr isa Expr && (expr.head != :error && expr.head != :incomplete)
                 tokens = collect(tokenize(str))

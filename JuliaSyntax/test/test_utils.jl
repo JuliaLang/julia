@@ -21,7 +21,8 @@ using JuliaSyntax:
     haschildren,
     children,
     child,
-    flisp_parse_all
+    fl_parseall,
+    fl_parse
 
 function remove_macro_linenums!(ex)
     if Meta.isexpr(ex, :macrocall)
@@ -63,7 +64,7 @@ function parsers_agree_on_file(filename; show_diff=false)
         # ignore this case.
         return true
     end
-    fl_ex = flisp_parse_all(text, filename=filename)
+    fl_ex = fl_parseall(text, filename=filename)
     if Meta.isexpr(fl_ex, :toplevel) && !isempty(fl_ex.args) &&
             Meta.isexpr(fl_ex.args[end], (:error, :incomplete))
         # Reference parser failed. This generally indicates a broken file not a
@@ -111,7 +112,7 @@ function equals_flisp_parse(tree)
     # Reparse with JuliaSyntax. This is a crude way to ensure we're not missing
     # some context from the parent node.
     ex,_,_ = parse(Expr, node_text)
-    fl_ex = flisp_parse_all(node_text)
+    fl_ex = fl_parseall(node_text)
     if Meta.isexpr(fl_ex, :error)
         return true  # Something went wrong in reduction; ignore these cases 😬
     end
@@ -237,7 +238,7 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
     println(stdout, "\n\n# Julia Expr:")
     show(stdout, MIME"text/plain"(), ex)
 
-    f_ex = JuliaSyntax.remove_linenums!(Meta.parse(code, raise=false))
+    f_ex = JuliaSyntax.remove_linenums!(fl_parse(code, raise=false))
     if JuliaSyntax.remove_linenums!(ex) != f_ex
         printstyled(stdout, "\n\n# flisp Julia Expr:\n", color=:red)
         show(stdout, MIME"text/plain"(), f_ex)
