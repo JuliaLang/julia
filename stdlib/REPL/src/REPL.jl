@@ -359,8 +359,7 @@ end
 
     consumer is an optional function that takes a REPLBackend as an argument
 """
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
-    backend = REPLBackend()
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     cleanup = @task try
             destroy(backend_ref, t)
@@ -1067,7 +1066,7 @@ function setup_interface(
 
     shell_prompt_len = length(SHELL_PROMPT)
     help_prompt_len = length(HELP_PROMPT)
-    jl_prompt_regex = r"^(?:\(.+\) )?julia> "
+    jl_prompt_regex = r"^In \[[0-9]+\]: |^(?:\(.+\) )?julia> "
     pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
 
     # Canonicalize user keymap input
@@ -1392,5 +1391,63 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
     nothing
 end
+
+module IPython
+
+using ..REPL
+
+__current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+
+function repl_eval_counter(hp)
+    length(hp.history)-hp.start_idx
+end
+
+function out_transform(x, repl=Base.active_repl)
+    return quote
+        julia_prompt = $repl.interface.modes[1]
+        n = $repl_eval_counter(julia_prompt.hist)
+        mod = $REPL.active_module()
+        if !isdefined(mod, :Out)
+            setglobal!(mod, :Out, Dict{Int, Any}())
+        end
+        local __temp_val = $x # workaround https://github.com/JuliaLang/julia/issues/464511
+        if __temp_val !== getglobal(mod, :Out) && __temp_val !== nothing # remove this?
+            getglobal(mod, :Out)[n] = __temp_val
+        end
+        __temp_val
+    end
+end
+
+function set_prompt(repl=Base.active_repl)
+    julia_prompt = repl.interface.modes[1]
+    julia_prompt.prompt = () -> string("In [", repl_eval_counter(julia_prompt.hist)+1, "]: ")
+end
+
+function set_output_prefix(repl=Base.active_repl)
+    julia_prompt = repl.interface.modes[1]
+    if REPL.hascolor(repl)
+        julia_prompt.output_prefix_prefix = Base.text_colors[:red]
+    end
+    julia_prompt.output_prefix = () -> string("Out[", repl_eval_counter(julia_prompt.hist), "]: ")
+end
+
+function __current_ast_transforms(repltask)
+    if repltask === nothing
+        isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+    else
+        repltask.ast_transforms
+    end
+end
+
+
+function ipython_mode(repl=Base.active_repl, repltask=nothing)
+    set_prompt(repl)
+    set_output_prefix(repl)
+    push!(__current_ast_transforms(repltask), ast -> out_transform(ast, repl))
+    return
+end
+end
+
+import .IPython.ipython_mode
 
 end # module

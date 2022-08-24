@@ -616,6 +616,20 @@ julia> REPL.activate(CustomMod)
   var       8 bytes Int64
 ```
 
+## IPython mode
+
+It is possible to get an interface which is similar to the IPython REPL with numbered input prompts and output prefixes. This is done by calling `REPL.ipython_mode()`. If you want to have this enabled on startup, add
+```julia
+atreplinit() do repl
+    if !isdefined(repl, :interface)
+        repl.interface = REPL.setup_interface(repl)
+    end
+    REPL.ipython_mode(repl)
+end
+```
+
+to your `startup.jl` file.
+
 ## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
