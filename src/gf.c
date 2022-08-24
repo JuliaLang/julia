@@ -1851,11 +1851,41 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                             if (k != n)
                                 continue;
                         }
-                        jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
-                        invalidate_external(mi, max_world);
+                        // Before deciding whether to invalidate `mi`, check each backedge for `invoke`s
                         if (mi->backedges) {
-                            invalidated = 1;
-                            invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_insert");
+                            jl_array_t *backedges = mi->backedges;
+                            size_t ib = 0, insb = 0, nb = jl_array_len(backedges);
+                            jl_value_t *invokeTypes;
+                            jl_method_instance_t *caller;
+                            while (ib < nb) {
+                                ib = get_next_edge(backedges, ib, &invokeTypes, &caller);
+                                if (!invokeTypes) {
+                                    // ordinary dispatch, invalidate
+                                    invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
+                                    invalidated = 1;
+                                } else {
+                                    // invoke-dispatch, check invokeTypes for validity
+                                    struct jl_typemap_assoc search = {invokeTypes, method->primary_world, NULL, 0, ~(size_t)0};
+                                    oldentry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->defs), &search, /*offs*/0, /*subtype*/0);
+                                    assert(oldentry);
+                                    if (oldentry->func.method == mi->def.method) {
+                                        jl_array_ptr_set(backedges, insb++, invokeTypes);
+                                        jl_array_ptr_set(backedges, insb++, caller);
+                                        continue;
+                                    }
+                                    invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
+                                    invalidated = 1;
+                                }
+                            }
+                            jl_array_del_end(backedges, nb - insb);
+                        }
+                        if (!mi->backedges || jl_array_len(mi->backedges) == 0) {
+                            jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
+                            invalidate_external(mi, max_world);
+                            if (mi->backedges) {
+                                invalidated = 1;
+                                invalidate_backedges(&do_nothing_with_codeinst, mi, max_world, "jl_method_table_insert");
+                            }
                         }
                     }
                 }
