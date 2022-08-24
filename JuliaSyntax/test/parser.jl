@@ -652,6 +652,8 @@ tests = [
         "[x ; y ; z]"  =>  "(vcat x y z)"
         "[x;]"  =>  "(vcat x)"
         "[x y]"  =>  "(hcat x y)"
+        # Early abort
+        "[x@y"  =>  "(hcat x) (error-t ✘ y)"
         # Mismatched rows
         "[x y ; z]"  =>  "(vcat (row x y) z)"
         # Single elements in rows
