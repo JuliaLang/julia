@@ -641,6 +641,7 @@ tests = [
         "```cmd```"  =>  "(macrocall :(Core.var\"@cmd\") \"cmd\")"
         # literals
         "42"   => "42"
+        "0x123456789abcdefp+0" => "8.19855292164869e16"
         # closing tokens
         ")"    => "(error)"
     ],

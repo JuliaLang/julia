@@ -20,7 +20,7 @@ function julia_string_to_number(str::AbstractString, kind)
         end
         return x
     elseif kind == K"Float"
-        if !startswith(str,"0x") && 'f' in str
+        if !startswith(str,"0x") && 'f' in str && !('p' in str)
             # This is kind of awful. Should we have a separate Float32 literal
             # type produced by the lexer?  The `f` suffix is nonstandard after all.
             return Base.parse(Float32, replace(str, 'f'=>'e'))
