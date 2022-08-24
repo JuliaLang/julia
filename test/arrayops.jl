@@ -3074,7 +3074,7 @@ end
         @test deleteat(a, (i for i in idx)) == a_remaining
 
         # logical indexing
-        @test deleteat(a, map(in(idx), 1:length(a))) == a_remaining
+        @test deleteat(a, map(in(idx), ainds)) == a_remaining
     end
     @test deleteat(a, 11:10) == [1:10;]
     @test deleteat(a, [1,3,5,7:10...]) == [2,4,6]
@@ -3123,16 +3123,16 @@ end
 end
 
 @testset "insert" begin
-    @test @inferred(insert(Int[1, 2], 1, :two)) ==ₜ [:two, 1, 2]
-    @test @inferred(insert(Int[1, 2], 2, 3.0)) ==ₜ [1.0, 3.0, 2.0]
-    @test @inferred(insert(Int[1, 2], 3, 3)) ==ₜ [1, 2, 3]
+    v = Int[1, 2]
+    @test @inferred(insert(v, 1, :two)) ==ₜ [:two, 1, 2]
+    @test @inferred(insert(v, 2, 3.0)) ==ₜ [1.0, 3.0, 2.0]
+    @test @inferred(insert(v, 3, 3)) ==ₜ [1, 2, 3]
 
     @test insert(v, 1, "here") == ["here", 1, 2]
     @test insert(v, 2, "here") == [1, "here", 2]
     @test insert(v, 3, "here") == [1, 2, "here"]
     @test_throws BoundsError insert(v, 0, 5)
     @test_throws BoundsError insert(v, 0, 5)
-
 
     @test_throws BoundsError insert(v, 0, 5)
     for i = 1:4
@@ -3141,10 +3141,6 @@ end
         @test vc == [v[1:(i-1)]; 5; v[i:end]]
     end
     @test_throws BoundsError insert(v, 5, 5)
-
-    @test insert((1,2), 1, "here") == ("here", 1, 2)
-    @test insert((1,2), 2, "here") == (1, "here", 2)
-    @test insert((1,2), 3, "here") == (1, 2, "here")
 end
 
 @test insert(v, i, 5) === insert!([3, 7, 6], i, 5)

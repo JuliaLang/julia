@@ -757,3 +757,9 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 
 # issue #46049: setindex(::Tuple) regression
 @inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
+
+@testset "insert" begin
+    @test insert((1,2), 1, "here") == ("here", 1, 2)
+    @test insert((1,2), 2, "here") == (1, "here", 2)
+    @test insert((1,2), 3, "here") == (1, 2, "here")
+end
