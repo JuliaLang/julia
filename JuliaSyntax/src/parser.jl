@@ -398,7 +398,7 @@ function parse_Nary(ps::ParseState, down, delimiters, closing_tokens)
             break
         elseif k in delimiters
             # ignore empty delimited sections
-            # a;;;b  ==>  (block a b) 
+            # a;;;b  ==>  (block a b)
             continue
         end
         down(ps)
@@ -433,7 +433,7 @@ function parse_toplevel(ps::ParseState)
     nothing
 end
 
-# Parse a newline or semicolon-delimited list of expressions. 
+# Parse a newline or semicolon-delimited list of expressions.
 # Repeated delimiters are allowed but ignored
 # a;b;c     ==>  (block a b c)
 # a;;;b;;   ==>  (block a b)
@@ -2246,7 +2246,7 @@ function parse_imports(ps::ParseState)
     bump(ps, TRIVIA_FLAG)
     emark = position(ps)
     initial_as = parse_import(ps, word, false)
-    t = peek_token(ps) 
+    t = peek_token(ps)
     k = kind(t)
     has_import_prefix = false  # true if we have `prefix:` in `import prefix: stuff`
     has_comma = false
@@ -2798,7 +2798,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     if k == K"," || (is_closing_token(ps, k) && k != K";")
         if k == K","
             # [x,]  ==>  (vect x)
-            bump(ps, TRIVIA_FLAG)
+            bump(ps, TRIVIA_FLAG; skip_newlines = true)
         end
         # [x]      ==>  (vect x)
         # [x \n ]  ==>  (vect x)
@@ -2912,9 +2912,9 @@ end
 # For example, (a=1; b=2) could be seen to parse four different ways!
 #
 # Function args:   (kw a 1) (parameters (kw b 2))
-# Tuple-like:      (=  a 1) (parameters (kw b 2)) 
-# Block:           (=  a 1)             (=  b 2)  
-# [] vect-like:    (=  a 1) (parameters (=  b 2)) 
+# Tuple-like:      (=  a 1) (parameters (kw b 2))
+# Block:           (=  a 1)             (=  b 2)
+# [] vect-like:    (=  a 1) (parameters (=  b 2))
 #
 # Expressions (X; Y; Z) with more semicolons are also allowed by the flisp
 # parser and generally parse as nested parameters blocks. This is invalid Julia
@@ -3384,7 +3384,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         # 42   ==>  42
         bump(ps)
     elseif is_closing_token(ps, leading_kind)
-        # Leave closing token in place for other productions to 
+        # Leave closing token in place for other productions to
         # recover with
         # )  ==>  error
         msg = leading_kind == K"EndMarker" ?
@@ -3395,4 +3395,3 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump(ps, error="invalid syntax atom")
     end
 end
-
