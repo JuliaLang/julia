@@ -494,7 +494,7 @@ end
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you
-give it a `DataType`, it will tell you that a value of the `DataType` is mutable.
+give it a `DataType`, it will tell you that a value of the type is mutable.
 
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
