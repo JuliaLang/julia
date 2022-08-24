@@ -2443,7 +2443,8 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                         k = 0;
                         while (k < nlive) {
                             k = get_next_edge(milive->backedges, k, &invokeTypes2, &belive2);
-                            if (belive == belive2 && jl_egal(invokeTypes, invokeTypes2)) {
+                            if (belive == belive2 && ((invokeTypes == NULL && invokeTypes2 == NULL) ||
+                                    (invokeTypes && invokeTypes2 && jl_egal(invokeTypes, invokeTypes2)))) {
                                 found = 1;
                                 break;
                             }
