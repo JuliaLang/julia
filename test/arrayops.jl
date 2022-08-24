@@ -3133,14 +3133,4 @@ end
     @test insert(v, 3, "here") == [1, 2, "here"]
     @test_throws BoundsError insert(v, 0, 5)
     @test_throws BoundsError insert(v, 0, 5)
-
-    @test_throws BoundsError insert(v, 0, 5)
-    for i = 1:4
-        vc = copy(v)
-        @test insert(vc, i, 5) === vc
-        @test vc == [v[1:(i-1)]; 5; v[i:end]]
-    end
-    @test_throws BoundsError insert(v, 5, 5)
 end
-
-@test insert(v, i, 5) === insert!([3, 7, 6], i, 5)

@@ -87,14 +87,14 @@ function _deleteat(x::Tuple{Vararg{Any,N}}, i::Integer) where {N}
 end
 
 function insert(x::Tuple{Vararg{Any,N}}, index::Integer, item) where {N}
-    @boundscheck 1 <= index <= length(x) || throw(BoundsError(x, index))
+    @boundscheck 1 <= index <= (length(x) + 1) || throw(BoundsError(x, index))
     ntuple(Val{N+1}()) do j
         if j == index
             item
         elseif j < index
-            getfield(index, j)
+            getfield(x, j)
         else
-            getfield(index, j - 1)
+            getfield(x, j - 1)
         end
     end
 end
