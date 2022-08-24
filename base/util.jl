@@ -348,7 +348,7 @@ Displays the `message` then waits for user input. Input is terminated when a new
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
-See also `Base.winprompt` (if your OS is Windows) and `Base.getpass` for secure entry of passwords.
+See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
 # Example
 
