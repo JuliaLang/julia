@@ -1245,7 +1245,7 @@ JLIBLDFLAGS += -Wl,-Bsymbolic-functions
 else
 endif
 ifeq (--enable-new-dtags, $(shell $(LD) --help | grep -o -e "--enable-new-dtags"))
-JLIBLDFLAGS += -Wl,--enable-new-dtags 
+JLIBLDFLAGS += -Wl,--enable-new-dtags
 endif
 endif
 
