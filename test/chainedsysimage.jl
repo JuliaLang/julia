@@ -30,11 +30,13 @@ end
     objcopy = get_llvm_cmd("llvm-objcopy")
     ld = LLD_jll.lld()
 
+    flavor = Sys.isapple() ? "darwin" : (Sys.iswindows() ? "link" : "gnu")
+
     if success(`$ar --version`) && success(`$objcopy --version`) && success(`$ld -flavor gnu --version`)
         dir = mktempdir() # Create directory for the compilation
         sysimage_path = Base.unsafe_string(Base.JLOptions().image_file)
         object_file = replace(sysimage_path, ".$(Libdl.dlext)" => "-o.a")
-        if true || !isfile(object_file)
+        if !isfile(object_file)
             # Compile julia sysimage because `sys-o.a` file is not distributed
             object_file = joinpath(dir, "chainedsysimage-test-sys.o")
             # Use the default values from PackageCompiler for incremental sysimage build (without re-using native code
@@ -52,7 +54,7 @@ end
             sysimage_path = tempname() * ".$(Libdl.dlext)"
             LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
             OBJECT = `--whole-archive $object_file --no-whole-archive`
-            run(`$ld -flavor gnu --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
+            run(`$ld -flavor $flavor --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
         end
         cd(dir) do
             cp("$object_file", "sys-o.a", force=true)
@@ -76,7 +78,7 @@ end;
             chained_sysimage = "chained.$(Libdl.dlext)"
             run(`$(Base.julia_cmd()) --sysimage-native-code=chained --startup-file=no --sysimage=$sysimage_path --output-o chained.o.a $source1`)
             run(`$ar x chained.o.a`) # Extract new sysimage files
-            run(`$ld -flavor gnu --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
+            run(`$ld -flavor $flavor --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
 
             # Test if "println(0.1, 1, 0x2)" is precompiled
             source2 = tempname(dir)
