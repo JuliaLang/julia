@@ -2670,7 +2670,7 @@ static int intersect_vararg_length(jl_value_t *v, ssize_t n, jl_stenv_t *e, int8
 }
 
 static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
-static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, jl_stenv_t *e, int param)
+static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, ssize_t offset, jl_stenv_t *e, int param)
 {
     // Vararg: covariant in first parameter, invariant in second
     jl_value_t *xp1=jl_unwrap_vararg(vmx), *xp2=jl_unwrap_vararg_num(vmx),
@@ -2688,19 +2688,24 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, jl_sten
         JL_GC_POP();
         return ii;
     }
+    jl_varbinding_t *xb = NULL, *yb = NULL;
     if (xp2 && jl_is_typevar(xp2)) {
-        jl_varbinding_t *xb = lookup(e, (jl_tvar_t*)xp2);
-        if (xb) xb->intvalued = 1;
-        if (!yp2) {
-            i2 = bound_var_below((jl_tvar_t*)xp2, xb, e);
+        xb = lookup(e, (jl_tvar_t*)xp2);
+        if (xb) {
+            xb->intvalued = 1;
+            xb->offset = offset;
         }
+        if (!yp2)
+            i2 = bound_var_below((jl_tvar_t*)xp2, xb, e);
     }
     if (yp2 && jl_is_typevar(yp2)) {
-        jl_varbinding_t *yb = lookup(e, (jl_tvar_t*)yp2);
-        if (yb) yb->intvalued = 1;
-        if (!xp2) {
-            i2 = bound_var_below((jl_tvar_t*)yp2, yb, e);
+        yb = lookup(e, (jl_tvar_t*)yp2);
+        if (yb) {
+            yb->intvalued = 1;
+            yb->offset = -offset;
         }
+        if (!xp2)
+            i2 = bound_var_below((jl_tvar_t*)yp2, yb, e);
     }
     if (xp2 && yp2) {
         // Vararg{T,N} <: Vararg{T2,N2}; equate N and N2
@@ -2711,6 +2716,8 @@ static jl_value_t *intersect_varargs(jl_vararg_t *vmx, jl_vararg_t *vmy, jl_sten
             i2 = jl_bottom_type;
         }
     }
+    if (xb) xb->offset = 0;
+    if (yb) yb->offset = 0;
     ii = i2 == jl_bottom_type ? (jl_value_t*)jl_bottom_type : (jl_value_t*)jl_wrap_vararg(ii, i2);
     JL_GC_POP();
     return ii;
@@ -2749,28 +2756,14 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
                 res = (jl_value_t*)jl_apply_tuple_type_v(jl_svec_data(params), i);
             break;
         }
-        jl_varbinding_t *xb=NULL, *yb=NULL;
         jl_value_t *ii = NULL;
-        if (vx && vy) {
-            // {A^n...,Vararg{T,N}} ∩ {Vararg{S,M}} = {(A∩S)^n...,Vararg{T∩S,N}} plus N = M-n
-            jl_value_t *xlen = jl_unwrap_vararg_num(xi);
-            if (xlen && jl_is_typevar(xlen)) {
-                xb = lookup(e, (jl_tvar_t*)xlen);
-                if (xb)
-                    xb->offset = ly-lx;
-            }
-            jl_value_t *ylen = jl_unwrap_vararg_num(yi);
-            if (ylen && jl_is_typevar(ylen)) {
-                yb = lookup(e, (jl_tvar_t*)ylen);
-                if (yb)
-                    yb->offset = lx-ly;
-            }
+        if (vx && vy)
             ii = intersect_varargs((jl_vararg_t*)xi,
                                    (jl_vararg_t*)yi,
+                                   ly - lx, // xi's offset: {A^n...,Vararg{T,N}} ∩ {Vararg{S,M}}
+                                            // {(A∩S)^n...,Vararg{T∩S,N}} plus N = M-n
                                    e, param);
-            if (xb) xb->offset = 0;
-            if (yb) yb->offset = 0;
-        } else {
+        else {
             if (vx)
                 xi = jl_unwrap_vararg(xi);
             if (vy)
@@ -2779,6 +2772,13 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
         }
         if (ii == jl_bottom_type) {
             if (vx && vy) {
+                jl_varbinding_t *xb=NULL, *yb=NULL;
+                jl_value_t *xlen = jl_unwrap_vararg_num(xi);
+                if (xlen && jl_is_typevar(xlen))
+                    xb = lookup(e, (jl_tvar_t*)xlen);
+                jl_value_t *ylen = jl_unwrap_vararg_num(yi);
+                if (ylen && jl_is_typevar(ylen))
+                    yb = lookup(e, (jl_tvar_t*)ylen);
                 int len = i > j ? i : j;
                 if ((xb && jl_is_long(xb->lb) && lx-1+jl_unbox_long(xb->lb) != len) ||
                     (yb && jl_is_long(yb->lb) && ly-1+jl_unbox_long(yb->lb) != len)) {
@@ -2894,13 +2894,10 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     jl_savedenv_t se;
     JL_GC_PUSH2(&ii, &root);
     save_env(e, &root, &se);
-    if (!subtype_in_env_existential(x, y, e, 0, e->invdepth)) {
+    if (!subtype_in_env_existential(x, y, e, 0, e->invdepth))
         ii = NULL;
-    }
-    else {
-        if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
-            ii = NULL;
-    }
+    else if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
+        ii = NULL;
     restore_env(e, root, &se);
     free_env(&se);
     JL_GC_POP();
