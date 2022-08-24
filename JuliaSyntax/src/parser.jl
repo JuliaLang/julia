@@ -2617,6 +2617,9 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
     # For an excellent overview of Pratt parsing, see
     # https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
     (dim, binding_power) = parse_array_separator(ps, array_order)
+    if binding_power == typemin(Int)
+        return (K"hcat", EMPTY_FLAGS)
+    end
     while true
         (next_dim, next_bp) = parse_array_inner(ps, binding_power, array_order)
         if next_bp == typemin(Int)
