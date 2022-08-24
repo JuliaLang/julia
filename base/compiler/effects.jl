@@ -1,3 +1,7 @@
+struct ConstPropProfitableArgs
+    argsbits::UInt8
+end
+
 """
     effects::Effects
 
@@ -95,6 +99,7 @@ struct Effects
     inaccessiblememonly::UInt8
     nonoverlayed::Bool
     noinbounds::Bool
+    const_prop_profitable_args::ConstPropProfitableArgs
     function Effects(
         consistent::UInt8,
         effect_free::UInt8,
@@ -103,7 +108,8 @@ struct Effects
         notaskstate::Bool,
         inaccessiblememonly::UInt8,
         nonoverlayed::Bool,
-        noinbounds::Bool)
+        noinbounds::Bool,
+        const_prop_profitable_args::ConstPropProfitableArgs = NO_PROFITABLE_ARGS)
         return new(
             consistent,
             effect_free,
@@ -112,7 +118,8 @@ struct Effects
             notaskstate,
             inaccessiblememonly,
             nonoverlayed,
-            noinbounds)
+            noinbounds,
+            const_prop_profitable_args)
     end
 end
 
@@ -129,6 +136,9 @@ const EFFECT_FREE_IF_INACCESSIBLEMEMONLY = 0x01 << 1
 # :inaccessiblememonly bits
 const INACCESSIBLEMEM_OR_ARGMEMONLY = 0x01 << 1
 
+# :const_prop_profitable_args bits
+const NO_PROFITABLE_ARGS = ConstPropProfitableArgs(0x00)
+
 const EFFECTS_TOTAL    = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  true,  true,  true,  ALWAYS_TRUE,  true,  true)
 const EFFECTS_THROWS   = Effects(ALWAYS_TRUE,  ALWAYS_TRUE,  false, true,  true,  ALWAYS_TRUE,  true,  true)
 const EFFECTS_UNKNOWN  = Effects(ALWAYS_FALSE, ALWAYS_FALSE, false, false, false, ALWAYS_FALSE, true,  false)  # unknown mostly, but it's not overlayed at least (e.g. it's not a call)
@@ -142,7 +152,8 @@ function Effects(e::Effects = _EFFECTS_UNKNOWN;
     notaskstate::Bool = e.notaskstate,
     inaccessiblememonly::UInt8 = e.inaccessiblememonly,
     nonoverlayed::Bool = e.nonoverlayed,
-    noinbounds::Bool = e.noinbounds)
+    noinbounds::Bool = e.noinbounds,
+    const_prop_profitable_args::ConstPropProfitableArgs = e.const_prop_profitable_args)
     return Effects(
         consistent,
         effect_free,
@@ -151,7 +162,8 @@ function Effects(e::Effects = _EFFECTS_UNKNOWN;
         notaskstate,
         inaccessiblememonly,
         nonoverlayed,
-        noinbounds)
+        noinbounds,
+        const_prop_profitable_args)
 end
 
 function merge_effects(old::Effects, new::Effects)
@@ -163,7 +175,8 @@ function merge_effects(old::Effects, new::Effects)
         merge_effectbits(old.notaskstate, new.notaskstate),
         merge_effectbits(old.inaccessiblememonly, new.inaccessiblememonly),
         merge_effectbits(old.nonoverlayed, new.nonoverlayed),
-        merge_effectbits(old.noinbounds, new.noinbounds))
+        merge_effectbits(old.noinbounds, new.noinbounds),
+        merge_effectbits(old.const_prop_profitable_args, new.const_prop_profitable_args))
 end
 
 function merge_effectbits(old::UInt8, new::UInt8)
@@ -173,6 +186,7 @@ function merge_effectbits(old::UInt8, new::UInt8)
     return old | new
 end
 merge_effectbits(old::Bool, new::Bool) = old & new
+merge_effectbits(old::ConstPropProfitableArgs, new::ConstPropProfitableArgs) = ConstPropProfitableArgs(old.argsbits | new.argsbits)
 
 is_consistent(effects::Effects)          = effects.consistent === ALWAYS_TRUE
 is_effect_free(effects::Effects)         = effects.effect_free === ALWAYS_TRUE
@@ -208,15 +222,18 @@ is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect
 
 is_inaccessiblemem_or_argmemonly(effects::Effects) = effects.inaccessiblememonly === INACCESSIBLEMEM_OR_ARGMEMONLY
 
+is_const_prop_profitable_arg(effects::Effects, arg::Int) = !iszero(effects.const_prop_profitable_args.argsbits & (0x01 << (arg-1)))
+
 function encode_effects(e::Effects)
-    return ((e.consistent          % UInt32) << 0) |
-           ((e.effect_free         % UInt32) << 3) |
-           ((e.nothrow             % UInt32) << 5) |
-           ((e.terminates          % UInt32) << 6) |
-           ((e.notaskstate         % UInt32) << 7) |
-           ((e.inaccessiblememonly % UInt32) << 8) |
-           ((e.nonoverlayed        % UInt32) << 10)|
-           ((e.noinbounds          % UInt32) << 11)
+    return ((e.consistent          % UInt32) << 0)  |
+           ((e.effect_free         % UInt32) << 3)  |
+           ((e.nothrow             % UInt32) << 5)  |
+           ((e.terminates          % UInt32) << 6)  |
+           ((e.notaskstate         % UInt32) << 7)  |
+           ((e.inaccessiblememonly % UInt32) << 8)  |
+           ((e.nonoverlayed        % UInt32) << 10) |
+           ((e.noinbounds          % UInt32) << 11) |
+           ((e.const_prop_profitable_args.argsbits % UInt32) << 12)
 end
 
 function decode_effects(e::UInt32)
@@ -228,7 +245,8 @@ function decode_effects(e::UInt32)
         _Bool((e >> 7) & 0x01),
         UInt8((e >> 8) & 0x03),
         _Bool((e >> 10) & 0x01),
-        _Bool((e >> 11) & 0x01))
+        _Bool((e >> 11) & 0x01),
+        ConstPropProfitableArgs(UInt8((e >> 12) & 0x7f)))
 end
 
 struct EffectsOverride

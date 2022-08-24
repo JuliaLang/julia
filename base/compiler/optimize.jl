@@ -134,7 +134,8 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), iinfo:
         # inferred source in the local cache
         # we still won't find a source for recursive call because the "single-level" inlining
         # seems to be more trouble and complex than it's worth
-        inf_result = cache_lookup(optimizer_lattice(interp), iinfo.mi, iinfo.argtypes, get_inference_cache(interp))
+        inf_cache = get_inference_cache(interp)
+        inf_result = cache_lookup(optimizer_lattice(interp), iinfo.mi, iinfo.argtypes, inf_cache)
         if inf_result !== nothing
             src = inf_result.src
             if isa(src, CodeInfo) && is_source_inferred(src)

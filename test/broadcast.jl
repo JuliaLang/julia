@@ -1133,3 +1133,10 @@ end
 import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 @test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
     Core.Compiler.is_foldable
+
+function f44330(x; isreal=true)
+    y = similar(x)
+    y .= x
+    isreal ? real(y) : y
+end
+@inferred f44330(randn(ComplexF64, 1))
