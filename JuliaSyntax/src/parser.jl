@@ -2618,6 +2618,7 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
     # https://matklad.github.io/2020/04/13/simple-but-powerful-pratt-parsing.html
     (dim, binding_power) = parse_array_separator(ps, array_order)
     if binding_power == typemin(Int)
+        # [x@y  ==>  (hcat x (error-t ✘ y))
         bump_closing_token(ps, closer)
         return (K"hcat", EMPTY_FLAGS)
     end
