@@ -1175,6 +1175,7 @@ static const auto &builtin_func_map() {
           { jl_f_arraysize_addr,          new JuliaFunction{XSTR(jl_f_arraysize), get_func_sig, get_func_attrs} },
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
           { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
+          { jl_f_compilerbarrier_addr,    new JuliaFunction{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
           { jl_f_finalizer_addr,          new JuliaFunction{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} }
         };
     return builtins;
@@ -6626,6 +6627,7 @@ static jl_llvm_functions_t
     jl_datatype_t *vatyp = NULL;
     JL_GC_PUSH2(&ctx.code, &vatyp);
     ctx.code = src->code;
+    ctx.source = src;
 
     std::map<int, BasicBlock*> labels;
     bool toplevel = false;
@@ -6648,13 +6650,12 @@ static jl_llvm_functions_t
     }
     ctx.nReqArgs = nreq;
     if (va) {
-        jl_sym_t *vn = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, ctx.nargs - 1);
+        jl_sym_t *vn = slot_symbol(ctx, ctx.nargs-1);
         if (vn != jl_unused_sym)
             ctx.vaSlot = ctx.nargs - 1;
     }
     toplevel = !jl_is_method(lam->def.method);
     ctx.rettype = jlrettype;
-    ctx.source = src;
     ctx.funcName = ctx.name;
     ctx.spvals_ptr = NULL;
     jl_array_t *stmts = ctx.code;
@@ -6712,7 +6713,7 @@ static jl_llvm_functions_t
     for (i = 0; i < nreq; i++) {
         jl_varinfo_t &varinfo = ctx.slots[i];
         varinfo.isArgument = true;
-        jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
+        jl_sym_t *argname = slot_symbol(ctx, i);
         if (argname == jl_unused_sym)
             continue;
         jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
@@ -6929,7 +6930,7 @@ static jl_llvm_functions_t
             const bool AlwaysPreserve = true;
             // Go over all arguments and local variables and initialize their debug information
             for (i = 0; i < nreq; i++) {
-                jl_sym_t *argname = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
+                jl_sym_t *argname = slot_symbol(ctx, i);
                 if (argname == jl_unused_sym)
                     continue;
                 jl_varinfo_t &varinfo = ctx.slots[i];
@@ -6956,7 +6957,7 @@ static jl_llvm_functions_t
                     DINode::FlagZero);                  // Flags (TODO: Do we need any)
             }
             for (i = 0; i < vinfoslen; i++) {
-                jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
+                jl_sym_t *s = slot_symbol(ctx, i);
                 jl_varinfo_t &varinfo = ctx.slots[i];
                 if (varinfo.isArgument || s == jl_empty_sym || s == jl_unused_sym)
                     continue;
@@ -7213,7 +7214,7 @@ static jl_llvm_functions_t
         attrs.at(Arg->getArgNo()) = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
     }
     for (i = 0; i < nreq; i++) {
-        jl_sym_t *s = (jl_sym_t*)jl_array_ptr_ref(src->slotnames, i);
+        jl_sym_t *s = slot_symbol(ctx, i);
         jl_value_t *argType = (i == 0 && ctx.is_opaque_closure) ? (jl_value_t*)jl_any_type :
             jl_nth_slot_type(lam->specTypes, i);
         bool isboxed = deserves_argbox(argType);

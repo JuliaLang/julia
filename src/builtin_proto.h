@@ -55,6 +55,7 @@ DECLARE_BUILTIN(_typebody);
 DECLARE_BUILTIN(typeof);
 DECLARE_BUILTIN(_typevar);
 DECLARE_BUILTIN(donotdelete);
+DECLARE_BUILTIN(compilerbarrier);
 DECLARE_BUILTIN(getglobal);
 DECLARE_BUILTIN(setglobal);
 DECLARE_BUILTIN(finalizer);

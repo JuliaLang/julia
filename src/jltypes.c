@@ -2532,7 +2532,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_simplevector_type,
                             jl_any_type,
-                            jl_any_type,
+                            jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_bool_type,

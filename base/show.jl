@@ -1686,7 +1686,14 @@ end
 
 ## AST printing ##
 
-show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
+function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
+    if get(io, :maxssaid, typemax(Int))::Int < val.id
+        # invalid SSAValue, print this in red for better recognition
+        printstyled(io, "%", val.id; color=:red)
+    else
+        print(io, "%", val.id)
+    end
+end
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)

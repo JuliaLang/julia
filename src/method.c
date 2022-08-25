@@ -784,6 +784,49 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     return m;
 }
 
+// backedges ------------------------------------------------------------------
+
+// Use this in a `while` loop to iterate over the backedges in a MethodInstance.
+// `*invokesig` will be NULL if the call was made by ordinary dispatch, otherwise
+// it will be the signature supplied in an `invoke` call.
+// If you don't need `invokesig`, you can set it to NULL on input.
+// Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
+{
+    jl_value_t *item = jl_array_ptr_ref(list, i);
+    if (jl_is_method_instance(item)) {
+        // Not an `invoke` call, it's just the MethodInstance
+        if (invokesig != NULL)
+            *invokesig = NULL;
+        *caller = (jl_method_instance_t*)item;
+        return i + 1;
+    }
+    assert(jl_is_type(item));
+    // An `invoke` call, it's a (sig, MethodInstance) pair
+    if (invokesig != NULL)
+        *invokesig = item;
+    *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i + 1);
+    if (*caller)
+        assert(jl_is_method_instance(*caller));
+    return i + 2;
+}
+
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, invokesig);
+    jl_array_ptr_set(list, i++, caller);
+    return i;
+}
+
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_1d_push(list, invokesig);
+    jl_array_ptr_1d_push(list, (jl_value_t*)caller);
+    return;
+}
+
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,

@@ -202,7 +202,7 @@ end
 
 @test which(===, Tuple{Int, Int}) isa Method
 @test length(code_typed(===, Tuple{Int, Int})) === 1
-@test only(Base.return_types(===, Tuple{Int, Int})) === Any
+@test only(Base.return_types(===, Tuple{Int, Int})) === Bool
 
 module TestingExported
 using Test
