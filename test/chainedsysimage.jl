@@ -53,8 +53,17 @@ end
             # Use the newly compiled sysimage
             sysimage_path = tempname() * ".$(Libdl.dlext)"
             LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
-            OBJECT = `--whole-archive $object_file --no-whole-archive`
-            run(`$ld -flavor $flavor --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
+            if Sys.isapple()
+                OBJECT = `-all_load $object_file -noall_load`
+            else
+                OBJECT = `--whole-archive $object_file --no-whole-archive`
+            end
+
+            if Sys.isapple()
+                run(`$ld -flavor $flavor -arch $(Sys.ARCH) -dylib -o $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
+            else
+                run(`$ld -flavor $flavor  --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
+            end
         end
         cd(dir) do
             cp("$object_file", "sys-o.a", force=true)
@@ -78,7 +87,12 @@ end;
             chained_sysimage = "chained.$(Libdl.dlext)"
             run(`$(Base.julia_cmd()) --sysimage-native-code=chained --startup-file=no --sysimage=$sysimage_path --output-o chained.o.a $source1`)
             run(`$ar x chained.o.a`) # Extract new sysimage files
-            run(`$ld -flavor $flavor --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
+
+            if Sys.isapple()
+                run(`$ld -flavor $flavor -arch $(Sys.ARCH) -dylib -o $chained_sysimage text.o data.o text-old.o`) # Link it all together
+            else
+                run(`$ld -flavor $flavor --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
+            end
 
             # Test if "println(0.1, 1, 0x2)" is precompiled
             source2 = tempname(dir)
