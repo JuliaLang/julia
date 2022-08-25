@@ -470,7 +470,7 @@ _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B
 
 # append a zero element / drop the last element
 _pushzero(A) = (B = similar(A, length(A)+1); B[begin:end-1] .= A; B[end] = zero(eltype(B)); B)
-_droplast(A) = (pop!(A); A)
+_droplast!(A) = deleteat!(A, lastindex(A))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
