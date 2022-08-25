@@ -435,6 +435,7 @@ tests = [
         "function (x,y) end"   =>  "(function (tuple x y) (block))"
         "function (x=1) end"   =>  "(function (tuple (kw x 1)) (block))"
         "function (;x=1) end"  =>  "(function (tuple (parameters (kw x 1))) (block))"
+        "function ()(x) end"   =>  "(function (call (tuple) x) (block))"
         "function (:)() end"   =>  "(function (call :) (block))"
         "function (x::T)() end"=>  "(function (call (:: x T)) (block))"
         "function (::T)() end" =>  "(function (call (:: T)) (block))"
