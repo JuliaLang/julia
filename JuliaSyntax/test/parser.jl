@@ -129,11 +129,7 @@ tests = [
     ],
     JuliaSyntax.parse_term => [
         "a * b * c"  => "(call-i a * b c)"
-        # parse_unary
-        "-2*x"   =>  "(call-i -2 * x)"
-        ":T"     =>  "(quote T)"
-        "in::T"  =>  "(:: in T)"
-        "isa::T" =>  "(:: isa T)"
+        "-2*x"       => "(call-i -2 * x)"
     ],
     JuliaSyntax.parse_juxtapose => [
         "2x"         => "(call-i 2 * x)"
@@ -153,9 +149,16 @@ tests = [
         "0xenomorph" => "0x0e"
     ],
     JuliaSyntax.parse_unary => [
-        "+2"       => "2"
+        ":T"       => "(quote T)"
+        "in::T"    => "(:: in T)"
+        "isa::T"   => "(:: isa T)"
         "-2^x"     => "(call - (call-i 2 ^ x))"
         "-2[1, 3]" => "(call - (ref 2 1 3))"
+        "-2"       => "-2"
+        "+2.0"     => "2.0"
+        "-0x1"     => "(call - 0x01)"
+        "- 2"      => "(call - 2)"
+        ".-2"      => "(call .- 2)"
     ],
     JuliaSyntax.parse_unary_call => [
         # Standalone dotted operators are parsed as (|.| op)
