@@ -21,9 +21,6 @@ tests = [
         "a;b \n c;d" =>  "(toplevel (toplevel a b) (toplevel c d))"
         "a \n \n"    =>  "(toplevel a)"
         ""           =>  "(toplevel)"
-        # Early abort in array parsing
-        "[x@y"       =>  "(toplevel (hcat x) (error-t ✘ y))"
-        "[x@y]"      =>  "(toplevel (hcat x) (error-t ✘ y ✘))"
     ],
     JuliaSyntax.parse_block => [
         "a;b;c"   => "(block a b c)"
@@ -655,6 +652,9 @@ tests = [
         "[x ; y ; z]"  =>  "(vcat x y z)"
         "[x;]"  =>  "(vcat x)"
         "[x y]"  =>  "(hcat x y)"
+        # Early abort in array parsing
+        "[x@y"   =>  "(hcat x (error-t ✘ y))"
+        "[x@y]"  =>  "(hcat x (error-t ✘ y))"
         # Mismatched rows
         "[x y ; z]"  =>  "(vcat (row x y) z)"
         # Single elements in rows
