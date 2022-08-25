@@ -468,18 +468,10 @@ end
     BU = Bidiagonal(randn(10), randn(9), :U)
     C = SymTridiagonal(randn(10), randn(9))
     D = Tridiagonal(randn(9), randn(10), randn(9))
-    ABL = kron(A, BL)
-    ABU = kron(A, BU)
-    AC = kron(A, C)
-    AD = kron(A, D)
-    @test ABL isa Bidiagonal
-    @test ABU isa Bidiagonal
-    @test AC isa SymTridiagonal
-    @test AD isa Tridiagonal
-    @test ABL == kron(Array(A), Array(BL))
-    @test ABU == kron(Array(A), Array(BU))
-    @test AC == kron(Array(A), Array(C))
-    @test AD == kron(Array(A), Array(D))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
 end
 
 @testset "svdvals and eigvals (#11120/#11247)" begin

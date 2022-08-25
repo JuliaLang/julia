@@ -594,7 +594,7 @@ kron(A::Diagonal, B::Diagonal) = Diagonal(kron(A.diag, B.diag))
 
 function kron(A::Diagonal, B::SymTridiagonal)
     kdv = kron(diag(A), B.dv)
-    kev = _droplast(kron(diag(A), _pushzero(B.ev)))
+    kev = _droplast(kron(diag(A), _pushzero(_evview(B))))
     SymTridiagonal(kdv, kev)
 end
 function kron(A::Diagonal, B::Tridiagonal)
