@@ -1071,6 +1071,17 @@ Return the nearest integral value of the same type as the complex-valued `z` to 
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
+                                                    
+If the `digits` keyword argument is provided, it rounds to the specified
+number of digits after the decimal place (or before if negative), in
+base `base`.
+
+If the `sigdigits` keyword argument is provided, it rounds to the
+specified number of significant `digits`, in base `base`.
+                                                    
+`RoundingModeReal` and `RoundingModeImaginary` defaults to `RoundNearest`,
+which rounds to the nearest integer, with ties (fractional values of 0.5)
+being rounded to the nearest even integer.
 
 # Example
 ```jldoctest
@@ -1079,7 +1090,7 @@ julia> round(3.14 + 4.5im)
 
 julia> round(3.14 + 4.5im, RoundUp, RoundNearestTiesUp)
 4.0 + 5.0im
-                                                    
+
 julia> round(3.14159 + 4.512im; digits = 1)
 3.1 + 4.5im
 
