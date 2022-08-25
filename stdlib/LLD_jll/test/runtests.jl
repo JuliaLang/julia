@@ -4,5 +4,6 @@ using Test, Libdl, LLD_jll
 
 @testset "LLD_jll" begin
     @test isfile(LLD_jll.lld_path)
-    @test success(`$(LLD_jll.lld()) --version`)
+    flavor = Sys.isapple() ? "darwin" : (Sys.iswindows() ? "link" : "gnu")
+    @test success(`$(LLD_jll.lld()) -flavor $flavor --version`)
 end

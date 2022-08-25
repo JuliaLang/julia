@@ -307,15 +307,7 @@ endif
 	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
 
 	# Install `lld` into libexec/
-	$(INSTALL_M) $(build_depsbindir)/lld $(DESTDIR)$(libexecdir)/
-ifeq ($(OS),Darwin)
-	$(INSTALL_M) $(build_depsbindir)/ld64.lld $(DESTDIR)$(libexecdir)/
-endif
-ifeq ($(OS),WINNT)
-	$(INSTALL_M) $(build_depsbindir)/lld-link $(DESTDIR)$(libexecdir)/
-else
-	$(INSTALL_M) $(build_depsbindir)/ld.lld $(DESTDIR)$(libexecdir)/
-endif
+	$(INSTALL_M) $(build_depsbindir)/lld$(EXE) $(DESTDIR)$(libexecdir)/
 
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia

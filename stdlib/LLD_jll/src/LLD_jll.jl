@@ -18,11 +18,9 @@ const LIBPATH = Ref("")
 artifact_dir = ""
 lld_path = ""
 if Sys.iswindows()
-    const lld_exe = "lld-link"
-elseif Sys.isapple()
-    const lld_exe = "ld64.lld"
+    const lld_exe = "lld.exe"
 else
-    const lld_exe = "ld.lld"
+    const lld_exe = "lld"
 end
 
 if Sys.iswindows()

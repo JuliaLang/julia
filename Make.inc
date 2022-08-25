@@ -66,6 +66,7 @@ USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_LLD:=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -347,6 +348,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 BUILD_LIBCXX := 0
+BUILD_LLD := 1
 
 # Options to enable Polly and its code-generation options
 USE_POLLY := 0
