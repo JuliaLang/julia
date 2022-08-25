@@ -469,7 +469,7 @@ _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
 # append a zero element / drop the last element
-_pushzero(A) = (B = similar(A, length(A)+1); B[begin:end-1] .= A; B[end] = zero(eltype(B)); B)
+_pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems

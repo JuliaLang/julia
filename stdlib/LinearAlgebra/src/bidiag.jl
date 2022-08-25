@@ -207,7 +207,7 @@ similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zero
 
 function kron(A::Diagonal, B::Bidiagonal)
     kdv = kron(diag(A), B.dv)
-    kev = _droplast(kron(diag(A), _pushzero(B.ev)))
+    kev = _droplast!(kron(diag(A), _pushzero(B.ev)))
     Bidiagonal(kdv, kev, B.uplo)
 end
 
