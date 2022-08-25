@@ -2002,28 +2002,34 @@ function parse_function(ps::ParseState)
         end
     else
         if peek(ps) == K"("
-            bump(ps, TRIVIA_FLAG)
-            # When an initial parenthesis is present, we might either have the
-            # function name or the argument list in an anonymous function. We
-            # use parse_brackets directly here (rather than dispatching to it
-            # via parse_atom) so we can distinguish these two cases by peeking
-            # at the following parenthesis, if present.
+            # When an initial parenthesis is present, we might either have
+            # * the function name in parens, followed by (args...)
+            # * an anonymous function argument list in parens
             #
-            # The flisp parser disambiguates this case quite differently,
-            # producing less consistent syntax for anonymous functions.
-            is_anon_func_ = Ref(is_anon_func)
+            # This should somewhat parse as in parse_paren() (this is what
+            # the flisp parser does), but that results in weird parsing of
+            # keyword parameters. So we peek at a following `(` instead to
+            # distinguish the cases here.
+            bump(ps, TRIVIA_FLAG)
+            is_empty_tuple = peek(ps, skip_newlines=true) == K")"
+            _is_anon_func = Ref(is_anon_func)
             parse_brackets(ps, K")") do _, _, _, _
-                is_anon_func_[] = peek(ps, 2) != K"("
-                return (needs_parameters     = is_anon_func_[],
-                        eq_is_kw_before_semi = is_anon_func_[],
-                        eq_is_kw_after_semi  = is_anon_func_[])
+                _is_anon_func[] = peek(ps, 2) != K"("
+                return (needs_parameters     = _is_anon_func[],
+                        eq_is_kw_before_semi = _is_anon_func[],
+                        eq_is_kw_after_semi  = _is_anon_func[])
             end
-            is_anon_func = is_anon_func_[]
+            is_anon_func = _is_anon_func[]
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
                 # function (x,y) end    ==>  (function (tuple x y) (block))
                 # function (x=1) end    ==>  (function (tuple (kw x 1)) (block))
                 # function (;x=1) end   ==>  (function (tuple (parameters (kw x 1))) (block))
+                emit(ps, def_mark, K"tuple")
+            elseif is_empty_tuple
+                # Weird case which is consistent with parse_paren but will be
+                # rejected in lowering
+                # function ()(x) end  ==> (function (call (tuple) x) (block))
                 emit(ps, def_mark, K"tuple")
             else
                 # function (:)() end    ==> (function (call :) (block))
