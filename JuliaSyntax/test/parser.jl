@@ -21,6 +21,9 @@ tests = [
         "a;b \n c;d" =>  "(toplevel (toplevel a b) (toplevel c d))"
         "a \n \n"    =>  "(toplevel a)"
         ""           =>  "(toplevel)"
+        # Early abort in array parsing
+        "[x@y"       =>  "(toplevel (hcat x) (error-t ✘ y))"
+        "[x@y]"      =>  "(toplevel (hcat x) (error-t ✘ y ✘))"
     ],
     JuliaSyntax.parse_block => [
         "a;b;c"   => "(block a b c)"
@@ -652,8 +655,6 @@ tests = [
         "[x ; y ; z]"  =>  "(vcat x y z)"
         "[x;]"  =>  "(vcat x)"
         "[x y]"  =>  "(hcat x y)"
-        # Early abort
-        "[x@y"  =>  "(hcat x) (error-t ✘ y)"
         # Mismatched rows
         "[x y ; z]"  =>  "(vcat (row x y) z)"
         # Single elements in rows
@@ -788,9 +789,9 @@ broken_tests = [
 
 @testset "Inline test cases" begin
     @testset "$production" for (production, test_specs) in tests
-        @testset "$(repr(input))" for (input,output) in test_specs
+        @testset "$(repr(input))" for (input, output) in test_specs
             if !(input isa AbstractString)
-                opts,input = input
+                opts, input = input
             else
                 opts = NamedTuple()
             end
