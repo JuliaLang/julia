@@ -50,6 +50,7 @@ show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 
 const possible_ansi_regex = r"\x1B(?:[@-Z\\-_\[])"
 const start_ansi_regex = r"\G(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+const next_ansi_regexes = r".(?:\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]))+"
 
 function _find_lastidx(str, width, chars, truncwidth, start)
     idx = start
@@ -76,7 +77,7 @@ function _find_lastidx(str, width, chars, truncwidth, start)
         if !isnothing(m)
             firstmatch == 0 && (firstmatch = lastidx)
             noansi = m.match == "[0m"
-            s = sizeof(m.match)
+            s = ncodeunits(m.match)
             idx += s
             lastidx = idx - 1 # the last character of an ansi delimiter is always of size 1.
             continue
@@ -85,25 +86,46 @@ function _find_lastidx(str, width, chars, truncwidth, start)
         truncidx == 0 && wid > (width - truncwidth) && (truncidx = last_lastidx)
         stop = (wid >= width || c in chars)
     end
-    return lastidx, truncidx, noansi || (lastidx < lastindex(str) && truncidx < firstmatch)
+    return lastidx, truncidx, noansi || (lastidx < lastindex(str) && truncidx < firstmatch), wid
 end
 
-function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
+function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, rpad=false, chars="\r\n", truncmark="…")
     truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
+    (width <= 0 || width < truncwidth) && return rpad ? ' '^width : ""
     # possible_substring is a subset of str at least as large as the returned string
     possible_substring = SubString(str, 1, thisind(str, min(ncodeunits(str), width+1)))
     m = ignore_ansi ? match(possible_ansi_regex, possible_substring) : nothing
     start_offset = isnothing(m) ? thisind(str, min(ncodeunits(str), width-truncwidth)) : m.offset
-    lastidx, truncidx, noansi = _find_lastidx(str, width, chars, truncwidth, start_offset)
-    lastidx == 0 && return ""
+    lastidx, truncidx, noansi, wid = _find_lastidx(str, width, chars, truncwidth, start_offset)
+    lastidx == 0 && return rpad ? ' '^width : ""
     str[lastidx] in chars && (lastidx = prevind(str, lastidx))
     truncidx == 0 && (truncidx = lastidx)
+    endansi = noansi ? "" : "\033[0m"
+    pad = rpad ? repeat(' ', max(0, width-wid)) : ""
     if lastidx < lastindex(str)
-        return string(SubString(str, 1, truncidx), noansi ? "" : "\033[0m", truncmark)
+        return string(SubString(str, 1, truncidx), endansi, truncmark, pad)
     else
-        return noansi ? String(str) : string(str, "\033[0m")
+        return string(str, endansi, pad)
     end
+end
+
+function _width_excluding_color(hascolor, str)
+    (!hascolor || length(str) < 2) && return textwidth(str)
+    i = 1
+    n = lastindex(str)
+    while i ≤ n && str[i] == '\033'
+        m = match(start_ansi_regex, str, i+1)
+        m isa RegexMatch || break
+        i = m.offset + ncodeunits(m.match)
+    end
+    m = match(next_ansi_regexes, str, i)
+    wid = 0
+    while m isa RegexMatch
+        wid += textwidth(SubString(str, i, m.offset))
+        i = m.offset + ncodeunits(m.match)
+        m = match(next_ansi_regexes, str, i)
+    end
+    return wid + textwidth(SubString(str, i, n))
 end
 
 function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
@@ -129,7 +151,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 
         if limit
             str = sprint(show, v, context=io, sizehint=0)
-            str = _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n")
+            str = _truncate_at_width_or_chars(get(io, :color, false), str, cols)
             print(io, str)
         else
             show(io, v)
@@ -161,19 +183,20 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
+        hascolor = get(recur_io, :color, false)
         ks = Vector{String}(undef, min(rows, length(t)))
         vs = Vector{String}(undef, min(rows, length(t)))
-        keylen = 0
-        vallen = 0
+        keywidth = 0
+        valwidth = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
             ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
             vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
-            keylen = clamp(length(ks[i]), keylen, cols)
-            vallen = clamp(length(vs[i]), vallen, cols)
+            keywidth = clamp(_width_excluding_color(hascolor, ks[i]), keywidth, cols)
+            valwidth = clamp(_width_excluding_color(hascolor, vs[i]), valwidth, cols)
         end
-        if keylen > max(div(cols, 2), cols - vallen)
-            keylen = max(cld(cols, 3), cols - vallen)
+        if keywidth > max(div(cols, 2), cols - valwidth)
+            keywidth = max(cld(cols, 3), cols - valwidth)
         end
     else
         rows = cols = typemax(Int)
@@ -182,12 +205,12 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
         if i == rows < length(t)
-            print(io, rpad("⋮", keylen), " => ⋮")
+            print(io, rpad("⋮", keywidth), " => ⋮")
             break
         end
 
         if limit
-            key = rpad(_truncate_at_width_or_chars(get(recur_io, :color, false), ks[i], keylen, "\r\n"), keylen)
+            key = _truncate_at_width_or_chars(hascolor, ks[i], keywidth, true)
         else
             key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
@@ -195,7 +218,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         print(io, " => ")
 
         if limit
-            val = _truncate_at_width_or_chars(get(recur_io, :color, false), vs[i], cols - keylen, "\r\n")
+            val = _truncate_at_width_or_chars(hascolor, vs[i], cols - keywidth)
             print(io, val)
         else
             show(recur_io_v, v)
@@ -239,7 +262,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
 
         if limit
             str = sprint(show, v, context=recur_io, sizehint=0)
-            print(io, _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n"))
+            print(io, _truncate_at_width_or_chars(get(io, :color, false), str, cols))
         else
             show(recur_io, v)
         end

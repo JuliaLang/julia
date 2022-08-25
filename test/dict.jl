@@ -452,6 +452,10 @@ end
     str10 = sprint(io -> show(io, MIME("text/plain"), d10); context = (:displaysize=>(30,15), :color=>true, :limit=>true))
     @test endswith(str10, "\033[0m…")
     @test count('苹', str10) == 2
+
+    d11 = Dict(RainbowString("abcdefgh", false, true, false) => 0, "123456" => 1)
+    str11 = sprint(io -> show(io, MIME("text/plain"), dict); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test endswith(str11, "\033[0m => 0")
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate
