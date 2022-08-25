@@ -659,8 +659,18 @@ function parse_cond(ps::ParseState)
     t = peek_token(ps)
     if !preceding_whitespace(t)
         # a ? b :c  ==>  (if a [ ] [?] [ ] b [ ] [:] (error-t) c)
-        bump_invisible(ps, K"error", TRIVIA_FLAG,
-                       error="space required after `:` in `?` expression")
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="space required after `:` in `?` expression")
+    end
+    if is_block_continuation_keyword(kind(t))
+        # a "continuaton keyword" is likely to belong to the surrounding code, so
+        # we abort early
+
+        # if true; x ? true elseif true end  ==> (if true (block (if x true (error-t) (error-t))) (elseif true (block)))
+        # if true; x ? true end  ==> (if true (block (if x true (error-t) (error-t))))
+        # if true; x ? true : elseif true end  ==> (if true (block (if x true (error-t))) (elseif true (block)))
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="unexpected `$(kind(t))`")
+        emit(ps, mark, K"if")
+        return
     end
     parse_eq_star(ps)
     emit(ps, mark, K"if")

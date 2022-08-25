@@ -27,15 +27,10 @@ const _kind_names =
         "baremodule"
         "begin"
         "break"
-        "catch"
         "const"
         "continue"
         "do"
-        "else"
-        "elseif"
-        "end"
         "export"
-        "finally"
         "for"
         "function"
         "global"
@@ -51,6 +46,13 @@ const _kind_names =
         "try"
         "using"
         "while"
+        "BEGIN_BLOCK_CONTINUATION_KEYWORDS"
+            "catch"
+            "finally"
+            "else"
+            "elseif"
+            "end"
+        "END_BLOCK_CONTINUATION_KEYWORDS"
         "BEGIN_CONTEXTUAL_KEYWORDS"
             # contextual keywords
             "abstract"
@@ -1045,6 +1047,7 @@ end
 is_contextual_keyword(k::Kind) = K"BEGIN_CONTEXTUAL_KEYWORDS" < k < K"END_CONTEXTUAL_KEYWORDS"
 is_error(k::Kind) = K"BEGIN_ERRORS" < k < K"END_ERRORS"
 is_keyword(k::Kind) = K"BEGIN_KEYWORDS" < k < K"END_KEYWORDS"
+is_block_continuation_keyword(k::Kind) = K"BEGIN_BLOCK_CONTINUATION_KEYWORDS" < k < K"END_BLOCK_CONTINUATION_KEYWORDS"
 is_literal(k::Kind) = K"BEGIN_LITERAL" < k < K"END_LITERAL"
 is_operator(k::Kind) = K"BEGIN_OPS" < k < K"END_OPS"
 is_word_operator(k::Kind) = (k == K"in" || k == K"isa" || k == K"where")
@@ -1098,5 +1101,3 @@ end
 function is_whitespace(x)
     kind(x) in (K"Whitespace", K"NewlineWs")
 end
-
-
