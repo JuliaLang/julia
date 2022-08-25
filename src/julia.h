@@ -283,6 +283,7 @@ typedef struct _jl_code_info_t {
     uint16_t inlining_cost;
     uint8_t propagate_inbounds;
     uint8_t pure;
+    uint8_t has_fcall;
     // uint8 settings
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
     _jl_purity_overrides_t purity;

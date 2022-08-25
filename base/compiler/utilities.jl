@@ -173,6 +173,8 @@ function subst_trivial_bounds(@nospecialize(atype))
     return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
+
 # If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
