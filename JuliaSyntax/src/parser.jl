@@ -1101,7 +1101,7 @@ function parse_unary(ps::ParseState)
         parse_factor(ps)
         return
     end
-    if k in KSet"- +"
+    if k in KSet"- +" && !is_decorated(t)
         t2 = peek_token(ps, 2)
         if !preceding_whitespace(t2) && kind(t2) in KSet"Integer Float"
             k3 = peek(ps, 3)
@@ -1116,13 +1116,18 @@ function parse_unary(ps::ParseState)
             else
                 # We have a signed numeric literal. Glue the operator to the
                 # next token to create a signed literal:
-                # +2    ==>  +2
+                # -2    ==>  -2
+                # +2.0  ==>  2.0
                 # -2*x  ==>  (call-i -2 * x)
                 bump_glue(ps, kind(t2), EMPTY_FLAGS, 2)
             end
             return
         end
     end
+    # Things which are not quite negative literals result in a unary call instead
+    # -0x1 ==>  (call - 0x01)
+    # - 2  ==>  (call - 2)
+    # .-2  ==>  (call .- 2)
     parse_unary_call(ps)
 end
 
