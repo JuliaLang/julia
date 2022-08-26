@@ -669,7 +669,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     buf = IOBuffer()
     stream = logger.stream
-    if !isopen(stream)
+    if !(isopen(stream)::Bool)
         stream = stderr
     end
     iob = IOContext(buf, stream)
