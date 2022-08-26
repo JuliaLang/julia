@@ -1079,7 +1079,7 @@ base `base`.
 If the `sigdigits` keyword argument is provided, it rounds to the
 specified number of significant `digits`, in base `base`.
                                                     
-`RoundingModeReal` and `RoundingModeImaginary` defaults to `RoundNearest`,
+`RoundingModeReal` and `RoundingModeImaginary` default to `RoundNearest`,
 which rounds to the nearest integer, with ties (fractional values of 0.5)
 being rounded to the nearest even integer.
 
