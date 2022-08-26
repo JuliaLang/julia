@@ -1275,6 +1275,7 @@ static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
             pg->nfree = 0;
             pg->has_young = 1;
         }
+        msan_allocated_memory(v, osize);
         return jl_valueof(v);
     }
     // if the freelist is empty we reuse empty but not freed pages
@@ -1299,6 +1300,7 @@ static inline jl_value_t *jl_gc_pool_alloc_inner(jl_ptls_t ptls, int pool_offset
         next = (jl_taggedvalue_t*)((char*)v + osize);
     }
     p->newpages = next;
+    msan_allocated_memory(v, osize);
     return jl_valueof(v);
 }
 
@@ -2886,6 +2888,7 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
     if (cmpswap_names != NULL)
         gc_mark_queue_obj(gc_cache, sp, cmpswap_names);
+    gc_mark_queue_obj(gc_cache, sp, jl_global_roots_table);
 }
 
 // find unmarked objects that need to be finalized from the finalizer list "list".

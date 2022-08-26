@@ -562,6 +562,23 @@ add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_elt
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, (@nospecialize args...)->Nothing, 0)
+function compilerbarrier_tfunc(@nospecialize(setting), @nospecialize(val))
+    # strongest barrier if a precise information isn't available at compiler time
+    # XXX we may want to have "compile-time" error instead for such case
+    isa(setting, Const) || return Any
+    setting = setting.val
+    isa(setting, Symbol) || return Any
+    if setting === :const
+        return widenconst(val)
+    elseif setting === :conditional
+        return widenconditional(val)
+    elseif setting === :type
+        return Any
+    else
+        return Bottom
+    end
+end
+add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, (@nospecialize args...)->Nothing, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -1854,7 +1871,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     apply_type,
     arraysize,
     Core.ifelse,
-    sizeof,
+    Core.sizeof,
     svec,
     fieldtype,
     isa,

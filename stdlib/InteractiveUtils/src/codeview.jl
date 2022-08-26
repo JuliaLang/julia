@@ -59,11 +59,14 @@ end
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
-as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
-This serves as a warning of potential type instability. Not all non-leaf types are particularly
-problematic for performance, so the results need to be used judiciously.
-In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
-these are often intentional.
+as to cause "non-leaf" types which may be problematic for performance to be emphasized
+(if color is available, displayed in red). This serves as a warning of potential type instability.
+
+Not all non-leaf types are particularly problematic for performance, and the performance
+characteristics of a particular type is an implementation detail of the compiler.
+`code_warntype` will err on the side of coloring types red if they might be a performance
+concern, so some types may be colored red even if they do not impact performance.
+Small unions of concrete types are usually not a concern, so these are highlighed in yellow.
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 

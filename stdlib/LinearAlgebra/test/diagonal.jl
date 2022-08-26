@@ -12,7 +12,7 @@ using .Main.Furlongs
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
-n=12 #Size of matrix problem to test
+const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
@@ -529,13 +529,21 @@ end
 end
 
 @testset "inverse" begin
-    for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
+    for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
     @test_throws SingularException inv(Diagonal(zeros(n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
+end
+
+@testset "pseudoinverse" begin
+    for d in Any[randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
+        D = Diagonal(d)
+        @test pinv(D) ≈ pinv(Array(D))
+        @test pinv(D, 1.0e-2) ≈ pinv(Array(D), 1.0e-2)
+    end
 end
 
 # allow construct from range
@@ -643,6 +651,16 @@ end
     copyto!(D2, D)
     rmul!(D2, D)
     @test D2 == D * D
+end
+
+@testset "multiplication of 2 Diagonal and a Matix (#46400)" begin
+    A = randn(10, 10)
+    D = Diagonal(randn(10))
+    D2 = Diagonal(randn(10))
+    @test D * A * D2 ≈ D * (A * D2)
+    @test D * A * D2 ≈ (D * A) * D2
+    @test_throws DimensionMismatch Diagonal(ones(9)) * A * D2
+    @test_throws DimensionMismatch D * A * Diagonal(ones(9))
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
