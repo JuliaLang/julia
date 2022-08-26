@@ -467,6 +467,7 @@ end
     BL = Bidiagonal(randn(10), randn(9), :L)
     BU = Bidiagonal(randn(10), randn(9), :U)
     C = SymTridiagonal(randn(10), randn(9))
+    Cl = SymTridiagonal(randn(10), randn(10))
     D = Tridiagonal(randn(9), randn(10), randn(9))
     @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
     @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
