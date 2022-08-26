@@ -352,8 +352,8 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
 end
 
 struct LiftedValue
-    x
-    LiftedValue(@nospecialize x) = new(x)
+    val
+    LiftedValue(@nospecialize val) = new(val)
 end
 const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
 
@@ -578,7 +578,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
         visited_phinodes, cmp, lifting_cache, Bool,
         lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
 
-    compact[idx] = lifted_val.x
+    compact[idx] = lifted_val.val
 end
 
 struct LiftedPhi
@@ -626,7 +626,7 @@ function perform_lifting!(compact::IncrementalCompact,
         end
     end
 
-    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.x : nothing
+    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.val : nothing
     if !isa(the_leaf_val, SSAValue)
         all_same = false
     end
@@ -690,7 +690,7 @@ function perform_lifting!(compact::IncrementalCompact,
                     resize!(new_node.values, length(new_node.values)+1)
                     continue
                 end
-                val = lifted_val.x
+                val = lifted_val.val
                 if isa(val, AnySSAValue)
                     callback = (@nospecialize(pi), @nospecialize(idx)) -> true
                     val = simple_walk(compact, val, callback)
@@ -750,18 +750,18 @@ function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
         elseif is_known_call(def, Core._compute_sparams, compact)
             res = _lift_svec_ref(def, compact)
             if res !== nothing
-                compact[idx] = res
+                compact[idx] = res.val
             end
             return
         end
     end
 end
 
-function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
-    # TODO: We could do the whole lifing machinery here, but really all
-    # we want to do is clean this up when it got inserted by inlining,
-    # which always targets simple `svec` call or `_compute_sparams`,
-    # so this specialized lifting would be enough
+# TODO: We could do the whole lifing machinery here, but really all
+# we want to do is clean this up when it got inserted by inlining,
+# which always targets simple `svec` call or `_compute_sparams`,
+# so this specialized lifting would be enough
+@inline function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
     m = argextype(def.args[2], compact)
     isa(m, Const) || return nothing
     m = m.val
@@ -776,9 +776,13 @@ function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
     sig.name === Tuple.name || return nothing
     length(sig.parameters) >= 1 || return nothing
 
-    i = findfirst(j->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    i = let sig=sig
+        findfirst(j->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    end
     i === nothing && return nothing
-    _any(j->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters)) && return nothing
+    let sig=sig
+        any(j->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
+    end && return nothing
 
     arg = sig.parameters[i]
     isa(arg, DataType) || return nothing
@@ -808,7 +812,7 @@ function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
     length(applyTbody.parameters) == length(arg.parameters) == 1 || return nothing
     applyTbody.parameters[1] === applyTvar || return nothing
     arg.parameters[1] === tvar || return nothing
-    return argdef.args[3]
+    return LiftedValue(argdef.args[3])
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -1017,7 +1021,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             @assert val !== nothing
         end
 
-        compact[idx] = val === nothing ? nothing : val.x
+        compact[idx] = val === nothing ? nothing : val.val
     end
 
     non_dce_finish!(compact)
