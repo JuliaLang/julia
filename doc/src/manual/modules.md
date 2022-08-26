@@ -143,7 +143,7 @@ As we will see in the next section `import .NiceStuff` is equivalent to `using .
 You can combine multiple `using` and `import` statements of the same kind in a comma-separated expression, e.g.
 
 ```jldoctest module_manual
-julia> using LinearAlgebra, Statistics
+julia> using LinearAlgebra, Random
 ```
 
 ### `using` and `import` with specific identifiers, and adding methods
