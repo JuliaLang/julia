@@ -643,12 +643,12 @@ end
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
 
-    @test setindex((1,), [2], 1:1) === (2, )
-    @test setindex((1, 2, 3, 4), [3, 2], 2:3) === (1, 3, 2, 4)
-    @test setindex((1, 2, 3, 4), [4, 3, 2, 1], 1:4) === (4, 3, 2, 1)
-    @test setindex((1,), [2], [1]) === (2, )
-    @test setindex((1, 2, 3, 4), [3, 2], [2,3]) === (1, 3, 2, 4)
-    @test setindex((1, 2, 3, 4), [4, 3, 2, 1], [1,2,3,4]) === (4, 3, 2, 1)
+    @test Base.setindex((1,), [2], 1:1) === (2, )
+    @test Base.setindex((1, 2, 3, 4), [3, 2], 2:3) === (1, 3, 2, 4)
+    @test Base.setindex((1, 2, 3, 4), [4, 3, 2, 1], 1:4) === (4, 3, 2, 1)
+    @test Base.setindex((1,), [2], [1]) === (2, )
+    @test Base.setindex((1, 2, 3, 4), [3, 2], [2,3]) === (1, 3, 2, 4)
+    @test Base.setindex((1, 2, 3, 4), [4, 3, 2, 1], [1,2,3,4]) === (4, 3, 2, 1)
 end
 
 @testset "inferrable range indexing with constant values" begin

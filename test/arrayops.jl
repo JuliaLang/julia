@@ -3124,7 +3124,6 @@ end
     @testset "$(typeof(x))" for x in [
         zeros(3),
         falses(3),
-        spzeros(3),
     ]
         y = Base.setindex(x, true, 1)
         @test iszero(x)  # x is not mutated
@@ -3139,7 +3138,6 @@ end
     @testset "$(typeof(x))" for x in [
         zeros(3, 3),
         falses(3, 3),
-        spzeros(3, 3),
     ]
         y = Base.setindex(x, true, 1, 1)
         @test iszero(x)  # x is not mutated
