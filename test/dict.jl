@@ -458,7 +458,18 @@ end
 
     d11 = Dict(RainbowString("abcdefgh", false, true, false) => 0, "123456" => 1)
     str11 = sprint(io -> show(io, MIME("text/plain"), d11); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
-    @test endswith(str11, "\033[0m => 0")
+    _, line11_a, line11_b = split(str11, '\n')
+    @test endswith(line11_a, "h\033[0m => 0") || endswith(line11_b, "h\033[0m => 0")
+    @test endswith(line11_a, "6\" => 1") || endswith(line11_b, "6\" => 1")
+
+    d12 = Dict(RainbowString(repeat(Char(48+i), 4), (i&1)==1, (i&2)==2, (i&4)==4) => i for i in 1:8)
+    str12 = sprint(io -> show(io, MIME("text/plain"), d12); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test !occursin('…', str12)
+
+    d13 = Dict(RainbowString("foo\nbar") => 74)
+    str13 = sprint(io -> show(io, MIME("text/plain"), d13); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    @test count('\n', str13) == 1
+    @test occursin('…', str13)
 end
 
 @testset "Issue #15739" begin # Compact REPL printouts of an `AbstractDict` use brackets when appropriate

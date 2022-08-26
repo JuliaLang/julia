@@ -48,58 +48,40 @@ show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 
-const ansi_regex = r"\G\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
+const ansi_regex = r"(?s)(?:\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]))|."
 
 # Pseudo-character representing an ANSI delimiter
 struct ANSIDelimiter
     del::SubString{String}
 end
-Base.ncodeunits(c::ANSIDelimiter) = ncodeunits(c.del)
-Base.textwidth(::ANSIDelimiter) = 0
+ncodeunits(c::ANSIDelimiter) = ncodeunits(c.del)
+textwidth(::ANSIDelimiter) = 0
 
-# String wrapper whose indexing yields either a Char or an ANSIDelimiter
-struct ANSIString{T<:AbstractString}
-    str::T
+# An iterator similar to `pairs(::String)` but whose values are Char or ANSIDelimiter
+struct ANSIIterator
+    captures::RegexMatchIterator
 end
+ANSIIterator(s::AbstractString) = ANSIIterator(eachmatch(ansi_regex, s))
 
-Base.IteratorSize(::Type{ANSIString{T}}) where {T} = Base.SizeUnknown()
-Base.eltype(::Type{ANSIString{T}}) where {T} = Union{eltype(T),ANSIDelimiter}
-function Base.getindex(s::ANSIString, i)
-    m = match(ansi_regex, s.str, i)
-    m isa RegexMatch && return ANSIDelimiter(m.match)
-    return s.str[i]
+IteratorSize(::Type{ANSIIterator}) = SizeUnknown()
+eltype(::Type{ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
+function iterate(I::ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
+    m_st === nothing && return nothing
+    m, (j, new_m_st) = m_st
+    c = lastindex(m.match) == 1 ? only(m.match) : ANSIDelimiter(m.match)
+    return (i => c, (j, iterate(I.captures, (j, new_m_st))))
 end
+textwidth(I::ANSIIterator) = mapreduce(textwidth∘last, +, I; init=0)
 
-function Base.iterate(s::ANSIString, i=firstindex(s.str))
-    y = iterate(pairs(s), i) # pairs(::ANSIString) is defined as ANSIStringPairs
-    y === nothing && return nothing
-    ((_, c), next) = y
-    return (c, next)
-end
-Base.textwidth(s::ANSIString) = mapreduce(textwidth, +, s; init=0)
-
-# An iterator similar to `pairs(::String)` but whose values are either Char or ANSIDelimiter
-struct ANSIStringPairs{T<:AbstractString}
-    s::ANSIString{T}
-end
-
-Base.IteratorSize(::Type{ANSIStringPairs{T}}) where {T} = Base.SizeUnknown()
-Base.eltype(::Type{ANSIStringPairs{T}}) where {T} = Pair{Int, Union{eltype(T),ANSIDelimiter}}
-function Base.iterate(e::ANSIStringPairs, i=firstindex(e.s.str))
-    i > ncodeunits(e.s.str) && return nothing
-    c = e.s[i]
-    return (i => c, i + ncodeunits(c))
-end
-Base.pairs(s::ANSIString) = ANSIStringPairs(s)
-
-
-function _find_lastidx(str, width, chars, truncwidth, ignore_ANSI)
-    lastidx = 0
-    truncidx = 0 # if str needs to be truncated, index of truncation.
-    stop = false # when set, only ANSI delimiters will be kept as new characters.
+function _truncate_at_width_or_chars(ignore_ANSI::Bool, str, width, rpad=false, chars="\r\n", truncmark="…")
+    truncwidth = textwidth(truncmark)
+    (width <= 0 || width < truncwidth) && return ""
+    wid = truncidx = lastidx = 0
+    # if str needs to be truncated, truncidx is the index of truncation.
+    stop = false # once set, only ANSI delimiters will be kept as new characters.
     needANSIend = false # set if the last ANSI delimiter before truncidx is not "\033[0m".
-    wid = 0
-    for (i, c) in (ignore_ANSI ? pairs(ANSIString(str)) : pairs(str))
+    I = ignore_ANSI ? ANSIIterator(str) : pairs(str)
+    for (i, c) in I
         if c isa ANSIDelimiter
             truncidx == 0 && (needANSIend = c != "\033[0m")
             lastidx = i + ncodeunits(c) - 1
@@ -112,20 +94,11 @@ function _find_lastidx(str, width, chars, truncwidth, ignore_ANSI)
             stop = wid >= width
         end
     end
-    truncidx == 0 && (truncidx = lastidx)
-    return lastidx, truncidx, needANSIend, wid
-end
-
-function _truncate_at_width_or_chars(ignore_ANSI::Bool, str, width, rpad=false, chars="\r\n", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return rpad ? ' '^width : ""
-    # possible_substring is a subset of str at least as large as the returned string
-    possible_substring = SubString(str, 1, thisind(str, min(ncodeunits(str), width+1)))
-    lastidx, truncidx, needANSIend, wid = _find_lastidx(str, width, chars, truncwidth, ignore_ANSI)
     lastidx == 0 && return rpad ? ' '^width : ""
     str[lastidx] in chars && (lastidx = prevind(str, lastidx))
     ANSIend = needANSIend ? "\033[0m" : ""
     pad = rpad ? repeat(' ', max(0, width-wid)) : ""
+    truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
         return string(SubString(str, 1, truncidx), ANSIend, truncmark, pad)
     else
@@ -197,8 +170,8 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
             i > rows && break
             ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
             vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
-            keywidth = clamp(hascolor ? textwidth(ANSIString(ks[i])) : textwidth(ks[i]), keywidth, cols)
-            valwidth = clamp(hascolor ? textwidth(ANSIString(vs[i])) : textwidth(vs[i]), valwidth, cols)
+            keywidth = clamp(hascolor ? textwidth(ANSIIterator(ks[i])) : textwidth(ks[i]), keywidth, cols)
+            valwidth = clamp(hascolor ? textwidth(ANSIIterator(vs[i])) : textwidth(vs[i]), valwidth, cols)
         end
         if keywidth > max(div(cols, 2), cols - valwidth)
             keywidth = max(cld(cols, 3), cols - valwidth)
