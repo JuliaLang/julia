@@ -472,6 +472,7 @@ end
     @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
     @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
     @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
     @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
 end
 
