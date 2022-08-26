@@ -426,6 +426,9 @@ end
     lines6 = split(str6, '\n')
     @test all(endswith("\033[0m…"), lines6[2:end])
     @test all(x -> length(x) > 100, lines6[2:end])
+    str6_long = sprint(io -> show(io, MIME("text/plain"), d6); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    lines6_long = split(str6_long, '\n')
+    @test all(endswith("\033[0m"), lines6_long[2:end])
 
     d7 = Dict(randstring(8) => RainbowString(randstring(30)))
     str7 = sprint(io -> show(io, MIME("text/plain"), d7); context = (:displaysize=>(30,20), :color=>true, :limit=>true))
