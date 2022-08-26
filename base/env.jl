@@ -85,6 +85,7 @@ pop!(::EnvDict, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 delete!(::EnvDict, k::AbstractString) = (_unsetenv(k); ENV)
 setindex!(::EnvDict, v, k::AbstractString) = _setenv(k,string(v))
 push!(::EnvDict, kv::Pair{<:AbstractString}) = setindex!(ENV, kv.second, kv.first)
+can_change_size(::Type{EnvDict}) = true
 
 if Sys.iswindows()
     GESW() = (pos = ccall(:GetEnvironmentStringsW, stdcall, Ptr{UInt16}, ()); (pos, pos))

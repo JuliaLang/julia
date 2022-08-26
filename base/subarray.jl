@@ -320,6 +320,10 @@ function getindex(V::FastContiguousSubArray{<:Any, 1}, i::Int)
     r
 end
 
+function can_setindex(@nospecialize T::Type{<:SubArray})
+    can_setindex(fieldtype(T, :parent))
+end
+
 # Indexed assignment follows the same pattern as `getindex` above
 function setindex!(V::SubArray{T,N}, x, I::Vararg{Int,N}) where {T,N}
     @inline

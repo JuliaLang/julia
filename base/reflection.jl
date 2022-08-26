@@ -529,6 +529,27 @@ function ismutabletype(@nospecialize t)
 end
 
 """
+    can_change_size(::Type{T}) -> Bool
+
+Returns `true` if instances of `T` may change size through operations such as `pop!` and
+`popfirst!`.
+
+See also: [`can_setindex`](@ref)
+"""
+can_change_size(x) = can_change_size(typeof(x))
+can_change_size(T::Type) = false
+can_change_size(@nospecialize T::Type{<:Pairs}) = can_change_size(fieldtype(T, :data))
+
+
+"""
+    can_setindex(::Type{T}) -> Bool
+
+Query whether a type can use `setindex!`. Falls back to the [`can_change_size`](@ref).
+"""
+can_setindex(x) = can_setindex(typeof(x))
+can_setindex(T::Type) = can_change_size(T)
+
+"""
     isstructtype(T) -> Bool
 
 Determine whether type `T` was declared as a struct type

@@ -66,6 +66,8 @@ end
 
 empty(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()
 
+can_change_size(::Type{<:Set}) = true
+
 # return an empty set with eltype T, which is mutable (can be grown)
 # by default, a Set is returned
 emptymutable(s::AbstractSet{T}, ::Type{U}=T) where {T,U} = Set{U}()

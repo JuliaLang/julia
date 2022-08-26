@@ -99,6 +99,8 @@ Dict() = Dict{Any,Any}()
 Dict(kv::Tuple{}) = Dict()
 copy(d::Dict) = Dict(d)
 
+can_change_size(::Type{<:Dict}) = true
+
 const AnyDict = Dict{Any,Any}
 
 Dict(ps::Pair{K,V}...) where {K,V} = Dict{K,V}(ps)

@@ -47,6 +47,8 @@ WeakKeyDict() = WeakKeyDict{Any,Any}()
 WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
 copy(d::WeakKeyDict) = WeakKeyDict(d)
 
+can_change_size(::Type{<:WeakKeyDict}) = true
+
 WeakKeyDict(ps::Pair{K,V}...)           where {K,V} = WeakKeyDict{K,V}(ps)
 WeakKeyDict(ps::Pair{K}...)             where {K}   = WeakKeyDict{K,Any}(ps)
 WeakKeyDict(ps::(Pair{K,V} where K)...) where {V}   = WeakKeyDict{Any,V}(ps)

@@ -221,6 +221,7 @@ const ColumnSlices{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colo
 IteratorSize(::Type{Slices{P,SM,AX,S,N}}) where {P,SM,AX,S,N} = HasShape{N}()
 axes(s::Slices) = s.axes
 size(s::Slices) = map(length, s.axes)
+can_setindex(@nospecialize T::Type{<:Slices}) = can_setindex(fieldtype(T, :parent))
 
 @inline function _slice_index(s::Slices, c...)
     return map(l -> l === (:) ? (:) : c[l], s.slicemap)

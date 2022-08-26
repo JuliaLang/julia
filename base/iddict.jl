@@ -66,6 +66,8 @@ function IdDict(kv)
     end
 end
 
+can_change_size(::Type{<:IdDict}) = true
+
 empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz = length(d.ht))

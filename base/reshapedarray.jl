@@ -250,6 +250,10 @@ end
 @inline _unsafe_getindex_rs(A, i::Integer) = (@inbounds ret = A[i]; ret)
 @inline _unsafe_getindex_rs(A, I) = (@inbounds ret = A[I...]; ret)
 
+function can_setindex(@nospecialize T::Type{<:ReshapedArray})
+    can_setindex(fieldtype(T, :parent))
+end
+
 @inline function setindex!(A::ReshapedArrayLF, val, index::Int)
     @boundscheck checkbounds(A, index)
     @inbounds parent(A)[index] = val

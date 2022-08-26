@@ -50,6 +50,10 @@ Base.size(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(size(parent
 Base.axes(A::PermutedDimsArray{T,N,perm}) where {T,N,perm} = genperm(axes(parent(A)), perm)
 Base.has_offset_axes(A::PermutedDimsArray) = Base.has_offset_axes(A.parent)
 
+function can_setindex(@nospecialize T::Type{<:PermutedDimsArray})
+    can_setindex(fieldtype(T, :parent))
+end
+
 Base.similar(A::PermutedDimsArray, T::Type, dims::Base.Dims) = similar(parent(A), T, dims)
 
 Base.unsafe_convert(::Type{Ptr{T}}, A::PermutedDimsArray{T}) where {T} = Base.unsafe_convert(Ptr{T}, parent(A))

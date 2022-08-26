@@ -15,6 +15,8 @@ copymutable(s::IdSet) = typeof(s)(s)
 emptymutable(s::IdSet{T}, ::Type{U}=T) where {T,U} = IdSet{U}()
 copy(s::IdSet) = typeof(s)(s)
 
+can_change_size(::Type{<:IdSet}) = true
+
 isempty(s::IdSet) = isempty(s.dict)
 length(s::IdSet)  = length(s.dict)
 in(@nospecialize(x), s::IdSet) = haskey(s.dict, x)

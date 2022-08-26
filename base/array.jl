@@ -154,6 +154,10 @@ asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1
 
 allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
+can_change_size(::Type{<:Vector}) = true
+
+can_setindex(::Type{<:Array}) = true
+
 """
     Base.isbitsunion(::Type{T})
 

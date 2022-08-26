@@ -778,6 +778,8 @@ export
     parse,
 
 # help and reflection
+    can_change_size,
+    can_setindex,
     code_typed,
     code_lowered,
     fullname,

@@ -1001,3 +1001,21 @@ function f_no_methods end
     @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
     @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
+
+@testset "can_change_size" begin
+    @test can_change_size([1])
+    @test can_change_size(Vector{Int})
+    @test can_change_size(Dict{Symbol,Any})
+    @test !can_change_size(Base.ImmutableDict{Symbol,Int64})
+    @test !can_change_size(Tuple{})
+end
+
+@testset "can_setindex" begin
+    @test !can_setindex(1:2)
+    @test can_setindex(Vector{Int})
+    @test !ArrayInterfaceCore.can_setindex(UnitRange{Int})
+    @test !ArrayInterfaceCore.can_setindex(Base.ImmutableDict{Int,Int})
+    @test !ArrayInterfaceCore.can_setindex(Tuple{})
+    @test !ArrayInterfaceCore.can_setindex(NamedTuple{(),Tuple{}})
+    @test ArrayInterfaceCore.can_setindex(Dict{Int,Int})
+end

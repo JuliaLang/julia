@@ -18,6 +18,8 @@ mutable struct BitSet <: AbstractSet{Int}
     BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
 end
 
+can_change_size(::Type{<:BitSet}) = true
+
 """
     BitSet([itr])
 

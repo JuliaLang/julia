@@ -72,6 +72,9 @@ BitArray(::UndefInitializer, dims::NTuple{N,Integer}) where {N} = BitArray{N}(un
 BitArray{N}(::UndefInitializer, dims::NTuple{N,Integer}) where {N} = BitArray{N}(undef, map(Int, dims)...)
 
 const BitVector = BitArray{1}
+
+can_change_size(::Type{BitVector}) = true
+
 const BitMatrix = BitArray{2}
 
 BitVector() = BitVector(undef, 0)
@@ -683,6 +686,8 @@ end
 end
 
 ## Indexing: setindex! ##
+
+can_setindex(T::Type{<:BitArray}) = true
 
 @inline function unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i::Int)
     i1, i2 = get_chunks_id(i)

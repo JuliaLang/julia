@@ -273,6 +273,11 @@ function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Vararg{Int, N})
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
+
+function can_setindex(@nospecialize T::Type{<:ReinterpretArray})
+    can_setindex(fieldtype(T, :parent))
+end
+
 function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
     @_propagate_inbounds_meta
     setindex!(A, v, I...)
