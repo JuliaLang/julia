@@ -1090,6 +1090,7 @@ function show_supertypes(io::IO, typ::DataType)
         typ = supertype(typ)
         print(io, " <: ", typ)
     end
+    println()
 end
 
 show_supertypes(typ::DataType) = show_supertypes(stdout, typ)
