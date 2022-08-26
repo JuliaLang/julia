@@ -147,7 +147,7 @@ endif
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
-LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
+LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins -rpath $(build_shlibdir)
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 endif

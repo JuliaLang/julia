@@ -312,7 +312,9 @@ function CodeInstance(
             const_flags = 0x00
         end
     end
-    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
+    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] :
+                     inferred_result === nothing ? UInt8(1) : UInt8(0)
+    # relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
@@ -328,7 +330,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
         return ci
     end
     if may_discard_trees(interp)
-        cache_the_tree = ci.inferred && (ci.inlineable || isa_compileable_sig(linfo.specTypes, def))
+        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, def))
     else
         cache_the_tree = true
     end
@@ -426,15 +428,39 @@ function adjust_effects(sv::InferenceState)
     # that is currently modeled in a flow-insensitive way: ideally we want to model it
     # with a proper dataflow analysis instead
     rt = sv.bestguess
-    if !ipo_effects.inbounds_taints_consistency && rt === Bottom
+    if ipo_effects.noinbounds && rt === Bottom
         # always throwing an error counts or never returning both count as consistent
         ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
     end
-    if ipo_effects.consistent === TRISTATE_UNKNOWN && is_consistent_argtype(rt)
+    if is_inaccessiblemem_or_argmemonly(ipo_effects) && all(1:narguments(sv)) do i::Int
+            return is_mutation_free_argtype(sv.slottypes[i])
+        end
+        ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
+    end
+    if is_consistent_if_notreturned(ipo_effects) && is_consistent_argtype(rt)
         # in a case when the :consistent-cy here is only tainted by mutable allocations
-        # (indicated by `TRISTATE_UNKNOWN`), we may be able to refine it if the return
+        # (indicated by `CONSISTENT_IF_NOTRETURNED`), we may be able to refine it if the return
         # type guarantees that the allocations are never returned
-        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        consistent = ipo_effects.consistent & ~CONSISTENT_IF_NOTRETURNED
+        ipo_effects = Effects(ipo_effects; consistent)
+    end
+    if is_consistent_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            consistent = ipo_effects.consistent & ~CONSISTENT_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; consistent)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_FALSE)
+        end
+    end
+    if is_effect_free_if_inaccessiblememonly(ipo_effects)
+        if is_inaccessiblememonly(ipo_effects)
+            effect_free = ipo_effects.effect_free & ~EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+            ipo_effects = Effects(ipo_effects; effect_free)
+        elseif is_inaccessiblemem_or_argmemonly(ipo_effects)
+        else # `:inaccessiblememonly` is already tainted, there will be no chance to refine this
+            ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_FALSE)
+        end
     end
 
     # override the analyzed effects using manually annotated effect settings
@@ -448,13 +474,16 @@ function adjust_effects(sv::InferenceState)
             ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
         end
         if is_effect_overridden(override, :nothrow)
-            ipo_effects = Effects(ipo_effects; nothrow=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; nothrow=true)
         end
         if is_effect_overridden(override, :terminates_globally)
-            ipo_effects = Effects(ipo_effects; terminates=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; terminates=true)
         end
         if is_effect_overridden(override, :notaskstate)
-            ipo_effects = Effects(ipo_effects; notaskstate=ALWAYS_TRUE)
+            ipo_effects = Effects(ipo_effects; notaskstate=true)
+        end
+        if is_effect_overridden(override, :inaccessiblememonly)
+            ipo_effects = Effects(ipo_effects; inaccessiblememonly=ALWAYS_TRUE)
         end
     end
 
@@ -499,13 +528,13 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # we can throw everything else away now
         me.result.src = nothing
         me.cached = false
-        me.src.inlineable = false
+        set_inlineable!(me.src, false)
         unlock_mi_inference(interp, me.linfo)
     elseif limited_src
         # a type result will be cached still, but not this intermediate work:
         # we can throw everything else away now
         me.result.src = nothing
-        me.src.inlineable = false
+        set_inlineable!(me.src, false)
     else
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
@@ -534,17 +563,12 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
 end
 
 function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    i = 1
-    while i <= length(edges)
-        to = edges[i]
+    for (typ, to) in BackedgeIterator(edges)
         if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-            i += 1
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
         else
             typeassert(to, Core.MethodTable)
-            typ = edges[i + 1]
             ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-            i += 2
         end
     end
 end
@@ -775,11 +799,11 @@ function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, chi
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    tristate_merge!(parent, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
+    merge_effects!(parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        tristate_merge!(child, Effects(EFFECTS_TOTAL; terminates=ALWAYS_FALSE))
+        merge_effects!(child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -853,7 +877,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     mi = specialize_method(method, atype, sparams)::MethodInstance
     code = get(code_cache(interp), mi, nothing)
     if code isa CodeInstance # return existing rettype if the code is already inferred
-        if code.inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
+        inferred = @atomic :monotonic code.inferred
+        if inferred === nothing && is_stmt_inline(get_curr_ssaflag(caller))
             # we already inferred this edge before and decided to discard the inferred code,
             # nevertheless we re-infer it here again and keep it around in the local cache
             # since the inliner will request to use it later
@@ -983,7 +1008,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            inf = code.inferred
+            inf = @atomic :monotonic code.inferred
             if use_const_api(code)
                 i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
@@ -998,7 +1023,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.inferred = true
                 tree.ssaflags = UInt8[0]
                 tree.pure = true
-                tree.inlineable = true
+                set_inlineable!(tree, true)
                 tree.parent = mi
                 tree.rettype = Core.Typeof(rettype_const)
                 tree.min_world = code.min_world

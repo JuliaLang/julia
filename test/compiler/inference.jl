@@ -2102,6 +2102,16 @@ let M = Module()
     @test rt == Tuple{Union{Nothing,Int},Any}
 end
 
+# make sure we never form nested `Conditional` (https://github.com/JuliaLang/julia/issues/46207)
+@test Base.return_types((Any,)) do a
+    c = isa(a, Integer)
+    42 === c ? :a : "b"
+end |> only === String
+@test Base.return_types((Any,)) do a
+    c = isa(a, Integer)
+    c === 42 ? :a : "b"
+end |> only === String
+
 @testset "conditional constraint propagation from non-`Conditional` object" begin
     @test Base.return_types((Bool,)) do b
         if b
@@ -3314,7 +3324,8 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test Core.Compiler.sizeof_tfunc(UnionAll) === Int
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
-@test Base.return_types(Expr) == Any[Expr]
+@test only(Base.return_types(Core._expr)) === Expr
+@test only(Base.return_types(Core.svec, (Any,))) === Core.SimpleVector
 
 # Use a global constant to rely less on unrelated constant propagation
 const const_int32_typename = Int32.name
@@ -3671,27 +3682,18 @@ end
     end
 end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
 
+# make sure inference on a recursive call graph with nested `Type`s terminates
 # https://github.com/JuliaLang/julia/issues/40336
-@testset "make sure a call with signatures with recursively nested Types terminates" begin
-    @test @eval Module() begin
-        f(@nospecialize(t)) = f(Type{t})
+f40336(@nospecialize(t)) = f40336(Type{t})
+@test Base.return_types() do
+    f40336(Int)
+end |> only === Union{}
 
-        code_typed() do
-            f(Int)
-        end
-        true
-    end
-
-    @test @eval Module() begin
-        f(@nospecialize(t)) = tdepth(t) == 10 ? t : f(Type{t})
-        tdepth(@nospecialize(t)) = isempty(t.parameters) ? 1 : 1+tdepth(t.parameters[1])
-
-        code_typed() do
-            f(Int)
-        end
-        true
-    end
-end
+g40336(@nospecialize(t)) = tdepth(t) == 10 ? t : g40336(Type{t})
+tdepth(@nospecialize(t)) = (!isa(t, DataType) || isempty(t.parameters)) ? 1 : 1+tdepth(t.parameters[1])
+@test (Base.return_types() do
+    g40336(Int)
+end |> only; true)
 
 # Make sure that const prop doesn't fall into cycles that aren't problematic
 # in the type domain
@@ -3757,45 +3759,37 @@ let
     @test Base.return_types(oc, Tuple{}) == Any[Float64]
 end
 
-@testset "constant prop' on `invoke` calls" begin
-    m = Module()
+# constant prop' on `invoke` calls
+invoke_constprop(a::Any,    typ::Bool) = typ ? Any : :any
+invoke_constprop(a::Number, typ::Bool) = typ ? Number : :number
+@test Base.return_types((Any,)) do a
+    @invoke invoke_constprop(a::Any, true::Bool)
+end |> only === Type{Any}
+@test Base.return_types((Any,)) do a
+    @invoke invoke_constprop(a::Number, true::Bool)
+end |> only === Type{Number}
+@test Base.return_types((Any,)) do a
+    @invoke invoke_constprop(a::Any, false::Bool)
+end |> only === Symbol
+@test Base.return_types((Any,)) do a
+    @invoke invoke_constprop(a::Number, false::Bool)
+end |> only === Symbol
 
-    # simple cases
-    @eval m begin
-        f(a::Any,    sym::Bool) = sym ? Any : :any
-        f(a::Number, sym::Bool) = sym ? Number : :number
-    end
-    @test (@eval m Base.return_types((Any,)) do a
-        @invoke f(a::Any, true::Bool)
-    end) == Any[Type{Any}]
-    @test (@eval m Base.return_types((Any,)) do a
-        @invoke f(a::Number, true::Bool)
-    end) == Any[Type{Number}]
-    @test (@eval m Base.return_types((Any,)) do a
-        @invoke f(a::Any, false::Bool)
-    end) == Any[Symbol]
-    @test (@eval m Base.return_types((Any,)) do a
-        @invoke f(a::Number, false::Bool)
-    end) == Any[Symbol]
+# https://github.com/JuliaLang/julia/issues/41024
+abstract type Interface41024 end
+Base.getproperty(x::Interface41024, sym::Symbol) =
+    sym === :x ? getfield(x, sym)::Int :
+    return getfield(x, sym) # fallback
 
-    # https://github.com/JuliaLang/julia/issues/41024
-    @eval m begin
-        # mixin, which expects common field `x::Int`
-        abstract type AbstractInterface end
-        Base.getproperty(x::AbstractInterface, sym::Symbol) =
-            sym === :x ? getfield(x, sym)::Int :
-            return getfield(x, sym) # fallback
+# extended mixin, which expects additional field `y::Rational{Int}`
+abstract type Interface41024Extended <: Interface41024 end
+Base.getproperty(x::Interface41024Extended, sym::Symbol) =
+    sym === :y ? getfield(x, sym)::Rational{Int} :
+    return @invoke getproperty(x::Interface41024, sym::Symbol)
 
-        # extended mixin, which expects additional field `y::Rational{Int}`
-        abstract type AbstractInterfaceExtended <: AbstractInterface end
-        Base.getproperty(x::AbstractInterfaceExtended, sym::Symbol) =
-            sym === :y ? getfield(x, sym)::Rational{Int} :
-            return @invoke getproperty(x::AbstractInterface, sym::Symbol)
-    end
-    @test (@eval m Base.return_types((AbstractInterfaceExtended,)) do x
-        x.x
-    end) == Any[Int]
-end
+@test Base.return_types((Interface41024Extended,)) do x
+    x.x
+end |> only === Int
 
 @testset "fieldtype for unions" begin # e.g. issue #40177
     f40177(::Type{T}) where {T} = fieldtype(T, 1)
@@ -4118,3 +4112,76 @@ struct Issue45780
 end
 f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
 @test (@inferred f45780()) == Val{1}()
+
+# issue #45600
+@test only(code_typed() do
+    while true
+        x = try finally end
+    end
+end)[2] == Union{}
+@test only(code_typed() do
+    while true
+        @time 1
+    end
+end)[2] == Union{}
+
+# compilerbarrier builtin
+import Core: compilerbarrier
+# runtime semantics
+for setting = (:type, :const, :conditional)
+    @test compilerbarrier(setting, 42) == 42
+    @test compilerbarrier(setting, :sym) == :sym
+end
+@test_throws ErrorException compilerbarrier(:nonexisting, 42)
+@test_throws TypeError compilerbarrier("badtype", 42)
+@test_throws ArgumentError compilerbarrier(:nonexisting, 42, nothing)
+# barrier on abstract interpretation
+@test Base.return_types((Int,)) do a
+    x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+    return x
+end |> only === Any
+@test Base.return_types() do
+    x = compilerbarrier(:const, 42)
+    if x == 42 # no constant information here, so inference also accounts for the else branch (leading to less accurate return type inference)
+        return x # but `x` is still inferred as `x::Int` at least here
+    else
+        return nothing
+    end
+end |> only === Union{Int,Nothing}
+@test Base.return_types((Union{Int,Nothing},)) do a
+    if compilerbarrier(:conditional, isa(a, Int))
+        # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+        return a
+    else
+        return nothing
+    end
+end |> only === Union{Int,Nothing}
+@test Base.return_types((Symbol,Int)) do setting, val
+    compilerbarrier(setting, val)
+end |> only === Any # XXX we may want to have "compile-time" error for this instead
+for setting = (:type, :const, :conditional)
+    # a successful barrier on abstract interpretation should be eliminated at the optimization
+    @test @eval fully_eliminated((Int,)) do a
+        compilerbarrier($(QuoteNode(setting)), 42)
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/46426
+@noinline Base.@assume_effects :nothrow typebarrier() = Base.inferencebarrier(0.0)
+@noinline Base.@assume_effects :nothrow constbarrier() = Base.compilerbarrier(:const, 0.0)
+let src = code_typed1() do
+        typebarrier()
+    end
+    @test any(isinvoke(:typebarrier), src.code)
+    @test Base.return_types() do
+        typebarrier()
+    end |> only === Any
+end
+let src = code_typed1() do
+        constbarrier()
+    end
+    @test any(isinvoke(:constbarrier), src.code)
+    @test Base.return_types() do
+        constbarrier()
+    end |> only === Float64
+end

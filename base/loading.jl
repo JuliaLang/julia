@@ -42,7 +42,7 @@ elseif Sys.isapple()
     #    char filename[max_filename_length];
     # };
     # Buffer buf;
-    # getattrlist(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isaccessiblefile(path) || return false
         path_basename = String(basename(path))
@@ -813,7 +813,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "src", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
@@ -1312,8 +1312,11 @@ end
 
 # get a top-level Module from the given key
 root_module(key::PkgId) = @lock require_lock loaded_modules[key]
-root_module(where::Module, name::Symbol) =
-    root_module(identify_package(where, String(name)))
+function root_module(where::Module, name::Symbol)
+    key = identify_package(where, String(name))
+    key isa PkgId || throw(KeyError(name))
+    return root_module(key)
+end
 maybe_root_module(key::PkgId) = @lock require_lock get(loaded_modules, key, nothing)
 
 root_module_exists(key::PkgId) = @lock require_lock haskey(loaded_modules, key)
@@ -2259,12 +2262,12 @@ macro __DIR__()
 end
 
 """
-    precompile(f, args::Tuple{Vararg{Any}})
+    precompile(f, argtypes::Tuple{Vararg{Any}})
 
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+Compile the given function `f` for the argument tuple (of types) `argtypes`, but do not execute it.
 """
-function precompile(@nospecialize(f), @nospecialize(args::Tuple))
-    precompile(Tuple{Core.Typeof(f), args...})
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    precompile(Tuple{Core.Typeof(f), argtypes...})
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
@@ -2274,6 +2277,27 @@ function precompile(@nospecialize(argt::Type))
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
     return ret
+end
+
+# Variants that work for `invoke`d calls for which the signature may not be sufficient
+precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
+    (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+
+"""
+    precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)
+
+Precompile a specific method for the given argument types. This may be used to precompile
+a different method than the one that would ordinarily be chosen by dispatch, thus
+mimicking `invoke`.
+"""
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
+    precompile(Tuple{Core.Typeof(f), argtypes...}, m)
+end
+
+function precompile(@nospecialize(argt::Type), m::Method)
+    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    mi = Core.Compiler.specialize_method(m, atype, sparams)
+    return precompile(mi)
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))

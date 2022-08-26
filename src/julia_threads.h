@@ -98,6 +98,9 @@ typedef struct {
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_)
+    void *asan_fake_stack;
+#endif
 } jl_ucontext_t;
 
 

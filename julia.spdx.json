@@ -147,18 +147,6 @@
             "summary": "A performant, 100% native-julia SHA1, SHA2, and SHA3 implementation"
         },
         {
-            "name": "DelimitedFiles.jl",
-            "SPDXID": "SPDXRef-JuliaDelimitedFiles",
-            "downloadLocation": "git+https://github.com/JuliaData/DelimitedFiles.jl.git",
-            "filesAnalyzed": false,
-            "homepage": "https://julialang.org",
-            "sourceInfo": "The git hash of the version in use can be found in the file stdlib/DelimitedFiles.version",
-            "licenseConcluded": "MIT",
-            "licenseDeclared": "MIT",
-            "copyrightText": "Copyright (c) 2012-2022 The Julia Programming Language",
-            "summary": "A package for reading and writing files with delimited values."
-        },
-        {
             "name": "dSFMT",
             "SPDXID": "SPDXRef-dSFMT",
             "downloadLocation": "git+https://github.com/MersenneTwister-Lab/dSFMT.git",
@@ -500,11 +488,6 @@
         },
         {
             "spdxElementId": "SPDXRef-JuliaSHA",
-            "relationshipType": "BUILD_DEPENDENCY_OF",
-            "relatedSpdxElement": "SPDXRef-JuliaMain"
-        },
-        {
-            "spdxElementId": "SPDXRef-JuliaDelimitedFiles",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },

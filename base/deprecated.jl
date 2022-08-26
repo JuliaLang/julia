@@ -159,7 +159,7 @@ function firstcaller(bt::Vector, funcsyms)
                 li = lkup.linfo
                 if li isa Core.MethodInstance
                     ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
-                    if isa(ft, DataType) && ft.name === Type.body.name
+                    if isType(ft)
                         ft = unwrap_unionall(ft.parameters[1])
                         found = (isa(ft, DataType) && ft.name.name in funcsyms)
                     end
@@ -313,5 +313,18 @@ const var"@_noinline_meta" = var"@noinline"
 # BEGIN 1.9 deprecations
 
 @deprecate splat(x) Splat(x) false
+
+# We'd generally like to avoid direct external access to internal fields
+# Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
+# but we need to keep these around for compat
+function getproperty(ci::CodeInfo, s::Symbol)
+    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    return getfield(ci, s)
+end
+
+function setproperty!(ci::CodeInfo, s::Symbol, v)
+    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
 
 # END 1.9 deprecations

@@ -35,6 +35,8 @@ Compiler/Runtime improvements
   `@nospecialize`-d call sites and avoiding excessive compilation. ([#44512])
 * All the previous usages of `@pure`-macro in `Base` has been replaced with the preferred
   `Base.@assume_effects`-based annotations. ([#44776])
+* `invoke(f, invokesig, args...)` calls to a less-specific method than would normally be chosen
+  for `f(args...)` are no longer spuriously invalidated when loading package precompile files. ([#46010])
 
 Command-line option changes
 ---------------------------
@@ -68,6 +70,9 @@ New library functions
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)`. ([#45607])
+* New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
+  and allows any iterators of iterators. Method `stack(f, x)` generalises `mapreduce(f, hcat, x)` and
+  is efficient. ([#43334])
 
 Library changes
 ---------------
@@ -157,6 +162,8 @@ Standard library changes
 #### Mmap
 
 #### DelimitedFiles
+
+* DelimitedFiles has been promoted from being a standard library to a separate package. It now has to be explicitly installed to be used.
 
 
 Deprecated or removed

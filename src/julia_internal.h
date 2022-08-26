@@ -25,8 +25,63 @@
 extern "C" {
 #endif
 #ifdef _COMPILER_ASAN_ENABLED_
+#if defined(__GLIBC__) && defined(_CPU_X86_64_)
+/* TODO: This is terrible - we're reaching deep into glibc internals here.
+   We should probably just switch to our own setjmp/longjmp implementation. */
+#define JB_RSP 6
+static inline uintptr_t demangle_ptr(uintptr_t var)
+{
+    asm ("ror $17, %0\n\t"
+         "xor %%fs:0x30, %0\n\t"
+        : "=r" (var)
+        : "0" (var));
+    return var;
+}
+static inline uintptr_t jmpbuf_sp(jl_jmp_buf *buf)
+{
+    return demangle_ptr((uintptr_t)(*buf)[0].__jmpbuf[JB_RSP]);
+}
+#else
+#error Need to implement jmpbuf_sp for this architecture
+#endif
 void __sanitizer_start_switch_fiber(void**, const void*, size_t);
 void __sanitizer_finish_switch_fiber(void*, const void**, size_t*);
+extern void __asan_unpoison_stack_memory(uintptr_t addr, size_t size);
+static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
+{
+    if (!ct)
+        return;
+    /* Unpoison everything from the base of the stack allocation to the address
+       that we're resetting to. The idea is to remove the posion from the frames
+       that we're skipping over, since they won't be unwound. */
+    uintptr_t top = jmpbuf_sp(buf);
+    uintptr_t bottom = (uintptr_t)ct->stkbuf;
+    __asan_unpoison_stack_memory(bottom, top - bottom);
+}
+static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) {
+    __asan_unpoison_stack_memory(addr, size);
+}
+#else
+static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf) JL_NOTSAFEPOINT {}
+static inline void asan_unpoison_stack_memory(uintptr_t addr, size_t size) JL_NOTSAFEPOINT {}
+#endif
+#ifdef _COMPILER_MSAN_ENABLED_
+void __msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFEPOINT;
+void __msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT;
+void __msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT;
+static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {
+    __msan_allocated_memory(a, size);
+}
+static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFEPOINT {
+    __msan_unpoison(a, size);
+}
+static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {
+    __msan_unpoison_string(a);
+}
+#else
+static inline void msan_unpoison(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
+static inline void msan_allocated_memory(const volatile void *a, size_t size) JL_NOTSAFEPOINT {}
+static inline void msan_unpoison_string(const volatile char *a) JL_NOTSAFEPOINT {}
 #endif
 #ifdef _COMPILER_TSAN_ENABLED_
 void *__tsan_create_fiber(unsigned flags);
@@ -520,7 +575,6 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 typedef struct {
     uint8_t pure:1;
     uint8_t propagate_inbounds:1;
-    uint8_t inlineable:1;
     uint8_t inferred:1;
     uint8_t constprop:2; // 0 = use heuristic; 1 = aggressive; 2 = none
 } jl_code_info_flags_bitfield_t;
@@ -532,7 +586,6 @@ typedef union {
 
 // -- functions -- //
 
-// jl_code_info_flag_t code_info_flags(uint8_t pure, uint8_t propagate_inbounds, uint8_t inlineable, uint8_t inferred, uint8_t constprop);
 JL_DLLEXPORT jl_code_info_t *jl_type_infer(jl_method_instance_t *li, size_t world, int force);
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world);
 jl_code_instance_t *jl_generate_fptr(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world);
@@ -543,6 +596,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
 jl_method_instance_t *jl_get_unspecialized_from_mi(jl_method_instance_t *method JL_PROPAGATES_ROOT);
 jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT);
 
+JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world);
 JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types);
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT);
 int jl_code_requires_compiler(jl_code_info_t *src);
@@ -550,6 +604,10 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
 void jl_resolve_globals_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
                               int binding_effects);
+
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT;
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller);
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller);
 
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root);
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots);
@@ -678,6 +736,9 @@ JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_binding_t *b
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
+extern jl_array_t *jl_global_roots_table JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED);
 int jl_compile_extern_c(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt);
 
 jl_opaque_closure_t *jl_new_opaque_closure(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
@@ -893,7 +954,7 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
     jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams);
 jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins);
-JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_method_instance_t *caller);
+JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_method_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_value_t *caller);
 
 uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
