@@ -378,7 +378,7 @@ test_monitor_wait_poll()
 test_watch_file_timeout(0.2)
 test_watch_file_change(6)
 
-if !(isbaseci && ismacos_x86) 
+if !(isbaseci && ismacos_x86)
     test_dirmonitor_wait2(0.2)
     test_dirmonitor_wait2(0.2)
 
