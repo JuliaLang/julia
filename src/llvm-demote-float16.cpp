@@ -47,23 +47,9 @@ INST_STATISTIC(FCmp);
 
 extern JuliaOJIT *jl_ExecutionEngine;
 
-Optional<bool> always_have_fp16() {
-#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
-    // x86 doesn't support fp16
-    // TODO: update for sapphire rapids when it comes out
-    return false;
-#else
-    return {};
-#endif
-}
-
 namespace {
 
 bool have_fp16(Function &caller) {
-    auto unconditional = always_have_fp16();
-    if (unconditional.hasValue())
-        return unconditional.getValue();
-
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
         FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();

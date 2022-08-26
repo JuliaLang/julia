@@ -154,6 +154,9 @@ static constexpr FeatureDep deps[] = {
     {avx512vnni, avx512f},
     {avx512vp2intersect, avx512f},
     {avx512vpopcntdq, avx512f},
+    {avx512fp16, avx512bw},
+    {avx512fp16, avx512dq},
+    {avx512fp16, avx512vl},
     {amx_int8, amx_tile},
     {amx_bf16, amx_tile},
     {sse4a, sse3},
@@ -208,8 +211,8 @@ constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdi
 constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq, pconfig,
                                                        rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni);
 constexpr auto sapphirerapids = icelake_server |
-    get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, serialize, cldemote, waitpkg,
-                      ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
+    get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, avx512fp16, serialize, cldemote, waitpkg,
+                      avxvnni, uintr, ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
 
 constexpr auto k8_sse3 = get_feature_masks(sse3, cx16);
 constexpr auto amdfam10 = k8_sse3 | get_feature_masks(sse4a, lzcnt, popcnt, sahf);
@@ -917,10 +920,10 @@ static void ensure_jit_target(bool imaging)
                                                   Feature::avx512pf, Feature::avx512er,
                                                   Feature::avx512cd, Feature::avx512bw,
                                                   Feature::avx512vl, Feature::avx512vbmi,
-                                                  Feature::avx512vpopcntdq,
+                                                  Feature::avx512vpopcntdq, Feature::avxvnni,
                                                   Feature::avx512vbmi2, Feature::avx512vnni,
                                                   Feature::avx512bitalg, Feature::avx512bf16,
-                                                  Feature::avx512vp2intersect};
+                                                  Feature::avx512vp2intersect, Feature::avx512fp16};
         for (auto fe: clone_math) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
                 t.en.flags |= JL_TARGET_CLONE_MATH;
@@ -930,6 +933,13 @@ static void ensure_jit_target(bool imaging)
         for (auto fe: clone_simd) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
                 t.en.flags |= JL_TARGET_CLONE_SIMD;
+                break;
+            }
+        }
+        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
                 break;
             }
         }

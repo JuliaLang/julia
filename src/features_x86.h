@@ -74,11 +74,13 @@ JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 0)
 // EAX=7,ECX=0: EDX
 // JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
 // JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
+JL_FEATURE_DEF(uintr, 32 * 4 + 5, 14000)
 JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
 JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
 JL_FEATURE_DEF_NAME(amx_bf16, 32 * 4 + 22, 110000, "amx-bf16")
+JL_FEATURE_DEF_NAME(avx512fp16, 32 * 4 + 23, 140000)
 JL_FEATURE_DEF_NAME(amx_tile, 32 * 4 + 24, 110000, "amx-tile")
 JL_FEATURE_DEF_NAME(amx_int8, 32 * 4 + 25, 110000, "amx-int8")
 
