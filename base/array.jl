@@ -1022,14 +1022,36 @@ type as required.
 """
 function setindex end
 
-function setindex(xs::AbstractArray, v, I...)
+function setindex(x::AbstractArray, v, i...)
     @_propagate_inbounds_meta
-    T = promote_type(eltype(xs), typeof(v))
-    ys = similar(xs, T)
-    copy!(ys, xs)
-    ys[I...] = v
-    return ys
+    inds = to_indices(x, i)
+    if inds isa Tuple{Vararg{Integer}}
+        T = promote_type(eltype(x), typeof(v))
+    else
+        T = promote_type(eltype(x), eltype(v))
+    end
+    y = similar(x, T)
+    copy!(y, x)
+    y[inds...] = v
+    return y
 end
+function setindex(t::Tuple, v, inds::AbstractUnitRange{<:Integer})
+    start = first(inds)
+    stop = last(inds)
+    offset = start - firstindex(v)
+    ntuple(Val{nfields(t)}()) do i
+        if i < start || i > stop
+            getfield(t, i)
+        else
+            v[i - offset]
+        end
+    end
+end
+function setindex(t::Tuple, v, inds::AbstractVector{<:Integer})
+    @_propagate_inbounds_meta
+    (setindex!(Any[t...], v, inds)...,)
+end
+
 
 # efficiently grow an array
 

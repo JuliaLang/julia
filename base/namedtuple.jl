@@ -375,8 +375,9 @@ julia> Base.setindex(nt, "a", :a)
 (a = "a",)
 ```
 """
-function setindex(nt::NamedTuple, v, idx::Symbol)
-    merge(nt, (; idx => v))
+setindex(nt::NamedTuple, v, idx::Symbol) = merge(nt, (; idx => v))
+function setindex(nt::NamedTuple, vs, idxs::AbstractVector{Symbol})
+    merge(nt, (; [i => v for (i,v) in zip(idxs, vs)]...))
 end
 
 """
