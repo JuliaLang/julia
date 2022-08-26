@@ -2466,9 +2466,6 @@ true
 
 julia> occursin([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
 false
-
-julia> occursin("el", "Hello")
-true
 ```
 """
 function occursin(B::AbstractArray, A::AbstractArray)
