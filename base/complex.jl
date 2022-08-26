@@ -1072,14 +1072,8 @@ breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
                                                     
-If the `digits` keyword argument is provided, it rounds to the specified
-number of digits after the decimal place (or before if negative), in
-base `base`.
-
-If the `sigdigits` keyword argument is provided, it rounds to the
-specified number of significant `digits`, in base `base`.
                                                     
-`RoundingModeReal` and `RoundingModeImaginary` default to `RoundNearest`,
+`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
 which rounds to the nearest integer, with ties (fractional values of 0.5)
 being rounded to the nearest even integer.
 
