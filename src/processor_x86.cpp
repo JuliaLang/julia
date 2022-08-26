@@ -936,7 +936,7 @@ static void ensure_jit_target(bool imaging)
                 break;
             }
         }
-        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        static constexpr uint32_t clone_fp16[] = {Feature::avx512fp16};
         for (auto fe: clone_fp16) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
                 t.en.flags |= JL_TARGET_CLONE_FLOAT16;
