@@ -80,7 +80,7 @@ JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
 JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
 JL_FEATURE_DEF_NAME(amx_bf16, 32 * 4 + 22, 110000, "amx-bf16")
-JL_FEATURE_DEF_NAME(avx512fp16, 32 * 4 + 23, 140000)
+JL_FEATURE_DEF(avx512fp16, 32 * 4 + 23, 140000)
 JL_FEATURE_DEF_NAME(amx_tile, 32 * 4 + 24, 110000, "amx-tile")
 JL_FEATURE_DEF_NAME(amx_int8, 32 * 4 + 25, 110000, "amx-int8")
 
