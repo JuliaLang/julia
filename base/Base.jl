@@ -410,6 +410,8 @@ include("util.jl")
 
 include("asyncmap.jl")
 
+include("statistics.jl")
+
 # deprecated functions
 include("deprecated.jl")
 

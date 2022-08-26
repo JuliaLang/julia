@@ -982,6 +982,12 @@ export
     rand,
     randn,
 
+# statistics
+    mean,
+    mean!,
+    std,
+    var,
+
 # Macros
     # parser internal
     @__FILE__,
