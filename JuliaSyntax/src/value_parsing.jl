@@ -21,12 +21,15 @@ function julia_string_to_number(str::AbstractString, kind)
         return x
     elseif kind == K"Float"
         if !startswith(str,"0x") && 'f' in str && !('p' in str)
-            # This is kind of awful. Should we have a separate Float32 literal
-            # type produced by the lexer?  The `f` suffix is nonstandard after all.
-            return Base.parse(Float32, replace(str, 'f'=>'e'))
+            # TODO: re-detecting Float32 here is kind of awful. Should have a
+            # separate Float32 literal type produced by the lexer?
+            x, code = _parse_float(Float32, str)
         else
-            return Base.parse(Float64, str)
+            x, code = _parse_float(Float64, str)
         end
+        return code === :ok           ? x :
+               code === :underflow    ? x : # < TODO: emit warning somehow?
+               #=code === :overflow=#   ErrorVal()
     elseif kind == K"HexInt"
         ndigits = length(str)-2
         return ndigits <= 2  ? Base.parse(UInt8, str)   :
@@ -65,6 +68,69 @@ function julia_string_to_number(str::AbstractString, kind)
     end
 end
 
+
+#-------------------------------------------------------------------------------
+"""
+Like `Base.parse(Union{Float64,Float32}, str)`, but permits float underflow
+
+Parse a Float64. str[firstind:lastind] must be a valid floating point literal
+string. If the value is outside Float64 range.
+"""
+function _parse_float(::Type{T}, str::String,
+        firstind::Integer, lastind::Integer) where {T} # force specialize with where {T} 
+    strsize = lastind - firstind + 1
+    bufsz = 50
+    buf = Ref{NTuple{bufsz, UInt8}}()
+    if strsize < bufsz
+        GC.@preserve str buf begin
+            ptr = Base.unsafe_convert(Ptr{UInt8}, pointer_from_objref(buf))
+            unsafe_copyto!(ptr, pointer(str, firstind), strsize)
+            unsafe_store!(ptr, UInt8(0), strsize + 1)
+        end
+    else
+        # Slow path with allocation
+        str = String(str[firstind:lastind])
+        ptr = pointer(str)
+    end
+    GC.@preserve str buf begin
+        Libc.errno(0)
+        endptr = Ref{Ptr{UInt8}}(C_NULL)
+        # Assumes ptr is null terminated
+        x = _strtofloat(T, ptr, strsize, endptr)
+        @check endptr[] == ptr + strsize
+        status = :ok
+        if Libc.errno() == Libc.ERANGE
+            # strtod man page:
+            # * If  the  correct  value  would cause overflow, plus or
+            #   minus HUGE_VAL, HUGE_VALF, or HUGE_VALL is returned and
+            #   ERANGE is stored in errno.
+            # * If the correct value would cause underflow, a value with
+            #   magnitude no larger than DBL_MIN, FLT_MIN, or LDBL_MIN is
+            #   returned and ERANGE is stored in errno.
+            status = abs(x) < 1.0 ? :underflow : :overflow
+        end
+        return (x, status)
+    end
+end
+
+function _parse_float(T, str::String)
+    _parse_float(T, str, firstindex(str), lastindex(str))
+end
+
+@inline function _strtofloat(::Type{Float64}, ptr, strsize, endptr)
+    @ccall jl_strtod_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cdouble
+end
+
+@inline function _strtofloat(::Type{Float32}, ptr, strsize, endptr)
+    # Convert float exponent 'f' to 'e' for strtof, eg, 1.0f0 => 1.0e0
+    for p in ptr+strsize-1:-1:ptr
+        if unsafe_load(p) == UInt8('f')
+            unsafe_store!(p, UInt8('e'))
+            break
+        end
+    end
+    @ccall jl_strtof_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cfloat
+end
 
 #-------------------------------------------------------------------------------
 is_indentation(c) = c == ' ' || c == '\t'
