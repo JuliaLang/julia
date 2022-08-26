@@ -436,7 +436,7 @@ end
     d8 = Dict(:x => RainbowString(randstring(10), false, false, false, 6))
     str8 = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,14), :color=>true, :limit=>true))
     line8 = split(str8, '\n')[2]
-    @test !occursin(line8, "\033[")
+    @test !occursin("\033[", line8)
     @test length(line8) == 14
     str8_long = sprint(io -> show(io, MIME("text/plain"), d8); context = (:displaysize=>(30,16), :color=>true, :limit=>true))
     line8_long = split(str8_long, '\n')[2]
@@ -454,7 +454,7 @@ end
     @test count('苹', str10) == 2
 
     d11 = Dict(RainbowString("abcdefgh", false, true, false) => 0, "123456" => 1)
-    str11 = sprint(io -> show(io, MIME("text/plain"), dict); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
+    str11 = sprint(io -> show(io, MIME("text/plain"), d11); context = (:displaysize=>(30,80), :color=>true, :limit=>true))
     @test endswith(str11, "\033[0m => 0")
 end
 
