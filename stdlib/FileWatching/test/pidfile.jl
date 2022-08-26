@@ -296,8 +296,10 @@ end
         sleep(3)
     end
     wait(t_loop)
-    @test maximum(lock_times) > 2
-    @test minimum(lock_times) < 1
+    if !(isbaseci && ismacos_arm) # https://github.com/JuliaLang/julia/issues/46185
+        @test maximum(lock_times) > 2
+        @test minimum(lock_times) < 1
+    end
 end
 
 @assert !ispath("pidfile")
