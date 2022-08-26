@@ -2419,7 +2419,7 @@ Return the indices of one or many existing subsequences B in A.
 A and B may be of type AbstractString or AbstractArray.
 If there are none in A, return an empty array.
 
-See also: [`issubseq`](@ref).
+See also: [`occursin`](@ref).
 
 # Examples
 ```jldoctest
@@ -2438,7 +2438,7 @@ julia> findsubseq("el", "Hello")
 
 """
 function findsubseq(B::AbstractArray, A::AbstractArray)
-    BinA = findall(isequal(B[1]), A)
+    BinA = findall(isequal(@view B[1]), A)
     matchFirstIndex = eltype(eachindex(A))[]
     for i in BinA
         if lastindex(A)-i+1 < length(B) continue end
@@ -2449,35 +2449,36 @@ end
 findsubseq(B::AbstractString,A::AbstractString) = findsubseq(collect(B),collect(A))
 
 """
-    issubseq(B,A)
+    occursin(B,A)
 
 Return true if one or many subsequences B exist in A.
-A and B may be of type AbstractString or AbstractArray.
+A and B may be of type AbstractArray.
 If there are none in A, return false.
+
+One can also use [`occursin`](@ref) for AbstractString inputs.
 
 See also: [`findsubseq`](@ref).
 
 # Examples
 ```jldoctest
-julia> issubseq([7, 8], [7, 2, 7, 8, 5, 9, 7, 8])
+julia> occursin([7, 8], [7, 2, 7, 8, 5, 9, 7, 8])
 true
 
-julia> issubseq([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
+julia> occursin([4, 6], [7, 2, 7, 8, 5, 9, 7, 8])
 false
 
-julia> issubseq("el", "Hello")
+julia> occursin("el", "Hello")
 true
 ```
 """
-function issubseq(B::AbstractArray, A::AbstractArray)
-    BinA = findall(isequal(B[1]), A)
+function occursin(B::AbstractArray, A::AbstractArray)
+    BinA = findall(isequal(@view B[1]), A)
     for i in BinA
         if lastindex(A)-i+1 < length(B) continue end
         if (@view A[i:i + length(B) - 1]) == B return true end
     end
     return false
 end
-issubseq(B::AbstractString, A::AbstractString) = issubseq(collect(B),collect(A))
 
 # similar to Matlab's ismember
 """
