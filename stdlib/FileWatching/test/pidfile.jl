@@ -21,6 +21,10 @@ Base.Filesystem.mtime(io::MemoryFile) = io.mtime
 # and create a test environment temp directory
 umask(new_mask) = ccall((@static iswindows() ? :_umask : :umask), Cint, (Cint,), new_mask)
 
+isbaseci = get(ENV, "JULIA_TEST_IS_BASE_CI", nothing) == "true"
+ismacos_arm = ((Sys.ARCH == :aarch64) && (Sys.isapple())) #https://github.com/JuliaLang/julia/issues/46185
+ismacos_x86 = ((Sys.ARCH == :x86_64) && (Sys.isapple()))
+
 # TODO: Use targeted @test_log tests instead of suppressing all logs to hide the expected warnings
 Base.CoreLogging.with_logger(Base.CoreLogging.NullLogger()) do
 
