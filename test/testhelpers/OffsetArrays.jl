@@ -100,7 +100,7 @@ end
 # function offset_coerce(::Type{Base.OneTo{T}}, r::IdOffsetRange) where T<:Integer
 #     rc, o = offset_coerce(Base.OneTo{T}, r.parent)
 
-# Fallback, specialze this method if `convert(I, r)` doesn't do what you need
+# Fallback, specialize this method if `convert(I, r)` doesn't do what you need
 offset_coerce(::Type{I}, r::AbstractUnitRange) where I<:AbstractUnitRange =
     convert(I, r)::I, 0
 
