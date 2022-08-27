@@ -1,6 +1,30 @@
 using JuliaSyntax:
     julia_string_to_number,
-    unescape_julia_string
+    unescape_julia_string,
+    _parse_float
+
+@testset "Float parsing" begin
+    # Float64
+    @test _parse_float(Float64, "123", 1, 3)   === (123.0, :ok)
+    @test _parse_float(Float64, "123", 2, 3)   === (23.0,  :ok)
+    @test _parse_float(Float64, "123", 2, 2)   === (2.0,   :ok)
+    @test _parse_float(Float64, "1.3", 1, 3)   === (1.3,   :ok)
+    @test _parse_float(Float64, "1.3e2", 1, 5) === (1.3e2, :ok)
+    @test _parse_float(Float64, "1.0e-1000", 1, 9) === (0.0, :underflow)
+    @test _parse_float(Float64, "1.0e+1000", 1, 9) === (Inf, :overflow)
+    # Slow path (exceeds static buffer size)
+    @test _parse_float(Float64, "0.000000000000000000000000000000000000000000000000000000000001") === (1e-60, :ok)
+
+    # Float32
+    @test _parse_float(Float32, "123", 1, 3) === (123.0f0, :ok)
+    @test _parse_float(Float32, "1.3f2", 1, 5) === (1.3f2, :ok)
+    @test _parse_float(Float32, "1.0f-50", 1, 7) === (0.0f0, :underflow)
+    @test _parse_float(Float32, "1.0f+50", 1, 7) === (Inf32, :overflow)
+
+    # Assertions
+    @test_throws ErrorException _parse_float(Float64, "x", 1, 1)
+    @test_throws ErrorException _parse_float(Float64, "1x", 1, 2)
+end
 
 hexint(s) = julia_string_to_number(s, K"HexInt")
 binint(s) = julia_string_to_number(s, K"BinInt")
