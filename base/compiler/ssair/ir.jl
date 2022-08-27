@@ -753,9 +753,9 @@ end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     node = add!(compact.pending_nodes, pos, attach_after)
-    # TODO: switch this to `l = length(pending_nodes); splice!(pending_perm, searchsorted(pending_perm, l), l)`
-    push!(compact.pending_perm, length(compact.pending_nodes))
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes.info[x].pos, Order.Forward))
+    l = length(compact.pending_nodes)
+    i = searchsortedfirst(compact.pending_perm, l, By(x->compact.pending_nodes.info[x].pos))
+    insert!(compact.pending_perm, i, l)
     return node
 end
 
