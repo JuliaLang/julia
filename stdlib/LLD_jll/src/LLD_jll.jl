@@ -88,7 +88,12 @@ function __init__()
     init_lld_path()
     PATH[] = dirname(lld_path)
     push!(PATH_list, PATH[])
-    append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), joinpath(Sys.BINDIR, Base.LIBDIR)])
+    if Sys.iswindows()
+        # On windows, the dynamic libraries (.dll) are in Sys.BINDIR ("usr\\bin")
+        append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), Sys.BINDIR])
+    else
+        append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), joinpath(Sys.BINDIR, Base.LIBDIR)])
+    end
     LIBPATH[] = join(LIBPATH_list, pathsep)
 end
 
