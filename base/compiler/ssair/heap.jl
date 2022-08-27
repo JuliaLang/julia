@@ -1,4 +1,4 @@
-# This contains code that was formerly a part of Julia. License is MIT: http://julialang.org/license
+# This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Base.Order: Forward, Ordering, lt
 
