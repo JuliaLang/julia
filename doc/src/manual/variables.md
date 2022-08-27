@@ -111,16 +111,35 @@ variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be writt
 it from `+ ᵃx` where `ᵃx` is the variable name.
 
 
-A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values but cannot be used to assign values to other variables.
-More technically, they can only be used as an [L-value](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue), but not as an
- [R-value](https://en.wikipedia.org/wiki/R-value):
+
+A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values but cannot be used to assign values to other variables (or examined on their own). More technically, they can only be used as an [L-value](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue), but not as an [R-value](https://en.wikipedia.org/wiki/R-value) or [non-L-value](https://en.wikipedia.org/wiki/Value_(computer_science)) (**non-L-value** is colloquially known as **R-value**):
 
 ```julia-repl
-julia> x, ___ = size([2 2; 1 1])
+julia> x, ___ = size([2 2; 1 1])                         # ___ is used as an L-value
 (2, 2)
 
-julia> y = ___
+julia> y = ___                                           # ___ is used as an R-value
 ERROR: syntax: all-underscore identifier used as rvalue
+
+julia> ___                                               # ___ is used as a non-L-value
+ERROR: all-underscore identifier used as rvalue
+```
+
+In Julia, a particular class of variable names is used when you only want a specific part of a collection (which has many values), and wants to "throw away" the rest of the values in the collection (regardless of the number)." Unlike languages like Python, the particular class of variables can not be examined on their own:
+```julia-repl
+julia> student1 = "Comprehensive High School", "Peter Pan", 13, "Grade 12", "Science";
+
+julia> student2 = "Greatness High School", "John Alan", 15, "Grade 6", "Arts";
+
+julia> ___, s1name, s1age, ___ = student1;
+
+julia> ___, s2name, s2age, ___ = student2;
+
+julia> print(s1name, " and ", s2name, " are ", s1age, " and ", s2age, " years old respectively.")
+Peter Pan and John Alan are 13 and 15 years old respectively.
+
+julia> ___    # trying to examine ___ throws an error because it's being used as a non-L-value
+ERROR: all-underscore identifier used as rvalue
 ```
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
