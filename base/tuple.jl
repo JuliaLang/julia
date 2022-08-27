@@ -82,7 +82,7 @@ function deleteat(x::Tuple, i)
 end
 function _deleteat(x::Tuple{Vararg{Any,N}}, i::Integer) where {N}
     @inline
-    ntuple(j -> j < i ? getfield(x, j) : getfield(x, j + 1), Val{N+1}())
+    ntuple(j -> j < i ? getfield(x, j) : getfield(x, j + 1), Val{N-1}())
 end
 
 function insert(x::Tuple{Vararg{Any,N}}, index::Integer, item) where {N}

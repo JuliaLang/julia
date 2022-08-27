@@ -405,7 +405,7 @@ function delete(nt::NamedTuple{names}, i::Symbol) where {names}
     if fidx === 0
         nt
     else
-        NamedTuple{_delete(fidx, names...)}(_delete(fidx, Tuple(nt)...))
+        NamedTuple{_deleteat(fidx, names...)}(_deleteat(fidx, Tuple(nt)...))
     end
 end
 

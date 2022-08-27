@@ -688,12 +688,9 @@ See also: [`delete!`](@ref).
 
 # Examples
 ```jldoctest
-julia> d = Dict("a"=>1, "b"=>2)
-Dict{String,Int64} with 2 entries:
-  "b" => 2
-  "a" => 1
+julia> d = Dict("a"=>1, "b"=>2);
 
-julia> delete(d, "b") == Dict("a"=>a)
+julia> delete(d, "b") == Dict("a"=>1)
 true
 
 julia> d == Dict("a"=>1, "b"=>2)
