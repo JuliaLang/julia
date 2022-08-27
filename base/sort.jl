@@ -475,7 +475,7 @@ Characteristics:
     (e.g. "a" and "A" in a sort of letters which ignores case).
   * *not in-place* in memory.
   * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
-  * *good performance* for most large collections.
+  * *good performance* for almost all large collections.
   * *quadratic worst case runtime* in pathological cases
     (vanishingly rare for non-malicious input)
 """
