@@ -78,7 +78,7 @@ end
             end
 
             if Sys.isapple()
-                run(`$ld -flavor $flavor -arch $(macos_arch()) -platform_version $(macos_version()) -dylib -o $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
+                run(`$ld -flavor $flavor -arch $(macos_arch()) -platform_version macos $(macos_version()) $(macos_version()) -dylib -o $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
             else
                 run(`$ld -flavor $flavor  --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
             end
@@ -107,7 +107,7 @@ end;
             run(`$ar x chained.o.a`) # Extract new sysimage files
 
             if Sys.isapple()
-                run(`$ld -flavor $flavor -arch $(macos_arch()) -platform_version $(macos_version()) -dylib -o $chained_sysimage text.o data.o text-old.o`) # Link it all together
+                run(`$ld -flavor $flavor -arch $(macos_arch()) -platform_version macos $(macos_version()) $(macos_version()) -dylib -o $chained_sysimage text.o data.o text-old.o`) # Link it all together
             else
                 run(`$ld -flavor $flavor --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
             end
