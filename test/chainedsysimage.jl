@@ -2,6 +2,24 @@
 
 using Test, Libdl
 
+# Taken from https://github.com/JuliaGPU/Metal.jl/blob/1e29ca1f5069f3679ac5f212777ffad1f16387ae/lib/core/MTL.jl#L20-L27
+const _macos_version = Ref{VersionNumber}()
+function macos_version()
+    if !isassigned(_macos_version)
+        verstr = read(`sw_vers -productVersion`, String)
+        _macos_version[] = parse(VersionNumber, verstr)
+    end
+    _macos_version[]
+end
+
+function macos_arch()
+    arch = "$(Sys.ARCH)"
+    if arch == "aarch64"
+        arch = "AArch64"
+    end
+    return arch
+end
+
 try
     # TODO - This is not perfect because the test depends on an external package
     using LLVM_full_jll
@@ -60,7 +78,7 @@ end
             end
 
             if Sys.isapple()
-                run(`$ld -flavor $flavor -arch $(Sys.ARCH) -dylib -o $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
+                run(`$ld -flavor $flavor -arch $(macos_arch()) -platform_version $(macos_version()) -dylib -o $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
             else
                 run(`$ld -flavor $flavor  --shared --output $sysimage_path $OBJECT -L$(libdir("libjulia")) -L$(libdir("libjulia-internal")) $LIBS`)
             end
@@ -89,7 +107,7 @@ end;
             run(`$ar x chained.o.a`) # Extract new sysimage files
 
             if Sys.isapple()
-                run(`$ld -flavor $flavor -arch $(Sys.ARCH) -dylib -o $chained_sysimage text.o data.o text-old.o`) # Link it all together
+                run(`$ld -flavor $flavor -arch $(macos_arch()) -platform_version $(macos_version()) -dylib -o $chained_sysimage text.o data.o text-old.o`) # Link it all together
             else
                 run(`$ld -flavor $flavor --shared --output $chained_sysimage text.o data.o text-old.o`) # Link it all together
             end
