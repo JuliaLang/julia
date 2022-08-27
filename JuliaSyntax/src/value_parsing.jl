@@ -80,41 +80,49 @@ function _parse_float(::Type{T}, str::String,
         firstind::Integer, lastind::Integer) where {T} # force specialize with where {T} 
     strsize = lastind - firstind + 1
     bufsz = 50
-    buf = Ref{NTuple{bufsz, UInt8}}()
     if strsize < bufsz
+        buf = Ref{NTuple{bufsz, UInt8}}()
+        ptr = Base.unsafe_convert(Ptr{UInt8}, pointer_from_objref(buf))
         GC.@preserve str buf begin
-            ptr = Base.unsafe_convert(Ptr{UInt8}, pointer_from_objref(buf))
             unsafe_copyto!(ptr, pointer(str, firstind), strsize)
+            # Ensure ptr is null terminated
             unsafe_store!(ptr, UInt8(0), strsize + 1)
+            _unsafe_parse_float(T, ptr, strsize)
         end
     else
-        # Slow path with allocation
-        str = String(str[firstind:lastind])
-        ptr = pointer(str)
-    end
-    GC.@preserve str buf begin
-        Libc.errno(0)
-        endptr = Ref{Ptr{UInt8}}(C_NULL)
-        # Assumes ptr is null terminated
-        x = _strtofloat(T, ptr, strsize, endptr)
-        @check endptr[] == ptr + strsize
-        status = :ok
-        if Libc.errno() == Libc.ERANGE
-            # strtod man page:
-            # * If  the  correct  value  would cause overflow, plus or
-            #   minus HUGE_VAL, HUGE_VALF, or HUGE_VALL is returned and
-            #   ERANGE is stored in errno.
-            # * If the correct value would cause underflow, a value with
-            #   magnitude no larger than DBL_MIN, FLT_MIN, or LDBL_MIN is
-            #   returned and ERANGE is stored in errno.
-            status = abs(x) < 1.0 ? :underflow : :overflow
-        end
-        return (x, status)
+        # Slow path with allocation.
+        buf = Vector{UInt8}(str[firstind:lastind])
+        push!(buf, 0x00)
+        ptr = pointer(buf)
+        GC.@preserve buf _unsafe_parse_float(T, ptr, strsize)
     end
 end
 
 function _parse_float(T, str::String)
     _parse_float(T, str, firstindex(str), lastindex(str))
+end
+
+# Internals of _parse_float, split into a separate function to avoid some
+# apparent codegen issues https://github.com/JuliaLang/julia/issues/46509
+# (perhaps we don't want the `buf` in `GC.@preserve buf` to be stack allocated
+# on one branch and heap allocated in another?)
+@inline function _unsafe_parse_float(::Type{T}, ptr, strsize) where {T}
+    Libc.errno(0)
+    endptr = Ref{Ptr{UInt8}}(C_NULL)
+    x = _strtofloat(T, ptr, strsize, endptr)
+    @check endptr[] == ptr + strsize
+    status = :ok
+    if Libc.errno() == Libc.ERANGE
+        # strtod man page:
+        # * If  the  correct  value  would cause overflow, plus or
+        #   minus HUGE_VAL, HUGE_VALF, or HUGE_VALL is returned and
+        #   ERANGE is stored in errno.
+        # * If the correct value would cause underflow, a value with
+        #   magnitude no larger than DBL_MIN, FLT_MIN, or LDBL_MIN is
+        #   returned and ERANGE is stored in errno.
+        status = abs(x) < 1.0 ? :underflow : :overflow
+    end
+    return (x, status)
 end
 
 @inline function _strtofloat(::Type{Float64}, ptr, strsize, endptr)
@@ -123,6 +131,7 @@ end
 
 @inline function _strtofloat(::Type{Float32}, ptr, strsize, endptr)
     # Convert float exponent 'f' to 'e' for strtof, eg, 1.0f0 => 1.0e0
+    # Presumes we can modify the data in ptr!
     for p in ptr+strsize-1:-1:ptr
         if unsafe_load(p) == UInt8('f')
             unsafe_store!(p, UInt8('e'))
