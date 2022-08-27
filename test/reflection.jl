@@ -2,6 +2,8 @@
 
 using Test
 
+include("compiler/irutils.jl")
+
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be
 # sufficient to catch segfault bugs.
@@ -66,6 +68,7 @@ end # module ReflectionTest
 @test isbits((1,2))
 @test !isbits([1])
 @test isbits(nothing)
+@test fully_eliminated(isbits, (Int,))
 
 # issue #16670
 @test isconcretetype(Int)
@@ -199,7 +202,7 @@ end
 
 @test which(===, Tuple{Int, Int}) isa Method
 @test length(code_typed(===, Tuple{Int, Int})) === 1
-@test only(Base.return_types(===, Tuple{Int, Int})) === Any
+@test only(Base.return_types(===, Tuple{Int, Int})) === Bool
 
 module TestingExported
 using Test

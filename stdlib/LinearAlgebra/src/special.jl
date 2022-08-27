@@ -347,10 +347,10 @@ end
 *(A::Diagonal, Q::AbstractQ) = _qrmul(A, Q)
 *(A::Diagonal, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
 
-*(Q::AbstractQ, B::AbstractQ) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = _qrmul(Q, B)
-*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = _qrmul(Q, B)
+*(Q::AbstractQ, B::AbstractQ) = Q * (B * I)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = Q * (B * I)
+*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)

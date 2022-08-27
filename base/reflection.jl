@@ -590,7 +590,7 @@ isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x8)
 
 Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
-isbits(@nospecialize x) = (@_total_meta; typeof(x).flags & 0x8 == 0x8)
+isbits(@nospecialize x) = isbitstype(typeof(x))
 
 """
     isdispatchtuple(T)
@@ -1404,14 +1404,19 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
         return Any[rt]
     end
     types = to_tuple_type(types)
-    rt = []
+    if isa(f, Core.Builtin)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Any[rt]
+    end
+    rts = []
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
-        push!(rt, something(ty, Any))
+        push!(rts, something(ty, Any))
     end
-    return rt
+    return rts
 end
 
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
@@ -1423,22 +1428,21 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         argtypes = Any[types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
         return Core.Compiler.builtin_effects(f, argtypes, rt)
-    else
-        effects = Core.Compiler.EFFECTS_TOTAL
-        matches = _methods(f, types, -1, world)::Vector
-        if isempty(matches)
-            # this call is known to throw MethodError
-            return Core.Compiler.Effects(effects; nothrow=false)
-        end
-        for match in matches
-            match = match::Core.MethodMatch
-            frame = Core.Compiler.typeinf_frame(interp,
-                match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
-            frame === nothing && return Core.Compiler.Effects()
-            effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
-        end
-        return effects
     end
+    effects = Core.Compiler.EFFECTS_TOTAL
+    matches = _methods(f, types, -1, world)::Vector
+    if isempty(matches)
+        # this call is known to throw MethodError
+        return Core.Compiler.Effects(effects; nothrow=false)
+    end
+    for match in matches
+        match = match::Core.MethodMatch
+        frame = Core.Compiler.typeinf_frame(interp,
+            match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+        frame === nothing && return Core.Compiler.Effects()
+        effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
+    end
+    return effects
 end
 
 """

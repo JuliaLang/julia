@@ -434,7 +434,11 @@ end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ dot(A'x, y)
+            @test dot(x, A, y) ≈ dot(A'x, y) ≈ dot(x, A*y)
+            @test dot([1], SymTridiagonal([1], Int[]), [1]) == 1
+            @test dot([1], Tridiagonal(Int[], [1], Int[]), [1]) == 1
+            @test dot(Int[], SymTridiagonal(Int[], Int[]), Int[]) === 0
+            @test dot(Int[], Tridiagonal(Int[], Int[], Int[]), Int[]) === 0
         end
     end
 end

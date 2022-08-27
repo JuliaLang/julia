@@ -312,7 +312,9 @@ function CodeInstance(
             const_flags = 0x00
         end
     end
-    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
+    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] :
+                     inferred_result === nothing ? UInt8(1) : UInt8(0)
+    # relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
@@ -346,9 +348,9 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     end
 end
 
-function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result),
-                                    ipo_effects::Effects)
+function transform_result_for_cache(interp::AbstractInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
+    inferred_result = result.src
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
@@ -383,7 +385,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
@@ -561,17 +563,12 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
 end
 
 function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    i = 1
-    while i <= length(edges)
-        to = edges[i]
+    for (typ, to) in BackedgeIterator(edges)
         if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-            i += 1
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
         else
             typeassert(to, Core.MethodTable)
-            typ = edges[i + 1]
             ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-            i += 2
         end
     end
 end
