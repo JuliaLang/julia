@@ -524,10 +524,8 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
     ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in uses]
-    for x in defs
-        push!(ordered, (x, block_for_inst(cfg, x), false))
-    end
-    ordered = sort(ordered, by=x->x[1])
+    append!(ordered, Iterators.map(x->(x, block_for_inst(cfg, x), false), defs))
+    sort!(ordered, by=x->x[1])
     bb_defs = Int[]
     bb_uses = Int[]
     last_bb = last_def_bb = 0
