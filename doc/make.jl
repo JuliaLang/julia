@@ -122,7 +122,7 @@ BaseDocs = [
     "base/libc.md",
     "base/stacktraces.md",
     "base/simd-types.md",
-    "base/statistics.md"
+    "base/statistics.md",
 ]
 
 StdlibDocs = [stdlib.targetfile for stdlib in STDLIB_DOCS]

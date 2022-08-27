@@ -142,7 +142,7 @@ Standard library changes
 
 #### Statistics
 
-* Statistics has been promoted from being a standard library to a separate package. It now has to be explicitly installed to be used. However, functions `mean`, `mean!`, `std` and `var` are now exported directly by Base.
+* Statistics has been promoted from being a standard library to a separate package. It now has to be explicitly installed to be used. However, functions `mean`, `mean!`, `std` and `var` are now exported directly by Base. ([#46501])
 
 #### Sockets
 
