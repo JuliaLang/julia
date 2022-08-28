@@ -64,7 +64,8 @@ end
 
 Creates a new tuple similar to `x` with the value at index `i` removed.
 Throws a `BoundsError` when out of bounds.
-See also: [`deleteat!`](@ref)
+
+See also: [`deleteat!`](@ref), [`delete`](@ref)
 
 # Examples
 ```jldoctest

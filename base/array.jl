@@ -1196,7 +1196,7 @@ end
 
 Returns a copy of `a` with `item` inserted at `index`.
 
-See also: [`insert!`](@ref)
+See also: [`insert!`](@ref), [`deleteat`](@ref), [`delete`](@ref)
 
 # Examples
 ```jldoctest
@@ -1737,7 +1737,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`deleteat`](@ref)
+See also: [`deleteat!`](@ref), [`delete`](@ref), [`insert`](@ref)
 
 # Examples
 ```jldoctest
