@@ -1982,11 +1982,12 @@ function hvcat(nbc::Integer, as...)
 end
 
 """
-    hvcat(rows::Tuple{Vararg{Int}}, values...)
+    hvcat(blocks_per_row::Union{Tuple{Vararg{Int}}, Integer}, values...)
 
 Horizontal and vertical concatenation in one call. This function is called for block matrix
 syntax. The first argument specifies the number of arguments to concatenate in each block
-row.
+row. If the first argument is a single integer `n`, then all block rows are assumed to have `n`
+block columns.
 
 # Examples
 ```jldoctest
@@ -2015,9 +2016,6 @@ julia> hvcat((2,2,2), a,b,c,d,e,f)
  3  4
  5  6
 ```
-
-If the first argument is a single integer `n`, then all block rows are assumed to have `n`
-block columns.
 """
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
