@@ -615,9 +615,9 @@ mutable struct IncrementalCompact
 
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
-        perm = my_sortperm(Int[code.new_nodes.info[i].pos for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
-        ssa_rename = Any[SSAValue(i) for i = 1:new_len]
+        isempty(code.new_nodes) || error("Expected new_nodes to be empty when inlining")
+        perm = Int[]
+        ssa_rename = Any[SSAValue(i) for i = 1:length(code.stmts)]
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
