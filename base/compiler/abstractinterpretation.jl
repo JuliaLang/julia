@@ -293,7 +293,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             if result === missing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
-            matches, overlayed = result
+            (; matches, overlayed) = result
             nonoverlayed &= !overlayed
             push!(infos, MethodMatchInfo(matches))
             for m in matches
@@ -334,7 +334,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
         end
-        matches, overlayed = result
+        (; matches, overlayed) = result
         fullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
         return MethodMatches(matches.matches,
                              MethodMatchInfo(matches),
