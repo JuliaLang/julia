@@ -251,9 +251,10 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret.
 
-Note that on Windows, the secret might be displayed as it is typed; see
-`Base.winprompt` for securely retrieving username/password pairs from a
-graphical interface.
+!!! info "Windows"
+    Note that on Windows, the secret might be displayed as it is typed; see
+    `Base.winprompt` for securely retrieving username/password pairs from a
+    graphical interface.
 """
 function getpass end
 
@@ -347,7 +348,7 @@ Displays the `message` then waits for user input. Input is terminated when a new
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
-See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
 # Example
 
@@ -577,7 +578,16 @@ function _kwdef!(blk, params_args, call_args)
             push!(params_args, ei)
             push!(call_args, ei)
         elseif ei isa Expr
-            if ei.head === :(=)
+            is_atomic = ei.head === :atomic
+            ei = is_atomic ? first(ei.args) : ei # strip "@atomic" and add it back later
+            is_const = ei.head === :const
+            ei = is_const ? first(ei.args) : ei # strip "const" and add it back later
+            # Note: `@atomic const ..` isn't valid, but reconstruct it anyway to serve a nice error
+            if ei isa Symbol
+                # const var
+                push!(params_args, ei)
+                push!(call_args, ei)
+            elseif ei.head === :(=)
                 lhs = ei.args[1]
                 if lhs isa Symbol
                     #  var = defexpr
@@ -593,7 +603,9 @@ function _kwdef!(blk, params_args, call_args)
                 defexpr = ei.args[2]  # defexpr
                 push!(params_args, Expr(:kw, var, esc(defexpr)))
                 push!(call_args, var)
-                blk.args[i] = lhs
+                lhs = is_const ? Expr(:const, lhs) : lhs
+                lhs = is_atomic ? Expr(:atomic, lhs) : lhs
+                blk.args[i] = lhs # overrides arg
             elseif ei.head === :(::) && ei.args[1] isa Symbol
                 # var::Typ
                 var = ei.args[1]

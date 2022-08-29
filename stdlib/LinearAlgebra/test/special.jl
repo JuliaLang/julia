@@ -215,16 +215,29 @@ end
         atri = typ(a)
         matri = Matrix(atri)
         b = rand(n,n)
-        qrb = qr(b, ColumnNorm())
-        @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-        @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-        @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-        @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
-        qrb = qr(b, NoPivot())
-        @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
-        @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
-        @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
-        @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+        for pivot in (ColumnNorm(), NoPivot())
+            qrb = qr(b, pivot)
+            @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
+            @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
+            @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
+            @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+        end
+    end
+end
+
+@testset "Multiplication of Qs" begin
+    for pivot in (ColumnNorm(), NoPivot()), A in (rand(5, 3), rand(5, 5), rand(3, 5))
+        Q = qr(A, pivot).Q
+        m = size(A, 1)
+        C = Matrix{Float64}(undef, (m, m))
+        @test Q*Q ≈ (Q*I) * (Q*I) ≈ mul!(C, Q, Q)
+        @test size(Q*Q) == (m, m)
+        @test Q'Q ≈ (Q'*I) * (Q*I) ≈ mul!(C, Q', Q)
+        @test size(Q'Q) == (m, m)
+        @test Q*Q' ≈ (Q*I) * (Q'*I) ≈ mul!(C, Q, Q')
+        @test size(Q*Q') == (m, m)
+        @test Q'Q' ≈ (Q'*I) * (Q'*I) ≈ mul!(C, Q', Q')
+        @test size(Q'Q') == (m, m)
     end
 end
 

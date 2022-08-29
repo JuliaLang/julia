@@ -97,6 +97,7 @@
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
+    XX(jl_compile_method_instance) \
     XX(jl_compress_argnames) \
     XX(jl_compress_ir) \
     XX(jl_compute_fieldtypes) \
@@ -413,6 +414,7 @@
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
+    XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \

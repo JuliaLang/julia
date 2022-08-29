@@ -322,13 +322,14 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 6) {
+                    if (jl_expr_nargs(ma) == 7) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
                         li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
+                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
                     }
                 }
                 else
@@ -376,7 +377,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
-
+        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
+            li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint8_set(li->ssaflags, j, 0);
         else {
@@ -470,6 +473,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
+    src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->purity.bits = 0;
@@ -781,6 +785,49 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->constprop = 0;
     JL_MUTEX_INIT(&m->writelock);
     return m;
+}
+
+// backedges ------------------------------------------------------------------
+
+// Use this in a `while` loop to iterate over the backedges in a MethodInstance.
+// `*invokesig` will be NULL if the call was made by ordinary dispatch, otherwise
+// it will be the signature supplied in an `invoke` call.
+// If you don't need `invokesig`, you can set it to NULL on input.
+// Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
+{
+    jl_value_t *item = jl_array_ptr_ref(list, i);
+    if (jl_is_method_instance(item)) {
+        // Not an `invoke` call, it's just the MethodInstance
+        if (invokesig != NULL)
+            *invokesig = NULL;
+        *caller = (jl_method_instance_t*)item;
+        return i + 1;
+    }
+    assert(jl_is_type(item));
+    // An `invoke` call, it's a (sig, MethodInstance) pair
+    if (invokesig != NULL)
+        *invokesig = item;
+    *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i + 1);
+    if (*caller)
+        assert(jl_is_method_instance(*caller));
+    return i + 2;
+}
+
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, invokesig);
+    jl_array_ptr_set(list, i++, caller);
+    return i;
+}
+
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_1d_push(list, invokesig);
+    jl_array_ptr_1d_push(list, (jl_value_t*)caller);
+    return;
 }
 
 // method definition ----------------------------------------------------------

@@ -971,16 +971,19 @@ about a context object that is being tested.
 """
 struct ContextTestSet <: AbstractTestSet
     parent_ts::AbstractTestSet
-    context_sym::Symbol
+    context_name::Union{Symbol, Expr}
     context::Any
 end
 
-function ContextTestSet(sym::Symbol, @nospecialize(context))
-    ContextTestSet(get_testset(), sym, context)
+function ContextTestSet(name::Union{Symbol, Expr}, @nospecialize(context))
+    if (name isa Expr) && (name.head != :tuple)
+        error("Invalid syntax: $(name)")
+    end
+    return ContextTestSet(get_testset(), name, context)
 end
 record(c::ContextTestSet, t) = record(c.parent_ts, t)
 function record(c::ContextTestSet, t::Fail)
-    context = string(c.context_sym, " = ", c.context)
+    context = string(c.context_name, " = ", c.context)
     context = t.context === nothing ? context : string(t.context, "\n              ", context)
     record(c.parent_ts, Fail(t.test_type, t.orig_expr, t.data, t.value, context, t.source, t.message_only))
 end
@@ -1306,6 +1309,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset let v = (...) ... end
 
 # With begin/end or function call
 
@@ -1714,8 +1718,7 @@ Int64
 
 julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
-  from f(a)
-     @ Main none:1
+  from f(a) @ Main none:1
 Arguments
   #self#::Core.Const(f)
   a::Int64

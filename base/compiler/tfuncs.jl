@@ -562,6 +562,23 @@ add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_elt
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, (@nospecialize args...)->Nothing, 0)
+function compilerbarrier_tfunc(@nospecialize(setting), @nospecialize(val))
+    # strongest barrier if a precise information isn't available at compiler time
+    # XXX we may want to have "compile-time" error instead for such case
+    isa(setting, Const) || return Any
+    setting = setting.val
+    isa(setting, Symbol) || return Any
+    if setting === :const
+        return widenconst(val)
+    elseif setting === :conditional
+        return widenconditional(val)
+    elseif setting === :type
+        return Any
+    else
+        return Bottom
+    end
+end
+add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, (@nospecialize args...)->Nothing, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -1844,11 +1861,63 @@ const _CONSISTENT_BUILTINS = Any[
     Core.ifelse,
     (<:),
     typeassert,
-    throw
+    throw,
+    setfield!,
+]
+
+const _INACCESSIBLEMEM_BUILTINS = Any[
+    (<:),
+    (===),
+    apply_type,
+    arraysize,
+    Core.ifelse,
+    Core.sizeof,
+    svec,
+    fieldtype,
+    isa,
+    isdefined,
+    nfields,
+    throw,
+    tuple,
+    typeassert,
+    typeof,
+]
+
+const _ARGMEM_BUILTINS = Any[
+    arrayref,
+    arrayset,
+    modifyfield!,
+    replacefield!,
+    setfield!,
+    swapfield!,
+]
+
+const _INCONSISTENT_INTRINSICS = Any[
+    Intrinsics.pointerref,      # this one is volatile
+    Intrinsics.arraylen,        # this one is volatile
+    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
+    Intrinsics.have_fma,        # this one depends on the runtime environment
+    Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
+    # ... and list fastmath intrinsics:
+    # join(string.("Intrinsics.", sort(filter(endswith("_fast")∘string, names(Core.Intrinsics)))), ",\n")
+    Intrinsics.add_float_fast,
+    Intrinsics.div_float_fast,
+    Intrinsics.eq_float_fast,
+    Intrinsics.le_float_fast,
+    Intrinsics.lt_float_fast,
+    Intrinsics.mul_float_fast,
+    Intrinsics.ne_float_fast,
+    Intrinsics.neg_float_fast,
+    Intrinsics.rem_float_fast,
+    Intrinsics.sqrt_llvm_fast,
+    Intrinsics.sub_float_fast
+    # TODO needs to revive #31193 to mark this as inconsistent to be accurate
+    # while preserving the currently optimizations for many math operations
+    # Intrinsics.muladd_float,    # this is not interprocedurally consistent
 ]
 
 const _SPECIAL_BUILTINS = Any[
-    Core._apply_iterate
+    Core._apply_iterate,
 ]
 
 function isdefined_effects(argtypes::Vector{Any})
@@ -1857,7 +1926,7 @@ function isdefined_effects(argtypes::Vector{Any})
     obj = argtypes[1]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
     consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = isdefined_nothrow(argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = isdefined_nothrow(argtypes)
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
@@ -1866,7 +1935,7 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     isempty(argtypes) && return EFFECTS_THROWS
     obj = argtypes[1]
     isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
-    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
+    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
     # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
     # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
     # throws `UndefRefError` so doesn't need to taint it
@@ -1882,28 +1951,39 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
         # N.B. We do not taint for `--check-bounds=no` here -that happens in
         # InferenceState.
         if length(argtypes) ≥ 2 && getfield_nothrow(argtypes[1], argtypes[2], true)
-            nothrow = ALWAYS_TRUE
+            nothrow = true
         else
-            consistent = nothrow = ALWAYS_FALSE
+            consistent = ALWAYS_FALSE
+            nothrow = false
         end
     else
-        nothrow = getfield_nothrow(argtypes) ? ALWAYS_TRUE : ALWAYS_FALSE
+        nothrow = getfield_nothrow(argtypes)
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow)
+    if hasintersect(widenconst(obj), Module)
+        inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
+    elseif is_mutation_free_argtype(obj)
+        inaccessiblememonly = ALWAYS_TRUE
+    else
+        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+    end
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
 function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
-    consistent = nothrow = ALWAYS_FALSE
+    consistent = inaccessiblememonly = ALWAYS_FALSE
+    nothrow = false
     if getglobal_nothrow(argtypes)
+        nothrow = true
         # typeasserts below are already checked in `getglobal_nothrow`
         M, s = (argtypes[1]::Const).val::Module, (argtypes[2]::Const).val::Symbol
         if isconst(M, s)
-            consistent = nothrow = ALWAYS_TRUE
-        else
-            nothrow = ALWAYS_TRUE
+            consistent = ALWAYS_TRUE
+            if is_mutation_free_argtype(rt)
+                inaccessiblememonly = ALWAYS_TRUE
+            end
         end
     end
-    return Effects(EFFECTS_TOTAL; consistent, nothrow)
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
 function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
@@ -1921,11 +2001,22 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         return getglobal_effects(argtypes, rt)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
-        effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)) ?
-            ALWAYS_TRUE : ALWAYS_FALSE
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt)) ?
-            ALWAYS_TRUE : ALWAYS_FALSE
-        return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
+        if f === setfield! || f === arrayset
+            effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+        elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
+            effect_free = ALWAYS_TRUE
+        else
+            effect_free = ALWAYS_FALSE
+        end
+        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
+        if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
+            inaccessiblememonly = ALWAYS_TRUE
+        elseif contains_is(_ARGMEM_BUILTINS, f)
+            inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+        else
+            inaccessiblememonly = ALWAYS_FALSE
+        end
+        return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
     end
 end
 
@@ -2092,16 +2183,9 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         return Effects()
     end
 
-    consistent = !(
-        f === Intrinsics.pointerref ||      # this one is volatile
-        f === Intrinsics.arraylen ||        # this one is volatile
-        f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||        # this one depends on the runtime environment
-        f === Intrinsics.cglobal            # cglobal lookup answer changes at runtime
-        ) ? ALWAYS_TRUE : ALWAYS_FALSE
+    consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes)) ?
-        ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
@@ -2250,5 +2334,89 @@ function get_binding_type_tfunc(@nospecialize(M), @nospecialize(s))
     return Type
 end
 add_tfunc(Core.get_binding_type, 2, 2, get_binding_type_tfunc, 0)
+
+# foreigncall
+# ===========
+
+# N.B. the `abstract_eval` callback below allows us to use these queries
+# both during abstract interpret and optimization
+
+const FOREIGNCALL_ARG_START = 6
+
+function foreigncall_effects(@specialize(abstract_eval), e::Expr)
+    args = e.args
+    name = args[1]
+    isa(name, QuoteNode) && (name = name.value)
+    isa(name, Symbol) || return EFFECTS_UNKNOWN
+    ndims = alloc_array_ndims(name)
+    if ndims !== nothing
+        if ndims ≠ 0
+            return alloc_array_effects(abstract_eval, args, ndims)
+        else
+            return new_array_effects(abstract_eval, args)
+        end
+    end
+    return EFFECTS_UNKNOWN
+end
+
+function alloc_array_ndims(name::Symbol)
+    if name === :jl_alloc_array_1d
+        return 1
+    elseif name === :jl_alloc_array_2d
+        return 2
+    elseif name === :jl_alloc_array_3d
+        return 3
+    elseif name === :jl_new_array
+        return 0
+    end
+    return nothing
+end
+
+function alloc_array_effects(@specialize(abstract_eval), args::Vector{Any}, ndims::Int)
+    nothrow = alloc_array_nothrow(abstract_eval, args, ndims)
+    return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+end
+
+function alloc_array_nothrow(@specialize(abstract_eval), args::Vector{Any}, ndims::Int)
+    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
+    atype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
+    dims = Csize_t[]
+    for i in 1:ndims
+        dim = abstract_eval(args[i+FOREIGNCALL_ARG_START])
+        isa(dim, Const) || return false
+        dimval = dim.val
+        isa(dimval, Int) || return false
+        push!(dims, reinterpret(Csize_t, dimval))
+    end
+    return _new_array_nothrow(atype, ndims, dims)
+end
+
+function new_array_effects(@specialize(abstract_eval), args::Vector{Any})
+    nothrow = new_array_nothrow(abstract_eval, args)
+    return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+end
+
+function new_array_nothrow(@specialize(abstract_eval), args::Vector{Any})
+    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
+    atype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
+    dims = abstract_eval(args[FOREIGNCALL_ARG_START+1])
+    isa(dims, Const) || return dims === Tuple{}
+    dimsval = dims.val
+    isa(dimsval, Tuple{Vararg{Int}}) || return false
+    ndims = nfields(dimsval)
+    isa(ndims, Int) || return false
+    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
+    return _new_array_nothrow(atype, ndims, dims)
+end
+
+function _new_array_nothrow(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
+    isa(atype, DataType) || return false
+    eltype = atype.parameters[1]
+    iskindtype(typeof(eltype)) || return false
+    elsz = aligned_sizeof(eltype)
+    return ccall(:jl_array_validate_dims, Cint,
+        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
+        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
+end
 
 @specialize

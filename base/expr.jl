@@ -388,6 +388,7 @@ end
 !!! compat "Julia 1.8"
     Using `Base.@assume_effects` requires Julia version 1.8.
 
+# Examples
 ```jldoctest
 julia> Base.@assume_effects :terminates_locally function pow(x)
            # this :terminates_locally allows `pow` to be constant-folded
@@ -433,6 +434,7 @@ The following `setting`s are supported.
 - `:terminates_globally`
 - `:terminates_locally`
 - `:notaskstate`
+- `:inaccessiblememonly`
 - `:foldable`
 - `:total`
 
@@ -571,6 +573,24 @@ moved between tasks without observable results.
     may still be dead-code-eliminated and thus promoted to `:total`.
 
 ---
+## `:inaccessiblememonly`
+
+The `:inaccessiblememonly` setting asserts that the method does not access or modify
+externally accessible mutable memory. This means the method can access or modify mutable
+memory for newly allocated objects that is not accessible by other methods or top-level
+execution before return from the method, but it can not access or modify any mutable
+global state or mutable memory pointed to by its arguments.
+
+!!! note
+    Below is an incomplete list of examples that invalidate this assumption:
+    - a global reference or `getglobal` call to access a mutable global variable
+    - a global assignment or `setglobal!` call to perform assignment to a non-constant global variable
+    - `setfield!` call that changes a field of a global mutable variable
+
+!!! note
+    This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
+
+---
 ## `:foldable`
 
 This setting is a convenient shortcut for the set of effects that the compiler
@@ -597,6 +617,7 @@ the following other `setting`s:
 - `:nothrow`
 - `:terminates_globally`
 - `:notaskstate`
+- `:inaccessiblememonly`
 
 !!! warning
     `:total` is a very strong assertion and will likely gain additional semantics
@@ -625,8 +646,8 @@ Another advantage is that effects introduced by `@assume_effects` are propagated
 callers interprocedurally while a purity defined by `@pure` is not.
 """
 macro assume_effects(args...)
-    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate) =
-        (false, false, false, false, false, false, false)
+    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
+        (false, false, false, false, false, false, false, false)
     for org_setting in args[1:end-1]
         (setting, val) = compute_assumed_setting(org_setting)
         if setting === :consistent
@@ -641,10 +662,12 @@ macro assume_effects(args...)
             terminates_locally = val
         elseif setting === :notaskstate
             notaskstate = val
+        elseif setting === :inaccessiblememonly
+            inaccessiblememonly = val
         elseif setting === :foldable
             consistent = effect_free = terminates_globally = val
         elseif setting === :total
-            consistent = effect_free = nothrow = terminates_globally = notaskstate = val
+            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
         else
             throw(ArgumentError("@assume_effects $org_setting not supported"))
         end
@@ -654,11 +677,11 @@ macro assume_effects(args...)
     if ex.head === :macrocall && ex.args[1] === Symbol("@ccall")
         ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
-            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
         )))
         return esc(ex)
     end
-    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate))
+    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
 end
 
 function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
@@ -852,7 +875,7 @@ the global scope or depending on mutable elements.
 
 See [Metaprogramming](@ref) for further details.
 
-## Example:
+# Examples
 ```jldoctest
 julia> @generated function bar(x)
            if x <: Integer
@@ -926,6 +949,7 @@ This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1025,6 +1049,7 @@ This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -1071,6 +1096,7 @@ This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` ca
 
 See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
