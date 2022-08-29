@@ -753,9 +753,17 @@ end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     node = add!(compact.pending_nodes, pos, attach_after)
-    l = length(compact.pending_nodes)
-    i = searchsortedfirst(compact.pending_perm, l, By(x->compact.pending_nodes.info[x].pos))
-    insert!(compact.pending_perm, i, l)
+
+    resize!(compact.pending_perm, length(compact.pending_perm)+1)
+    i = lastindex(compact.pending_perm) - 1
+    while i >= firstindex(compact.pending_perm)
+        @inbounds j = compact.pending_perm[i]
+        pos < compact.pending_nodes.info[j].pos || break
+        @inbounds compact.pending_perm[i + 1] = j
+        i -= 1
+    end
+    compact.pending_perm[i + 1] = length(compact.pending_nodes)
+
     return node
 end
 
