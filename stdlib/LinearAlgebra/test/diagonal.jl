@@ -462,6 +462,20 @@ end
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
+@testset "kron (issue #46456)" begin
+    A = Diagonal(randn(10))
+    BL = Bidiagonal(randn(10), randn(9), :L)
+    BU = Bidiagonal(randn(10), randn(9), :U)
+    C = SymTridiagonal(randn(10), randn(9))
+    Cl = SymTridiagonal(randn(10), randn(10))
+    D = Tridiagonal(randn(9), randn(10), randn(9))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])

@@ -251,9 +251,10 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret.
 
-Note that on Windows, the secret might be displayed as it is typed; see
-`Base.winprompt` for securely retrieving username/password pairs from a
-graphical interface.
+!!! info "Windows"
+    Note that on Windows, the secret might be displayed as it is typed; see
+    `Base.winprompt` for securely retrieving username/password pairs from a
+    graphical interface.
 """
 function getpass end
 
@@ -347,7 +348,7 @@ Displays the `message` then waits for user input. Input is terminated when a new
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
-See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
 # Example
 
