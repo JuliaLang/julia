@@ -519,7 +519,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
         x = v[i]
         while j > lo
             y = v[j-1]
-            if !lt(o, x, y)
+            if !(lt(o, x, y)::Bool)
                 break
             end
             v[j] = y
@@ -1486,8 +1486,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt(::Left, x::T, y::T)::Bool where {T<:Floats} = slt_int(y, x)
-lt(::Right, x::T, y::T)::Bool where {T<:Floats} = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
 
 uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
 uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
