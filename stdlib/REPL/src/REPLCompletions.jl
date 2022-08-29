@@ -409,9 +409,11 @@ function get_value(sym::Expr, fn)
     end
     sym.head !== :. && return (nothing, false)
     for ex in sym.args
-        ex, found::Bool = get_value(ex, fn)
+        exfound = get_value(ex, fn)
+        ex = exfound[1]; found = exfound[2]::Bool
         !found && return (nothing, false)
-        fn, found::Bool = get_value(ex, fn)
+        exfound = get_value(ex, fn)
+        ex = exfound[1]; found = exfound[2]::Bool
         !found && return (nothing, false)
     end
     return (fn, true)
