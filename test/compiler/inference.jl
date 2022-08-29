@@ -4185,3 +4185,6 @@ let src = code_typed1() do
         constbarrier()
     end |> only === Float64
 end
+
+# Test that Const ⊑ PartialStruct respects vararg
+@test Const((1,2)) ⊑ PartialStruct(Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
