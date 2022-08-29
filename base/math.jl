@@ -190,12 +190,15 @@ end
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
-    N = length(p)
-    ex = p[end]
-    for i in N-1:-1:1
-        ex = muladd(x, ex, p[i])
+    isempty(p) && return zero(eltype(p)) * one(x)
+    i = lastindex(p)
+    @inbounds v = p[i] * one(x)
+    i -= 1
+    while i >= firstindex(p)
+        @inbounds v = muladd(v, x, p[i])
+        i -= 1
     end
-    ex
+    return v
 end
 
 function evalpoly(z::Complex, p::Tuple)
@@ -224,7 +227,6 @@ function evalpoly(z::Complex, p::Tuple)
     end
 end
 evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
-
 
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 

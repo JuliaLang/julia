@@ -630,6 +630,14 @@ end
         @test evalpoly(x, (p1, p2, p3)) == evpm
         @test evalpoly(x, [p1, p2, p3]) == evpm
     end
+
+    @inferred evalpoly(2.3, Float32[3, 2.2, -0.02])
+    @inferred evalpoly(1.5, Float32[])
+    @inferred evalpoly(-0.33f0, Float64[-7.9, 8.9, 2.33])
+    @inferred evalpoly(-9.8f0, Float64[])
+
+    @test evalpoly(2.3, Float32[2.1f0]) === Float64(2.1f0)
+    @test evalpoly(3.7f0, Float64[]) === 0.0
 end
 
 @testset "evalpoly complex" begin
