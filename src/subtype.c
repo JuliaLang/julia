@@ -2301,6 +2301,26 @@ static int check_unsat_bound(jl_value_t *t, jl_tvar_t *v, jl_stenv_t *e) JL_NOTS
     return 0;
 }
 
+static int has_free_vararg_length(jl_value_t *a, jl_stenv_t *e) {
+    if (jl_is_unionall(a))
+        a = jl_unwrap_unionall(a);
+    if (jl_is_datatype(a) && jl_is_tuple_type((jl_datatype_t *)a)) {
+        size_t lx = jl_nparams((jl_datatype_t *)a);
+        if (lx > 0) {
+            jl_value_t *la = jl_tparam((jl_datatype_t *)a, lx-1);
+            if (jl_is_vararg(la)) {
+                jl_value_t *len = jl_unwrap_vararg_num((jl_vararg_t *)la);
+                // return 1 if we meet a vararg with Null length
+                if (!len) return 1;
+                // or a typevar not in the current env.
+                if (jl_is_typevar(len))
+                    return lookup(e, (jl_tvar_t *)len) == NULL;
+            }
+        }
+    }
+    return 0;
+}
+
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
@@ -2355,6 +2375,11 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
                 }
             }
             bb->ub = ub;
+            // We get a imprecise Tuple here. Don't change `lb` and return the typevar directly.
+            if (has_free_vararg_length(ub, e) && !has_free_vararg_length(a, e)) {
+                JL_GC_POP();
+                return (jl_value_t*)b;
+            }
             bb->lb = ub;
         }
         JL_GC_POP();
