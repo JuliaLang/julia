@@ -132,7 +132,7 @@ is true.
 ```jldoctest
 julia> isreal(5.)
 true
-                
+
 julia> isreal(1 - 3im)
 false
 
