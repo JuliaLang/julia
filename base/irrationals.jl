@@ -173,7 +173,7 @@ and arbitrary-precision definition in terms of `BigFloat`s given by the expressi
 
 An `AssertionError` is thrown when either `big(def) isa BigFloat` or `Float64(val) == Float64(def)`
 returns `false`.
-    
+
 # Examples
 ```jldoctest
 julia> Base.@irrational(twoπ, 6.2831853071795864769, 2*big(π))
@@ -185,10 +185,10 @@ julia> Base.@irrational sqrt2  1.4142135623730950488  √big(2)
 
 julia> sqrt2
 sqrt2 = 1.4142135623730...
-    
+
 julia> Base.@irrational sqrt2  1.4142135623730950488  big(2)
 ERROR: AssertionError: big($(Expr(:escape, :sqrt2))) isa BigFloat
-    
+
 julia> Base.@irrational sqrt2  1.41421356237309  √big(2)
 ERROR: AssertionError: Float64($(Expr(:escape, :sqrt2))) == Float64(big($(Expr(:escape, :sqrt2))))
 ```
