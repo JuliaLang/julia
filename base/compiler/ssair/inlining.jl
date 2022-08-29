@@ -655,7 +655,11 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
         for ((old_idx, idx), stmt) in compact
             if old_idx == inline_idx
                 stmt = stmt::Expr
-                argexprs = copy(stmt.args)
+                if stmt.head === :invoke
+                    argexprs = stmt.args[2:end]
+                else
+                    argexprs = copy(stmt.args)
+                end
                 refinish = false
                 if compact.result_idx == first(compact.result_bbs[compact.active_result_bb].stmts)
                     compact.active_result_bb -= 1
