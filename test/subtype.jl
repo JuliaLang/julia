@@ -1043,7 +1043,12 @@ function test_intersection()
                    Type{Tuple{Int,T}} where T<:Integer)
     @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
                    Type{Tuple{Vararg{Int,N}}} where N,
-                   Type{Tuple{Int,Vararg{Int,N}}} where N)
+                   !Union{})
+
+    @test typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{Tuple{Int,Vararg{Int}}}
+    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) == Type{Tuple{Int,Vararg{Int,N}}} where N
+    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{<:Tuple{Int,Vararg{Int}}}
+
     @testintersect(Type{<:Array},
                    Type{AbstractArray{T}} where T,
                    Bottom)
@@ -2080,3 +2085,52 @@ let A = Tuple{NTuple{N,Any},Val{N}} where {N},
     @testintersect(A, Tuple{Tuple{Any,Any,Any,Any,Any,Vararg{Any}},Val{4}}, Union{})
     @testintersect(A, Tuple{Tuple{Any,Any,Any,Any,Any,Vararg{Any,N}} where {N},Val{4}}, Union{})
 end
+
+#issue #39088
+let
+    a() = c((1,), (1,1,1,1))
+    c(d::NTuple{T}, ::NTuple{T}) where T = d
+    c(d::NTuple{f}, b) where f = c((d..., f), b)
+    j(h::NTuple{T}, ::NTuple{T} = a()) where T = nothing
+    @test j((1,1,1,1)) === nothing
+end
+
+let A = Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
+    C = Tuple{NTuple{4, Int}, NTuple{4, Int}}
+    @testintersect(A, Tuple{Tuple{Int, Vararg{Any}}, NTuple{4, Int}}, C)
+    @testintersect(A, Tuple{Tuple{Int, Vararg{Any, N}} where {N}, NTuple{4, Int}}, C)
+    @testintersect(A, Tuple{Tuple{Int, Vararg{Any, N}}, NTuple{4, Int}} where {N}, C)
+
+    Bs = (Tuple{Tuple{Int, Vararg{Any}}, Tuple{Int, Int, Vararg{Any}}},
+          Tuple{Tuple{Int, Vararg{Any,N1}}, Tuple{Int, Int, Vararg{Any,N2}}} where {N1,N2},
+          Tuple{Tuple{Int, Vararg{Any,N}} where {N}, Tuple{Int, Int, Vararg{Any,N}} where {N}})
+    Cerr = Tuple{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        C = typeintersect(A, B)
+        @test C == typeintersect(B, A) != Union{}
+        @test C != Cerr
+        # TODO: The ideal result is Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+        @test_broken C != Tuple{Tuple{Int, Vararg{Int}}, Tuple{Int, Int, Vararg{Int}}}
+    end
+end
+
+let A = Pair{NTuple{N, Int}, NTuple{N, Int}} where N,
+    C = Pair{NTuple{4, Int}, NTuple{4, Int}}
+    @testintersect(A, Pair{<:Tuple{Int, Vararg{Any}}, NTuple{4, Int}}, C)
+    @testintersect(A, Pair{<:Tuple{Int, Vararg{Any, N}} where {N}, NTuple{4, Int}}, C)
+    @testintersect(A, Pair{<:Tuple{Int, Vararg{Any, N}}, NTuple{4, Int}} where {N}, C)
+
+    Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Tuple{Int, Int, Vararg{Int}}},
+          Pair{Tuple{Int, Vararg{Int,N1}}, Tuple{Int, Int, Vararg{Int,N2}}} where {N1,N2},
+          Pair{<:Tuple{Int, Vararg{Int,N}} where {N}, <:Tuple{Int, Int, Vararg{Int,N}} where {N}})
+    Cerr = Pair{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        C = typeintersect(A, B)
+        @test C == typeintersect(B, A) != Union{}
+        @test C != Cerr
+        @test_broken C != B
+    end
+end
+
+# Example from pr#39098
+@testintersect(NTuple, Tuple{Any,Vararg}, Tuple{T, Vararg{T}} where {T})
