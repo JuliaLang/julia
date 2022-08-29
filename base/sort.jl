@@ -1486,8 +1486,12 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt(::Left, x::T, y::T)::Bool where {T<:Floats} = slt_int(y, x)
-lt(::Right, x::T, y::T)::Bool where {T<:Floats} = slt_int(x, y)
+function lt(::Left, x::T, y::T)::Bool where {T<:Floats}
+    slt_int(y, x)
+end
+function lt(::Right, x::T, y::T)::Bool where {T<:Floats}
+    slt_int(x, y)
+end
 
 uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
 uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
