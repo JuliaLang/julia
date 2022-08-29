@@ -313,6 +313,11 @@ const var"@_noinline_meta" = var"@noinline"
 # BEGIN 1.9 deprecations
 
 @deprecate splat(x) Splat(x) false
+# When removing this, also remove the struct & its constructor in Libc
+function Libc.TimeVal()
+    Base.depwarn("`TimeVal()` is deprecated, use `TimeSpec()` and convert to microseconds manually or move to the higher precision directly instead.", :TimeVal)
+    convert(Libc.TimeVal, Libc.TimeSpec())
+end
 
 # We'd generally like to avoid direct external access to internal fields
 # Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,

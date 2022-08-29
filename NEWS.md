@@ -87,6 +87,7 @@ Library changes
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* `time()` now has up to nanosecond resolution on Unix based platforms.
 
 Standard library changes
 ------------------------
@@ -170,6 +171,8 @@ Deprecated or removed
 ---------------------
 
 * Unexported `splat` is deprecated in favor of exported `Splat`, which has pretty printing of the wrapped function. ([#42717])
+* `Libc.TimeVal` is deprecated in favor of `Libc.TimeSpec`, which (generally) has higher resolution.
+  This deprecation follows the deprecation of `gettimeofday` in libc.
 
 External dependencies
 ---------------------
