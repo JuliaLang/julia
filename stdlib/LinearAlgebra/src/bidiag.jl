@@ -205,6 +205,11 @@ convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
 similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
+function kron(A::Diagonal, B::Bidiagonal)
+    kdv = kron(diag(A), B.dv)
+    kev = _droplast!(kron(diag(A), _pushzero(B.ev)))
+    Bidiagonal(kdv, kev, B.uplo)
+end
 
 ###################
 # LAPACK routines #
