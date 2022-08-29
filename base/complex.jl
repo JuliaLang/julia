@@ -1071,8 +1071,8 @@ Return the nearest integral value of the same type as the complex-valued `z` to 
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
-                                                    
-                                                    
+
+
 `RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
 which rounds to the nearest integer, with ties (fractional values of 0.5)
 being rounded to the nearest even integer.
