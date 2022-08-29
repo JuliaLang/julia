@@ -20,22 +20,23 @@ n = 20
 intvls = [2, .2, .1, .005, .00001]
 
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
-if !(isbaseci && ismacos_arm)
-    for i in 1:n
-        if Sys.iswindows() || i > n ÷ 2
-            uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), 1, (Sys.iswindows() ? 6 : 0), Ref(pipe_fds, i), 0, 0))
-        else
-            uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
-        end
-        Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-        FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
-        fd_in_limits =
-            0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
-            0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
-        # Dump out what file descriptors are open for easier debugging of failure modes
-        if !fd_in_limits && Sys.islinux()
-            run(`ls -la /proc/$(getpid())/fd`)
-        end
+
+for i in 1:n
+    if Sys.iswindows() || i > n ÷ 2
+        uv_error("socketpair", ccall(:uv_socketpair, Cint, (Cint, Cint, Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), 1, (Sys.iswindows() ? 6 : 0), Ref(pipe_fds, i), 0, 0))
+    else
+        uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
+    end
+    Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
+    FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    fd_in_limits =
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    # Dump out what file descriptors are open for easier debugging of failure modes
+    if !fd_in_limits && Sys.islinux()
+        run(`ls -la /proc/$(getpid())/fd`)
+    end
+    if !(isbaseci && ismacos_arm)
         @test fd_in_limits
     end
 end
