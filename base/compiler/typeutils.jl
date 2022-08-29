@@ -23,13 +23,18 @@ function hasuniquerep(@nospecialize t)
     return false
 end
 
-function has_nontrivial_const_info(@nospecialize t)
+function has_nontrivial_const_info(lattice::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
+    return has_nontrivial_const_info(widenlattice(lattice), t)
+end
+function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return true
-    isa(t, Const) || return false
-    val = t.val
-    return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+    if isa(t, Const)
+        val = t.val
+        return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+    end
+    return has_nontrivial_const_info(widenlattice(lattice), t)
 end
 
 has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)

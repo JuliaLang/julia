@@ -651,7 +651,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
-        if !(sv.slottypes[id] ⊑ typ)
+        if !⊑(typeinf_lattice(sv.interp), sv.slottypes[id], typ)
             return TypedSlot(id, typ)
         end
         return x
