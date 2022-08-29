@@ -12,7 +12,6 @@ using Base: uv_error, Experimental
 # Odd numbered pipes are tested for reads
 # Even numbered pipes are tested for timeouts
 # Writable ends are always tested for write-ability before a write
-isbaseci = get(ENV, "JULIA_TEST_IS_BASE_CI", nothing) == "true"
 ismacos_arm = ((Sys.ARCH == :aarch64) && (Sys.isapple())) #https://github.com/JuliaLang/julia/issues/46185
 ismacos_x86 = ((Sys.ARCH == :x86_64) && (Sys.isapple()))  #Used to disable the unreliable macos tests
 
@@ -36,7 +35,7 @@ for i in 1:n
     if !fd_in_limits && Sys.islinux()
         run(`ls -la /proc/$(getpid())/fd`)
     end
-    if !(isbaseci && ismacos_arm)
+    if ismacos_arm
         @test fd_in_limits
     end
 end
@@ -189,7 +188,7 @@ function test_init_afile()
     @test(watch_folder(dir) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME)))
     @test close(open(file, "w")) === nothing
     sleep(3)
-    if !(isbaseci && ismacos_x86)
+    if !ismacos_x86
         let c
             c = watch_folder(dir, 0)
 
@@ -379,7 +378,7 @@ test_monitor_wait_poll()
 test_watch_file_timeout(0.2)
 test_watch_file_change(6)
 
-if !(isbaseci && ismacos_x86)
+if !ismacos_x86
     test_dirmonitor_wait2(0.2)
     test_dirmonitor_wait2(0.2)
 
