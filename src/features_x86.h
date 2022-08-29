@@ -74,7 +74,7 @@ JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 0)
 // EAX=7,ECX=0: EDX
 // JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
 // JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
-JL_FEATURE_DEF(uintr, 32 * 4 + 5, 14000)
+JL_FEATURE_DEF(uintr, 32 * 4 + 5, 140000)
 JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
