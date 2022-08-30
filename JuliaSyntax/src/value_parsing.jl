@@ -106,10 +106,10 @@ end
 # apparent codegen issues https://github.com/JuliaLang/julia/issues/46509
 # (perhaps we don't want the `buf` in `GC.@preserve buf` to be stack allocated
 # on one branch and heap allocated in another?)
-@inline function _unsafe_parse_float(::Type{T}, ptr, strsize) where {T}
+@inline function _unsafe_parse_float(::Type{Float64}, ptr, strsize)
     Libc.errno(0)
     endptr = Ref{Ptr{UInt8}}(C_NULL)
-    x = _strtofloat(T, ptr, strsize, endptr)
+    x = @ccall jl_strtod_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cdouble
     @check endptr[] == ptr + strsize
     status = :ok
     if Libc.errno() == Libc.ERANGE
@@ -120,16 +120,12 @@ end
         # * If the correct value would cause underflow, a value with
         #   magnitude no larger than DBL_MIN, FLT_MIN, or LDBL_MIN is
         #   returned and ERANGE is stored in errno.
-        status = abs(x) < 1.0 ? :underflow : :overflow
+        status = abs(x) < 1 ? :underflow : :overflow
     end
     return (x, status)
 end
 
-@inline function _strtofloat(::Type{Float64}, ptr, strsize, endptr)
-    @ccall jl_strtod_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cdouble
-end
-
-@inline function _strtofloat(::Type{Float32}, ptr, strsize, endptr)
+@inline function _unsafe_parse_float(::Type{Float32}, ptr, strsize)
     # Convert float exponent 'f' to 'e' for strtof, eg, 1.0f0 => 1.0e0
     # Presumes we can modify the data in ptr!
     for p in ptr+strsize-1:-1:ptr
@@ -138,8 +134,29 @@ end
             break
         end
     end
-    @ccall jl_strtof_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cfloat
+    Libc.errno(0)
+    endptr = Ref{Ptr{UInt8}}(C_NULL)
+    status = :ok
+    @static if Sys.iswindows()
+        # Call strtod here and convert to Float32 on the Julia side because
+        # strtof seems buggy on windows and doesn't set ERANGE correctly on
+        # overflow. See also
+        # https://github.com/JuliaLang/julia/issues/46544
+        x = Float32(@ccall jl_strtod_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cdouble)
+        if isinf(x)
+            status = :overflow
+            # Underflow not detected, but that will only be a warning elsewhere.
+        end
+    else
+        x = @ccall jl_strtof_c(ptr::Ptr{UInt8}, endptr::Ptr{Ptr{UInt8}})::Cfloat
+    end
+    @check endptr[] == ptr + strsize
+    if Libc.errno() == Libc.ERANGE
+        status = abs(x) < 1 ? :underflow : :overflow
+    end
+    return (x, status)
 end
+
 
 #-------------------------------------------------------------------------------
 is_indentation(c) = c == ' ' || c == '\t'
