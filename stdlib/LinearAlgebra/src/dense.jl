@@ -1595,7 +1595,7 @@ function sylvester(A::AbstractMatrix{T}, B::AbstractMatrix{T}, C::AbstractMatrix
     RB, QB = schur(B)
     D = QA' * C * QB
     D .= .-D
-    Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
+    Y, scale = LAPACK.trsyl!('N', 'N', RA, RB, D)
     rmul!(QA * Y * QB', inv(scale))
 end
 
