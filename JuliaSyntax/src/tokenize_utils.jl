@@ -9,7 +9,11 @@ end
 
 function is_identifier_start_char(c::Char)
     c == EOF_CHAR && return false
-    return Base.is_id_start_char(c)
+    return try
+        Base.is_id_start_char(c)
+    catch _
+        false
+    end
 end
 
 # Chars that we will never allow to be part of a valid non-operator identifier
