@@ -4,14 +4,19 @@ const EOF_CHAR = typemax(Char)
 
 function is_identifier_char(c::Char)
     c == EOF_CHAR && return false
-    return Base.is_id_char(c)
+    return try
+        Base.is_id_char(c)
+    catch
+        false
+    end
+
 end
 
 function is_identifier_start_char(c::Char)
     c == EOF_CHAR && return false
     return try
         Base.is_id_start_char(c)
-    catch _
+    catch
         false
     end
 end
