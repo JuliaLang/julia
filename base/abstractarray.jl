@@ -1982,7 +1982,7 @@ function hvcat(nbc::Integer, as...)
 end
 
 """
-    hvcat(blocks_per_row::Union{Tuple{Vararg{Int}}, Integer}, values...)
+    hvcat(blocks_per_row::Union{Tuple{Vararg{Int}}, Int}, values...)
 
 Horizontal and vertical concatenation in one call. This function is called for block matrix
 syntax. The first argument specifies the number of arguments to concatenate in each block
