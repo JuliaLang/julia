@@ -1867,14 +1867,14 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                     // invoke-dispatch, check invokeTypes for validity
                                     struct jl_typemap_assoc search = {invokeTypes, method->primary_world, NULL, 0, ~(size_t)0};
                                     oldentry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->defs), &search, /*offs*/0, /*subtype*/0);
-                                    assert(oldentry);
-                                    if (oldentry->func.method == mi->def.method) {
+                                    if (oldentry && oldentry->func.method == mi->def.method) {
+                                        // We can safely keep this method
                                         jl_array_ptr_set(backedges, insb++, invokeTypes);
                                         jl_array_ptr_set(backedges, insb++, caller);
-                                        continue;
+                                    } else {
+                                        invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
+                                        invalidated = 1;
                                     }
-                                    invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
-                                    invalidated = 1;
                                 }
                             }
                             jl_array_del_end(backedges, nb - insb);
