@@ -404,6 +404,7 @@ tests = [
         "if a xx else yy end"   =>  "(if a (block xx) (block yy))"
         "if true; x ? true elseif true end"  => "(if true (block (if x true (error-t) (error-t))) (elseif true (block)))"
         "if true; x ? true end"  => "(if true (block (if x true (error-t) (error-t))))"
+        "if true; x ? true\nend"  => "(if true (block (if x true (error-t) (error-t))))"
         "if true; x ? true : elseif true end"  => "(if true (block (if x true (error-t))) (elseif true (block)))"
     ],
     JuliaSyntax.parse_const_local_global => [
