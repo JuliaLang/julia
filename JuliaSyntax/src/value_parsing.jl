@@ -77,7 +77,7 @@ Parse a Float64. str[firstind:lastind] must be a valid floating point literal
 string. If the value is outside Float64 range.
 """
 function _parse_float(::Type{T}, str::String,
-        firstind::Integer, lastind::Integer) where {T} # force specialize with where {T} 
+        firstind::Integer, lastind::Integer) where {T} # force specialize with where {T}
     strsize = lastind - firstind + 1
     bufsz = 50
     if strsize < bufsz
@@ -207,7 +207,7 @@ end
 Process Julia source code escape sequences for non-raw strings.
 `str` should be passed without delimiting quotes.
 """
-function unescape_julia_string(io::IO, str::AbstractString)
+function unescape_julia_string(io::IO, str::AbstractString)::Tuple{Bool, String}
     i = firstindex(str)
     lastidx = lastindex(str)
     while i <= lastidx
@@ -244,8 +244,7 @@ function unescape_julia_string(io::IO, str::AbstractString)
             end
             if k == 1 || n > 0x10ffff
                 u = m == 4 ? 'u' : 'U'
-                throw(ArgumentError("invalid $(m == 2 ? "hex (\\x)" :
-                                    "unicode (\\$u)") escape sequence"))
+                return true, "invalid $(m == 2 ? "hex (\\x)" : "unicode (\\$u)") escape sequence"
             end
             if m == 2 # \x escape sequence
                 write(io, UInt8(n))
@@ -261,7 +260,7 @@ function unescape_julia_string(io::IO, str::AbstractString)
                 i += 1
             end
             if n > 255
-                throw(ArgumentError("octal escape sequence out of range"))
+                return true, "octal escape sequence out of range"
             end
             write(io, UInt8(n))
         else
@@ -280,21 +279,24 @@ function unescape_julia_string(io::IO, str::AbstractString)
                 c == '"' ? '"' :
                 c == '$' ? '$' :
                 c == '`' ? '`' :
-                throw(ArgumentError("Invalid escape sequence \\$c"))
+                return true, "Invalid escape sequence \\$c"
             write(io, u)
         end
         i = nextind(str, i)
     end
+    return false, ""
 end
 
-function unescape_julia_string(str::AbstractString, is_cmd::Bool, is_raw::Bool)
+function unescape_julia_string(str::AbstractString, is_cmd::Bool, is_raw::Bool)::Tuple{String, Bool, String}
     io = IOBuffer()
+    error = false
+    msg = ""
     if is_raw
         unescape_raw_string(io, str, is_cmd)
     else
-        unescape_julia_string(io, str)
+        error, msg = unescape_julia_string(io, str)
     end
-    String(take!(io))
+    String(take!(io)), error, msg
 end
 
 #-------------------------------------------------------------------------------

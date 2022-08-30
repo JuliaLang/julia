@@ -151,8 +151,8 @@ octint(s) = julia_string_to_number(s, K"OctInt")
     end
 end
 
+unesc(str, is_cmd = false, is_raw = false) = unescape_julia_string(str, is_cmd, is_raw)[1]
 @testset "String unescaping" begin
-    unesc(str) = unescape_julia_string(str, false, false)
     # Allowed escapes of delimiters and dollar sign
     @test only(unesc("\\\\")) == '\\'
     @test only(unesc("\\\"")) == '"'
@@ -164,8 +164,8 @@ end
     @test unesc("a\nb\rc\r\nd") == "a\nb\nc\nd"
 
     # Invalid escapes
-    @test_throws ArgumentError unesc("\\.")
-    @test_throws ArgumentError unesc("\\z")
+    @test unescape_julia_string("\\.", false, false)[2]
+    @test unescape_julia_string("\\z", false, false)[2]
 
     # Standard C escape sequences
     @test codeunits(unesc("\\n\\t\\r\\e\\b\\f\\v\\a")) ==
@@ -177,44 +177,44 @@ end
     @test unesc("x\\U001F604x") == "x😄x"
     # Maximum unicode code point
     @test unesc("x\\U10ffffx") == "x\U10ffffx"
-    @test_throws ArgumentError unesc("x\\U110000x")
+    @test unescape_julia_string("x\\U110000x", false, false)[2]
 
     # variable-length octal
     @test unesc("x\\7x") == "x\ax"
     @test unesc("x\\77x") == "x?x"
     @test unesc("x\\141x") == "xax"
     @test unesc("x\\377x") == "x\xffx"
-    @test_throws ArgumentError unesc("x\\400x")
+    @test unescape_julia_string("x\\400x", false, false)[2]
 end
 
 @testset "Raw string unescaping" begin
     # " delimited
     # x\"x ==> x"x
-    @test unescape_julia_string("x\\\"x",     false, true) == "x\"x"
+    @test unesc("x\\\"x",     false, true) == "x\"x"
     # x\`x ==> x\`x
-    @test unescape_julia_string("x\\`x",      false, true) == "x\\`x"
+    @test unesc("x\\`x",      false, true) == "x\\`x"
     # x\\\"x ==> x\"x
-    @test unescape_julia_string("x\\\\\\\"x", false, true) == "x\\\"x"
+    @test unesc("x\\\\\\\"x", false, true) == "x\\\"x"
     # x\\\`x ==> x\\\`x
-    @test unescape_julia_string("x\\\\\\`x",  false, true) == "x\\\\\\`x"
+    @test unesc("x\\\\\\`x",  false, true) == "x\\\\\\`x"
     # '\\ ' ==> '\\ '
-    @test unescape_julia_string("\\\\ ",      false, true) == "\\\\ "
+    @test unesc("\\\\ ",      false, true) == "\\\\ "
     # '\\' ==> '\'
-    @test unescape_julia_string("\\\\",       false, true) == "\\"
+    @test unesc("\\\\",       false, true) == "\\"
     # '\\\\' ==> '\\'
-    @test unescape_julia_string("\\\\\\\\",       false, true) == "\\\\"
+    @test unesc("\\\\\\\\",   false, true) == "\\\\"
 
     # ` delimited
     # x\"x ==> x\"x
-    @test unescape_julia_string("x\\\"x",     true, true) == "x\\\"x"
+    @test unesc("x\\\"x",     true, true) == "x\\\"x"
     # x\`x ==> x`x
-    @test unescape_julia_string("x\\`x",      true, true)  == "x`x"
+    @test unesc("x\\`x",      true, true)  == "x`x"
     # x\\\"x ==> x\"x
-    @test unescape_julia_string("x\\\\\\\"x", true, true) == "x\\\\\\\"x"
+    @test unesc("x\\\\\\\"x", true, true) == "x\\\\\\\"x"
     # x\\\`x ==> x\`x
-    @test unescape_julia_string("x\\\\\\`x",  true, true) == "x\\`x"
+    @test unesc("x\\\\\\`x",  true, true) == "x\\`x"
     # '\\ ' ==> '\\ '
-    @test unescape_julia_string("\\\\ ",      true, true) == "\\\\ "
+    @test unesc("\\\\ ",      true, true) == "\\\\ "
 end
 
 @testset "Normalization of identifiers" begin
