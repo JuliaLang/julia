@@ -447,9 +447,10 @@ show(io::IO, @nospecialize(x)) = show_default(io, x)
 show(x) = show(stdout, x)
 
 # avoid inferring show_default on the type of `x`
-show_default(io::IO, @nospecialize(x)) = _show_default(io, inferencebarrier(x))
+show_default(io::IO, @nospecialize(x); kwshow::Bool=false) =
+    _show_default(io, inferencebarrier(x); kwshow=kwshow)
 
-function _show_default(io::IO, @nospecialize(x))
+function _show_default(io::IO, @nospecialize(x); kwshow::Bool)
     t = typeof(x)
     show(io, inferencebarrier(t)::DataType)
     print(io, '(')
@@ -461,6 +462,9 @@ function _show_default(io::IO, @nospecialize(x))
                                  Pair{Symbol,Any}(:typeinfo, Any))
             for i in 1:nf
                 f = fieldname(t, i)
+                if kwshow
+                    print(io, f, " = ")
+                end
                 if !isdefined(x, f)
                     print(io, undef_ref_str)
                 else
