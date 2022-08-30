@@ -383,62 +383,36 @@ end
 # hitting the deprecated construct-to-convert fallback.
 (::Type{T})(p::Period) where {T<:Period} = convert(T, p)::T
 
-# FixedPeriod conversions and promotion rules
-const fixedperiod_conversions = [(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
-                                 (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)]
-for i = 1:length(fixedperiod_conversions)
-    T, n = fixedperiod_conversions[i]
-    N = Int64(1)
-    for j = (i - 1):-1:1 # less-precise periods
-        Tc, nc = fixedperiod_conversions[j]
-        N *= nc
-        vmax = typemax(Int64) ÷ N
-        vmin = typemin(Int64) ÷ N
-        @eval function Base.convert(::Type{$T}, x::$Tc)
-            $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
-            return $T(value(x) * $N)
+# Conversions and promotion rules
+function define_conversions(periods)
+    for i = eachindex(periods)
+        T, n = periods[i]
+        N = Int64(1)
+        for j = (i - 1):-1:firstindex(periods) # less-precise periods
+            Tc, nc = periods[j]
+            N *= nc
+            vmax = typemax(Int64) ÷ N
+            vmin = typemin(Int64) ÷ N
+            @eval function Base.convert(::Type{$T}, x::$Tc)
+                $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, $T, x))
+                return $T(value(x) * $N)
+            end
+        end
+        N = n
+        for j = (i + 1):lastindex(periods) # more-precise periods
+            Tc, nc = periods[j]
+            @eval Base.convert(::Type{$T}, x::$Tc) = $T(divexact(value(x), $N))
+            @eval Base.promote_rule(::Type{$T}, ::Type{$Tc}) = $Tc
+            N *= nc
         end
     end
-    N = n
-    for j = (i + 1):length(fixedperiod_conversions) # more-precise periods
-        Tc, nc = fixedperiod_conversions[j]
-        @eval Base.convert(::Type{$T}, x::$Tc) = $T(divexact(value(x), $N))
-        @eval Base.promote_rule(::Type{$T}, ::Type{$Tc}) = $Tc
-        N *= nc
-    end
 end
-
-# other periods with fixed conversions but which aren't fixed time periods
-const OtherPeriod = Union{Month, Quarter, Year}
-let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
-    @eval function Base.convert(::Type{Month}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
-        Month(value(x) * 12)
-    end
-end
-Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x), 12))
-Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
-
-let vmax = typemax(Int64) ÷ 4, vmin = typemin(Int64) ÷ 4
-    @eval function Base.convert(::Type{Quarter}, x::Year)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Quarter, x))
-        Quarter(value(x) * 4)
-    end
-end
-Base.convert(::Type{Year}, x::Quarter) = Year(divexact(value(x), 4))
-Base.promote_rule(::Type{Year}, ::Type{Quarter}) = Quarter
-
-let vmax = typemax(Int64) ÷ 3, vmin = typemin(Int64) ÷ 3
-    @eval function Base.convert(::Type{Month}, x::Quarter)
-        $vmin ≤ value(x) ≤ $vmax || throw(InexactError(:convert, Month, x))
-        Month(value(x) * 3)
-    end
-end
-Base.convert(::Type{Quarter}, x::Month) = Quarter(divexact(value(x), 3))
-Base.promote_rule(::Type{Quarter}, ::Type{Month}) = Month
-
+define_conversions([(:Week, 7), (:Day, 24), (:Hour, 60), (:Minute, 60), (:Second, 1000),
+                    (:Millisecond, 1000), (:Microsecond, 1000), (:Nanosecond, 1)])
+define_conversions([(:Year, 4), (:Quarter, 3), (:Month, 1)])
 
 # fixed is not comparable to other periods, except when both are zero (#37459)
+const OtherPeriod = Union{Month, Quarter, Year}
 (==)(x::FixedPeriod, y::OtherPeriod) = iszero(x) & iszero(y)
 (==)(x::OtherPeriod, y::FixedPeriod) = y == x
 
