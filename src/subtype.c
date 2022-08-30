@@ -2759,15 +2759,31 @@ static int normalize_vb_offset(jl_svec_t **params JL_REQUIRE_ROOTED_SLOT, jl_tva
     }
     else {
         assert(vb->offset > 0);
-        // Go backwards over the parameter list and verify that
-        // they are all equal to the vararg type.
-        for (ssize_t i = pos - 1; i > pos - 1 - vb->offset; i--) {
-            if (!forall_exists_equal(jl_svecref(*params, i), ii->T, e)) {
-                return 0;
-            }
+        ssize_t i = 0;
+        jl_value_t *T = ii->T;
+        JL_GC_PUSH1(&T);
+        for (; i < vb->offset; i++) {
+            //// TODO: if we can prove that the diagonal rule for 2 or more elements
+            //// applies (see this case in obvious_subtype for an example), we can
+            //// reject this intersection now if the parameters will violate it by
+            //// going backwards over the parameter list and verify that
+            //// they are all equal to the vararg type.
+            //if (!forall_exists_equal(jl_svecref(*params, pos - i - 1), T, e)) {
+            //    return 0;
+            //}
+            // This simple_join may discard precision of the initial elements,
+            // but we cannot know if the value of N is observed elsewhere until
+            // finish_unionall, so it is more important to preserve that value
+            // correctly than to preserve these parameters precisely
+            T = simple_join(jl_svecref(*params, pos - i - 1), T);
         }
-        jl_svecset(*params, pos - vb->offset, ii);
-        *params = jl_svec_copy_resize(*params, pos - vb->offset + 1);
+        if (T == ii->T)
+            T = (jl_value_t*)ii;
+        else
+            T = (jl_value_t*)jl_wrap_vararg(T, ii->N);
+        *params = jl_svec_copy_resize(*params, pos - i + 1);
+        jl_svecset(*params, pos - i, T);
+        JL_GC_POP();
     }
     return 1;
 }

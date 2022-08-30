@@ -2023,5 +2023,8 @@ struct X43082{A, I, B<:Union{Ref{I},I}}; end
 
 # issue #39088
 @testintersect(Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
-               Tuple{Tuple{Int, Vararg{Any}}, NTuple{4, Int64}},
-               Tuple{NTuple{4, Int64}, NTuple{4, Int64}})
+               Tuple{Tuple{Int, Vararg{Any}}, NTuple{4, Int}},
+               Tuple{NTuple{4, Int}, NTuple{4, Int}})
+@testintersect(Tuple{Vector, Vararg{Union{Int, Vector}, N}} where N,
+               Tuple{Any, Int, Vararg{Vector{Int}}},
+               Tuple{Vector, Union{Int, Vector{Int}}, Vararg{Union{Int, Vector{Int}}}}) # TODO: improve this bound
