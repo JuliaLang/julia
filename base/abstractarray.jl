@@ -1972,7 +1972,7 @@ typed_hcat(T::Type, A::AbstractArray...) = _cat_t(Val(2), T, A...)
 hvcat_rows(rows::Tuple...) = hvcat(map(length, rows), (rows...)...)
 typed_hvcat_rows(T::Type, rows::Tuple...) = typed_hvcat(T, map(length, rows), (rows...)...)
 
-function hvcat(nbc::Integer, as...)
+function hvcat(nbc::Int, as...)
     # nbc = # of block columns
     n = length(as)
     mod(n,nbc) != 0 &&
