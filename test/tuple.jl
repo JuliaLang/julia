@@ -754,3 +754,6 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 @test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
 @test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
 @test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64
+
+# issue #46049: setindex(::Tuple) regression
+@inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)

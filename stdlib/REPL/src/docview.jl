@@ -230,7 +230,7 @@ function lookup_doc(ex)
         end
     end
     binding = esc(bindingexpr(namify(ex)))
-    if isexpr(ex, :call) || isexpr(ex, :macrocall)
+    if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
         :($(doc)($binding, $sig))
     else

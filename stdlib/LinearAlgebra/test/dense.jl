@@ -25,7 +25,7 @@ Random.seed!(1234323)
             ainv = inv(a)
             @test cond(a, 1)   == opnorm(a, 1)  *opnorm(ainv, 1)
             @test cond(a, Inf) == opnorm(a, Inf)*opnorm(ainv, Inf)
-            @test cond(a[:, 1:5]) == (/)(reverse(extrema(svdvals(a[:, 1:5])))...)
+            @test cond(a[:, 1:5]) == (\)(extrema(svdvals(a[:, 1:5]))...)
             @test_throws ArgumentError cond(a,3)
         end
     end

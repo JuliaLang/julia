@@ -2,6 +2,8 @@
 
 using Test
 
+include("compiler/irutils.jl")
+
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be
 # sufficient to catch segfault bugs.
@@ -66,6 +68,7 @@ end # module ReflectionTest
 @test isbits((1,2))
 @test !isbits([1])
 @test isbits(nothing)
+@test fully_eliminated(isbits, (Int,))
 
 # issue #16670
 @test isconcretetype(Int)
@@ -199,7 +202,7 @@ end
 
 @test which(===, Tuple{Int, Int}) isa Method
 @test length(code_typed(===, Tuple{Int, Int})) === 1
-@test only(Base.return_types(===, Tuple{Int, Int})) === Any
+@test only(Base.return_types(===, Tuple{Int, Int})) === Bool
 
 module TestingExported
 using Test
@@ -224,7 +227,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N}\n")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N}")
 
 mutable struct TLayout
     x::Int8
@@ -425,9 +428,9 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     mmime = repr("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for fieldtype(...)"
-    @test mrepr == mmime == "fieldtype(...)\n     @ Core none:0"
+    @test mrepr == "fieldtype(...) @ Core none:0"       # simple print
+    @test mmime == "fieldtype(...)\n     @ Core none:0" # verbose print
 end
-
 
 # Linfo Tracing test
 function tracefoo end
@@ -995,4 +998,6 @@ function f_no_methods end
     # builtins
     @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
     @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+    @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
+    @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end

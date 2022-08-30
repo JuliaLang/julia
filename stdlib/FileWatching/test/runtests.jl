@@ -324,8 +324,10 @@ function test_dirmonitor_wait2(tval)
                     fname, events = wait(fm)
                 end
                 for i = 1:3
-                    @test fname == "$F_PATH$i"
-                    @test !events.changed && !events.timedout && events.renamed
+                    @testset let (fname, events) = (fname, events)
+                        @test fname == "$F_PATH$i"
+                        @test !events.changed && !events.timedout && events.renamed
+                    end
                     i == 3 && break
                     fname, events = wait(fm)
                 end
@@ -367,60 +369,62 @@ test_monitor_wait_poll()
 test_monitor_wait_poll()
 test_watch_file_timeout(0.2)
 test_watch_file_change(6)
-test_dirmonitor_wait2(0.2)
-test_dirmonitor_wait2(0.2)
 
-mv(file, file * "~")
-mv(file * "~", file)
-let changes = []
-    while true
-        let c
-            Sys.iswindows() && sleep(0.1)
-            @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
-            push!(changes, c)
-            (c.second::FileWatching.FileEvent).timedout && break
+if !((Sys.ARCH == :x86_64) && (Sys.isapple())) #These tests tend to fail a lot on x86-apple
+    test_dirmonitor_wait2(0.2)                 #because the os can reorder the events
+    test_dirmonitor_wait2(0.2)                 #see https://github.com/dotnet/runtime/issues/30415
+
+    mv(file, file * "~")
+    mv(file * "~", file)
+    let changes = []
+        while true
+            let c
+                Sys.iswindows() && sleep(0.1)
+                @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
+                push!(changes, c)
+                (c.second::FileWatching.FileEvent).timedout && break
+            end
         end
-    end
-    if F_GETPATH
-        @test 12 < length(changes) < 48
-    else
-        @test 5 < length(changes) < 16
-    end
-    @test pop!(changes) == ("" => FileWatching.FileEvent())
-    if F_GETPATH
-        Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
-        p = pop!(changes)
-        if !Sys.isapple()
-            @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        if F_GETPATH
+            @test 12 < length(changes) < 48
+        else
+            @test 5 < length(changes) < 16
         end
-        while changes[end][1] == F_PATH
-            @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
-        end
-        p = pop!(changes)
-        if !Sys.isapple()
-            @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
-        end
-        while changes[end][1] == F_PATH * "~"
-            @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
-        end
-        if changes[end][1] == F_PATH
-            @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
-        end
-        for j = 1:4
-            for i = 3:-1:1
-                while changes[end - 1][1] == "$F_PATH$i"
-                    @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
-                end
-                p = pop!(changes)
-                if !Sys.isapple()
-                    @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        @test pop!(changes) == ("" => FileWatching.FileEvent())
+        if F_GETPATH
+            Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
+            p = pop!(changes)
+            if !Sys.isapple()
+                @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+            end
+            while changes[end][1] == F_PATH
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            p = pop!(changes)
+            if !Sys.isapple()
+                @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+            end
+            while changes[end][1] == F_PATH * "~"
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            if changes[end][1] == F_PATH
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            for j = 1:4
+                for i = 3:-1:1
+                    while changes[end - 1][1] == "$F_PATH$i"
+                        @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
+                    end
+                    p = pop!(changes)
+                    if !Sys.isapple()
+                        @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                    end
                 end
             end
         end
+        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
     end
-    @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
 end
-
 @test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),
              watch_file("____nonexistent_file", 10))
 @test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),

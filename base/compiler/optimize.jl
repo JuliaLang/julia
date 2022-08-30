@@ -30,8 +30,21 @@ const IR_FLAG_EFFECT_FREE = 0x01 << 4
 # This statement was proven not to throw
 const IR_FLAG_NOTHROW     = 0x01 << 5
 
-
 const TOP_TUPLE = GlobalRef(Core, :tuple)
+
+# This corresponds to the type of `CodeInfo`'s `inlining_cost` field
+const InlineCostType = UInt16
+const MAX_INLINE_COST = typemax(InlineCostType)
+const MIN_INLINE_COST = InlineCostType(10)
+
+is_inlineable(src::Union{CodeInfo, Vector{UInt8}}) = ccall(:jl_ir_inlining_cost, InlineCostType, (Any,), src) != MAX_INLINE_COST
+set_inlineable!(src::CodeInfo, val::Bool) = src.inlining_cost = (val ? MIN_INLINE_COST : MAX_INLINE_COST)
+
+function inline_cost_clamp(x::Int)::InlineCostType
+    x > MAX_INLINE_COST && return MAX_INLINE_COST
+    x < MIN_INLINE_COST && return MIN_INLINE_COST
+    return convert(InlineCostType, x)
+end
 
 #####################
 # OptimizationState #
@@ -49,6 +62,10 @@ intersect!(et::EdgeTracker, range::WorldRange) =
     et.valid_worlds[] = intersect(et.valid_worlds[], range)
 
 push!(et::EdgeTracker, mi::MethodInstance) = push!(et.edges, mi)
+function add_edge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
+    invokesig === nothing && return push!(et.edges, mi)
+    push!(et.edges, invokesig, mi)
+end
 function push!(et::EdgeTracker, ci::CodeInstance)
     intersect!(et, WorldRange(min_world(li), max_world(li)))
     push!(et, ci.def)
@@ -68,7 +85,7 @@ function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_f
                          mi::MethodInstance, argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = is_source_inferred(src)
-        src_inlineable = is_stmt_inline(stmt_flag) || ccall(:jl_ir_flag_inlineable, Bool, (Any,), src)
+        src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inferred && src_inlineable ? src : nothing
     elseif src === nothing && is_stmt_inline(stmt_flag)
         # if this statement is forced to be inlined, make an additional effort to find the
@@ -249,8 +266,12 @@ function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IR
             end
             return (true, true)
         elseif head === :foreigncall
-            total = foreigncall_effect_free(stmt, src)
-            return (total, total)
+            effects = foreigncall_effects(stmt) do @nospecialize x
+                argextype(x, src)
+            end
+            effect_free = is_effect_free(effects)
+            nothrow = is_nothrow(effects)
+            return (effect_free & nothrow, nothrow)
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false)
             typ = argextype(args[1], src)
@@ -259,8 +280,8 @@ function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IR
             typ ⊑ Tuple || return (false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
-            src = argextype(args[4], src)
-            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && src ⊑ Method)
+            source = argextype(args[4], src)
+            if !(rt_lb ⊑ Type && rt_ub ⊑ Type && source ⊑ Method)
                 return (false, false)
             end
             return (true, true)
@@ -272,74 +293,6 @@ function stmt_effect_flags(@nospecialize(stmt), @nospecialize(rt), src::Union{IR
         end
     end
     return (true, true)
-end
-
-function foreigncall_effect_free(stmt::Expr, src::Union{IRCode,IncrementalCompact})
-    args = stmt.args
-    name = args[1]
-    isa(name, QuoteNode) && (name = name.value)
-    isa(name, Symbol) || return false
-    ndims = alloc_array_ndims(name)
-    if ndims !== nothing
-        if ndims == 0
-            return new_array_no_throw(args, src)
-        else
-            return alloc_array_no_throw(args, ndims, src)
-        end
-    end
-    return false
-end
-
-function alloc_array_ndims(name::Symbol)
-    if name === :jl_alloc_array_1d
-        return 1
-    elseif name === :jl_alloc_array_2d
-        return 2
-    elseif name === :jl_alloc_array_3d
-        return 3
-    elseif name === :jl_new_array
-        return 0
-    end
-    return nothing
-end
-
-const FOREIGNCALL_ARG_START = 6
-
-function alloc_array_no_throw(args::Vector{Any}, ndims::Int, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
-    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
-    dims = Csize_t[]
-    for i in 1:ndims
-        dim = argextype(args[i+FOREIGNCALL_ARG_START], src)
-        isa(dim, Const) || return false
-        dimval = dim.val
-        isa(dimval, Int) || return false
-        push!(dims, reinterpret(Csize_t, dimval))
-    end
-    return _new_array_no_throw(atype, ndims, dims)
-end
-
-function new_array_no_throw(args::Vector{Any}, src::Union{IRCode,IncrementalCompact})
-    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
-    atype = instanceof_tfunc(argextype(args[FOREIGNCALL_ARG_START], src))[1]
-    dims = argextype(args[FOREIGNCALL_ARG_START+1], src)
-    isa(dims, Const) || return dims === Tuple{}
-    dimsval = dims.val
-    isa(dimsval, Tuple{Vararg{Int}}) || return false
-    ndims = nfields(dimsval)
-    isa(ndims, Int) || return false
-    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
-    return _new_array_no_throw(atype, ndims, dims)
-end
-
-function _new_array_no_throw(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
-    isa(atype, DataType) || return false
-    eltype = atype.parameters[1]
-    iskindtype(typeof(eltype)) || return false
-    elsz = aligned_sizeof(eltype)
-    return ccall(:jl_array_validate_dims, Cint,
-        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
-        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
 end
 
 """
@@ -462,7 +415,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 @assert isconstType(result)
                 analyzed = ConstAPI(result.parameters[1])
             end
-            force_noinline || (src.inlineable = true)
+            force_noinline || set_inlineable!(src, true)
         end
     end
 
@@ -483,14 +436,14 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
         else
             force_noinline = true
         end
-        if !src.inlineable && result === Bottom
+        if !is_inlineable(src) && result === Bottom
             force_noinline = true
         end
     end
     if force_noinline
-        src.inlineable = false
+        set_inlineable!(src, false)
     elseif isa(def, Method)
-        if src.inlineable && isdispatchtuple(specTypes)
+        if is_inlineable(src) && isdispatchtuple(specTypes)
             # obey @inline declaration if a dispatch barrier would not help
         else
             # compute the cost (size) of inlining this code
@@ -499,7 +452,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                 cost_threshold += params.inline_tupleret_bonus
             end
             # if the method is declared as `@inline`, increase the cost threshold 20x
-            if src.inlineable
+            if is_inlineable(src)
                 cost_threshold += 19*default
             end
             # a few functions get special treatment
@@ -509,7 +462,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
                     cost_threshold += 4*default
                 end
             end
-            src.inlineable = inline_worthy(ir, params, union_penalties, cost_threshold)
+            src.inlining_cost = inline_cost(ir, params, union_penalties, cost_threshold)
         end
     end
 
@@ -560,8 +513,8 @@ macro pass(name, expr)
     end
 end
 
-matchpass(optimize_until::Int, stage, _name) = optimize_until < stage
-matchpass(optimize_until::String, _stage, name) = optimize_until == name
+matchpass(optimize_until::Int, stage, _) = optimize_until == stage
+matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
 function run_passes(
@@ -570,7 +523,7 @@ function run_passes(
     caller::InferenceResult,
     optimize_until = nothing,  # run all passes by default
 )
-    __stage__ = 1  # used by @pass
+    __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
@@ -821,16 +774,16 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_worthy(ir::IRCode,
-                       params::OptimizationParams, union_penalties::Bool=false, cost_threshold::Integer=params.inline_cost_threshold)
+function inline_cost(ir::IRCode, params::OptimizationParams, union_penalties::Bool=false,
+                       cost_threshold::Integer=params.inline_cost_threshold)::InlineCostType
     bodycost::Int = 0
     for line = 1:length(ir.stmts)
         stmt = ir.stmts[line][:inst]
         thiscost = statement_or_branch_cost(stmt, line, ir, ir.sptypes, union_penalties, params)
         bodycost = plus_saturate(bodycost, thiscost)
-        bodycost > cost_threshold && return false
+        bodycost > cost_threshold && return MAX_INLINE_COST
     end
-    return true
+    return inline_cost_clamp(bodycost)
 end
 
 function statement_costs!(cost::Vector{Int}, body::Vector{Any}, src::Union{CodeInfo, IRCode}, sptypes::Vector{Any}, unionpenalties::Bool, params::OptimizationParams)

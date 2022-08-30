@@ -29,6 +29,52 @@ static const    uint64_t GIGA = 1000000000ULL;
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
 
+///////////////////////
+// Utility functions //
+///////////////////////
+JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
+{
+    bt_size_max = maxsize;
+    nsecprof = delay_nsec;
+    if (bt_data_prof != NULL)
+        free((void*)bt_data_prof);
+    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
+    if (bt_data_prof == NULL && maxsize > 0)
+        return -1;
+    bt_size_cur = 0;
+    return 0;
+}
+
+JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
+{
+    return (uint8_t*) bt_data_prof;
+}
+
+JL_DLLEXPORT size_t jl_profile_len_data(void)
+{
+    return bt_size_cur;
+}
+
+JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
+{
+    return bt_size_max;
+}
+
+JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
+{
+    return nsecprof;
+}
+
+JL_DLLEXPORT void jl_profile_clear_data(void)
+{
+    bt_size_cur = 0;
+}
+
+JL_DLLEXPORT int jl_profile_is_running(void)
+{
+    return running;
+}
+
 // Any function that acquires this lock must be either a unmanaged thread
 // or in the GC safe region and must NOT allocate anything through the GC
 // while holding this lock.
@@ -424,52 +470,6 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
     }
     jl_gc_debug_print_status();
     jl_gc_debug_critical_error();
-}
-
-///////////////////////
-// Utility functions //
-///////////////////////
-JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
-{
-    bt_size_max = maxsize;
-    nsecprof = delay_nsec;
-    if (bt_data_prof != NULL)
-        free((void*)bt_data_prof);
-    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (bt_data_prof == NULL && maxsize > 0)
-        return -1;
-    bt_size_cur = 0;
-    return 0;
-}
-
-JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
-{
-    return (uint8_t*) bt_data_prof;
-}
-
-JL_DLLEXPORT size_t jl_profile_len_data(void)
-{
-    return bt_size_cur;
-}
-
-JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
-{
-    return bt_size_max;
-}
-
-JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
-{
-    return nsecprof;
-}
-
-JL_DLLEXPORT void jl_profile_clear_data(void)
-{
-    bt_size_cur = 0;
-}
-
-JL_DLLEXPORT int jl_profile_is_running(void)
-{
-    return running;
 }
 
 #ifdef __cplusplus

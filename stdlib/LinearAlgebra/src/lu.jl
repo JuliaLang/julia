@@ -530,7 +530,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
     if dl === du
         throw(ArgumentError("off-diagonals of `A` must not alias"))
     end
-    du2 = fill!(similar(d, n-2), 0)::V
+    du2 = fill!(similar(d, max(0, n-2)), 0)::V
 
     @inbounds begin
         for i = 1:n

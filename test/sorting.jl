@@ -75,6 +75,7 @@ end
     @test sum(randperm(6)) == 21
     @test length(reverse(0x1:0x2)) == 2
     @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
+    @test sort(Union{}[]) == Union{}[] # issue #45280
 end
 
 @testset "partialsort" begin
@@ -651,8 +652,7 @@ end
         T = eltype(x)
         U = UIntN(Val(sizeof(T)))
         for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
-            if order isa Base.Order.By || T === Float16 ||
-                ((T <: AbstractFloat) == (order isa DirectOrdering))
+            if order isa Base.Order.By || ((T <: AbstractFloat) == (order isa DirectOrdering))
                 @test Base.Sort.UIntMappable(T, order) === nothing
                 continue
             end
@@ -678,6 +678,8 @@ end
             end
         end
     end
+
+    @test Base.Sort.UIntMappable(Union{Int, UInt}, Base.Forward) === nothing # issue #45280
 end
 
 @testset "sort(x; buffer)" begin
@@ -693,6 +695,20 @@ end
         M = rand(n, n)
         @test sort(M; dims=2) == sort(M; dims=2, buffer)
         @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
+    end
+end
+
+@testset "sorting preserves identity" begin
+    a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
+    sort!(a)
+    @test length(IdDict(a .=> a)) == 6
+
+    for v in [BigInt.(rand(1:5, 40)), BigInt.(rand(Int, 70)), BigFloat.(rand(52))]
+        hashes = Set(hash.(v))
+        ids = Set(objectid.(v))
+        sort!(v)
+        @test hashes == Set(hash.(v))
+        @test ids == Set(objectid.(v))
     end
 end
 

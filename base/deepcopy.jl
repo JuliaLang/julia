@@ -140,7 +140,7 @@ function deepcopy_internal(x::GenericCondition, stackdict::IdDict)
     if haskey(stackdict, x)
         return stackdict[x]
     end
-    y = typeof(x)(deepcopy_internal(x.lock))
+    y = typeof(x)(deepcopy_internal(x.lock, stackdict))
     stackdict[x] = y
     return y
 end

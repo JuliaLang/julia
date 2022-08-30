@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def]),
+        (Core.CodeInstance, [:def, :min_world, :max_world, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
         (Core.MethodTable, [:module]),
@@ -7808,3 +7808,18 @@ end
 import .Foo45350: x45350
 f45350() = (global x45350 = 2)
 @test_throws ErrorException f45350()
+
+# #46503 - redefine `invoke`d methods
+foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
+foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
+@test 0 <= foo46503(1, nothing) <= 1
+foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
+@test 10 <= foo46503(1, nothing) <= 11
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
+end
