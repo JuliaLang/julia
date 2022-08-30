@@ -671,10 +671,15 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
         # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
         hist_open_file(hist)
     end
-    FileWatching.mkpidlock(hist.file_path  * ".pid", stale_age=3) do
+    if isfile(hist.file_path)
+        FileWatching.mkpidlock(hist.file_path  * ".pid", stale_age=3) do
+            print(hist.history_file, entry)
+            flush(hist.history_file)
+        end
+    else # handle eg devnull
         print(hist.history_file, entry)
         flush(hist.history_file)
-    end
+    end       
     nothing
 end
 
