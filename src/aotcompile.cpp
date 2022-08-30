@@ -20,18 +20,21 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
+#include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 #if defined(USE_POLLY)
@@ -217,7 +220,7 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
-        *src_out = (jl_code_info_t*)codeinst->inferred;
+        *src_out = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_t *def = codeinst->def->def.method;
         if ((jl_value_t*)*src_out == jl_nothing)
             *src_out = NULL;
@@ -232,8 +235,10 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
             *src_out = jl_type_infer(mi, world, 0);
             if (*src_out) {
                 codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
-                if ((*src_out)->inferred && !codeinst->inferred)
-                    codeinst->inferred = jl_nothing;
+                if ((*src_out)->inferred) {
+                    jl_value_t *null = nullptr;
+                    jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
+                }
             }
         }
     }
@@ -434,6 +439,23 @@ static void reportWriterError(const ErrorInfoBase &E)
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
 }
 
+static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
+{
+    Function *target = M.getFunction(alias);
+    if (!target) {
+        target = Function::Create(FT, Function::ExternalLinkage, alias, M);
+    }
+    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+    appendToCompilerUsed(M, {interposer});
+
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
+    SmallVector<Value *, 4> CallArgs;
+    for (auto &arg : interposer->args())
+        CallArgs.push_back(&arg);
+    auto val = builder.CreateCall(target, CallArgs);
+    builder.CreateRet(val);
+}
+
 
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup
@@ -496,20 +518,23 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
-    legacy::PassManager preopt, postopt;
+    PassBuilder emptyPB;
+    AnalysisManagers empty(emptyPB);
+    ModulePassManager preopt, postopt;
+    legacy::PassManager emitter; // MC emission is only supported on legacy PM
 
     if (unopt_bc_fname)
-        preopt.add(createBitcodeWriterPass(unopt_bc_OS));
+        preopt.addPass(BitcodeWriterPass(unopt_bc_OS));
 
-    //Is this necessary for TM?
-    // addTargetPasses(&postopt, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (bc_fname)
-        postopt.add(createBitcodeWriterPass(bc_OS));
+        postopt.addPass(BitcodeWriterPass(bc_OS));
+    //Is this necessary for TM?
+    addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (obj_fname)
-        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(emitter, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
     legacy::PassManager optimizer;
@@ -548,9 +573,27 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        preopt.run(M);
+        preopt.run(M, empty.MAM);
         optimizer.run(M);
-        postopt.run(M);
+
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+        postopt.run(M, empty.MAM);
+        emitter.run(M);
+
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -695,7 +738,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createAddressSanitizerFunctionPass());
 #endif
 #if defined(_COMPILER_MSAN_ENABLED_)
-        PM->add(createMemorySanitizerPass(true));
+        PM->add(createMemorySanitizerLegacyPassPass());
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
@@ -850,7 +893,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAddressSanitizerFunctionPass());
 #endif
 #if defined(_COMPILER_MSAN_ENABLED_)
-    PM->add(createMemorySanitizerPass(true));
+    PM->add(createMemorySanitizerLegacyPassPass());
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
@@ -910,79 +953,27 @@ static void registerCallbacks(PassBuilder &PB) {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "DemoteFloat16") {
-                PM.addPass(DemoteFloat16());
-                return true;
-            }
-            if (Name == "CombineMulAdd") {
-              PM.addPass(CombineMulAdd());
-              return true;
-            }
-            if (Name == "LateLowerGCFrame") {
-                PM.addPass(LateLowerGC());
-                return true;
-            }
-            if (Name == "AllocOpt") {
-                PM.addPass(AllocOptPass());
-                return true;
-            }
-            if (Name == "PropagateJuliaAddrspaces") {
-                PM.addPass(PropagateJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "LowerExcHandlers") {
-                PM.addPass(LowerExcHandlers());
-                return true;
-            }
-            if (Name == "GCInvariantVerifier") {
-                // TODO: Parse option and allow users to set `Strong`
-                PM.addPass(GCInvariantVerifierPass());
-                return true;
-            }
+#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef FUNCTION_PASS
             return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "CPUFeatures") {
-              PM.addPass(CPUFeatures());
-              return true;
-            }
-            if (Name == "RemoveNI") {
-              PM.addPass(RemoveNI());
-              return true;
-            }
-            if (Name == "LowerSIMDLoop") {
-              PM.addPass(LowerSIMDLoop());
-              return true;
-            }
-            if (Name == "FinalLowerGC") {
-                PM.addPass(FinalLowerGCPass());
-                return true;
-            }
-            if (Name == "RemoveJuliaAddrspaces") {
-                PM.addPass(RemoveJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "MultiVersioning") {
-                PM.addPass(MultiVersioning());
-                return true;
-            }
-            if (Name == "LowerPTLS") {
-                PM.addPass(LowerPTLSPass());
-                return true;
-            }
+#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef MODULE_PASS
             return false;
         });
 
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "JuliaLICM") {
-                PM.addPass(JuliaLICMPass());
-                return true;
-            }
+#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#include "llvm-julia-passes.inc"
+#undef LOOP_PASS
             return false;
         });
 }
@@ -1019,7 +1010,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         jl_value_t *ci = jl_rettype_inferred(mi, world, world);
         if (ci != jl_nothing) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            src = (jl_code_info_t*)codeinst->inferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
             if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
                 src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
             jlrettype = codeinst->rettype;

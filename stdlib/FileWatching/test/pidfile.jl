@@ -272,10 +272,18 @@ end
 
     # Just for coverage's sake, run a test with do-block syntax
     lock_times = Float64[]
+    synchronizer = Base.Event()
+    synchronizer2 = Base.Event()
     t_loop = @async begin
         for idx in 1:100
-            t = @elapsed mkpidlock("do_block_pidfile") do
-                # nothing
+            t = @elapsed begin
+                if idx == 1
+                    wait(synchronizer)
+                    notify(synchronizer2)
+                end
+                mkpidlock("do_block_pidfile") do
+                    # nothing
+                end
             end
             sleep(0.01)
             push!(lock_times, t)
@@ -283,6 +291,8 @@ end
     end
     isdefined(Base, :errormonitor) && Base.errormonitor(t_loop)
     mkpidlock("do_block_pidfile") do
+        notify(synchronizer)
+        wait(synchronizer2)
         sleep(3)
     end
     wait(t_loop)

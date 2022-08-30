@@ -325,6 +325,17 @@ end
     @test Returns(val)(1) === val
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 
-    illtype = Vector{Core._typevar(:T, Union{}, Any)}
+    illtype = Vector{Core.TypeVar(:T)}
     @test Returns(illtype) == Returns{DataType}(illtype)
+end
+
+@testset "<= (issue #46327)" begin
+    struct A46327 <: Real end
+    Base.:(==)(::A46327, ::A46327) = false
+    Base.:(<)(::A46327, ::A46327) = false
+    @test !(A46327() <= A46327())
+    struct B46327 <: Real end
+    Base.:(==)(::B46327, ::B46327) = true
+    Base.:(<)(::B46327, ::B46327) = false
+    @test B46327() <= B46327()
 end

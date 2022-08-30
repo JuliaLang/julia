@@ -3,10 +3,19 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 """
-    typejoin(T, S)
+    typejoin(T, S, ...)
 
-Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
-they both inherit.
+Return the closest common ancestor of types `T` and `S`, i.e. the narrowest type from which
+they both inherit. Recurses on additional varargs.
+
+# Examples
+```jldoctest
+julia> typejoin(Int, Float64)
+Real
+
+julia> typejoin(Int, Float64, ComplexF32)
+Number
+```
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
@@ -489,7 +498,7 @@ xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
 (==)(x::T, y::T) where {T<:Number} = x === y
 (< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
-(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
+(<=)(x::T, y::T) where {T<:Real} = (x == y) | (x < y)
 
 rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
 mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)

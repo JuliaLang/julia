@@ -726,6 +726,11 @@ end
     @test_throws ArgumentError "abc"[BitArray([true, false, true])]
 end
 
+@testset "issue #46039 enhance StringIndexError display" begin
+    @test sprint(showerror, StringIndexError("αn", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'n'"
+    @test sprint(showerror, StringIndexError("α\n", 2)) == "StringIndexError: invalid index [2], valid nearby indices [1]=>'α', [3]=>'\\n'"
+end
+
 @testset "concatenation" begin
     @test "ab" * "cd" == "abcd"
     @test 'a' * "bc" == "abc"

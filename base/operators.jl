@@ -513,8 +513,6 @@ julia> identity("Well, what did you expect?")
 identity(@nospecialize x) = x
 
 +(x::Number) = x
--(x) = Int8(-1)*x
--(x, y) = x + (-y)
 *(x::Number) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
@@ -615,9 +613,7 @@ julia> inv(A) * x
  -7.0
 ```
 """
-\(x, y) = inv(x) * y
-
-/(x, y) = x * inv(y)
+\(x,y) = adjoint(adjoint(y)/adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned

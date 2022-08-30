@@ -178,9 +178,9 @@ mutable struct InferenceState
         #       are stronger than the inbounds assumptions, since the latter
         #       requires dynamic reachability, while the former is global).
         inbounds = inbounds_option()
-        inbounds_taints_consistency = !(inbounds === :on || (inbounds === :default && !any_inbounds(code)))
-        consistent = inbounds_taints_consistency ? ALWAYS_FALSE : ALWAYS_TRUE
-        ipo_effects = Effects(EFFECTS_TOTAL; consistent, inbounds_taints_consistency)
+        noinbounds = inbounds === :on || (inbounds === :default && !any_inbounds(code))
+        consistent = noinbounds ? ALWAYS_TRUE : ALWAYS_FALSE
+        ipo_effects = Effects(EFFECTS_TOTAL; consistent, noinbounds)
 
         params = InferenceParams(interp)
         restrict_abstract_call_sites = isa(linfo.def, Module)
@@ -206,11 +206,11 @@ end
 
 Effects(state::InferenceState) = state.ipo_effects
 
-function tristate_merge!(caller::InferenceState, effects::Effects)
-    caller.ipo_effects = tristate_merge(caller.ipo_effects, effects)
+function merge_effects!(caller::InferenceState, effects::Effects)
+    caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
-tristate_merge!(caller::InferenceState, callee::InferenceState) =
-    tristate_merge!(caller, Effects(callee))
+merge_effects!(caller::InferenceState, callee::InferenceState) =
+    merge_effects!(caller, Effects(callee))
 
 is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
@@ -479,11 +479,14 @@ function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, curr
 end
 
 # temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(li::MethodInstance, caller::InferenceState)
+function add_backedge!(li::MethodInstance, caller::InferenceState, invokesig::Union{Nothing,Type}=nothing)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     edges = caller.stmt_edges[caller.currpc]
     if edges === nothing
         edges = caller.stmt_edges[caller.currpc] = []
+    end
+    if invokesig !== nothing
+        push!(edges, invokesig)
     end
     push!(edges, li)
     return nothing
@@ -521,3 +524,10 @@ function print_callstack(sv::InferenceState)
 end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+
+function narguments(sv::InferenceState)
+    def = sv.linfo.def
+    isva = isa(def, Method) && def.isva
+    nargs = length(sv.result.argtypes) - isva
+    return nargs
+end
