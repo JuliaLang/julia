@@ -1726,10 +1726,14 @@ static jl_value_t *inst_tuple_w_(jl_value_t *t, jl_typeenv_t *env, jl_typestack_
         jl_value_t *ttN = jl_unwrap_vararg_num(va);
         jl_typeenv_t *e = env;
         while (e != NULL) {
-            if ((jl_value_t*)e->var == ttT)
+            if ((jl_value_t*)e->var == ttT) {
                 T = e->val;
-            else if ((jl_value_t*)e->var == ttN)
+            }
+            else if ((jl_value_t*)e->var == ttN) {
+                if (e->val_is_lb)
+                    break;
                 N = e->val;
+            }
             e = e->prev;
         }
         if (T != NULL && N != NULL && jl_is_long(N)) {

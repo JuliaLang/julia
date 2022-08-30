@@ -2458,13 +2458,15 @@ static jl_value_t *finish_unionall(jl_value_t *res JL_MAYBE_UNROOTED, jl_varbind
     }
 
     int is_bound = 0;
-    if (!varval && vb->intvalued && jl_is_long(vb->lb) && vb->ub == (jl_value_t*)jl_any_type) {
+    if (!varval && vb->intvalued && jl_is_long(vb->lb) && vb->ub == (jl_value_t*)jl_any_type && vb->occurs_cov == 1 && vb->occurs_inv == 0) {
+        // this changes the value "assigned" to N, so be careful to only do it when this optimization is definitely valid
+        // (e.g. exclusively only appears as intvalued N in one or more Vararg{T,N} uses)
         is_bound = 1;
         newvar = vb->lb;
     }
-    else if (!varval && (vb->lb != vb->var->lb || vb->ub != vb->var->ub)) {
+    else if (!varval && ((vb->lb != vb->var->lb && !jl_is_long(vb->lb)) || vb->ub != vb->var->ub)) {
         // TODO: this can prevent us from matching typevar identities later
-        newvar = (jl_value_t*)jl_new_typevar(vb->var->name, vb->lb, vb->ub);
+        newvar = (jl_value_t*)jl_new_typevar(vb->var->name, jl_is_long(vb->lb) ? vb->var->lb : vb->lb, vb->ub);
     }
 
     // remove/replace/rewrap free occurrences of this var in the environment
@@ -2754,7 +2756,8 @@ static int normalize_vb_offset(jl_svec_t **params JL_REQUIRE_ROOTED_SLOT, jl_tva
             jl_svecset(*params, pos + i, ii->T);
         }
         jl_svecset(*params, pos + -vb->offset, ii);
-    } else {
+    }
+    else {
         assert(vb->offset > 0);
         // Go backwards over the parameter list and verify that
         // they are all equal to the vararg type.
@@ -2867,7 +2870,8 @@ static jl_value_t *intersect_tuple(jl_datatype_t *xd, jl_datatype_t *yd, jl_sten
         if (vx && vy) {
             JL_GC_POP();
             return intersect_tuple_vararg_tail(params, lx, ly, xi, yi, e, param);
-        } else {
+        }
+        else {
             if (vx)
                 xi = jl_unwrap_vararg(xi);
             if (vy)
