@@ -505,7 +505,7 @@ Test whether a number is infinite.
 
 See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 """
-isinf(x::Real) = !(isnan(x)::Bool) & !(isfinite(x)::Bool)
+isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
 let Tf = Float64, Tu = UInt64, Ti = Int64
