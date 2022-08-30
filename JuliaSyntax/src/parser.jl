@@ -822,9 +822,10 @@ function parse_range(ps::ParseState)
                 emit_diagnostic(ps, error="found unexpected closing token")
                 return
             end
-            if had_newline
+            if had_newline && !ps.whitespace_newline
                 # Error message for people coming from python
-                # 1:\n2 ==> (call-i 1 : (error))
+                # 1:\n2   ==> (call-i 1 : (error))
+                # (1:\n2) ==> (call-i 1 : 2)
                 emit_diagnostic(ps, whitespace=true,
                                 error="line break after `:` in range expression")
                 bump_invisible(ps, K"error")
