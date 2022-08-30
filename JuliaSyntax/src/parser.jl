@@ -2525,6 +2525,7 @@ end
 # then reconstructing the nested flattens and generators when converting to Expr.
 #
 # [x for a = as for b = bs if cond1 for c = cs if cond2] ==> (comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))
+# [x for a = as if begin cond2 end]  =>  (comprehension (generator x (filter (= a as) (block cond2))))
 #
 # flisp: parse-generator
 function parse_generator(ps::ParseState, mark, flatten=false)
@@ -2561,7 +2562,8 @@ end
 # flisp: parse-comprehension
 function parse_comprehension(ps::ParseState, mark, closer)
     ps = ParseState(ps, whitespace_newline=true,
-                    space_sensitive=false)
+                    space_sensitive=false,
+                    end_symbol=false)
     parse_generator(ps, mark)
     bump_closing_token(ps, closer)
     return (K"comprehension", EMPTY_FLAGS)
