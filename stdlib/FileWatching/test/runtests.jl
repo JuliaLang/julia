@@ -17,7 +17,6 @@ ismacos_x86 = ((Sys.ARCH == :x86_64) && (Sys.isapple()))  #Used to disable the u
 
 n = 20
 intvls = [2, .2, .1, .005, .00001]
-
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 
 for i in 1:n
@@ -35,7 +34,7 @@ for i in 1:n
     if !fd_in_limits && Sys.islinux()
         run(`ls -la /proc/$(getpid())/fd`)
     end
-    if ismacos_arm
+    if !ismacos_arm
         @test fd_in_limits
     end
 end
