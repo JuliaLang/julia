@@ -614,6 +614,7 @@ tests = [
         "[x \n\n for a in as]"  =>  "(comprehension (generator x (= a as)))"
         # parse_generator
         "[x for a = as for b = bs if cond1 for c = cs if cond2]"  =>  "(comprehension (flatten x (= a as) (filter (= b bs) cond1) (filter (= c cs) cond2)))"
+        "[x for a = as if begin cond2 end]"  =>  "(comprehension (generator x (filter (= a as) (block cond2))))"
         "[(x)for x in xs]"  =>  "(comprehension (generator x (error-t) (= x xs)))"
         "(a for x in xs if cond)"  =>  "(generator a (filter (= x xs) cond))"
         "(xy for x in xs for y in ys)"  =>  "(flatten xy (= x xs) (= y ys))"
