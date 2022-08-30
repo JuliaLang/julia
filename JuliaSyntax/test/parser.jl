@@ -101,6 +101,7 @@ tests = [
         "1:2:3"     => "(call-i 1 : 2 3)"
         "a:b:c:d:e" => "(call-i (call-i a : b c) : d e)"
         "a :< b"    => "(call-i a (error : <) b)"
+        "1:\n2"     => "(call-i 1 : (error))"
     ],
     JuliaSyntax.parse_range => [
         "a..b"       => "(call-i a .. b)"
@@ -561,6 +562,9 @@ tests = [
         # Generators
         "(x for a in as)"       =>  "(generator x (= a as))"
         "(x \n\n for a in as)"  =>  "(generator x (= a as))"
+        # Range parsing in parens
+        "(1:\n2)" => "(call-i 1 : 2)"
+        "(1:2)" => "(call-i 1 : 2)"
     ],
     JuliaSyntax.parse_atom => [
         ":foo"   => "(quote foo)"
