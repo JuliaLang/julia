@@ -78,7 +78,7 @@ printvalue(f::MbyFunc, io::IO, value::Integer; _...) =
     Base.print(io, Int64(value))  # TOML specifies 64-bit signed long range for integer
 printvalue(f::MbyFunc, io::IO, value::AbstractFloat; _...) =
     Base.print(io, isnan(value) ? "nan" :
-                   isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
+                   !(isfinite(value)::Bool) ? string(value > 0 ? "+" : "-", "inf") :
                    Float64(value))  # TOML specifies IEEE 754 binary64 for float
 function printvalue(f::MbyFunc, io::IO, value::AbstractString; _...)
     Base.print(io, "\"")
