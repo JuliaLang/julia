@@ -539,7 +539,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
-        recompute_cfg = type_annotate!(me, doopt)
+        changemap = type_annotate!(interp, me, doopt)
+        recompute_cfg = changemap !== nothing
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp, recompute_cfg)
         else
@@ -690,7 +691,7 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
 end
 
 # annotate types of all symbols in AST
-function type_annotate!(sv::InferenceState, run_optimizer::Bool)
+function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)
@@ -767,9 +768,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         deleteat!(stmt_info, inds)
         deleteat!(ssaflags, inds)
         renumber_ir_elements!(body, changemap)
-        return true
+        return changemap
     else
-        return false
+        return nothing
     end
 end
 
