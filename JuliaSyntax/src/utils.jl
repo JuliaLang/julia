@@ -1,3 +1,21 @@
+# Internal error, used as assertion failure for cases we expect can't happen.
+@noinline function internal_error(strs...)
+    error("Internal error: ", strs...)
+end
+
+# Like @assert, but always enabled and calls internal_error()
+macro check(ex, msgs...)
+    msg = isempty(msgs) ? ex : msgs[1]
+    if isa(msg, AbstractString)
+        msg = msg
+    elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
+        msg = :(string($(esc(msg))))
+    else
+        msg = string(msg)
+    end
+    return :($(esc(ex)) ? nothing : internal_error($msg))
+end
+
 
 """
     Like printstyled, but allows providing RGB colors for true color terminals
