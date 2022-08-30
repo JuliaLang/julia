@@ -2015,6 +2015,9 @@ julia> hvcat((2,2,2), a,b,c,d,e,f)
  1  2
  3  4
  5  6
+ 
+julia> hvcat((2,2,2), a,b,c,d,e,f) == hvcat(2, a,b,c,d,e,f)
+true
 ```
 """
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
