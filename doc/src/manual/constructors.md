@@ -360,10 +360,10 @@ and then delegates construction to the general constructor for the case where bo
 successfully creates a point of type `Point{Float64}`:
 
 ```jldoctest parametric2
-julia> Point(1,2.5)
+julia> p = Point(1,2.5)
 Point{Float64}(1.0, 2.5)
 
-julia> typeof(ans)
+julia> typeof(p)
 Point{Float64}
 ```
 
@@ -372,8 +372,13 @@ However, other similar calls still don't work:
 ```jldoctest parametric2
 julia> Point(1.5,2)
 ERROR: MethodError: no method matching Point(::Float64, ::Int64)
+
 Closest candidates are:
-  Point(::T, !Matched::T) where T<:Real at none:1
+  Point(::T, !Matched::T) where T<:Real
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 For a more general way to make all such calls work sensibly, see [Conversion and Promotion](@ref conversion-and-promotion).
@@ -420,7 +425,9 @@ julia> struct OurRational{T<:Integer} <: Real
                if num == 0 && den == 0
                     error("invalid rational: 0//0")
                end
-               g = gcd(den, num)
+               num = flipsign(num, den)
+               den = flipsign(den, den)
+               g = gcd(num, den)
                num = div(num, g)
                den = div(den, g)
                new(num, den)
@@ -465,11 +472,10 @@ and `den::T` indicate that the data held in a `OurRational{T}` object are a pair
 `T`, one representing the rational value's numerator and the other representing its denominator.
 
 Now things get interesting. `OurRational` has a single inner constructor method which checks that
-both of `num` and `den` aren't zero and ensures that every rational is constructed in "lowest
-terms" with a non-negative denominator. This is accomplished by dividing the given numerator and
-denominator values by their greatest common divisor, computed using the `gcd` function. Since
-`gcd` returns the greatest common divisor of its arguments with sign matching the first argument
-(`den` here), after this division the new value of `den` is guaranteed to be non-negative. Because
+`num` and `den` aren't both zero and ensures that every rational is constructed in "lowest
+terms" with a non-negative denominator. This is accomplished by first flipping the signs of numerator
+and denominator if the denominator is negative. Then, both are divided by their greatest common
+divisor (`gcd` always returns a non-negative number, regardless of the sign of its arguments). Because
 this is the only inner constructor for `OurRational`, we can be certain that `OurRational` objects are
 always constructed in this normalized form.
 
@@ -490,7 +496,7 @@ The first and most basic definition just makes `a ⊘ b` construct a `OurRationa
 is already a rational number, we construct a new rational for the resulting ratio slightly differently;
 this behavior is actually identical to division of a rational with an integer.
 Finally, applying
-`⊘` to complex integral values creates an instance of `Complex{OurRational}` -- a complex
+`⊘` to complex integral values creates an instance of `Complex{<:OurRational}` -- a complex
 number whose real and imaginary parts are rationals:
 
 ```jldoctest rational
@@ -499,12 +505,12 @@ julia> z = (1 + 2im) ⊘ (1 - 2im);
 julia> typeof(z)
 Complex{OurRational{Int64}}
 
-julia> typeof(z) <: Complex{OurRational}
-false
+julia> typeof(z) <: Complex{<:OurRational}
+true
 ```
 
 Thus, although the `⊘` operator usually returns an instance of `OurRational`, if either
-of its arguments are complex integers, it will return an instance of `Complex{OurRational}` instead.
+of its arguments are complex integers, it will return an instance of `Complex{<:OurRational}` instead.
 The interested reader should consider perusing the rest of [`rational.jl`](https://github.com/JuliaLang/julia/blob/master/base/rational.jl):
 it is short, self-contained, and implements an entire basic Julia type.
 
@@ -527,7 +533,7 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-SummedArray{Int32,Int32}(Int32[1, 2, 3], 6)
+SummedArray{Int32, Int32}(Int32[1, 2, 3], 6)
 ```
 
 The problem is that we want `S` to be a larger type than `T`, so that we can sum many elements
@@ -548,9 +554,14 @@ julia> struct SummedArray{T<:Number,S<:Number}
        end
 
 julia> SummedArray(Int32[1; 2; 3], Int32(6))
-ERROR: MethodError: no method matching SummedArray(::Array{Int32,1}, ::Int32)
+ERROR: MethodError: no method matching SummedArray(::Vector{Int32}, ::Int32)
+
 Closest candidates are:
-  SummedArray(::Array{T,1}) where T at none:5
+  SummedArray(::Vector{T}) where T
+   @ Main none:4
+
+Stacktrace:
+[...]
 ```
 
 This constructor will be invoked by the syntax `SummedArray(a)`. The syntax `new{T,S}` allows

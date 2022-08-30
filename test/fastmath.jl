@@ -60,9 +60,6 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
         @test @fastmath(cmp(two,two)) == cmp(two,two)
         @test @fastmath(cmp(two,three)) == cmp(two,three)
         @test @fastmath(cmp(three,two)) == cmp(three,two)
-        @test @fastmath(one/zero) == convert(T,Inf)
-        @test @fastmath(-one/zero) == -convert(T,Inf)
-        @test isnan(@fastmath(zero/zero)) # must not throw
 
         for x in (zero, two, convert(T, Inf), convert(T, NaN))
             @test @fastmath(isfinite(x))
@@ -251,4 +248,14 @@ end
     @test (@fastmath :(:sin)) == :(:sin)
     @test (@fastmath "a" * "b") == "ab"
     @test (@fastmath "a" ^ 2) == "aa"
+end
+
+
+@testset "exp overflow and underflow" begin
+    for T in (Float32,Float64)
+        for func in (@fastmath exp2,exp,exp10)
+            @test func(T(2000)) == T(Inf)
+            @test func(T(-2000)) == T(0)
+        end
+    end
 end

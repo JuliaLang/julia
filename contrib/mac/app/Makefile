@@ -49,9 +49,18 @@ dmg/$(APP_NAME): startup.applescript julia.icns
 	-mkdir -p $@/Contents/Resources/julia
 	make -C $(JULIAHOME) binary-dist
 	tar zxf $(JULIAHOME)/$(JULIA_BINARYDIST_FILENAME).tar.gz -C $@/Contents/Resources/julia --strip-components 1
+	find $@/Contents/Resources/julia -type f -exec chmod -w {} \;
+	# Even though the tarball may already be signed, we re-sign here to make it easier to add
+	# unsigned executables (like the app launcher) and whatnot, without needing to maintain lists
+	# of what is or is not signed.  Codesigning is cheap, so might as well do it early and often.
 	if [ -n "$$MACOS_CODESIGN_IDENTITY" ]; then \
 	    echo "Codesigning with identity $$MACOS_CODESIGN_IDENTITY"; \
-		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -v --deep $@; \
+		MACHO_FILES=$$(find "$@" -type f -perm -0111 | cut -d: -f1); \
+		for f in $${MACHO_FILES}; do \
+			echo "Codesigning $${f}..."; \
+			codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --deep --force "$${f}"; \
+		done; \
+		codesign -s "$$MACOS_CODESIGN_IDENTITY" --option=runtime --entitlements Entitlements.plist -vvv --timestamp --deep --force "$@"; \
 	else \
 		true; \
 	fi
@@ -62,7 +71,7 @@ ifneq ($(filter root,$(ROOTFILES)),)
 	@echo "We have to use sudo here to clean out folders owned by root.  You may be asked for your password"
 	sudo rm -rf dmg *.dmg notarize-*.xml
 else
-	rm -rf dmg *.dmg
+	rm -rf dmg *.dmg notarize-*.xml
 endif
 
 notarize-upload-$(DMG_NAME).xml: $(DMG_NAME)

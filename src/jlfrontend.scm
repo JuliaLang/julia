@@ -13,14 +13,14 @@
 (define (error-wrap thk)
   (with-exception-catcher
    (lambda (e)
-     (if (and (pair? e) (eq? (car e) 'error))
+     (if (and (pair? e) (memq (car e) '(error io-error)))
          (let ((msg (cadr e))
                (pfx "incomplete:"))
            (if (and (string? msg) (>= (string-length msg) (string-length pfx))
                     (equal? pfx
                             (substring msg 0 (string-length pfx))))
                `(incomplete ,msg)
-               e))
+               (cons 'error (cdr e))))
          (begin
            ;;(newline)
            ;;(display "unexpected error: ")
@@ -37,14 +37,16 @@
 ;; parser entry points
 
 ;; parse one expression (if greedy) or atom, returning end position
-(define (jl-parse-one s pos0 greedy)
-  (let ((inp (open-input-string s)))
+(define (jl-parse-one str filename pos0 greedy (lineno 1))
+  (let ((inp (open-input-string str)))
     (io.seek inp pos0)
-    (let ((expr (error-wrap (lambda ()
-                              (if greedy
-                                  (julia-parse inp)
-                                  (julia-parse inp parse-atom))))))
-      (cons expr (io.pos inp)))))
+    (io.set-lineno! inp lineno)
+    (with-bindings ((current-filename (symbol filename)))
+     (let ((expr (error-wrap (lambda ()
+                               (if greedy
+                                   (julia-parse inp parse-stmts)
+                                   (julia-parse inp parse-atom))))))
+       (cons expr (io.pos inp))))))
 
 (define (parse-all- io filename)
   (unwind-protect
@@ -53,10 +55,13 @@
       (let loop ((exprs '()))
         (let ((lineno (error-wrap
                        (lambda ()
-                         (skip-ws-and-comments (ts:port stream))
-                         (input-port-line (ts:port stream))))))
+                         (skip-ws-and-comments io)
+                         (input-port-line io)))))
           (if (pair? lineno)
-              (cons 'toplevel (reverse! (cons lineno exprs)))
+              (cons 'toplevel
+                    (reverse! (list* lineno
+                                     `(line ,(input-port-line io) ,current-filename)
+                                     exprs)))
               (let ((expr (error-wrap
                            (lambda ()
                              (julia-parse stream)))))
@@ -74,13 +79,17 @@
    (io.close io)))
 
 ;; parse all expressions in a string, the same way files are parsed
-(define (jl-parse-all str filename)
-  (parse-all- (open-input-string str) filename))
+(define (jl-parse-all str filename (lineno 1))
+  (let ((io (open-input-string str)))
+    (io.set-lineno! io lineno)
+    (parse-all- io filename)))
 
-(define (jl-parse-file filename)
+(define (jl-parse-file filename (lineno 1))
   (trycatch
-   (parse-all- (open-input-file filename) filename)
-   (lambda (e) #f)))
+    (let ((io (open-input-string str)))
+      (io.set-lineno! io lineno)
+      (parse-all- io filename))
+    (lambda (e) #f)))
 
 ;; lowering entry points
 
@@ -91,7 +100,7 @@
   (let ((ex0 (julia-expand-macroscope e)))
     (if (toplevel-only-expr? ex0)
         ex0
-        (let* ((ex (julia-expand0 ex0))
+        (let* ((ex (julia-expand0 ex0 file line))
                (th (julia-expand1
                     `(lambda () ()
                              (scope-block
@@ -149,13 +158,14 @@
 (define (jl-expand-to-thunk-warn expr file line stmt)
   (let ((warnings '()))
     (with-bindings
-     ((lowering-warning (lambda lst (set! warnings (cons lst warnings)))))
-     (begin0
-      (if stmt
-          (expand-to-thunk-stmt- expr file line)
-          (expand-to-thunk- expr file line))
-      (for-each (lambda (args) (apply julia-logmsg args))
-                (reverse warnings))))))
+     ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
+     ;; `Expr`s but should be good enough provided we're only passing simple
+     ;; numbers, symbols and strings.
+     ((lowering-warning (lambda lst (set! warnings (cons (cons 'warn lst) warnings)))))
+     (let ((thunk (if stmt
+                      (expand-to-thunk-stmt- expr file line)
+                      (expand-to-thunk- expr file line))))
+       (if (pair? warnings) `(warn ,@(reverse warnings) ,thunk) thunk)))))
 
 (define (jl-expand-to-thunk expr file line)
   (expand-to-thunk- expr file line))
@@ -173,7 +183,7 @@
   (jl-expand-to-thunk
    (let* ((name (caddr e))
           (body (cadddr e))
-          (loc  (cadr body))
+          (loc  (if (null? (cdr body)) () (cadr body)))
           (loc  (if (and (pair? loc) (eq? (car loc) 'line))
                     (list loc)
                     '()))
@@ -187,11 +197,11 @@
        (= (call include ,x)
           (block
            ,@loc
-           (call (top include) ,name ,x)))
+           (call (core _call_latest) (top include) ,name ,x)))
        (= (call include (:: ,mex (top Function)) ,x)
           (block
            ,@loc
-           (call (top include) ,mex ,name ,x)))))
+           (call (core _call_latest) (top include) ,mex ,name ,x)))))
    'none 0))
 
 ; run whole frontend on a string. useful for testing.
@@ -210,16 +220,6 @@
 ; Utilities for logging messages from the frontend, in a way which can be
 ; controlled from julia code.
 
-; Log a general deprecation message at line node location `lno`
-(define (deprecation-message msg lno)
-  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
-    (frontend-depwarn msg file line)))
-
-; Log a syntax deprecation from line node location `lno`
-(define (syntax-deprecation what instead lno)
-  (let* ((lf (extract-line-file lno)) (line (car lf)) (file (cadr lf)))
-    (deprecation-message (format-syntax-deprecation what instead file line #f) lno)))
-
 ; Extract line and file from a line number node, defaulting to (0, none)
 ; respectively if lno is absent (`#f`) or doesn't contain a file
 (define (extract-line-file lno)
@@ -237,21 +237,4 @@
       ""
       (string (if exactloc " at " " around ") file ":" line)))
 
-(define (format-syntax-deprecation what instead file line exactloc)
-  (string "Deprecated syntax `" what "`"
-          (format-file-line file line exactloc)
-          "."
-          (if (equal? instead "") ""
-              (string #\newline "Use `" instead "` instead."))))
-
 (define *scopewarn-opt* 1)
-
-; Corresponds to --depwarn 0="no", 1="yes", 2="error"
-(define *depwarn-opt* 1)
-
-; Emit deprecation warning via julia logging layer.
-(define (frontend-depwarn msg file line)
-  ; (display (string msg "; file = " file "; line = " line #\newline)))
-  (case *depwarn-opt*
-    (1 (julia-logmsg 1000 'depwarn (symbol (string file line)) file line msg))
-    (2 (error msg))))

@@ -1,0 +1,16 @@
+TOOLCHAIN=$(BUILDROOT)/../toolchain
+BINDIR=$(TOOLCHAIN)/usr/bin
+TOOLDIR=$(TOOLCHAIN)/usr/tools
+
+# use our new toolchain
+USECLANG=1
+override CC=$(TOOLDIR)/clang
+override CXX=$(TOOLDIR)/clang++
+
+USE_BINARYBUILDER_LLVM=1
+
+override SANITIZE=1
+override SANITIZE_THREAD=1
+
+# default to a debug build for better line number reporting
+override JULIA_BUILD_MODE=debug

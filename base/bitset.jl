@@ -11,7 +11,7 @@ const NO_OFFSET = Int === Int64 ? -one(Int) << 60 : -one(Int) << 29
 #   a small optimization in the in(x, ::BitSet) method
 
 mutable struct BitSet <: AbstractSet{Int}
-    bits::Vector{UInt64}
+    const bits::Vector{UInt64}
     # 1st stored Int equals 64*offset
     offset::Int
 
@@ -137,20 +137,10 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
 
     # grow s.bits as necessary
     if diffb >= len
-        _growend!(s.bits, diffb - len + 1)
-        # we set only some values to CHK0, those which will not be
-        # fully overwritten (i.e. only or'ed with `|`)
-        s.bits[end] = CHK0 # end == diffb + 1
-        if diffa >= len
-            s.bits[diffa + 1] = CHK0
-        end
+        _growend0!(s.bits, diffb - len + 1)
     end
     if diffa < 0
-        _growbeg!(s.bits, -diffa)
-        s.bits[1] = CHK0
-        if diffb < 0
-            s.bits[diffb - diffa + 1] = CHK0
-        end
+        _growbeg0!(s.bits, -diffa)
         s.offset = cidxa # s.offset += diffa
         diffb -= diffa
         diffa = 0
@@ -406,13 +396,27 @@ function ==(s1::BitSet, s2::BitSet)
 
     # compare overlap values
     if overlap > 0
+        t1 = @_gc_preserve_begin a1
+        t2 = @_gc_preserve_begin a2
         _memcmp(pointer(a1, b2-b1+1), pointer(a2), overlap<<3) == 0 || return false
+        @_gc_preserve_end t2
+        @_gc_preserve_end t1
     end
 
     return true
 end
 
-issubset(a::BitSet, b::BitSet) = a == intersect(a,b)
+function issubset(a::BitSet, b::BitSet)
+    n = length(a.bits)
+    shift = b.offset - a.offset
+    i, j = shift, shift + length(b.bits)
+
+    f(a, b) = a == a & b
+    return (
+        all(@inbounds iszero(a.bits[i]) for i in 1:min(n, i)) &&
+        all(@inbounds f(a.bits[i], b.bits[i - shift]) for i in max(1, i+1):min(n, j)) &&
+        all(@inbounds iszero(a.bits[i]) for i in max(1, j+1):n))
+end
 ⊊(a::BitSet, b::BitSet) = a <= b && a != b
 
 

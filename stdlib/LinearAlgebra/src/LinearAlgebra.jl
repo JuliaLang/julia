@@ -9,15 +9,20 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, conj, convert, copy, copyto!, cos,
-    cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isone, iszero, IndexStyle, kron, length, log, map, ndims,
-    oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
-    setindex!, show, similar, sin, sincos, sinh, size, sqrt,
-    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec
-using Base: hvcat_fill, IndexLinear, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_vcat, require_one_based_indexing
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
+    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
+    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
+    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
+    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
+    vec, zero
+using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
+    @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
+    Splat
 using Base.Broadcast: Broadcasted, broadcasted
+using OpenBLAS_jll
+using libblastrampoline_jll
+import Libdl
 
 export
 # Modules
@@ -34,6 +39,7 @@ export
     BunchKaufman,
     Cholesky,
     CholeskyPivoted,
+    ColumnNorm,
     Eigen,
     GeneralizedEigen,
     GeneralizedSVD,
@@ -41,12 +47,15 @@ export
     Hessenberg,
     LU,
     LDLt,
+    NoPivot,
+    RowNonZero,
     QR,
     QRPivoted,
     LQ,
     Schur,
     SVD,
     Hermitian,
+    RowMaximum,
     Symmetric,
     LowerTriangular,
     UpperTriangular,
@@ -124,6 +133,8 @@ export
     opnorm,
     rank,
     rdiv!,
+    reflect!,
+    rotate!,
     schur,
     schur!,
     svd,
@@ -161,6 +172,11 @@ abstract type Algorithm end
 struct DivideAndConquer <: Algorithm end
 struct QRIteration <: Algorithm end
 
+abstract type PivotingStrategy end
+struct NoPivot <: PivotingStrategy end
+struct RowNonZero <: PivotingStrategy end
+struct RowMaximum <: PivotingStrategy end
+struct ColumnNorm <: PivotingStrategy end
 
 # Check that stride of matrix/vector is 1
 # Writing like this to avoid splatting penalty when called with multiple arguments,
@@ -174,7 +190,7 @@ in dimension 1 in units of element size.
 # Examples
 ```jldoctest
 julia> A = [1,2,3,4]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  3
@@ -184,7 +200,7 @@ julia> LinearAlgebra.stride1(A)
 1
 
 julia> B = view(A, 2:2:4)
-2-element view(::Array{Int64,1}, 2:2:4) with eltype Int64:
+2-element view(::Vector{Int64}, 2:2:4) with eltype Int64:
  2
  4
 
@@ -211,7 +227,7 @@ For multiple arguments, return a vector.
 julia> A = fill(1, (4,4)); B = fill(1, (5,5));
 
 julia> LinearAlgebra.checksquare(A, B)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  4
  5
 ```
@@ -251,9 +267,7 @@ function sym_uplo(uplo::Char)
     end
 end
 
-
 @noinline throw_uplo() = throw(ArgumentError("uplo argument must be either :U (upper) or :L (lower)"))
-
 
 """
     ldiv!(Y, A, B) -> Y
@@ -267,6 +281,10 @@ The reason for this is that factorization itself is both expensive and typically
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
+
 # Examples
 ```jldoctest
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
@@ -278,13 +296,13 @@ julia> Y = zero(X);
 julia> ldiv!(Y, qr(A), X);
 
 julia> Y
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.051652892561983674
   0.10020661157024757
 
 julia> A\\X
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.05165289256198333
   0.10020661157024785
@@ -304,6 +322,10 @@ The reason for this is that factorization itself is both expensive and typically
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
+
 # Examples
 ```jldoctest
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
@@ -315,13 +337,13 @@ julia> Y = copy(X);
 julia> ldiv!(qr(A), X);
 
 julia> X
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.051652892561983674
   0.10020661157024757
 
 julia> A\\Y
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
   0.7128099173553719
  -0.05165289256198333
   0.10020661157024785
@@ -341,11 +363,54 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
+
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
 """
 rdiv!(A, B)
 
+"""
+    copy_oftype(A, T)
+
+Creates a copy of `A` with eltype `T`. No assertions about mutability of the result are
+made. When `eltype(A) == T`, then this calls `copy(A)` which may be overloaded for custom
+array types. Otherwise, this calls `convert(AbstractArray{T}, A)`.
+"""
 copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
 copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+"""
+    copymutable_oftype(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T)`.
+
+The resulting matrix typically has similar algebraic structure as `A`. For
+example, supplying a tridiagonal matrix results in another tridiagonal matrix.
+In general, the type of the output corresponds to that of `similar(A, T)`.
+
+In LinearAlgebra, mutable copies (of some desired eltype) are created to be passed
+to in-place algorithms (such as `ldiv!`, `rdiv!`, `lu!` and so on). If the specific
+algorithm is known to preserve the algebraic structure, use `copymutable_oftype`.
+If the algorithm is known to return a dense matrix (or some wrapper backed by a dense
+matrix), then use `copy_similar`.
+
+See also: `Base.copymutable`, `copy_similar`.
+"""
+copymutable_oftype(A::AbstractArray, ::Type{S}) where {S} = copyto!(similar(A, S), A)
+
+"""
+    copy_similar(A, T)
+
+Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
+
+Compared to `copymutable_oftype`, the result can be more flexible. In general, the type
+of the output corresponds to that of the three-argument method `similar(A, T, size(A))`.
+
+See also: `copymutable_oftype`.
+"""
+copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
+
 
 include("adjtrans.jl")
 include("transpose.jl")
@@ -371,6 +436,7 @@ include("cholesky.jl")
 include("lu.jl")
 include("bunchkaufman.jl")
 include("diagonal.jl")
+include("symmetriceigen.jl")
 include("bidiag.jl")
 include("uniformscaling.jl")
 include("hessenberg.jl")
@@ -385,6 +451,73 @@ include("deprecated.jl")
 const ⋅ = dot
 const × = cross
 export ⋅, ×
+
+## convenience methods
+## return only the solution of a least squares problem while avoiding promoting
+## vectors to matrices.
+_cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
+_cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
+
+# SymTridiagonal ev can be the same length as dv, but the last element is
+# ignored. However, some methods can fail if they read the entired ev
+# rather than just the meaningful elements. This is a helper function
+# for getting only the meaningful elements of ev. See #41089
+_evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
+
+## append right hand side with zeros if necessary
+_zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
+_zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+
+# append a zero element / drop the last element
+_pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
+_droplast!(A) = deleteat!(A, lastindex(A))
+
+# General fallback definition for handling under- and overdetermined system as well as square problems
+# While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
+# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# we restrict this method to only the LAPACK factorizations in LinearAlgebra.
+# The definition is put here since it explicitly references all the Factorizion structs so it has
+# to be located after all the files that define the structs.
+const LAPACKFactorizations{T,S} = Union{
+    BunchKaufman{T,S},
+    Cholesky{T,S},
+    LQ{T,S},
+    LU{T,S},
+    QR{T,S},
+    QRCompactWY{T,S},
+    QRPivoted{T,S},
+    SVD{T,<:Real,S}}
+function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(F)
+    if m != size(B, 1)
+        throw(DimensionMismatch("arguments must have the same number of rows"))
+    end
+
+    TFB = typeof(oneunit(eltype(B)) / oneunit(eltype(F)))
+    FF = Factorization{TFB}(F)
+
+    # For wide problem we (often) compute a minimum norm solution. The solution
+    # is larger than the right hand side so we use size(F, 2).
+    BB = _zeros(TFB, B, n)
+
+    if n > size(B, 1)
+        # Underdetermined
+        copyto!(view(BB, 1:m, :), B)
+    else
+        copyto!(BB, B)
+    end
+
+    ldiv!(FF, BB)
+
+    # For tall problems, we compute a least squares solution so only part
+    # of the rhs should be returned from \ while ldiv! uses (and returns)
+    # the complete rhs
+    return _cut_B(BB, 1:n)
+end
+# disambiguate
+(\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
 
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
@@ -422,30 +555,71 @@ end
 
 
 function versioninfo(io::IO=stdout)
-    if Base.libblas_name == "libopenblas" || BLAS.vendor() === :openblas || BLAS.vendor() === :openblas64
-        openblas_config = BLAS.openblas_get_config()
-        println(io, "BLAS: libopenblas (", openblas_config, ")")
-    else
-        println(io, "BLAS: ",Base.libblas_name)
+    indent = "  "
+    config = BLAS.get_config()
+    build_flags = join(string.(config.build_flags), ", ")
+    println(io, "BLAS: ", BLAS.libblastrampoline, " (", build_flags, ")")
+    for lib in config.loaded_libs
+        interface = uppercase(string(lib.interface))
+        println(io, indent, "--> ", lib.libname, " (", interface, ")")
     end
-    println(io, "LAPACK: ",Base.liblapack_name)
+    println(io, "Threading:")
+    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
+    println(io, "Relevant environment variables:")
+    env_var_names = [
+        "JULIA_NUM_THREADS",
+        "MKL_DYNAMIC",
+        "MKL_NUM_THREADS",
+         # OpenBLAS has a hierarchy of environment variables for setting the
+         # number of threads, see
+         # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
+        ("OPENBLAS_NUM_THREADS", "GOTO_NUM_THREADS", "OMP_NUM_THREADS"),
+    ]
+    printed_at_least_one_env_var = false
+    print_var(io, indent, name) = println(io, indent, name, " = ", ENV[name])
+    for name in env_var_names
+        if name isa Tuple
+            # If `name` is a Tuple, then find the first environment which is
+            # defined, and disregard the following ones.
+            for nm in name
+                if haskey(ENV, nm)
+                    print_var(io, indent, nm)
+                    printed_at_least_one_env_var = true
+                    break
+                end
+            end
+        else
+            if haskey(ENV, name)
+                print_var(io, indent, name)
+                printed_at_least_one_env_var = true
+            end
+        end
+    end
+    if !printed_at_least_one_env_var
+        println(io, indent, "[none]")
+    end
+    return nothing
 end
 
 function __init__()
     try
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
         BLAS.check()
-        if BLAS.vendor() === :mkl
-            ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Cvoid, (Cint,), USE_BLAS64 ? 1 : 0)
-        end
-        Threads.resize_nthreads!(Abuf)
-        Threads.resize_nthreads!(Bbuf)
-        Threads.resize_nthreads!(Cbuf)
     catch ex
-        Base.showerror_nostdio(ex,
-            "WARNING: Error during initialization of module LinearAlgebra")
+        Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+
+    # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "GOTO_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
+        @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+        else
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+        end
+    end
 end
 
 end # module LinearAlgebra

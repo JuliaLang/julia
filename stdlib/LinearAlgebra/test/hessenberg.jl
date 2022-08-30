@@ -4,6 +4,10 @@ module TestHessenberg
 
 using Test, LinearAlgebra, Random
 
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
 # for tuple tests below
 ≅(x,y) = all(p -> p[1] ≈ p[2], zip(x,y))
 
@@ -55,6 +59,71 @@ let n = 10
         H = UpperHessenberg(Areal)
         @test Array(Hc + H) == Array(Hc) + Array(H)
         @test Array(Hc - H) == Array(Hc) - Array(H)
+        @testset "Preserve UpperHessenberg shape (issue #39388)" begin
+            for H = (UpperHessenberg(Areal), UpperHessenberg(Furlong.(Areal)))
+                if eltype(H) <: Furlong
+                    A = Furlong.(rand(n,n))
+                    d = Furlong.(rand(n))
+                    dl = Furlong.(rand(n-1))
+                    du = Furlong.(rand(n-1))
+                    us = Furlong(1)*I
+                else
+                    A = rand(n,n)
+                    d = rand(n)
+                    dl = rand(n-1)
+                    du = rand(n-1)
+                    us = 1*I
+                end
+                @testset "$op" for op = (+,-)
+                    for x = (us, Diagonal(d), Bidiagonal(d,dl,:U), Bidiagonal(d,dl,:L),
+                             Tridiagonal(dl,d,du), SymTridiagonal(d,dl),
+                             UpperTriangular(A), UnitUpperTriangular(A))
+                        @test op(H,x) == op(Array(H),x)
+                        @test op(x,H) == op(x,Array(H))
+                        @test op(H,x) isa UpperHessenberg
+                        @test op(x,H) isa UpperHessenberg
+                    end
+                end
+            end
+            H = UpperHessenberg(Areal)
+            A = randn(n,n)
+            d = randn(n)
+            dl = randn(n-1)
+            @testset "Multiplication/division" begin
+                for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U),
+                            UpperTriangular(A), UnitUpperTriangular(A))
+                    @test (H*x)::UpperHessenberg == Array(H)*x
+                    @test (x*H)::UpperHessenberg == x*Array(H)
+                    @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
+                    @test H/x isa UpperHessenberg
+                    @test x\H isa UpperHessenberg
+                end
+                x = Bidiagonal(d, dl, :L)
+                @test H*x == Array(H)*x
+                @test x*H == x*Array(H)
+                @test H/x == Array(H)/x
+                @test x\H == x\Array(H)
+            end
+            H = UpperHessenberg(Furlong.(Areal))
+            for A in (A, Furlong.(A))
+                @testset "Multiplication/division Furlong" begin
+                    for x = (5, 5I, Diagonal(d), Bidiagonal(d,dl,:U))
+                        @test (H*x)::UpperHessenberg == Array(H)*x
+                        @test (x*H)::UpperHessenberg == x*Array(H)
+                        @test H/x == Array(H)/x broken = eltype(H) <: Furlong && x isa UpperTriangular
+                        @test x\H == x\Array(H) broken = eltype(H) <: Furlong && x isa UpperTriangular
+                        @test H/x isa UpperHessenberg
+                        @test x\H isa UpperHessenberg
+                    end
+                    x = Bidiagonal(d, dl, :L)
+                    @test H*x == Array(H)*x
+                    @test x*H == x*Array(H)
+                    @test H/x == Array(H)/x
+                    @test x\H == x\Array(H)
+                end
+            end
+        end
     end
 
     @testset for eltya in (Float32, Float64, ComplexF32, ComplexF64, Int), herm in (false, true)
@@ -125,6 +194,35 @@ end
 # check logdet on a matrix that has a positive determinant
 let A = [0.5 0.1 0.9 0.4; 0.9 0.7 0.5 0.4; 0.3 0.4 0.9 0.0; 0.4 0.0 0.0 0.5]
     @test logdet(hessenberg(A)) ≈ logdet(A) ≈ -3.5065578973199822
+end
+
+@testset "Base.propertynames" begin
+    F =  hessenberg([4. 9. 7.; 4. 4. 1.; 4. 3. 2.])
+    @test Base.propertynames(F) == (:Q, :H, :μ)
+    @test Base.propertynames(F, true) == (:Q, :H, :μ, :τ, :factors, :uplo)
+end
+
+@testset "adjoint of Hessenberg" begin
+    Ar = randn(5, 5)
+    Ac = complex.(randn(5, 5), randn(5, 5))
+    b = ones(size(Ar, 1))
+
+    for A in (Ar, Ac)
+        F = hessenberg(A)
+        @test A'\b ≈ F'\b
+    end
+end
+
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Conversion to AbstractArray" begin
+    # tests corresponding to #34995
+    A = ImmutableArray([1 2 3; 4 5 6; 7 8 9])
+    H = UpperHessenberg(A)
+
+    @test convert(AbstractArray{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
+    @test convert(AbstractMatrix{Float64}, H)::UpperHessenberg{Float64,ImmutableArray{Float64,2,Array{Float64,2}}} == H
 end
 
 end # module TestHessenberg

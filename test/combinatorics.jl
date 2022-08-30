@@ -45,6 +45,17 @@ end
     let ai = 2:-1:1
         @test invpermute!(permute!([1, 2], ai), ai) == [1, 2]
     end
+
+    # PR 35234
+    for N in 3:1:20
+        A=randcycle(N)
+        T=Tuple(A)
+        K=Tuple(A.-1)
+        @test A[collect(invperm(T))] == 1:N
+        @test_throws ArgumentError invperm(K)
+        @test isperm(T) == true
+        @test isperm(K) == false
+    end
 end
 
 @testset "factorial" begin

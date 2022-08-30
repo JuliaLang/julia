@@ -13,9 +13,15 @@ export
     atomic_and!, atomic_nand!, atomic_or!, atomic_xor!,
     atomic_max!, atomic_min!,
     atomic_fence
-
-# 128-bit atomics do not exist on AArch32.
-if startswith(string(ARCH), "arm")
+##
+# Filter out unsupported atomic types on platforms
+# - 128-bit atomics do not exist on AArch32.
+# - Omitting 128-bit types on 32bit x86 and ppc64
+# - LLVM doesn't currently support atomics on floats for ppc64
+#   C++20 is adding limited support for atomics on float, but as of
+#   now Clang does not support that yet.
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
+   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
     const inttypes = (Int8, Int16, Int32, Int64,
                       UInt8, UInt16, UInt32, UInt64)
 else
@@ -25,7 +31,12 @@ end
 const floattypes = (Float16, Float32, Float64)
 const arithmetictypes = (inttypes..., floattypes...)
 # TODO: Support Ptr
-const atomictypes = (arithmetictypes..., Bool)
+if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
+    const atomictypes = (inttypes..., Bool)
+else
+    const atomictypes = (arithmetictypes..., Bool)
+end
+
 const IntTypes = Union{inttypes...}
 const FloatTypes = Union{floattypes...}
 const ArithmeticTypes = Union{arithmetictypes...}
@@ -324,7 +335,7 @@ const llvmtypes = IdDict{Any,String}(
     Int32 => "i32", UInt32 => "i32",
     Int64 => "i64", UInt64 => "i64",
     Int128 => "i128", UInt128 => "i128",
-    Float16 => "i16", # half
+    Float16 => "half",
     Float32 => "float",
     Float64 => "double",
 )
@@ -345,13 +356,13 @@ for typ in atomictypes
     rt = "$lt, $lt*"
     irt = "$ilt, $ilt*"
     @eval getindex(x::Atomic{$typ}) =
-        llvmcall($"""
+        GC.@preserve x llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  %rv = load atomic $rt %ptr acquire, align $(gc_alignment(typ))
                  ret $lt %rv
                  """, $typ, Tuple{Ptr{$typ}}, unsafe_convert(Ptr{$typ}, x))
     @eval setindex!(x::Atomic{$typ}, v::$typ) =
-        llvmcall($"""
+        GC.@preserve x llvmcall($"""
                  %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                  store atomic $lt %1, $lt* %ptr release, align $(gc_alignment(typ))
                  ret void
@@ -360,7 +371,7 @@ for typ in atomictypes
     # Note: atomic_cas! succeeded (i.e. it stored "new") if and only if the result is "cmp"
     if typ <: Integer
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
+            GC.@preserve x llvmcall($"""
                      %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                      %rs = cmpxchg $lt* %ptr, $lt %1, $lt %2 acq_rel acquire
                      %rv = extractvalue { $lt, i1 } %rs, 0
@@ -369,7 +380,7 @@ for typ in atomictypes
                      unsafe_convert(Ptr{$typ}, x), cmp, new)
     else
         @eval atomic_cas!(x::Atomic{$typ}, cmp::$typ, new::$typ) =
-            llvmcall($"""
+            GC.@preserve x llvmcall($"""
                      %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                      %icmp = bitcast $lt %1 to $ilt
                      %inew = bitcast $lt %2 to $ilt
@@ -392,7 +403,7 @@ for typ in atomictypes
         if rmwop in arithmetic_ops && !(typ <: ArithmeticTypes) continue end
         if typ <: Integer
             @eval $fn(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
+                GC.@preserve x llvmcall($"""
                          %ptr = inttoptr i$WORD_SIZE %0 to $lt*
                          %rv = atomicrmw $rmw $lt* %ptr, $lt %1 acq_rel
                          ret $lt %rv
@@ -400,7 +411,7 @@ for typ in atomictypes
         else
             rmwop === :xchg || continue
             @eval $fn(x::Atomic{$typ}, v::$typ) =
-                llvmcall($"""
+                GC.@preserve x llvmcall($"""
                          %iptr = inttoptr i$WORD_SIZE %0 to $ilt*
                          %ival = bitcast $lt %1 to $ilt
                          %irv = atomicrmw $rmw $ilt* %iptr, $ilt %ival acq_rel
@@ -422,7 +433,7 @@ for op in [:+, :-, :max, :min]
             new = $op(old, val)
             cmp = old
             old = atomic_cas!(var, cmp, new)
-            reinterpret(IT, old) == reinterpret(IT, cmp) && return new
+            reinterpret(IT, old) == reinterpret(IT, cmp) && return old
             # Temporary solution before we have gc transition support in codegen.
             ccall(:jl_gc_safepoint, Cvoid, ())
         end

@@ -34,11 +34,6 @@
     @test map(m -> m.match, eachmatch(r"(\p{L}+)", "Tú lees.")) == ["Tú", "lees"]
     @test map(m -> m.match, eachmatch(r"(\p{L}+)", "¿Cuál es tu pregunta?")) == ["Cuál", "es", "tu", "pregunta"]
 
-    # Issue 9545 (32 bit)
-    buf = PipeBuffer()
-    show(buf, r"")
-    @test read(buf, String) == "r\"\""
-
     # see #10994, #11447: PCRE2 allows NUL chars in the pattern
     @test occursin(Regex("^a\0b\$"), "a\0b")
 
@@ -52,27 +47,86 @@
     subst = s"FROM: \g<name>\n MESSAGE: \1"
     @test replace(msg, re => subst) == "FROM: Julia\n MESSAGE: Hello"
 
+    # Issue #9545 (32 bit)
+    @test repr(r"") == "r\"\""
+    # Issue #36550
+    @test repr(s"\x") == raw"s\"\x\""
+    @test repr(s"\\x") == raw"s\"\\x\""
+    @test repr(s"\\\x") == raw"s\"\\\x\""
+    @test repr(s"x\\") == raw"s\"x\\\\\""
+    @test repr(s"a\1b") == raw"s\"a\1b\""
+    # Issue #29580
+    @test repr(r"\\\"") == raw"r\"\\\\\\\"\""
+    @test repr(s"\\\"\\") == raw"s\"\\\\\\\"\\\\\""
+
     # findall
     @test findall(r"\w+", "foo bar") == [1:3, 5:7]
     @test findall(r"\w+", "foo bar", overlap=true) == [1:3, 2:3, 3:3, 5:7, 6:7, 7:7]
-    @test findall(r"\w*", "foo bar") == [1:3, 4:3, 5:7, 8:7]
-    @test findall(r"\b", "foo bar") == [1:0, 4:3, 5:4, 8:7]
+    @test all(findall(r"\w*", "foo bar") .=== [1:3, 4:3, 5:7, 8:7]) # use === to compare empty ranges
+    @test all(findall(r"\b", "foo bar") .=== [1:0, 4:3, 5:4, 8:7])  # use === to compare empty ranges
+    # with Char as argument
+    @test findall('a', "batman") == [2, 5]
+    @test findall('→', "OH⁻ + H₃CBr →  HOH₃CBr⁻ → HOCH₃ + Br⁻") == [17, 35]
+    @test findall('a', "") == Int[]
+    @test findall('c', "batman") == Int[]
+    @test findall([0x52, 0x62], [0x40, 0x52, 0x62, 0x63]) == [2:3]
+    @test findall([0x52, 0x62], [0x40, 0x52, 0x62, 0x63, 0x52, 0x62]) == [2:3, 5:6]
+    @test findall([0x01, 0x01], [0x01, 0x01, 0x01, 0x01]) == [1:2, 3:4]
+    @test findall([0x01, 0x01], [0x01, 0x01, 0x01, 0x01]; overlap=true) == [1:2, 2:3, 3:4]
+
+    # findnext
+    @test findnext(r"z", "zabcz", 2) == 5:5
+    @test_throws BoundsError findnext(r"z", "zabcz", 7)
 
     # count
     @test count(r"\w+", "foo bar") == 2
     @test count(r"\w+", "foo bar", overlap=true) == 6
     @test count(r"\w*", "foo bar") == 4
     @test count(r"\b", "foo bar") == 4
+    # count with char as argument
+    @test count('a', "batman") == 2
+    @test count('a', "aaa", overlap=true) == 3
+    @test count('a', "") == 0
+    @test count('→', "OH⁻ + H₃CBr →  (HOH₃CBr⁻)† → HOCH₃ + Br⁻") == 2
+
+    # Unnamed subpatterns
+    let m = match(r"(.)(.)(.)", "xyz")
+        @test haskey(m, 1)
+        @test haskey(m, 2)
+        @test haskey(m, 3)
+        @test !haskey(m, 44)
+        @test (m[1], m[2], m[3]) == ("x", "y", "z")
+        @test sprint(show, m) == "RegexMatch(\"xyz\", 1=\"x\", 2=\"y\", 3=\"z\")"
+    end
 
     # Named subpatterns
     let m = match(r"(?<a>.)(.)(?<b>.)", "xyz")
+        @test haskey(m, :a)
+        @test haskey(m, "b")
+        @test !haskey(m, "foo")
         @test (m[:a], m[2], m["b"]) == ("x", "y", "z")
         @test sprint(show, m) == "RegexMatch(\"xyz\", a=\"x\", 2=\"y\", b=\"z\")"
+        @test keys(m) == ["a", 2, "b"]
+    end
+
+    # Unicode named subpatterns and property mixes of scripts and classes (issues #35322/#35459 and #40231)
+    let m = match(r"(?<numéro>\d)[\pZs]*(?<文本>[\p{Han}\p{P}]+)", "1 孔生雪笠，聖裔也。為人蘊藉，工詩。")
+        @test haskey(m, :numéro)
+        @test haskey(m, "文本")
+        @test !haskey(m, "ゑ")
+        @test (m[:numéro], m[:文本]) == ("1", "孔生雪笠，聖裔也。為人蘊藉，工詩。")
+        @test (m[1], m[2]) == (m[:numéro], m[:文本])
+        @test sprint(show, m) == "RegexMatch(\"1 孔生雪笠，聖裔也。為人蘊藉，工詩。\", numéro=\"1\", 文本=\"孔生雪笠，聖裔也。為人蘊藉，工詩。\")"
+        @test keys(m) == ["numéro", "文本"]
     end
 
     # Backcapture reference in substitution string
     @test replace("abcde", r"(..)(?P<byname>d)" => s"\g<byname>xy\\\1") == "adxy\\bce"
     @test_throws ErrorException replace("a", r"(?P<x>)" => s"\g<y>")
+    # test replace with invalid substitution group pattern
+    @test_throws ErrorException replace("s", r"(?<g1>.)" => s"\gg1>")
+    # test replace with 2-digit substitution group
+    @test replace(("0" ^ 9) * "1", Regex(("(0)" ^ 9) * "(1)") => s"10th group: \10") == "10th group: 1"
 
     # Proper unicode handling
     @test  match(r"∀∀", "∀x∀∀∀").match == "∀∀"
@@ -95,6 +149,8 @@
     @test startswith("abc", r"A"i)
     @test !endswith("abc", r"C")
     @test endswith("abc", r"C"i)
+    # test with substring
+    @test endswith((@views "abc"[2:3]), r"C"i)
 
     @testset "multiplication & exponentiation" begin
         @test *(r"a") == r"a"
@@ -136,7 +192,35 @@
         @test r"this|that"^2 == r"(?:this|that){2}"
     end
 
+    @testset "iterate" begin
+        m = match(r"(.) test (.+)", "a test 123")
+        @test first(m) == "a"
+        @test collect(m) == ["a", "123"]
+        for (i, capture) in enumerate(m)
+            i == 1 && @test capture == "a"
+            i == 2 && @test capture == "123"
+        end
+    end
+
+    @testset "Destructuring dispatch" begin
+        handle(::Nothing) = "not found"
+        handle((capture,)::RegexMatch) = "found $capture"
+
+        @test handle(match(r"a (\d)", "xyz")) == "not found"
+        @test handle(match(r"a (\d)", "a 1")) == "found 1"
+    end
+
     # Test that PCRE throws the correct kind of error
     # TODO: Uncomment this once the corresponding change has propagated to CI
     #@test_throws ErrorException Base.PCRE.info(C_NULL, Base.PCRE.INFO_NAMECOUNT, UInt32)
+
+    # test that we can get the error message of negative error codes
+    @test Base.PCRE.err_message(Base.PCRE.ERROR_NOMEMORY) isa String
+
+    # test failure cases for invalid integer flags
+    @test_throws ArgumentError Regex("test", typemax(Int32), 0)
+    @test_throws ArgumentError Regex("test", 0, typemax(Int32))
+
+    # hash
+    @test hash(r"123"i, zero(UInt)) == hash(Regex("123", "i"), zero(UInt))
 end

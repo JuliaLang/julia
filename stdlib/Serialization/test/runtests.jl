@@ -325,8 +325,8 @@ main_ex = quote
         local g2 = deserialize(ds)
         Base.invokelatest() do
             $Test.@test g2 !== g
-            $Test.@test g2() == :magic_token_anon_fun_test
-            $Test.@test g2() == :magic_token_anon_fun_test
+            $Test.@test g2() === :magic_token_anon_fun_test
+            $Test.@test g2() === :magic_token_anon_fun_test
             $Test.@test deserialize(ds) === g2
         end
 
@@ -354,7 +354,7 @@ create_serialization_stream() do s # user-defined type array
     seek(s, 0)
     r = deserialize(s)
     @test r.storage[:v] == 2
-    @test r.state == :done
+    @test r.state === :done
     @test r.exception === nothing
 end
 
@@ -366,7 +366,7 @@ create_serialization_stream() do s # user-defined type array
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.state == :failed
+    @test r.state === :failed
 end
 
 # corner case: undefined inside immutable struct
@@ -529,8 +529,8 @@ let x = T20324[T20324(1) for i = 1:2]
     @test y == x
 end
 
-# serializer header
-let io = IOBuffer()
+@testset "serializer header" begin
+    io = IOBuffer()
     serialize(io, ())
     seekstart(io)
     b = read(io)
@@ -541,6 +541,25 @@ let io = IOBuffer()
     @test ((b[5] & 0xc)>>2) == (sizeof(Int) == 8)
     @test (b[5] & 0xf0) == 0
     @test all(b[6:8] .== 0)
+
+    # Detection of incompatible binary serializations
+    function corrupt_header(bytes, offset, val)
+        b = copy(bytes)
+        b[offset] = val
+        IOBuffer(b)
+    end
+    @test_throws(
+        ErrorException("""Cannot read stream serialized with a newer version of Julia.
+                          Got data version 255 > current version $(Serialization.ser_version)"""),
+        deserialize(corrupt_header(b, 4, 0xff)))
+    @test_throws(ErrorException("Unknown word size flag in header"),
+                 deserialize(corrupt_header(b, 5, 2<<2)))
+    @test_throws(ErrorException("Unknown endianness flag in header"),
+                 deserialize(corrupt_header(b, 5, 2)))
+    other_wordsize = sizeof(Int) == 8 ? 4 : 8
+    other_endianness = bswap(ENDIAN_BOM)
+    @test_throws(ErrorException("Serialized byte order mismatch ($(repr(other_endianness)))"),
+                 deserialize(corrupt_header(b, 5, UInt8(ENDIAN_BOM != 0x01020304))))
 end
 
 # issue #26979
@@ -581,4 +600,53 @@ let d = IdDict([1] => 2, [3] => 4), io = IOBuffer()
     ds = deserialize(io)
     @test Dict(d) == Dict(ds)
     @test all([k in keys(ds) for k in keys(ds)])
+end
+
+# issue #35030, shared references to Strings
+let s = join(rand('a':'z', 1024)), io = IOBuffer()
+    serialize(io, (s, s))
+    seekstart(io)
+    s2 = deserialize(io)
+    @test Base.summarysize(s2) < 2*sizeof(s)
+end
+
+# issue #39895
+@eval Main begin
+    using Test, Serialization
+    let g = gensym(:g)
+        closure = eval(:(f -> $g(x) = f(x)))
+        inc(x) = x + 1
+        b = IOBuffer()
+        serialize(b, closure(inc))
+        seekstart(b)
+        f = deserialize(b)
+        # this should not crash
+        @test_broken f(1) == 2
+    end
+end
+
+let c1 = Threads.Condition()
+    c2 = Threads.Condition(c1.lock)
+    lock(c2)
+    t = @task nothing
+    Base._wait2(c1, t)
+    c3, c4 = deserialize(IOBuffer(sprint(serialize, [c1, c2])))::Vector{Threads.Condition}
+    @test c3.lock === c4.lock
+    @test islocked(c1)
+    @test !islocked(c3)
+    @test !isempty(c1.waitq)
+    @test isempty(c2.waitq)
+    @test isempty(c3.waitq)
+    @test isempty(c4.waitq)
+    notify(c1)
+    unlock(c2)
+    wait(t)
+end
+
+@testset "LazyString" begin
+    l1 = lazy"a $1 b $2"
+    l2 = deserialize(IOBuffer(sprint(serialize, l1)))
+    @test l2.str === l1.str
+    @test l2 == l1
+    @test l2.parts === ()
 end

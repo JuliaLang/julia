@@ -5,14 +5,10 @@ module LAPACK
 Interfaces to LAPACK subroutines.
 """ LAPACK
 
-const liblapack = Base.liblapack_name
+using ..LinearAlgebra.BLAS: @blasfunc, chkuplo
 
-import ..LinearAlgebra.BLAS.@blasfunc
-
-import ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException,
-    DimensionMismatch, SingularException, PosDefException, chkstride1, checksquare
-
-using ..LinearAlgebra: triu, tril, dot
+using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
+    SingularException, PosDefException, chkstride1, checksquare,triu, tril, dot
 
 using Base: iszero, require_one_based_indexing
 
@@ -51,14 +47,6 @@ function chkposdef(ret::BlasInt)
     end
 end
 
-"Check that upper/lower (for special matrices) is correctly specified"
-function chkuplo(uplo::AbstractChar)
-    if !(uplo == 'U' || uplo == 'L')
-        throw(ArgumentError("uplo argument must be 'U' (upper) or 'L' (lower), got $uplo"))
-    end
-    uplo
-end
-
 "Check that {c}transpose is correctly specified"
 function chktrans(trans::AbstractChar)
     if !(trans == 'N' || trans == 'C' || trans == 'T')
@@ -95,12 +83,30 @@ function chkfinite(A::AbstractMatrix)
     return true
 end
 
+function chkuplofinite(A::AbstractMatrix, uplo::AbstractChar)
+    require_one_based_indexing(A)
+    m, n = size(A)
+    if uplo == 'U'
+        @inbounds for j in 1:n, i in 1:j
+            if !isfinite(A[i,j])
+                throw(ArgumentError("matrix contains Infs or NaNs"))
+            end
+        end
+    else
+        @inbounds for j in 1:n, i in j:m
+            if !isfinite(A[i,j])
+                throw(ArgumentError("matrix contains Infs or NaNs"))
+            end
+        end
+    end
+end
+
 # LAPACK version number
 function version()
     major = Ref{BlasInt}(0)
     minor = Ref{BlasInt}(0)
     patch = Ref{BlasInt}(0)
-    ccall((@blasfunc(ilaver_), liblapack), Cvoid,
+    ccall((@blasfunc(ilaver_), libblastrampoline), Cvoid,
           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
           major, minor, patch)
     return VersionNumber(major[], minor[], patch[])
@@ -126,7 +132,7 @@ for (gbtrf, gbtrs, elty) in
             mnmn = min(m, n)
             ipiv = similar(AB, BlasInt, mnmn)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gbtrf), liblapack), Cvoid,
+            ccall((@blasfunc($gbtrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   m, n, kl, ku, AB, max(1,stride(AB,2)), ipiv, info)
@@ -152,12 +158,12 @@ for (gbtrf, gbtrs, elty) in
             if m != n || m != size(B,1)
                 throw(DimensionMismatch("matrix AB has dimensions $(size(AB)), but right hand side matrix B has dimensions $(size(B))"))
             end
-            ccall((@blasfunc($gbtrs), liblapack), Cvoid,
+            ccall((@blasfunc($gbtrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}),
+                   Ptr{BlasInt}, Clong),
                   trans, n, kl, ku, size(B,2), AB, max(1,stride(AB,2)), ipiv,
-                  B, max(1,stride(B,2)), info)
+                  B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -206,10 +212,10 @@ for (gebal, gebak, elty, relty) in
             ilo = Ref{BlasInt}()
             scale = similar(A, $relty, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gebal), liblapack), Cvoid,
+            ccall((@blasfunc($gebal), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                  job, n, A, max(1,stride(A,2)), ilo, ihi, scale, info)
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong),
+                  job, n, A, max(1,stride(A,2)), ilo, ihi, scale, info, 1)
             chklapackerror(info[])
             ilo[], ihi[], scale
         end
@@ -229,10 +235,12 @@ for (gebal, gebak, elty, relty) in
             chkfinite(V) # balancing routines don't support NaNs and Infs
             n = checksquare(V)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gebak), liblapack), Cvoid,
+            ccall((@blasfunc($gebak), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{$relty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  job, side, size(V,1), ilo, ihi, scale, n, V, max(1,stride(V,2)), info)
+                   Ptr{$relty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
+                   Clong, Clong),
+                  job, side, size(V,1), ilo, ihi, scale, n, V, max(1,stride(V,2)), info,
+                  1, 1)
             chklapackerror(info[])
             V
         end
@@ -294,7 +302,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gebrd), liblapack), Cvoid,
+                ccall((@blasfunc($gebrd), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$elty},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
@@ -328,7 +336,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work  = Vector{$elty}(undef, 1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gelqf), liblapack), Cvoid,
+                ccall((@blasfunc($gelqf), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, A, lda, tau, work, lwork, info)
@@ -359,7 +367,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work  = Vector{$elty}(undef, 1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($geqlf), liblapack), Cvoid,
+                ccall((@blasfunc($geqlf), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, A, lda, tau, work, lwork, info)
@@ -401,7 +409,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 if cmplx
-                    ccall((@blasfunc($geqp3), liblapack), Cvoid,
+                    ccall((@blasfunc($geqp3), libblastrampoline), Cvoid,
                           (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
@@ -409,7 +417,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                           jpvt, tau, work, lwork,
                           rwork, info)
                 else
-                    ccall((@blasfunc($geqp3), liblapack), Cvoid,
+                    ccall((@blasfunc($geqp3), libblastrampoline), Cvoid,
                           (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{BlasInt}),
@@ -439,7 +447,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work = Vector{$elty}(undef, nb*n)
             if n > 0
                 info = Ref{BlasInt}()
-                ccall((@blasfunc($geqrt), liblapack), Cvoid,
+                ccall((@blasfunc($geqrt), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}),
@@ -465,7 +473,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             if n > 0
                 info = Ref{BlasInt}()
-                ccall((@blasfunc($geqrt3), liblapack), Cvoid,
+                ccall((@blasfunc($geqrt3), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                      m, n, A, max(1, stride(A, 2)),
@@ -492,13 +500,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2                # first call returns lwork as work[1]
-                ccall((@blasfunc($geqrf), liblapack), Cvoid,
+                ccall((@blasfunc($geqrf), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(1),BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end
@@ -521,13 +529,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work  = Vector{$elty}(undef, 1)
             info  = Ref{BlasInt}()
             for i = 1:2                # first call returns lwork as work[1]
-                ccall((@blasfunc($gerqf), liblapack), Cvoid,
+                ccall((@blasfunc($gerqf), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, A, max(1,stride(A,2)), tau, work, lwork, info)
                 chklapackerror(info[])
                 if i == 1
-                    lwork = BlasInt(real(work[1]))
+                    lwork = max(BlasInt(m), BlasInt(real(work[1])))
                     resize!(work, lwork)
                 end
             end
@@ -547,7 +555,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lda  = max(1,stride(A, 2))
             ipiv = similar(A, BlasInt, min(m,n))
             info = Ref{BlasInt}()
-            ccall((@blasfunc($getrf), liblapack), Cvoid,
+            ccall((@blasfunc($getrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                    Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   m, n, A, lda, ipiv, info)
@@ -754,7 +762,7 @@ for (larfg, elty) in
             α    = Ref{$elty}(x[1])
             incx = BlasInt(1)
             τ    = Ref{$elty}(0)
-            ccall((@blasfunc($larfg), liblapack), Cvoid,
+            ccall((@blasfunc($larfg), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty}),
                 N, α, pointer(x, 2), incx, τ)
             @inbounds x[1] = one($elty)
@@ -783,7 +791,7 @@ for (larf, elty) in
             ldc = max(1, stride(C, 2))
             l = side == 'L' ? n : m
             incv  = BlasInt(1)
-            ccall((@blasfunc($larf), liblapack), Cvoid,
+            ccall((@blasfunc($larf), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ref{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Clong),
                 side, m, n, v, incv,
@@ -828,7 +836,7 @@ for (tzrzf, ormrz, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($tzrzf), liblapack), Cvoid,
+                ccall((@blasfunc($tzrzf), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                     m, n, A, lda,
@@ -866,15 +874,15 @@ for (tzrzf, ormrz, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormrz), liblapack), Cvoid,
+                ccall((@blasfunc($ormrz), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                      Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                     Ref{BlasInt}, Ptr{BlasInt}),
+                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                     side, trans, m, n,
                     k, l, A, lda,
                     tau, C, ldc, work,
-                    lwork, info)
+                    lwork, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -931,12 +939,12 @@ for (gels, gesv, getrs, getri, elty) in
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gels), liblapack), Cvoid,
+                ccall((@blasfunc($gels), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       (btrn ? 'T' : 'N'), m, n, size(B,2), A, max(1,stride(A,2)),
-                      B, max(1,stride(B,2)), work, lwork, info)
+                      B, max(1,stride(B,2)), work, lwork, info, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -972,7 +980,7 @@ for (gels, gesv, getrs, getri, elty) in
             end
             ipiv = similar(A, BlasInt, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gesv), liblapack), Cvoid,
+            ccall((@blasfunc($gesv), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                   n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
@@ -997,10 +1005,10 @@ for (gels, gesv, getrs, getri, elty) in
             end
             nrhs = size(B, 2)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($getrs), liblapack), Cvoid,
+            ccall((@blasfunc($getrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  trans, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  trans, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -1023,7 +1031,7 @@ for (gels, gesv, getrs, getri, elty) in
             work  = Vector{$elty}(undef, 1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($getri), liblapack), Cvoid,
+                ccall((@blasfunc($getri), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       n, A, lda, ipiv, work, lwork, info)
@@ -1119,14 +1127,14 @@ for (gesvx, elty) in
             iwork = Vector{BlasInt}(undef, n)
             info  = Ref{BlasInt}()
             X = similar(A, $elty, n, nrhs)
-            ccall((@blasfunc($gesvx), liblapack), Cvoid,
+            ccall((@blasfunc($gesvx), libblastrampoline), Cvoid,
               (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                Ref{UInt8}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-               Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+               Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
               fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, R, C, B,
-              ldb, X, n, rcond, ferr, berr, work, iwork, info)
+              ldb, X, n, rcond, ferr, berr, work, iwork, info, 1, 1, 1)
             chklapackerror(info[])
             if info[] == n + 1
                 @warn "Matrix is singular to working precision"
@@ -1189,14 +1197,14 @@ for (gesvx, elty, relty) in
             rwork = Vector{$relty}(undef, 2n)
             info  = Ref{BlasInt}()
             X = similar(A, $elty, n, nrhs)
-            ccall((@blasfunc($gesvx), liblapack), Cvoid,
+            ccall((@blasfunc($gesvx), libblastrampoline), Cvoid,
               (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                Ref{UInt8}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$relty},
-               Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+               Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong, Clong),
               fact, trans, n, nrhs, A, lda, AF, ldaf, ipiv, equed, R, C, B,
-              ldb, X, n, rcond, ferr, berr, work, rwork, info)
+              ldb, X, n, rcond, ferr, berr, work, rwork, info, 1, 1, 1)
             chklapackerror(info[])
             if info[] == n + 1
                 @warn "Matrix is singular to working precision"
@@ -1285,7 +1293,7 @@ for (gelsd, gelsy, elty) in
             lwork = BlasInt(-1)
             iwork = Vector{BlasInt}(undef, 1)
             for i = 1:2  # first call returns lwork as work[1] and iwork length as iwork[1]
-                ccall((@blasfunc($gelsd), liblapack), Cvoid,
+                ccall((@blasfunc($gelsd), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{$elty}, Ref{$elty}, Ref{BlasInt}, Ptr{$elty},
@@ -1331,7 +1339,7 @@ for (gelsd, gelsy, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gelsy), liblapack), Cvoid,
+                ccall((@blasfunc($gelsy), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                      Ref{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
@@ -1381,7 +1389,7 @@ for (gelsd, gelsy, elty, relty) in
             rwork = Vector{$relty}(undef, 1)
             iwork = Vector{BlasInt}(undef, 1)
             for i = 1:2  # first call returns lwork as work[1], rwork length as rwork[1] and iwork length as iwork[1]
-                ccall((@blasfunc($gelsd), liblapack), Cvoid,
+                ccall((@blasfunc($gelsd), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty},
                        Ref{$relty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
@@ -1429,7 +1437,7 @@ for (gelsd, gelsy, elty, relty) in
             rwork = Vector{$relty}(undef, 2n)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gelsy), liblapack), Cvoid,
+                ccall((@blasfunc($gelsy), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                      Ref{$relty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
@@ -1504,7 +1512,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
             work  = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gglse), liblapack), Cvoid,
+                ccall((@blasfunc($gglse), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
@@ -1567,21 +1575,21 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 if cmplx
-                    ccall((@blasfunc($geev), liblapack), Cvoid,
+                    ccall((@blasfunc($geev), libblastrampoline), Cvoid,
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                           Ptr{$relty}, Ptr{BlasInt}),
+                           Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
                           jobvl, jobvr, n, A, max(1,stride(A,2)), W, VL, n, VR, n,
-                          work, lwork, rwork, info)
+                          work, lwork, rwork, info, 1, 1)
                 else
-                    ccall((@blasfunc($geev), liblapack), Cvoid,
+                    ccall((@blasfunc($geev), libblastrampoline), Cvoid,
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                           Ref{BlasInt}, Ptr{BlasInt}),
+                           Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                           jobvl, jobvr, n, A, max(1,stride(A,2)), WR, WI, VL, n,
-                          VR, n, work, lwork, info)
+                          VR, n, work, lwork, info, 1, 1)
                 end
                 chklapackerror(info[])
                 if i == 1
@@ -1631,21 +1639,21 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info   = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
                 if cmplx
-                    ccall((@blasfunc($gesdd), liblapack), Cvoid,
+                    ccall((@blasfunc($gesdd), libblastrampoline), Cvoid,
                           (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                           Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                           Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
                           job, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
-                          work, lwork, rwork, iwork, info)
+                          work, lwork, rwork, iwork, info, 1)
                 else
-                    ccall((@blasfunc($gesdd), liblapack), Cvoid,
+                    ccall((@blasfunc($gesdd), libblastrampoline), Cvoid,
                           (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                           Ptr{BlasInt}, Ptr{BlasInt}),
+                           Ptr{BlasInt}, Ptr{BlasInt}, Clong),
                           job, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
-                          work, lwork, iwork, info)
+                          work, lwork, iwork, info, 1)
                 end
                 chklapackerror(info[])
                 if i == 1
@@ -1700,21 +1708,21 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info   = Ref{BlasInt}()
             for i in 1:2  # first call returns lwork as work[1]
                 if cmplx
-                    ccall((@blasfunc($gesvd), liblapack), Cvoid,
+                    ccall((@blasfunc($gesvd), libblastrampoline), Cvoid,
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                           Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
+                           Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
                           jobu, jobvt, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
-                          work, lwork, rwork, info)
+                          work, lwork, rwork, info, 1, 1)
                 else
-                    ccall((@blasfunc($gesvd), liblapack), Cvoid,
+                    ccall((@blasfunc($gesvd), libblastrampoline), Cvoid,
                           (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                            Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                           Ref{BlasInt}, Ptr{BlasInt}),
+                           Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                           jobu, jobvt, m, n, A, max(1,stride(A,2)), S, U, max(1,stride(U,2)), VT, max(1,stride(VT,2)),
-                          work, lwork, info)
+                          work, lwork, info, 1, 1)
                 end
                 chklapackerror(info[])
                 if i == 1
@@ -1780,33 +1788,37 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             iwork = Vector{BlasInt}(undef, n)
             info = Ref{BlasInt}()
             if cmplx
-                ccall((@blasfunc($ggsvd), liblapack), Cvoid,
+                ccall((@blasfunc($ggsvd), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                     Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                    Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Clong, Clong, Clong),
                     jobu, jobv, jobq, m,
                     n, p, k, l,
                     A, lda, B, ldb,
                     alpha, beta, U, ldu,
                     V, ldv, Q, ldq,
-                    work, rwork, iwork, info)
+                    work, rwork, iwork, info,
+                    1, 1, 1)
             else
-                ccall((@blasfunc($ggsvd), liblapack), Cvoid,
+                ccall((@blasfunc($ggsvd), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                     Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                    Clong, Clong, Clong),
                     jobu, jobv, jobq, m,
                     n, p, k, l,
                     A, lda, B, ldb,
                     alpha, beta, U, ldu,
                     V, ldv, Q, ldq,
-                    work, iwork, info)
+                    work, iwork, info,
+                    1, 1, 1)
             end
             chklapackerror(info[])
             if m - k[1] - l[1] >= 0
@@ -1900,19 +1912,21 @@ for (f, elty) in ((:dggsvd3_, :Float64),
             iwork = Vector{BlasInt}(undef, n)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($f), liblapack), Cvoid,
+                ccall((@blasfunc($f), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                     Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}),
+                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
+                    Clong, Clong, Clong),
                     jobu, jobv, jobq, m,
                     n, p, k, l,
                     A, lda, B, ldb,
                     alpha, beta, U, ldu,
                     V, ldv, Q, ldq,
-                    work, lwork, iwork, info)
+                    work, lwork, iwork, info,
+                    1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -1958,21 +1972,21 @@ for (f, elty, relty) in ((:zggsvd3_, :ComplexF64, :Float64),
             iwork = Vector{BlasInt}(undef, n)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($f), liblapack), Cvoid,
+                ccall((@blasfunc($f), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                     Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
-                    Ptr{BlasInt}),
+                    Ptr{BlasInt}, Clong, Clong, Clong),
                     jobu, jobv, jobq, m,
                     n, p, k, l,
                     A, lda, B, ldb,
                     alpha, beta, U, ldu,
                     V, ldv, Q, ldq,
                     work, lwork, rwork, iwork,
-                    info)
+                    info, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -2066,19 +2080,21 @@ for (geevx, ggev, elty) in
             iwork = Vector{BlasInt}(undef, iworksize)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($geevx), liblapack), Cvoid,
+                ccall((@blasfunc($geevx), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                       Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                       Ref{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Clong, Clong, Clong, Clong),
                        balanc, jobvl, jobvr, sense,
                        n, A, lda, wr,
                        wi, VL, max(1,ldvl), VR,
                        max(1,ldvr), ilo, ihi, scale,
                        abnrm, rconde, rcondv, work,
-                       lwork, iwork, info)
+                       lwork, iwork, info,
+                       1, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -2132,17 +2148,17 @@ for (geevx, ggev, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ggev), liblapack), Cvoid,
+                ccall((@blasfunc($ggev), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                     Ptr{BlasInt}),
+                     Ptr{BlasInt}, Clong, Clong),
                     jobvl, jobvr, n, A,
                     lda, B, ldb, alphar,
                     alphai, beta, vl, ldvl,
                     vr, ldvr, work, lwork,
-                    info)
+                    info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -2212,19 +2228,19 @@ for (geevx, ggev, elty, relty) in
             rwork = Vector{$relty}(undef, 2n)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($geevx), liblapack), Cvoid,
+                ccall((@blasfunc($geevx), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{UInt8},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty},
                        Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$relty}, Ptr{BlasInt}),
+                       Ptr{$relty}, Ptr{BlasInt}, Clong, Clong, Clong, Clong),
                        balanc, jobvl, jobvr, sense,
                        n, A, lda, w,
                        VL, max(1,ldvl), VR, max(1,ldvr),
                        ilo, ihi, scale, abnrm,
                        rconde, rcondv, work, lwork,
-                       rwork, info)
+                       rwork, info, 1, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -2279,17 +2295,17 @@ for (geevx, ggev, elty, relty) in
             rwork = Vector{$relty}(undef, 8n)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ggev), liblapack), Cvoid,
+                ccall((@blasfunc($ggev), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty},
-                     Ptr{BlasInt}),
+                     Ptr{BlasInt}, Clong, Clong),
                     jobvl, jobvr, n, A,
                     lda, B, ldb, alpha,
                     beta, vl, ldvl, vr,
                     ldvr, work, lwork, rwork,
-                    info)
+                    info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -2353,7 +2369,7 @@ for (laic1, elty) in
             sestpr = Vector{$elty}(undef, 1)
             s = Vector{$elty}(undef, 1)
             c = Vector{$elty}(undef, 1)
-            ccall((@blasfunc($laic1), liblapack), Cvoid,
+            ccall((@blasfunc($laic1), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{$elty},
                  Ptr{$elty}, Ref{$elty}, Ptr{$elty}, Ptr{$elty},
                  Ptr{$elty}),
@@ -2387,7 +2403,7 @@ for (laic1, elty, relty) in
             sestpr = Vector{$relty}(undef, 1)
             s = Vector{$elty}(undef, 1)
             c = Vector{$elty}(undef, 1)
-            ccall((@blasfunc($laic1), liblapack), Cvoid,
+            ccall((@blasfunc($laic1), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{$relty},
                  Ptr{$elty}, Ref{$elty}, Ptr{$relty}, Ptr{$elty},
                  Ptr{$elty}),
@@ -2429,7 +2445,7 @@ for (gtsv, gttrf, gttrs, elty) in
                 return B # Early exit if possible
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gtsv), liblapack), Cvoid,
+            ccall((@blasfunc($gtsv), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                   n, size(B,2), dl, d, du, B, max(1,stride(B,2)), info)
@@ -2456,7 +2472,7 @@ for (gtsv, gttrf, gttrs, elty) in
             du2  = similar(d, $elty, n-2)
             ipiv = similar(d, BlasInt, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gttrf), liblapack), Cvoid,
+            ccall((@blasfunc($gttrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}),
                   n, dl, d, du, du2, ipiv, info)
@@ -2488,11 +2504,11 @@ for (gtsv, gttrf, gttrs, elty) in
                 throw(DimensionMismatch("B has leading dimension $(size(B,1)), but should have $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gttrs), liblapack), Cvoid,
+            ccall((@blasfunc($gttrs), libblastrampoline), Cvoid,
                    (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                    Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                   trans, n, size(B,2), dl, d, du, du2, ipiv, B, max(1,stride(B,2)), info)
+                    Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                   trans, n, size(B,2), dl, d, du, du2, ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
          end
@@ -2555,7 +2571,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($orglq), liblapack), Cvoid,
+                ccall((@blasfunc($orglq), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, k, A, max(1,stride(A,2)), tau, work, lwork, info)
@@ -2589,7 +2605,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($orgqr), liblapack), Cvoid,
+                ccall((@blasfunc($orgqr), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, k, A,
@@ -2625,7 +2641,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($orgql), liblapack), Cvoid,
+                ccall((@blasfunc($orgql), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, k, A,
@@ -2663,7 +2679,7 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($orgrq), liblapack), Cvoid,
+                ccall((@blasfunc($orgrq), libblastrampoline), Cvoid,
                       (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                        Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                       m, n, k, A,
@@ -2710,12 +2726,12 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormlq), liblapack), Cvoid,
+                ccall((@blasfunc($ormlq), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                       side, trans, m, n, k, A, max(1,stride(A,2)), tau,
-                      C, max(1,stride(C,2)), work, lwork, info)
+                      C, max(1,stride(C,2)), work, lwork, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -2757,15 +2773,15 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormqr), liblapack), Cvoid,
+                ccall((@blasfunc($ormqr), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}),
+                       Ptr{BlasInt}, Clong, Clong),
                       side, trans, m, n,
                       k, A, max(1,stride(A,2)), tau,
                       C, max(1, stride(C,2)), work, lwork,
-                      info)
+                      info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -2807,15 +2823,15 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormql), liblapack), Cvoid,
+                ccall((@blasfunc($ormql), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                        Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}),
+                       Ptr{BlasInt}, Clong, Clong),
                       side, trans, m, n,
                       k, A, max(1,stride(A,2)), tau,
                       C, max(1, stride(C,2)), work, lwork,
-                      info)
+                      info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -2857,12 +2873,12 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormrq), liblapack), Cvoid,
+                ccall((@blasfunc($ormrq), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                       side, trans, m, n, k, A, max(1,stride(A,2)), tau,
-                      C, max(1,stride(C,2)), work, lwork, info)
+                      C, max(1,stride(C,2)), work, lwork, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -2913,15 +2929,15 @@ for (orglq, orgqr, orgql, orgrq, ormlq, ormqr, ormql, ormrq, gemqrt, elty) in
             ldc = stride(C, 2)
             work = Vector{$elty}(undef, wss)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gemqrt), liblapack), Cvoid,
+            ccall((@blasfunc($gemqrt), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}),
+                 Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
                 side, trans, m, n,
                 k, nb, V, ldv,
                 T, max(1,stride(T,2)), C, max(1,ldc),
-                work, info)
+                work, info, 1, 1)
             chklapackerror(info[])
             return C
         end
@@ -3032,10 +3048,10 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                 throw(DimensionMismatch("first dimension of B, $(size(B,1)), and size of A, ($n,$n), must match!"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($posv), liblapack), Cvoid,
+            ccall((@blasfunc($posv), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), B, max(1,stride(B,2)), info)
+                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), B, max(1,stride(B,2)), info, 1)
             chkargsok(info[])
             chkposdef(info[])
             A, B
@@ -3057,9 +3073,9 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                 return A, 0
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($potrf), liblapack), Cvoid,
-                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, size(A,1), A, lda, info)
+            ccall((@blasfunc($potrf), libblastrampoline), Cvoid,
+                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, size(A,1), A, lda, info, 1)
             chkargsok(info[])
             #info[] > 0 means the leading minor of order info[] is not positive definite
             #ordinarily, throw Exception here, but return error code here
@@ -3078,9 +3094,9 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A)
             chkuplo(uplo)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($potri), liblapack), Cvoid,
-                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, size(A,1), A, max(1,stride(A,2)), info)
+            ccall((@blasfunc($potri), libblastrampoline), Cvoid,
+                  (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, size(A,1), A, max(1,stride(A,2)), info, 1)
             chkargsok(info[])
             chknonsingular(info[])
             A
@@ -3107,11 +3123,11 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             end
             ldb = max(1,stride(B,2))
             info = Ref{BlasInt}()
-            ccall((@blasfunc($potrs), liblapack), Cvoid,
+            ccall((@blasfunc($potrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
-                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                    Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                    uplo, n, nrhs, A,
-                   lda, B, ldb, info)
+                   lda, B, ldb, info, 1)
             chklapackerror(info[])
             return B
         end
@@ -3132,10 +3148,10 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             rank = Vector{BlasInt}(undef, 1)
             work = Vector{$rtyp}(undef, 2n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($pstrf), liblapack), Cvoid,
+            ccall((@blasfunc($pstrf), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                   Ptr{BlasInt}, Ref{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), piv, rank, tol, work, info)
+                   Ptr{BlasInt}, Ref{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), piv, rank, tol, work, info, 1)
             chkargsok(info[])
             A, piv, rank[1], info[] #Stored in CholeskyPivoted
         end
@@ -3221,7 +3237,7 @@ for (ptsv, pttrf, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($ptsv), liblapack), Cvoid,
+            ccall((@blasfunc($ptsv), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                   n, size(B,2), D, E, B, max(1,stride(B,2)), info)
@@ -3242,7 +3258,7 @@ for (ptsv, pttrf, elty, relty) in
                 throw(DimensionMismatch("E has length $(length(E)), but needs $(n - 1)"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($pttrf), liblapack), Cvoid,
+            ccall((@blasfunc($pttrf), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}),
                   n, D, E, info)
             chklapackerror(info[])
@@ -3289,7 +3305,7 @@ for (pttrs, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($pttrs), liblapack), Cvoid,
+            ccall((@blasfunc($pttrs), libblastrampoline), Cvoid,
                   (Ref{BlasInt}, Ref{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
                   n, size(B,2), D, E, B, max(1,stride(B,2)), info)
@@ -3323,10 +3339,10 @@ for (pttrs, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($pttrs), liblapack), Cvoid,
+            ccall((@blasfunc($pttrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$relty}, Ptr{$elty},
-                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), D, E, B, max(1,stride(B,2)), info)
+                   Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), D, E, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -3362,10 +3378,10 @@ for (trtri, trtrs, elty) in
             chkdiag(diag)
             lda = max(1,stride(A, 2))
             info = Ref{BlasInt}()
-            ccall((@blasfunc($trtri), liblapack), Cvoid,
+            ccall((@blasfunc($trtri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}),
-                  uplo, diag, n, A, lda, info)
+                   Ptr{BlasInt}, Clong, Clong),
+                  uplo, diag, n, A, lda, info, 1, 1)
             chklapackerror(info[])
             A
         end
@@ -3388,11 +3404,13 @@ for (trtri, trtrs, elty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)) but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($trtrs), liblapack), Cvoid,
+            ccall((@blasfunc($trtrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
+                   Clong, Clong, Clong),
                   uplo, trans, diag, n, size(B,2), A, max(1,stride(A,2)),
-                  B, max(1,stride(B,2)), info)
+                  B, max(1,stride(B,2)), info,
+                  1, 1, 1)
             chklapackerror(info[])
             B
         end
@@ -3443,11 +3461,13 @@ for (trcon, trevc, trrfs, elty) in
             work  = Vector{$elty}(undef, 3n)
             iwork = Vector{BlasInt}(undef, n)
             info  = Ref{BlasInt}()
-            ccall((@blasfunc($trcon), liblapack), Cvoid,
+            ccall((@blasfunc($trcon), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
-                   Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                   Clong, Clong, Clong),
                   norm, uplo, diag, n,
-                  A, max(1,stride(A,2)), rcond, work, iwork, info)
+                  A, max(1,stride(A,2)), rcond, work, iwork, info,
+                  1, 1, 1)
             chklapackerror(info[])
             rcond[]
         end
@@ -3482,15 +3502,15 @@ for (trcon, trevc, trrfs, elty) in
             work = Vector{$elty}(undef, 3n)
             info = Ref{BlasInt}()
 
-            ccall((@blasfunc($trevc), liblapack), Cvoid,
+            ccall((@blasfunc($trevc), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$elty}, Ref{BlasInt},Ref{BlasInt}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}),
+                 Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
                 side, howmny, select, n,
                 T, ldt, VL, ldvl,
                 VR, ldvr, mm, m,
-                work, info)
+                work, info, 1, 1)
             chklapackerror(info[])
 
             #Decide what exactly to return
@@ -3539,13 +3559,13 @@ for (trcon, trevc, trrfs, elty) in
             work = Vector{$elty}(undef, 3n)
             iwork = Vector{BlasInt}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($trrfs), liblapack), Cvoid,
+            ccall((@blasfunc($trrfs), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
                 uplo, trans, diag, n,
                 nrhs, A, max(1,stride(A,2)), B, max(1,stride(B,2)), X, max(1,stride(X,2)),
-                Ferr, Berr, work, iwork, info)
+                Ferr, Berr, work, iwork, info, 1, 1, 1)
             chklapackerror(info[])
             Ferr, Berr
         end
@@ -3574,11 +3594,13 @@ for (trcon, trevc, trrfs, elty, relty) in
             work  = Vector{$elty}(undef, 2n)
             rwork = Vector{$relty}(undef, n)
             info  = Ref{BlasInt}()
-            ccall((@blasfunc($trcon), liblapack), Cvoid,
+            ccall((@blasfunc($trcon), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
-                   Ptr{$elty}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ref{BlasInt}, Ref{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt},
+                   Clong, Clong, Clong),
                   norm, uplo, diag, n,
-                  A, max(1,stride(A,2)), rcond, work, rwork, info)
+                  A, max(1,stride(A,2)), rcond, work, rwork, info,
+                  1, 1, 1)
             chklapackerror(info[])
             rcond[]
         end
@@ -3614,15 +3636,15 @@ for (trcon, trevc, trrfs, elty, relty) in
             work = Vector{$elty}(undef, 2n)
             rwork = Vector{$relty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($trevc), liblapack), Cvoid,
+            ccall((@blasfunc($trevc), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                 Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
                 side, howmny, select, n,
                 T, ldt, VL, ldvl,
                 VR, ldvr, mm, m,
-                work, rwork, info)
+                work, rwork, info, 1, 1)
             chklapackerror(info[])
 
             #Decide what exactly to return
@@ -3671,13 +3693,13 @@ for (trcon, trevc, trrfs, elty, relty) in
             work  = Vector{$elty}(undef, 2n)
             rwork = Vector{$relty}(undef, n)
             info  = Ref{BlasInt}()
-            ccall((@blasfunc($trrfs), liblapack), Cvoid,
+            ccall((@blasfunc($trrfs), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                 Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Clong, Clong, Clong),
                 uplo, trans, diag, n,
                 nrhs, A, max(1,stride(A,2)), B, max(1,stride(B,2)), X, max(1,stride(X,2)),
-                Ferr, Berr, work, rwork, info)
+                Ferr, Berr, work, rwork, info, 1, 1, 1)
             chklapackerror(info[])
             Ferr, Berr
         end
@@ -3736,16 +3758,16 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev)
             chkstride1(dv, ev)
             n = length(dv)
-            if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+            if length(ev) != n - 1 && length(ev) != n
+                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than or equal to dv's length, $n)"))
             end
             Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Vector{$elty}(undef, max(1, 2n-2))
             info = Ref{BlasInt}()
-            ccall((@blasfunc($stev), liblapack), Cvoid,
+            ccall((@blasfunc($stev), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                   Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  job, n, dv, ev, Zmat, n, work, info)
+                   Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  job, n, dv, ev, Zmat, n, work, info, 1)
             chklapackerror(info[])
             dv, Zmat
         end
@@ -3770,17 +3792,17 @@ for (stev, stebz, stegr, stein, elty) in
             work = Vector{$elty}(undef, 4*n)
             iwork = Vector{BlasInt}(undef, 3*n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($stebz), liblapack), Cvoid,
+            ccall((@blasfunc($stebz), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{$elty},
                 Ref{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ref{$elty},
                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                Ptr{BlasInt}, Ptr{BlasInt}),
+                Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                 range, order, n, vl,
                 vu, il, iu, abstol,
                 dv, ev, m, nsplit,
                 w, iblock, isplit, work,
-                iwork, info)
+                iwork, info, 1, 1)
             chklapackerror(info[])
             w[1:m[]], iblock[1:m[]], isplit[1:nsplit[1]]
         end
@@ -3789,10 +3811,16 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev)
             chkstride1(dv, ev)
             n = length(dv)
-            if length(ev) != n - 1
-                throw(DimensionMismatch("ev has length $(length(ev)) but needs one less than dv's length, $n)"))
+            ne = length(ev)
+            if ne == n - 1
+                eev = [ev; zero($elty)]
+            elseif ne == n
+                eev = copy(ev)
+                eev[n] = zero($elty)
+            else
+                throw(DimensionMismatch("ev has length $ne but needs one less than or equal to dv's length, $n)"))
             end
-            eev = [ev; zero($elty)]
+
             abstol = Vector{$elty}(undef, 1)
             m = Ref{BlasInt}()
             w = similar(dv, $elty, n)
@@ -3805,17 +3833,19 @@ for (stev, stebz, stegr, stein, elty) in
             liwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1] and liwork as iwork[1]
-                ccall((@blasfunc($stegr), liblapack), Cvoid,
+                ccall((@blasfunc($stegr), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                     Ptr{$elty}, Ref{$elty}, Ref{$elty}, Ref{BlasInt},
                     Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                    Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}),
+                    Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
+                    Clong, Clong),
                     jobz, range, n, dv,
                     eev, vl, vu, il,
                     iu, abstol, m, w,
                     Z, ldz, isuppz, work,
-                    lwork, iwork, liwork, info)
+                    lwork, iwork, liwork, info,
+                    1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -3831,10 +3861,15 @@ for (stev, stebz, stegr, stein, elty) in
             require_one_based_indexing(dv, ev_in, w_in, iblock_in, isplit_in)
             chkstride1(dv, ev_in, w_in, iblock_in, isplit_in)
             n = length(dv)
-            if length(ev_in) != n - 1
-                throw(DimensionMismatch("ev_in has length $(length(ev_in)) but needs one less than dv's length, $n)"))
+            ne = length(ev_in)
+            if ne == n - 1
+                ev = [ev_in; zero($elty)]
+            elseif ne == n
+                ev = copy(ev_in)
+                ev[n] = zero($elty)
+            else
+                throw(DimensionMismatch("ev_in has length $ne but needs one less than or equal to dv's length, $n)"))
             end
-            ev = [ev_in; zeros($elty,1)]
             ldz = n #Leading dimension
             #Number of eigenvalues to find
             if !(1 <= length(w_in) <= n)
@@ -3863,7 +3898,7 @@ for (stev, stebz, stegr, stein, elty) in
             iwork = Vector{BlasInt}(undef, n)
             ifail = Vector{BlasInt}(undef, m)
             info  = Ref{BlasInt}()
-            ccall((@blasfunc($stein), liblapack), Cvoid,
+            ccall((@blasfunc($stein), libblastrampoline), Cvoid,
                 (Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -3951,10 +3986,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($syconv), liblapack), Cvoid,
+            ccall((@blasfunc($syconv), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, 'C', n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
+                  uplo, 'C', n, A, max(1,stride(A,2)), ipiv, work, info, 1, 1)
             chklapackerror(info[])
             A, work
         end
@@ -3980,11 +4015,11 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sysv), liblapack), Cvoid,
+                ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
-                      work, lwork, info)
+                      work, lwork, info,  1)
                 chkargsok(info[])
                 chknonsingular(info[])
                 if i == 1
@@ -4014,10 +4049,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sytrf), liblapack), Cvoid,
+                ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      uplo, n, A, stride(A,2), ipiv, work, lwork, info)
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                      uplo, n, A, stride(A,2), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4042,10 +4077,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #             lwork = BlasInt(-1)
 #             info  = Ref{BlasInt}()
 #             for i in 1:2
-#                 ccall((@blasfunc($sytri), liblapack), Cvoid,
+#                 ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
 #                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info, 1)
 #                 @assertargsok
 #                 chknonsingular(info[])
 #                 if lwork < 0
@@ -4069,10 +4104,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytri), liblapack), Cvoid,
+            ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chkargsok(info[])
             chknonsingular(info[])
             A
@@ -4096,10 +4131,10 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytrs), liblapack), Cvoid,
+            ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -4132,11 +4167,11 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sysv), liblapack), Cvoid,
+                ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
-                      work, lwork, info)
+                      work, lwork, info, 1)
                 chkargsok(info[])
                 chknonsingular(info[])
                 if i == 1
@@ -4166,10 +4201,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sytrf), liblapack), Cvoid,
+                ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      uplo, n, A, stride(A,2), ipiv, work, lwork, info)
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                      uplo, n, A, stride(A,2), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4192,10 +4227,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytri), liblapack), Cvoid,
+            ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chkargsok(info[])
             chknonsingular(info[])
             A
@@ -4219,10 +4254,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytrs), liblapack), Cvoid,
+            ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -4259,11 +4294,13 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty) in
             # allocate
             info = Ref{BlasInt}()
 
-            ccall((@blasfunc($syconvf), liblapack), Cvoid,
+            ccall((@blasfunc($syconvf), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                 Clong, Clong),
                 uplo, way, n, A,
-                lda, e, ipiv, info)
+                lda, e, ipiv, info,
+                1, 1)
 
             chklapackerror(info[])
             return A, e
@@ -4292,10 +4329,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($syconv), liblapack), Cvoid,
+            ccall((@blasfunc($syconv), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, 'C', n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong, Clong),
+                  uplo, 'C', n, A, max(1,stride(A,2)), ipiv, work, info, 1, 1)
             chklapackerror(info[])
             A, work
         end
@@ -4321,11 +4358,11 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($hesv), liblapack), Cvoid,
+                ccall((@blasfunc($hesv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
-                      work, lwork, info)
+                      work, lwork, info, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4352,10 +4389,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i in 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($hetrf), liblapack), Cvoid,
+                ccall((@blasfunc($hetrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info)
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4381,10 +4418,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #             lwork = BlasInt(-1)
 #             info  = Ref{BlasInt}()
 #             for i in 1:2
-#                 ccall((@blasfunc($hetri), liblapack), Cvoid,
+#                 ccall((@blasfunc($hetri), libblastrampoline), Cvoid,
 #                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info, 1)
 #                 chklapackerror(info[])
 #                 if lwork < 0
 #                     lwork = BlasInt(real(work[1]))
@@ -4409,10 +4446,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($hetri), liblapack), Cvoid,
+            ccall((@blasfunc($hetri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
         end
@@ -4434,10 +4471,10 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($hetrs), liblapack), Cvoid,
+            ccall((@blasfunc($hetrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -4469,11 +4506,11 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($hesv), liblapack), Cvoid,
+                ccall((@blasfunc($hesv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
-                      work, lwork, info)
+                      work, lwork, info, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4500,10 +4537,10 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i in 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($hetrf), liblapack), Cvoid,
+                ccall((@blasfunc($hetrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info)
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4527,10 +4564,10 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($hetri), liblapack), Cvoid,
+            ccall((@blasfunc($hetri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
         end
@@ -4552,10 +4589,10 @@ for (hesv, hetrf, hetri, hetrs, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($hetrs), liblapack), Cvoid,
+            ccall((@blasfunc($hetrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -4588,11 +4625,11 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sysv), liblapack), Cvoid,
+                ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
-                      work, lwork, info)
+                      work, lwork, info, 1)
                 chkargsok(info[])
                 chknonsingular(info[])
                 if i == 1
@@ -4623,10 +4660,10 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sytrf), liblapack), Cvoid,
+                ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info)
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4652,10 +4689,10 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #             lwork = BlasInt(-1)
 #             info  = Ref{BlasInt}()
 #             for i in 1:2
-#                 ccall((@blasfunc($sytri), liblapack), Cvoid,
+#                 ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
 #                       (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Clong),
+#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info, 1)
 #                 chklapackerror(info[])
 #                 if lwork < 0
 #                     lwork = BlasInt(real(work[1]))
@@ -4679,10 +4716,10 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytri), liblapack), Cvoid,
+            ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
         end
@@ -4705,10 +4742,10 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytrs), liblapack), Cvoid,
+            ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info,  1)
             chklapackerror(info[])
             B
         end
@@ -4741,11 +4778,11 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sysv), liblapack), Cvoid,
+                ccall((@blasfunc($sysv), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
                       uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)),
-                      work, lwork, info)
+                      work, lwork, info, 1)
                 chkargsok(info[])
                 chknonsingular(info[])
                 if i == 1
@@ -4776,10 +4813,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($sytrf), liblapack), Cvoid,
+                ccall((@blasfunc($sytrf), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info)
+                       Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                      uplo, n, A, max(1,stride(A,2)), ipiv, work, lwork, info, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -4803,10 +4840,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             chkuplo(uplo)
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytri), liblapack), Cvoid,
+            ccall((@blasfunc($sytri), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Clong),
+                  uplo, n, A, max(1,stride(A,2)), ipiv, work, info, 1)
             chklapackerror(info[])
             A
         end
@@ -4829,10 +4866,10 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
                 throw(DimensionMismatch("B has first dimension $(size(B,1)), but needs $n"))
             end
             info = Ref{BlasInt}()
-            ccall((@blasfunc($sytrs), liblapack), Cvoid,
+            ccall((@blasfunc($sytrs), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info)
+                   Ptr{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                  uplo, n, size(B,2), A, max(1,stride(A,2)), ipiv, B, max(1,stride(B,2)), info, 1)
             chklapackerror(info[])
             B
         end
@@ -4871,11 +4908,13 @@ for (sysv, sytrf, sytri, sytrs, syconvf, elty, relty) in
             # allocate
             info = Ref{BlasInt}()
 
-            ccall((@blasfunc($syconvf), liblapack), Cvoid,
+            ccall((@blasfunc($syconvf), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                 Ref{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                 Clong, Clong),
                 uplo, way, n, A,
-                max(1, lda), e, ipiv, info)
+                max(1, lda), e, ipiv, info,
+                1, 1)
 
             chklapackerror(info[])
             return A, e
@@ -5002,10 +5041,10 @@ for (syev, syevr, sygvd, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($syev), liblapack), Cvoid,
+                ccall((@blasfunc($syev), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                      jobz, uplo, n, A, max(1,stride(A,2)), W, work, lwork, info)
+                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
+                      jobz, uplo, n, A, max(1,stride(A,2)), W, work, lwork, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5030,6 +5069,7 @@ for (syev, syevr, sygvd, elty) in
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
             n = checksquare(A)
+            chkuplofinite(A, uplo)
             if range == 'I' && !(1 <= il <= iu <= n)
                 throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu = $iu), which must be between 1 and n = $n"))
             end
@@ -5052,19 +5092,19 @@ for (syev, syevr, sygvd, elty) in
             liwork = BlasInt(-1)
             info   = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1] and liwork as iwork[1]
-                ccall((@blasfunc($syevr), liblapack), Cvoid,
+                ccall((@blasfunc($syevr), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ref{$elty},
                         Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
-                        Ptr{BlasInt}),
+                        Ptr{BlasInt}, Clong, Clong, Clong),
                     jobz, range, uplo, n,
                     A, max(1,lda), vl, vu,
                     il, iu, abstol, m,
                     w, Z, max(1,ldz), isuppz,
                     work, lwork, iwork, liwork,
-                    info)
+                    info, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5103,15 +5143,15 @@ for (syev, syevr, sygvd, elty) in
             liwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1] and liwork as iwork[1]
-                ccall((@blasfunc($sygvd), liblapack), Cvoid,
+                ccall((@blasfunc($sygvd), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
-                     Ref{BlasInt}, Ptr{BlasInt}),
+                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                     itype, jobz, uplo, n,
                     A, lda, B, ldb,
                     w, work, lwork, iwork,
-                    liwork, info)
+                    liwork, info, 1, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(work[1])
@@ -5147,10 +5187,12 @@ for (syev, syevr, sygvd, elty, relty) in
             rwork = Vector{$relty}(undef, max(1, 3n-2))
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($syev), liblapack), Cvoid,
+                ccall((@blasfunc($syev), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                      Ptr{$relty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                      jobz, uplo, n, A, stride(A,2), W, work, lwork, rwork, info)
+                      Ptr{$relty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
+                      Clong, Clong),
+                      jobz, uplo, n, A, stride(A,2), W, work, lwork, rwork, info,
+                      1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5202,19 +5244,21 @@ for (syev, syevr, sygvd, elty, relty) in
             liwork = BlasInt(-1)
             info   = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1], lrwork as rwork[1] and liwork as iwork[1]
-                ccall((@blasfunc($syevr), liblapack), Cvoid,
+                ccall((@blasfunc($syevr), libblastrampoline), Cvoid,
                       (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ref{$elty},
                        Ref{BlasInt}, Ref{BlasInt}, Ref{$elty}, Ptr{BlasInt},
                        Ptr{$relty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ref{BlasInt},
-                       Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}),
+                       Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
+                       Clong, Clong, Clong),
                       jobz, range, uplo, n,
                       A, lda, vl, vu,
                       il, iu, abstol, m,
                       w, Z, ldz, isuppz,
                       work, lwork, rwork, lrwork,
-                      iwork, liwork, info)
+                      iwork, liwork, info,
+                      1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5257,15 +5301,17 @@ for (syev, syevr, sygvd, elty, relty) in
             lrwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1], lrwork as rwork[1] and liwork as iwork[1]
-                ccall((@blasfunc($sygvd), liblapack), Cvoid,
+                ccall((@blasfunc($sygvd), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$relty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$relty},
-                     Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt}),
+                     Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
+                     Clong, Clong),
                     itype, jobz, uplo, n,
                     A, lda, B, ldb,
                     w, work, lwork, rwork,
-                    lrwork, iwork, liwork, info)
+                    lrwork, iwork, liwork, info,
+                    1, 1)
                 chkargsok(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5356,15 +5402,15 @@ for (bdsqr, relty, elty) in
             # Allocate
             work = Vector{$relty}(undef, 4n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($bdsqr), liblapack), Cvoid,
+            ccall((@blasfunc($bdsqr), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ref{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty},
                  Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                 Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
+                 Ref{BlasInt}, Ptr{$relty}, Ptr{BlasInt}, Clong),
                 uplo, n, ncvt, nru,
                 ncc, d, e_, Vt,
                 ldvt, U, ldu, C,
-                ldc, work, info)
+                ldc, work, info, 1)
             chklapackerror(info[])
             d, Vt, U, C #singular values in descending order, P**T * VT, U * Q, Q**T * C
         end
@@ -5409,7 +5455,7 @@ for (bdsdc, elty) in
             elseif compq == 'P'
                 @warn "COMPQ='P' is not tested"
                 #TODO turn this into an actual LAPACK call
-                #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
+                #smlsiz=ilaenv(9, $elty === :Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
                 smlsiz=100 #For now, completely overkill
                 ldq = n*(11+2*smlsiz+8*round(Int,log((n/(smlsiz+1)))/log(2)))
                 ldiq = n*(3+3*round(Int,log(n/(smlsiz+1))/log(2)))
@@ -5427,13 +5473,15 @@ for (bdsdc, elty) in
             work  = Vector{$elty}(undef, lwork)
             iwork = Vector{BlasInt}(undef, 8n)
             info  = Ref{BlasInt}()
-            ccall((@blasfunc($bdsdc), liblapack), Cvoid,
+            ccall((@blasfunc($bdsdc), libblastrampoline), Cvoid,
                (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                 Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                Clong, Clong),
                 uplo, compq, n, d, e_,
                 u, ldu, vt, ldvt,
-                q, iq, work, iwork, info)
+                q, iq, work, iwork, info,
+                1, 1)
             chklapackerror(info[])
             d, e_, u, vt, q, iq
         end
@@ -5477,12 +5525,12 @@ for (gecon, elty) in
             work = Vector{$elty}(undef, 4n)
             iwork = Vector{BlasInt}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gecon), liblapack), Cvoid,
+            ccall((@blasfunc($gecon), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{$elty}, Ref{$elty}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{BlasInt}),
+                   Ptr{BlasInt}, Clong),
                   normtype, n, A, lda, anorm, rcond, work, iwork,
-                  info)
+                  info, 1)
             chklapackerror(info[])
             rcond[]
         end
@@ -5511,12 +5559,12 @@ for (gecon, elty, relty) in
             work = Vector{$elty}(undef, 2n)
             rwork = Vector{$relty}(undef, 2n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($gecon), liblapack), Cvoid,
+            ccall((@blasfunc($gecon), libblastrampoline), Cvoid,
                   (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{$relty}, Ref{$relty}, Ptr{$elty}, Ptr{$relty},
-                   Ptr{BlasInt}),
+                   Ptr{BlasInt}, Clong),
                   normtype, n, A, lda, anorm, rcond, work, rwork,
-                  info)
+                  info, 1)
             chklapackerror(info[])
             rcond[]
         end
@@ -5554,7 +5602,7 @@ for (gehrd, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gehrd), liblapack), Cvoid,
+                ccall((@blasfunc($gehrd), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{BlasInt}),
@@ -5605,7 +5653,7 @@ for (orghr, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($orghr), liblapack), Cvoid,
+                ccall((@blasfunc($orghr), libblastrampoline), Cvoid,
                     (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{BlasInt}),
@@ -5662,15 +5710,15 @@ for (ormhr, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormhr), liblapack), Cvoid,
+                ccall((@blasfunc($ormhr), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                      Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                     Ref{BlasInt}, Ptr{BlasInt}),
+                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                     side, trans, mC, nC,
                     ilo, ihi, A, max(1, stride(A, 2)),
                     tau, C, max(1, stride(C, 2)), work,
-                    lwork, info)
+                    lwork, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5708,11 +5756,11 @@ for (hetrd, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($hetrd), liblapack), Cvoid,
+                ccall((@blasfunc($hetrd), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$relty}, Ptr{$relty},
-                    Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}),
-                    uplo, n, A, max(1, stride(A, 2)), d, e, tau, work, lwork, info)
+                    Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Clong),
+                    uplo, n, A, max(1, stride(A, 2)), d, e, tau, work, lwork, info, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5758,13 +5806,13 @@ for (orgtr, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($orgtr), liblapack), Cvoid,
+                ccall((@blasfunc($orgtr), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{BlasInt}, Ptr{$elty},
                      Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ref{BlasInt},
-                     Ptr{BlasInt}),
+                     Ptr{BlasInt}, Clong),
                     uplo, n, A,
                     max(1, stride(A, 2)), tau, work, lwork,
-                    info)
+                    info, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5816,15 +5864,15 @@ for (ormtr, elty) in
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($ormtr), liblapack), Cvoid,
+                ccall((@blasfunc($ormtr), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt},
                      Ptr{$elty}, Ref{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                     Ref{BlasInt}, Ptr{BlasInt}),
+                     Ref{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
                     side, uplo, trans, mC, nC,
                     A, max(1, stride(A, 2)),
                     tau, C, max(1, stride(C, 2)), work,
-                    lwork, info)
+                    lwork, info, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5861,15 +5909,15 @@ for (gees, gges, elty) in
             lwork = BlasInt(-1)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gees), liblapack), Cvoid,
+                ccall((@blasfunc($gees), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
-                        Ref{BlasInt}, Ptr{Cvoid}, Ptr{BlasInt}),
+                        Ref{BlasInt}, Ptr{Cvoid}, Ptr{BlasInt}, Clong, Clong),
                     jobvs, 'N', C_NULL, n,
                         A, max(1, stride(A, 2)), sdim, wr,
                         wi, vs, ldvs, work,
-                        lwork, C_NULL, info)
+                        lwork, C_NULL, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5898,27 +5946,27 @@ for (gees, gges, elty) in
             alphar = similar(A, $elty, n)
             alphai = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvsl = jobvsl == 'V' ? n : 1
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
             vsl = similar(A, $elty, ldvsl, n)
-            ldvsr = jobvsr == 'V' ? n : 1
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gges), liblapack), Cvoid,
+                ccall((@blasfunc($gges), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{Cvoid},
-                        Ptr{BlasInt}),
+                        Ptr{BlasInt}, Clong, Clong, Clong),
                     jobvsl, jobvsr, 'N', C_NULL,
                     n, A, max(1,stride(A, 2)), B,
                     max(1,stride(B, 2)), sdim, alphar, alphai,
                     beta, vsl, ldvsl, vsr,
                     ldvsr, work, lwork, C_NULL,
-                    info)
+                    info, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5956,15 +6004,15 @@ for (gees, gges, elty, relty) in
             rwork = Vector{$relty}(undef, n)
             info  = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gees), liblapack), Cvoid,
+                ccall((@blasfunc($gees), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                        Ptr{$relty}, Ptr{Cvoid}, Ptr{BlasInt}),
+                        Ptr{$relty}, Ptr{Cvoid}, Ptr{BlasInt}, Clong, Clong),
                     jobvs, sort, C_NULL, n,
                         A, max(1, stride(A, 2)), sdim, w,
                         vs, ldvs, work, lwork,
-                        rwork, C_NULL, info)
+                        rwork, C_NULL, info, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -5993,28 +6041,28 @@ for (gees, gges, elty, relty) in
             sdim = BlasInt(0)
             alpha = similar(A, $elty, n)
             beta = similar(A, $elty, n)
-            ldvsl = jobvsl == 'V' ? n : 1
+            ldvsl = jobvsl == 'V' ? max(1, n) : 1
             vsl = similar(A, $elty, ldvsl, n)
-            ldvsr = jobvsr == 'V' ? n : 1
+            ldvsr = jobvsr == 'V' ? max(1, n) : 1
             vsr = similar(A, $elty, ldvsr, n)
             work = Vector{$elty}(undef, 1)
             lwork = BlasInt(-1)
             rwork = Vector{$relty}(undef, 8n)
             info = Ref{BlasInt}()
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($gges), liblapack), Cvoid,
+                ccall((@blasfunc($gges), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ref{UInt8}, Ptr{Cvoid},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                         Ptr{$elty}, Ref{BlasInt}, Ptr{$relty}, Ptr{Cvoid},
-                        Ptr{BlasInt}),
+                        Ptr{BlasInt}, Clong, Clong, Clong),
                     jobvsl, jobvsr, 'N', C_NULL,
                     n, A, max(1, stride(A, 2)), B,
                     max(1, stride(B, 2)), sdim, alpha, beta,
                     vsl, ldvsl, vsr, ldvsr,
                     work, lwork, rwork, C_NULL,
-                    info)
+                    info, 1, 1, 1)
                 chklapackerror(info[])
                 if i == 1
                     lwork = BlasInt(real(work[1]))
@@ -6067,15 +6115,15 @@ for (trexc, trsen, tgsen, elty) in
             ldq = max(1, stride(Q, 2))
             work = Vector{$elty}(undef, n)
             info = Ref{BlasInt}()
-            ccall((@blasfunc($trexc), liblapack), Cvoid,
+            ccall((@blasfunc($trexc), libblastrampoline), Cvoid,
                   (Ref{UInt8},  Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}),
+                   Ptr{$elty}, Ptr{BlasInt}, Clong),
                   compq, n,
                   T, ldt, Q, ldq,
                   ifst, ilst,
-                  work, info)
+                  work, info, 1)
             chklapackerror(info[])
             T, Q
         end
@@ -6109,17 +6157,17 @@ for (trexc, trsen, tgsen, elty) in
             s = Ref{$elty}(zero($elty))
             sep = Ref{$elty}(zero($elty))
             for i = 1:2  # first call returns lwork as work[1] and liwork as iwork[1]
-                ccall((@blasfunc($trsen), liblapack), Cvoid,
+                ccall((@blasfunc($trsen), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ref{BlasInt}, Ref{$elty}, Ref{$elty},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{BlasInt}, Ref{BlasInt},
-                    Ptr{BlasInt}),
+                    Ptr{BlasInt}, Clong, Clong),
                     job, compq, select, n,
                     T, ldt, Q, ldq,
                     wr, wi, m, s, sep,
                     work, lwork, iwork, liwork,
-                    info)
+                    info, 1, 1)
                 chklapackerror(info[])
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
@@ -6174,7 +6222,7 @@ for (trexc, trsen, tgsen, elty) in
             info = Ref{BlasInt}()
             select = convert(Array{BlasInt}, select)
             for i = 1:2  # first call returns lwork as work[1] and liwork as iwork[1]
-                ccall((@blasfunc($tgsen), liblapack), Cvoid,
+                ccall((@blasfunc($tgsen), libblastrampoline), Cvoid,
                        (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -6218,15 +6266,15 @@ for (trexc, trsen, tgsen, elty, relty) in
             ldt = max(1, stride(T, 2))
             ldq = max(1, stride(Q, 2))
             info = Ref{BlasInt}()
-            ccall((@blasfunc($trexc), liblapack), Cvoid,
+            ccall((@blasfunc($trexc), libblastrampoline), Cvoid,
                   (Ref{UInt8},  Ref{BlasInt},
                    Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                    Ref{BlasInt}, Ref{BlasInt},
-                   Ptr{BlasInt}),
+                   Ptr{BlasInt}, Clong),
                   compq, n,
                   T, ldt, Q, ldq,
                   ifst, ilst,
-                  info)
+                  info,  1)
             chklapackerror(info[])
             T, Q
         end
@@ -6256,17 +6304,17 @@ for (trexc, trsen, tgsen, elty, relty) in
             s = Ref{$relty}(zero($relty))
             sep = Ref{$relty}(zero($relty))
             for i = 1:2  # first call returns lwork as work[1]
-                ccall((@blasfunc($trsen), liblapack), Cvoid,
+                ccall((@blasfunc($trsen), libblastrampoline), Cvoid,
                     (Ref{UInt8}, Ref{UInt8}, Ptr{BlasInt}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
                     Ptr{$elty}, Ref{BlasInt}, Ref{$relty}, Ref{$relty},
                     Ptr{$elty}, Ref{BlasInt},
-                    Ptr{BlasInt}),
+                    Ptr{BlasInt}, Clong, Clong),
                     job, compq, select, n,
                     T, ldt, Q, ldq,
                     w, m, s, sep,
                     work, lwork,
-                    info)
+                    info, 1, 1)
                 chklapackerror(info[])
                 if i == 1 # only estimated optimal lwork, liwork
                     lwork  = BlasInt(real(work[1]))
@@ -6318,7 +6366,7 @@ for (trexc, trsen, tgsen, elty, relty) in
             info = Ref{BlasInt}()
             select = convert(Array{BlasInt}, select)
             for i = 1:2  # first call returns lwork as work[1] and liwork as iwork[1]
-                ccall((@blasfunc($tgsen), liblapack), Cvoid,
+                ccall((@blasfunc($tgsen), libblastrampoline), Cvoid,
                        (Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt}, Ptr{BlasInt},
                         Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty},
                         Ref{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -6348,15 +6396,18 @@ end
 
 """
     trexc!(compq, ifst, ilst, T, Q) -> (T, Q)
+    trexc!(ifst, ilst, T, Q) -> (T, Q)
 
-Reorder the Schur factorization of a matrix. If `compq = V`, the Schur
-vectors `Q` are reordered. If `compq = N` they are not modified. `ifst`
-and `ilst` specify the reordering of the vectors.
+Reorder the Schur factorization `T` of a matrix, such that the diagonal block
+of `T` with row index `ifst` is moved to row index `ilst`. If `compq = V`, the Schur
+vectors `Q` are reordered. If `compq = N` they are not modified. The 4-arg method
+calls the 5-arg method with `compq = V`.
 """
 trexc!(compq::AbstractChar, ifst::BlasInt, ilst::BlasInt, T::AbstractMatrix, Q::AbstractMatrix)
 
 """
-    trsen!(compq, job, select, T, Q) -> (T, Q, w, s, sep)
+    trsen!(job, compq, select, T, Q) -> (T, Q, w, s, sep)
+    trsen!(select, T, Q) -> (T, Q, w, s, sep)
 
 Reorder the Schur factorization of a matrix and optionally finds reciprocal
 condition numbers. If `job = N`, no condition numbers are found. If `job = E`,
@@ -6365,7 +6416,8 @@ only the condition number for this cluster of eigenvalues is found. If
 If `job = B` then the condition numbers for the cluster and subspace are
 found. If `compq = V` the Schur vectors `Q` are updated. If `compq = N`
 the Schur vectors are not modified. `select` determines which
-eigenvalues are in the cluster.
+eigenvalues are in the cluster. The 3-arg method calls the 5-arg method
+with `job = N` and `compq = V`.
 
 Returns `T`, `Q`, reordered eigenvalues in `w`, the condition number of the
 cluster of eigenvalues `s`, and the condition number of the invariant subspace
@@ -6390,7 +6442,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                         B::AbstractMatrix{$elty}, C::AbstractMatrix{$elty}, isgn::Int=1)
             require_one_based_indexing(A, B, C)
             chkstride1(A, B, C)
-            m, n = checksquare(A, B)
+            m, n = checksquare(A), checksquare(B)
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             m1, n1 = size(C)
@@ -6398,17 +6450,17 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                 throw(DimensionMismatch("dimensions of A, ($m,$n), and C, ($m1,$n1), must match"))
             end
             ldc = max(1, stride(C, 2))
-            scale = Vector{$relty}(undef, 1)
+            scale = Ref{$relty}()
             info  = Ref{BlasInt}()
-            ccall((@blasfunc($fn), liblapack), Cvoid,
+            ccall((@blasfunc($fn), libblastrampoline), Cvoid,
                 (Ref{UInt8}, Ref{UInt8}, Ref{BlasInt}, Ref{BlasInt}, Ref{BlasInt},
                  Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt}, Ptr{$elty}, Ref{BlasInt},
-                 Ptr{$relty}, Ptr{BlasInt}),
+                 Ptr{$relty}, Ptr{BlasInt}, Clong, Clong),
                 transa, transb, isgn, m, n,
                 A, lda, B, ldb, C, ldc,
-                scale, info)
+                scale, info, 1, 1)
             chklapackerror(info[])
-            C, scale[1]
+            C, scale[]
         end
     end
 end

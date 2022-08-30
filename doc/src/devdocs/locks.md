@@ -1,4 +1,4 @@
-# Proper maintenance and care of multi-threading locks
+# [Proper maintenance and care of multi-threading locks](@id Proper-maintenance-and-care-of-multi-threading-locks)
 
 The following strategies are used to ensure that the code is dead-lock free (generally by addressing
 the 4th Coffman condition: circular wait).
@@ -27,16 +27,20 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * pagealloc
 >   * gc_perm_lock
 >   * flisp
+>   * jl_in_stackwalk (Win32)
+>   * ResourcePool<?>::mutex
+>   * RLST_mutex
+>   * jl_locked_stream::mutex
+>   * debuginfo_asyncsafe
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
+>     > likewise, the ResourcePool<?>::mutexes just protect the associated resource pool
 
 The following is a leaf lock (level 2), and only acquires level 1 locks (safepoint) internally:
 
 >   * typecache
-
-The following is a level 2 lock:
-
 >   * Module->lock
+>   * JLDebuginfoPlugin::PluginMutex
 
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
 
@@ -48,9 +52,18 @@ The following is a level 4 lock, which can only recurse to acquire level 1, 2, o
 
 No Julia code may be called while holding a lock above this point.
 
-The following is a level 6 lock, which can only recurse to acquire locks at lower levels:
+orc::ThreadSafeContext (TSCtx) locks occupy a special spot in the locking hierarchy. They are used to
+protect LLVM's global non-threadsafe state, but there may be an arbitrary number of them. By default,
+all of these locks may be treated as level 5 locks for the purposes of comparing with the rest of the
+hierarchy. Acquiring a TSCtx should only be done from the JIT's pool of TSCtx's, and all locks on
+that TSCtx should be released prior to returning it to the pool. If multiple TSCtx locks must be
+acquired at the same time (due to recursive compilation), then locks should be acquired in the order
+that the TSCtxs were borrowed from the pool.
+
+The following are a level 6 lock, which can only recurse to acquire locks at lower levels:
 
 >   * codegen
+>   * jl_modules_mutex
 
 The following is an almost root lock (level end-1), meaning only the root look may be held when
 trying to acquire it:
@@ -93,6 +106,19 @@ The following locks are broken:
     > doesn't exist right now
     >
     > fix: create it
+
+  * Module->lock
+
+    > This is vulnerable to deadlocks since it can't be certain it is acquired in sequence.
+    > Some operations (such as `import_module`) are missing a lock.
+    >
+    > fix: replace with `jl_modules_mutex`?
+
+  * loading.jl: `require` and `register_root_module`
+
+    > This file potentially has numerous problems.
+    >
+    > fix: needs locks
 
 ## Shared Global Data Structures
 

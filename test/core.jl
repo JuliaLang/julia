@@ -2,13 +2,110 @@
 
 # test core language features
 
-using Random, SparseArrays, InteractiveUtils
+using Random, InteractiveUtils
 
 const Bottom = Union{}
 
-
 # For curmod_*
 include("testenv.jl")
+
+## tests that `const` field declarations
+
+# sanity tests that our built-in types are marked correctly for const fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:def, :min_world, :max_world, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
+        (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
+        (Core.MethodTable, [:module]),
+        (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
+        (Core.TypeMapLevel, []),
+        (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (DataType, [:name, :super, :parameters, :instance, :hash]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    setfield!(Int, :name, Int.name))
+@test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
+    (Base.Experimental.@force_compile; setfield!(Int, :name, Int.name)))
+
+@test_throws(ErrorException("invalid field attribute const for immutable struct"),
+    @eval struct ABCDconst
+        const abcd
+    end)
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    const d::Union{Int,Nothing}
+end
+@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+    mutable struct ABCDconst
+        const a
+        const b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+@test_throws(ErrorException("invalid redefinition of constant ABCDconst"),
+    mutable struct ABCDconst
+        a
+        b::Int
+        c
+        d::Union{Int,Nothing}
+    end)
+let abcd = ABCDconst(1, 2, 3, 4)
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+# repeat with the compiler
+let abcd = ABCDconst(1, 2, 3, 4)
+    Base.Experimental.@force_compile
+    @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+    @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
+        abcd.a = 0)
+    @test_throws(ErrorException("replacefield!: const field .a of type ABCDconst cannot be changed"),
+        replacefield!(abcd, :a, 1, 0))
+    @test_throws(ErrorException("modifyfield!: const field .a of type ABCDconst cannot be changed"),
+        modifyfield!(abcd, :a, +, 1))
+    @test_throws(ErrorException("swapfield!: const field .a of type ABCDconst cannot be changed"),
+        swapfield!(abcd, :a, 0))
+    @test_throws(ErrorException("setfield!: const field .b of type ABCDconst cannot be changed"),
+        abcd.b = 0)
+    abcd.c = "not constant"
+    @test_throws(ErrorException("setfield!: const field .d of type ABCDconst cannot be changed"),
+        abcd.d = nothing)
+    @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
+end
+
+# test `===` handling null pointer in struct #44712
+struct N44712
+    a::Some{Any}
+    b::Int
+    N44712() = new()
+end
+let a  = Int[0, 1], b = Int[0, 2]
+    GC.@preserve a b begin
+        @test unsafe_load(Ptr{N44712}(pointer(a))) !== unsafe_load(Ptr{N44712}(pointer(b)))
+    end
+end
+
+# another possible issue in #44712
+@test (("", 0),) !== (("", 1),)
 
 f47(x::Vector{Vector{T}}) where {T} = 0
 @test_throws MethodError f47(Vector{Vector}())
@@ -168,11 +265,21 @@ for T in (Nothing, Missing)
     @test Base.promote_typejoin(Int, T) === Union{Int, T}
     @test Base.promote_typejoin(T, String) === Union{T, String}
     @test Base.promote_typejoin(Vector{Int}, T) === Union{Vector{Int}, T}
-    @test Base.promote_typejoin(Vector, T) === Any
-    @test Base.promote_typejoin(Real, T) === Any
-    @test Base.promote_typejoin(Int, String) === Any
-    @test Base.promote_typejoin(Int, Union{Float64, T}) === Any
-    @test Base.promote_typejoin(Int, Union{String, T}) === Any
+    @test Base.promote_typejoin(Vector, T) === Union{Vector, T}
+    @test Base.promote_typejoin(Real, T) === Union{Real, T}
+    for U in (String, Float64)
+        @test Base.promote_typejoin(Int, U) === typejoin(Int, U)
+        @test Base.promote_typejoin(Int, Union{U, T}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{Int, U}, T) === Union{Union{Int, U}, T}
+        @test Base.promote_typejoin(Union{T, U}, Int) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{T, Int}) === Union{typejoin(Int, U), T}
+        @test Base.promote_typejoin(Union{T, U}, Union{Missing, Int}) ===
+            Union{typejoin(Int, U), T, Missing}
+        @test Base.promote_typejoin(Union{T, U}, Union{Nothing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing}
+        @test Base.promote_typejoin(Union{T, Nothing, U}, Union{Nothing, Missing, Int}) ===
+            Union{typejoin(Int, U), T, Nothing, Missing}
+    end
     @test Base.promote_typejoin(T, Union{}) === T
     @test Base.promote_typejoin(Union{}, T) === T
 end
@@ -230,16 +337,25 @@ end
 #struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
 @test_broken @isdefined S22624
 
+# issue #42297
+mutable struct Node42297{T, V}
+    value::V
+    next::Union{Node42297{T, T}, Node42297{T, Val{T}}, Nothing}
+    Node42297{T}(value) where {T} = new{T, typeof(value)}(value, nothing)
+end
+@test fieldtype(Node42297{Int,Val{Int}}, 1) === Val{Int}
+@test fieldtype(Node42297{Int,Int}, 1) === Int
+
 # issue #3890
 mutable struct A3890{T1}
     x::Matrix{Complex{T1}}
 end
-@test A3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test A3890{Float64}.types[1] === Array{ComplexF64,2}
 # make sure the field type Matrix{Complex{T1}} isn't cached
 mutable struct B3890{T2}
     x::Matrix{Complex{T2}}
 end
-@test B3890{Float64}.types[1] === Array{Complex{Float64},2}
+@test B3890{Float64}.types[1] === Array{ComplexF64,2}
 
 # issue #786
 mutable struct Node{T}
@@ -301,7 +417,7 @@ function bar(x::T) where T
 end
 @test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(Complex{Float64},2)
+z = convert(ComplexF64,2)
 @test z == Complex(2.0,0.0)
 
 function typeassert_instead_of_decl()
@@ -311,9 +427,6 @@ function typeassert_instead_of_decl()
     return 0
 end
 @test_throws TypeError typeassert_instead_of_decl()
-
-# type declarations on globals not implemented yet
-@test_throws ErrorException eval(Meta.parse("global x20327::Int"))
 
 y20327 = 1
 @test_throws TypeError y20327::Float64
@@ -401,7 +514,7 @@ function foo23996(xs...)
     bar(::AbstractFloat) = push!(rets, 2)
     bar(::Bool) = foobar()
     for x in xs
-	bar(x)
+        bar(x)
     end
     rets
 end
@@ -669,15 +782,16 @@ end
 
 # isassigned, issue #11167
 mutable struct Type11167{T,N} end
-Type11167{Int,2}
-let tname = Type11167.body.body.name
-    @test !isassigned(tname.cache, 0)
-    @test isassigned(tname.cache, 1)
-    @test !isassigned(tname.cache, 2)
-    Type11167{Float32,5}
-    @test isassigned(tname.cache, 2)
-    @test !isassigned(tname.cache, 3)
+function count11167()
+    let cache = Type11167.body.body.name.cache
+        return sum(i -> isassigned(cache, i), 0:length(cache))
+    end
 end
+@test count11167() == 0
+Type11167{Int,2}
+@test count11167() == 1
+Type11167{Float32,5}
+@test count11167() == 2
 
 # dispatch
 let
@@ -987,6 +1101,8 @@ end
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
+@test Module(:anonymous, false, true).Core == Core
+@test_throws UndefVarError Module(:anonymous, false, false).Core
 
 # exception from __init__()
 let didthrow =
@@ -1089,9 +1205,9 @@ end
 let strct = LoadError("yofile", 0, "bad")
     @test nfields(strct) == 3 # sanity test
     @test_throws BoundsError(strct, 10) getfield(strct, 10)
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
-    @test_throws ErrorException("setfield! immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 0, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, 4, "")
+    @test_throws ErrorException("setfield!: immutable struct of type LoadError cannot be changed") setfield!(strct, :line, 0)
     @test strct.file == "yofile"
     @test strct.line === 0
     @test strct.error == "bad"
@@ -1113,7 +1229,7 @@ let mstrct = TestMutable("melm", 1, nothing)
     @test_throws BoundsError(mstrct, 4) setfield!(mstrct, 4, "")
 end
 let strct = LoadError("yofile", 0, "bad")
-    @test_throws(ErrorException("setfield! immutable struct of type LoadError cannot be changed"),
+    @test_throws(ErrorException("setfield!: immutable struct of type LoadError cannot be changed"),
                  ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), strct, 0, ""))
 end
 let mstrct = TestMutable("melm", 1, nothing)
@@ -1208,7 +1324,7 @@ end
 # issue #22842
 f22842(x::UnionAll) = UnionAll
 f22842(x::DataType) = length(x.parameters)
-@test f22842(Tuple{Vararg{Int64,N} where N}) == 1
+@test f22842(Tuple{Vararg{Int64}}) == 1
 @test f22842(Tuple{Vararg{Int64,N}} where N) === UnionAll
 
 # issue #1153
@@ -1430,6 +1546,12 @@ let
     i2169(a::Array{T}) where {T} = typemin(T)
     @test invoke(i2169, Tuple{Array}, Int8[1]) === Int8(-128)
 end
+
+# issue #44227
+struct F{T} end
+F{Int32}(; y=1) = 1
+F{Int64}(; y=1) = invoke(F{Int32}, Tuple{}; y)
+@test F{Int64}() === 1
 
 # issue #2365
 mutable struct B2365{T}
@@ -2070,7 +2192,7 @@ mutable struct A6142 <: AbstractMatrix{Float64}; end
 +(x::A6142, y::AbstractRange) = "AbstractRange method called" #16324 ambiguity
 
 # issue #6175
-function g6175(); print(""); (); end
+function g6175(); GC.safepoint(); (); end
 g6175(i::Real, I...) = g6175(I...)
 g6175(i, I...) = tuple(length(i), g6175(I...)...)
 @test g6175(1:5) === (5,)
@@ -2119,7 +2241,7 @@ f5577(::Type) = true
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 f6426(x,t::Tuple{Vararg{Type}}) = string(t)
-@test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
+@test f6426(1, (1.,2.)) == "(Tuple{Float64, Float64},)"
 
 # issue #6502
 f6502() = convert(Tuple{Vararg{Int}}, (10,))
@@ -2210,7 +2332,7 @@ day_in(obj6387)
 function segfault6793(;gamma=1)
     A = 1
     B = 1
-    print()
+    GC.safepoint()
     return
     -gamma
     nothing
@@ -2262,7 +2384,7 @@ end
 @test ttt7049(init="a") == "init=a"
 
 # issue #7074
-let z(A::StridedMatrix{T}) where {T<:Union{Float64,Complex{Float64},Float32,Complex{Float32}}} = T,
+let z(A::StridedMatrix{T}) where {T<:Union{Float64,ComplexF64,Float32,ComplexF32}} = T,
     S = zeros(Complex,2,2)
     @test_throws MethodError z(S)
 end
@@ -2379,19 +2501,14 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
 end
 
 # call overloading (#2403)
-(x::Int)(y::Int) = x + 3y
 issue2403func(f) = f(7)
-let x = 10
-    @test x(3) == 19
-    @test x((3,)...) == 19
-    @test issue2403func(x) == 31
-end
 mutable struct Issue2403
     x
 end
 (i::Issue2403)(y) = i.x + 2y
 let x = Issue2403(20)
     @test x(3) == 26
+    @test x((3,)...) == 26
     @test issue2403func(x) == 34
 end
 
@@ -2721,10 +2838,10 @@ let f
     end
 end
 for m in methods(f10373)
-    @test m.name == :f10373
+    @test m.name === :f10373
 end
 for m in methods(g10373)
-    @test m.name == :g10373
+    @test m.name === :g10373
 end
 
 # issue #7221
@@ -3316,7 +3433,7 @@ function f11065()
         if i == 1
             z = "z is defined"
         elseif i == 2
-            print(z)
+            print(z) # z is undefined
         end
     end
 end
@@ -3490,7 +3607,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == Int
     end
@@ -3500,7 +3617,7 @@ let
         @test false
     catch err
         @test isa(err, TypeError)
-        @test err.func == :Vararg
+        @test err.func === :Vararg
         @test err.expected == Int
         @test err.got == 0x1
     end
@@ -3511,9 +3628,10 @@ end
 @test_throws TypeError Union{Int, 1}
 
 @test_throws ErrorException Vararg{Any,-2}
-@test_throws ErrorException Vararg{Int, N} where N<:T where T
-@test_throws ErrorException Vararg{Int, N} where N<:Integer
-@test_throws ErrorException Vararg{Int, N} where N>:Integer
+# Disabled due to #39698, see src/jltypes.c
+#@test_throws ErrorException Vararg{Int, N} where N<:T where T
+#@test_throws ErrorException Vararg{Int, N} where N<:Integer
+#@test_throws ErrorException Vararg{Int, N} where N>:Integer
 
 mutable struct FooNTuple{N}
     z::Tuple{Integer, Vararg{Int, N}}
@@ -3567,7 +3685,7 @@ f12092(x::Int, y::Int...) = 2
 # NOTE: should have > MAX_TUPLETYPE_LEN arguments
 f12063(tt, g, p, c, b, v, cu::T, d::AbstractArray{T, 2}, ve) where {T} = 1
 f12063(args...) = 2
-g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, spzeros(0,0), Int[])
+g12063() = f12063(0, 0, 0, 0, 0, 0, 0.0, zeros(0,0), Int[])
 @test g12063() == 1
 
 # issue #11587
@@ -3638,7 +3756,7 @@ end
 
 end
 
-# don't allow redefining types if ninitialized changes
+# don't allow redefining types if n_uninitialized changes
 struct NInitializedTestType
     a
 end
@@ -4111,17 +4229,8 @@ end
 let ex = quote
              $(if true; :(test); end)
          end
-    @test ex.args[2] == :test
+    @test ex.args[2] === :test
 end
-
-# issue #25652
-x25652 = 1
-x25652_2 = let (x25652, _) = (x25652, nothing)
-    x25652 = x25652 + 1
-    x25652
-end
-@test x25652_2 == 2
-@test x25652 == 1
 
 # issue #15180
 function f15180(x::T) where T
@@ -4233,7 +4342,10 @@ end
 end
 # disable GC to make sure no collection/promotion happens
 # when we are constructing the objects
+get_finalizers_inhibited() = ccall(:jl_gc_get_finalizers_inhibited, Int32, (Ptr{Cvoid},), C_NULL)
 let gc_enabled13995 = GC.enable(false)
+    @assert gc_enabled13995
+    @assert get_finalizers_inhibited() == 0
     finalized13995 = [false, false, false, false]
     create_dead_object13995(finalized13995)
     GC.enable(true)
@@ -4243,6 +4355,30 @@ let gc_enabled13995 = GC.enable(false)
     GC.enable(false)
     @test finalized13995 == [true, true, true, true]
     GC.enable(gc_enabled13995)
+end
+
+# Ensure an independent GC frame
+@noinline outlined(f) = f()
+
+@testset "finalizers must not change the sticky flag" begin
+    GC.enable(false)
+    try
+        outlined() do
+            local obj = Ref(0)
+            finalizer(obj) do _
+                @async nothing
+            end
+            Base.donotdelete(obj)
+        end
+        task = Threads.@spawn begin
+            GC.enable(true)
+            GC.gc()
+        end
+        wait(task)
+        @test !task.sticky
+    finally
+        GC.enable(true)
+    end
 end
 
 # issue #15283
@@ -4707,6 +4843,11 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# `where` syntax in constructor definitions
+(A12238{T} where T<:Real)(x) = 0
+@test A12238{<:Real}(0) == 0
+@test_throws MethodError A12238{<:Integer}(0)
+
 # issue #16315
 let a = Any[]
     @noinline f() = a[end]
@@ -4982,7 +5123,8 @@ gVararg(a::fVararg(Int)) = length(a)
     false
 catch e
     (e::ErrorException).msg
-end == "The function body AST defined by this @generated function is not pure. This likely means it contains a closure or comprehension."
+end == "The function body AST defined by this @generated function is not pure. " *
+       "This likely means it contains a closure, a comprehension or a generator."
 
 let x = 1
     global g18444
@@ -5172,6 +5314,36 @@ end
 @test let_Box5()() == 46
 @test let_noBox()() == 21
 
+# issue #37690
+function foo37690()
+    local f
+    local x
+    for k = 1:2
+        x = k
+        if k == 1
+            f = () -> x
+        end
+    end
+    f
+end
+@test foo37690()() == 2
+
+function g37690()
+    local x
+    local f
+    for k = 1:2
+    end
+    x = 0
+    ()->x
+end
+@test g37690().x === 0
+
+function _assigns_and_captures_arg(a)
+    a = a
+    return ()->a
+end
+@test !any(contains_Box, code_lowered(_assigns_and_captures_arg,(Any,))[1].code)
+
 module TestModuleAssignment
 using Test
 @eval $(GlobalRef(TestModuleAssignment, :x)) = 1
@@ -5257,6 +5429,16 @@ if Sys.WORD_SIZE == 64
         return
     end
     @test_nowarn tester20360()
+end
+
+# issue #39717
+let a = Base.StringVector(2^17)
+    b = String(a)
+    c = String(a)
+    GC.gc()
+    @test sizeof(a) == 0
+    @test sizeof(b) == 2^17
+    @test sizeof(c) == 0
 end
 
 @test_throws ArgumentError eltype(Bottom)
@@ -5601,11 +5783,9 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-let err = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
+let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
     __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    e = err.error::MethodError
+    e::MethodError
     @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
     @test e.args === (__source__, @__MODULE__, :(:x))
 end
@@ -5922,11 +6102,11 @@ end
 for U in boxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        A = Array{U}(undef, ntuple(x->10, N)...)
+        A = Array{U}(undef, ntuple(Returns(10), N)...)
         @test length(A) == 10^N
         @test sizeof(A) == sizeof(Int) * (10^N)
         @test !isassigned(A, 1)
@@ -5958,6 +6138,16 @@ struct A33709
 end
 let a33709 = A33709(A33709(nothing))
     @test isnothing(a33709.a.a)
+end
+
+# issue #35793
+struct A35793
+    x::Union{Nothing, Missing}
+end
+let x = A35793(nothing), y = A35793(missing)
+    @test x isa A35793
+    @test x.x === nothing
+    @test y.x === missing
 end
 
 # issue 31583
@@ -5997,11 +6187,11 @@ using Serialization
 for U in unboxedunions
     local U
     for N in (1, 2, 3, 4)
-        A = Array{U}(undef, ntuple(x->0, N)...)
+        A = Array{U}(undef, ntuple(Returns(0), N)...)
         @test isempty(A)
         @test sizeof(A) == 0
 
-        len = ntuple(x->10, N)
+        len = ntuple(Returns(10), N)
         mxsz = maximum(sizeof, Base.uniontypes(U))
         A = Array{U}(undef, len)
         @test length(A) == prod(len)
@@ -6586,6 +6776,17 @@ end
 # issue #26518
 function f26518((a,b)) end
 @test f26518((1,2)) === nothing
+# issue #36572 - destructuring called object
+struct Foo36572
+    a
+    b
+end
+function Base.iterate(f::Foo36572, i=1)
+    i == 1 ? (f.a, 2) :
+    i == 2 ? (f.b, 3) : nothing
+end
+((a,b)::Foo36572)(x) = a*x + b
+@test Foo36572(10,2)(3) == 32
 
 # issue 22098
 macro m22098 end
@@ -6795,7 +6996,7 @@ function f27597(y)
     return y
 end
 @test f27597([1]) == [1]
-@test f27597([]) == 1:0
+@test f27597([]) === 1:0
 
 # issue #22291
 wrap22291(ind) = (ind...,)
@@ -6940,7 +7141,6 @@ end
 @test_throws ArgumentError Array{Int, 2}(undef, -1, -1)
 
 # issue #28812
-@test Tuple{Vararg{Array{T},3} where T} === Tuple{Array,Array,Array}
 @test Tuple{Vararg{Array{T} where T,3}} === Tuple{Array,Array,Array}
 
 # issue #29145
@@ -7116,7 +7316,7 @@ let code = code_lowered(FieldConvert)[1].code
     @test code[8] == Expr(:call, GlobalRef(Core, :fieldtype), Core.SSAValue(1), 5)
     @test code[9] == Expr(:call, GlobalRef(Base, :convert), Core.SSAValue(8), Core.SlotNumber(6))
     @test code[10] == Expr(:new, Core.SSAValue(1), Core.SSAValue(3), Core.SSAValue(5), Core.SlotNumber(4), Core.SSAValue(7), Core.SSAValue(9))
-    @test code[11] == Expr(:return, Core.SSAValue(10))
+    @test code[11] == Core.ReturnNode(Core.SSAValue(10))
  end
 
 # Issue #32820
@@ -7154,8 +7354,57 @@ end
 struct B33954
     x::Q33954{B33954}
 end
-@test_broken isbitstype(Tuple{B33954})
-@test_broken isbitstype(B33954)
+@test isbitstype(Tuple{B33954})
+@test isbitstype(B33954)
+
+struct A41503{d}
+    e::d
+end
+struct B41503{j,k} <: AbstractArray{A41503{B41503{Any,k}},Any}
+    l::k
+end
+@test !isbitstype(B41503{Any,Any})
+@test_broken isbitstype(B41503{Any,Int})
+
+struct B40050 <: Ref{Tuple{B40050}}
+end
+@test string((B40050(),)) == "($B40050(),)"
+@test_broken isbitstype(Tuple{B40050})
+
+# issue #41654
+struct X41654 <: Ref{X41654}
+end
+@test isbitstype(X41654)
+@test ('a'=>X41654(),)[1][2] isa X41654
+
+# issue #43411
+struct A43411{S, T}
+    x::NamedTuple{S, T}
+end
+@test isbitstype(A43411{(:a,), Tuple{Int}})
+
+# issue #44614
+struct T44614_1{T}
+    m::T
+end
+struct T44614_2{L}
+    tuple::NTuple{3, Int64}
+    T44614_2{L}(t::NTuple{3, Int64}) where {L} = new{sum(t)}(t)
+end
+struct T44614_3{L, N}
+    a::Tuple{T44614_2{L}}
+    param::NTuple{N, T44614_1}
+    T44614_3(a::Tuple{T44614_2{L}}, pars::NTuple{N, T44614_1}) where {L, N} = new{L, N}(a, pars)
+end
+@test sizeof((T44614_2{L} where L).body) == 24
+let T = T44614_3{L,2} where L
+    # these values are computable, but we currently don't know how to compute them properly
+    ex = ErrorException("Argument is an incomplete T44614_3 type and does not have a definite size.")
+    @test_throws ex sizeof(T.body)
+    @test_throws ex sizeof(T)
+    @test_throws BoundsError fieldoffset(T.body, 2)
+    @test fieldoffset(T{1}, 2) == 24
+end
 
 # Issue #34206/34207
 function mre34206(a, n)
@@ -7190,3 +7439,387 @@ end
 @test_throws ErrorException f34482()
 @test_throws TypeError g34482()
 @test_throws TypeError h34482()
+
+struct NFANode34126
+    edges::Vector{Tuple{Nothing,NFANode34126}}
+    NFANode34126() = new(Tuple{Nothing,NFANode34126}[])
+end
+
+@test repr(NFANode34126()) == "$NFANode34126(Tuple{Nothing, $NFANode34126}[])"
+
+# issue #35416
+struct Node35416{T,K,X}
+end
+struct AVL35416{K,V}
+    avl:: Union{Nothing,Node35416{AVL35416{K,V},<:K,<:V}}
+end
+@test AVL35416(Node35416{AVL35416{Integer,AbstractString},Int,String}()) isa AVL35416{Integer,AbstractString}
+
+# issue #31696
+foo31696(x::Int8, y::Int8) = 1
+foo31696(x::T, y::T) where {T <: Int8} = 2
+@test length(methods(foo31696)) == 1
+let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
+    b .= a
+    @test b[1] == (1,)
+    a .= b
+    @test a[1] == (1,)
+end
+
+# issue #36104
+module M36104
+using Test
+struct T36104
+    v::Vector{M36104.T36104}
+end
+struct T36104   # check that redefining it works, issue #21816
+    v::Vector{T36104}
+end
+# with a gensymmed unionall
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
+end
+@test_throws ErrorException begin
+    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+        data::S
+        uplo::Char
+    end
+end
+end
+@test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
+@test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
+@test @isdefined(X36104)
+struct X36104; x::Int; end
+@test fieldtypes(X36104) == (Int,)
+primitive type P36104 8 end
+@test_throws ErrorException("invalid redefinition of constant P36104") @eval(primitive type P36104 16 end)
+
+# Malformed invoke
+f_bad_invoke(x::Int) = invoke(x, (Any,), x)
+@test_throws TypeError f_bad_invoke(1)
+
+# Fixup for #37044, make sure mutation of `types` field of `DataType` is respected.
+struct A37044{T1,T2}
+    x::T1
+    y::T2
+end
+struct Ref37044
+    x::DataType
+end
+function f37044(r)
+    t = r.x
+    if !isdefined(t, :types)
+        Base.datatype_fieldtypes(t)
+    end
+    return t.types
+end
+r37044 = Ref37044(A37044{Int}.body)
+@test f37044(r37044)[1] === Int
+
+a37265() = 0
+b37265() = 0
+function c37265(d)
+    if d == 1
+        e = a37265
+    elseif d == 2
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws UndefVarError c37265(0)
+@test c37265(1) === a37265
+@test c37265(2) === b37265
+
+function c37265_2(d)
+    if 0
+        e = a37265
+    elseif 0
+        e = b37265
+    else
+        try
+        catch
+        end
+    end
+    e
+end
+@test_throws TypeError c37265_2(0)
+
+struct PointerImmutable
+    a::Any
+    b::Int
+end
+struct NullableHomogeneousPointerImmutable
+    x1::PointerImmutable
+    x2::PointerImmutable
+    x3::PointerImmutable
+    NullableHomogeneousPointerImmutable() = new()
+    NullableHomogeneousPointerImmutable(x1) = new(x1)
+    NullableHomogeneousPointerImmutable(x1, x2) = new(x1, x2)
+    NullableHomogeneousPointerImmutable(x1, x2, x3) = new(x1, x2, x3)
+end
+
+function getfield_knownindex_unused(v)
+    v.x1
+    return
+end
+
+function getfield_unknownindex_unused(v, n)
+    getfield(v, n)
+    return
+end
+
+function getfield_knownindex_used1(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld
+end
+
+function getfield_knownindex_used2(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.a
+end
+
+function getfield_knownindex_used3(r, v)
+    fld = v.x1
+    r[] += 1
+    return fld.b
+end
+
+let v = NullableHomogeneousPointerImmutable(),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    r = Ref(0)
+    @test_throws UndefRefError getfield_knownindex_unused(v)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, 1)
+    @test_throws UndefRefError getfield_unknownindex_unused(v, :x1)
+    @test_throws UndefRefError getfield_knownindex_used1(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used2(r, v)
+    @test r[] == 0
+    @test_throws UndefRefError getfield_knownindex_used3(r, v)
+    @test r[] == 0
+
+    @test getfield_knownindex_unused(v2) === nothing
+    @test getfield_unknownindex_unused(v2, 1) === nothing
+    @test getfield_unknownindex_unused(v2, :x1) === nothing
+    @test getfield_knownindex_used1(r, v2) === PointerImmutable(1, 2)
+    @test r[] == 1
+    @test getfield_knownindex_used2(r, v2) === 1
+    @test r[] == 2
+    @test getfield_knownindex_used3(r, v2) === 2
+    @test r[] == 3
+end
+
+struct RedefinedSingleton
+end
+redefined_singleton_ref = Ref{Any}(RedefinedSingleton())
+struct RedefinedSingleton
+end
+cmp_refs(a::Ref{Any}) = a[] === RedefinedSingleton()
+@test cmp_refs(redefined_singleton_ref)
+
+struct PointerNopadding{T}
+    a::Symbol
+    b::T
+end
+struct ContainsPointerNopadding{T}
+    a::PointerNopadding{T}
+    ContainsPointerNopadding{T}() where T = new{T}()
+    ContainsPointerNopadding{T}(a) where T = new{T}(a)
+end
+
+@test !Base.datatype_haspadding(PointerNopadding{Symbol})
+@test !Base.datatype_haspadding(PointerNopadding{Int})
+# Sanity check to make sure the meaning of haspadding didn't change.
+@test Base.datatype_haspadding(PointerNopadding{Any})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Symbol}})
+@test !Base.datatype_haspadding(Tuple{PointerNopadding{Int}})
+@test !Base.datatype_haspadding(ContainsPointerNopadding{Symbol})
+@test Base.datatype_haspadding(ContainsPointerNopadding{Int})
+
+# Test the codegen optimized version as well as the unoptimized version of `jl_egal`
+@noinline unopt_jl_egal(@nospecialize(a), @nospecialize(b)) =
+    ccall(:jl_egal, Cint, (Any, Any), a, b) != 0
+@noinline opt_jl_egal(a, b) = a === b
+
+let aint = ContainsPointerNopadding{Int}(), asym = ContainsPointerNopadding{Symbol}(),
+    hint = objectid(aint), hsym = objectid(asym)
+    # Test that the uninitialized bits field doesn't affect the objectid or ===
+    for i in 1:100
+        local i
+        # Increase the chance one of the objects contains garbage int
+        local bint = ContainsPointerNopadding{Int}()
+        local bsym = ContainsPointerNopadding{Symbol}()
+        @test objectid(bint) === hint
+        @test objectid(bsym) === hsym
+        @test aint === bint
+        @test asym === bsym
+        @test unopt_jl_egal(aint, bint)
+        @test unopt_jl_egal(asym, bsym)
+        @test opt_jl_egal(aint, bint)
+        @test opt_jl_egal(asym, bsym)
+        aint = bint
+        asym = bsym
+    end
+end
+
+# Check === for potentially NULL field
+let vnull1 = NullableHomogeneousPointerImmutable(),
+    vnull2 = NullableHomogeneousPointerImmutable(),
+    v1 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2)),
+    v2 = NullableHomogeneousPointerImmutable(PointerImmutable(1, 2))
+
+    @test vnull1 === vnull2
+    @test unopt_jl_egal(vnull1, vnull2)
+    @test opt_jl_egal(vnull1, vnull2)
+    @test v1 === v2
+    @test unopt_jl_egal(v1, v2)
+    @test opt_jl_egal(v1, v2)
+
+    @test vnull1 !== v1
+    @test !unopt_jl_egal(vnull1, v1)
+    @test !opt_jl_egal(vnull1, v1)
+    @test vnull2 !== v2
+    @test !unopt_jl_egal(vnull2, v2)
+    @test !opt_jl_egal(vnull2, v2)
+end
+
+# Make sure non-allbits union is handled correctly
+@noinline returns_union37557(r) = r[]
+@noinline compare_union37557(r1, r2) = returns_union37557(r1) === returns_union37557(r2)
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(Int[]), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1), Ref{Union{Int,Vector{Int}}}(Int[]))
+@test !compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                          Ref{Union{Int,Vector{Int}}}(3))
+let array = Int[]
+    @test compare_union37557(Ref{Union{Int,Vector{Int}}}(array),
+                             Ref{Union{Int,Vector{Int}}}(array))
+end
+@test compare_union37557(Ref{Union{Int,Vector{Int}}}(1),
+                         Ref{Union{Int,Vector{Int}}}(1))
+
+# issue #38224
+struct S38224
+    i::Union{Int,Missing}
+end
+@test S38224.flags & 0x10 == 0x10 # .zeroinit
+for _ in 1:5
+    let a = Vector{S38224}(undef, 1000000)
+        @test all(x->ismissing(x.i), a)
+    end
+end
+
+# Redefining types with Vararg
+abstract type RedefineVararg; end
+const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
+const RedefineVarargN{N} = Tuple{Vararg{RedefineVararg, N}}
+
+# NTuples with non-types
+@test NTuple{3, 2} == Tuple{2, 2, 2}
+
+# issue #18621
+function f18621()
+   g = (k(i) for i in 1:5)
+   k = identity
+   return collect(g)
+end
+@test f18621() == 1:5
+@test [_ for _ in 1:5] == 1:5
+
+# issue #35130
+const T35130 = Tuple{Vector{Int}, <:Any}
+@eval struct A35130
+    x::Vector{Tuple{Vector{Int}, Any}}
+    A35130(x) = $(Expr(:new, :A35130, :x))
+end
+h35130(x) = A35130(Any[x][1]::Vector{T35130})
+@test h35130(T35130[([1],1)]) isa A35130
+
+# issue #41503
+let S = Tuple{Tuple{Tuple{K, UInt128} where K<:Tuple{Int64}, Int64}},
+    T = Tuple{Tuple{Tuple{Tuple{Int64}, UInt128}, Int64}}
+    @test pointer_from_objref(T) === pointer_from_objref(S)
+    @test isbitstype(T)
+end
+
+# avoid impossible normalization (don't try to form Tuple{Complex{String}} here)
+@test Tuple{Complex{T} where String<:T<:String} == Tuple{Complex{T} where String<:T<:String}
+
+# control over compilation/interpreter
+@testset "Experimental.@force_compile" begin
+    function trim_after_eval(str::AbstractString)
+        rng = findfirst("eval(", str)
+        @test !isempty(rng)
+        return str[1:first(rng)-1]
+    end
+    btc = eval(quote
+        Base.Experimental.@force_compile
+        backtrace()
+    end)
+    bti = eval(quote
+        backtrace()
+    end)
+    @test !occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(btc, true))))
+    @test  occursin(r"(interpreter|do_call)", trim_after_eval(string(stacktrace(bti, true))))
+end
+
+@testset "rest(svec, ...)" begin
+    x = Core.svec(1, 2, 3)
+    a..., = x
+    @test a == Core.svec(1, 2, 3)
+    a, b... = x
+    @test a == 1
+    @test b == Core.svec(2, 3)
+end
+
+@testset "setproperty! on modules" begin
+    m = Module()
+    @eval m global x::Int
+
+    setglobal!(m, :x, 1)
+    @test m.x === 1
+    setglobal!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setglobal!(m, :x, 3, :not_atomic)
+    @test_throws ErrorException setglobal!(m, :x, 4., :release)
+
+    m.x = 1
+    @test m.x === 1
+    setproperty!(m, :x, 2, :release)
+    @test m.x === 2
+    @test_throws ConcurrencyViolationError setproperty!(m, :x, 3, :not_atomic)
+    m.x = 4.
+    @test m.x === 4
+end
+
+# #45350 - Codegen for assignment to binding imported from module
+module Foo45350
+    global x45350::Int = 1
+end
+import .Foo45350: x45350
+f45350() = (global x45350 = 2)
+@test_throws ErrorException f45350()
+
+# #46503 - redefine `invoke`d methods
+foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
+foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
+@test 0 <= foo46503(1, nothing) <= 1
+foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
+@test 10 <= foo46503(1, nothing) <= 11
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
+end

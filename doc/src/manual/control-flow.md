@@ -4,7 +4,7 @@ Julia provides a variety of control flow constructs:
 
   * [Compound Expressions](@ref man-compound-expressions): `begin` and `;`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
-  * [Short-Circuit Evaluation](@ref): `&&`, `||` and chained comparisons.
+  * [Short-Circuit Evaluation](@ref): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
   * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
@@ -40,7 +40,7 @@ julia> z = (x = 1; y = 2; x + y)
 ```
 
 This syntax is particularly useful with the terse single-line function definition form introduced
-in [Functions](@ref). Although it is typical, there is no requirement that `begin` blocks be multiline
+in [Functions](@ref man-functions). Although it is typical, there is no requirement that `begin` blocks be multiline
 or that `;` chains be single-line:
 
 ```jldoctest
@@ -247,11 +247,18 @@ no
 
 ## Short-Circuit Evaluation
 
+The `&&` and `||` operators in Julia correspond to logical “and” and “or” operations, respectively,
+and are typically used for this purpose.  However, they have an additional property of *short-circuit*
+evaluation: they don't necessarily evaluate their second argument, as explained below.  (There
+are also bitwise `&` and `|` operators that can be used as logical “and” and “or” *without*
+short-circuit behavior, but beware that `&` and `|` have higher precedence than `&&` and `||` for evaluation order.)
+
 Short-circuit evaluation is quite similar to conditional evaluation. The behavior is found in
 most imperative programming languages having the `&&` and `||` boolean operators: in a series
 of boolean expressions connected by these operators, only the minimum number of expressions are
-evaluated as are necessary to determine the final boolean value of the entire chain. Explicitly,
-this means that:
+evaluated as are necessary to determine the final boolean value of the entire chain. Some
+languages (like Python) refer to them as `and` (`&&`) and `or` (`||`). Explicitly, this means
+that:
 
   * In the expression `a && b`, the subexpression `b` is only evaluated if `a` evaluates to `true`.
   * In the expression `a || b`, the subexpression `b` is only evaluated if `a` evaluates to `false`.
@@ -381,15 +388,13 @@ loop. Here is an example of a `while` loop:
 ```jldoctest
 julia> i = 1;
 
-julia> while i <= 5
+julia> while i <= 3
            println(i)
            global i += 1
        end
 1
 2
 3
-4
-5
 ```
 
 The `while` loop evaluates the condition expression (`i <= 5` in this case), and as long it remains
@@ -401,39 +406,53 @@ down like the above `while` loop does is so common, it can be expressed more con
 `for` loop:
 
 ```jldoctest
-julia> for i = 1:5
+julia> for i = 1:3
            println(i)
        end
 1
 2
 3
-4
-5
 ```
 
-Here the `1:5` is a range object, representing the sequence of numbers 1, 2, 3, 4, 5. The `for`
+Here the `1:3` is a range object, representing the sequence of numbers 1, 2, 3. The `for`
 loop iterates through these values, assigning each one in turn to the variable `i`. One rather
 important distinction between the previous `while` loop form and the `for` loop form is the scope
-during which the variable is visible. If the variable `i` has not been introduced in another
-scope, in the `for` loop form, it is visible only inside of the `for` loop, and not
-outside/afterwards. You'll either need a new interactive session instance or a different variable
+during which the variable is visible. A `for` loop always introduces a new iteration variable in
+its body, regardless of whether a variable of the same name exists in the enclosing scope.
+This implies that on the one hand `i` need not be declared before the loop. On the other hand it
+will not be visible outside the loop, nor will an outside variable of the same name be affected.
+You'll either need a new interactive session instance or a different variable
 name to test this:
 
 ```jldoctest
-julia> for j = 1:5
+julia> for j = 1:3
            println(j)
        end
 1
 2
 3
-4
-5
 
 julia> j
 ERROR: UndefVarError: j not defined
 ```
 
-See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope and how it works in
+```jldoctest
+julia> j = 0;
+
+julia> for j = 1:3
+           println(j)
+       end
+1
+2
+3
+
+julia> j
+0
+```
+
+Use `for outer` to modify the latter behavior and reuse an existing local variable.
+
+See [Scope of Variables](@ref scope-of-variables) for a detailed explanation of variable scope, [`outer`](@ref), and how it works in
 Julia.
 
 In general, the `for` loop construct can iterate over any container. In these cases, the alternative
@@ -468,7 +487,7 @@ julia> i = 1;
 
 julia> while true
            println(i)
-           if i >= 5
+           if i >= 3
                break
            end
            global i += 1
@@ -476,20 +495,16 @@ julia> while true
 1
 2
 3
-4
-5
 
 julia> for j = 1:1000
            println(j)
-           if j >= 5
+           if j >= 3
                break
            end
        end
 1
 2
 3
-4
-5
 ```
 
 Without the `break` keyword, the above `while` loop would never terminate on its own, and the `for` loop would iterate up to 1000. These loops are both exited early by using `break`.
@@ -546,6 +561,21 @@ julia> for i = 1:2, j = 3:4
 
 If this example were rewritten to use a `for` keyword for each variable, then the output would
 be different: the second and fourth values would contain `0`.
+
+Multiple containers can be iterated over at the same time in a single `for` loop using [`zip`](@ref):
+
+```jldoctest
+julia> for (j, k) in zip([1 2 3], [4 5 6 7])
+           println((j,k))
+       end
+(1, 4)
+(2, 5)
+(3, 6)
+```
+
+Using [`zip`](@ref) will create an iterator that is a tuple containing the subiterators for the containers passed to it.
+The `zip` iterator will iterate over all subiterators in order, choosing the ``i``th element of each subiterator in the
+``i``th iteration of the `for` loop. Once any of the subiterators run out, the `for` loop will stop.
 
 ## Exception Handling
 
@@ -655,6 +685,7 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 
 !!! note
     When writing an error message, it is preferred to make the first word lowercase. For example,
+
     `size(A) == size(B) || throw(DimensionMismatch("size of A not equal to size of B"))`
 
     is preferred over
@@ -662,7 +693,9 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
     `size(A) == size(B) || throw(DimensionMismatch("Size of A not equal to size of B"))`.
 
     However, sometimes it makes sense to keep the uppercase first letter, for instance if an argument
-    to a function is a capital letter: `size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))`.
+    to a function is a capital letter:
+
+    `size(A,1) == size(B,2) || throw(DimensionMismatch("A has first dimension..."))`.
 
 ### Errors
 
@@ -792,7 +825,7 @@ The power of the `try/catch` construct lies in the ability to unwind a deeply ne
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
 is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
-and [`Base.catch_stack`](@ref) functions for more advanced error handling.
+and [`current_exceptions`](@ref) functions for more advanced error handling.
 
 ### `finally` Clauses
 
@@ -821,167 +854,5 @@ case the `finally` block will run after `catch` has handled the error.
 ## [Tasks (aka Coroutines)](@id man-tasks)
 
 Tasks are a control flow feature that allows computations to be suspended and resumed in a flexible
-manner. This feature is sometimes called by other names, such as symmetric coroutines, lightweight
-threads, cooperative multitasking, or one-shot continuations.
-
-When a piece of computing work (in practice, executing a particular function) is designated as
-a [`Task`](@ref), it becomes possible to interrupt it by switching to another [`Task`](@ref).
-The original [`Task`](@ref) can later be resumed, at which point it will pick up right where it
-left off. At first, this may seem similar to a function call. However there are two key differences.
-First, switching tasks does not use any space, so any number of task switches can occur without
-consuming the call stack. Second, switching among tasks can occur in any order, unlike function
-calls, where the called function must finish executing before control returns to the calling function.
-
-This kind of control flow can make it much easier to solve certain problems. In some problems,
-the various pieces of required work are not naturally related by function calls; there is no obvious
-"caller" or "callee" among the jobs that need to be done. An example is the producer-consumer
-problem, where one complex procedure is generating values and another complex procedure is consuming
-them. The consumer cannot simply call a producer function to get a value, because the producer
-may have more values to generate and so might not yet be ready to return. With tasks, the producer
-and consumer can both run as long as they need to, passing values back and forth as necessary.
-
-Julia provides a [`Channel`](@ref) mechanism for solving this problem.
-A [`Channel`](@ref) is a waitable first-in first-out queue which can have
-multiple tasks reading from and writing to it.
-
-Let's define a producer task, which produces values via the [`put!`](@ref) call.
-To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
-constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!`](@ref) values repeatedly from the channel object:
-
-```jldoctest producer
-julia> function producer(c::Channel)
-           put!(c, "start")
-           for n=1:4
-               put!(c, 2n)
-           end
-           put!(c, "stop")
-       end;
-
-julia> chnl = Channel(producer);
-
-julia> take!(chnl)
-"start"
-
-julia> take!(chnl)
-2
-
-julia> take!(chnl)
-4
-
-julia> take!(chnl)
-6
-
-julia> take!(chnl)
-8
-
-julia> take!(chnl)
-"stop"
-```
-
-One way to think of this behavior is that `producer` was able to return multiple times. Between
-calls to [`put!`](@ref), the producer's execution is suspended and the consumer has control.
-
-The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
-loop variable takes on all the produced values. The loop is terminated when the channel is closed.
-
-```jldoctest producer
-julia> for x in Channel(producer)
-           println(x)
-       end
-start
-2
-4
-6
-8
-stop
-```
-
-Note that we did not have to explicitly close the channel in the producer. This is because
-the act of binding a [`Channel`](@ref) to a [`Task`](@ref) associates the open lifetime of
-a channel with that of the bound task. The channel object is closed automatically when the task
-terminates. Multiple channels can be bound to a task, and vice-versa.
-
-While the [`Task`](@ref) constructor expects a 0-argument function, the [`Channel`](@ref)
-method which creates a channel bound task expects a function that accepts a single argument of
-type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
-function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
-
-For [`Task`](@ref) objects this can be done either directly or by use of a convenience macro:
-
-```julia
-function mytask(myarg)
-    ...
-end
-
-taskHdl = Task(() -> mytask(7))
-# or, equivalently
-taskHdl = @task mytask(7)
-```
-
-To orchestrate more advanced work distribution patterns, [`bind`](@ref) and [`schedule`](@ref)
-can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
-constructors to explicitly link a set of channels with a set of producer/consumer tasks.
-
-Note that currently Julia tasks are not scheduled to run on separate CPU cores.
-True kernel threads are discussed under the topic of [Parallel Computing](@ref).
-
-### Core task operations
-
-Let us explore the low level construct [`yieldto`](@ref) to understand how task switching works.
-`yieldto(task,value)` suspends the current task, switches to the specified `task`, and causes
-that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
-is the only operation required to use task-style control flow; instead of calling and returning
-we are always just switching to a different task. This is why this feature is also called "symmetric
-coroutines"; each task is switched to and from using the same mechanism.
-
-[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
-this might be. If you switch away from the current task, you will probably want to switch back
-to it at some point, but knowing when to switch back, and knowing which task has the responsibility
-of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
-are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
-easier to use than the low-level [`yieldto`](@ref).
-
-In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
-
-  * [`current_task`](@ref) gets a reference to the currently-running task.
-  * [`istaskdone`](@ref) queries whether a task has exited.
-  * [`istaskstarted`](@ref) queries whether a task has run yet.
-  * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
-
-### Tasks and events
-
-Most task switches occur as a result of waiting for events such as I/O requests, and are performed
-by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
-and executes an event loop that restarts tasks based on external events such as message arrival.
-
-The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
-for example, given a `Process` object, [`wait`](@ref) will wait for it to exit. [`wait`](@ref)
-is often implicit; for example, a [`wait`](@ref) can happen inside a call to [`read`](@ref)
-to wait for data to be available.
-
-In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@ref) object, which
-is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
-the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
-The scheduler will then pick another task to run, or block waiting for external events. If all
-goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
-tasks waiting for that condition to become runnable again.
-
-A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
-allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
-a task waits for an event, it still gets restarted automatically when the event happens, as you
-would expect. It is also possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling [`schedule`](@ref), or using the [`@async`](@ref)
-macro (see [Parallel Computing](@ref) for more details).
-
-### Task states
-
-Tasks have a `state` field that describes their execution status. A [`Task`](@ref) `state` is one of the following
-symbols:
-
-| Symbol      | Meaning                                            |
-|:----------- |:-------------------------------------------------- |
-| `:runnable` | Currently running, or able to run                  |
-| `:done`     | Successfully finished executing                    |
-| `:failed`   | Finished with an uncaught exception                |
+manner. We mention them here only for completeness; for a full discussion see
+[Asynchronous Programming](@ref man-asynchronous).

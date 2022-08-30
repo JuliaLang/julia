@@ -129,7 +129,7 @@ function tryparsenext(d::DatePart{'p'}, str, i, len)
     return ap == 'a' ? AM : PM, ii
 end
 
-for (tok, fn) in zip("uUeE", [monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
+for (tok, fn) in zip("uUeE", Any[monthabbr_to_value, monthname_to_value, dayabbr_to_value, dayname_to_value])
     @eval @inline function tryparsenext(d::DatePart{$tok}, str, i, len, locale)
         next = tryparsenext_word(str, i, len, locale, max_width(d))
         next === nothing && return nothing
@@ -150,7 +150,7 @@ struct Decimal3 end
     len = ii - i
     if len > 3
         ms, r = divrem(ms0, Int64(10) ^ (len - 3))
-        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+        r == 0 || return nothing
     else
         ms = ms0 * Int64(10) ^ (3 - len)
     end
@@ -161,13 +161,13 @@ end
 
 hour12(dt) = let h = hour(dt); h > 12 ? h - 12 : h == 0 ? 12 : h; end
 
-for (c, fn) in zip("YmdHIMS", [year, month, day, hour, hour12, minute, second])
+for (c, fn) in zip("YmdHIMS", Any[year, month, day, hour, hour12, minute, second])
     @eval function format(io, d::DatePart{$c}, dt)
         print(io, string($fn(dt), base = 10, pad = d.width))
     end
 end
 
-for (tok, fn) in zip("uU", [monthabbr, monthname])
+for (tok, fn) in zip("uU", Any[monthabbr, monthname])
     @eval function format(io, d::DatePart{$tok}, dt, locale)
         print(io, $fn(month(dt), locale))
     end
@@ -178,7 +178,7 @@ function format(io, d::DatePart{'p'}, dt, locale)
     print(io, ampm)
 end
 
-for (tok, fn) in zip("eE", [dayabbr, dayname])
+for (tok, fn) in zip("eE", Any[dayabbr, dayname])
     @eval function format(io, ::DatePart{$tok}, dt, locale)
         print(io, $fn(dayofweek(dt), locale))
     end
@@ -332,6 +332,23 @@ const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond, AMPM),
 )
 
+# The `DateFormat(format, locale)` method just below consumes the following Regex.
+# Constructing this Regex is fairly expensive; doing so in the method itself can
+# consume half or better of `DateFormat(format, locale)`'s runtime. So instead we
+# construct and cache it outside the method body. Note, however, that when
+# `keys(CONVERSION_SPECIFIERS)` changes, the cached Regex must be updated accordingly;
+# hence the mutability (Ref-ness) of the cache, the helper method with which to populate
+# the cache, the cache of the hash of `keys(CONVERSION_SPECIFIERS)` (to facilitate checking
+# for changes), and the lock (to maintain consistency of these objects across threads when
+# threads simultaneously modify `CONVERSION_SPECIFIERS` and construct `DateFormat`s).
+function compute_dateformat_regex(conversion_specifiers)
+    letters = String(collect(keys(conversion_specifiers)))
+    return Regex("(?<!\\\\)([\\Q$letters\\E])\\1*")
+end
+const DATEFORMAT_REGEX_LOCK = ReentrantLock()
+const DATEFORMAT_REGEX_HASH = Ref(hash(keys(CONVERSION_SPECIFIERS)))
+const DATEFORMAT_REGEX_CACHE = Ref(compute_dateformat_regex(CONVERSION_SPECIFIERS))
+
 """
     DateFormat(format::AbstractString, locale="english") -> DateFormat
 
@@ -339,23 +356,23 @@ Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
 string:
 
-| Code       | Matches   | Comment                                                      |
-|:-----------|:----------|:-------------------------------------------------------------|
-| `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
-| `Y`        | 1996, 96  | Returns year of 1996, 0096. Equivalent to `y`                |
-| `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
-| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
-| `U`        | January   | Matches full month names according to the `locale` keyword   |
-| `d`        | 1, 01     | Matches 1 or 2-digit days                                    |
-| `H`        | 00        | Matches hours (24-hour clock)                                |
-| `I`        | 00        | For outputting hours with 12-hour clock                      |
-| `M`        | 00        | Matches minutes                                              |
-| `S`        | 00        | Matches seconds                                              |
-| `s`        | .500      | Matches milliseconds                                         |
-| `e`        | Mon, Tues | Matches abbreviated days of the week                         |
-| `E`        | Monday    | Matches full name days of the week                           |
-| `p`        | AM        | Matches AM/PM (case-insensitive)                             |
-| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
+| Code       | Matches   | Comment                                                       |
+|:-----------|:----------|:--------------------------------------------------------------|
+| `Y`        | 1996, 96  | Returns year of 1996, 0096                                    |
+| `y`        | 1996, 96  | Same as `Y` on `parse` but discards excess digits on `format` |
+| `m`        | 1, 01     | Matches 1 or 2-digit months                                   |
+| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword  |
+| `U`        | January   | Matches full month names according to the `locale` keyword    |
+| `d`        | 1, 01     | Matches 1 or 2-digit days                                     |
+| `H`        | 00        | Matches hours (24-hour clock)                                 |
+| `I`        | 00        | For outputting hours with 12-hour clock                       |
+| `M`        | 00        | Matches minutes                                               |
+| `S`        | 00        | Matches seconds                                               |
+| `s`        | .500      | Matches milliseconds                                          |
+| `e`        | Mon, Tues | Matches abbreviated days of the week                          |
+| `E`        | Monday    | Matches full name days of the week                            |
+| `p`        | AM        | Matches AM/PM (case-insensitive)                              |
+| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                      |
 
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
@@ -367,8 +384,9 @@ When parsing a time with a `p` specifier, any hour (either `H` or `I`) is interp
 as a 12-hour clock, so the `I` code is mainly useful for output.
 
 Creating a DateFormat object is expensive. Whenever possible, create it once and use it many times
-or try the `dateformat""` string macro. Using this macro creates the DateFormat object once at
-macro expansion time and reuses it later. see [`@dateformat_str`](@ref).
+or try the [`dateformat""`](@ref @dateformat_str) string macro. Using this macro creates the DateFormat
+object once at macro expansion time and reuses it later. There are also several [pre-defined formatters](@ref
+Common-Date-Formatters), listed later.
 
 See [`DateTime`](@ref) and [`format`](@ref) for how to use a DateFormat object to parse and write Date strings
 respectively.
@@ -378,14 +396,24 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev = ()
     prev_offset = 1
 
-    letters = String(collect(keys(CONVERSION_SPECIFIERS)))
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+    # To understand this block, please see the comments attached to the definitions of
+    # DATEFORMAT_REGEX_LOCK, DATEFORMAT_REGEX_HASH, and DATEFORMAT_REGEX_CACHE.
+    lock(DATEFORMAT_REGEX_LOCK)
+    try
+        dateformat_regex_hash = hash(keys(CONVERSION_SPECIFIERS))
+        if dateformat_regex_hash != DATEFORMAT_REGEX_HASH[]
+            DATEFORMAT_REGEX_HASH[] = dateformat_regex_hash
+            DATEFORMAT_REGEX_CACHE[] = compute_dateformat_regex(CONVERSION_SPECIFIERS)
+        end
+    finally
+        unlock(DATEFORMAT_REGEX_LOCK)
+    end
+
+    for m in eachmatch(DATEFORMAT_REGEX_CACHE[], f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
-
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
 
@@ -404,8 +432,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
-
         push!(tokens, DatePart{letter}(width, false))
     end
 
@@ -443,14 +469,63 @@ macro dateformat_str(str)
 end
 
 # Standard formats
+
+"""
+    Dates.ISODateTimeFormat
+
+Describes the ISO8601 formatting for a date and time. This is the default value for `Dates.format`
+of a `DateTime`.
+
+# Example
+```jldoctest
+julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), ISODateTimeFormat)
+"2018-08-08T12:00:43.001"
+```
+"""
 const ISODateTimeFormat = DateFormat("yyyy-mm-dd\\THH:MM:SS.s")
+default_format(::Type{DateTime}) = ISODateTimeFormat
+
+"""
+    Dates.ISODateFormat
+
+Describes the ISO8601 formatting for a date. This is the default value for `Dates.format` of a `Date`.
+
+# Example
+```jldoctest
+julia> Dates.format(Date(2018, 8, 8), ISODateFormat)
+"2018-08-08"
+```
+"""
 const ISODateFormat = DateFormat("yyyy-mm-dd")
+default_format(::Type{Date}) = ISODateFormat
+
+"""
+    Dates.ISOTimeFormat
+
+Describes the ISO8601 formatting for a time. This is the default value for `Dates.format` of a `Time`.
+
+# Example
+```jldoctest
+julia> Dates.format(Time(12, 0, 43, 1), ISOTimeFormat)
+"12:00:43.001"
+```
+"""
 const ISOTimeFormat = DateFormat("HH:MM:SS.s")
+default_format(::Type{Time}) = ISOTimeFormat
+
+"""
+    Dates.RFC1123Format
+
+Describes the RFC1123 formatting for a date and time.
+
+# Example
+```jldoctest
+julia> Dates.format(DateTime(2018, 8, 8, 12, 0, 43, 1), RFC1123Format)
+"Wed, 08 Aug 2018 12:00:43"
+```
+"""
 const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 
-default_format(::Type{DateTime}) = ISODateTimeFormat
-default_format(::Type{Date}) = ISODateFormat
-default_format(::Type{Time}) = ISOTimeFormat
 
 ### API
 
@@ -460,22 +535,37 @@ const Locale = Union{DateLocale, String}
     DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date time string following the
-pattern given in the `format` string.
+pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many date time strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> DateTime("2020-01-01", "yyyy-mm-dd")
+2020-01-01T00:00:00
+
+julia> a = ("2020-01-01", "2020-01-02");
+
+julia> [DateTime(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
+2-element Vector{DateTime}:
+ 2020-01-01T00:00:00
+ 2020-01-02T00:00:00
+```
 """
 function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     return parse(DateTime, dt, DateFormat(format, locale))
 end
 
 """
-    DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+    DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
 
 Construct a `DateTime` by parsing the `dt` date time string following the
-pattern given in the [`DateFormat`](@ref) object. Similar to
-`DateTime(::AbstractString, ::AbstractString)` but more efficient when
+pattern given in the [`DateFormat`](@ref) object, or $ISODateTimeFormat if omitted.
+
+Similar to `DateTime(::AbstractString, ::AbstractString)` but more efficient when
 repeatedly parsing similarly formatted date time strings with a pre-created
 `DateFormat` object.
 """
@@ -485,20 +575,39 @@ DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime,
     Date(d::AbstractString, format::AbstractString; locale="english") -> Date
 
 Construct a `Date` by parsing the `d` date string following the pattern given
-in the `format` string.
+in the `format` string (see [`DateFormat`](@ref) for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many date strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> Date("2020-01-01", "yyyy-mm-dd")
+2020-01-01
+
+julia> a = ("2020-01-01", "2020-01-02");
+
+julia> [Date(d, dateformat"yyyy-mm-dd") for d ∈ a] # preferred
+2-element Vector{Date}:
+ 2020-01-01
+ 2020-01-02
+```
 """
 function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(Date, d, DateFormat(format, locale))
 end
 
 """
-    Date(d::AbstractString, df::DateFormat) -> Date
+    Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
 
-Parse a date from a date string `d` using a `DateFormat` object `df`.
+Construct a `Date` by parsing the `d` date string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISODateFormat if omitted.
+
+Similar to `Date(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted date strings with a pre-created
+`DateFormat` object.
 """
 Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 
@@ -506,20 +615,39 @@ Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
     Time(t::AbstractString, format::AbstractString; locale="english") -> Time
 
 Construct a `Time` by parsing the `t` time string following the pattern given
-in the `format` string.
+in the `format` string (see [`DateFormat`](@ref) for syntax).
 
-This method creates a `DateFormat` object each time it is called. If you are
-parsing many time strings of the same format, consider creating a
-[`DateFormat`](@ref) object once and using that as the second argument instead.
+!!! note
+    This method creates a `DateFormat` object each time it is called. It is recommended
+    that you create a [`DateFormat`](@ref) object instead and use that as the second
+    argument to avoid performance loss when using the same format repeatedly.
+
+# Example
+```jldoctest
+julia> Time("12:34pm", "HH:MMp")
+12:34:00
+
+julia> a = ("12:34pm", "2:34am");
+
+julia> [Time(d, dateformat"HH:MMp") for d ∈ a] # preferred
+2-element Vector{Time}:
+ 12:34:00
+ 02:34:00
+```
 """
 function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
     parse(Time, t, DateFormat(format, locale))
 end
 
 """
-    Time(t::AbstractString, df::DateFormat) -> Time
+    Time(t::AbstractString, df::DateFormat=ISOTimeFormat) -> Time
 
-Parse a time from a time string `t` using a `DateFormat` object `df`.
+Construct a `Time` by parsing the `t` date time string following the
+pattern given in the [`DateFormat`](@ref) object, or $ISOTimeFormat if omitted.
+
+Similar to `Time(::AbstractString, ::AbstractString)` but more efficient when
+repeatedly parsing similarly formatted time strings with a pre-created
+`DateFormat` object.
 """
 Time(t::AbstractString, df::DateFormat=ISOTimeFormat) = parse(Time, t, df)
 
@@ -580,9 +708,9 @@ end
 # show
 function Base.print(io::IO, dt::DateTime)
     str = if millisecond(dt) == 0
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 24)
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS", 19)
     else
-        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.s", 26)
+        format(dt, dateformat"YYYY-mm-dd\THH:MM:SS.sss", 23)
     end
     print(io, str)
 end

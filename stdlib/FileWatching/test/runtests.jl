@@ -1,7 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, FileWatching
-using Base: uv_error
+using Base: uv_error, Experimental
+
+@testset "FileWatching" begin
 
 # This script does the following
 # Sets up N unix pipes (or WSA sockets)
@@ -12,7 +14,7 @@ using Base: uv_error
 # Writable ends are always tested for write-ability before a write
 
 n = 20
-intvls = [2, .2, .1, .005]
+intvls = [2, .2, .1, .005, .00001]
 
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
 for i in 1:n
@@ -22,9 +24,15 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? 0x7fff : (n + 60) # expectations on reasonable values
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax
-    @test 0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    FDmax = Sys.iswindows() ? 0x7fff : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    fd_in_limits =
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
+        0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
+    # Dump out what file descriptors are open for easier debugging of failure modes
+    if !fd_in_limits && Sys.islinux()
+        run(`ls -la /proc/$(getpid())/fd`)
+    end
+    @test fd_in_limits
 end
 
 function pfd_tst_reads(idx, intvl)
@@ -64,15 +72,14 @@ end
 
 # Odd numbers trigger reads, even numbers timeout
 for (i, intvl) in enumerate(intvls)
-    @sync begin
+    @Experimental.sync begin
         global ready = 0
         global ready_c = Condition()
-        t = Vector{Task}(undef, n)
         for idx in 1:n
             if isodd(idx)
-                t[idx] = @async pfd_tst_reads(idx, intvl)
+                @async pfd_tst_reads(idx, intvl)
             else
-                t[idx] = @async pfd_tst_timeout(idx, intvl)
+                @async pfd_tst_timeout(idx, intvl)
             end
         end
 
@@ -96,9 +103,6 @@ for (i, intvl) in enumerate(intvls)
             end
         end
         notify(ready_c, all=true)
-        for idx in 1:n
-            Base.wait(t[idx])
-        end
     end
 end
 
@@ -155,8 +159,8 @@ test2_12992()
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-const F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
-const F_PATH = F_GETPATH ? "afile.txt" : ""
+F_GETPATH = Sys.islinux() || Sys.iswindows() || Sys.isapple()  # platforms where F_GETPATH is available
+F_PATH = F_GETPATH ? "afile.txt" : ""
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 
@@ -320,8 +324,10 @@ function test_dirmonitor_wait2(tval)
                     fname, events = wait(fm)
                 end
                 for i = 1:3
-                    @test fname == "$F_PATH$i"
-                    @test !events.changed && !events.timedout && events.renamed
+                    @testset let (fname, events) = (fname, events)
+                        @test fname == "$F_PATH$i"
+                        @test !events.changed && !events.timedout && events.renamed
+                    end
                     i == 3 && break
                     fname, events = wait(fm)
                 end
@@ -363,60 +369,62 @@ test_monitor_wait_poll()
 test_monitor_wait_poll()
 test_watch_file_timeout(0.2)
 test_watch_file_change(6)
-test_dirmonitor_wait2(0.2)
-test_dirmonitor_wait2(0.2)
 
-mv(file, file * "~")
-mv(file * "~", file)
-let changes = []
-    while true
-        let c
-            Sys.iswindows() && sleep(0.1)
-            @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
-            push!(changes, c)
-            (c.second::FileWatching.FileEvent).timedout && break
+if !((Sys.ARCH == :x86_64) && (Sys.isapple())) #These tests tend to fail a lot on x86-apple
+    test_dirmonitor_wait2(0.2)                 #because the os can reorder the events
+    test_dirmonitor_wait2(0.2)                 #see https://github.com/dotnet/runtime/issues/30415
+
+    mv(file, file * "~")
+    mv(file * "~", file)
+    let changes = []
+        while true
+            let c
+                Sys.iswindows() && sleep(0.1)
+                @test @elapsed(c = watch_folder(dir, 0.0)) < 0.5
+                push!(changes, c)
+                (c.second::FileWatching.FileEvent).timedout && break
+            end
         end
-    end
-    if F_GETPATH
-        @test 12 < length(changes) < 48
-    else
-        @test 5 < length(changes) < 16
-    end
-    @test pop!(changes) == ("" => FileWatching.FileEvent())
-    if F_GETPATH
-        Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
-        p = pop!(changes)
-        if !Sys.isapple()
-            @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        if F_GETPATH
+            @test 12 < length(changes) < 48
+        else
+            @test 5 < length(changes) < 16
         end
-        while changes[end][1] == F_PATH
-            @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
-        end
-        p = pop!(changes)
-        if !Sys.isapple()
-            @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
-        end
-        while changes[end][1] == F_PATH * "~"
-            @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
-        end
-        if changes[end][1] == F_PATH
-            @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
-        end
-        for j = 1:4
-            for i = 3:-1:1
-                while changes[end - 1][1] == "$F_PATH$i"
-                    @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
-                end
-                p = pop!(changes)
-                if !Sys.isapple()
-                    @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+        @test pop!(changes) == ("" => FileWatching.FileEvent())
+        if F_GETPATH
+            Sys.iswindows() && @test pop!(changes) == (F_PATH => FileWatching.FileEvent(FileWatching.UV_CHANGE))
+            p = pop!(changes)
+            if !Sys.isapple()
+                @test p == (F_PATH => FileWatching.FileEvent(FileWatching.UV_RENAME))
+            end
+            while changes[end][1] == F_PATH
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            p = pop!(changes)
+            if !Sys.isapple()
+                @test p == (F_PATH * "~" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+            end
+            while changes[end][1] == F_PATH * "~"
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            if changes[end][1] == F_PATH
+                @test pop!(changes)[2] == FileWatching.FileEvent(FileWatching.UV_RENAME)
+            end
+            for j = 1:4
+                for i = 3:-1:1
+                    while changes[end - 1][1] == "$F_PATH$i"
+                        @test let x = pop!(changes)[2]; x.changed ⊻ x.renamed; end
+                    end
+                    p = pop!(changes)
+                    if !Sys.isapple()
+                        @test p == ("$F_PATH$i" => FileWatching.FileEvent(FileWatching.UV_RENAME))
+                    end
                 end
             end
         end
+        @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
     end
-    @test all(x -> (isa(x, Pair) && x[1] == F_PATH && (x[2].changed ⊻ x[2].renamed)), changes) || changes
 end
-
 @test_throws(Base._UVError("FileMonitor (start)", Base.UV_ENOENT),
              watch_file("____nonexistent_file", 10))
 @test_throws(Base._UVError("FolderMonitor (start)", Base.UV_ENOENT),
@@ -429,3 +437,9 @@ unwatch_folder(dir)
 @test isempty(FileWatching.watched_folders)
 rm(file)
 rm(dir)
+
+@testset "Pidfile" begin
+    include("pidfile.jl")
+end
+
+end # testset

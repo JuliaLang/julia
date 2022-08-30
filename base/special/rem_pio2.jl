@@ -23,7 +23,7 @@
 #        @printf "0x%016x,\n" k
 #        I -= k
 #    end
-const INV_2PI = UInt64[
+const INV_2PI = (
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
     0x36d8_a566_4f10_e410,
@@ -42,7 +42,7 @@ const INV_2PI = UInt64[
     0x5d49_eeb1_faf9_7c5e,
     0xcf41_ce7d_e294_a4ba,
     0x9afe_d7ec_47e3_5742,
-    0x1580_cc11_bf1e_daea]
+    0x1580_cc11_bf1e_daea)
 
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
     pio2_1 = 1.57079632673412561417e+00
@@ -125,7 +125,10 @@ function fromfraction(f::Int128)
     return (z1,z2)
 end
 
-function paynehanek(x::Float64)
+# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# because the effect analysis currently can't prove it in the presence of `@inbounds` or
+# `:boundscheck`, but still the accesses to `INV_2PI` are really safe here
+Base.@assume_effects :consistent function paynehanek(x::Float64)
     # 1. Convert to form
     #
     #    x = X * 2^k,
@@ -209,12 +212,13 @@ function paynehanek(x::Float64)
 end
 
 """
-    rem_pio2_kernel(x)
+    rem_pio2_kernel(x::Union{Float32, Float64})
 
-Return the remainder of `x` modulo π/2 as a double-double pair, along with a `k`
-such that ``k \\mod 3 == K \\mod 3`` where ``K*π/2 = x - rem``. Note, that it is
-only meant for use when ``|x|>=π/4``, and that ``π/2`` is always subtracted or
-added for ``π/4<|x|<=π/2`` instead of simply returning `x`.
+Calculate `x` divided by `π/2` accurately for arbitrarily large `x`.
+Returns a pair `(k, r)`, where `k` is the quadrant of the result
+(multiple of π/2) and `r` is the remainder, such that ``k * π/2 = x - r``.
+The remainder is given as a double-double pair.
+`k` is positive if `x > 0` and is negative if `x ≤ 0`.
 """
 @inline function rem_pio2_kernel(x::Float64)
     xhp = poshighword(x)

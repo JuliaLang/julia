@@ -282,7 +282,7 @@ function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_forma
     val = tryparsenext_internal(T, str, pos, len, df, true)
     @assert val !== nothing
     values, endpos = val
-    return T(values...)
+    return T(values...)::T
 end
 
 function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
@@ -292,7 +292,7 @@ function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_fo
     values, endpos = res
     if validargs(T, values...) === nothing
         # TODO: validargs gets called twice, since it's called again in the T constructor
-        return T(values...)
+        return T(values...)::T
     end
     return nothing
 end

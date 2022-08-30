@@ -83,7 +83,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     int n = 0;
     for (i = 0; i < l; i++) {
         jl_datatype_t *fld = (jl_datatype_t*)jl_field_type(ty, i);
-        if (!jl_is_datatype(fld) || ((jl_datatype_t*)fld)->layout == NULL)
+        if (!jl_is_datatype(fld) || ((jl_datatype_t*)fld)->layout == NULL || jl_is_layout_opaque(((jl_datatype_t*)fld)->layout))
             return 9;
         n += isHFA((jl_datatype_t*)fld, ty0, hva);
         if (n > 8)
@@ -92,7 +92,7 @@ unsigned isHFA(jl_datatype_t *ty, jl_datatype_t **ty0, bool *hva) const
     return n;
 }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
@@ -101,18 +101,18 @@ bool use_sret(jl_datatype_t *dt) override
     return false;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     jl_datatype_t *ty0 = NULL;
     bool hva = false;
     if (jl_datatype_size(dt) > 64 && isHFA(dt, &ty0, &hva) > 8) {
-        ab.addAttribute(Attribute::ByVal);
+        ab.addByValAttr(Ty);
         return true;
     }
     return false;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
     // Arguments are either scalar or passed by value
     size_t size = jl_datatype_size(dt);
@@ -125,19 +125,16 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     int hfa = isHFA(dt, &ty0, &hva);
     if (hfa <= 8) {
         if (ty0 == jl_float32_type) {
-            return ArrayType::get(T_float32, hfa);
+            return ArrayType::get(llvm::Type::getFloatTy(ctx), hfa);
         }
         else if (ty0 == jl_float64_type) {
-            return ArrayType::get(T_float64, hfa);
+            return ArrayType::get(llvm::Type::getDoubleTy(ctx), hfa);
         }
         else {
             jl_datatype_t *vecty = (jl_datatype_t*)jl_field_type(ty0, 0);
             assert(jl_is_datatype(vecty) && vecty->name == jl_vecelement_typename);
-            jl_value_t *elemty = jl_tparam0(vecty);
-            assert(jl_is_primitivetype(elemty));
-
-            Type *ety = julia_type_to_llvm(elemty);
-            Type *vty = VectorType::get(ety, jl_datatype_nfields(ty0));
+            Type *ety = bitstype_to_llvm(jl_tparam0(vecty), ctx);
+            Type *vty = FixedVectorType::get(ety, jl_datatype_nfields(ty0));
             return ArrayType::get(vty, hfa);
         }
     }
@@ -145,14 +142,15 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
     // the bitsize of the integer gives the desired alignment
     if (size > 8) {
         if (jl_datatype_align(dt) <= 8) {
+            Type  *T_int64 = Type::getInt64Ty(ctx);
             return ArrayType::get(T_int64, (size + 7) / 8);
         }
         else {
-            Type *T_int128 = Type::getIntNTy(jl_LLVMContext, 128);
+            Type *T_int128 = Type::getIntNTy(ctx, 128);
             return ArrayType::get(T_int128, (size + 15) / 16);
         }
     }
-    return Type::getIntNTy(jl_LLVMContext, size * 8);
+    return Type::getIntNTy(ctx, size * 8);
 }
 
 };

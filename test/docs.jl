@@ -12,12 +12,20 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
-    String(take!(io1)) == String(take!(io2))
+    s1 = String(take!(io1))
+    s2 = String(take!(io2))
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
+    return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
 
@@ -72,6 +80,11 @@ end
 
 @test docstrings_equal(@doc(ModuleMacroDoc), doc"I am a module")
 @test docstrings_equal(@doc(ModuleMacroDoc.@m), doc"I am a macro")
+
+# issue #38819
+
+module NoDocStrings end
+@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
 
 # General tests for docstrings.
 
@@ -157,7 +170,7 @@ t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
 
 # Docstrings to parametric methods after definition using where syntax (#32960):
 tw(x::T) where T = nothing
@@ -337,7 +350,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -433,6 +446,7 @@ macro example_1(f)
     end |> esc
 end
 
+const LINE_NUMBER_F = @__LINE__() + 1
 "f"
 @example_1 f
 
@@ -446,16 +460,23 @@ macro example_2(f)
     end |> esc
 end
 
+const LINE_NUMBER_G = @__LINE__() + 1
 "g"
 @example_2 g
 
 @example_2 _g
+
+const LINE_NUMBER_T = @__LINE__() + 1
+"T"
+Base.@kwdef struct T end
 
 end
 
 let md = meta(MacroGenerated)[@var(MacroGenerated.f)]
     @test md.order == [Tuple{Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"f")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_F
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_f)
@@ -464,9 +485,18 @@ let md = meta(MacroGenerated)[@var(MacroGenerated.g)]
     @test md.order == [Tuple{Any}, Tuple{Any, Any}]
     @test docstrings_equal(md.docs[Tuple{Any}], doc"g")
     @test docstrings_equal(md.docs[Tuple{Any, Any}], doc"g")
+    @test md.docs[Tuple{Any}].data[:linenumber] == MacroGenerated.LINE_NUMBER_G
+    @test md.docs[Tuple{Any}].data[:path] == @__FILE__()
 end
 
 @test isdefined(MacroGenerated, :_g)
+
+let md = meta(MacroGenerated)[@var(MacroGenerated.T)]
+    @test md.order == Type[Union{}]
+    @test docstrings_equal(md.docs[Union{}], doc"T")
+    @test md.docs[Union{}].data[:linenumber] == MacroGenerated.LINE_NUMBER_T
+    @test md.docs[Union{}].data[:path] == @__FILE__()
+end
 
 module DocVars
 
@@ -618,7 +648,7 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found.
 
@@ -686,7 +716,7 @@ f12593_2() = 1
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
-                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}); debug=false)
 
 # test that macro documentation works
 @test (@repl :@assert) !== nothing
@@ -756,21 +786,16 @@ end
 
 # Issue #13905.
 let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
-    __source__ = LineNumberNode(@__LINE__() -  1, Symbol(@__FILE__))
-    err::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::LoadError
-    @test err.file === string(__source__.file)
-    @test err.line === __source__.line
-    err = err.error::UndefVarError
-    @test err.var == Symbol("@x")
+    err::UndefVarError
+    @test err.var === Symbol("@x")
  end
 
 
 # Undocumented DataType Summaries.
 
 module Undocumented
+
+export A, B, C, at0, pt2
 
 abstract type A end
 abstract type B <: A end
@@ -783,13 +808,54 @@ struct D <: B
     three::Float64
 end
 
+abstract type at0{T<:Number,N} end
+abstract type at1{T>:Integer,N} <:at0{T,N} end
+
+const at_ = at0{Int64}
+
+primitive type pt2{T<:Number,N,A>:Integer} <:at0{T,N} 32 end
+
+struct st3{T<:Integer,N} <: at0{T,N}
+    a::NTuple{N,T}
+    b::Array{Int64,N}
+    c::Int64
+end
+
+struct st4{T,N} <: at0{T,N}
+    a::T
+    b::NTuple{N,T}
+end
+
+struct st5{T>:Int64,N} <:at1{T,N}
+    c::st3{T,N}
+end
+
+mutable struct mt6{T<:Integer,N} <:at1{T,N}
+    d::st5{T,N}
+end
+
+const ut7 = Union{st5, mt6}
+
+const ut8 = Union{at1, pt2, st3, st4}
+
+const ut9{T} = Union{at1{T}, pt2{T}, st3{T}, st4{T}}
+
 f = () -> nothing
 
 undocumented() = 1
 undocumented(x) = 2
 undocumented(x,y) = 3
 
-end
+end # module
+
+doc_str = Markdown.parse("""
+No docstring or readme file found for module `$(curmod_prefix)Undocumented`.
+
+# Exported names
+
+`A`, `B`, `C`, `at0`, `pt2`
+""")
+@test docstrings_equal(@doc(Undocumented), doc"$doc_str")
 
 doc_str = Markdown.parse("""
 No documentation found.
@@ -803,7 +869,7 @@ No documentation found.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.A <: Any
+abstract type $(curmod_prefix)Undocumented.A
 ```
 
 # Subtypes
@@ -819,7 +885,7 @@ No documentation found.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A
+abstract type $(curmod_prefix)Undocumented.B
 ```
 
 # Subtypes
@@ -839,7 +905,7 @@ No documentation found.
 
 # Summary
 ```
-mutable struct $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A
+mutable struct $(curmod_prefix)Undocumented.C
 ```
 
 # Supertype Hierarchy
@@ -854,7 +920,7 @@ No documentation found.
 
 # Summary
 ```
-struct $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B
+struct $(curmod_prefix)Undocumented.D
 ```
 
 # Fields
@@ -870,6 +936,217 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{T<:Number, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.at1{Integer<:T<:Number, N}
+$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{T<:Integer, N}
+$(curmod_prefix)Undocumented.st4{T<:Number, N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.mt6{Integer, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.at0{T>:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+abstract type $(curmod_prefix)Undocumented.at0{Int64, N}
+```
+
+# Subtypes
+
+```
+$(curmod_prefix)Undocumented.pt2{Int64, N, A>:Integer}
+$(curmod_prefix)Undocumented.st3{Int64, N}
+$(curmod_prefix)Undocumented.st4{Int64, N}
+```
+""")
+@test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+primitive type $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+```
+
+# Supertype Hierarchy
+
+```
+$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Undocumented.at0{T<:Number, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
+```
+
+# Fields
+```
+a :: Tuple{Vararg{T<:Integer, N}}
+b :: Array{Int64, N}
+c :: Int64
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st4{T, N}
+```
+
+# Fields
+```
+a :: T
+b :: Tuple{Vararg{T, N}}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+struct $(curmod_prefix)Undocumented.st5{T>:Int64, N}
+```
+
+# Fields
+```
+c :: $(curmod_prefix)Undocumented.st3{T>:Int64, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at1{T>:Int64, N} <: $(curmod_prefix)Undocumented.at0{T>:Int64, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+```
+mutable struct $(curmod_prefix)Undocumented.mt6{T<:Integer, N}
+```
+
+# Fields
+```
+d :: $(curmod_prefix)Undocumented.st5{T<:Integer, N}
+```
+
+# Supertype Hierarchy
+```
+$(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.at1{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+```
+""")
+@test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut7` is of type `Union`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.mt6`
+ - `$(curmod_prefix)Undocumented.st5`
+""")
+@test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut8` is of type `Union`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.at1`
+ - `$(curmod_prefix)Undocumented.pt2`
+ - `$(curmod_prefix)Undocumented.st3`
+ - `$(curmod_prefix)Undocumented.st4`
+""")
+@test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
+
+doc_str = Markdown.parse("""
+No documentation found.
+
+# Summary
+
+`$(curmod_prefix)Undocumented.ut9` is of type `UnionAll`.
+
+# Union Composed of Types
+
+ - `$(curmod_prefix)Undocumented.at1{T} where T`
+ - `$(curmod_prefix)Undocumented.pt2{T} where T`
+ - `$(curmod_prefix)Undocumented.st3{T} where T`
+ - `$(curmod_prefix)Undocumented.st4`
+""")
+@test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
 
 let d = @doc(Undocumented.f)
     io = IOBuffer()
@@ -925,11 +1202,11 @@ end
 
 import Base.Docs: @var, Binding, defined
 
-let x = Binding(Base, Symbol("@time"))
+let x = Binding(Base, Symbol("@inline"))
     @test defined(x) == true
-    @test @var(@time) == x
-    @test @var(Base.@time) == x
-    @test @var(Base.Iterators.@time) == x
+    @test @var(@inline) == x
+    @test @var(Base.@inline) == x
+    @test @var(Base.Iterators.@inline) == x
 end
 
 let x = Binding(Iterators, :enumerate)
@@ -985,6 +1262,11 @@ end
 @test sprint(repl_latex, "√") == "\"√\" can be typed by \\sqrt<tab>\n\n"
 @test sprint(repl_latex, "x̂₂") == "\"x̂₂\" can be typed by x\\hat<tab>\\_2<tab>\n\n"
 
+# issue #36378 (\u1e8b and x\u307 are the fully composed and decomposed forms of ẋ, respectively)
+@test sprint(repl_latex, "\u1e8b") == "\"x\u307\" can be typed by x\\dot<tab>\n\n"
+# issue 39814
+@test sprint(repl_latex, "\u2209") == "\"\u2209\" can be typed by \\notin<tab>\n\n"
+
 # issue #15684
 begin
     """
@@ -1013,9 +1295,9 @@ dynamic_test.x = "test 2"
 function striptrimdocs(expr)
     if Meta.isexpr(expr, :call)
         fex = expr.args[1]
-        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
+        if Meta.isexpr(fex, :.) && fex.args[1] === :REPL
             fmex = fex.args[2]
-            if isa(fmex, QuoteNode) && fmex.value == :trimdocs
+            if isa(fmex, QuoteNode) && fmex.value === :trimdocs
                 expr = expr.args[2]
             end
         end
@@ -1027,28 +1309,28 @@ let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
     @test dt1.args[1].head === :macrocall
-    @test dt1.args[1].args[1] == Symbol("@doc")
+    @test dt1.args[1].args[1] === Symbol("@doc")
     @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
     @test dt2.args[1].head === :macrocall
-    @test dt2.args[1].args[1] == Symbol("@doc")
+    @test dt2.args[1].args[1] === Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
     @test dt3.args[1].head === :macrocall
-    @test dt3.args[1].args[1] == Symbol("@doc")
-    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+    @test dt3.args[1].args[1] === Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head === :(::) # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
     @test dt4.args[1].head === :macrocall
-    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[1] === Symbol("@doc")
     @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
 end
 
@@ -1152,25 +1434,34 @@ end
 struct t_docs_abc end
 @test "t_docs_abc" in accessible(@__MODULE__)
 
-# Call overloading issue #20087
+# Call overloading issues #20087 and #44889
 """
 Docs for `MyFunc` struct.
 """
-mutable struct MyFunc
-    x
-end
+mutable struct MyFunc x end
+"""
+Docs for `MyParametricFunc{T}` struct.
+"""
+struct MyParametricFunc{T} end
 
 """
 Docs for calling `f::MyFunc`.
 """
-function (f::MyFunc)(x)
-    f.x = x
-    return f
-end
+(f::MyFunc)(x) = f
 
-@test docstrings_equal(@doc(MyFunc(2)),
+"""
+Docs for calling `f::MyParametricFunc{T}`.
+"""
+(f::MyParametricFunc{T})(x) where T = f
+
+@test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
+""")
+
+@test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
+doc"""
+Docs for calling `f::MyParametricFunc{T}`.
 """)
 
 struct A_20087 end
@@ -1204,3 +1495,23 @@ end
 end
 @test M27832.xs == ":(\$(Expr(:\$, :fn)))"
 Core.atdoc!(_last_atdoc)
+
+# issue #29432
+"First docstring" module Module29432 end
+Test.collect_test_logs() do                          # suppress printing of any warning
+    eval(quote "Second docstring" Module29432 end)   # requires toplevel
+end
+@test docstrings_equal(@doc(Module29432), doc"Second docstring")
+
+# Issue #13109
+eval(Expr(:block, Expr(:macrocall, GlobalRef(Core, Symbol("@doc")), nothing, "...", Expr(:module, false, :MBareModuleEmpty, Expr(:block)))))
+@test docstrings_equal(@doc(MBareModuleEmpty), doc"...")
+
+# issue #41727
+"struct docstring"
+struct S41727
+    "x is $(2*2)"
+    x
+end
+@test S41727(1) isa S41727
+@test string(@repl S41727.x) == "x is 4\n"

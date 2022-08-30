@@ -2,74 +2,205 @@
 
 using Random
 
+is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
+
 @testset "gcd/lcm" begin
-    # Int32 and Int64 take different code paths -- test both
-    for T in (Int32, Int64)
+    # All Integer data types take different code paths -- test all
+    # TODO: Test gcd and lcm for BigInt.
+    for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128)
         @test gcd(T(3)) === T(3)
         @test gcd(T(3), T(5)) === T(1)
         @test gcd(T(3), T(15)) === T(3)
         @test gcd(T(0), T(15)) === T(15)
-        @test gcd(T(3), T(-15)) === T(3)
-        @test gcd(T(-3), T(-15)) === T(3)
+        @test gcd(T(15), T(0)) === T(15)
+        if T <: Signed
+            @test gcd(T(-12)) === T(12)
+            @test gcd(T(0), T(-15)) === T(15)
+            @test gcd(T(-15), T(0)) === T(15)
+            @test gcd(T(3), T(-15)) === T(3)
+            @test gcd(T(-3), T(-15)) === T(3)
+        end
         @test gcd(T(0), T(0)) === T(0)
 
         @test gcd(T(2), T(4), T(6)) === T(2)
+        if T <: Signed
+            @test gcd(T(2), T(4), T(-6)) === T(2)
+            @test gcd(T(2), T(-4), T(-6)) === T(2)
+            @test gcd(T(-2), T(4), T(-6)) === T(2)
+            @test gcd(T(-2), T(-4), T(-6)) === T(2)
+        end
 
         @test gcd(typemax(T), T(1)) === T(1)
-        @test gcd(-typemax(T), T(1)) === T(1)
-        @test gcd(typemin(T), T(1)) === T(1)
-        @test_throws OverflowError gcd(typemin(T), typemin(T))
+        @test gcd(T(1), typemax(T)) === T(1)
+        @test gcd(typemax(T), T(0)) === typemax(T)
+        @test gcd(T(0), typemax(T)) === typemax(T)
+        @test gcd(typemax(T), typemax(T)) === typemax(T)
+        @test gcd(typemax(T), typemax(T)-T(1)) === T(1)     # gcd(n, n-1) = 1. n and n-1 are always coprime.
+
+        if T <: Signed
+            @test gcd(-typemax(T), T(1)) === T(1)
+            @test gcd(T(1), -typemax(T)) === T(1)
+            @test gcd(-typemax(T), T(0)) === typemax(T)
+            @test gcd(T(0), -typemax(T)) === typemax(T)
+            @test gcd(-typemax(T), -typemax(T)) === typemax(T)
+            @test gcd(typemax(T), -typemax(T)) === typemax(T)
+            @test gcd(-typemax(T), typemax(T)) === typemax(T)
+
+            @test gcd(typemin(T), T(1)) === T(1)
+            @test gcd(T(1), typemin(T)) === T(1)
+            @test gcd(typemin(T), typemin(T)+T(1)) === T(1) # gcd(n, n+1) = 1. n and n+1 are always coprime.
+            @test_throws OverflowError gcd(typemin(T), typemin(T))
+            @test_throws OverflowError gcd(typemin(T), T(0))
+            @test_throws OverflowError gcd(T(0), typemin(T))
+        else
+            # For Unsigned Integer types, -typemax(T) == 1.
+            @test gcd(-typemax(T), T(1)) === T(1)
+            @test gcd(T(1), -typemax(T)) === T(1)
+            @test gcd(-typemax(T), T(0)) === T(1)
+            @test gcd(T(0), -typemax(T)) === T(1)
+            @test gcd(-typemax(T), -typemax(T)) === T(1)
+            @test gcd(-typemax(T), typemax(T)) === T(1)
+            @test gcd(typemax(T), -typemax(T)) === T(1)
+
+            # For Unsigned Integer types, typemin(T) == 0.
+            @test gcd(typemin(T), T(1)) === T(1)
+            @test gcd(T(1), typemin(T)) === T(1)
+            @test gcd(typemin(T), typemin(T)+T(1)) === T(1) # gcd(n, n+1) = 1. n and n+1 are always coprime.
+            @test gcd(typemin(T), typemin(T)) === T(0)
+            @test gcd(typemin(T), T(0)) === T(0)
+            @test gcd(T(0), typemin(T)) === T(0)
+        end
 
         @test lcm(T(0)) === T(0)
         @test lcm(T(2)) === T(2)
         @test lcm(T(2), T(3)) === T(6)
+        @test lcm(T(3), T(2)) === T(6)
         @test lcm(T(4), T(6)) === T(12)
+        @test lcm(T(6), T(4)) === T(12)
         @test lcm(T(3), T(0)) === T(0)
+        @test lcm(T(0), T(3)) === T(0)
         @test lcm(T(0), T(0)) === T(0)
-        @test lcm(T(4), T(-6)) === T(12)
-        @test lcm(T(-4), T(-6)) === T(12)
+        if T <: Signed
+            @test lcm(T(-12)) === T(12)
+            @test lcm(T(0), T(-4)) === T(0)
+            @test lcm(T(-4), T(0)) === T(0)
+            @test lcm(T(4), T(-6)) === T(12)
+            @test lcm(T(-4), T(-6)) === T(12)
+        end
 
         @test lcm(T(2), T(4), T(6)) === T(12)
+        @test lcm(T(2), T(4), T(0)) === T(0)
+        if T <: Signed
+            @test lcm(T(2), T(4), T(-6)) === T(12)
+            @test lcm(T(2), T(-4), T(-6)) === T(12)
+            @test lcm(T(-2), T(-4), T(-6)) === T(12)
+            @test lcm(T(-2), T(0), T(-6)) === T(0)
+        end
 
         @test lcm(typemax(T), T(1)) === typemax(T)
-        @test lcm(-typemax(T), T(1)) === typemax(T)
-        @test_throws OverflowError lcm(typemin(T), T(1))
-        @test_throws OverflowError lcm(typemin(T), typemin(T))
+        @test lcm(T(1), typemax(T)) === typemax(T)
+        @test lcm(typemax(T), T(0)) === T(0)
+        @test lcm(T(0), typemax(T)) === T(0)
+        @test lcm(typemax(T), typemax(T)) === typemax(T)
+        @test_throws OverflowError lcm(typemax(T), typemax(T)-T(1)) # lcm(n, n-1) = n*(n-1). Since n and n-1 are always coprime.
         @test_throws OverflowError lcm(typemax(T), T(2))
+
+        let x = isqrt(typemax(T))+T(1) # smallest number x such that x^2 > typemax(T)
+            @test lcm(x, x) === x
+            @test_throws OverflowError lcm(x, x+T(1))   # lcm(n, n+1) = n*(n+1). Since n and n+1 are always coprime.
+        end
+
+        if T <: Signed
+            @test lcm(-typemax(T), T(1)) === typemax(T)
+            @test lcm(T(1), -typemax(T)) === typemax(T)
+            @test lcm(-typemax(T), T(0)) === T(0)
+            @test lcm(T(0), -typemax(T)) === T(0)
+            @test lcm(-typemax(T), -typemax(T)) === typemax(T)
+            @test lcm(typemax(T), -typemax(T)) === typemax(T)
+            @test lcm(-typemax(T), typemax(T)) === typemax(T)
+
+            @test_throws OverflowError lcm(typemin(T), T(1))
+            @test_throws OverflowError lcm(T(1), typemin(T))
+            @test lcm(typemin(T), T(0)) === T(0)
+            @test lcm(T(0), typemin(T)) === T(0)
+            @test_throws OverflowError lcm(typemin(T), typemin(T)+T(1)) # lcm(n, n+1) = n*(n+1).
+            @test_throws OverflowError lcm(typemin(T), typemin(T))
+        else
+            # For Unsigned Integer types, -typemax(T) == 1.
+            @test lcm(-typemax(T), T(1)) === T(1)
+            @test lcm(T(1), -typemax(T)) === T(1)
+            @test lcm(-typemax(T), T(0)) === T(0)
+            @test lcm(T(0), -typemax(T)) === T(0)
+            @test lcm(-typemax(T), -typemax(T)) === T(1)
+            @test lcm(-typemax(T), typemax(T)) === typemax(T)
+            @test lcm(typemax(T), -typemax(T)) === typemax(T)
+
+            # For Unsigned Integer types, typemin(T) == 0.
+            @test lcm(typemin(T), T(1)) === lcm(T(0), T(1)) === T(0)
+            @test lcm(T(1), typemin(T)) === T(0)
+            @test lcm(typemin(T), T(0)) === T(0)
+            @test lcm(T(0), typemin(T)) === T(0)
+            @test lcm(typemin(T), typemin(T)) === T(0)
+            @test lcm(typemin(T), typemin(T)+T(1)) === T(0)
+        end
     end
     @test lcm(0x5, 3) == 15
     @test gcd(0xf, 20) == 5
+    @test gcd(UInt32(6), Int8(-50)) == 2
+    @test gcd(typemax(UInt), -16) == 1
+
+    @testset "effects" begin
+        @test is_effect_free(gcd, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
+    end
 end
+
 @testset "gcd/lcm for arrays" begin
-    for T in (Int32, Int64)
+    # TODO: Test gcd and lcm for BigInt arrays.
+    for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128)
         @test gcd(T[]) === T(0)
         @test gcd(T[3, 5]) === T(1)
         @test gcd(T[3, 15]) === T(3)
         @test gcd(T[0, 15]) === T(15)
-        @test gcd(T[3,-15]) === T(3)
-        @test gcd(T[-3,-15]) === T(3)
+        if T <: Signed
+            @test gcd(T[-12]) === T(12)
+            @test gcd(T[3,-15]) === T(3)
+            @test gcd(T[-3,-15]) === T(3)
+        end
         @test gcd(T[0, 0]) === T(0)
 
         @test gcd(T[2, 4, 6]) === T(2)
         @test gcd(T[2, 4, 3, 5]) === T(1)
 
         @test lcm(T[]) === T(1)
-        @test lcm(T[2]) === T(2)
         @test lcm(T[2, 3]) === T(6)
         @test lcm(T[4, 6]) === T(12)
         @test lcm(T[3, 0]) === T(0)
         @test lcm(T[0, 0]) === T(0)
-        @test lcm(T[4, -6]) === T(12)
-        @test lcm(T[-4, -6]) === T(12)
+        if T <: Signed
+            @test lcm(T[-2]) === T(2)
+            @test lcm(T[4, -6]) === T(12)
+            @test lcm(T[-4, -6]) === T(12)
+        end
 
         @test lcm(T[2, 4, 6]) === T(12)
     end
 end
+
 @testset "gcdx" begin
-    @test gcdx(5, 12) == (1, 5, -2)
-    @test gcdx(5, -12) == (1, 5, 2)
-    @test gcdx(-25, -4) == (1, -1, 6)
+    # TODO: Test gcdx for BigInt.
+    for T in (Int8, Int16, Int32, Int64, Int128)
+        @test gcdx(T(5), T(12)) === (T(1), T(5), T(-2))
+        @test gcdx(T(5), T(-12)) === (T(1), T(5), T(2))
+        @test gcdx(T(-5), T(12)) === (T(1), T(-5), T(-2))
+        @test gcdx(T(-5), T(-12)) === (T(1), T(-5), T(2))
+        @test gcdx(T(-25), T(-4)) === (T(1), T(-1), T(6))
+    end
+    x, y = Int8(-12), UInt(100)
+    d, u, v = gcdx(x, y)
+    @test x*u + y*v == d
 end
+
 @testset "gcd/lcm/gcdx for custom types" begin
     struct MyRational <: Real
         val::Rational{Int}
@@ -80,16 +211,51 @@ end
     @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
     @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
     @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
+
+    # test error path
+    struct MyOtherRational <: Real
+        val::Rational{Int}
+    end
+    @test_throws MethodError gcd(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError lcm(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
+
 @testset "invmod" begin
     @test invmod(6, 31) === 26
     @test invmod(-1, 3) === 2
     @test invmod(1, -3) === -2
     @test invmod(-1, -3) === -1
     @test invmod(0x2, 0x3) === 0x2
-    @test invmod(2, 0x3) === 2
+    @test invmod(2, 0x3) === UInt(2)
+    @test invmod(0x8, -3) === -1
     @test_throws DomainError invmod(0, 3)
+
+    # For issue 29971
+    @test invmod(UInt8(1), typemax(UInt8))  === 0x01
+    @test invmod(UInt16(1), typemax(UInt16)) === 0x0001
+    @test invmod(UInt32(1), typemax(UInt32)) === 0x0000_0001
+    @test invmod(UInt64(1), typemax(UInt64)) === 0x0000_0000_0000_0001
+
+    for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt)
+        @test invmod(T(3), T(124))::T == 83
+    end
+
+    for T in (Int8, UInt8)
+        for x in typemin(T):typemax(T)
+            for m in typemin(T):typemax(T)
+                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                    y = invmod(x, m)
+                    @test mod(widemul(y, x), m) == mod(1, m)
+                    @test div(y, m) == 0
+                else
+                    @test_throws DomainError invmod(x, m)
+                end
+            end
+        end
+    end
 end
+
 @testset "powermod" begin
     @test powermod(2, 3, 5) == 3
     @test powermod(2, 3, -5) == -2
@@ -102,6 +268,7 @@ end
     @test powermod(2, -1, -5) == -2
     @test powermod(2, -2, -5) == -1
 end
+
 @testset "nextpow/prevpow" begin
     @test nextpow(2, 3) == 4
     @test nextpow(2, 4) == 4
@@ -112,9 +279,13 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
+    @test prevpow(Int64(10), Int64(1234567890123456789)) === Int64(1000000000000000000)
+    @test prevpow(10, 101.0) === 100
+    @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end
+
 @testset "ndigits/ndigits0z" begin
     @testset "issue #8266" begin
         @test ndigits(-15, base=10) == 2
@@ -171,12 +342,16 @@ end
     end
 
 end
+
+primitive type BitString128 128 end
+
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
     @test string(3, pad = Int32(2), base = Int32(2)) == "11"
+    @test string(3, pad = typemin(Int128) + 3, base = 0x2) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
@@ -201,7 +376,9 @@ end
     @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
+
 @testset "digits/base" begin
     @test digits(5, base = 3) == [2, 1]
     @test digits(5, pad = 3) == [5, 0, 0]
@@ -209,6 +386,8 @@ end
     # The following have bases powers of 2, but don't enter the fast path
     @test digits(-3, base = 2) == -[1, 1]
     @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @test_throws DomainError string(5, base = typemin(Int128) + 10)
 
     @testset "digits/base with bases powers of 2" begin
         @test digits(4, base = 2) == [0, 0, 1]
@@ -261,6 +440,7 @@ end
                     "44642116066", "19000000000", "1xIpcEe"]
     end
 end
+
 @testset "leading_ones and count_zeros" begin
     @test leading_ones(UInt32(Int64(2) ^ 32 - 2)) == 31
     @test leading_ones(1) == 0
@@ -269,18 +449,21 @@ end
 
     @test count_zeros(Int64(1)) == 63
 end
+
 @testset "factorial" begin
     @test factorial(3) == 6
     @test factorial(Int8(3)) === 6
     @test_throws DomainError factorial(-3)
     @test_throws DomainError factorial(Int8(-3))
 end
+
 @testset "isqrt" begin
     @test isqrt(4) == 2
     @test isqrt(5) == 2
     @test isqrt(Int8(4)) === Int8(2)
     @test isqrt(Int8(5)) === Int8(2)
 end
+
 @testset "issue #4884" begin
     @test isqrt(9223372030926249000) == 3037000498
     @test isqrt(typemax(Int128)) == parse(Int128,"13043817825332782212")
@@ -297,6 +480,7 @@ end
         @test (s+1)*(s+1) > n
     end
 end
+
 # issue #9786
 let ptr = Ptr{Cvoid}(typemax(UInt))
     for T in (Int, Cssize_t)
@@ -313,3 +497,31 @@ end
 for b in [-100:-2; 2:100;]
     @test Base.ndigits0z(0, b) == 0
 end
+
+@testset "constant prop in gcd" begin
+    ci = code_typed(() -> gcd(14, 21))[][1]
+    @test ci.code == Any[Core.ReturnNode(7)]
+
+    ci = code_typed(() -> 14 // 21)[][1]
+    @test ci.code == Any[Core.ReturnNode(2 // 3)]
+end
+@testset "binomial" begin
+    for T in (Int8, Int16, Int32, Int64)
+        for x in rand(-isqrt(typemax(T)):isqrt(typemax(T)), 1000)
+            @test binomial(x,T(1)) == x
+            x>=0 && @test binomial(x,x-T(1)) == x
+            @test binomial(x,T(2)) == div(x*(x-1), 2)
+            x>=0 && @test binomial(x,x-T(2)) == div(x*(x-1), 2)
+        end
+        @test @inferred(binomial(one(T),one(T))) isa T
+    end
+    for x in ((false,false), (false,true), (true,false), (true,true))
+        @test binomial(x...) == (x != (false,true))
+    end
+end
+
+# concrete-foldability
+@test Base.infer_effects(gcd, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable

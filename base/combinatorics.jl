@@ -36,6 +36,22 @@ end
 
 # Basic functions for working with permutations
 
+@inline function _foldoneto(op, acc, ::Val{N}) where N
+    @assert N::Integer > 0
+    if @generated
+        quote
+            acc_0 = acc
+            Base.Cartesian.@nexprs $N i -> acc_{i} = op(acc_{i-1}, i)
+            return $(Symbol(:acc_, N))
+        end
+    else
+        for i in 1:N
+            acc = op(acc, i)
+        end
+        return acc
+    end
+end
+
 """
     isperm(v) -> Bool
 
@@ -50,7 +66,9 @@ julia> isperm([1; 3])
 false
 ```
 """
-function isperm(A)
+isperm(A) = _isperm(A)
+
+function _isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
@@ -63,6 +81,18 @@ isperm(p::Tuple{}) = true
 isperm(p::Tuple{Int}) = p[1] == 1
 isperm(p::Tuple{Int,Int}) = ((p[1] == 1) & (p[2] == 2)) | ((p[1] == 2) & (p[2] == 1))
 
+function isperm(P::Tuple)
+    valn = Val(length(P))
+    _foldoneto(true, valn) do b,i
+        s = _foldoneto(false, valn) do s, j
+            s || P[j]==i
+        end
+        b&s
+    end
+end
+
+isperm(P::Any32) = _isperm(P)
+
 # swap columns i and j of a, in-place
 function swapcols!(a::AbstractMatrix, i, j)
     i == j && return
@@ -73,6 +103,18 @@ function swapcols!(a::AbstractMatrix, i, j)
         @inbounds a[k,i],a[k,j] = a[k,j],a[k,i]
     end
 end
+
+# swap rows i and j of a, in-place
+function swaprows!(a::AbstractMatrix, i, j)
+    i == j && return
+    rows = axes(a,1)
+    @boundscheck i in rows || throw(BoundsError(a, (:,i)))
+    @boundscheck j in rows || throw(BoundsError(a, (:,j)))
+    for k in axes(a,2)
+        @inbounds a[i,k],a[j,k] = a[j,k],a[i,k]
+    end
+end
+
 # like permute!! applied to each row of a, in-place in a (overwriting p).
 function permutecols!!(a::AbstractMatrix, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
@@ -122,8 +164,7 @@ end
 Permute vector `v` in-place, according to permutation `p`. No checking is done
 to verify that `p` is a permutation.
 
-To return a new permutation, use `v[p]`. Note that this is generally faster than
-`permute!(v,p)` for large vectors.
+To return a new permutation, use `v[p]`. Note that this is faster than `permute!(v, p)`.
 
 See also [`invpermute!`](@ref).
 
@@ -136,14 +177,14 @@ julia> perm = [2, 4, 3, 1];
 julia> permute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  4
  3
  1
 ```
 """
-permute!(a, p::AbstractVector) = permute!!(a, copymutable(p))
+permute!(v, p::AbstractVector) = (v .= v[p])
 
 function invpermute!!(a, p::AbstractVector{<:Integer})
     require_one_based_indexing(a, p)
@@ -183,14 +224,14 @@ julia> perm = [2, 4, 3, 1];
 julia> invpermute!(A, perm);
 
 julia> A
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
  1
 ```
 """
-invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
+invpermute!(v, p::AbstractVector) = (v[p] = v; v)
 
 """
     invperm(v)
@@ -198,12 +239,19 @@ invpermute!(a, p::AbstractVector) = invpermute!!(a, copymutable(p))
 Return the inverse permutation of `v`.
 If `B = A[v]`, then `A == B[invperm(v)]`.
 
+See also [`sortperm`](@ref), [`invpermute!`](@ref), [`isperm`](@ref), [`permutedims`](@ref).
+
 # Examples
 ```jldoctest
+julia> p = (2, 3, 1);
+
+julia> invperm(p)
+(3, 1, 2)
+
 julia> v = [2; 4; 3; 1];
 
 julia> invperm(v)
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  4
  1
  3
@@ -212,14 +260,14 @@ julia> invperm(v)
 julia> A = ['a','b','c','d'];
 
 julia> B = A[v]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'd': ASCII/Unicode U+0064 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
 
 julia> B[invperm(v)]
-4-element Array{Char,1}:
+4-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
  'c': ASCII/Unicode U+0063 (category Ll: Letter, lowercase)
@@ -242,31 +290,48 @@ function invperm(p::Union{Tuple{},Tuple{Int},Tuple{Int,Int}})
     isperm(p) || throw(ArgumentError("argument is not a permutation"))
     p  # in dimensions 0-2, every permutation is its own inverse
 end
-invperm(a::Tuple) = (invperm([a...])...,)
+
+function invperm(P::Tuple)
+    valn = Val(length(P))
+    ntuple(valn) do i
+        s = _foldoneto(nothing, valn) do s, j
+            s !== nothing && return s
+            P[j]==i && return j
+            nothing
+        end
+        s === nothing && throw(ArgumentError("argument is not a permutation"))
+        s
+    end
+end
+
+invperm(P::Any32) = Tuple(invperm(collect(P)))
 
 #XXX This function should be moved to Combinatorics.jl but is currently used by Base.DSP.
 """
-    nextprod([k_1, k_2,...], n)
+    nextprod(factors::Union{Tuple,AbstractVector}, n)
 
 Next integer greater than or equal to `n` that can be written as ``\\prod k_i^{p_i}`` for integers
-``p_1``, ``p_2``, etc.
+``p_1``, ``p_2``, etcetera, for factors ``k_i`` in `factors`.
 
 # Examples
 ```jldoctest
-julia> nextprod([2, 3], 105)
+julia> nextprod((2, 3), 105)
 108
 
 julia> 2^2 * 3^3
 108
 ```
+
+!!! compat "Julia 1.6"
+    The method that accepts a tuple requires Julia 1.6 or later.
 """
-function nextprod(a::Vector{Int}, x)
+function nextprod(a::Union{Tuple{Vararg{Integer}},AbstractVector{<:Integer}}, x::Real)
     if x > typemax(Int)
         throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = fill(1, k)                    # current value of each counter
-    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    mx = map(a -> nextpow(a,x), a)   # maximum value of each counter
     v[1] = mx[1]                      # start at first case that is >= x
     p::widen(Int) = mx[1]             # initial value of product in this case
     best = p

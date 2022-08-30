@@ -13,9 +13,67 @@ end
 
 ## types ##
 abstract type IOServer end
+"""
+    LibuvServer
+
+An abstract type for IOServers handled by libuv.
+
+If `server isa LibuvServer`, it must obey the following interface:
+
+- `server.handle` must be a `Ptr{Cvoid}`
+- `server.status` must be an `Int`
+- `server.cond` must be a `GenericCondition`
+"""
 abstract type LibuvServer <: IOServer end
+
+function getproperty(server::LibuvServer, name::Symbol)
+    if name === :handle
+        return getfield(server, :handle)::Ptr{Cvoid}
+    elseif name === :status
+        return getfield(server, :status)::Int
+    elseif name === :cond
+        return getfield(server, :cond)::GenericCondition
+    else
+        return getfield(server, name)
+    end
+end
+
+"""
+    LibuvStream
+
+An abstract type for IO streams handled by libuv.
+
+If `stream isa LibuvStream`, it must obey the following interface:
+
+- `stream.handle`, if present, must be a `Ptr{Cvoid}`
+- `stream.status`, if present, must be an `Int`
+- `stream.buffer`, if present, must be an `IOBuffer`
+- `stream.sendbuf`, if present, must be a `Union{Nothing,IOBuffer}`
+- `stream.cond`, if present, must be a `GenericCondition`
+- `stream.lock`, if present, must be an `AbstractLock`
+- `stream.throttle`, if present, must be an `Int`
+"""
 abstract type LibuvStream <: IO end
 
+function getproperty(stream::LibuvStream, name::Symbol)
+    if name === :handle
+        return getfield(stream, :handle)::Ptr{Cvoid}
+    elseif name === :status
+        return getfield(stream, :status)::Int
+    elseif name === :buffer
+        return getfield(stream, :buffer)::IOBuffer
+    elseif name === :sendbuf
+        return getfield(stream, :sendbuf)::Union{Nothing,IOBuffer}
+    elseif name === :cond
+        return getfield(stream, :cond)::GenericCondition
+    elseif name === :lock
+        return getfield(stream, :lock)::AbstractLock
+    elseif name === :throttle
+        return getfield(stream, :throttle)::Int
+    else
+        return getfield(stream, name)
+    end
+end
 
 # IO
 # +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
@@ -23,7 +81,6 @@ abstract type LibuvStream <: IO end
 # .  +- Pipe
 # .  +- Process (not exported)
 # .  +- ProcessChain (not exported)
-# +- BufferStream
 # +- DevNull (not exported)
 # +- Filesystem.File
 # +- LibuvStream (not exported)
@@ -31,6 +88,7 @@ abstract type LibuvStream <: IO end
 # .  +- TCPSocket
 # .  +- TTY (not exported)
 # .  +- UDPSocket
+# .  +- BufferStream (FIXME: 2.0)
 # +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
 # +- IOStream
 
@@ -51,7 +109,7 @@ function eof(s::LibuvStream)
     # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
-    open = isopen(s) # must precede readerror check
+    open = isreadable(s) # must precede readerror check
     s.readerror === nothing || throw(s.readerror)
     return !open
 end
@@ -212,6 +270,7 @@ show(io::IO, stream::LibuvStream) = print(io, typeof(stream), "(",
 function isreadable(io::LibuvStream)
     bytesavailable(io) > 0 && return true
     isopen(io) || return false
+    io.status == StatusEOF && return false
     return ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), io.handle) != 0
 end
 
@@ -224,6 +283,7 @@ end
 lock(s::LibuvStream) = lock(s.lock)
 unlock(s::LibuvStream) = unlock(s.lock)
 
+setup_stdio(stream::LibuvStream, ::Bool) = (stream, false)
 rawhandle(stream::LibuvStream) = stream.handle
 unsafe_convert(::Type{Ptr{Cvoid}}, s::Union{LibuvStream, LibuvServer}) = s.handle
 
@@ -263,7 +323,7 @@ and take ownership of the fd handle.
 Call `open(Libc.dup(fd))` to avoid the ownership capture
 of the original handle.
 
-!!! warn
+!!! warning
     Do not call this on a handle that's already owned by some
     other part of the system.
 """
@@ -289,7 +349,7 @@ function open(h::OS_HANDLE)
             if ccall(:jl_ispty, Cint, (Ptr{Cvoid},), io.handle) != 0
                 # replace the Julia `PipeEndpoint` type with a `TTY` type,
                 # if we detect that this is a cygwin pty object
-                pipe_handle, pipe_status = io.handle, pipe.status
+                pipe_handle, pipe_status = io.handle, io.status
                 io.status = StatusClosed
                 io.handle = C_NULL
                 io = TTY(pipe_handle, pipe_status)
@@ -317,10 +377,10 @@ if OS_HANDLE != RawFD
 end
 
 function isopen(x::Union{LibuvStream, LibuvServer})
-    if x.status == StatusUninit || x.status == StatusInit
+    if x.status == StatusUninit || x.status == StatusInit || x.handle === C_NULL
         throw(ArgumentError("$x is not initialized"))
     end
-    return x.status != StatusClosed && x.status != StatusEOF
+    return x.status != StatusClosed
 end
 
 function check_open(x::Union{LibuvStream, LibuvServer})
@@ -332,13 +392,13 @@ end
 function wait_readnb(x::LibuvStream, nb::Int)
     # fast path before iolock acquire
     bytesavailable(x.buffer) >= nb && return
-    open = isopen(x) # must precede readerror check
+    open = isopen(x) && x.status != StatusEOF # must precede readerror check
     x.readerror === nothing || throw(x.readerror)
     open || return
     iolock_begin()
     # repeat fast path after iolock acquire, before other expensive work
     bytesavailable(x.buffer) >= nb && (iolock_end(); return)
-    open = isopen(x)
+    open = isopen(x) && x.status != StatusEOF
     x.readerror === nothing || throw(x.readerror)
     open || (iolock_end(); return)
     # now do the "real" work
@@ -349,6 +409,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
         while bytesavailable(x.buffer) < nb
             x.readerror === nothing || throw(x.readerror)
             isopen(x) || break
+            x.status == StatusEOF && break
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
@@ -373,6 +434,52 @@ function wait_readnb(x::LibuvStream, nb::Int)
     nothing
 end
 
+function closewrite(s::LibuvStream)
+    iolock_begin()
+    check_open(s)
+    req = Libc.malloc(_sizeof_uv_shutdown)
+    uv_req_set_data(req, C_NULL) # in case we get interrupted before arriving at the wait call
+    err = ccall(:uv_shutdown, Int32, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
+                req, s, @cfunction(uv_shutdowncb_task, Cvoid, (Ptr{Cvoid}, Cint)))
+    if err < 0
+        Libc.free(req)
+        uv_error("shutdown", err)
+    end
+    ct = current_task()
+    preserve_handle(ct)
+    sigatomic_begin()
+    uv_req_set_data(req, ct)
+    iolock_end()
+    status = try
+        sigatomic_end()
+        wait()::Cint
+    finally
+        # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
+        sigatomic_end()
+        iolock_begin()
+        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        if uv_req_data(req) != C_NULL
+            # req is still alive,
+            # so make sure we won't get spurious notifications later
+            uv_req_set_data(req, C_NULL)
+        else
+            # done with req
+            Libc.free(req)
+        end
+        iolock_end()
+        unpreserve_handle(ct)
+    end
+    if isopen(s)
+        if status < 0 || ccall(:uv_is_readable, Cint, (Ptr{Cvoid},), s.handle) == 0
+            close(s)
+        end
+    end
+    if status < 0
+        throw(_UVError("shutdown", status))
+    end
+    nothing
+end
+
 function wait_close(x::Union{LibuvStream, LibuvServer})
     preserve_handle(x)
     lock(x.cond)
@@ -389,34 +496,37 @@ end
 
 function close(stream::Union{LibuvStream, LibuvServer})
     iolock_begin()
-    should_wait = false
     if stream.status == StatusInit
         ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
         stream.status = StatusClosing
-    elseif isopen(stream) || stream.status == StatusEOF
-        should_wait = uv_handle_data(stream) != C_NULL
+    elseif isopen(stream)
         if stream.status != StatusClosing
             ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
             stream.status = StatusClosing
         end
     end
     iolock_end()
-    should_wait && wait_close(stream)
+    wait_close(stream)
     nothing
 end
 
 function uvfinalize(uv::Union{LibuvStream, LibuvServer})
-    uv.handle == C_NULL && return
     iolock_begin()
     if uv.handle != C_NULL
-        disassociate_julia_struct(uv.handle) # not going to call the usual close hooks
-        if uv.status != StatusUninit
-            close(uv)
-        else
+        disassociate_julia_struct(uv.handle) # not going to call the usual close hooks (so preserve_handle is not needed)
+        if uv.status == StatusUninit
+            Libc.free(uv.handle)
+        elseif uv.status == StatusInit
+            ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+        elseif isopen(uv)
+            if uv.status != StatusClosing
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), uv.handle)
+            end
+        elseif uv.status == StatusClosed
             Libc.free(uv.handle)
         end
-        uv.status = StatusClosed
         uv.handle = C_NULL
+        uv.status = StatusClosed
     end
     iolock_end()
     nothing
@@ -445,7 +555,7 @@ julia> withenv("LINES" => 30, "COLUMNS" => 100) do
 
 To get your TTY size,
 
-```julia
+```julia-repl
 julia> displaysize(stdout)
 (34, 147)
 ```
@@ -455,6 +565,9 @@ displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
 function displaysize(io::TTY)
+    # A workaround for #34620 and #26687 (this still has the TOCTOU problem).
+    check_open(io)
+
     local h::Int, w::Int
     default_size = displaysize()
 
@@ -485,11 +598,6 @@ function displaysize(io::TTY)
     return h, w
 end
 
-in(key_value::Pair{Symbol,Bool}, ::TTY) = key_value.first === :color && key_value.second === have_color
-haskey(::TTY, key::Symbol) = key === :color
-getindex(::TTY, key::Symbol) = key === :color ? have_color : throw(KeyError(key))
-get(::TTY, key::Symbol, default) = key === :color ? have_color : default
-
 ### Libuv callbacks ###
 
 ## BUFFER ##
@@ -497,8 +605,8 @@ get(::TTY, key::Symbol, default) = key === :color ? have_color : default
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = length(buffer.data) - ptr + 1
-    return (pointer(buffer.data, ptr), nb)
+    nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
+    return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
 notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Cvoid}, len::UInt) = notify_filled(buffer, nread)
@@ -550,35 +658,36 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
     nrequested = ccall(:jl_uv_buf_len, Csize_t, (Ptr{Cvoid},), buf)
     function readcb_specialized(stream::LibuvStream, nread::Int, nrequested::UInt)
         lock(stream.cond)
-        try
-            if nread < 0
-                if nread == UV_ENOBUFS && nrequested == 0
-                    # remind the client that stream.buffer is full
+        if nread < 0
+            if nread == UV_ENOBUFS && nrequested == 0
+                # remind the client that stream.buffer is full
+                notify(stream.cond)
+            elseif nread == UV_EOF # libuv called uv_stop_reading already
+                if stream.status != StatusClosing
+                    stream.status = StatusEOF
                     notify(stream.cond)
-                elseif nread == UV_EOF
-                    if isa(stream, TTY)
-                        stream.status = StatusEOF # libuv called uv_stop_reading already
-                        notify(stream.cond)
-                    elseif stream.status != StatusClosing
-                        # begin shutdown of the stream
+                    if stream isa TTY
+                        # stream can still be used by reseteof (or possibly write)
+                    elseif !(stream isa PipeEndpoint) && ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
+                        # stream can still be used by write
+                    else
+                        # underlying stream is no longer useful: begin finalization
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                         stream.status = StatusClosing
                     end
-                else
-                    stream.readerror = _UVError("read", nread)
-                    # This is a fatal connection error. Shutdown requests as per the usual
-                    # close function won't work and libuv will fail with an assertion failure
-                    ccall(:jl_forceclose_uv, Cvoid, (Ptr{Cvoid},), stream)
-                    stream.status = StatusClosing
-                    notify(stream.cond)
                 end
             else
-                notify_filled(stream.buffer, nread)
+                stream.readerror = _UVError("read", nread)
                 notify(stream.cond)
+                # This is a fatal connection error
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
+                stream.status = StatusClosing
             end
-        finally
-            unlock(stream.cond)
+        else
+            notify_filled(stream.buffer, nread)
+            notify(stream.cond)
         end
+        unlock(stream.cond)
 
         # Stop background reading when
         # 1) there's nobody paying attention to the data we are reading
@@ -595,6 +704,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
         nothing
     end
     readcb_specialized(stream_unknown_type, Int(nread), UInt(nrequested))
+    nothing
 end
 
 function reseteof(x::TTY)
@@ -609,7 +719,6 @@ end
 function _uv_hook_close(uv::Union{LibuvStream, LibuvServer})
     lock(uv.cond)
     try
-        uv.handle = C_NULL
         uv.status = StatusClosed
         # notify any listeners that exist on this libuv stream type
         notify(uv.cond)
@@ -735,7 +844,8 @@ function start_reading(stream::LibuvStream)
         # for a TTY on Windows, so ensure the status is set first
         stream.status = StatusActive
         ret = ccall(:uv_read_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, Ptr{Cvoid}),
-                    stream, uv_jl_alloc_buf::Ptr{Cvoid}, uv_jl_readcb::Ptr{Cvoid})
+                    stream, @cfunction(uv_alloc_buf, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid})),
+                    @cfunction(uv_readcb, Cvoid, (Ptr{Cvoid}, Cssize_t, Ptr{Cvoid})))
     elseif stream.status == StatusPaused
         stream.status = StatusActive
         ret = Int32(0)
@@ -787,6 +897,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || break
+            s.status != StatusEOF || break
             iolock_end()
             wait_readnb(s, nb)
             iolock_begin()
@@ -833,6 +944,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         while bytesavailable(buf) < nb
             s.readerror === nothing || throw(s.readerror)
             isopen(s) || throw(EOFError())
+            s.status != StatusEOF || throw(EOFError())
             iolock_end()
             wait_readnb(s, nb)
             iolock_begin()
@@ -889,13 +1001,14 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
     @assert buf.seekable == false
     if !occursin(c, buf) # fast path checks first
         x.readerror === nothing || throw(x.readerror)
-        if isopen(x)
+        if isopen(x) && x.status != StatusEOF
             preserve_handle(x)
             lock(x.cond)
             try
                 while !occursin(c, x.buffer)
                     x.readerror === nothing || throw(x.readerror)
                     isopen(x) || break
+                    x.status != StatusEOF || break
                     start_reading(x) # ensure we are reading
                     iolock_end()
                     wait(x.cond)
@@ -968,7 +1081,7 @@ function uv_write_async(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
                     Int32,
                     (Ptr{Cvoid}, Ptr{Cvoid}, UInt, Ptr{Cvoid}, Ptr{Cvoid}),
                     s, p, nwrite, uvw,
-                    uv_jl_writecb_task::Ptr{Cvoid})
+                    @cfunction(uv_writecb_task, Cvoid, (Ptr{Cvoid}, Cint)))
         if err < 0
             Libc.free(uvw)
             uv_error("write", err)
@@ -1058,113 +1171,273 @@ function uv_writecb_task(req::Ptr{Cvoid}, status::Cint)
     nothing
 end
 
+function uv_shutdowncb_task(req::Ptr{Cvoid}, status::Cint)
+    d = uv_req_data(req)
+    if d != C_NULL
+        uv_req_set_data(req, C_NULL) # let the Task know we got the shutdowncb
+        t = unsafe_pointer_to_objref(d)::Task
+        schedule(t, status)
+    else
+        # no owner for this req, safe to just free it
+        Libc.free(req)
+    end
+    nothing
+end
+
+
 _fd(x::IOStream) = RawFD(fd(x))
 _fd(x::Union{OS_HANDLE, RawFD}) = x
 
 function _fd(x::Union{LibuvStream, LibuvServer})
     fd = Ref{OS_HANDLE}(INVALID_OS_HANDLE)
-    if x.status != StatusUninit && x.status != StatusClosed
+    if x.status != StatusUninit && x.status != StatusClosed && x.handle != C_NULL
         err = ccall(:uv_fileno, Int32, (Ptr{Cvoid}, Ptr{OS_HANDLE}), x.handle, fd)
         # handle errors by returning INVALID_OS_HANDLE
     end
     return fd[]
 end
 
-for (x, writable, unix_fd, c_symbol) in
-        ((:stdin, false, 0, :jl_uv_stdin),
-         (:stdout, true, 1, :jl_uv_stdout),
-         (:stderr, true, 2, :jl_uv_stderr))
-    f = Symbol("redirect_", lowercase(string(x)))
-    _f = Symbol("_", f)
-    @eval begin
-        function ($_f)(stream)
-            global $x
-            posix_fd = _fd(stream)
-            @static if Sys.iswindows()
-                ccall(:SetStdHandle, stdcall, Int32, (Int32, OS_HANDLE),
-                    $(-10 - unix_fd), Libc._get_osfhandle(posix_fd))
-            end
-            dup(posix_fd, RawFD($unix_fd))
-            $x = stream
-            nothing
-        end
-        function ($f)(handle::Union{LibuvStream, IOStream})
-            $(_f)(handle)
-            unsafe_store!(cglobal($(Expr(:quote, c_symbol)), Ptr{Cvoid}),
-                handle.handle)
-            return handle
-        end
-        function ($f)()
-            p = link_pipe!(Pipe())
-            read, write = p.out, p.in
-            ($f)($(writable ? :write : :read))
-            return (read, write)
+struct RedirectStdStream <: Function
+    unix_fd::Int
+    writable::Bool
+end
+for (f, writable, unix_fd) in
+        ((:redirect_stdin, false, 0),
+         (:redirect_stdout, true, 1),
+         (:redirect_stderr, true, 2))
+    @eval const ($f) = RedirectStdStream($unix_fd, $writable)
+end
+function _redirect_io_libc(stream, unix_fd::Int)
+    posix_fd = _fd(stream)
+    @static if Sys.iswindows()
+        if 0 <= unix_fd <= 2
+            ccall(:SetStdHandle, stdcall, Int32, (Int32, OS_HANDLE),
+                -10 - unix_fd, Libc._get_osfhandle(posix_fd))
         end
     end
+    dup(posix_fd, RawFD(unix_fd))
+    nothing
 end
+function _redirect_io_global(io, unix_fd::Int)
+    unix_fd == 0 && (global stdin = io)
+    unix_fd == 1 && (global stdout = io)
+    unix_fd == 2 && (global stderr = io)
+    nothing
+end
+function (f::RedirectStdStream)(handle::Union{LibuvStream, IOStream})
+    _redirect_io_libc(handle, f.unix_fd)
+    c_sym = f.unix_fd == 0 ? cglobal(:jl_uv_stdin, Ptr{Cvoid}) :
+            f.unix_fd == 1 ? cglobal(:jl_uv_stdout, Ptr{Cvoid}) :
+            f.unix_fd == 2 ? cglobal(:jl_uv_stderr, Ptr{Cvoid}) :
+            C_NULL
+    c_sym == C_NULL || unsafe_store!(c_sym, handle.handle)
+    _redirect_io_global(handle, f.unix_fd)
+    return handle
+end
+function (f::RedirectStdStream)(::DevNull)
+    nulldev = @static Sys.iswindows() ? "NUL" : "/dev/null"
+    handle = open(nulldev, write=f.writable)
+    _redirect_io_libc(handle, f.unix_fd)
+    close(handle) # handle has been dup'ed in _redirect_io_libc
+    _redirect_io_global(devnull, f.unix_fd)
+    return devnull
+end
+function (f::RedirectStdStream)(io::AbstractPipe)
+    io2 = (f.writable ? pipe_writer : pipe_reader)(io)
+    f(io2)
+    _redirect_io_global(io, f.unix_fd)
+    return io
+end
+function (f::RedirectStdStream)(p::Pipe)
+    if p.in.status == StatusInit && p.out.status == StatusInit
+        link_pipe!(p)
+    end
+    io2 = getfield(p, f.writable ? :in : :out)
+    f(io2)
+    return p
+end
+(f::RedirectStdStream)() = f(Pipe())
+
+# Deprecate these in v2 (RedirectStdStream support)
+iterate(p::Pipe) = (p.out, 1)
+iterate(p::Pipe, i::Int) = i == 1 ? (p.in, 2) : nothing
+getindex(p::Pipe, key::Int) = key == 1 ? p.out : key == 2 ? p.in : throw(KeyError(key))
 
 """
-    redirect_stdout([stream]) -> (rd, wr)
+    redirect_stdout([stream]) -> stream
 
 Create a pipe to which all C and Julia level [`stdout`](@ref) output
-will be redirected.
-Returns a tuple `(rd, wr)` representing the pipe ends.
+will be redirected. Return a stream representing the pipe ends.
 Data written to [`stdout`](@ref) may now be read from the `rd` end of
-the pipe. The `wr` end is given for convenience in case the old
-[`stdout`](@ref) object was cached by the user and needs to be replaced
-elsewhere.
-
-If called with the optional `stream` argument, then returns `stream` itself.
+the pipe.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
+    `Pipe`, socket, or `devnull`.
+
+See also [`redirect_stdio`](@ref).
 """
 redirect_stdout
 
 """
-    redirect_stderr([stream]) -> (rd, wr)
+    redirect_stderr([stream]) -> stream
 
 Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
+    `Pipe`, socket, or `devnull`.
+
+See also [`redirect_stdio`](@ref).
 """
 redirect_stderr
 
 """
-    redirect_stdin([stream]) -> (rd, wr)
+    redirect_stdin([stream]) -> stream
 
 Like [`redirect_stdout`](@ref), but for [`stdin`](@ref).
-Note that the order of the return tuple is still `(rd, wr)`,
-i.e. data to be read from [`stdin`](@ref) may be written to `wr`.
+Note that the direction of the stream is reversed.
 
 !!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
+    `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
+    `Pipe`, socket, or `devnull`.
+
+See also [`redirect_stdio`](@ref).
 """
 redirect_stdin
 
-for (F,S) in ((:redirect_stdin, :stdin), (:redirect_stdout, :stdout), (:redirect_stderr, :stderr))
-    @eval function $F(f::Function, stream)
-        STDOLD = $S
-        local ret
-        $F(stream)
-        try
-            ret = f()
-        finally
-            $F(STDOLD)
-        end
-        ret
+"""
+    redirect_stdio(;stdin=stdin, stderr=stderr, stdout=stdout)
+
+Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
+Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+
+!!! compat "Julia 1.7"
+    `redirect_stdio` requires Julia 1.7 or later.
+"""
+function redirect_stdio(;stdin=nothing, stderr=nothing, stdout=nothing)
+    stdin  === nothing || redirect_stdin(stdin)
+    stderr === nothing || redirect_stderr(stderr)
+    stdout === nothing || redirect_stdout(stdout)
+end
+
+"""
+    redirect_stdio(f; stdin=nothing, stderr=nothing, stdout=nothing)
+
+Redirect a subset of the streams `stdin`, `stderr`, `stdout`,
+call `f()` and restore each stream.
+
+Possible values for each stream are:
+* `nothing` indicating the stream should not be redirected.
+* `path::AbstractString` redirecting the stream to the file at `path`.
+* `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+
+# Examples
+```julia-repl
+julia> redirect_stdio(stdout="stdout.txt", stderr="stderr.txt") do
+           print("hello stdout")
+           print(stderr, "hello stderr")
+       end
+
+julia> read("stdout.txt", String)
+"hello stdout"
+
+julia> read("stderr.txt", String)
+"hello stderr"
+```
+
+# Edge cases
+
+It is possible to pass the same argument to `stdout` and `stderr`:
+```julia-repl
+julia> redirect_stdio(stdout="log.txt", stderr="log.txt", stdin=devnull) do
+    ...
+end
+```
+
+However it is not supported to pass two distinct descriptors of the same file.
+```julia-repl
+julia> io1 = open("same/path", "w")
+
+julia> io2 = open("same/path", "w")
+
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
+```
+Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
+```julia-repl
+julia> io = open(...)
+
+julia> redirect_stdio(f, stdout=io, stdin=io) # not supported
+```
+
+!!! compat "Julia 1.7"
+    `redirect_stdio` requires Julia 1.7 or later.
+"""
+function redirect_stdio(f; stdin=nothing, stderr=nothing, stdout=nothing)
+
+    function resolve(new::Nothing, oldstream, mode)
+        (new=nothing, close=false, old=nothing)
+    end
+    function resolve(path::AbstractString, oldstream,mode)
+        (new=open(path, mode), close=true, old=oldstream)
+    end
+    function resolve(new, oldstream, mode)
+        (new=new, close=false, old=oldstream)
+    end
+
+    same_path(x, y) = false
+    function same_path(x::AbstractString, y::AbstractString)
+        # if x = y = "does_not_yet_exist.txt" then samefile will return false
+        (abspath(x) == abspath(y)) || samefile(x,y)
+    end
+    if same_path(stderr, stdin)
+        throw(ArgumentError("stdin and stderr cannot be the same path"))
+    end
+    if same_path(stdout, stdin)
+        throw(ArgumentError("stdin and stdout cannot be the same path"))
+    end
+
+    new_in , close_in , old_in  = resolve(stdin , Base.stdin , "r")
+    new_out, close_out, old_out = resolve(stdout, Base.stdout, "w")
+    if same_path(stderr, stdout)
+        # make sure that in case stderr = stdout = "same/path"
+        # only a single io is used instead of opening the same file twice
+        new_err, close_err, old_err = new_out, false, Base.stderr
+    else
+        new_err, close_err, old_err = resolve(stderr, Base.stderr, "w")
+    end
+
+    redirect_stdio(; stderr=new_err, stdin=new_in, stdout=new_out)
+
+    try
+        return f()
+    finally
+        redirect_stdio(;stderr=old_err, stdin=old_in, stdout=old_out)
+        close_err && close(new_err)
+        close_in  && close(new_in )
+        close_out && close(new_out)
     end
 end
+
+function (f::RedirectStdStream)(thunk::Function, stream)
+    stdold = f.unix_fd == 0 ? stdin :
+             f.unix_fd == 1 ? stdout :
+             f.unix_fd == 2 ? stderr :
+             throw(ArgumentError("Not implemented to get old handle of fd except for stdio"))
+    f(stream)
+    try
+        return thunk()
+    finally
+        f(stdold)
+    end
+end
+
 
 """
     redirect_stdout(f::Function, stream)
 
 Run the function `f` while redirecting [`stdout`](@ref) to `stream`.
 Upon completion, [`stdout`](@ref) is restored to its prior setting.
-
-!!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stdout(f::Function, stream)
 
@@ -1173,9 +1446,6 @@ redirect_stdout(f::Function, stream)
 
 Run the function `f` while redirecting [`stderr`](@ref) to `stream`.
 Upon completion, [`stderr`](@ref) is restored to its prior setting.
-
-!!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stderr(f::Function, stream)
 
@@ -1184,9 +1454,6 @@ redirect_stderr(f::Function, stream)
 
 Run the function `f` while redirecting [`stdin`](@ref) to `stream`.
 Upon completion, [`stdin`](@ref) is restored to its prior setting.
-
-!!! note
-    `stream` must be a `TTY`, a `Pipe`, or a socket.
 """
 redirect_stdin(f::Function, stream)
 
@@ -1195,9 +1462,9 @@ unmark(x::LibuvStream)   = unmark(x.buffer)
 reset(x::LibuvStream)    = reset(x.buffer)
 ismarked(x::LibuvStream) = ismarked(x.buffer)
 
-function peek(s::LibuvStream)
+function peek(s::LibuvStream, ::Type{T}) where T
     mark(s)
-    try read(s, UInt8)
+    try read(s, T)
     finally
         reset(s)
     end
@@ -1207,23 +1474,27 @@ end
 mutable struct BufferStream <: LibuvStream
     buffer::IOBuffer
     cond::Threads.Condition
-    is_open::Bool
+    readerror::Any
     buffer_writes::Bool
     lock::ReentrantLock # advisory lock
+    status::Int
 
-    BufferStream() = new(PipeBuffer(), Threads.Condition(), true, false, ReentrantLock())
+    BufferStream() = new(PipeBuffer(), Threads.Condition(), nothing, false, ReentrantLock(), StatusActive)
 end
 
-isopen(s::BufferStream) = s.is_open
+isopen(s::BufferStream) = s.status != StatusClosed
+
+closewrite(s::BufferStream) = close(s)
 
 function close(s::BufferStream)
     lock(s.cond) do
-        s.is_open = false
+        s.status = StatusClosed
         notify(s.cond)
         nothing
     end
 end
 uvfinalize(s::BufferStream) = nothing
+setup_stdio(stream::BufferStream, child_readable::Bool) = invoke(setup_stdio, Tuple{IO, Bool}, stream, child_readable)
 
 function read(s::BufferStream, ::Type{UInt8})
     nread = lock(s.cond) do
@@ -1241,8 +1512,8 @@ function unsafe_read(s::BufferStream, a::Ptr{UInt8}, nb::UInt)
 end
 bytesavailable(s::BufferStream) = bytesavailable(s.buffer)
 
-isreadable(s::BufferStream) = s.buffer.readable
-iswritable(s::BufferStream) = s.buffer.writable
+isreadable(s::BufferStream) = (isopen(s) || bytesavailable(s) > 0) && s.buffer.readable
+iswritable(s::BufferStream) = isopen(s) && s.buffer.writable
 
 function wait_readnb(s::BufferStream, nb::Int)
     lock(s.cond) do
@@ -1252,7 +1523,7 @@ function wait_readnb(s::BufferStream, nb::Int)
     end
 end
 
-show(io::IO, s::BufferStream) = print(io, "BufferStream() bytes waiting:", bytesavailable(s.buffer), ", isopen:", s.is_open)
+show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesavailable(s.buffer), ", isopen=", isopen(s), ")")
 
 function readuntil(s::BufferStream, c::UInt8; keep::Bool=false)
     bytes = lock(s.cond) do
@@ -1302,3 +1573,5 @@ function flush(s::BufferStream)
         nothing
     end
 end
+
+skip(s::BufferStream, n) = skip(s.buffer, n)

@@ -54,8 +54,8 @@ julia> 안녕하세요 = "Hello"
 
 In the Julia REPL and several other Julia editing environments, you can type many Unicode math
 symbols by typing the backslashed LaTeX symbol name followed by tab. For example, the variable
-name `δ` can be entered by typing `\delta`-*tab*, or even `α̂₂` by `\alpha`-*tab*-`\hat`-
-*tab*-`\_2`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
+name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\alpha`-*tab*-`\hat`-
+*tab*-`\^(2)`-*tab*. (If you find a symbol somewhere, e.g. in someone else's code,
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
@@ -81,19 +81,19 @@ julia> pi
 π = 3.1415926535897...
 
 julia> pi = 3
-ERROR: cannot assign a value to variable MathConstants.pi from module Main
+ERROR: cannot assign a value to imported variable MathConstants.pi from module Main
 
 julia> sqrt(100)
 10.0
 
 julia> sqrt = 4
-ERROR: cannot assign a value to variable Base.sqrt from module Main
+ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
 
-## Allowed Variable Names
+## [Allowed Variable Names](@id man-allowed-variable-names)
 
 Variable names must begin with a letter (A-Z or a-z), underscore, or a subset of Unicode code
-points greater than 00A0; in particular, [Unicode character categories](http://www.fileformat.info/info/unicode/category/index.htm)
+points greater than 00A0; in particular, [Unicode character categories](https://www.fileformat.info/info/unicode/category/index.htm)
 Lu/Ll/Lt/Lm/Lo/Nl (letters), Sc/So (currency and other symbols), and a few other letter-like characters
 (e.g. a subset of the Sm math symbols) are allowed. Subsequent characters may also include ! and
 digits (0-9 and other characters in categories Nd/No), as well as other Unicode code points: diacritics
@@ -106,8 +106,26 @@ will reassign it. Most of the Unicode infix operators (in category Sm), such as 
 as infix operators and are available for user-defined methods (e.g. you can use `const ⊗ = kron`
 to define `⊗` as an infix Kronecker product).  Operators can also be suffixed with modifying marks,
 primes, and sub/superscripts, e.g. `+̂ₐ″` is parsed as an infix operator with the same precedence as `+`.
+A space is required between an operator that ends with a subscript/superscript letter and a subsequent
+variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be written as `+ᵃ x` to distinguish
+it from `+ ᵃx` where `ᵃx` is the variable name.
 
-The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref):
+
+A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values, which are immediately discarded, and cannot therefore be used to assign values to other variables (i.e., they cannot be used as [`rvalues`](https://en.wikipedia.org/wiki/Value_(computer_science)#Assignment:_l-values_and_r-values)) or use the last value
+assigned to them in any way.
+
+```julia-repl
+julia> x, ___ = size([2 2; 1 1])
+(2, 2)
+
+julia> y = ___
+ERROR: syntax: all-underscore identifier used as rvalue
+
+julia> println(___)
+ERROR: syntax: all-underscore identifier used as rvalue
+```
+
+The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
 
 ```julia-repl
 julia> else = false
@@ -119,10 +137,15 @@ ERROR: syntax: unexpected "="
 
 Some Unicode characters are considered to be equivalent in identifiers.
 Different ways of entering Unicode combining characters (e.g., accents)
-are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.macchiato.com/unicode/nfc-faq)-normalized).
-The Unicode characters `ɛ` (U+025B: Latin small letter open e)
-and `µ` (U+00B5: micro sign) are treated as equivalent to the corresponding
-Greek letters, because the former are easily accessible via some input methods.
+are treated as equivalent (specifically, Julia identifiers are [NFC](https://www.macchiato.com/unicode-intl-sw/nfc-faq)-normalized).
+Julia also includes a few non-standard equivalences for characters that are
+visually similar and are easily entered by some input methods. The Unicode
+characters `ɛ` (U+025B: Latin small letter open e) and `µ` (U+00B5: micro sign)
+are treated as equivalent to the corresponding Greek letters. The middle dot
+`·` (U+00B7) and the Greek
+[interpunct](https://en.wikipedia.org/wiki/Interpunct) `·` (U+0387) are both
+treated as the mathematical dot operator `⋅` (U+22C5).
+The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign `-` (U+002D).
 
 ## Stylistic Conventions
 

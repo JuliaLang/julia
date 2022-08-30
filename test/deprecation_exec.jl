@@ -26,6 +26,13 @@ module DeprecationTests # to test @deprecate
     struct A{T} end
     @deprecate A{T}(x::S) where {T, S} f()
 
+    module Sub
+    f1() = true
+    function f2 end
+    end
+    @deprecate Sub.f1() f() false
+    @deprecate Sub.f2 f false
+
     # test that @deprecate_moved can be overridden by an import
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
@@ -43,7 +50,12 @@ struct T21972
     end
 end
 
-@testset "@deprecate" begin
+# Create a consistent call frame for nowarn tests
+@noinline call(f, args...) = @noinline f(args...)
+
+# Given this is a sub-processed test file, not using @testsets avoids
+# leaking the report print into the Base test runner report
+begin # @deprecate
     using .DeprecationTests
     using .Foo1234
     @test foo1234(3) == 4
@@ -55,26 +67,41 @@ end
     @test_warn "importing deprecated binding" eval(ex)
     @test @test_nowarn(DeprecationTests.bar(4)) == 7
 
-    # enable when issue #22043 is fixed
-    # @test @test_warn "f1 is deprecated, use f instead." f1()
-    # @test @test_nowarn f1()
+    @test @test_warn "`f1` is deprecated, use `f` instead." f1()
 
-    # @test_throws UndefVarError f2() # not exported
-    # @test @test_warn "f2 is deprecated, use f instead." DeprecationTests.f2()
-    # @test @test_nowarn DeprecationTests.f2()
+    @test_throws UndefVarError f2() # not exported
+    @test @test_warn "`f2` is deprecated, use `f` instead." DeprecationTests.f2()
 
-    # @test @test_warn "f3() is deprecated, use f() instead." f3()
-    # @test @test_nowarn f3()
+    @test @test_warn "`f3()` is deprecated, use `f()` instead." f3()
 
-    # @test_throws UndefVarError f4() # not exported
-    # @test @test_warn "f4() is deprecated, use f() instead." DeprecationTests.f4()
-    # @test @test_nowarn DeprecationTests.f4()
+    @test_throws UndefVarError f4() # not exported
+    @test @test_warn "`f4()` is deprecated, use `f()` instead." DeprecationTests.f4()
 
-    # @test @test_warn "f5(x::T) where T is deprecated, use f() instead." f5(1)
-    # @test @test_nowarn f5(1)
+    @test @test_warn "`f5(x::T) where T` is deprecated, use `f()` instead." f5(1)
 
-    # @test @test_warn "A{T}(x::S) where {T, S} is deprecated, use f() instead." A{Int}(1.)
-    # @test @test_nowarn A{Int}(1.)
+    @test @test_warn "`A{T}(x::S) where {T, S}` is deprecated, use `f()` instead." A{Int}(1.)
+
+    @test @test_warn "`Sub.f1()` is deprecated, use `f()` instead." DeprecationTests.Sub.f1()
+
+    redirect_stderr(devnull) do
+        @test call(f1)
+        @test call(DeprecationTests.f2)
+        @test call(f3)
+        @test call(DeprecationTests.f4)
+        @test call(f5, 1)
+        @test call(A{Int}, 1.)
+        @test call(DeprecationTests.Sub.f1)
+        @test call(DeprecationTests.Sub.f2)
+    end
+
+    @test @test_nowarn call(f1)
+    @test @test_nowarn call(DeprecationTests.f2)
+    @test @test_nowarn call(f3)
+    @test @test_nowarn call(DeprecationTests.f4)
+    @test @test_nowarn call(f5, 1)
+    @test @test_nowarn call(A{Int}, 1.)
+    @test @test_nowarn call(DeprecationTests.Sub.f1)
+    @test @test_nowarn call(DeprecationTests.Sub.f2)
 
     # issue #21972
     @noinline function f21972()
@@ -87,7 +114,7 @@ f24658() = depwarn24658()
 
 depwarn24658() = Base.firstcaller(backtrace(), :_func_not_found_)
 
-@testset "firstcaller" begin
+begin # firstcaller
     # issue #24658
     @test eval(:(if true; f24658(); end)) == (Ptr{Cvoid}(0),StackTraces.UNKNOWN)
 end
@@ -105,7 +132,7 @@ f25130()
 testlogs = testlogger.logs
 @test length(testlogs) == 2
 @test testlogs[1].id != testlogs[2].id
-@test testlogs[1].kwargs[:caller].func == Symbol("top-level scope")
+@test testlogs[1].kwargs[:caller].func === Symbol("top-level scope")
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 
@@ -113,10 +140,40 @@ global_logger(prev_logger)
 #-------------------------------------------------------------------------------
 # BEGIN 0.7 deprecations
 
-@testset "parser syntax deprecations" begin
+begin # parser syntax deprecations
     # #15524
     # @test (@test_deprecated Meta.parse("for a=b f() end")) == :(for a=b; f() end)
     @test_broken length(Test.collect_test_logs(()->Meta.parse("for a=b f() end"))[1]) > 0
 end
 
 # END 0.7 deprecations
+
+begin # tuple indexed by float deprecation
+    @test_deprecated getindex((1,), 1.0) === 1
+    @test_deprecated getindex((1,2), 2.0) === 2
+    @test Base.JLOptions().depwarn == 1
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((), 1.0)
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), 0.0)
+    @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
+end
+
+begin #@deprecated error message
+    @test_throws(
+        "if the third `export_old` argument is not specified or `true`,",
+        @eval @deprecate M.f() g()
+    )
+    @test_throws(
+        "if the third `export_old` argument is not specified or `true`,",
+        @eval @deprecate M.f() g() true
+    )
+
+    # Given `@deprecated Old{T} where {...} new`, it is unclear if we should generate
+    # `Old{T}(args...) where {...} = new(args...)` or
+    # `(Old{T} where {...})(args...) = new(args...)`.
+    # Since nobody has requested this feature yet, make sure that it throws, until we
+    # conciously define
+    @test_throws(
+        "invalid usage of @deprecate",
+        @eval @deprecate Foo{T} where {T <: Int} g true
+    )
+end

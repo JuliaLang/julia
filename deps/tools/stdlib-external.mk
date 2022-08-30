@@ -18,7 +18,7 @@ $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled: $$(BUILDDIR)/$$($2_SRC_DIR)/source-e
 	echo 1 > $$@
 $$(eval $$(call symlink_install,$1,$$$$($2_SRC_DIR),$$$$(build_datarootdir)/julia/stdlib/$$$$(VERSDIR)))
 clean-$1:
-	-rm $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled
+	-rm -f $$(BUILDDIR)/$$($2_SRC_DIR)/build-compiled
 get-$1: $$($2_SRC_FILE)
 extract-$1: $$(BUILDDIR)/$$($2_SRC_DIR)/source-extracted
 configure-$1: extract-$1

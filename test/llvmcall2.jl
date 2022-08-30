@@ -36,3 +36,27 @@ function ceilfloor(x::Float64)
     return b
 end
 @test ceilfloor(7.4) == 8.0
+
+let err = ErrorException("llvmcall only supports intrinsic calls")
+    # support for calling external functions
+    @test_throws err @eval ccall("time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    g() = ccall("extern time", llvmcall, Cvoid, (Ptr{Cvoid},), C_NULL)
+    g()
+    @test_throws err @eval ccall("extern llvm.floor", llvmcall, Float64, (Float64,), 0.0)
+
+    # support for mangling
+    @test (@eval ccall("llvm.floor.f64", llvmcall, Float64, (Float64,), 0.0)) === 0.0
+    @test (@eval ccall("llvm.floor", llvmcall, Float64, (Float64,), 0.0),
+                 ccall("llvm.floor", llvmcall, Float32, (Float32,), 0.0)) === (0.0, 0.0f0)
+    @test_throws err @eval ccall("llvm.floor.f64", llvmcall, Float32, (Float64,), 0.0)
+    @test_throws err @eval ccall("llvm.floor.f64", llvmcall, Float32, (Float32,), 0.0f0)
+    @test_throws err @eval ccall("llvm.floor.f64", llvmcall, Float64, (Float32,), 0.0f0)
+    @test_throws err @eval ccall("llvm.floor.f64", llvmcall, Float64, (Int,), 0)
+    @test_throws err @eval ccall("llvm.floor.f64", llvmcall, Int, (Int,), 0)
+    @test_throws err @eval ccall("llvm.floor", llvmcall, Float64, (Float32,), 0.0f0)
+    @test_throws err @eval ccall("llvm.floor", llvmcall, Float64, (Int,), 0)
+    @test_throws err @eval ccall("llvm.floor", llvmcall, Int, (Int,), 0)
+
+    @test_throws err (@eval ccall("llvm.floor.f64", llvmcall, Float64, (Float64, Float64...,), 0.0)) === 0.0
+    @test_throws err (@eval ccall("llvm.floor", llvmcall, Float64, (Float64, Float64...,), 0.0)) === 0.0
+end

@@ -15,11 +15,17 @@
 # is only printed the first time for each call place.
 
 """
-    @deprecate old new [ex=true]
+    @deprecate old new [export_old=true]
 
-The first argument `old` is the signature of the deprecated method, the second one
-`new` is the call which replaces it. `@deprecate` exports `old` unless the optional
-third argument is `false`.
+Deprecate method `old` and specify the replacement call `new`, defining a new method `old`
+with the specified signature in the process.
+
+To prevent `old` from being exported, set `export_old` to `false`.
+
+!!! compat "Julia 1.5"
+    As of Julia 1.5, functions defined by `@deprecate` do not print warning when `julia`
+    is run without the `--depwarn=yes` flag set, as the default value of `--depwarn` option
+    is `no`.  The warnings are printed from tests run by `Pkg.test()`.
 
 # Examples
 ```jldoctest
@@ -29,62 +35,99 @@ old (generic function with 1 method)
 julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
+
+Calls to `@deprecate` without explicit type-annotations will define deprecated methods
+accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
+the arguments of `old`. For example,
+```jldoctest; filter = r"@ .*"
+julia> new(x::Int) = x;
+
+julia> new(x::Float64) = 2x;
+
+julia> @deprecate old(x::Int) new(x);
+
+julia> methods(old)
+# 1 method for generic function "old" from Main:
+ [1] old(x::Int64)
+     @ deprecated.jl:94
+```
+will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
+define nor deprecate the method `old(x::Float64)`.
 """
-macro deprecate(old, new, ex=true)
+macro deprecate(old, new, export_old=true)
+    function cannot_export_nonsymbol()
+        error(
+            "if the third `export_old` argument is not specified or `true`, the first",
+            " argument must be of form",
+            " (1) `f(...)` where `f` is a symbol,",
+            " (2) `T{...}(...)` where `T` is a symbol, or",
+            " (3) a symbol.",
+        )
+    end
     meta = Expr(:meta, :noinline)
-    if isa(old, Symbol)
-        oldname = Expr(:quote, old)
-        newname = Expr(:quote, new)
-        Expr(:toplevel,
-            ex ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...)
-                  $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
-                  $(esc(new))(args...)
-              end))
-    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
+    if isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
         if callexpr.head === :call
-            if isa(callexpr.args[1], Symbol)
-                oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
-                oldsym = callexpr.args[1].args[1]::Symbol
+            fnexpr = callexpr.args[1]
+            if fnexpr isa Expr && fnexpr.head === :curly
+                fnexpr = fnexpr.args[1]
+            end
+            if export_old
+                if fnexpr isa Symbol
+                    maybe_export = Expr(:export, esc(fnexpr))
+                else
+                    cannot_export_nonsymbol()
+                end
             else
-                error("invalid usage of @deprecate")
+                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-            ex ? Expr(:export, esc(oldsym)) : nothing,
+            maybe_export,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
                   $(esc(new))
               end))
     else
-        error("invalid usage of @deprecate")
+        if export_old && !(old isa Symbol)
+            cannot_export_nonsymbol()
+        end
+        Expr(:toplevel,
+            export_old ? Expr(:export, esc(old)) : nothing,
+            :(function $(esc(old))(args...)
+                  $meta
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
+                  $(esc(new))(args...)
+              end))
     end
 end
 
-function depwarn(msg, funcsym)
+function depwarn(msg, funcsym; force::Bool=false)
     opts = JLOptions()
     if opts.depwarn == 2
         throw(ErrorException(msg))
     end
-    deplevel = opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
+    deplevel = force || opts.depwarn == 1 ? CoreLogging.Warn : CoreLogging.BelowMinLevel
     @logmsg(
         deplevel,
         msg,
         _module=begin
             bt = backtrace()
             frame, caller = firstcaller(bt, funcsym)
-            # TODO: Is it reasonable to attribute callers without linfo to Core?
-            caller.linfo isa Core.MethodInstance ? caller.linfo.def.module : Core
+            linfo = caller.linfo
+            if linfo isa Core.MethodInstance
+                def = linfo.def
+                def isa Module ? def : def.module
+            else
+                Core    # TODO: Is it reasonable to attribute callers without linfo to Core?
+            end
         end,
         _file=String(caller.file),
         _line=caller.line,
@@ -112,12 +155,14 @@ function firstcaller(bt::Vector, funcsyms)
             end
             found = lkup.func in funcsyms
             # look for constructor type name
-            if !found && lkup.linfo isa Core.MethodInstance
+            if !found
                 li = lkup.linfo
-                ft = ccall(:jl_first_argument_datatype, Any, (Any,), li.def.sig)
-                if isa(ft, DataType) && ft.name === Type.body.name
-                    ft = unwrap_unionall(ft.parameters[1])
-                    found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                if li isa Core.MethodInstance
+                    ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
+                    if isType(ft)
+                        ft = unwrap_unionall(ft.parameters[1])
+                        found = (isa(ft, DataType) && ft.name.name in funcsyms)
+                    end
                 end
             end
         end
@@ -159,39 +204,17 @@ macro deprecate_moved(old, new, export_old=true)
         Expr(:call, :deprecate, __module__, Expr(:quote, old), 2))
 end
 
-# BEGIN 0.7 deprecations
-
-function promote_eltype_op end
-
-# END 0.7 deprecations
-
 # BEGIN 1.0 deprecations
 
-# @deprecate one(i::CartesianIndex) oneunit(i)
-# @deprecate one(::Type{I}) where I<:CartesianIndex oneunit(I)
+@deprecate one(i::CartesianIndex)                    oneunit(i)
+@deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
 
-@deprecate reindex(V, idxs, subidxs) reindex(idxs, subidxs) false
-@deprecate substrides(parent::AbstractArray, strds::Tuple, I::Tuple) substrides(strds, I) false
-
-# TODO: deprecate these
-one(::CartesianIndex{N}) where {N} = one(CartesianIndex{N})
-one(::Type{CartesianIndex{N}}) where {N} = CartesianIndex(ntuple(x -> 1, Val(N)))
-
-MPFR.BigFloat(x, prec::Int) = BigFloat(x; precision=prec)
-MPFR.BigFloat(x, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
-MPFR.BigFloat(x::Real, prec::Int) = BigFloat(x; precision=prec)
-MPFR.BigFloat(x::Real, prec::Int, rounding::RoundingMode) = BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
+@deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)
+@deprecate BigFloat(x::Real, prec::Int, rounding::RoundingMode) BigFloat(x, rounding; precision=prec)
 
 # END 1.0 deprecations
-
-# BEGIN 1.3 deprecations
-
-@eval Threads begin
-    Base.@deprecate_binding RecursiveSpinLock ReentrantLock
-    Base.@deprecate_binding Mutex ReentrantLock
-end
-
-# END 1.3 deprecations
 
 # BEGIN 1.5 deprecations
 
@@ -214,15 +237,94 @@ false
 """
 isimmutable(@nospecialize(x)) = !ismutable(x)
 export isimmutable
-
+# Note isimmutable is not @deprecated out of performance concerns
 
 macro get!(h, key0, default)
     f, l = __source__.file, __source__.line
-    depwarn("`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead.", Symbol("@get!"))
+    @warn "`@get!(dict, key, default)` at $f:$l is deprecated, use `get!(()->default, dict, key)` instead."
     return quote
         get!(()->$(esc(default)), $(esc(h)), $(esc(key0)))
     end
 end
 
+pointer(V::SubArray{<:Any,<:Any,<:Array,<:Tuple{Vararg{RangeIndex}}}, is::Tuple) = pointer(V, CartesianIndex(is))
 
 # END 1.5 deprecations
+
+# BEGIN 1.6 deprecations
+
+# These changed from SimpleVector to `MethodMatch`. These definitions emulate
+# being a SimpleVector to ease transition for packages that make explicit
+# use of (internal) APIs that return raw method matches.
+iterate(match::Core.MethodMatch, field::Int=1) =
+    field > nfields(match) ? nothing : (getfield(match, field), field+1)
+getindex(match::Core.MethodMatch, field::Int) =
+    getfield(match, field)
+
+
+# these were internal functions, but some packages seem to be relying on them
+tuple_type_head(T::Type) = fieldtype(T, 1)
+tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
+function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
+    @_foldable_meta
+    Tuple{S, T.parameters...}
+end
+function parameter_upper_bound(t::UnionAll, idx)
+    @_foldable_meta
+    return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
+end
+
+# these were internal functions, but some packages seem to be relying on them
+@deprecate cat_shape(dims, shape::Tuple{}, shapes::Tuple...) cat_shape(dims, shapes) false
+cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not recursively calls itself
+
+@deprecate unsafe_indices(A) axes(A) false
+@deprecate unsafe_length(r) length(r) false
+
+# these were internal type aliases, but some pacakges seem to be relying on them
+const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
+                        Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
+const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
+                         T,T,T,T,T,T,T,T,Vararg{T,N}}
+
+# END 1.6 deprecations
+
+# BEGIN 1.7 deprecations
+
+# the plan is to eventually overload getproperty to access entries of the dict
+@noinline function getproperty(x::Pairs, s::Symbol)
+    depwarn("use values(kwargs) and keys(kwargs) instead of kwargs.data and kwargs.itr", :getproperty, force=true)
+    return getfield(x, s)
+end
+
+# This function was marked as experimental and not exported.
+@deprecate catch_stack(task=current_task(); include_bt=true) current_exceptions(task; backtrace=include_bt) false
+
+# END 1.7 deprecations
+
+# BEGIN 1.8 deprecations
+
+const var"@_inline_meta" = var"@inline"
+const var"@_noinline_meta" = var"@noinline"
+@deprecate getindex(t::Tuple, i::Real) t[convert(Int, i)]
+
+# END 1.8 deprecations
+
+# BEGIN 1.9 deprecations
+
+@deprecate splat(x) Splat(x) false
+
+# We'd generally like to avoid direct external access to internal fields
+# Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
+# but we need to keep these around for compat
+function getproperty(ci::CodeInfo, s::Symbol)
+    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    return getfield(ci, s)
+end
+
+function setproperty!(ci::CodeInfo, s::Symbol, v)
+    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
+
+# END 1.9 deprecations

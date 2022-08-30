@@ -35,8 +35,8 @@ elseif Sys.iswindows()
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
-        String(m.captures[1]), String(m.captures[2])
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)::AbstractMatch
+        String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
     error("path primitives for this OS need to be defined")
@@ -72,7 +72,7 @@ function homedir()
         elseif rc == Base.UV_ENOBUFS
             resize!(buf, sz[] - 1) # space for null-terminator implied by StringVector
         else
-            uv_error(:homedir, rc)
+            uv_error("homedir()", rc)
         end
     end
 end
@@ -137,8 +137,11 @@ _splitdir_nodrive(path::String) = _splitdir_nodrive("", path)
 function _splitdir_nodrive(a::String, b::String)
     m = match(path_dir_splitter,b)
     m === nothing && return (a,b)
-    a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, String(m.captures[3])
+    cs = m.captures
+    getcapture(cs, i) = cs[i]::AbstractString
+    c1, c2, c3 = getcapture(cs, 1), getcapture(cs, 2), getcapture(cs, 3)
+    a = string(a, isempty(c1) ? c2[1] : c1)
+    a, String(c3)
 end
 
 """
@@ -156,7 +159,7 @@ julia> dirname("/home/myuser/")
 "/home/myuser"
 ```
 
-See also: [`basename`](@ref)
+See also [`basename`](@ref).
 """
  dirname(path::AbstractString) = splitdir(path)[1]
 
@@ -165,37 +168,47 @@ See also: [`basename`](@ref)
 
 Get the file name part of a path.
 
+!!! note
+    This function differs slightly from the Unix `basename` program, where trailing slashes are ignored,
+    i.e. `\$ basename /foo/bar/` returns `bar`, whereas `basename` in Julia returns an empty string `""`.
+
 # Examples
 ```jldoctest
 julia> basename("/home/myuser/example.jl")
 "example.jl"
+
+julia> basename("/home/myuser/")
+""
 ```
 
-See also: [`dirname`](@ref)
+See also [`dirname`](@ref).
 """
 basename(path::AbstractString) = splitdir(path)[2]
 
 """
     splitext(path::AbstractString) -> (AbstractString, AbstractString)
 
-If the last component of a path contains a dot, split the path into everything before the
-dot and everything including and after the dot. Otherwise, return a tuple of the argument
-unmodified and the empty string.
+If the last component of a path contains one or more dots, split the path into everything before the
+last dot and everything including and after the dot. Otherwise, return a tuple of the argument
+unmodified and the empty string. "splitext" is short for "split extension".
 
 # Examples
 ```jldoctest
 julia> splitext("/home/myuser/example.jl")
 ("/home/myuser/example", ".jl")
 
-julia> splitext("/home/myuser/example")
-("/home/myuser/example", "")
+julia> splitext("/home/myuser/example.tar.gz")
+("/home/myuser/example.tar", ".gz")
+
+julia> splitext("/home/my.user/example")
+("/home/my.user/example", "")
 ```
 """
 function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m === nothing && return (path,"")
-    a*m.captures[1], String(m.captures[2])
+    (a*something(m.captures[1])), String(something(m.captures[2]))
 end
 
 # NOTE: deprecated in 1.4
@@ -214,7 +227,7 @@ the path, including the root directory if present.
 # Examples
 ```jldoctest
 julia> splitpath("/home/myuser/example.jl")
-4-element Array{String,1}:
+4-element Vector{String}:
  "/"
  "home"
  "myuser"
@@ -241,16 +254,19 @@ function splitpath(p::String)
     return out
 end
 
-joinpath(path::AbstractString)::String = path
-
 if Sys.iswindows()
 
-function joinpath(path::AbstractString, paths::AbstractString...)::String
-    result_drive, result_path = splitdrive(path)
+function joinpath(paths::Union{Tuple, AbstractVector})::String
+    assertstring(x) = x isa AbstractString || throw(ArgumentError("path component is not a string: $(repr(x))"))
 
-    local p_drive, p_path
-    for p in paths
-        p_drive, p_path = splitdrive(p)
+    isempty(paths) && throw(ArgumentError("collection of path components must be non-empty"))
+    assertstring(paths[1])
+    result_drive, result_path = splitdrive(paths[1])
+
+    p_path = ""
+    for i in firstindex(paths)+1:lastindex(paths)
+        assertstring(paths[i])
+        p_drive, p_path = splitdrive(paths[i])
 
         if startswith(p_path, ('\\', '/'))
             # second path is absolute
@@ -286,8 +302,15 @@ end
 
 else
 
-function joinpath(path::AbstractString, paths::AbstractString...)::String
-    for p in paths
+function joinpath(paths::Union{Tuple, AbstractVector})::String
+    assertstring(x) = x isa AbstractString || throw(ArgumentError("path component is not a string: $(repr(x))"))
+
+    isempty(paths) && throw(ArgumentError("collection of path components must be non-empty"))
+    assertstring(paths[1])
+    path = paths[1]
+    for i in firstindex(paths)+1:lastindex(paths)
+        p = paths[i]
+        assertstring(p)
         if isabspath(p)
             path = p
         elseif isempty(path) || path[end] == '/'
@@ -301,8 +324,12 @@ end
 
 end # os-test
 
+joinpath(paths::AbstractString...)::String = joinpath(paths)
+
 """
     joinpath(parts::AbstractString...) -> String
+    joinpath(parts::Vector{AbstractString}) -> String
+    joinpath(parts::Tuple{AbstractString}) -> String
 
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
@@ -318,26 +345,35 @@ letter casing, hence `joinpath("C:\\A","c:b") = "C:\\A\\b"`.
 julia> joinpath("/home/myuser", "example.jl")
 "/home/myuser/example.jl"
 ```
+
+```jldoctest
+julia> joinpath(["/home/myuser", "example.jl"])
+"/home/myuser/example.jl"
+```
 """
 joinpath
 
 """
     normpath(path::AbstractString) -> String
 
-Normalize a path, removing "." and ".." entries.
+Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
+for the system.
 
 # Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
+
+julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
+true
 ```
 """
 function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re)
-    filter!(x->!isempty(x) && x!=".", parts)
+    parts = split(path, path_separator_re; keepempty=false)
+    filter!(!=("."), parts)
     while true
         clean = true
         for j = 1:length(parts)-1
@@ -379,8 +415,30 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
+
+# Example
+
+If you are in a directory called `JuliaExample` and the data you are using is two levels up relative to the `JuliaExample` directory, you could write:
+
+abspath("../../data")
+
+Which gives a path like `"/home/JuliaUser/data/"`.
+
+See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
-abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+function abspath(a::String)::String
+    if !isabspath(a)
+        cwd = pwd()
+        a_drive, a_nodrive = splitdrive(a)
+        if a_drive != "" && lowercase(splitdrive(cwd)[1]) != lowercase(a_drive)
+            cwd = a_drive * path_separator
+            a = joinpath(cwd, a_nodrive)
+        else
+            a = joinpath(cwd, a)
+        end
+    end
+    return normpath(a)
+end
 
 """
     abspath(path::AbstractString, paths::AbstractString...) -> String
@@ -425,11 +483,11 @@ function realpath(path::AbstractString)
                     (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
                     C_NULL, req, path, C_NULL)
         if ret < 0
-            ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
-            uv_error("realpath", ret)
+            uv_fs_req_cleanup(req)
+            uv_error("realpath($(repr(path)))", ret)
         end
         path = unsafe_string(ccall(:jl_uv_fs_t_ptr, Cstring, (Ptr{Cvoid},), req))
-        ccall(:uv_fs_req_cleanup, Cvoid, (Ptr{Cvoid},), req)
+        uv_fs_req_cleanup(req)
         return path
     finally
         Libc.free(req)
@@ -444,11 +502,11 @@ else
 function expanduser(path::AbstractString)
     y = iterate(path)
     y === nothing && return path
-    c, i = y
+    c, i = y::Tuple{eltype(path),Int}
     c != '~' && return path
     y = iterate(path, i)
     y === nothing && return homedir()
-    y[1] == '/' && return homedir() * path[i:end]
+    y[1]::eltype(path) == '/' && return homedir() * path[i:end]
     throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
 function contractuser(path::AbstractString)
@@ -468,6 +526,8 @@ end
     expanduser(path::AbstractString) -> AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+
+See also: [`contractuser`](@ref).
 """
 expanduser(path::AbstractString)
 
@@ -475,6 +535,8 @@ expanduser(path::AbstractString)
     contractuser(path::AbstractString) -> AbstractString
 
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+
+See also: [`expanduser`](@ref).
 """
 contractuser(path::AbstractString)
 
@@ -485,6 +547,9 @@ contractuser(path::AbstractString)
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the
 existence or nature of `path` or `startpath`.
+
+On Windows, case sensitivity is applied to every part of the path except drive letters. If
+`path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
     isempty(path) && throw(ArgumentError("`path` must be specified"))
@@ -492,8 +557,17 @@ function relpath(path::String, startpath::String = ".")
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
-    path_arr  = split(abspath(path),      path_separator_re)
-    start_arr = split(abspath(startpath), path_separator_re)
+    if Sys.iswindows()
+        path_drive, path_without_drive = splitdrive(path)
+        startpath_drive, startpath_without_drive = splitdrive(startpath)
+        isempty(startpath_drive) && (startpath_drive = path_drive) # by default assume same as path drive
+        uppercase(path_drive) == uppercase(startpath_drive) || return abspath(path) # if drives differ return first path
+        path_arr  = split(abspath(path_drive * path_without_drive),      path_separator_re)
+        start_arr = split(abspath(path_drive * startpath_without_drive), path_separator_re)
+    else
+        path_arr  = split(abspath(path),      path_separator_re)
+        start_arr = split(abspath(startpath), path_separator_re)
+    end
     i = 0
     while i < min(length(path_arr), length(start_arr))
         i += 1

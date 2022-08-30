@@ -16,24 +16,24 @@ regions.
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> B = zeros(Complex{Int64}, 2, 2)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+0im
  0+0im  0+0im
 
 julia> transpose!(B, A);
 
 julia> B
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  8+7im
  9+2im  4+6im
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 ```
@@ -51,24 +51,24 @@ regions.
 # Examples
 ```jldoctest
 julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 
 julia> B = zeros(Complex{Int64}, 2, 2)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  0+0im  0+0im
  0+0im  0+0im
 
 julia> adjoint!(B, A);
 
 julia> B
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3-2im  8-7im
  9-2im  4-6im
 
 julia> A
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
  8+7im  4+6im
 ```
@@ -158,17 +158,17 @@ This operation is intended for linear algebra usage - for general data manipulat
 # Examples
 ```jldoctest
 julia> A = [1 2im; -3im 4]
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im  0+2im
  0-3im  4+0im
 
 julia> T = transpose(A)
-2×2 Transpose{Complex{Int64},Array{Complex{Int64},2}}:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  1+0im  0-3im
  0+2im  4+0im
 
 julia> copy(T)
-2×2 Array{Complex{Int64},2}:
+2×2 Matrix{Complex{Int64}}:
  1+0im  0-3im
  0+2im  4+0im
 ```
@@ -181,11 +181,11 @@ Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, rever
 function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                          A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
     if length(ir_dest) != length(jr_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))
     end
     if length(jr_dest) != length(ir_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(ir_src)," and ",length(jr_dest),")")))
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)

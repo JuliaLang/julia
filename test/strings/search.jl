@@ -97,6 +97,8 @@ for str in [astr]
     @test findprev('l', str, 2) == nothing
     @test findlast(',', str) == 6
     @test findprev(',', str, 5) == nothing
+    @test findlast(str, "") == nothing
+    @test findlast(str^2, str) == nothing
     @test findlast('\n', str) == 14
 end
 
@@ -247,7 +249,7 @@ end
 for i = 1:lastindex(u8str)
     @test findnext("", u8str, i) == i:i-1
 end
-@test findfirst("", "") == 1:0
+@test findfirst("", "") === 1:0
 
 # string backward search with a zero-char string
 for i = 1:lastindex(astr)
@@ -256,7 +258,7 @@ end
 for i = 1:lastindex(u8str)
     @test findprev("", u8str, i) == i:i-1
 end
-@test findlast("", "") == 1:0
+@test findlast("", "") === 1:0
 
 # string forward search with a zero-char regex
 for i = 1:lastindex(astr)
@@ -355,6 +357,16 @@ end
 # occursin with a String and Char needle
 @test occursin("o", "foo")
 @test occursin('o', "foo")
+# occursin in curried form
+@test occursin("foo")("o")
+@test occursin("foo")('o')
+
+# contains
+@test contains("foo", "o")
+@test contains("foo", 'o')
+# contains in curried form
+@test contains("o")("foo")
+@test contains('o')("foo")
 
 @test_throws ErrorException "ab" ∈ "abc"
 
@@ -377,8 +389,63 @@ s_18109 = "fooα🐨βcd3"
 @testset "findall" begin
     @test findall("fooo", "foo") == UnitRange{Int}[]
     @test findall("ing", "Spinning laughing dancing") == [6:8, 15:17, 23:25]
-    @test findall("", "foo") == [1:0, 2:1, 3:2, 4:3]
+    @test all(findall("", "foo") .=== [1:0, 2:1, 3:2, 4:3]) # use === to compare empty ranges
     @test findall("αβ", "blαh blαβ blαββy") == findall("αβ", "blαh blαβ blαββy", overlap=true) == [9:11, 16:18]
     @test findall("aa", "aaaaaa") == [1:2, 3:4, 5:6]
     @test findall("aa", "aaaaaa", overlap=true) == [1:2, 2:3, 3:4, 4:5, 5:6]
+end
+
+# issue 37280
+@testset "UInt8, Int8 vector" begin
+    for T in [Int8, UInt8], VT in [Int8, UInt8]
+        A = T[0x40, 0x52, 0x00, 0x52, 0x00]
+
+        for A in (A, @view(A[1:end]), codeunits(String(copyto!(Vector{UInt8}(undef,5), A))))
+            @test findfirst(VT[0x30], A) === findfirst(==(VT(0x30)), A) == nothing
+            @test findfirst(VT[0x52], A) === 2:2
+            @test findfirst(==(VT(0x52)), A) === 2
+            @test findlast(VT[0x30], A) === findlast(==(VT(0x30)), A) === nothing
+            @test findlast(VT[0x52], A) === 4:4
+            @test findlast(==(VT(0x52)), A) === 4
+            @test findfirst(iszero, A) === 3 === findprev(iszero, A, 4)
+            @test findlast(iszero, A) === 5 === findnext(iszero, A, 4)
+
+            pattern = VT[0x52, 0x00]
+
+            @test findfirst(pattern, A) === 2:3
+            @test findnext(pattern, A, 2) === 2:3
+            @test findnext(pattern, A, 3) === 4:5
+            # 1 idx too far is allowed
+            @test findnext(pattern, A, length(A)+1) === nothing
+            @test_throws BoundsError findnext(pattern, A, -3)
+            @test_throws BoundsError findnext(pattern, A, length(A)+2)
+
+            @test findlast(pattern, A) === 4:5
+            @test findprev(pattern, A, 3) === 2:3
+            @test findprev(pattern, A, 5) === 4:5
+            @test findprev(pattern, A, 2) === nothing
+            @test findprev(pattern, A, length(A)+1) == findlast(pattern, A)
+            @test findprev(pattern, A, length(A)+2) == findlast(pattern, A)
+            @test_throws BoundsError findprev(pattern, A, -3)
+        end
+    end
+end
+
+# issue 32568
+for T = (UInt, BigInt)
+    for x = (4, 5)
+        @test eltype(findnext(r"l", astr, T(x))) == Int
+        @test findnext(isequal('l'), astr, T(x)) isa Int
+        @test findprev(isequal('l'), astr, T(x)) isa Int
+        @test findnext('l', astr, T(x)) isa Int
+        @test findprev('l', astr, T(x)) isa Int
+    end
+    for x = (5, 6)
+        @test eltype(findprev(",b", "foo,bar,baz", T(x))) == Int
+    end
+    for x = (7, 8)
+        @test eltype(findnext(",b", "foo,bar,baz", T(x))) == Int
+        @test findnext(isletter, astr, T(x)) isa Int
+        @test findprev(isletter, astr, T(x)) isa Int
+    end
 end

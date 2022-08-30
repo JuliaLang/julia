@@ -79,6 +79,12 @@ using Random
 
 @test_throws ArgumentError VersionNumber(4, 3, 2, (), ("", 1))
 
+# parse()/tryparse()
+@test parse(VersionNumber, "1.2.3") == v"1.2.3"
+@test_throws ArgumentError parse(VersionNumber, "not a version")
+@test tryparse(VersionNumber, "3.2.1") == v"3.2.1"
+@test tryparse(VersionNumber, "not a version") === nothing
+
 # show
 io = IOBuffer()
 show(io,v"4.3.2+1.a")
@@ -93,6 +99,12 @@ show(io,v"4.3.2+1.a")
 
 # construction from AbstractString
 @test VersionNumber("4.3.2+1.a") == v"4.3.2+1.a"
+
+# construct from VersionNumber
+let
+    v = VersionNumber("1.2.3")
+    @test VersionNumber(v) == v
+end
 
 # typemin and typemax
 @test typemin(VersionNumber) == v"0-"

@@ -51,24 +51,24 @@ other subtypes of `AbstractChar`, e.g. to optimize operations for other
 input and shown:
 
 ```jldoctest
-julia> 'x'
+julia> c = 'x'
 'x': ASCII/Unicode U+0078 (category Ll: Letter, lowercase)
 
-julia> typeof(ans)
+julia> typeof(c)
 Char
 ```
 
 You can easily convert a `Char` to its integer value, i.e. code point:
 
 ```jldoctest
-julia> Int('x')
+julia> c = Int('x')
 120
 
-julia> typeof(ans)
+julia> typeof(c)
 Int64
 ```
 
-On 32-bit architectures, [`typeof(ans)`](@ref) will be [`Int32`](@ref). You can convert an
+On 32-bit architectures, [`typeof(c)`](@ref) will be [`Int32`](@ref). You can convert an
 integer value back to a `Char` just as easily:
 
 ```jldoctest
@@ -166,6 +166,14 @@ julia> """Contains "quote" characters"""
 "Contains \"quote\" characters"
 ```
 
+Long lines in strings can be broken up by preceding the newline with a backslash (`\`):
+
+```jldoctest
+julia> "This is a long \
+       line"
+"This is a long line"
+```
+
 If you want to extract a character from a string, you index into it:
 
 ```jldoctest helloworldstring
@@ -205,13 +213,11 @@ Using an index less than `begin` (`1`) or greater than `end` raises an error:
 
 ```jldoctest helloworldstring
 julia> str[begin-1]
-ERROR: BoundsError: attempt to access String
-  at index [0]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [0]
 [...]
 
 julia> str[end+1]
-ERROR: BoundsError: attempt to access String
-  at index [15]
+ERROR: BoundsError: attempt to access 14-codeunit String at index [15]
 [...]
 ```
 
@@ -236,8 +242,9 @@ The former is a single character value of type `Char`, while the latter is a str
 happens to contain only a single character. In Julia these are very different things.
 
 Range indexing makes a copy of the selected part of the original string.
-Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref),
-for example:
+Alternatively, it is possible to create a view into a string using the type [`SubString`](@ref).
+More simply, using the [`@views`](@ref) macro on a block of code converts all string slices
+into substrings.  For example:
 
 ```jldoctest
 julia> str = "long string"
@@ -247,6 +254,9 @@ julia> substr = SubString(str, 1, 4)
 "long"
 
 julia> typeof(substr)
+SubString{String}
+
+julia> @views typeof(str[1:4]) # @views converts slices to SubStrings
 SubString{String}
 ```
 
@@ -281,11 +291,12 @@ julia> s[1]
 '∀': Unicode U+2200 (category Sm: Symbol, math)
 
 julia> s[2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
+Stacktrace:
 [...]
 
 julia> s[3]
-ERROR: StringIndexError("∀ x ∃ y", 3)
+ERROR: StringIndexError: invalid index [3], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -305,7 +316,7 @@ julia> s[end-1]
 ' ': ASCII/Unicode U+0020 (category Zs: Separator, space)
 
 julia> s[end-2]
-ERROR: StringIndexError("∀ x ∃ y", 9)
+ERROR: StringIndexError: invalid index [9], valid nearby indices [7]=>'∃', [10]=>' '
 Stacktrace:
 [...]
 
@@ -325,7 +336,7 @@ julia> s[1:1]
 "∀"
 
 julia> s[1:2]
-ERROR: StringIndexError("∀ x ∃ y", 2)
+ERROR: StringIndexError: invalid index [2], valid nearby indices [1]=>'∀', [4]=>' '
 Stacktrace:
 [...]
 
@@ -336,7 +347,7 @@ julia> s[1:4]
 Because of variable-length encodings, the number of characters in a string (given by [`length(s)`](@ref))
 is not always the same as the last index. If you iterate through the indices 1 through [`lastindex(s)`](@ref)
 and index into `s`, the sequence of characters returned when errors aren't thrown is the sequence
-of characters comprising the string `s`. Thus we have the identity that `length(s) <= lastindex(s)`,
+of characters comprising the string `s`. Thus `length(s) <= lastindex(s)`,
 since each character in a string must have its own index. The following is an inefficient and
 verbose way to iterate through the characters of `s`:
 
@@ -380,7 +391,7 @@ You can also use the [`eachindex`](@ref) function to iterate over the valid char
 
 ```jldoctest unicodestring
 julia> collect(eachindex(s))
-7-element Array{Int64,1}:
+7-element Vector{Int64}:
   1
   4
   5
@@ -475,17 +486,17 @@ of the concatenated strings, e.g.:
 julia> a, b = "\xe2\x88", "\x80"
 ("\xe2\x88", "\x80")
 
-julia> c = a*b
+julia> c = string(a, b)
 "∀"
 
 julia> collect.([a, b, c])
-3-element Array{Array{Char,1},1}:
+3-element Vector{Vector{Char}}:
  ['\xe2\x88']
  ['\x80']
  ['∀']
 
 julia> length.([a, b, c])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  1
  1
@@ -549,7 +560,7 @@ they are entered as literal expressions:
 
 ```jldoctest
 julia> v = [1,2,3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -640,9 +651,18 @@ julia> """
 "Hello,\nworld."
 ```
 
+If the newline is removed using a backslash, dedentation will be respected as well:
+
+```jldoctest
+julia> """
+         Averylong\
+         word"""
+"Averylongword"
+```
+
 Trailing whitespace is left unaltered.
 
-Triple-quoted string literals can contain `"` symbols without escaping.
+Triple-quoted string literals can contain `"` characters without escaping.
 
 Note that line breaks in literal strings, whether single- or triple-quoted, result in a newline
 (LF) character `\n` in the string, even if your editor uses a carriage return `\r` (CR) or CRLF
@@ -671,29 +691,29 @@ You can search for the index of a particular character using the
 [`findfirst`](@ref) and [`findlast`](@ref) functions:
 
 ```jldoctest
-julia> findfirst(isequal('o'), "xylophone")
+julia> findfirst('o', "xylophone")
 4
 
-julia> findlast(isequal('o'), "xylophone")
+julia> findlast('o', "xylophone")
 7
 
-julia> findfirst(isequal('z'), "xylophone")
+julia> findfirst('z', "xylophone")
 ```
 
 You can start the search for a character at a given offset by using
 the functions [`findnext`](@ref) and [`findprev`](@ref):
 
 ```jldoctest
-julia> findnext(isequal('o'), "xylophone", 1)
+julia> findnext('o', "xylophone", 1)
 4
 
-julia> findnext(isequal('o'), "xylophone", 5)
+julia> findnext('o', "xylophone", 5)
 7
 
-julia> findprev(isequal('o'), "xylophone", 5)
+julia> findprev('o', "xylophone", 5)
 4
 
-julia> findnext(isequal('o'), "xylophone", 8)
+julia> findnext('o', "xylophone", 8)
 ```
 
 You can use the [`occursin`](@ref) function to check if a substring is found within a string:
@@ -740,16 +760,20 @@ Some other useful functions include:
 
 There are situations when you want to construct a string or use string semantics, but the behavior
 of the standard string construct is not quite what is needed. For these kinds of situations, Julia
-provides [non-standard string literals](@ref). A non-standard string literal looks like a regular
-double-quoted string literal, but is immediately prefixed by an identifier, and doesn't behave
-quite like a normal string literal.  Regular expressions, byte array literals and version number
-literals, as described below, are some examples of non-standard string literals. Other examples
-are given in the [Metaprogramming](@ref) section.
+provides non-standard string literals. A non-standard string literal looks like a regular
+double-quoted string literal,
+but is immediately prefixed by an identifier, and may behave differently from a normal string literal.
 
-## Regular Expressions
+[Regular expressions](@ref man-regex-literals), [byte array literals](@ref man-byte-array-literals),
+and [version number literals](@ref man-version-number-literals), as described below,
+are some examples of non-standard string literals. Users and packages may also define new non-standard string literals.
+Further documentation is given in the [Metaprogramming](@ref meta-non-standard-string-literals) section.
 
-Julia has Perl-compatible regular expressions (regexes), as provided by the [PCRE](http://www.pcre.org/)
-library (a description of the syntax can be found [here](http://www.pcre.org/current/doc/html/pcre2syntax.html)). Regular expressions are related to strings in two ways: the obvious connection is that
+## [Regular Expressions](@id man-regex-literals)
+Sometimes you are not looking for an exact string, but a particular *pattern*. For example, suppose you are trying to extract a single date from a large text file. You don’t know what that date is (that’s why you are searching for it), but you do know it will look something like `YYYY-MM-DD`. Regular expressions allow you to specify these patterns and search for them.
+
+Julia uses version 2 of Perl-compatible regular expressions (regexes), as provided by the [PCRE](https://www.pcre.org/)
+library (see the [PCRE2 syntax description](https://www.pcre.org/current/doc/html/pcre2syntax.html) for more details). Regular expressions are related to strings in two ways: the obvious connection is that
 regular expressions are used to find regular patterns in strings; the other connection is that
 regular expressions are themselves input as strings, which are parsed into a state machine that
 can be used to efficiently search for patterns in strings. In Julia, regular expressions are input
@@ -757,10 +781,10 @@ using non-standard string literals prefixed with various identifiers beginning w
 basic regular expression literal without any options turned on just uses `r"..."`:
 
 ```jldoctest
-julia> r"^\s*(?:#|$)"
+julia> re = r"^\s*(?:#|$)"
 r"^\s*(?:#|$)"
 
-julia> typeof(ans)
+julia> typeof(re)
 Regex
 ```
 
@@ -799,7 +823,7 @@ else
 end
 ```
 
-If a regular expression does match, the value returned by [`match`](@ref) is a `RegexMatch`
+If a regular expression does match, the value returned by [`match`](@ref) is a [`RegexMatch`](@ref)
 object. These objects record how the expression matches, including the substring that the pattern
 matches and any captured substrings, if there are any. This example only captures the portion
 of the substring that matches, but perhaps we want to capture any non-blank text after the comment
@@ -843,7 +867,7 @@ julia> m.match
 "acd"
 
 julia> m.captures
-3-element Array{Union{Nothing, SubString{String}},1}:
+3-element Vector{Union{Nothing, SubString{String}}}:
  "a"
  "c"
  "d"
@@ -852,7 +876,7 @@ julia> m.offset
 1
 
 julia> m.offsets
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -864,7 +888,7 @@ julia> m.match
 "ad"
 
 julia> m.captures
-3-element Array{Union{Nothing, SubString{String}},1}:
+3-element Vector{Union{Nothing, SubString{String}}}:
  "a"
  nothing
  "d"
@@ -873,17 +897,17 @@ julia> m.offset
 1
 
 julia> m.offsets
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  0
  2
 ```
 
 It is convenient to have captures returned as an array so that one can use destructuring syntax
-to bind them to local variables:
+to bind them to local variables. As a convenience, the `RegexMatch` object implements iterator methods that pass through to the `captures` field, so you can destructure the match object directly:
 
 ```jldoctest acdmatch
-julia> first, second, third = m.captures; first
+julia> first, second, third = m; first
 "a"
 ```
 
@@ -920,7 +944,7 @@ julia> replace("a", r"." => s"\g<0>1")
 
 You can modify the behavior of regular expressions by some combination of the flags `i`, `m`,
 `s`, and `x` after the closing double quote mark. These flags have the same meaning as they do
-in Perl, as explained in this excerpt from the [perlre manpage](http://perldoc.perl.org/perlre.html#Modifiers):
+in Perl, as explained in this excerpt from the [perlre manpage](https://perldoc.perl.org/perlre#Modifiers):
 
 ```
 i   Do case-insensitive pattern matching.
@@ -1003,15 +1027,19 @@ RegexMatch("Day 10")
 julia> name = "Jon"
 "Jon"
 
-julia> regex_name = Regex("[\"( ]$name[\") ]")  # interpolate value of name
-r"[\"( ]Jon[\") ]"
+julia> regex_name = Regex("[\"( ]\\Q$name\\E[\") ]")  # interpolate value of name
+r"[\"( ]\QJon\E[\") ]"
 
-julia> match(regex_name," Jon ")
+julia> match(regex_name, " Jon ")
 RegexMatch(" Jon ")
 
-julia> match(regex_name,"[Jon]") === nothing
+julia> match(regex_name, "[Jon]") === nothing
 true
 ```
+
+Note the use of the `\Q...\E` escape sequence. All characters between the `\Q` and the `\E`
+are interpreted as literal characters (after string interpolation). This escape sequence can
+be useful when interpolating, possibly malicious, user input.
 
 ## [Byte Array Literals](@id man-byte-array-literals)
 
@@ -1031,7 +1059,7 @@ produce arrays of bytes. Here is an example using all three:
 
 ```jldoctest
 julia> b"DATA\xff\u2200"
-8-element Base.CodeUnits{UInt8,String}:
+8-element Base.CodeUnits{UInt8, String}:
  0x44
  0x41
  0x54
@@ -1051,12 +1079,12 @@ julia> isvalid("DATA\xff\u2200")
 false
 ```
 
-As it was mentioned `CodeUnits{UInt8,String}` type behaves like read only array of `UInt8` and
+As it was mentioned `CodeUnits{UInt8, String}` type behaves like read only array of `UInt8` and
 if you need a standard vector you can convert it using `Vector{UInt8}`:
 
 ```jldoctest
 julia> x = b"123"
-3-element Base.CodeUnits{UInt8,String}:
+3-element Base.CodeUnits{UInt8, String}:
  0x31
  0x32
  0x33
@@ -1065,11 +1093,11 @@ julia> x[1]
 0x31
 
 julia> x[1] = 0x32
-ERROR: setindex! not defined for Base.CodeUnits{UInt8,String}
+ERROR: CanonicalIndexError: setindex! not defined for Base.CodeUnits{UInt8, String}
 [...]
 
 julia> Vector{UInt8}(x)
-3-element Array{UInt8,1}:
+3-element Vector{UInt8}:
  0x31
  0x32
  0x33
@@ -1081,11 +1109,11 @@ is encoded as two bytes in UTF-8:
 
 ```jldoctest
 julia> b"\xff"
-1-element Base.CodeUnits{UInt8,String}:
+1-element Base.CodeUnits{UInt8, String}:
  0xff
 
 julia> b"\uff"
-2-element Base.CodeUnits{UInt8,String}:
+2-element Base.CodeUnits{UInt8, String}:
  0xc3
  0xbf
 ```
