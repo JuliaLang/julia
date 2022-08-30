@@ -194,6 +194,12 @@ eltype(::Type{T}) where T<:NamedTuple = nteltype(T)
 nteltype(::Type) = Any
 nteltype(::Type{NamedTuple{names,T}} where names) where {T} = eltype(T)
 
+keytype(@nospecialize nt::NamedTuple) = keytype(typeof(nt))
+keytype(@nospecialize T::Type{<:NamedTuple}) = Symbol
+
+valtype(@nospecialize nt::NamedTuple) = valtype(typeof(nt))
+valtype(@nospecialize T::Type{<:NamedTuple}) = eltype(T)
+
 ==(a::NamedTuple{n}, b::NamedTuple{n}) where {n} = Tuple(a) == Tuple(b)
 ==(a::NamedTuple, b::NamedTuple) = false
 
