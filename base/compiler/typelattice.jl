@@ -249,25 +249,41 @@ The non-strict partial order over the type inference lattice.
                 return false
             end
             for i in 1:length(b.fields)
-                # XXX: let's handle varargs later
-                ⊑(a.fields[i], b.fields[i]) || return false
+                af = a.fields[i]
+                bf = b.fields[i]
+                if i == length(b.fields)
+                    if isvarargtype(af)
+                        # If `af` is vararg, so must bf by the <: above
+                        @assert isvarargtype(bf)
+                        continue
+                    elseif isvarargtype(bf)
+                        # If `bf` is vararg, it must match the information
+                        # in the type, so there's nothing to check here.
+                        continue
+                    end
+                end
+                ⊑(af, bf) || return false
             end
             return true
         end
         return isa(b, Type) && a.typ <: b
     elseif isa(b, PartialStruct)
         if isa(a, Const)
-            nfields(a.val) == length(b.fields) || return false
+            nf = nfields(a.val)
+            nf == length(b.fields) || return false
             widenconst(b).name === widenconst(a).name || return false
             # We can skip the subtype check if b is a Tuple, since in that
             # case, the ⊑ of the elements is sufficient.
             if b.typ.name !== Tuple.name && !(widenconst(a) <: widenconst(b))
                 return false
             end
-            for i in 1:nfields(a.val)
-                # XXX: let's handle varargs later
+            for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
-                ⊑(Const(getfield(a.val, i)), b.fields[i]) || return false
+                bf = b.fields[i]
+                if i == nf
+                    bf = unwrapva(bf)
+                end
+                ⊑(Const(getfield(a.val, i)), bf) || return false
             end
             return true
         end
@@ -280,6 +296,8 @@ The non-strict partial order over the type inference lattice.
                 ⊑(a.env, b.env)
         end
         return widenconst(a) ⊑ b
+    elseif isa(b, PartialOpaque)
+        return false
     end
     if isa(a, Const)
         if isa(b, Const)
@@ -294,12 +312,12 @@ The non-strict partial order over the type inference lattice.
             return a.instance === b.val
         end
         return false
-    elseif isa(a, PartialTypeVar) && b === TypeVar
-        return true
-    elseif isa(a, Type) && isa(b, Type)
-        return a <: b
-    else # handle this conservatively in the remaining cases
+    elseif isa(a, PartialTypeVar)
+        return b === TypeVar || a === b
+    elseif isa(b, PartialTypeVar)
         return a === b
+    else
+        return a <: b
     end
 end
 

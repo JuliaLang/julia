@@ -1176,8 +1176,8 @@ end
         xnlo += err
         n >>>= 1
     end
-    !isfinite(x) && return x*y
-    return muladd(x, y, muladd(y, xnlo, x*ynlo))
+    err = muladd(y, xnlo, x*ynlo)
+    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
 function ^(x::Float32, n::Integer)

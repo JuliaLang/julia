@@ -1490,7 +1490,7 @@ end
 end
 
 # returns the width of the written prompt
-function write_prompt(terminal, s::Union{AbstractString,Function}, color::Bool)
+function write_prompt(terminal::AbstractTerminal, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)

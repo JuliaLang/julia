@@ -35,6 +35,8 @@ Compiler/Runtime improvements
   `@nospecialize`-d call sites and avoiding excessive compilation. ([#44512])
 * All the previous usages of `@pure`-macro in `Base` has been replaced with the preferred
   `Base.@assume_effects`-based annotations. ([#44776])
+* `invoke(f, invokesig, args...)` calls to a less-specific method than would normally be chosen
+  for `f(args...)` are no longer spuriously invalidated when loading package precompile files. ([#46010])
 
 Command-line option changes
 ---------------------------
@@ -85,6 +87,7 @@ Library changes
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* `@kwdef` is now exported and added to the public API ([#46273])
 
 Standard library changes
 ------------------------
