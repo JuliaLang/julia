@@ -298,8 +298,9 @@ end
 
 # Used by Pkg but not used in loading itself
 function find_package(arg)
-    pkg, env = identify_package_env(arg)
-    pkg === nothing && return nothing
+    pkgenv = identify_package_env(arg)
+    pkgenv === nothing && return nothing
+    pkg, env = pkgenv
     return locate_package(pkg, env)
 end
 
