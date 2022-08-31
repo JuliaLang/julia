@@ -418,7 +418,7 @@ const OtherPeriod = Union{Month, Quarter, Year}
 
 const zero_or_fixedperiod_seed = UInt === UInt64 ? 0x5b7fc751bba97516 : 0xeae0fdcb
 const nonzero_otherperiod_seed = UInt === UInt64 ? 0xe1837356ff2d2ac9 : 0x170d1b00
-otherperiod_seed(x::OtherPeriod) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
+otherperiod_seed(x) = iszero(value(x)) ? zero_or_fixedperiod_seed : nonzero_otherperiod_seed
 # tons() will overflow for periods longer than ~300,000 years, implying a hash collision
 # which is relatively harmless given how infrequently such periods should appear
 Base.hash(x::FixedPeriod, h::UInt) = hash(tons(x), h + zero_or_fixedperiod_seed)
