@@ -599,6 +599,7 @@ end
 # accessing the command elements as an array or iterator:
 let c = `ls -l "foo bar"`
     @test collect(c) == ["ls", "-l", "foo bar"]
+    @test collect(Iterators.reverse(c)) == reverse!(["ls", "-l", "foo bar"])
     @test first(c) == "ls" == c[1]
     @test last(c) == "foo bar" == c[3] == c[end]
     @test c[1:2] == ["ls", "-l"]
@@ -825,6 +826,12 @@ end
     dir = joinpath(pwd(), "dir")
     cmd = addenv(setenv(`julia`; dir=dir), Dict())
     @test cmd.dir == dir
+
+    @test addenv(``, ["a=b=c"], inherit=false).env == ["a=b=c"]
+    cmd = addenv(``, "a"=>"b=c", inherit=false)
+    @test cmd.env == ["a=b=c"]
+    cmd = addenv(cmd, "b"=>"b")
+    @test issetequal(cmd.env, ["b=b", "a=b=c"])
 end
 
 @testset "setenv with dir (with tests for #42131)" begin

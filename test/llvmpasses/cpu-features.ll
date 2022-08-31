@@ -1,4 +1,5 @@
-; RUN: opt -load libjulia-internal%shlibext -CPUFeatures -simplifycfg -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -CPUFeatures -simplifycfg -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='CPUFeatures,simplifycfg' -S %s | FileCheck %s
 
 declare i1 @julia.cpu.have_fma.f64()
 declare double @with_fma(double %0, double %1, double %2)

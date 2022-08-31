@@ -1,13 +1,13 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # highlighting settings
-highlighting = Dict{Symbol, Bool}(
+const highlighting = Dict{Symbol, Bool}(
     :warntype => true,
     :llvm => true,
     :native => true,
 )
 
-llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
+const llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
     :default     => (false, :normal), # e.g. comma, equal sign, unknown token
     :comment     => (false, :light_black),
     :label       => (false, :light_red),
@@ -32,7 +32,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     str = "::$ty"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Union && Base.is_expected_union(ty)
+    elseif ty isa Union && is_expected_union(ty)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
     elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
         Base.emphasize(io, str)
@@ -42,16 +42,31 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     nothing
 end
 
+# True if one can be pretty certain that the compiler handles this union well,
+# i.e. must be small with concrete types.
+function is_expected_union(u::Union)
+    Base.unionlen(u) < 4 || return false
+    for x in Base.uniontypes(u)
+        if !Base.isdispatchelem(x) || x == Core.Box
+            return false
+        end
+    end
+    return true
+end
+
 """
     code_warntype([io::IO], f, types; debuginfo=:default)
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
-as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
-This serves as a warning of potential type instability. Not all non-leaf types are particularly
-problematic for performance, so the results need to be used judiciously.
-In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
-these are often intentional.
+as to cause "non-leaf" types which may be problematic for performance to be emphasized
+(if color is available, displayed in red). This serves as a warning of potential type instability.
+
+Not all non-leaf types are particularly problematic for performance, and the performance
+characteristics of a particular type is an implementation detail of the compiler.
+`code_warntype` will err on the side of coloring types red if they might be a performance
+concern, so some types may be colored red even if they do not impact performance.
+Small unions of concrete types are usually not a concern, so these are highlighed in yellow.
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
@@ -62,6 +77,11 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     for (src, rettype) in code_typed(f, t; optimize, kwargs...)
+        if !(src isa Core.CodeInfo)
+            println(io, src)
+            println(io, "  failed to infer")
+            continue
+        end
         lambda_io::IOContext = io
         p = src.parent
         nargs::Int = 0
@@ -139,6 +159,13 @@ code_warntype(@nospecialize(f), @nospecialize(t=Base.default_tt(f)); kwargs...) 
 
 import Base.CodegenParams
 
+const GENERIC_SIG_WARNING = "; WARNING: This code may not match what actually runs.\n"
+const OC_MISMATCH_WARNING =
+"""
+; WARNING: The pre-inferred opaque closure is not callable with the given arguments
+;          and will error on dispatch with this signature.
+"""
+
 # Printing code representations in IR and assembly
 function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
                         strip_ir_metadata::Bool, dump_module::Bool, syntax::Symbol,
@@ -148,10 +175,28 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     if isa(f, Core.Builtin)
         throw(ArgumentError("argument is not a generic function"))
     end
+    warning = ""
     # get the MethodInstance for the method match
-    world = typemax(UInt)
-    match = Base._which(signature_type(f, t), world)
-    linfo = Core.Compiler.specialize_method(match)
+    if !isa(f, Core.OpaqueClosure)
+        world = Base.get_world_counter()
+        match = Base._which(signature_type(f, t), world)
+        linfo = Core.Compiler.specialize_method(match)
+        # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
+        isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
+    else
+        world = UInt64(f.world)
+        if Core.Compiler.is_source_inferred(f.source.source)
+            # OC was constructed from inferred source. There's only one
+            # specialization and we can't infer anything more precise either.
+            world = f.source.primary_world
+            linfo = f.source.specializations[1]
+            Core.Compiler.hasintersect(typeof(f).parameters[1], t) || (warning = OC_MISMATCH_WARNING)
+        else
+            linfo = Core.Compiler.specialize_method(f.source, Tuple{typeof(f.captures), t.parameters...}, Core.svec())
+            actual = isdispatchtuple(linfo.specTypes)
+            isdispatchtuple(linfo.specTypes) || (warning = GENERIC_SIG_WARNING)
+        end
+    end
     # get the code for it
     if debuginfo === :default
         debuginfo = :source
@@ -170,8 +215,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
     else
         str = _dump_function_linfo_llvm(linfo, world, wrapper, strip_ir_metadata, dump_module, optimize, debuginfo, params)
     end
-    # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
-    isdispatchtuple(linfo.specTypes) || (str = "; WARNING: This code may not match what actually runs.\n" * str)
+    str = warning * str
     return str
 end
 
@@ -182,12 +226,18 @@ function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wr
     return str
 end
 
+struct LLVMFDump
+    tsm::Ptr{Cvoid} # opaque
+    f::Ptr{Cvoid} # opaque
+end
+
 function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, true, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, true, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_asm, Ref{String},
-                (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                llvmf, false, syntax, debuginfo, binary)
+                (Ptr{LLVMFDump}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                llvmf_dump, false, syntax, debuginfo, binary)
     return str
 end
 
@@ -196,11 +246,12 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, optimize, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
-                (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
-                llvmf, strip_ir_metadata, dump_module, debuginfo)
+                (Ptr{LLVMFDump}, Bool, Bool, Ptr{UInt8}),
+                llvmf_dump, strip_ir_metadata, dump_module, debuginfo)
     return str
 end
 
@@ -234,9 +285,13 @@ code_llvm(@nospecialize(f), @nospecialize(types=Base.default_tt(f)); raw=false, 
 
 Prints the native assembly instructions generated for running the method matching the given
 generic function and type signature to `io`.
-Switch assembly syntax using `syntax` symbol parameter set to `:att` for AT&T syntax or `:intel` for Intel syntax.
-Keyword argument `debuginfo` may be one of source (default) or none, to specify the verbosity of code comments.
-If `binary` is `true`, it also prints the binary machine code for each instruction precedented by an abbreviated address.
+
+* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+
+See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and [`code_lowered`](@ref)
 """
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)

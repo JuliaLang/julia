@@ -102,6 +102,7 @@ end
 @test length(zip(cycle(1:3), 1:7, cycle(1:3))) == 7
 @test length(zip(1:3,product(1:7,cycle(1:3)))) == 3
 @test length(zip(1:3,product(1:7,cycle(1:3)),8)) == 1
+@test_throws ArgumentError length(zip()) # length of zip of empty tuple
 
 # map
 # ----
@@ -186,8 +187,17 @@ end
 @test isempty(collect(drop(0:2:10, 100)))
 @test_throws ArgumentError drop(0:2:8, -1)
 @test length(drop(1:3,typemax(Int))) == 0
+@test length(drop(UInt(1):2, 3)) == 0
+@test length(drop(StepRangeLen(1, 1, UInt(2)), 3)) == 0
 @test Base.IteratorSize(drop(countfrom(1),3)) == Base.IsInfinite()
 @test_throws MethodError length(drop(countfrom(1), 3))
+@test Base.IteratorSize(Iterators.drop(Iterators.filter(i -> i>0, 1:10), 2)) == Base.SizeUnknown()
+
+let x = Iterators.drop(Iterators.Stateful("abc"), 2)
+    @test !Base.isdone(x, nothing)
+    iterate(x)
+    @test Base.isdone(x, nothing)
+end
 
 # double take
 # and take/drop canonicalization
@@ -236,6 +246,8 @@ let i = 0
         i += 1
         i <= 10 || break
     end
+    @test Base.isdone(cycle(0:3)) === Base.isdone(0:3) === missing
+    @test !Base.isdone(cycle(0:3), 1)
 end
 
 # repeated
@@ -314,6 +326,8 @@ let itr
     @test collect(itr) == Int[] # Stateful do not preserve shape
     itr = (i-1 for i in Base.Stateful(zeros(Int, 0, 0)))
     @test collect(itr) == Int[] # Stateful do not preserve shape
+    itr = Iterators.Stateful(Iterators.Stateful(1:1))
+    @test collect(itr) == [1]
 end
 
 # with 1D inputs
@@ -430,6 +444,10 @@ end
 @test Base.IteratorSize(product(take(1:2, 1), take(1:2, 1))) == Base.HasShape{2}()
 @test Base.IteratorSize(product(take(1:2, 2)))               == Base.HasShape{1}()
 @test Base.IteratorSize(product([1 2; 3 4]))                 == Base.HasShape{2}()
+@test Base.IteratorSize(product((1,2,3,4), (5, 6, 7, 8)))    == Base.HasShape{2}()  # product of ::HasLength and ::HasLength
+@test Base.IteratorSize(product(1:2, 3:5, 5:6))              == Base.HasShape{3}()  # product of 3 iterators
+@test Base.IteratorSize(product([1 2; 3 4], 1:4))            == Base.HasShape{3}()  # product of ::HasShape{2} with ::HasShape{1}
+@test Base.IteratorSize(product([1 2; 3 4], (1,2)))          == Base.HasShape{3}()  # product of ::HasShape{2} with ::HasLength
 
 # IteratorEltype trait business
 let f1 = Iterators.filter(i->i>0, 1:10)
@@ -447,11 +465,19 @@ end
 @test Base.IteratorEltype(product(take(1:2, 1), take(1:2, 1))) == Base.HasEltype()
 @test Base.IteratorEltype(product(take(1:2, 2)))               == Base.HasEltype()
 @test Base.IteratorEltype(product([1 2; 3 4]))                 == Base.HasEltype()
+@test Base.IteratorEltype(product())                           == Base.HasEltype()
 
 @test collect(product(1:2,3:4)) == [(1,3) (1,4); (2,3) (2,4)]
 @test isempty(collect(product(1:0,1:2)))
 @test length(product(1:2,1:10,4:6)) == 60
 @test Base.IteratorSize(product(1:2, countfrom(1))) == Base.IsInfinite()
+
+@test Base.iterate(product()) == ((), true)
+@test Base.iterate(product(), 1) == nothing
+
+# intersection
+@test intersect(product(1:3, 4:6), product(2:4, 3:5)) == Iterators.ProductIterator((2:3, 4:5))
+@test intersect(product(1:3, [4 5 ; 6 7]), product(2:4, [7 6 ; 5 4])).iterators == (2:3, [4, 6, 5, 7])
 
 # flatten
 # -------
@@ -468,9 +494,38 @@ end
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
 @test_throws ArgumentError length(flatten([[1], [1]]))
 
+@testset "IteratorSize trait for flatten" begin
+    @test Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1)) == Base.SizeUnknown()
+    @test Base.IteratorSize(Base.Flatten((1,2))) == Base.HasLength()
+    @test Base.IteratorSize(Base.Flatten(1:2:4)) == Base.HasLength()
+end
+
 @test Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
 # see #29112, #29464, #29548
 @test Base.return_types(Base.IteratorEltype, Tuple{Array}) == [Base.HasEltype]
+
+# flatmap
+# -------
+@test flatmap(1:3) do j flatmap(1:3) do k
+    j!=k ? ((j,k),) : ()
+end end |> collect == [(j,k) for j in 1:3 for k in 1:3 if j!=k]
+# Test inspired by the monad associativity law
+fmf(x) = x<0 ? () : (x^2,)
+fmg(x) = x<1 ? () : (x/2,)
+fmdata = -2:0.75:2
+fmv1 = flatmap(tuple.(fmdata)) do h
+    flatmap(h) do x
+        gx = fmg(x)
+        flatmap(gx) do x
+            fmf(x)
+        end
+    end
+end
+fmv2 = flatmap(tuple.(fmdata)) do h
+    gh = flatmap(h) do x fmg(x) end
+    flatmap(gh) do x fmf(x) end
+end
+@test all(fmv1 .== fmv2)
 
 # partition(c, n)
 let v = collect(partition([1,2,3,4,5], 1))
@@ -478,7 +533,7 @@ let v = collect(partition([1,2,3,4,5], 1))
 end
 
 let v1 = collect(partition([1,2,3,4,5], 2)),
-    v2 = collect(partition(flatten([[1,2],[3,4],5]), 2)) # collecting partition with SizeUnkown
+    v2 = collect(partition(flatten([[1,2],[3,4],5]), 2)) # collecting partition with SizeUnknown
     @test v1[1] == v2[1] == [1,2]
     @test v1[2] == v2[2] == [3,4]
     @test v1[3] == v2[3] == [5]
@@ -550,12 +605,15 @@ end
                                                          (1,1), (8,8), (11, 13),
                                                          (1,1,1), (8, 4, 2), (11, 13, 17)),
                                                 part in (1, 7, 8, 11, 63, 64, 65, 142, 143, 144)
-    P = partition(CartesianIndices(dims), part)
-    for I in P
-        @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
-        @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+    for fun in (i -> 1:i, i -> 1:2:2i, i -> Base.IdentityUnitRange(-i:i))
+        iter = CartesianIndices(map(fun, dims))
+        P = partition(iter, part)
+        for I in P
+            @test length(I) == iterate_length(I) == simd_iterate_length(I) == simd_trip_count(I)
+            @test collect(I) == iterate_elements(I) == simd_iterate_elements(I) == index_elements(I)
+        end
+        @test all(Base.Splat(==), zip(Iterators.flatten(map(collect, P)), iter))
     end
-    @test all(Base.splat(==), zip(Iterators.flatten(map(collect, P)), CartesianIndices(dims)))
 end
 @testset "empty/invalid partitions" begin
     @test_throws ArgumentError partition(1:10, 0)
@@ -716,6 +774,7 @@ end
         @test popfirst!(a) == 'a'
         @test collect(Iterators.take(a, 3)) == ['b','c','d']
         @test collect(a) == ['e', 'f']
+        @test_throws EOFError popfirst!(a) # trying to pop from an empty stateful iterator.
     end
     let a = @inferred(Iterators.Stateful([1, 1, 1, 2, 3, 4]))
         for x in a; x == 1 || break; end
@@ -830,6 +889,8 @@ end
     @test_throws ArgumentError only([])
     @test_throws ArgumentError only([3, 2])
 
+    @test only(fill(42)) === 42 # zero dimensional array containing a single value.
+
     @test @inferred(only((3,))) === 3
     @test_throws ArgumentError only(())
     @test_throws ArgumentError only((3, 2))
@@ -883,6 +944,23 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
+
+@testset "Iterators.tail_if_any" begin
+    @test Iterators.tail_if_any(()) == ()
+    @test Iterators.tail_if_any((1, 2)) == (2,)
+    @test Iterators.tail_if_any((1,)) == ()
+end
+
+@testset "IteratorSize trait for zip" begin
+    @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
+    @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
+    @test Base.IteratorSize(zip( 1:5, repeated(0) )) == Base.HasLength()    # for zip of ::HasShape and ::IsInfinite
+    @test Base.IteratorSize(zip(repeated(0), (1,2,3))) == Base.HasLength()  # for zip of ::IsInfinite and ::HasLength
+    @test Base.IteratorSize(zip(repeated(0), 1:5 )) == Base.HasLength()     # for zip of ::IsInfinite and ::HasShape
+    @test Base.IteratorSize(zip((1,2,3), 1:5) ) == Base.HasLength()         # for zip of ::HasLength and ::HasShape
+    @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
+end
+
 @testset "proper patition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end
@@ -898,4 +976,12 @@ end
 @testset "last for iterators" begin
     @test last(Iterators.map(identity, 1:3)) == 3
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
+end
+
+@testset "isempty and isdone for Generators" begin
+    itr = eachline(IOBuffer("foo\n"))
+    gen = (x for x in itr)
+    @test !isempty(gen)
+    @test !Base.isdone(gen)
+    @test collect(gen) == ["foo"]
 end

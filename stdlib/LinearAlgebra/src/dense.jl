@@ -257,6 +257,8 @@ Vector `kv.second` will be placed on the `kv.first` diagonal.
 By default the matrix is square and its size is inferred
 from `kv`, but a non-square size `m`×`n` (padded with zeros as needed)
 can be specified by passing `m,n` as the first arguments.
+For repeated diagonal indices `kv.first` the values in the corresponding
+vectors `kv.second` will be added.
 
 `diagm` constructs a full matrix; if you want storage-efficient
 versions with fast arithmetic, see [`Diagonal`](@ref), [`Bidiagonal`](@ref)
@@ -276,6 +278,13 @@ julia> diagm(1 => [1,2,3], -1 => [4,5])
  0  1  0  0
  4  0  2  0
  0  5  0  3
+ 0  0  0  0
+
+julia> diagm(1 => [1,2,3], 1 => [1,2,3])
+4×4 Matrix{Int64}:
+ 0  2  0  0
+ 0  0  4  0
+ 0  0  0  6
  0  0  0  0
 ```
 """
@@ -516,7 +525,7 @@ function (^)(A::AbstractMatrix{T}, p::Real) where T
     # Quicker return if A is diagonal
     if isdiag(A)
         TT = promote_op(^, T, typeof(p))
-        retmat = copy_oftype(A, TT)
+        retmat = copymutable_oftype(A, TT)
         for i in 1:n
             retmat[i, i] = retmat[i, i] ^ p
         end
@@ -899,7 +908,7 @@ sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)
-    S = typeof((one(T)*zero(T) + one(T)*zero(T))/one(T))
+    S = typeof((oneunit(T)*zero(T) + oneunit(T)*zero(T))/oneunit(T))
     AA = convert(AbstractArray{S}, A)
     if istriu(AA)
         Ai = triu!(parent(inv(UpperTriangular(AA))))
@@ -1428,7 +1437,7 @@ The default relative tolerance is `n*ϵ`, where `n` is the size of the smallest
 dimension of `M`, and `ϵ` is the [`eps`](@ref) of the element type of `M`.
 
 For inverting dense ill-conditioned matrices in a least-squares sense,
-`rtol = sqrt(eps(real(float(one(eltype(M))))))` is recommended.
+`rtol = sqrt(eps(real(float(oneunit(eltype(M))))))` is recommended.
 
 For more information, see [^issue8859], [^B96], [^S84], [^KY88].
 
@@ -1458,19 +1467,20 @@ julia> M * N
 
 [^KY88]: Konstantinos Konstantinides and Kung Yao, "Statistical analysis of effective singular values in matrix rank determination", IEEE Transactions on Acoustics, Speech and Signal Processing, 36(5), 1988, 757-763. [doi:10.1109/29.1585](https://doi.org/10.1109/29.1585)
 """
-function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(float(one(T))))*min(size(A)...))*iszero(atol)) where T
+function pinv(A::AbstractMatrix{T}; atol::Real = 0.0, rtol::Real = (eps(real(float(oneunit(T))))*min(size(A)...))*iszero(atol)) where T
     m, n = size(A)
-    Tout = typeof(zero(T)/sqrt(one(T) + one(T)))
+    Tout = typeof(zero(T)/sqrt(oneunit(T) + oneunit(T)))
     if m == 0 || n == 0
         return similar(A, Tout, (n, m))
     end
     if isdiag(A)
-        ind = diagind(A)
-        dA = view(A, ind)
+        indA = diagind(A)
+        dA = view(A, indA)
         maxabsA = maximum(abs, dA)
         tol = max(rtol * maxabsA, atol)
         B = fill!(similar(A, Tout, (n, m)), 0)
-        B[ind] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
+        indB = diagind(B)
+        B[indB] .= (x -> abs(x) > tol ? pinv(x) : zero(x)).(dA)
         return B
     end
     SVD         = svd(A)
@@ -1527,7 +1537,7 @@ julia> nullspace(M, atol=0.95)
  1.0
 ```
 """
-function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size(A, 1), size(A, 2))*eps(real(float(one(eltype(A))))))*iszero(atol))
+function nullspace(A::AbstractVecOrMat; atol::Real = 0.0, rtol::Real = (min(size(A, 1), size(A, 2))*eps(real(float(oneunit(eltype(A))))))*iszero(atol))
     m, n = size(A, 1), size(A, 2)
     (m == 0 || n == 0) && return Matrix{eigtype(eltype(A))}(I, n, n)
     SVD = svd(A; full=true)

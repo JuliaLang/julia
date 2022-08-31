@@ -1,4 +1,5 @@
 ; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -FinalLowerGC -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame),FinalLowerGC' -S %s | FileCheck %s
 
 
 declare {}*** @julia.ptls_states()

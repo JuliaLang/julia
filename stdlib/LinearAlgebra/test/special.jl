@@ -104,6 +104,28 @@ Random.seed!(1)
             @test LowerTriangular(C) == LowerTriangular(Cdense)
         end
     end
+
+    @testset "Matrix constructor for !isa(zero(T), T)" begin
+        # the following models JuMP.jl's VariableRef and AffExpr, resp.
+        struct TypeWithoutZero end
+        struct TypeWithZero end
+        Base.promote_rule(::Type{TypeWithoutZero}, ::Type{TypeWithZero}) = TypeWithZero
+        Base.convert(::Type{TypeWithZero}, ::TypeWithoutZero) = TypeWithZero()
+        Base.zero(::Type{<:Union{TypeWithoutZero, TypeWithZero}}) = TypeWithZero()
+        LinearAlgebra.symmetric(::TypeWithoutZero, ::Symbol) = TypeWithoutZero()
+        Base.transpose(::TypeWithoutZero) = TypeWithoutZero()
+        d  = fill(TypeWithoutZero(), 3)
+        du = fill(TypeWithoutZero(), 2)
+        dl = fill(TypeWithoutZero(), 2)
+        D  = Diagonal(d)
+        Bu = Bidiagonal(d, du, :U)
+        Bl = Bidiagonal(d, dl, :L)
+        Tri = Tridiagonal(dl, d, du)
+        Sym = SymTridiagonal(d, dl)
+        for M in (D, Bu, Bl, Tri, Sym)
+            @test Matrix(M) == zeros(TypeWithZero, 3, 3)
+        end
+    end
 end
 
 @testset "Binary ops among special types" begin
@@ -145,7 +167,7 @@ end
     LoBi = Bidiagonal(rand(20,20), :L)
     Sym = SymTridiagonal(rand(20), rand(19))
     Dense = rand(20, 20)
-    mats = [UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
+    mats = Any[UpTri, LoTri, Diag, Tridiag, UpBi, LoBi, Sym, Dense]
 
     for op in (+,-,*)
         for A in mats
@@ -160,7 +182,7 @@ end
     diag = 1:5
     offdiag = 1:4
     uniformscalingmats = [UniformScaling(3), UniformScaling(1.0), UniformScaling(3//5), UniformScaling(ComplexF64(1.3, 3.5))]
-    mats = [Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
+    mats = Any[Diagonal(diag), Bidiagonal(diag, offdiag, 'U'), Bidiagonal(diag, offdiag, 'L'), Tridiagonal(offdiag, diag, offdiag), SymTridiagonal(diag, offdiag)]
     for T in [ComplexF64, Int64, Rational{Int64}, Float64]
         push!(mats, Diagonal(Vector{T}(diag)))
         push!(mats, Bidiagonal(Vector{T}(diag), Vector{T}(offdiag), 'U'))
@@ -188,16 +210,34 @@ end
 
 
 @testset "Triangular Types and QR" begin
-    for typ in [UpperTriangular,LowerTriangular,LinearAlgebra.UnitUpperTriangular,LinearAlgebra.UnitLowerTriangular]
+    for typ in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
         a = rand(n,n)
         atri = typ(a)
+        matri = Matrix(atri)
         b = rand(n,n)
-        qrb = qr(b, ColumnNorm())
-        @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        qrb = qr(b, NoPivot())
-        @test *(atri, adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
-        @test rmul!(copy(atri), adjoint(qrb.Q)) ≈ Matrix(atri) * qrb.Q'
+        for pivot in (ColumnNorm(), NoPivot())
+            qrb = qr(b, pivot)
+            @test atri * qrb.Q ≈ matri * qrb.Q ≈ rmul!(copy(atri), qrb.Q)
+            @test atri * qrb.Q' ≈ matri * qrb.Q' ≈ rmul!(copy(atri), qrb.Q')
+            @test qrb.Q * atri ≈ qrb.Q * matri ≈ lmul!(qrb.Q, copy(atri))
+            @test qrb.Q' * atri ≈ qrb.Q' * matri ≈ lmul!(qrb.Q', copy(atri))
+        end
+    end
+end
+
+@testset "Multiplication of Qs" begin
+    for pivot in (ColumnNorm(), NoPivot()), A in (rand(5, 3), rand(5, 5), rand(3, 5))
+        Q = qr(A, pivot).Q
+        m = size(A, 1)
+        C = Matrix{Float64}(undef, (m, m))
+        @test Q*Q ≈ (Q*I) * (Q*I) ≈ mul!(C, Q, Q)
+        @test size(Q*Q) == (m, m)
+        @test Q'Q ≈ (Q'*I) * (Q*I) ≈ mul!(C, Q', Q)
+        @test size(Q'Q) == (m, m)
+        @test Q*Q' ≈ (Q*I) * (Q'*I) ≈ mul!(C, Q, Q')
+        @test size(Q*Q') == (m, m)
+        @test Q'Q' ≈ (Q'*I) * (Q'*I) ≈ mul!(C, Q', Q')
+        @test size(Q'Q') == (m, m)
     end
 end
 
@@ -321,7 +361,7 @@ using .Main.Furlongs
         Bl = Bidiagonal(rand(elty, 10), rand(elty, 9), 'L')
         T = Tridiagonal(rand(elty, 9),rand(elty, 10), rand(elty, 9))
         S = SymTridiagonal(rand(elty, 10), rand(elty, 9))
-        mats = [D, Bu, Bl, T, S]
+        mats = Any[D, Bu, Bl, T, S]
         for A in mats
             @test iszero(zero(A))
             @test isone(one(A))
@@ -375,12 +415,18 @@ using .Main.Furlongs
     @test one(S) isa SymTridiagonal
 
     # eltype with dimensions
-    D = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4])
-    Bu = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
-    Bl =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
-    T = Tridiagonal{Furlong{2, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
-    S = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4], [1, 2, 3])
-    mats = [D, Bu, Bl, T, S]
+    D0 = Diagonal{Furlong{0, Int64}}([1, 2, 3, 4])
+    Bu0 = Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'U')
+    Bl0 =  Bidiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3], 'L')
+    T0 = Tridiagonal{Furlong{0, Int64}}([1, 2, 3], [1, 2, 3, 4], [1, 2, 3])
+    S0 = SymTridiagonal{Furlong{0, Int64}}([1, 2, 3, 4], [1, 2, 3])
+    F2 = Furlongs.Furlong{2}(1)
+    D2 = Diagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2)
+    Bu2 = Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'U')
+    Bl2 =  Bidiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2, 'L')
+    T2 = Tridiagonal{Furlong{2, Int64}}([1, 2, 3].*F2, [1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    S2 = SymTridiagonal{Furlong{2, Int64}}([1, 2, 3, 4].*F2, [1, 2, 3].*F2)
+    mats = Any[D0, Bu0, Bl0, T0, S0, D2, Bu2, Bl2, T2, S2]
     for A in mats
         @test iszero(zero(A))
         @test isone(one(A))
@@ -415,19 +461,18 @@ end
 end
 
 @testset "BiTriSym*Q' and Q'*BiTriSym" begin
-    dl = [1, 1, 1];
-    d = [1, 1, 1, 1];
-    Tri = Tridiagonal(dl, d, dl)
+    dl = [1, 1, 1]
+    d = [1, 1, 1, 1]
+    D = Diagonal(d)
     Bi = Bidiagonal(d, dl, :L)
+    Tri = Tridiagonal(dl, d, dl)
     Sym = SymTridiagonal(d, dl)
     F = qr(ones(4, 1))
     A = F.Q'
-    @test Tri*A ≈ Matrix(Tri)*A
-    @test A*Tri ≈ A*Matrix(Tri)
-    @test Bi*A ≈ Matrix(Bi)*A
-    @test A*Bi ≈ A*Matrix(Bi)
-    @test Sym*A ≈ Matrix(Sym)*A
-    @test A*Sym ≈ A*Matrix(Sym)
+    for A in (F.Q, F.Q'), B in (D, Bi, Tri, Sym)
+        @test B*A ≈ Matrix(B)*A
+        @test A*B ≈ A*Matrix(B)
+    end
 end
 
 @testset "Ops on SymTridiagonal ev has the same length as dv" begin

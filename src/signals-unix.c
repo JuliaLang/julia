@@ -61,7 +61,6 @@ bt_context_t *jl_to_bt_context(void *sigctx)
 #endif
 }
 
-
 static int thread0_exit_count = 0;
 static void jl_exit_thread0(int exitstate, jl_bt_element_t *bt_data, size_t bt_size);
 
@@ -105,7 +104,7 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
 // returns. `fptr` will execute on the signal stack, and must not return.
 // jl_call_in_ctx is also currently executing on that signal stack,
 // so be careful not to smash it
-static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
+JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
     // sigreturn oriented programming mitigation can work against us
@@ -191,7 +190,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext64->__ss.__lr = 0;
 #endif
 #else
-#warning "julia: throw-in-context not supported on this platform"
+#pragma message("julia: throw-in-context not supported on this platform")
     // TODO Add support for PowerPC(64)?
     sigset_t sset;
     sigemptyset(&sset);
@@ -299,7 +298,7 @@ int is_write_fault(void *context) {
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
 #else
-#warning Implement this query for consistent PROT_NONE handling
+#pragma message("Implement this query for consistent PROT_NONE handling")
 int is_write_fault(void *context) {
     return 0;
 }
@@ -311,7 +310,7 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
-static void segv_handler(int sig, siginfo_t *info, void *context)
+JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     if (jl_get_safe_restore()) { // restarting jl_ or profile
         jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
@@ -362,8 +361,8 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 }
 
 #if !defined(JL_DISABLE_LIBUNWIND)
-static unw_context_t *volatile signal_context;
-static pthread_mutex_t in_signal_lock;
+static unw_context_t *signal_context;
+pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
 
@@ -385,10 +384,21 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return;
         }
-        err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+        // Request is either now 0 (meaning the other thread is waiting for
+        //   exit_signal_cond already),
+        // Or it is now -1 (meaning the other thread
+        //   is waiting for in_signal_lock, and we need to release that lock
+        //   here for a bit, until the other thread has a chance to get to the
+        //   exit_signal_cond)
+        if (request == -1) {
+            err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+            assert(!err);
+        }
     }
-    assert(!err);
-    assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
+    // Now the other thread is waiting on exit_signal_cond (verify that here by
+    // checking it is 0, and add an acquire barrier for good measure)
+    int request = jl_atomic_load_acquire(&ptls2->signal_request);
+    assert(request == 0); (void) request;
     *ctx = signal_context;
 }
 
@@ -398,7 +408,10 @@ static void jl_thread_resume(int tid, int sig)
     jl_atomic_store_release(&ptls2->signal_request, sig == -1 ? 3 : 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
-    assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
+    // The other thread is waiting to leave exit_signal_cond (verify that here by
+    // checking it is 0, and add an acquire barrier for good measure)
+    int request = jl_atomic_load_acquire(&ptls2->signal_request);
+    assert(request == 0); (void) request;
     pthread_mutex_unlock(&in_signal_lock);
 }
 #endif
@@ -442,25 +455,27 @@ static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
     if (thread0_exit_count <= 1) {
         unw_context_t *signal_context;
         jl_thread_suspend_and_get_state(0, &signal_context);
-        thread0_exit_state = state;
-        ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-        memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-        jl_thread_resume(0, -1);
+        if (signal_context != NULL) {
+            thread0_exit_state = state;
+            ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
+            memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
+            jl_thread_resume(0, -1);
+            return;
+        }
     }
-    else {
-        thread0_exit_state = state;
-        jl_atomic_store_release(&ptls2->signal_request, 3);
-        // This also makes sure `sleep` is aborted.
-        pthread_kill(ptls2->system_id, SIGUSR2);
-    }
+    thread0_exit_state = state;
+    jl_atomic_store_release(&ptls2->signal_request, 3);
+    // This also makes sure `sleep` is aborted.
+    pthread_kill(ptls2->system_id, SIGUSR2);
 }
 
 // request:
-// 0: nothing
-// 1: get state
-// 2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
-//    is reached
-// 3: exit with `thread0_exit_state`
+// -1: beginning processing [invalid outside here]
+//  0: nothing [not from here]
+//  1: get state
+//  2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
+//     is reached
+//  3: exit with `thread0_exit_state`
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -470,20 +485,26 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (ptls == NULL)
         return;
     int errno_save = errno;
-    sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
+    // acknowledge that we saw the signal_request
+    sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, -1);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
-        signal_context = jl_to_bt_context(ctx);
-
         pthread_mutex_lock(&in_signal_lock);
+        signal_context = jl_to_bt_context(ctx);
+        // acknowledge that we set the signal_caught_cond broadcast
+        request = jl_atomic_exchange(&ptls->signal_request, 0);
+        assert(request == -1); (void) request;
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_cond_wait(&exit_signal_cond, &in_signal_lock);
         request = jl_atomic_exchange(&ptls->signal_request, 0);
         assert(request == 1 || request == 3);
+        // acknowledge that we got the resume signal
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_mutex_unlock(&in_signal_lock);
     }
+    else
 #endif
+    jl_atomic_exchange(&ptls->signal_request, 0); // returns -1
     if (request == 2) {
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
@@ -499,6 +520,16 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
     errno = errno_save;
+}
+
+// Because SIGUSR1 is dual-purpose, and the timer can have trailing signals after being deleted,
+// a 2-second grace period is imposed to ignore any trailing timer-created signals so they don't get
+// confused for user triggers
+uint64_t last_timer_delete_time = 0;
+
+int timer_graceperiod_elapsed(void)
+{
+    return jl_hrtime() > (last_timer_delete_time + 2e9);
 }
 
 #if defined(HAVE_TIMER)
@@ -518,25 +549,32 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     sigprof.sigev_notify = SIGEV_SIGNAL;
     sigprof.sigev_signo = SIGUSR1;
     sigprof.sigev_value.sival_ptr = &timerprof;
-    if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1)
+    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
+    running = 1;
+    if (timer_create(CLOCK_REALTIME, &sigprof, &timerprof) == -1) {
+        running = 0;
         return -2;
+    }
 
     // Start the timer
     itsprof.it_interval.tv_sec = 0;
     itsprof.it_interval.tv_nsec = 0;
     itsprof.it_value.tv_sec = nsecprof / GIGA;
     itsprof.it_value.tv_nsec = nsecprof % GIGA;
-    if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
+    if (timer_settime(timerprof, 0, &itsprof, NULL) == -1) {
+        running = 0;
         return -3;
-    running = 1;
+    }
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
-    if (running)
+    if (running) {
         timer_delete(timerprof);
-    running = 0;
+        last_timer_delete_time = jl_hrtime();
+        running = 0;
+    }
 }
 
 #elif defined(HAVE_ITIMER)
@@ -551,18 +589,22 @@ JL_DLLEXPORT int jl_profile_start_timer(void)
     timerprof.it_interval.tv_usec = 0;
     timerprof.it_value.tv_sec = nsecprof / GIGA;
     timerprof.it_value.tv_usec = ((nsecprof % GIGA) + 999) / 1000;
-    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1)
-        return -3;
+    // Because SIGUSR1 is multipurpose, set `running` before so that we know that the first SIGUSR1 came from the timer
     running = 1;
+    if (setitimer(ITIMER_PROF, &timerprof, NULL) == -1) {
+        running = 0;
+        return -3;
+    }
     return 0;
 }
 
 JL_DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running) {
-        running = 0;
         memset(&timerprof, 0, sizeof(timerprof));
         setitimer(ITIMER_PROF, &timerprof, NULL);
+        last_timer_delete_time = jl_hrtime();
+        running = 0;
     }
 }
 
@@ -609,6 +651,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     if (sigaltstack(&ss, NULL) < 0) {
         jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
     }
+
+#ifdef HAVE_MACH
+    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
+#endif
 }
 
 static void jl_sigsetset(sigset_t *sset)
@@ -646,6 +692,26 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
     }
 }
 #endif
+
+void trigger_profile_peek(void)
+{
+    jl_safe_printf("\n======================================================================================\n");
+    jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
+    jl_safe_printf("======================================================================================\n");
+    if (bt_size_max == 0){
+        // If the buffer hasn't been initialized, initialize with default size
+        // Keep these values synchronized with Profile.default_init()
+        if (jl_profile_init(10000000 * jl_n_threads, 1000000) == -1){
+            jl_safe_printf("ERROR: could not initialize the profile buffer");
+            return;
+        }
+    }
+    bt_size_cur = 0; // clear profile buffer
+    if (jl_profile_start_timer() < 0)
+        jl_safe_printf("ERROR: Could not start profile timer\n");
+    else
+        profile_autostop_time = jl_hrtime() + (profile_peek_duration * 1e9);
+}
 
 static void *signal_listener(void *arg)
 {
@@ -715,7 +781,7 @@ static void *signal_listener(void *arg)
 #ifndef HAVE_MACH
 #if defined(HAVE_TIMER)
         profile = (sig == SIGUSR1);
-#if _POSIX_C_SOURCE >= 199309L
+#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L
         if (profile && !(info.si_code == SI_TIMER &&
 	            info.si_value.sival_ptr == &timerprof))
             profile = 0;
@@ -752,11 +818,17 @@ static void *signal_listener(void *arg)
 
         int doexit = critical;
 #ifdef SIGINFO
-        if (sig == SIGINFO)
+        if (sig == SIGINFO) {
+            if (running != 1)
+                trigger_profile_peek();
             doexit = 0;
+        }
 #else
-        if (sig == SIGUSR1)
+        if (sig == SIGUSR1) {
+            if (running != 1 && timer_graceperiod_elapsed())
+                trigger_profile_peek();
             doexit = 0;
+        }
 #endif
 
         bt_size = 0;
@@ -766,11 +838,12 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile) {
             jl_lock_profile();
-            if (!critical)
-                jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
+            int *randperm;
+            if (profile)
+                 randperm = profile_get_randperm(jl_n_threads);
             for (int idx = jl_n_threads; idx-- > 0; ) {
-                // Stop the threads in the random round-robin order.
-                int i = critical ? idx : profile_round_robin_thread_order[idx];
+                // Stop the threads in the random or reverse round-robin order.
+                int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
                 if (signal_context == NULL)
@@ -834,6 +907,7 @@ static void *signal_listener(void *arg)
         }
 #ifndef HAVE_MACH
         if (profile && running) {
+            jl_check_profile_autostop();
 #if defined(HAVE_TIMER)
             timer_settime(timerprof, 0, &itsprof, NULL);
 #elif defined(HAVE_ITIMER)
@@ -857,7 +931,7 @@ static void *signal_listener(void *arg)
                     jl_ptls_t ptls2 = jl_all_tls_states[idx];
                     nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
                 }
-                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", jl_getpid(), nrunning, jl_n_threads);
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, jl_n_threads);
 #endif
 
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));

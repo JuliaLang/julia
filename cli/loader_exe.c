@@ -36,7 +36,7 @@ int main(int argc, char * argv[])
 {
 #endif
 
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
     // ASAN/TSAN do not support RTLD_DEEPBIND
     // https://github.com/google/sanitizers/issues/611
     putenv("LBT_USE_RTLD_DEEPBIND=0");
@@ -62,6 +62,15 @@ int main(int argc, char * argv[])
     exit(ret);
     return ret;
 }
+
+#if defined(__GLIBC__) && (defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_))
+// fork is generally bad news, but it is better if we prevent applications from
+// making it worse as openblas threadpools cause it to hang
+int __register_atfork232(void (*prepare)(void), void (*parent)(void), void (*child)(void), void *dso_handle) {
+    return 0;
+}
+__asm__ (".symver __register_atfork232, __register_atfork@@GLIBC_2.3.2");
+#endif
 
 #ifdef __cplusplus
 } // extern "C"

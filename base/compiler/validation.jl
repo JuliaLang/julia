@@ -23,7 +23,7 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
-    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, cconv, args..., roots...
+    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects), args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:1,
     :code_coverage_effect => 0:0,
@@ -53,6 +53,7 @@ const NON_TOP_LEVEL_METHOD = "encountered `Expr` head `:method` in non-top-level
 const NON_TOP_LEVEL_GLOBAL = "encountered `Expr` head `:global` in non-top-level code (i.e. `nargs` > 0)"
 const SIGNATURE_NARGS_MISMATCH = "method signature does not match number of method arguments"
 const SLOTNAMES_NARGS_MISMATCH = "CodeInfo for method contains fewer slotnames than the number of method arguments"
+const INVALID_SIGNATURE_OPAQUE_CLOSURE = "invalid signature of method for opaque closure - `sig` field must always be set to `Tuple`"
 
 struct InvalidCodeError <: Exception
     kind::String
@@ -215,7 +216,9 @@ function validate_code!(errors::Vector{>:InvalidCodeError}, mi::Core.MethodInsta
         m = mi.def::Method
         mnargs = m.nargs
         n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
-        if (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
+        if m.is_for_opaque_closure
+            m.sig === Tuple || push!(errors, InvalidCodeError(INVALID_SIGNATURE_OPAQUE_CLOSURE, (m.sig, m.isva)))
+        elseif (m.isva ? (n_sig_params < (mnargs - 1)) : (n_sig_params != mnargs))
             push!(errors, InvalidCodeError(SIGNATURE_NARGS_MISMATCH, (m.isva, n_sig_params, mnargs)))
         end
     end

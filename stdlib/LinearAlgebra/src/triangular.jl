@@ -1485,7 +1485,7 @@ end
 function ldiv!(xA::Union{UpperTriangular,UnitUpperTriangular}, B::UpperTriangular)
     return UpperTriangular(ldiv!(xA, triu!(B.data)))
 end
-function ldiv!(xA::Union{LowerTriangular,UnitLowerTriangular}, B::UpperTriangular)
+function ldiv!(xA::Union{LowerTriangular,UnitLowerTriangular}, B::LowerTriangular)
     return LowerTriangular(ldiv!(xA, tril!(B.data)))
 end
 

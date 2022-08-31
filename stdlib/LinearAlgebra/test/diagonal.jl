@@ -5,7 +5,14 @@ module TestDiagonal
 using Test, LinearAlgebra, Random
 using LinearAlgebra: BlasFloat, BlasComplex
 
-n=12 #Size of matrix problem to test
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
+using .Main.Furlongs
+
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
@@ -344,8 +351,12 @@ Random.seed!(1)
 
     @testset "Eigensystem" begin
         eigD = eigen(D)
-        @test Diagonal(eigD.values) ≈ D
+        @test Diagonal(eigD.values) == D
         @test eigD.vectors == Matrix(I, size(D))
+        eigsortD = eigen(D, sortby=LinearAlgebra.eigsortby)
+        @test eigsortD.values !== D.diag
+        @test eigsortD.values == sort(D.diag, by=LinearAlgebra.eigsortby)
+        @test Matrix(eigsortD) == D
     end
 
     @testset "ldiv" begin
@@ -411,6 +422,22 @@ Random.seed!(1)
         @test svd(D).V == V
     end
 
+    @testset "svd/eigen with Diagonal{Furlong}" begin
+        Du = Furlong.(D)
+        @test Du isa Diagonal{<:Furlong{1}}
+        F = svd(Du)
+        U, s, V = F
+        @test map(x -> x.val, Matrix(F)) ≈ map(x -> x.val, Du)
+        @test svdvals(Du) == s
+        @test U isa AbstractMatrix{<:Furlong{0}}
+        @test V isa AbstractMatrix{<:Furlong{0}}
+        @test s isa AbstractVector{<:Furlong{1}}
+        E = eigen(Du)
+        vals, vecs = E
+        @test Matrix(E) == Du
+        @test vals isa AbstractVector{<:Furlong{1}}
+        @test vecs isa AbstractMatrix{<:Furlong{0}}
+    end
 end
 
 @testset "rdiv! (#40887)" begin
@@ -435,10 +462,31 @@ end
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
+@testset "kron (issue #46456)" begin
+    A = Diagonal(randn(10))
+    BL = Bidiagonal(randn(10), randn(9), :L)
+    BU = Bidiagonal(randn(10), randn(9), :U)
+    C = SymTridiagonal(randn(10), randn(9))
+    Cl = SymTridiagonal(randn(10), randn(10))
+    D = Tridiagonal(randn(9), randn(10), randn(9))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
     @test sort([eigvals(D)...;], by=LinearAlgebra.eigsortby) ≈ eigvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
+end
+
+@testset "eigvals should return a copy of the diagonal" begin
+    D = Diagonal([1, 2, 3])
+    lam = eigvals(D)
+    D[3,3] = 4 # should not affect lam
+    @test lam == [1, 2, 3]
 end
 
 @testset "eigmin (#27847)" begin
@@ -495,13 +543,21 @@ end
 end
 
 @testset "inverse" begin
-    for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
+    for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
     @test_throws SingularException inv(Diagonal(zeros(n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
+end
+
+@testset "pseudoinverse" begin
+    for d in Any[randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
+        D = Diagonal(d)
+        @test pinv(D) ≈ pinv(Array(D))
+        @test pinv(D, 1.0e-2) ≈ pinv(Array(D), 1.0e-2)
+    end
 end
 
 # allow construct from range
@@ -609,6 +665,16 @@ end
     copyto!(D2, D)
     rmul!(D2, D)
     @test D2 == D * D
+end
+
+@testset "multiplication of 2 Diagonal and a Matix (#46400)" begin
+    A = randn(10, 10)
+    D = Diagonal(randn(10))
+    D2 = Diagonal(randn(10))
+    @test D * A * D2 ≈ D * (A * D2)
+    @test D * A * D2 ≈ (D * A) * D2
+    @test_throws DimensionMismatch Diagonal(ones(9)) * A * D2
+    @test_throws DimensionMismatch D * A * Diagonal(ones(9))
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -754,6 +820,16 @@ end
     @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
+@testset "Multiplication of a Diagonal with an OffsetArray" begin
+    # Offset indices should throw
+    D = Diagonal(1:4)
+    A = OffsetArray(rand(4,4), 2, 2)
+    @test_throws ArgumentError D * A
+    @test_throws ArgumentError A * D
+    @test_throws ArgumentError mul!(similar(A, size(A)), A, D)
+    @test_throws ArgumentError mul!(similar(A, size(A)), D, A)
+end
+
 @testset "Triangular division by Diagonal #27989" begin
     K = 5
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -807,6 +883,10 @@ end
             DS = D \ M
             @test DS isa Tridiagonal
             DM = D \ Mm
+            for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
+            DS = M / D
+            @test DS isa Tridiagonal
+            DM = Mm / D
             for i in -1:1; @test diag(DS, i) ≈ diag(DM, i) end
         end
     end

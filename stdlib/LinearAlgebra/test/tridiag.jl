@@ -266,6 +266,12 @@ end
                 @test func(func(A)) == A
             end
         end
+        @testset "permutedims(::[Sym]Tridiagonal)" begin
+            @test permutedims(permutedims(A)) === A
+            @test permutedims(A) == transpose.(transpose(A))
+            @test permutedims(A, [1, 2]) === A
+            @test permutedims(A, (2, 1)) == permutedims(A)
+        end
         if elty != Int
             @testset "Simple unary functions" begin
                 for func in (det, inv)
@@ -428,7 +434,11 @@ end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ dot(A'x, y)
+            @test dot(x, A, y) ≈ dot(A'x, y) ≈ dot(x, A*y)
+            @test dot([1], SymTridiagonal([1], Int[]), [1]) == 1
+            @test dot([1], Tridiagonal(Int[], [1], Int[]), [1]) == 1
+            @test dot(Int[], SymTridiagonal(Int[], Int[]), Int[]) === 0
+            @test dot(Int[], Tridiagonal(Int[], Int[], Int[]), Int[]) === 0
         end
     end
 end

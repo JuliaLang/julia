@@ -21,11 +21,12 @@ end
 # to return a valid value for `cache_lookup(linfo, argtypes, cache).argtypes`,
 # so that we can construct cache-correct `InferenceResult`s in the first place.
 function matching_cache_argtypes(
-    linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#, va_override::Bool)
+    linfo::MethodInstance, (arginfo, sv)#=::Tuple{ArgInfo,InferenceState}=#)
     (; fargs, argtypes) = arginfo
-    @assert isa(linfo.def, Method) # ensure the next line works
-    nargs::Int = linfo.def.nargs
-    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing, va_override)
+    def = linfo.def
+    @assert isa(def, Method) # ensure the next line works
+    nargs::Int = def.nargs
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo, nothing)
     given_argtypes = Vector{Any}(undef, length(argtypes))
     local condargs = nothing
     for i in 1:length(argtypes)
@@ -37,9 +38,9 @@ function matching_cache_argtypes(
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
                 sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
-                vtype = tmeet(cnd.vtype, sigt)
+                thentype = tmeet(cnd.thentype, sigt)
                 elsetype = tmeet(cnd.elsetype, sigt)
-                if vtype === Bottom && elsetype === Bottom
+                if thentype === Bottom && elsetype === Bottom
                     # we accidentally proved this method match is impossible
                     # TODO bail out here immediately rather than just propagating Bottom ?
                     given_argtypes[i] = Bottom
@@ -48,14 +49,14 @@ function matching_cache_argtypes(
                         condargs = Tuple{Int,Int}[]
                     end
                     push!(condargs, (slotid, i))
-                    given_argtypes[i] = Conditional(SlotNumber(slotid), vtype, elsetype)
+                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
                 end
                 continue
             end
         end
         given_argtypes[i] = widenconditional(argtype)
     end
-    isva = va_override || linfo.def.isva
+    isva = def.isva
     if isva || isvarargtype(given_argtypes[end])
         isva_given_argtypes = Vector{Any}(undef, nargs)
         for i = 1:(nargs - isva)
@@ -93,8 +94,9 @@ function matching_cache_argtypes(
 end
 
 function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(specTypes),
-    isva::Bool, withfirst::Bool = true)
+    withfirst::Bool = true)
     toplevel = method === nothing
+    isva = !toplevel && method.isva
     linfo_argtypes = Any[(unwrap_unionall(specTypes)::DataType).parameters...]
     nargs::Int = toplevel ? 0 : method.nargs
     if !withfirst
@@ -105,7 +107,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
     # First, if we're dealing with a varargs method, then we set the last element of `args`
     # to the appropriate `Tuple` type or `PartialStruct` instance.
     if !toplevel && isva
-        if specTypes == Tuple
+        if specTypes::Type == Tuple
             if nargs > 1
                 linfo_argtypes = Any[Any for i = 1:nargs]
                 linfo_argtypes[end] = Vararg{Any}
@@ -192,10 +194,9 @@ function elim_free_typevars(@nospecialize t)
     end
 end
 
-function matching_cache_argtypes(linfo::MethodInstance, ::Nothing, va_override::Bool)
+function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     mthd = isa(linfo.def, Method) ? linfo.def::Method : nothing
-    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes,
-        va_override || (isa(mthd, Method) ? mthd.isva : false))
+    cache_argtypes = most_general_argtypes(mthd, linfo.specTypes)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 

@@ -7,6 +7,9 @@
 Like [`getindex`](@ref), but returns a view into the parent string `s`
 within range `i:j` or `r` respectively instead of making a copy.
 
+The [`@views`](@ref) macro converts any string slices `s[i:j]` into
+substrings `SubString(s, i, j)` in a block of code.
+
 # Examples
 ```jldoctest
 julia> SubString("abc", 1, 2)
@@ -25,7 +28,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, 0, 0)
+        i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
             @inbounds isvalid(s, i) || string_index_err(s, i)
@@ -54,6 +57,11 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
 convert(::Type{T}, s::T) where {T<:SubString} = s
+
+# Regex match allows only Union{String, SubString{String}} so define conversion to this type
+convert(::Type{Union{String, SubString{String}}}, s::String) = s
+convert(::Type{Union{String, SubString{String}}}, s::SubString{String}) = s
+convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)
 
 function String(s::SubString{String})
     parent = s.string
@@ -214,16 +222,28 @@ end
 function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
+        # 4 types is too many for automatic Union-splitting, so we split manually
+        # and allow one specializable call site per concrete type
         if v isa Char
             n += ncodeunits(v)
-        else
+        elseif v isa String
             n += sizeof(v)
+        elseif v isa SubString{String}
+            n += sizeof(v)
+        else
+            n += sizeof(v::Symbol)
         end
     end
     out = _string_n(n)
     offs = 1
     for v in a
-        offs += __unsafe_string!(out, v, offs)
+        if v isa Char
+            offs += __unsafe_string!(out, v, offs)
+        elseif v isa String || v isa SubString{String}
+            offs += __unsafe_string!(out, v, offs)
+        else
+            offs += __unsafe_string!(out, v::Symbol, offs)
+        end
     end
     return out
 end

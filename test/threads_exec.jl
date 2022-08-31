@@ -16,7 +16,7 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
@@ -70,7 +70,23 @@ end
 
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
+    counter = Threads.Atomic{Int}(min(Threads.nthreads(), length(r)))
     @threads for i in r
+        # synchronize the start given that each partition is started sequentially,
+        # meaning that without the wait, if the loop is too fast the iteration can happen in order
+        if counter[] != 0
+            Threads.atomic_sub!(counter, 1)
+            spins = 0
+            while counter[] != 0
+                GC.safepoint()
+                ccall(:jl_cpu_pause, Cvoid, ())
+                spins += 1
+                if spins > 500_000_000  # about 10 seconds
+                    @warn "Failed wait for all workers. Unfinished rogue tasks occupying worker threads?"
+                    break
+                end
+            end
+        end
         j = i - firstindex(r) + 1
         a[j] = 1 + atomic_add!(x, 1)
     end
@@ -83,18 +99,13 @@ function test_threaded_loop_and_atomic_add()
         a = zeros(Int, n)
         threaded_loop(a,r,x)
         found = zeros(Bool,n)
-        was_inorder = true
         for i=1:length(a)
-            was_inorder &= a[i]==i
             found[a[i]] = true
         end
         @test x[] == n
         # Next test checks that all loop iterations ran,
         # and were unique (via pigeon-hole principle).
         @test !(false in found)
-        if was_inorder && nthreads() > 1
-            println(stderr, "Warning: threaded loop executed in order")
-        end
     end
 end
 
@@ -254,7 +265,7 @@ end
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
 
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
 
     @test_throws TypeError Atomic{Int128}()
@@ -503,7 +514,7 @@ function test_thread_cfunction()
     @test cfs[2] == cf(fs[2])
     @test length(unique(cfs)) == 1000
     ok = zeros(Int, nthreads())
-    @threads for i in 1:10000
+    @threads :static for i in 1:10000
         i = mod1(i, 1000)
         fi = fs[i]
         cfi = cf(fi)
@@ -538,7 +549,9 @@ function test_load_and_lookup_18020(n)
             ccall(:jl_load_and_lookup,
                   Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
-        catch
+        catch ex
+            ex isa ErrorException || rethrow()
+            startswith(ex.msg, "could not load library") || rethrow()
         end
     end
 end
@@ -577,27 +590,12 @@ function test_thread_too_few_iters()
 end
 test_thread_too_few_iters()
 
-let e = Event(), started = Event()
-    done = false
-    t = @async (notify(started); wait(e); done = true)
-    wait(started)
-    sleep(0.1)
-    @test done == false
-    notify(e)
-    wait(t)
-    @test done == true
-    blocked = true
-    wait(@async (wait(e); blocked = false))
-    @test !blocked
-end
-
-
-@testset "InvasiveLinkedList" begin
-    @test eltype(Base.InvasiveLinkedList{Integer}) == Integer
+@testset "IntrusiveLinkedList" begin
+    @test eltype(Base.IntrusiveLinkedList{Integer}) == Integer
     @test eltype(Base.LinkedList{Integer}) == Integer
-    @test eltype(Base.InvasiveLinkedList{<:Integer}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Integer}) == Any
     @test eltype(Base.LinkedList{<:Integer}) == Any
-    @test eltype(Base.InvasiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
 
     t = Base.LinkedList{Integer}()
     @test eltype(t) == Integer
@@ -720,9 +718,9 @@ let ch = Channel{Char}(0), t
     @test String(collect(ch)) == "hello"
 end
 
-# errors inside @threads
+# errors inside @threads :static
 function _atthreads_with_error(a, err)
-    Threads.@threads for i in eachindex(a)
+    Threads.@threads :static for i in eachindex(a)
         if err
             error("failed")
         end
@@ -730,22 +728,75 @@ function _atthreads_with_error(a, err)
     end
     a
 end
-@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
+@test_throws CompositeException _atthreads_with_error(zeros(nthreads()), true)
 let a = zeros(nthreads())
     _atthreads_with_error(a, false)
     @test a == [1:nthreads();]
 end
 
 # static schedule
-function _atthreads_static_schedule()
-    ids = zeros(Int, nthreads())
-    Threads.@threads :static for i = 1:nthreads()
+function _atthreads_static_schedule(n)
+    ids = zeros(Int, n)
+    Threads.@threads :static for i = 1:n
         ids[i] = Threads.threadid()
     end
     return ids
 end
-@test _atthreads_static_schedule() == [1:nthreads();]
-@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
+@test _atthreads_static_schedule(nthreads()) == 1:nthreads()
+@test _atthreads_static_schedule(1) == [1;]
+@test_throws(
+    "`@threads :static` cannot be used concurrently or nested",
+    @threads(for i = 1:1; _atthreads_static_schedule(nthreads()); end),
+)
+
+# dynamic schedule
+function _atthreads_dynamic_schedule(n)
+    inc = Threads.Atomic{Int}(0)
+    flags = zeros(Int, n)
+    Threads.@threads :dynamic for i = 1:n
+        Threads.atomic_add!(inc, 1)
+        flags[i] = 1
+    end
+    return inc[], flags
+end
+@test _atthreads_dynamic_schedule(nthreads()) == (nthreads(), ones(nthreads()))
+@test _atthreads_dynamic_schedule(1) == (1, ones(1))
+@test _atthreads_dynamic_schedule(10) == (10, ones(10))
+@test _atthreads_dynamic_schedule(nthreads() * 2) == (nthreads() * 2, ones(nthreads() * 2))
+
+# nested dynamic schedule
+function _atthreads_dynamic_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:nthreads()
+        Threads.@threads :dynamic for _ = 1:nthreads()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_dynamic_dynamic_schedule() == nthreads() * nthreads()
+
+function _atthreads_static_dynamic_schedule()
+    ids = zeros(Int, nthreads())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:nthreads()
+        ids[i] = Threads.threadid()
+        Threads.@threads :dynamic for _ = 1:nthreads()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc[]
+end
+@test _atthreads_static_dynamic_schedule() == (1:nthreads(), nthreads() * nthreads())
+
+# errors inside @threads :dynamic
+function _atthreads_dynamic_with_error(a)
+    Threads.@threads :dynamic for i in eachindex(a)
+        error("user error in the loop body")
+    end
+    a
+end
+@test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(nthreads()))
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)

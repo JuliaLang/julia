@@ -111,8 +111,8 @@
 #    module::Module
 #    method::Symbol
 #    file::Symbol
-#    line::Int
-#    inlined_at::Int
+#    line::Int32
+#    inlined_at::Int32
 #end
 
 #struct GotoNode
@@ -193,6 +193,8 @@ export
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!,
     nfields, throw, tuple, ===, isdefined, eval,
+    # access to globals
+    getglobal, setglobal!,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
     # type reflection
     <:, typeof, isa, typeassert,
@@ -201,7 +203,7 @@ export
     # constants
     nothing, Main
 
-const getproperty = getfield
+const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
 
 abstract type Number end
@@ -222,7 +224,7 @@ primitive type Char <: AbstractChar 32 end
 primitive type Int8    <: Signed   8 end
 #primitive type UInt8   <: Unsigned 8 end
 primitive type Int16   <: Signed   16 end
-primitive type UInt16  <: Unsigned 16 end
+#primitive type UInt16  <: Unsigned 16 end
 #primitive type Int32   <: Signed   32 end
 #primitive type UInt32  <: Unsigned 32 end
 #primitive type Int64   <: Signed   64 end
@@ -394,39 +396,48 @@ struct VecElement{T}
 end
 VecElement(arg::T) where {T} = VecElement{T}(arg)
 
-_new(typ::Symbol, argty::Symbol) = eval(Core, :($typ(@nospecialize n::$argty) = $(Expr(:new, typ, :n))))
-_new(:GotoNode, :Int)
-_new(:NewvarNode, :SlotNumber)
-_new(:QuoteNode, :Any)
-_new(:SSAValue, :Int)
-_new(:Argument, :Int)
-_new(:ReturnNode, :Any)
-eval(Core, :(ReturnNode() = $(Expr(:new, :ReturnNode)))) # unassigned val indicates unreachable
-eval(Core, :(GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))))
-eval(Core, :(LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
-eval(Core, :(LineNumberNode(l::Int, @nospecialize(f)) = $(Expr(:new, :LineNumberNode, :l, :f))))
-LineNumberNode(l::Int, f::String) = LineNumberNode(l, Symbol(f))
-eval(Core, :(GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
-eval(Core, :(SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))))
-eval(Core, :(TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))))
-eval(Core, :(PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))))
-eval(Core, :(PiNode(val, typ) = $(Expr(:new, :PiNode, :val, :typ))))
-eval(Core, :(PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))))
-eval(Core, :(UpsilonNode(val) = $(Expr(:new, :UpsilonNode, :val))))
-eval(Core, :(UpsilonNode() = $(Expr(:new, :UpsilonNode))))
-eval(Core, :(LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int, inlined_at::Int) =
-             $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))))
-eval(Core, :(CodeInstance(mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
-                          @nospecialize(inferred), const_flags::Int32,
-                          min_world::UInt, max_world::UInt) =
-                ccall(:jl_new_codeinst, Ref{CodeInstance}, (Any, Any, Any, Any, Int32, UInt, UInt),
-                    mi, rettype, inferred_const, inferred, const_flags, min_world, max_world)))
-eval(Core, :(Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))))
-eval(Core, :(PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))))
-eval(Core, :(PartialOpaque(@nospecialize(typ), @nospecialize(env), isva::Bool, parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :isva, :parent, :source))))
-eval(Core, :(InterConditional(slot::Int, @nospecialize(vtype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :vtype, :elsetype))))
-eval(Core, :(MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) =
-    $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))))
+eval(Core, quote
+    GotoNode(label::Int) = $(Expr(:new, :GotoNode, :label))
+    NewvarNode(slot::SlotNumber) = $(Expr(:new, :NewvarNode, :slot))
+    QuoteNode(@nospecialize value) = $(Expr(:new, :QuoteNode, :value))
+    SSAValue(id::Int) = $(Expr(:new, :SSAValue, :id))
+    Argument(n::Int) = $(Expr(:new, :Argument, :n))
+    ReturnNode(@nospecialize val) = $(Expr(:new, :ReturnNode, :val))
+    ReturnNode() = $(Expr(:new, :ReturnNode)) # unassigned val indicates unreachable
+    GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
+    LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
+    function LineNumberNode(l::Int, @nospecialize(f))
+        isa(f, String) && (f = Symbol(f))
+        return $(Expr(:new, :LineNumberNode, :l, :f))
+    end
+    LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
+        $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
+    GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
+    SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
+    TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
+    PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
+    PiNode(@nospecialize(val), @nospecialize(typ)) = $(Expr(:new, :PiNode, :val, :typ))
+    PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
+    UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
+    UpsilonNode() = $(Expr(:new, :UpsilonNode))
+    function CodeInstance(
+        mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+        @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
+        ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+        relocatability::UInt8)
+        return ccall(:jl_new_codeinst, Ref{CodeInstance},
+            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+            mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
+            ipo_effects, effects, argescapes,
+            relocatability)
+    end
+    Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
+    # NOTE the main constructor is defined within `Core.Compiler`
+    _PartialStruct(typ::DataType, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
+    InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
+    MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
+end)
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
 
@@ -441,6 +452,19 @@ convert(::Type{Any}, @nospecialize(x)) = x
 convert(::Type{T}, x::T) where {T} = x
 cconvert(::Type{T}, x) where {T} = convert(T, x)
 unsafe_convert(::Type{T}, x::T) where {T} = x
+
+_is_internal(__module__) = __module__ === Core
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
+    return _is_internal(__module__) && Expr(:meta, Expr(:purity,
+        #=:consistent=#true,
+        #=:effect_free=#true,
+        #=:nothrow=#false,
+        #=:terminates_globally=#true,
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
+end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
 
@@ -469,7 +493,6 @@ Array{T}(::UndefInitializer, d::NTuple{N,Int}) where {T,N} = Array{T,N}(undef, d
 # empty vector constructor
 Array{T,1}() where {T} = Array{T,1}(undef, 0)
 
-
 (Array{T,N} where T)(x::AbstractArray{S,N}) where {S,N} = Array{S,N}(x)
 
 Array(A::AbstractArray{T,N})    where {T,N}   = Array{T,N}(A)
@@ -478,12 +501,12 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
-eval(Core, :(function Symbol(s::String)
-    $(Expr(:meta, :pure))
+function Symbol(s::String)
+    @_foldable_meta
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
                  sizeof(s))
-end))
+end
 function Symbol(a::Array{UInt8,1})
     return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
                  ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
@@ -791,7 +814,7 @@ Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
 # Binding for the julia parser, called as
 #
-#    Core._parse(text, filename, offset, options)
+#    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
 # it to `filename`. `text` may be a `String` or `svec(ptr::Ptr{UInt8},

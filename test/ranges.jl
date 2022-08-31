@@ -35,9 +35,14 @@ using Base.Checked: checked_length
         @test r ==  range(; stop=Float64(stop))
     end
 
-    for T = (Int8, Rational{Int16}, UInt32, Float64, Char)
+    for T = (Int8, UInt32, Float64, Char)
         @test typeof(range(start=T(5), length=3)) === typeof(range(stop=T(5), length=3))
+        @test typeof(range(start=T(5), length=Int8(3))) === typeof(range(stop=T(5), length=Int8(3)))
     end
+    let T = Rational{Int16}
+        @test typeof(range(start=T(5), length=Int16(3))) === typeof(range(stop=T(5), length=Int16(3)))
+    end
+
 
     @test first(10:3) === 10
     @test last(10:3) === 9
@@ -382,6 +387,14 @@ end
         @test reverse(reverse(typemin(Int):typemax(Int))) == typemin(Int):typemax(Int)
         @test reverse(reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
     end
+    @testset "reverse `[Step|Unit]Range{$T}`" for T in (Int8, UInt8, Int, UInt, Int128, UInt128)
+        @test reverse(T(1):T(10)) == T(10):-1:T(1)
+        @test reverse(typemin(T):typemax(T)) == typemax(T):-1:typemin(T)
+        @test reverse(typemin(T):2:typemax(T)) == typemax(T)-T(1):-2:typemin(T)
+        @test reverse(reverse(T(1):T(10))) == T(1):T(10)
+        @test reverse(reverse(typemin(T):typemax(T))) == typemin(T):typemax(T)
+        @test reverse(reverse(typemin(T):2:typemax(T))) == typemin(T):2:typemax(T)
+    end
     @testset "intersect" begin
         @test intersect(1:5, 2:3) === 2:3
         @test intersect(-3:5, 2:8) === 2:5
@@ -717,9 +730,9 @@ end
     @test broadcast(-, T(1):2:6, 1) === T(0):2:4
     @test broadcast(-, T(1):2:6, 0.3) === range(T(1)-0.3, step=2, length=T(3)) == T(1)-0.3:2:5-0.3
     is_unsigned = T <: Unsigned
-    is_unsigned && @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2)
-    @test broadcast(-, T(1):3) == -T(1):-T(1):-T(3)
-    @test broadcast(-, 2, T(1):3) == T(1):-T(1):-T(1)
+    @test length(broadcast(-, T(1):3, 2)) === length(T(1)-2:T(3)-2) === (is_unsigned ? T(0) : T(3))
+    @test broadcast(-, T(1):3) == -T(1):-1:-T(3)
+    @test broadcast(-, 2, T(1):3) == T(1):-1:-T(1)
 end
 @testset "operations between ranges and arrays" for T in (Int, UInt, Int128)
     @test all(([T(1):5;] + (T(5):-1:1)) .=== T(6))
@@ -861,7 +874,6 @@ end
 @testset "Inexact errors on 32 bit architectures. #22613" begin
     @test first(range(log(0.2), stop=log(10.0), length=10)) == log(0.2)
     @test last(range(log(0.2), stop=log(10.0), length=10)) == log(10.0)
-    @test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 end
 
 @testset "ranges with very small endpoints for type $T" for T = (Float32, Float64)
@@ -1184,15 +1196,15 @@ end
     @test replrepr(1:4) == "1:4"
     @test repr("text/plain", 1:4) == "1:4"
     @test repr("text/plain", range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0,1.66667,2.33333,3.0,3.66667,4.33333,5.0"
+    @test repr("text/plain", LinRange{Float64}(1,5,7)) == "7-element LinRange{Float64, Int$nb}:\n 1.0, 1.66667, 2.33333, 3.0, 3.66667, 4.33333, 5.0"
     @test repr(range(1, stop=5, length=7)) == "1.0:0.6666666666666666:5.0"
-    @test repr(LinRange{Float64}(1,5,7)) == "range(1.0, stop=5.0, length=7)"
+    @test repr(LinRange{Float64}(1,5,7)) == "LinRange{Float64}(1.0, 5.0, 7)"
     @test replrepr(0:100.) == "0.0:1.0:100.0"
     # next is to test a very large range, which should be fast because print_range
     # only examines spacing of the left and right edges of the range, sufficient
     # to cover the designated screen size.
     @test replrepr(range(0, stop=100, length=10000)) == "0.0:0.010001000100010001:100.0"
-    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0,0.010001,0.020002,0.030003,0.040004,…,99.95,99.96,99.97,99.98,99.99,100.0"
+    @test replrepr(LinRange{Float64}(0,100, 10000)) == "10000-element LinRange{Float64, Int$nb}:\n 0.0, 0.010001, 0.020002, 0.030003, …, 99.96, 99.97, 99.98, 99.99, 100.0"
 
     @test sprint(show, UnitRange(1, 2)) == "1:2"
     @test sprint(show, StepRange(1, 2, 5)) == "1:2:5"
@@ -1517,8 +1529,10 @@ isdefined(Main, :Furlongs) || @eval Main include("testhelpers/Furlongs.jl")
 using .Main.Furlongs
 
 @testset "dimensional correctness" begin
-    @test length(Vector(Furlong(2):Furlong(10))) == 9
-    @test length(range(Furlong(2), length=9)) == checked_length(range(Furlong(2), length=9)) == 9
+    @test_throws TypeError Furlong(2):Furlong(10)
+    @test_throws TypeError range(Furlong(2), length=9)
+    @test length(Vector(Furlong(2):Furlong(1):Furlong(10))) == 9
+    @test length(range(Furlong(2), step=Furlong(1), length=9)) == checked_length(range(Furlong(2), step=Furlong(1), length=9)) == 9
     @test @inferred(length(StepRange(Furlong(2), Furlong(1), Furlong(1)))) == 0
     @test Vector(Furlong(2):Furlong(1):Furlong(10)) == Vector(range(Furlong(2), step=Furlong(1), length=9)) == Furlong.(2:10)
     @test Vector(Furlong(1.0):Furlong(0.5):Furlong(10.0)) ==
@@ -1595,6 +1609,60 @@ end
     x = range(3, stop=3, length=5)
     @test step(x) == 0.0
     @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+end
+
+@testset "Issue #44292" begin
+    let x = @inferred range(0, step=0.2, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [0.0, 0.2, 0.4, 0.6, 0.8]
+    end
+
+    let x = @inferred range(0.0, step=2, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [0.0, 2.0, 4.0, 6.0, 8.0]
+        @test x === range(0.0, step=2.0, length=5)
+        @test x === range(0.0f0, step=2e0, length=5)
+        @test x === range(0e0, step=2.0f0, length=5)
+    end
+
+    # start::IEEEFloat and step::Complex
+    let x = @inferred range(2.0, step=1im, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, Float64, Complex{Int}, Int}
+        @test x == range(2, step=1im, length=3)  # compare with integer range
+        @test x == 2.0 .+ [0im, 1im, 2im]
+    end
+
+    # start::Complex and step::IEEEFloat
+    let x = @inferred range(2im, step=1.0, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, Complex{Int}, Float64, Int}
+        @test x == range(2im, step=1, length=3)  # compare with integer range
+    end
+
+    # stop::IEEEFloat and step::Complex
+    let x = @inferred range(stop=2.0, step=1im, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Complex{Int}, Int}
+        @test x == range(stop=2, step=1im, length=3)  # compare with integer range
+        @test x == 2.0 .- [2im, 1im, 0im]
+    end
+
+    # stop::Complex and step::IEEEFloat
+    let x = @inferred range(stop=2im, step=1.0, length=3)
+        @test typeof(x) === StepRangeLen{ComplexF64, ComplexF64, Float64, Int}
+        @test x == range(stop=2im, step=1, length=3)  # compare with integer range
+    end
+
+    let x = @inferred range(stop=10, step=2.0, length=5)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x === @inferred range(stop=10.0, step=2.0, length=5)
+        @test x === @inferred range(stop=10f0, step=2.0, length=5)
+        @test x === @inferred range(stop=10e0, step=2.0f0, length=5)
+        @test x == [2, 4, 6, 8, 10]
+    end
+
+    let x = @inferred range(stop=10.0, step=2, length=4)
+        @test x isa StepRangeLen{Float64,Base.TwicePrecision{Float64},Base.TwicePrecision{Float64}}
+        @test x == [4.0, 6.0, 8.0, 10.0]
+    end
 end
 
 @testset "Views of ranges" begin
@@ -1962,6 +2030,20 @@ end
     @test typeof(step(r)) === Int8
 end
 
+@testset "length(StepRange()) type stability" begin
+    for SR in (StepRange{Int,Int128}, StepRange{Int8,Int128})
+        r1, r2 = SR(1, 1, 1), SR(1, 1, 0)
+        @test typeof(length(r1)) == typeof(checked_length(r1)) ==
+              typeof(length(r2)) == typeof(checked_length(r2))
+    end
+    SR = StepRange{Union{Int64,Int128},Int}
+    test_length(r, l) = length(r) === checked_length(r) === l
+    @test test_length(SR(Int64(1), 1, Int128(1)), Int128(1))
+    @test test_length(SR(Int64(1), 1, Int128(0)), Int128(0))
+    @test test_length(SR(Int64(1), 1, Int64(1)), Int64(1))
+    @test test_length(SR(Int64(1), 1, Int64(0)), Int64(0))
+end
+
 @testset "LinRange eltype for element types that wrap integers" begin
     struct RealWrapper{T <: Real} <: Real
         x :: T
@@ -2256,4 +2338,30 @@ let r = Ptr{Cvoid}(20):-UInt(2):Ptr{Cvoid}(10)
     @test first(r) === Ptr{Cvoid}(20)
     @test step(r) === -UInt(2)
     @test last(r) === Ptr{Cvoid}(10)
+end
+
+# test behavior of wrap-around and promotion of empty ranges (#35711)
+@test length(range(0, length=UInt(0))) === UInt(0)
+@test isempty(range(0, length=UInt(0)))
+@test length(range(typemax(Int), length=UInt(0))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0)))
+@test length(range(0, length=UInt(0), step=UInt(2))) == UInt(0)
+@test isempty(range(0, length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=UInt(2))) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=UInt(2)))
+@test length(range(typemax(Int), length=UInt(0), step=2)) === UInt(0)
+@test isempty(range(typemax(Int), length=UInt(0), step=2))
+@test length(range(typemax(Int), length=0, step=UInt(2))) === 0
+@test isempty(range(typemax(Int), length=0, step=UInt(2)))
+
+@test length(range(1, length=typemax(Int128))) === typemax(Int128)
+
+@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
+    test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
+    for T in Base.BitInteger_types, S in Base.BitInteger_types
+        @test test_firstindex(StepRange{T,S}(1, 1, 1))
+        @test test_firstindex(StepRange{T,S}(1, 1, 0))
+    end
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
 end

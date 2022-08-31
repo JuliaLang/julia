@@ -51,7 +51,7 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel, :wlclipboard)
             # wl-clipboard ships wl-copy/paste individually
-            c = cmd == :wlclipboard ? Symbol("wl-copy") : cmd
+            c = cmd === :wlclipboard ? Symbol("wl-copy") : cmd
             success(pipeline(`which $c`, devnull)) && return _clipboardcmd = cmd
         end
         pkgs = @static if Sys.KERNEL === :FreeBSD
@@ -83,14 +83,14 @@ elseif Sys.iswindows()
         x_u16 = Base.cwstring(x)
         pdata = Ptr{UInt16}(C_NULL)
         function cleanup(cause)
-            errno = cause == :success ? UInt32(0) : Libc.GetLastError()
+            errno = cause === :success ? UInt32(0) : Libc.GetLastError()
             if cause !== :OpenClipboard
                 if cause !== :success && pdata != C_NULL
                     ccall((:GlobalFree, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
                 end
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end
-            cause == :success || Base.windowserror(cause, errno)
+            cause === :success || Base.windowserror(cause, errno)
             nothing
         end
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
@@ -110,7 +110,7 @@ elseif Sys.iswindows()
     clipboard(x) = clipboard(sprint(print, x)::String)
     function clipboard()
         function cleanup(cause)
-            errno = cause == :success ? UInt32(0) : Libc.GetLastError()
+            errno = cause === :success ? UInt32(0) : Libc.GetLastError()
             if cause !== :OpenClipboard
                 ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror(:CloseClipboard) # this should never fail
             end

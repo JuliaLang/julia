@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 16 # do not make changes without bumping the version #!
+const ser_version = 20 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -419,6 +419,7 @@ function serialize(s::AbstractSerializer, meth::Method)
     serialize(s, meth.isva)
     serialize(s, meth.is_for_opaque_closure)
     serialize(s, meth.constprop)
+    serialize(s, meth.purity)
     if isdefined(meth, :source)
         serialize(s, Base._uncompressed_ast(meth, meth.source))
     else
@@ -480,7 +481,7 @@ function serialize(s::AbstractSerializer, g::GlobalRef)
     if (g.mod === __deserialized_types__ ) ||
         (g.mod === Main && isdefined(g.mod, g.name) && isconst(g.mod, g.name))
 
-        v = getfield(g.mod, g.name)
+        v = getglobal(g.mod, g.name)
         unw = unwrap_unionall(v)
         if isa(unw,DataType) && v === unw.name.wrapper && should_send_whole_type(s, unw)
             # handle references to types in Main by sending the whole type.
@@ -513,6 +514,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
+    serialize(s, t.max_methods)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
@@ -539,7 +541,7 @@ function should_send_whole_type(s, t::DataType)
         isanonfunction = mod === Main && # only Main
             t.super === Function && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
-            (!isdefined(mod, name) || t != typeof(getfield(mod, name))) # XXX: 95% accurate test for this being an inner function
+            (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
         #TODO: iskw = startswith(tn.name, "#kw#") && ???
         #TODO: iskw && return send-as-kwftype
@@ -984,7 +986,7 @@ function deserialize_module(s::AbstractSerializer)
         end
         m = Base.root_module(mkey[1])
         for i = 2:length(mkey)
-            m = getfield(m, mkey[i])::Module
+            m = getglobal(m, mkey[i])::Module
         end
     else
         name = String(deserialize(s)::Symbol)
@@ -992,7 +994,7 @@ function deserialize_module(s::AbstractSerializer)
         m = Base.root_module(pkg)
         mname = deserialize(s)
         while mname !== ()
-            m = getfield(m, mname)::Module
+            m = getglobal(m, mname)::Module
             mname = deserialize(s)
         end
     end
@@ -1026,11 +1028,15 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     isva = deserialize(s)::Bool
     is_for_opaque_closure = false
     constprop = 0x00
+    purity = 0x00
     template_or_is_opaque = deserialize(s)
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 14
             constprop = deserialize(s)::UInt8
+        end
+        if format_version(s) >= 17
+            purity = deserialize(s)::UInt8
         end
         template = deserialize(s)
     else
@@ -1051,6 +1057,7 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         meth.isva = isva
         meth.is_for_opaque_closure = is_for_opaque_closure
         meth.constprop = constprop
+        meth.purity = purity
         if template !== nothing
             # TODO: compress template
             meth.source = template::CodeInfo
@@ -1105,7 +1112,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::Union{Int32, Int}), Int32(deserialize(s)::Union{Int32, Int}))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})
@@ -1176,11 +1183,22 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    ci.inlineable = deserialize(s)
+    inlining = deserialize(s)
+    if isa(inlining, Bool)
+        Core.Compiler.set_inlineable!(ci, inlining)
+    else
+        ci.inlining_cost = inlining
+    end
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
+    if format_version(s) >= 20
+        ci.has_fcall = deserialize(s)
+    end
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
+    end
+    if format_version(s) >= 17
+        ci.purity = deserialize(s)::UInt8
     end
     return ci
 end
@@ -1290,6 +1308,7 @@ function deserialize_typename(s::AbstractSerializer, number)
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
     ninitialized = deserialize(s)::Int32
+    maxm = format_version(s) >= 18 ? deserialize(s)::UInt8 : UInt8(0)
 
     if makenew
         # TODO: there's an unhanded cycle in the dependency graph at this point:
@@ -1301,6 +1320,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         @assert tn == ndt.name
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), tn.module, tn.name, tn.wrapper)
         ty = tn.wrapper
+        tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
             if !isdefined(ty, :instance)
@@ -1352,7 +1372,7 @@ function deserialize_datatype(s::AbstractSerializer, full::Bool)
     else
         name = deserialize(s)::Symbol
         mod = deserialize(s)::Module
-        ty = getfield(mod,name)
+        ty = getglobal(mod, name)
     end
     if isa(ty,DataType) && isempty(ty.parameters)
         t = ty
@@ -1553,5 +1573,7 @@ function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCond
     return cond
 end
 
+serialize(s::AbstractSerializer, l::LazyString) =
+    invoke(serialize, Tuple{AbstractSerializer,Any}, s, Base._LazyString((), string(l)))
 
 end

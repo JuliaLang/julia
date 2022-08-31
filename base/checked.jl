@@ -2,6 +2,14 @@
 
 # Support for checked integer arithmetic
 
+"""
+    Checked
+
+The Checked module provides arithmetic functions for the built-in signed and unsigned
+Integer types which throw an error when an overflow occurs. They are named like `checked_sub`,
+`checked_div`, etc. In addition, `add_with_overflow`, `sub_with_overflow`, `mul_with_overflow`
+return both the unchecked results and a boolean value denoting the presence of an overflow.
+"""
 module Checked
 
 export checked_neg, checked_abs, checked_add, checked_sub, checked_mul,
@@ -115,9 +123,10 @@ function checked_abs end
 
 function checked_abs(x::SignedInt)
     r = ifelse(x<0, -x, x)
-    r<0 && throw(OverflowError(string("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))))
-    r
- end
+    r<0 || return r
+    msg = LazyString("checked arithmetic: cannot compute |x| for x = ", x, "::", typeof(x))
+    throw(OverflowError(msg))
+end
 checked_abs(x::UnsignedInt) = x
 checked_abs(x::Bool) = x
 
@@ -151,7 +160,7 @@ end
 
 
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
-    throw(OverflowError(Base.invokelatest(string, x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
+    throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
 
 """
     Base.checked_add(x, y)

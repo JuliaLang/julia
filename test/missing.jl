@@ -110,7 +110,7 @@ end
 end
 
 @testset "two-argument functions" begin
-    two_argument_functions = [atan]
+    two_argument_functions = [atan, hypot, log]
 
     # All two-argument functions return missing when operating on two missing's
     # All two-argument functions return missing when operating on a scalar and an missing
@@ -275,10 +275,10 @@ end
     @test sprint(show, [1 missing]) == "$(Union{Int, Missing})[1 missing]"
     b = IOBuffer()
     display(TextDisplay(b), [missing])
-    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing"
+    @test String(take!(b)) == "1-element Vector{$Missing}:\n missing\n"
     b = IOBuffer()
     display(TextDisplay(b), [1 missing])
-    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing"
+    @test String(take!(b)) == "1×2 Matrix{$(Union{Int, Missing})}:\n 1  missing\n"
 end
 
 @testset "arrays with missing values" begin

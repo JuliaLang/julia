@@ -69,10 +69,12 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
+    jl_atomic_store_release(&tn->Typeofwrapper, NULL);
     jl_atomic_store_relaxed(&tn->cache, jl_emptysvec);
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
+    tn->_reserved = 0;
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
@@ -80,6 +82,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
+    tn->max_methods = 0;
     return tn;
 }
 
@@ -1489,7 +1492,7 @@ void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, 
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
+        jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {
@@ -1787,9 +1790,9 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
     return fval != NULL ? 1 : 0;
 }
 
-JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
-    if (ty->layout == NULL || field > jl_datatype_nfields(ty) || field < 1)
+    if (!jl_struct_try_layout(ty) || field > jl_datatype_nfields(ty) || field < 1)
         jl_bounds_error_int((jl_value_t*)ty, field);
     return jl_field_offset(ty, field - 1);
 }

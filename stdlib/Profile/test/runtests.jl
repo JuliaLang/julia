@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
+
 Profile.clear()
 Profile.init()
 
@@ -64,8 +66,8 @@ end
     iobuf = IOBuffer()
     with_logger(NullLogger()) do
         @testset for format in [:flat, :tree]
-            @testset for threads in [1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
-                @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+            @testset for threads in Any[1:typemax(Int), 1, 1:1, 1:2, [1,2]]
+                @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
                     Profile.print(iobuf; groupby, threads, format)
                     @test !isempty(String(take!(iobuf)))
                 end
@@ -151,14 +153,14 @@ end
     @profile busywait(1, 20)
     _, fdict0 = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func == :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
         map!(modify, list, list)
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
     function getline(sfs)
         for sf in sfs
-            sf.func == :busywait && return sf.line
+            sf.func === :busywait && return sf.line
         end
         nothing
     end
@@ -170,7 +172,11 @@ let cmd = Base.julia_cmd()
     script = """
         using Profile
         f(::Val) = GC.safepoint()
-        @profile for i = 1:10^3; f(Val(i)); end
+        @profile for i = 1:10^3
+            println(i)
+            f(Val(i))
+        end
+        println("done")
         print(Profile.len_data())
         """
     p = open(`$cmd -e $script`)
@@ -184,7 +190,53 @@ let cmd = Base.julia_cmd()
     s = read(p, String)
     close(t)
     @test success(p)
-    @test parse(Int, s) > 100
+    @test !isempty(s)
+    @test occursin("done", s)
+    @test parse(Int, split(s, '\n')[end]) > 100
+end
+
+if Sys.isbsd() || Sys.islinux()
+    @testset "SIGINFO/SIGUSR1 profile triggering" begin
+        let cmd = Base.julia_cmd()
+            script = """
+                x = rand(1000, 1000)
+                println("started")
+                while true
+                    x * x
+                    yield()
+                end
+                """
+            iob = Base.BufferStream()
+            p = run(pipeline(`$cmd -e $script`, stderr = devnull, stdout = iob), wait = false)
+            t = Timer(120) do t
+                # should be under 10 seconds, so give it 2 minutes then report failure
+                println("KILLING BY PROFILE TEST WATCHDOG\n")
+                kill(p, Base.SIGTERM)
+                sleep(10)
+                kill(p, Base.SIGKILL)
+                close(iob)
+            end
+            try
+                s = readuntil(iob, "started", keep = true)
+                @assert occursin("started", s)
+                @assert process_running(p)
+                for _ in 1:2
+                    sleep(2.5)
+                    if Sys.isbsd()
+                        kill(p, 29) # SIGINFO
+                    elseif Sys.islinux()
+                        kill(p, 10) # SIGUSR1
+                    end
+                    s = readuntil(iob, "Overhead ╎", keep = true)
+                    @test process_running(p)
+                    @test occursin("Overhead ╎", s)
+                end
+            finally
+                kill(p, Base.SIGKILL)
+                close(t)
+            end
+        end
+    end
 end
 
 @testset "FlameGraphs" begin
@@ -213,9 +265,11 @@ end
     Profile.tree!(root, backtraces, lidict, #= C =# true, :off)
     @test length(root.down) == 2
     for k in keys(root.down)
-        @test k.file == :file1
+        @test k.file === :file1
         @test k.line ∈ (1, 2)
     end
     node = root.down[stackframe(:f1, :file1, 2)]
     @test only(node.down).first == lidict[8]
 end
+
+include("allocs.jl")

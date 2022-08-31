@@ -19,6 +19,8 @@ function _any(@nospecialize(f), a)
     end
     return false
 end
+any(@nospecialize(f), itr) = _any(f, itr)
+any(itr) = _any(identity, itr)
 
 function _all(@nospecialize(f), a)
     for x in a
@@ -26,6 +28,8 @@ function _all(@nospecialize(f), a)
     end
     return true
 end
+all(@nospecialize(f), itr) = _all(f, itr)
+all(itr) = _all(identity, itr)
 
 function contains_is(itr, @nospecialize(x))
     for y in itr
@@ -48,7 +52,7 @@ function istopfunction(@nospecialize(f), name::Symbol)
     tn = typeof(f).name
     if tn.mt.name === name
         top = _topmod(tn.module)
-        return isdefined(top, name) && isconst(top, name) && f === getfield(top, name)
+        return isdefined(top, name) && isconst(top, name) && f === getglobal(top, name)
     end
     return false
 end
@@ -60,6 +64,7 @@ end
 # Meta expression head, these generally can't be deleted even when they are
 # in a dead branch but can be ignored when analyzing uses/liveness.
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
+is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
 sym_isless(a::Symbol, b::Symbol) = ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b) < 0
 
@@ -168,6 +173,8 @@ function subst_trivial_bounds(@nospecialize(atype))
     return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
+
 # If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
@@ -179,7 +186,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atype, sparams
+    return Pair{Any,SimpleVector}(atype, sparams)
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
@@ -204,21 +211,71 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
-# This function is used for computing alternate limit heuristics
-function method_for_inference_heuristics(method::Method, @nospecialize(sig), sparams::SimpleVector)
-    if isdefined(method, :generator) && method.generator.expand_early && may_invoke_generator(method, sig, sparams)
-        method_instance = specialize_method(method, sig, sparams)
-        if isa(method_instance, MethodInstance)
-            cinfo = get_staged(method_instance)
-            if isa(cinfo, CodeInfo)
-                method2 = cinfo.method_for_inference_limit_heuristics
-                if method2 isa Method
-                    return method2
-                end
-            end
-        end
-    end
-    return nothing
+"""
+    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :aggressive`.
+"""
+is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
+
+"""
+    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :none`.
+"""
+is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
+
+#############
+# backedges #
+#############
+
+"""
+    BackedgeIterator(backedges::Vector{Any})
+
+Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
+which will be one of the following:
+
+- `(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `(specsig, mt::MethodTable)`: an abstract call
+
+# Examples
+
+```julia
+julia> callme(x) = x+1
+callme (generic function with 1 method)
+
+julia> callyou(x) = callme(x)
+callyou (generic function with 1 method)
+
+julia> callyou(2.0)
+3.0
+
+julia> mi = first(which(callme, (Any,)).specializations)
+MethodInstance for callme(::Float64)
+
+julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi.backedges)
+           println(sig)
+           println(caller)
+       end
+nothing
+callyou(Float64) from callyou(Any)
+```
+"""
+struct BackedgeIterator
+    backedges::Vector{Any}
+end
+
+const empty_backedge_iter = BackedgeIterator(Any[])
+
+
+function iterate(iter::BackedgeIterator, i::Int=1)
+    backedges = iter.backedges
+    i > length(backedges) && return nothing
+    item = backedges[i]
+    isa(item, MethodInstance) && return (nothing, item), i+1           # regular dispatch
+    isa(item, Core.MethodTable) && return (backedges[i+1], item), i+2  # abstract dispatch
+    return (item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
 end
 
 #########
@@ -239,6 +296,27 @@ end
 ###################
 # SSAValues/Slots #
 ###################
+
+function ssamap(f, @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            op[] = f(val)
+        end
+    end
+    return urs[]
+end
+
+function foreachssa(@specialize(f), @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, SSAValue)
+            f(val)
+        end
+    end
+end
 
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
@@ -345,6 +423,38 @@ end
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
     isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
 
+######################
+# IncrementalCompact #
+######################
+
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact)
+    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
+    nvals = length(compact.used_ssas)
+    nbody1 = length(body1)
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    function increment_uses(ssa::SSAValue)
+        uses[ssa.id] += 1
+    end
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreachssa(increment_uses, e)
+    end
+    return uses
+end
+
 ###########
 # options #
 ###########
@@ -355,12 +465,12 @@ inlining_enabled() = (JLOptions().can_inline == 1)
 function coverage_enabled(m::Module)
     ccall(:jl_generating_output, Cint, ()) == 0 || return false # don't alter caches
     cov = JLOptions().code_coverage
-    if cov == 1
+    if cov == 1 # user
         m = moduleroot(m)
         m === Core && return false
         isdefined(Main, :Base) && m === Main.Base && return false
         return true
-    elseif cov == 2
+    elseif cov == 2 # all
         return true
     end
     return false

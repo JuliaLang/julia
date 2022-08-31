@@ -134,7 +134,7 @@ function Matrix{T}(M::SymTridiagonal) where T
     Mf[n,n] = symmetric(M.dv[n], :U)
     return Mf
 end
-Matrix(M::SymTridiagonal{T}) where {T} = Matrix{T}(M)
+Matrix(M::SymTridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::SymTridiagonal) = Matrix(M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
@@ -162,6 +162,11 @@ end
 transpose(S::SymTridiagonal) = S
 adjoint(S::SymTridiagonal{<:Real}) = S
 adjoint(S::SymTridiagonal) = Adjoint(S)
+permutedims(S::SymTridiagonal) = S
+function permutedims(S::SymTridiagonal, perm)
+    Base.checkdims_perm(S, S, perm)
+    NTuple{2}(perm) == (2, 1) ? permutedims(S) : S
+end
 Base.copy(S::Adjoint{<:Any,<:SymTridiagonal}) = SymTridiagonal(map(x -> copy.(adjoint.(x)), (S.parent.dv, S.parent.ev))...)
 
 ishermitian(S::SymTridiagonal) = isreal(S.dv) && isreal(_evview(S))
@@ -251,21 +256,24 @@ end
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
-    (nx == size(S, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+    (nx == size(S, 1) == ny) || throw(DimensionMismatch("dot"))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+        return dot(x[1], S.dv[1], y[1])
     end
     dv, ev = S.dv, S.ev
-    x₀ = x[1]
-    x₊ = x[2]
-    sub = transpose(ev[1])
-    r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
-    @inbounds for j in 2:nx-1
-        x₋, x₀, x₊ = x₀, x₊, x[j+1]
-        sup, sub = transpose(sub), transpose(ev[j])
-        r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+    @inbounds begin
+        x₀ = x[1]
+        x₊ = x[2]
+        sub = transpose(ev[1])
+        r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
+        for j in 2:nx-1
+            x₋, x₀, x₊ = x₀, x₊, x[j+1]
+            sup, sub = transpose(sub), transpose(ev[j])
+            r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+        end
+        r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
     end
-    r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
     return r
 end
 
@@ -276,30 +284,30 @@ ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(
 rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
 
 eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
-eigen(A::SymTridiagonal{T}) where T = eigen!(copy_oftype(A, eigtype(T)))
+eigen(A::SymTridiagonal{T}) where T = eigen!(copymutable_oftype(A, eigtype(T)))
 
 eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
 eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigen!(copy_oftype(A, eigtype(T)), irange)
+    eigen!(copymutable_oftype(A, eigtype(T)), irange)
 
 eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
 eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigen!(copy_oftype(A, eigtype(T)), vl, vu)
+    eigen!(copymutable_oftype(A, eigtype(T)), vl, vu)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
-eigvals(A::SymTridiagonal{T}) where T = eigvals!(copy_oftype(A, eigtype(T)))
+eigvals(A::SymTridiagonal{T}) where T = eigvals!(copymutable_oftype(A, eigtype(T)))
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
 eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T =
-    eigvals!(copy_oftype(A, eigtype(T)), irange)
+    eigvals!(copymutable_oftype(A, eigtype(T)), irange)
 
 eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
 eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
-    eigvals!(copy_oftype(A, eigtype(T)), vl, vu)
+    eigvals!(copymutable_oftype(A, eigtype(T)), vl, vu)
 
 #Computes largest and smallest eigenvalue
 eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
@@ -566,18 +574,19 @@ function size(M::Tridiagonal, d::Integer)
     end
 end
 
-function Matrix{T}(M::Tridiagonal{T}) where T
+function Matrix{T}(M::Tridiagonal) where {T}
     A = zeros(T, size(M))
-    for i = 1:length(M.d)
+    n = length(M.d)
+    n == 0 && return A
+    for i in 1:n-1
         A[i,i] = M.d[i]
-    end
-    for i = 1:length(M.d)-1
         A[i+1,i] = M.dl[i]
         A[i,i+1] = M.du[i]
     end
+    A[n,n] = M.d[n]
     A
 end
-Matrix(M::Tridiagonal{T}) where {T} = Matrix{T}(M)
+Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M)
 Array(M::Tridiagonal) = Matrix(M)
 
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
@@ -597,6 +606,11 @@ adjoint(S::Tridiagonal) = Adjoint(S)
 transpose(S::Tridiagonal) = Transpose(S)
 adjoint(S::Tridiagonal{<:Real}) = Tridiagonal(S.du, S.d, S.dl)
 transpose(S::Tridiagonal{<:Number}) = Tridiagonal(S.du, S.d, S.dl)
+permutedims(T::Tridiagonal) = Tridiagonal(T.du, T.d, T.dl)
+function permutedims(T::Tridiagonal, perm)
+    Base.checkdims_perm(T, T, perm)
+    NTuple{2}(perm) == (2, 1) ? permutedims(T) : T
+end
 Base.copy(aS::Adjoint{<:Any,<:Tridiagonal}) = (S = aS.parent; Tridiagonal(map(x -> copy.(adjoint.(x)), (S.du, S.d, S.dl))...))
 Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(x -> copy.(transpose.(x)), (S.du, S.d, S.dl))...))
 
@@ -726,6 +740,7 @@ end
 
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du-B.du)
+-(A::Tridiagonal) = Tridiagonal(-A.dl, -A.d, -A.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
 *(B::Number, A::Tridiagonal) = Tridiagonal(B*A.dl, B*A.d, B*A.du)
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
@@ -829,17 +844,29 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(A, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return dot(x[1], A.d[1], y[1])
     end
-    x₀ = x[1]
-    x₊ = x[2]
-    dl, d, du = A.dl, A.d, A.du
-    r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
-    @inbounds for j in 2:nx-1
-        x₋, x₀, x₊ = x₀, x₊, x[j+1]
-        r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+    @inbounds begin
+        x₀ = x[1]
+        x₊ = x[2]
+        dl, d, du = A.dl, A.d, A.du
+        r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
+        for j in 2:nx-1
+            x₋, x₀, x₊ = x₀, x₊, x[j+1]
+            r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+        end
+        r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     end
-    r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     return r
+end
+
+function cholesky(S::SymTridiagonal, ::NoPivot = NoPivot(); check::Bool = true)
+    if !ishermitian(S)
+        check && checkpositivedefinite(-1)
+        return Cholesky(S, 'U', convert(BlasInt, -1))
+    end
+    T = choltype(eltype(S))
+    cholesky!(Hermitian(Bidiagonal{T}(diag(S, 0), diag(S, 1), :U)), NoPivot(); check = check)
 end

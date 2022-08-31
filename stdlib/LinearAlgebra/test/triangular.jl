@@ -26,7 +26,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                         (UnitLowerTriangular, :L))
 
         # Construct test matrix
-        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
+        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 === :U ? t : copy(t')))
         @test t1(A1) === A1
         @test t1{elty1}(A1) === A1
         # test the ctor works for AbstractMatrix
@@ -77,7 +77,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         A1c = copy(A1)
         for i = 1:size(A1, 1)
             for j = 1:size(A1, 2)
-                if uplo1 == :U
+                if uplo1 === :U
                     if i > j
                         A1c[i,j] = 0
                         @test_throws ArgumentError A1c[i,j] = 1
@@ -104,7 +104,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         # istril/istriu
-        if uplo1 == :L
+        if uplo1 === :L
             @test istril(A1)
             @test !istriu(A1)
             @test istriu(A1')
@@ -121,7 +121,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #tril/triu
-        if uplo1 == :L
+        if uplo1 === :L
             @test tril(A1,0)  == A1
             @test tril(A1,-1) == LowerTriangular(tril(Matrix(A1), -1))
             @test tril(A1,1)  == t1(tril(tril(Matrix(A1), 1)))
@@ -319,7 +319,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
                 debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
 
-                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 == :U ? t : copy(t')))
+                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 === :U ? t : copy(t')))
 
                 # Convert
                 if elty1 <: Real && !(elty2 <: Integer)
@@ -332,7 +332,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test A1 + A2 == Matrix(A1) + Matrix(A2)
                 @test A1 - A2 == Matrix(A1) - Matrix(A2)
 
-                # Triangular-Triangualar multiplication and division
+                # Triangular-Triangular multiplication and division
                 @test A1*A2 ≈ Matrix(A1)*Matrix(A2)
                 @test transpose(A1)*A2 ≈ transpose(Matrix(A1))*Matrix(A2)
                 @test transpose(A1)*adjoint(A2) ≈ transpose(Matrix(A1))*adjoint(Matrix(A2))
@@ -376,7 +376,8 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                 @test_throws DimensionMismatch A2'  * offsizeA
                 @test_throws DimensionMismatch A2   * offsizeA
                 if (uplo1 == uplo2 && elty1 == elty2 != Int && t1 != UnitLowerTriangular && t1 != UnitUpperTriangular)
-                    @test rdiv!(copy(A1), copy(A2)) ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
+                    @test rdiv!(copy(A1), copy(A2))::t1 ≈ A1/A2 ≈ Matrix(A1)/Matrix(A2)
+                    @test ldiv!(copy(A2), copy(A1))::t1 ≈ A2\A1 ≈ Matrix(A2)\Matrix(A1)
                 end
                 if (uplo1 != uplo2 && elty1 == elty2 != Int && t2 != UnitLowerTriangular && t2 != UnitUpperTriangular)
                     @test lmul!(adjoint(copy(A1)), copy(A2)) ≈ A1'*A2 ≈ Matrix(A1)'*Matrix(A2)
@@ -822,6 +823,17 @@ end
     test_one_oneunit_triangular(b)
     c = UpperTriangular(Diagonal(rand(2)))
     test_one_oneunit_triangular(c)
+end
+
+@testset "LowerTriangular(Diagonal(...)) and friends (issue #28869)" begin
+    for elty in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFloat}, Int)
+        V = elty ≡ Int ? rand(1:10, 5) : elty.(randn(5))
+        D = Diagonal(V)
+        for dty in (UpperTriangular, LowerTriangular)
+            A = dty(D)
+            @test A * A' == D * D'
+        end
+    end
 end
 
 end # module TestTriangular

@@ -10,6 +10,7 @@ and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
+    effects::Effects
     info::Any
 end
 
@@ -38,6 +39,41 @@ struct UnionSplitInfo
     matches::Vector{MethodMatchInfo}
 end
 
+nmatches(info::MethodMatchInfo) = length(info.results)
+function nmatches(info::UnionSplitInfo)
+    n = 0
+    for mminfo in info.matches
+        n += nmatches(mminfo)
+    end
+    return n
+end
+
+struct ConstPropResult
+    result::InferenceResult
+end
+
+struct ConcreteResult
+    mi::MethodInstance
+    effects::Effects
+    result
+    ConcreteResult(mi::MethodInstance, effects::Effects) = new(mi, effects)
+    ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
+end
+
+const ConstResult = Union{ConstPropResult,ConcreteResult}
+
+"""
+    info::ConstCallInfo
+
+The precision of this call was improved using constant information.
+In addition to the original call information `info.call`, this info also keeps the results
+of constant inference `info.results::Vector{Union{Nothing,ConstResult}}`.
+"""
+struct ConstCallInfo
+    call::Union{MethodMatchInfo,UnionSplitInfo}
+    results::Vector{Union{Nothing,ConstResult}}
+end
+
 """
     info::MethodResultPure
 
@@ -46,7 +82,7 @@ effect-free, including being no-throw (typically because the value was computed
 by calling an `@pure` function).
 """
 struct MethodResultPure
-    info::Union{MethodMatchInfo,UnionSplitInfo,Bool}
+    info::Any
 end
 let instance = MethodResultPure(false)
     global MethodResultPure
@@ -93,18 +129,6 @@ struct UnionSplitApplyCallInfo
 end
 
 """
-    info::ConstCallInfo
-
-The precision of this call was improved using constant information.
-In addition to the original call information `info.call`, this info also keeps
-the inference results with constant information `info.results::Vector{Union{Nothing,InferenceResult}}`.
-"""
-struct ConstCallInfo
-    call::Union{MethodMatchInfo,UnionSplitInfo}
-    results::Vector{Union{Nothing,InferenceResult}}
-end
-
-"""
     info::InvokeCallInfo
 
 Represents a resolved call to `Core.invoke`, carrying the `info.match::MethodMatch` of
@@ -113,7 +137,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct InvokeCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult}
+    result::Union{Nothing,ConstResult}
 end
 
 """
@@ -125,7 +149,7 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
 struct OpaqueClosureCallInfo
     match::MethodMatch
-    result::Union{Nothing,InferenceResult}
+    result::Union{Nothing,ConstResult}
 end
 
 """
@@ -157,6 +181,17 @@ was supposed to analyze.
 """
 struct ReturnTypeCallInfo
     info::Any
+end
+
+"""
+    info::FinalizerInfo
+
+Represents the information of a potential (later) call to the finalizer on the given
+object type.
+"""
+struct FinalizerInfo
+    info::Any
+    effects::Effects
 end
 
 @specialize

@@ -43,13 +43,9 @@ If the condition is true, a `Pass` is returned:
 ```jldoctest testfoo
 julia> @test foo("bar") == 9
 Test Passed
-  Expression: foo("bar") == 9
-   Evaluated: 9 == 9
 
 julia> @test foo("fizz") >= 10
 Test Passed
-  Expression: foo("fizz") >= 10
-   Evaluated: 16 >= 10
 ```
 
 If the condition is false, then a `Fail` is returned and an exception is thrown:
@@ -88,7 +84,6 @@ to check that this occurs:
 ```jldoctest testfoo
 julia> @test_throws MethodError foo(:cat)
 Test Passed
-  Expression: foo(:cat)
       Thrown: MethodError
 ```
 
@@ -205,6 +200,16 @@ Foo Tests     |    3     1      4  0.0s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
 ```
 
+## Testing Log Statements
+
+One can use the [`@test_logs`](@ref) macro to test log statements, or use a [`TestLogger`](@ref).
+
+```@docs
+Test.@test_logs
+Test.TestLogger
+Test.LogRecord
+```
+
 ## Other Test Macros
 
 As calculations on floating-point values can be imprecise, you can perform approximate equality
@@ -214,8 +219,6 @@ checks using either `@test a ≈ b` (where `≈`, typed via tab completion of `\
 ```jldoctest
 julia> @test 1 ≈ 0.999999999
 Test Passed
-  Expression: 1 ≈ 0.999999999
-   Evaluated: 1 ≈ 0.999999999
 
 julia> @test 1 ≈ 0.999999
 Test Failed at none:1
@@ -228,14 +231,11 @@ after the `≈` comparison:
 ```jldoctest
 julia> @test 1 ≈ 0.999999  rtol=1e-5
 Test Passed
-  Expression: ≈(1, 0.999999, rtol = 1.0e-5)
-   Evaluated: ≈(1, 0.999999; rtol = 1.0e-5)
 ```
 Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 
 ```@docs
 Test.@inferred
-Test.@test_logs
 Test.@test_deprecated
 Test.@test_warn
 Test.@test_nowarn
