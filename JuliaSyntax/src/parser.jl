@@ -811,7 +811,7 @@ function parse_range(ps::ParseState)
             end
             n_colons += 1
             bump(ps, n_colons == 1 ? EMPTY_FLAGS : TRIVIA_FLAG)
-            had_newline = peek(ps, skip_newlines=false) == K"NewlineWs"
+            had_newline = peek(ps) == K"NewlineWs"
             t = peek_token(ps)
             if is_closing_token(ps, kind(t))
                 # 1: }    ==>  (call-i 1 : (error))
@@ -824,7 +824,8 @@ function parse_range(ps::ParseState)
             end
             if had_newline
                 # Error message for people coming from python
-                # 1:\n2 ==> (call-i 1 : (error))
+                # 1:\n2   ==> (call-i 1 : (error))
+                # (1:\n2) ==> (call-i 1 : 2)
                 emit_diagnostic(ps, whitespace=true,
                                 error="line break after `:` in range expression")
                 bump_invisible(ps, K"error")
