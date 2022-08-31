@@ -956,7 +956,7 @@ end
         try
             empty!(LOAD_PATH)
             push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
-            
+
             push!(LOAD_PATH, joinpath(tmp, "Global"))
 
             pkg = Base.identify_package("Baz")
