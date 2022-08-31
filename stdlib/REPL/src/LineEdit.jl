@@ -1548,7 +1548,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override::Bool = false)
+function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, value; override::Bool = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1560,10 +1560,10 @@ function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override
         if y === nothing
             keymap[c] = value
             break
-        elseif !((c in keys(keymap))::Bool && isa(keymap[c], Dict))
+        elseif !(c in keys(keymap) && isa(keymap[c], Dict))
             keymap[c] = Dict{Char,Any}()
         end
-        keymap = keymap[c]
+        keymap = keymap[c]::Dict{Char, Any}
     end
 end
 
