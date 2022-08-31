@@ -52,16 +52,16 @@ tests = [
         "a => b"  =>  "(call-i a => b)"
     ],
     JuliaSyntax.parse_cond => [
-        "a ? b : c"   => "(if a b c)"
-        "a ?\nb : c"  => "(if a b c)"
-        "a ? b :\nc"  => "(if a b c)"
-        "a ? b : c:d" =>   "(if a b (call-i c : d))"
+        "a ? b : c"   => "(? a b c)"
+        "a ?\nb : c"  => "(? a b c)"
+        "a ? b :\nc"  => "(? a b c)"
+        "a ? b : c:d" =>   "(? a b (call-i c : d))"
         # Following are errors but should recover
-        "a? b : c"    => "(if a (error-t) b c)"
-        "a ?b : c"    => "(if a (error-t) b c)"
-        "a ? b: c"    => "(if a b (error-t) c)"
-        "a ? b :c"    => "(if a b (error-t) c)"
-        "a ? b c"     => "(if a b (error-t) c)"
+        "a? b : c"    => "(? a (error-t) b c)"
+        "a ?b : c"    => "(? a (error-t) b c)"
+        "a ? b: c"    => "(? a b (error-t) c)"
+        "a ? b :c"    => "(? a b (error-t) c)"
+        "a ? b c"     => "(? a b (error-t) c)"
     ],
     JuliaSyntax.parse_arrow => [
         "x → y"     =>  "(call-i x → y)"

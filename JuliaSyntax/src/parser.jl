@@ -602,7 +602,7 @@ function parse_pair(ps::ParseState)
 end
 
 # Parse short form conditional expression
-# a ? b : c ==> (if a b c)
+# a ? b : c ==> (? a b c)
 #
 # flisp: parse-cond
 function parse_cond(ps::ParseState)
@@ -613,38 +613,38 @@ function parse_cond(ps::ParseState)
         return
     end
     if !preceding_whitespace(t)
-        # a? b : c  => (if a (error-t) b c)
+        # a? b : c  => (? a (error-t) b c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required before `?` operator")
     end
     bump(ps, TRIVIA_FLAG) # ?
     t = peek_token(ps)
     if !preceding_whitespace(t)
-        # a ?b : c
+        # a ?b : c  ==>  (? a (error-t) b c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required after `?` operator")
     end
     parse_eq_star(ParseState(ps, range_colon_enabled=false))
     t = peek_token(ps)
     if !preceding_whitespace(t)
-        # a ? b: c  ==>  (if a [ ] [?] [ ] b (error-t) [:] [ ] c)
+        # a ? b: c  ==>  (? a b (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required before `:` in `?` expression")
     end
     if kind(t) == K":"
         bump(ps, TRIVIA_FLAG)
     else
-        # a ? b c  ==>  (if a b (error) c)
+        # a ? b c  ==>  (? a b (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="`:` expected in `?` expression")
     end
     t = peek_token(ps)
     if !preceding_whitespace(t)
-        # a ? b :c  ==>  (if a [ ] [?] [ ] b [ ] [:] (error-t) c)
+        # a ? b :c  ==>  (? a b (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required after `:` in `?` expression")
     end
     parse_eq_star(ps)
-    emit(ps, mark, K"if")
+    emit(ps, mark, K"?")
 end
 
 # Parse arrows.  Like parse_RtoL, but specialized for --> syntactic operator
