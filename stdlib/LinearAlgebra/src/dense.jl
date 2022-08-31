@@ -1580,10 +1580,8 @@ julia> X = sylvester(A, B, C)
  -4.46667   1.93333
   3.73333  -1.8
 
-julia> A*X + X*B + C
-2×2 Matrix{Float64}:
-  2.66454e-15  1.77636e-15
- -3.77476e-15  4.44089e-16
+julia> A*X + X*B ≈ -C
+true
 ```
 """
 function sylvester(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix)
@@ -1655,10 +1653,8 @@ julia> X = lyap(A, B)
   0.5  -0.5
  -0.5   0.25
 
-julia> A*X + X*A' + B
-2×2 Matrix{Float64}:
- 0.0          6.66134e-16
- 6.66134e-16  8.88178e-16
+julia> A*X + X*A' ≈ -B
+true
 ```
 """
 function lyap(A::AbstractMatrix, C::AbstractMatrix)
