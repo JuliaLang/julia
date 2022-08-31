@@ -341,27 +341,67 @@ function tr(A::Matrix{T}) where T
     t
 end
 
+_kronsize(A::AbstractMatrix, B::AbstractMatrix) = map(*, size(A), size(B))
+_kronsize(A::AbstractMatrix, B::AbstractVector) = (size(A, 1)*length(B), size(A, 2))
+_kronsize(A::AbstractVector, B::AbstractMatrix) = (length(A)*size(B, 1), size(B, 2))
+
 """
     kron!(C, A, B)
 
-`kron!` is the in-place version of [`kron`](@ref). Computes `kron(A, B)` and stores the result in `C`
-overwriting the existing value of `C`.
-
-!!! tip
-    Bounds checking can be disabled by [`@inbounds`](@ref), but you need to take care of the shape
-    of `C`, `A`, `B` yourself.
+Computes the Kronecker product of `A` and `B` and stores the result in `C`,
+overwriting the existing content of `C`. This is the in-place version of [`kron``](@ref).
 
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
-@inline function kron!(C::AbstractMatrix, A::AbstractMatrix, B::AbstractMatrix)
-    require_one_based_indexing(A, B)
-    @boundscheck (size(C) == (size(A,1)*size(B,1), size(A,2)*size(B,2))) || throw(DimensionMismatch())
-    m = 0
-    @inbounds for j = 1:size(A,2), l = 1:size(B,2), i = 1:size(A,1)
+function kron!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat)
+    size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
+    _kron!(C, A, B)
+end
+function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
+    length(c) == length(a) * length(b) || throw(DimensionMismatch("kron!"))
+    m = firstindex(c)
+    @inbounds for i in eachindex(a)
+        ai = a[i]
+        for k in eachindex(b)
+            c[m] = ai*b[k]
+            m += 1
+        end
+    end
+    return c
+end
+kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
+kron!(c::AbstractVecOrMat, a::Number, b::AbstractVecOrMat) = mul!(c, a, b)
+
+function _kron!(C, A::AbstractMatrix, B::AbstractMatrix)
+    m = firstindex(C)
+    @inbounds for j in axes(A,2), l in axes(B,2), i in axes(A,1)
         Aij = A[i,j]
-        for k = 1:size(B,1)
-            C[m += 1] = Aij*B[k,l]
+        for k in axes(B,1)
+            C[m] = Aij*B[k,l]
+            m += 1
+        end
+    end
+    return C
+end
+function _kron!(C, A::AbstractMatrix, b::AbstractVector)
+    m = firstindex(C)
+    @inbounds for j in axes(A,2), i in axes(A,1)
+        Aij = A[i,j]
+        for k in eachindex(b)
+            C[m] = Aij*b[k]
+            m += 1
+        end
+    end
+    return C
+end
+function _kron!(C, a::AbstractVector, B::AbstractMatrix)
+    m = firstindex(C)
+    @inbounds for l in axes(B,2), i in eachindex(a)
+        ai = a[i]
+        for k in axes(B,1)
+            C[m] = ai*B[k,l]
+            m += 1
         end
     end
     return C
@@ -370,7 +410,7 @@ end
 """
     kron(A, B)
 
-Kronecker tensor product of two vectors or two matrices.
+Computes the Kronecker product of two vectors, matrices or numbers.
 
 For real vectors `v` and `w`, the Kronecker product is related to the outer product by
 `kron(v,w) == vec(w * transpose(v))` or
@@ -413,35 +453,16 @@ julia> reshape(kron(v,w), (length(w), length(v)))
  5  10
 ```
 """
-function kron(a::AbstractMatrix{T}, b::AbstractMatrix{S}) where {T,S}
-    R = Matrix{promote_op(*,T,S)}(undef, size(a,1)*size(b,1), size(a,2)*size(b,2))
-    return @inbounds kron!(R, a, b)
+function kron(A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S}) where {T,S}
+    R = Matrix{promote_op(*,T,S)}(undef, _kronsize(A, B))
+    return kron!(R, A, B)
 end
-
-kron!(c::AbstractVecOrMat, a::AbstractVecOrMat, b::Number) = mul!(c, a, b)
-kron!(c::AbstractVecOrMat, a::Number, b::AbstractVecOrMat) = mul!(c, a, b)
-
-Base.@propagate_inbounds function kron!(c::AbstractVector, a::AbstractVector, b::AbstractVector)
-    C = Base.ReshapedArray(c, (length(a)*length(b), 1), ())
-    A = Base.ReshapedArray(a, (length(a), 1), ())
-    B = Base.ReshapedArray(b, (length(b), 1), ())
-    kron!(C, A, B)
-    return c
-end
-
-Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractMatrix, b::AbstractVector) = kron!(C, a, Base.ReshapedArray(b, (length(b), 1), ()))
-Base.@propagate_inbounds kron!(C::AbstractMatrix, a::AbstractVector, b::AbstractMatrix) = kron!(C, Base.ReshapedArray(a, (length(a), 1), ()), b)
-
-kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
-kron(a::AbstractVecOrMat, b::Number) = a * b
-
 function kron(a::AbstractVector{T}, b::AbstractVector{S}) where {T,S}
     c = Vector{promote_op(*,T,S)}(undef, length(a)*length(b))
-    @inbounds kron!(c, a, b)
+    return kron!(c, a, b)
 end
-kron(a::AbstractMatrix, b::AbstractVector) = kron(a, Base.ReshapedArray(b, (length(b), 1), ()))
-kron(a::AbstractVector, b::AbstractMatrix) = kron(Base.ReshapedArray(a, (length(a), 1), ()), b)
-
+kron(a::Number, b::Union{Number, AbstractVecOrMat}) = a * b
+kron(a::AbstractVecOrMat, b::Number) = a * b
 kron(a::AdjointAbsVec, b::AdjointAbsVec) = adjoint(kron(adjoint(a), adjoint(b)))
 kron(a::AdjOrTransAbsVec, b::AdjOrTransAbsVec) = transpose(kron(transpose(a), transpose(b)))
 
