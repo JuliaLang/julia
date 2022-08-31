@@ -7826,3 +7826,7 @@ end
 @testset "error message for getfield with bad integer type" begin
     @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end
+
+# Correct isdefined error for isdefined of Module of Int fld
+f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
+@test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
