@@ -36,11 +36,20 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"false"
             false
         elseif k == K"Char"
-            unescape_julia_string(val_str, false, false)[2]
+            v, err, _ = unescape_julia_string(val_str, false, false)
+            if err
+                ErrorVal()
+            else
+                v[2]
+            end
         elseif k == K"Identifier"
             if has_flags(head(raw), RAW_STRING_FLAG)
-                s = unescape_julia_string(val_str, false, true)
-                Symbol(normalize_identifier(s))
+                s, err, _ = unescape_julia_string(val_str, false, true)
+                if err
+                    ErrorVal()
+                else
+                    Symbol(normalize_identifier(s))
+                end
             else
                 Symbol(normalize_identifier(val_str))
             end
@@ -50,7 +59,13 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k in KSet"String CmdString"
             is_cmd = k == K"CmdString"
             is_raw = has_flags(head(raw), RAW_STRING_FLAG)
-            unescape_julia_string(val_str, is_cmd, is_raw)
+            s, err, _ = unescape_julia_string(val_str, is_cmd, is_raw)
+            if err
+                # TODO: communicate the unescaping error somehow
+                ErrorVal()
+            else
+                s
+            end
         elseif is_operator(k)
             isempty(val_range)  ?
                 Symbol(untokenize(k)) : # synthetic invisible tokens

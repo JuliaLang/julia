@@ -704,6 +704,7 @@ tests = [
         "\"\$var\""      =>  "(string var)"
         "\"\$outer\""    =>  "(string outer)"
         "\"\$in\""       =>  "(string in)"
+        raw"\"\xqqq\""   =>  "✘"
         # Triple-quoted dedenting:
         "\"\"\"\nx\"\"\""   =>  "\"x\""
         "\"\"\"\n\nx\"\"\"" =>  raw"""(string-s "\n" "x")"""
