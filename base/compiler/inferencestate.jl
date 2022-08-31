@@ -206,11 +206,11 @@ end
 
 Effects(state::InferenceState) = state.ipo_effects
 
-function merge_effects!(caller::InferenceState, effects::Effects)
+function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
-merge_effects!(caller::InferenceState, callee::InferenceState) =
-    merge_effects!(caller, Effects(callee))
+merge_effects!(interp::AbstractInterpreter, caller::InferenceState, callee::InferenceState) =
+    merge_effects!(interp, caller, Effects(callee))
 
 is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)

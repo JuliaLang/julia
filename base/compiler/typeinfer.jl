@@ -793,18 +793,18 @@ function union_caller_cycle!(a::InferenceState, b::InferenceState)
     return
 end
 
-function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, ancestor::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    merge_effects!(parent, Effects(EFFECTS_TOTAL; terminates=false))
+    merge_effects!(interp, parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        merge_effects!(child, Effects(EFFECTS_TOTAL; terminates=false))
+        merge_effects!(interp, child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -840,7 +840,7 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
                 poison_callstack(parent, frame)
                 return true
             end
-            merge_call_chain!(parent, frame, frame)
+            merge_call_chain!(interp, parent, frame, frame)
             return frame
         end
         for caller in frame.callers_in_cycle
@@ -849,7 +849,7 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
                     poison_callstack(parent, frame)
                     return true
                 end
-                merge_call_chain!(parent, frame, caller)
+                merge_call_chain!(interp, parent, frame, caller)
                 return caller
             end
         end
