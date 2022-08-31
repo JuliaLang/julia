@@ -395,10 +395,10 @@ function tmeet(@nospecialize(v), @nospecialize(t::Type))
     elseif isa(v, PartialStruct)
         has_free_typevars(t) && return v
         widev = widenconst(v)
-        if widev <: t
+        ti = typeintersect(widev, t)
+        if ti === widev
             return v
         end
-        ti = typeintersect(widev, t)
         valid_as_lattice(ti) || return Bottom
         @assert widev <: Tuple
         new_fields = Vector{Any}(undef, length(v.fields))
