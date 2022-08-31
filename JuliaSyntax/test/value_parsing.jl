@@ -153,7 +153,7 @@ end
 
 function unesc(str, is_cmd = false, is_raw = false)
     str, iserror, _ = unescape_julia_string(str, is_cmd, is_raw)
-    @test !iserorr
+    @test !iserror
     return str
 end
 @testset "String unescaping" begin
