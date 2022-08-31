@@ -151,7 +151,11 @@ octint(s) = julia_string_to_number(s, K"OctInt")
     end
 end
 
-unesc(str, is_cmd = false, is_raw = false) = unescape_julia_string(str, is_cmd, is_raw)[1]
+function unesc(str, is_cmd = false, is_raw = false)
+    str, iserror, _ = unescape_julia_string(str, is_cmd, is_raw)
+    @test !iserorr
+    return str
+end
 @testset "String unescaping" begin
     # Allowed escapes of delimiters and dollar sign
     @test only(unesc("\\\\")) == '\\'
