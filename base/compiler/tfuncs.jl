@@ -1583,12 +1583,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function has_struct_const_info(x)
-    isa(x, PartialTypeVar) && return true
-    isa(x, Conditional) && return true
-    return has_nontrivial_const_info(x)
-end
-
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(argtypes::Vector{Any})
@@ -1607,7 +1601,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_struct_const_info(x)
+        if has_nontrivial_const_info(x)
             anyinfo = true
         else
             if !isvarargtype(x)
