@@ -78,6 +78,10 @@ end
 getindex(H::UpperHessenberg{T}, i::Integer, j::Integer) where {T} =
     i <= j+1 ? convert(T, H.data[i,j]) : zero(T)
 
+function Base.can_setindex(@nospecialize T::Type{<:UpperHessenberg})
+    Base.can_setindex(fieldtype(T, :data))
+end
+
 function setindex!(A::UpperHessenberg, x, i::Integer, j::Integer)
     if i > j+1
         x == 0 || throw(ArgumentError("cannot set index in the lower triangular part " *

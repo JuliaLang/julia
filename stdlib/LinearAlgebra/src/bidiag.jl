@@ -140,6 +140,10 @@ end
     end
 end
 
+function Base.can_setindex(@nospecialize T::Type{<:Bidiagonal})
+    Base.can_setindex(fieldtype(T, :ev))
+end
+
 @inline function setindex!(A::Bidiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j

@@ -61,6 +61,9 @@ similar(A::LowerTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}
 similar(A::UnitLowerTriangular{<:Any,<:Union{Adjoint{Ti}, Transpose{Ti}}}, ::Type{T}) where {T,Ti} =
     UnitLowerTriangular(similar(parent(parent(A)), T))
 
+function Base.can_setindex(@nospecialize T::Type{<:Union{Union{LowerTriangular,UnitLowerTriangular,UpperTriangular,UnitUpperTriangular}}})
+    Base.can_setindex(fieldtype(T, :data))
+end
 
 """
     LowerTriangular(A::AbstractMatrix)

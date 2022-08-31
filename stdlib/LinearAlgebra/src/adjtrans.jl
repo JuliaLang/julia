@@ -70,6 +70,10 @@ Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
 
+function Base.can_setindex(@nospecialize T::Type{<:Union{Adjoint,Transpose}})
+    Base.can_setindex(fieldtype(T, :parent))
+end
+
 # wrapping lowercase quasi-constructors
 """
     A'

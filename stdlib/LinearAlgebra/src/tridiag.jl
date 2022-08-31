@@ -458,6 +458,9 @@ logabsdet(A::SymTridiagonal; shift::Number=false) = logabsdet(ldlt(A; shift=shif
     end
 end
 
+function Base.can_setindex(@nospecialize T::Type{<:SymTridiagonal})
+    Base.can_setindex(fieldtype(T, :ev))
+end
 @inline function setindex!(A::SymTridiagonal, x, i::Integer, j::Integer)
     @boundscheck checkbounds(A, i, j)
     if i == j

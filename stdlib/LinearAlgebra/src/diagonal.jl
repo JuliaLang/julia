@@ -121,6 +121,10 @@ end
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
+function Base.can_setindex(@nospecialize T::Type{<:Diagonal})
+    Base.can_setindex(fieldtype(T, :diag))
+end
+
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j

@@ -223,6 +223,10 @@ end
     end
 end
 
+function Base.can_setindex(@nospecialize T::Type{<:Union{Symmetric,Hermitian}})
+    Base.can_setindex(fieldtype(T, :data))
+end
+
 function setindex!(A::Symmetric, v, i::Integer, j::Integer)
     i == j || throw(ArgumentError("Cannot set a non-diagonal index in a symmetric matrix"))
     setindex!(A.data, v, i, j)
