@@ -643,7 +643,7 @@ function parse_cond(ps::ParseState)
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="space required after `:` in `?` expression")
     end
 
-    # FIXME: This is a very specific case. Error recovery should be handled mor
+    # FIXME: This is a very specific case. Error recovery should be handled more
     # generally elsewhere.
     if is_block_continuation_keyword(kind(t))
         # a "continuaton keyword" is likely to belong to the surrounding code, so
