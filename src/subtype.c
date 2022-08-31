@@ -2877,6 +2877,11 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     jl_value_t *ii = intersect(x, y, e, 2);
     e->invdepth--;
     e->Rinvdepth--;
+    // Skip the following subtype check if `ii` was returned from `set_vat_to_const`.
+    // As `var_gt`/`var_lt` might not handle `Vararg` length offset correctly.
+    // TODO: fix this on subtype side and remove this branch.
+    if (jl_is_long(ii) && ((jl_is_typevar(x) && jl_is_long(y)) || (jl_is_typevar(y) && jl_is_long(x))))
+        return ii;
     if (jl_is_typevar(x) && jl_is_typevar(y) && (jl_is_typevar(ii) || !jl_is_type(ii)))
         return ii;
     if (ii == jl_bottom_type) {
