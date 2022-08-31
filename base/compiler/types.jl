@@ -158,6 +158,8 @@ struct NativeInterpreter <: AbstractInterpreter
     cache::Vector{InferenceResult}
     # The world age we're working inside of
     world::UInt
+    # method table to lookup for during inference on this world age
+    method_table::CachedMethodTable{InternalMethodTable}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
@@ -167,27 +169,21 @@ struct NativeInterpreter <: AbstractInterpreter
                                inf_params = InferenceParams(),
                                opt_params = OptimizationParams(),
                                )
+        cache = Vector{InferenceResult}() # Initially empty cache
+
         # Sometimes the caller is lazy and passes typemax(UInt).
         # we cap it to the current world age
         if world == typemax(UInt)
             world = get_world_counter()
         end
 
+        method_table = CachedMethodTable(InternalMethodTable(world))
+
         # If they didn't pass typemax(UInt) but passed something more subtly
         # incorrect, fail out loudly.
         @assert world <= get_world_counter()
 
-        return new(
-            # Initially empty cache
-            Vector{InferenceResult}(),
-
-            # world age counter
-            world,
-
-            # parameters for inference and optimization
-            inf_params,
-            opt_params,
-        )
+        return new(cache, world, method_table, inf_params, opt_params)
     end
 end
 
@@ -251,6 +247,7 @@ External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
 to incorporate customized dispatches for the overridden methods.
 """
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
+method_table(interp::NativeInterpreter) = interp.method_table
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:

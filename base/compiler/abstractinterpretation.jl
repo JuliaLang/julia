@@ -293,7 +293,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             if result === missing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
-            matches, overlayed = result
+            (; matches, overlayed) = result
             nonoverlayed &= !overlayed
             push!(infos, MethodMatchInfo(matches))
             for m in matches
@@ -334,7 +334,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
         end
-        matches, overlayed = result
+        (; matches, overlayed) = result
         fullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
         return MethodMatches(matches.matches,
                              MethodMatchInfo(matches),
@@ -1914,7 +1914,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
     elseif head === :boundscheck
         return Bool
     elseif head === :the_exception
-        merge_effects!(sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent=ALWAYS_FALSE))
         return Any
     end
     return Any
@@ -1928,7 +1928,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SlotNumber) || isa(e, Argument)
         return vtypes[slot_id(e)].typ
     elseif isa(e, GlobalRef)
-        return abstract_eval_global(e.mod, e.name, sv)
+        return abstract_eval_global(interp, e.mod, e.name, sv)
     end
 
     return Const(e)
@@ -1976,7 +1976,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             t = Bottom
         else
             callinfo = abstract_call(interp, ArgInfo(ea, argtypes), sv)
-            merge_effects!(sv, callinfo.effects)
+            merge_effects!(interp, sv, callinfo.effects)
             sv.stmt_info[sv.currpc] = callinfo.info
             t = callinfo.rt
         end
@@ -2037,7 +2037,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             consistent = ALWAYS_FALSE
             nothrow = false
         end
-        merge_effects!(sv, Effects(EFFECTS_TOTAL; consistent, nothrow))
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent, nothrow))
     elseif ehead === :splatnew
         t, isexact = instanceof_tfunc(abstract_eval_value(interp, e.args[1], vtypes, sv))
         nothrow = false # TODO: More precision
@@ -2055,9 +2055,9 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
             end
         end
         consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
-        merge_effects!(sv, Effects(EFFECTS_TOTAL; consistent, nothrow))
+        merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; consistent, nothrow))
     elseif ehead === :new_opaque_closure
-        merge_effects!(sv, Effects()) # TODO
+        merge_effects!(interp, sv, Effects()) # TODO
         t = Union{}
         if length(e.args) >= 4
             ea = e.args
@@ -2101,17 +2101,17 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
                 override.inaccessiblememonly ? ALWAYS_TRUE : effects.inaccessiblememonly,
                 effects.nonoverlayed)
         end
-        merge_effects!(sv, effects)
+        merge_effects!(interp, sv, effects)
     elseif ehead === :cfunction
-        merge_effects!(sv, EFFECTS_UNKNOWN)
+        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
         t = e.args[1]
         isa(t, Type) || (t = Any)
         abstract_eval_cfunction(interp, e, vtypes, sv)
     elseif ehead === :method
-        merge_effects!(sv, EFFECTS_UNKNOWN)
+        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
         t = (length(e.args) == 1) ? Any : Nothing
     elseif ehead === :copyast
-        merge_effects!(sv, EFFECTS_UNKNOWN)
+        merge_effects!(interp, sv, EFFECTS_UNKNOWN)
         t = abstract_eval_value(interp, e.args[1], vtypes, sv)
         if t isa Const && t.val isa Expr
             # `copyast` makes copies of Exprs
@@ -2149,7 +2149,7 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     elseif false
         @label always_throw
         t = Bottom
-        merge_effects!(sv, EFFECTS_THROWS)
+        merge_effects!(interp, sv, EFFECTS_THROWS)
     else
         t = abstract_eval_value_expr(interp, e, vtypes, sv)
     end
@@ -2178,7 +2178,7 @@ function abstract_eval_global(M::Module, s::Symbol)
     return ty
 end
 
-function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
+function abstract_eval_global(interp::AbstractInterpreter, M::Module, s::Symbol, frame::InferenceState)
     rt = abstract_eval_global(M, s)
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
@@ -2193,7 +2193,7 @@ function abstract_eval_global(M::Module, s::Symbol, frame::InferenceState)
     elseif isdefined(M,s)
         nothrow = true
     end
-    merge_effects!(frame, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
+    merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
     return rt
 end
 
@@ -2201,7 +2201,7 @@ function handle_global_assignment!(interp::AbstractInterpreter, frame::Inference
     effect_free = ALWAYS_FALSE
     nothrow = global_assignment_nothrow(lhs.mod, lhs.name, newty)
     inaccessiblememonly = ALWAYS_FALSE
-    merge_effects!(frame, Effects(EFFECTS_TOTAL; effect_free, nothrow, inaccessiblememonly))
+    merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; effect_free, nothrow, inaccessiblememonly))
     return nothing
 end
 
@@ -2290,12 +2290,12 @@ function widenreturn_noconditional(@nospecialize(rt))
     return widenconst(rt)
 end
 
-function handle_control_backedge!(frame::InferenceState, from::Int, to::Int)
+function handle_control_backedge!(interp::AbstractInterpreter, frame::InferenceState, from::Int, to::Int)
     if from > to
         if is_effect_overridden(frame, :terminates_locally)
             # this backedge is known to terminate
         else
-            merge_effects!(frame, Effects(EFFECTS_TOTAL; terminates=false))
+            merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; terminates=false))
         end
     end
     return nothing
@@ -2331,7 +2331,7 @@ end
         elseif isa(lhs, GlobalRef)
             handle_global_assignment!(interp, frame, lhs, t)
         elseif !isa(lhs, SSAValue)
-            merge_effects!(frame, EFFECTS_UNKNOWN)
+            merge_effects!(interp, frame, EFFECTS_UNKNOWN)
         end
         return BasicStmtChange(changes, t)
     elseif hd === :method
@@ -2405,7 +2405,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     @assert length(succs) == 1
                     nextbb = succs[1]
                     ssavaluetypes[currpc] = Any
-                    handle_control_backedge!(frame, currpc, stmt.label)
+                    handle_control_backedge!(interp, frame, currpc, stmt.label)
                     @goto branch
                 elseif isa(stmt, GotoIfNot)
                     condx = stmt.cond
@@ -2443,7 +2443,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                         falsebb = succs[1] == truebb ? succs[2] : succs[1]
                         if condval === false
                             nextbb = falsebb
-                            handle_control_backedge!(frame, currpc, stmt.dest)
+                            handle_control_backedge!(interp, frame, currpc, stmt.dest)
                             @goto branch
                         else
                             # We continue with the true branch, but process the false
@@ -2464,7 +2464,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                                 changed = update_bbstate!(frame, falsebb, currstate)
                             end
                             if changed
-                                handle_control_backedge!(frame, currpc, stmt.dest)
+                                handle_control_backedge!(interp, frame, currpc, stmt.dest)
                                 push!(W, falsebb)
                             end
                             @goto fallthrough
