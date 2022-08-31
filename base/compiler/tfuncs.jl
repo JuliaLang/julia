@@ -1351,18 +1351,7 @@ end
 add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
-function valid_tparam_type(T::DataType)
-    T === Symbol && return true
-    isbitstype(T) && return true
-    if T <: Tuple
-        isconcretetype(T) || return false
-        for P in T.parameters
-            (P === Symbol || isbitstype(P)) || return false
-        end
-        return true
-    end
-    return false
-end
+valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
