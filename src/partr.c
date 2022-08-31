@@ -281,6 +281,27 @@ static int check_empty(jl_value_t *checkempty)
     return jl_apply_generic(checkempty, NULL, 0) == jl_true;
 }
 
+jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
+void jl_wait_empty_begin(void);
+void jl_wait_empty_end(void);
+
+void jl_task_wait_empty(void)
+{
+    jl_task_t *ct = jl_current_task;
+    if (jl_atomic_load_relaxed(&ct->tid) == 0 && jl_base_module) {
+        jl_wait_empty_begin();
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("wait"));
+        wait_empty = ct;
+        size_t lastage = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (f)
+            jl_apply_generic(f, NULL, 0);
+        ct->world_age = lastage;
+        wait_empty = NULL;
+        jl_wait_empty_end();
+    }
+}
+
 static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     // sleep_check_state is only transitioned from not_sleeping to sleeping
@@ -312,7 +333,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
         jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (!jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == 0)) {
+        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == 0 && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
             // acquire sleep-check lock
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]
@@ -409,6 +430,14 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             int8_t gc_state = jl_gc_safe_enter(ptls);
             uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
+                if (ptls->tid == 0 && wait_empty) {
+                    task = wait_empty;
+                    if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
+                        jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
+                        JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
+                    }
+                    break;
+                }
                 uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 // TODO: help with gc work here, if applicable
             }
@@ -417,6 +446,11 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
             start_cycles = 0;
+            if (task) {
+                assert(task == wait_empty);
+                wait_empty = NULL;
+                return task;
+            }
         }
         else {
             // maybe check the kernel for new messages too
