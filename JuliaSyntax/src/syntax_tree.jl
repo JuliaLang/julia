@@ -61,6 +61,7 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             is_raw = has_flags(head(raw), RAW_STRING_FLAG)
             s, err, _ = unescape_julia_string(val_str, is_cmd, is_raw)
             if err
+                # TODO: communicate the unescaping error somehow
                 ErrorVal()
             else
                 s
