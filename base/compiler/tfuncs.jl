@@ -257,14 +257,14 @@ end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     if isa(arg1, Const)
-        a1 = typeof(arg1.val)
+        arg1t = typeof(arg1.val)
     else
-        a1 = widenconst(arg1)
+        arg1t = widenconst(arg1)
     end
-    if isType(a1)
+    if isType(arg1t)
         return Bool
     end
-    a1 = unwrap_unionall(a1)
+    a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
@@ -307,8 +307,8 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             end
         end
     elseif isa(a1, Union)
-        return tmerge(isdefined_tfunc(a1.a, sym),
-                      isdefined_tfunc(a1.b, sym))
+        return tmerge(isdefined_tfunc(rewrap_unionall(a1.a, arg1t), sym),
+                      isdefined_tfunc(rewrap_unionall(a1.b, arg1t), sym))
     end
     return Bool
 end
@@ -1583,12 +1583,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function has_struct_const_info(x)
-    isa(x, PartialTypeVar) && return true
-    isa(x, Conditional) && return true
-    return has_nontrivial_const_info(x)
-end
-
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(argtypes::Vector{Any})
@@ -1607,7 +1601,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_struct_const_info(x)
+        if has_nontrivial_const_info(x)
             anyinfo = true
         else
             if !isvarargtype(x)
