@@ -8,7 +8,11 @@ for opt in opt_level
         @testset "LLVM pipeline check with boundscheck=$bc and opt=-O$opt" begin
             cmd = `$(Base.julia_cmd()) --check-bounds=$(bc) -O$(opt) --depwarn=error --startup-file=no compiler/llvmpipeline_opt_$(opt).jl`
             if !success(pipeline(cmd; stdout=stdout, stderr=stderr))
-                error("llvmpipeline test failed, cmd : $cmd")
+                # Just to mark it as a fail
+                @test "llvmpipeline fails for cmd : $cmd" == ""
+            else
+                # Just to mark it as a pass
+                @test "llvmpipeline passes for -O$opt bounds=$bc" != ""
             end
         end
     end

@@ -15,7 +15,7 @@ elseif check_bounds == bc_off
 else
     bc = "auto"
 end
-prefix = "O$opt_level bounds=$bc"
+prefix = "O$opt_level bounds=$bc;"
 
 get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
     sprint(code_llvm, f, t, raw, dump_module, optimize)
@@ -44,33 +44,39 @@ end
 # * SIMD loop marker removal
 # * PTLS lowering
 
-@testset "$prefix ptls lowering" begin
-    function simple()
-        Ref(0)
-    end
-    # TLS load + object allocation
-    check_llvm([("asm", true), ("julia.get_pgcstack", false), ("julia.gc_alloc_obj", false), ("ijl_gc_pool_alloc", true)], simple, Tuple{})
-end
+# @testset "$prefix ptls lowering" begin
 
-@testset "$prefix gc lowering" begin
-    function buildarray()
-        out = []
-        for i=1:100
-            push!(out, Ref(0))
-        end
-        out
-    end
-    # Write barrier lowering
-    check_llvm([("gc_queue_root", true), ("julia.write_barrier", false)], buildarray, Tuple{})
+function simple()
+    Ref(0)
 end
+# TLS load + object allocation
+check_llvm([("asm", true), ("julia.get_pgcstack", false), ("julia.gc_alloc_obj", false), ("ijl_gc_pool_alloc", true)], simple, Tuple{})
 
-@testset "$prefix simd lowering" begin
-    function simd_loop()
-        total = 0.0
-        @simd for i=1:1000
-            total += i
-        end
-        total
+# end
+
+# @testset "$prefix gc lowering" begin
+
+function buildarray()
+    out = []
+    for i=1:100
+        push!(out, Ref(0))
     end
-    check_llvm([("fadd fast", true), ("julia.loopinfo_marker", false)], simd_loop, Tuple{})
+    out
 end
+# Write barrier lowering
+check_llvm([("gc_queue_root", true), ("julia.write_barrier", false)], buildarray, Tuple{})
+
+# end
+
+# @testset "$prefix simd lowering" begin
+
+function simd_loop()
+    total = 0.0
+    @simd for i=1:1000
+        total += i
+    end
+    total
+end
+check_llvm([("fadd fast", true), ("julia.loopinfo_marker", false)], simd_loop, Tuple{})
+
+# end
