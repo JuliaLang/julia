@@ -1598,7 +1598,7 @@ end
 function getEntry(keymap::Dict{Char,Any},key::Union{String,Char})
     v = keymap
     for c in key
-        if !haskey(v,c)
+        if !(haskey(v,c)::Bool)
             return nothing
         end
         v = v[c]
