@@ -642,6 +642,9 @@ function parse_cond(ps::ParseState)
         # a ? b :c  ==>  (if a [ ] [?] [ ] b [ ] [:] (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="space required after `:` in `?` expression")
     end
+
+    # FIXME: This is a very specific case. Error recovery should be handled mor
+    # generally elsewhere.
     if is_block_continuation_keyword(kind(t))
         # a "continuaton keyword" is likely to belong to the surrounding code, so
         # we abort early
