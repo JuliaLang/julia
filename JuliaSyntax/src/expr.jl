@@ -24,9 +24,13 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
             return val
         end
     end
-    headstr = untokenize(head(node), include_flag_suff=false)
-    headsym = !isnothing(headstr) ? Symbol(headstr) :
-        error("Can't untokenize head of kind $(kind(node))")
+    if kind(node) == K"?"
+        headsym = :if
+    else
+        headstr = untokenize(head(node), include_flag_suff=false)
+        headsym = !isnothing(headstr) ? Symbol(headstr) :
+            error("Can't untokenize head of kind $(kind(node))")
+    end
     node_args = children(node)
     insert_linenums = (headsym == :block || headsym == :toplevel) && need_linenodes
     args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
