@@ -190,6 +190,7 @@ end
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
+    Base.require_one_based_indexing(p)
     N = length(p)
     ex = p[end]
     for i in N-1:-1:1
@@ -229,6 +230,7 @@ evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
+    Base.require_one_based_indexing(p)
     length(p) == 1 && return p[1]
     N = length(p)
     a = p[end]
