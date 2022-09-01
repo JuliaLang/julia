@@ -186,24 +186,8 @@ end
 
 function Float64(x::Int128)
     sign_bit = ((x >> 127) % UInt64) << 63
-    ux = unsigned(abs(x))
-    if ux < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
-        low_exp = 0x1p52
-        high_exp = 0x1p104
-        low_bits = (ux % UInt64) & Base.significand_mask(Float64)
-        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
-        high_bits = ((ux >> 52) % UInt64)
-        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
-        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
-    else # Large enough that low bits only affect rounding, pack low bits
-        low_exp = 0x1p76
-        high_exp = 0x1p128
-        low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
-        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
-        high_bits = ((ux >> 76) % UInt64)
-        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
-        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
-    end
+    ux = uabs(x)
+    @inline Float64(ux)
 end
 
 function Float32(x::UInt128)
