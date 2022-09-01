@@ -1001,7 +1001,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-read(s::IO, ::Type{String}) = String(read(s))
+read(s::IO, ::Type{String}) = String(read(s)) :: String
 read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##
