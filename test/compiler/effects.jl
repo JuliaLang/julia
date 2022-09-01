@@ -552,3 +552,6 @@ end
 end # @testset "effects analysis on array construction" begin
 
 end # @testset "effects analysis on array ops" begin
+
+# Test that builtin_effects handles vararg correctly
+@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.isdefined, Any[String, Vararg{Any}], Bool))
