@@ -560,9 +560,8 @@ mutable struct IncrementalCompact
     # This supports insertion while compacting
     new_new_nodes::NewNodeStream  # New nodes that were before the compaction point at insertion time
     new_new_used_ssas::Vector{Int}
-    # TODO: Switch these two to a min-heap of some sort
     pending_nodes::NewNodeStream  # New nodes that were after the compaction point at insertion time
-    pending_perm::Vector{Int}
+    pending_perm::Vector{Int} # pending_nodes.info[pending_perm] is in min-heap order by pos
 
     # State
     idx::Int
@@ -769,9 +768,7 @@ end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     node = add!(compact.pending_nodes, pos, attach_after)
-    # TODO: switch this to `l = length(pending_nodes); splice!(pending_perm, searchsorted(pending_perm, l), l)`
-    push!(compact.pending_perm, length(compact.pending_nodes))
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes.info[x].pos, Order.Forward))
+    heappush!(compact.pending_perm, length(compact.pending_nodes), By(x -> compact.pending_nodes.info[x].pos))
     return node
 end
 
@@ -1451,7 +1448,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
             if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
                 break
             end
-            popfirst!(compact.pending_perm)
+            heappop!(compact.pending_perm, By(x -> compact.pending_nodes.info[x].pos))
         end
         # Move to next block
         compact.idx += 1
@@ -1473,7 +1470,7 @@ function iterate(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int}=
     elseif !isempty(compact.pending_perm) &&
         (info = compact.pending_nodes.info[compact.pending_perm[1]];
          info.attach_after ? info.pos == idx - 1 : info.pos == idx)
-        new_idx = popfirst!(compact.pending_perm)
+        new_idx = heappop!(compact.pending_perm, By(x -> compact.pending_nodes.info[x].pos))
         new_node_entry = compact.pending_nodes.stmts[new_idx]
         new_node_info = compact.pending_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
