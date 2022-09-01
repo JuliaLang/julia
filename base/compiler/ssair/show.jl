@@ -158,8 +158,9 @@ function should_print_ssa_type(@nospecialize node)
 end
 
 function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
+    get(io, :show_type, true) || return nothing
     printstyled(io, "::", typ, color=(used ? :cyan : :light_black))
-    nothing
+    return nothing
 end
 
 normalize_method_name(m::Method) = m.name
@@ -647,8 +648,11 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 
         if new_node_type === UNDEF # try to be robust against errors
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => node_idx), new_node_type, node_idx in used)
+        else
+            ioctx = IOContext(io,
+                :show_type => show_type,
+                :idx => node_idx)
+            line_info_postprinter(ioctx, new_node_type, node_idx in used)
         end
         println(io)
         i += 1
@@ -662,8 +666,11 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
         if type === UNDEF
             # This is an error, but can happen if passes don't update their type information
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => idx), type, idx in used)
+        else
+            ioctx = IOContext(io,
+                :show_type => show_type,
+                :idx => idx)
+            line_info_postprinter(ioctx, type, idx in used)
         end
     end
     println(io)

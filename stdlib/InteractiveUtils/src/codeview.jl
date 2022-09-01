@@ -28,7 +28,8 @@ end
 # displaying type warnings
 
 function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
-    used || return
+    used || return nothing
+    get(io, :show_type, true) || return nothing
     str = "::$ty"
     if !highlighting[:warntype]
         print(io, str)
@@ -39,7 +40,7 @@ function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
-    nothing
+    return nothing
 end
 
 # True if one can be pretty certain that the compiler handles this union well,
