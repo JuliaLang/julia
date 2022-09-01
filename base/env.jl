@@ -117,7 +117,7 @@ if Sys.iswindows()
                 m = nothing
             end
             if m === nothing
-                @warn "malformed environment entry: $env"
+                @warn "malformed environment entry" env
                 continue
             end
             return (Pair{String,String}(winuppercase(env[1:prevind(env, m)]), env[nextind(env, m):end]), (pos, blk))
@@ -131,8 +131,8 @@ else # !windows
             env = env::String
             m = findfirst('=', env)
             if m === nothing
-                @warn "malformed environment entry: $env"
-                nothing
+                @warn "malformed environment entry" env
+                continue
             end
             return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i+1)
         end
