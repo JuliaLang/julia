@@ -523,23 +523,23 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in uses]
-    for x in defs
-        push!(ordered, (x, block_for_inst(cfg, x), false))
-    end
-    ordered = sort(ordered, by=x->x[1])
-    bb_defs = Int[]
-    bb_uses = Int[]
-    last_bb = last_def_bb = 0
-    for (_, bb, is_use) in ordered
-        if bb != last_bb && is_use
-            push!(bb_uses, bb)
+    bb_defs = Int[] # blocks with a def
+    bb_uses = Int[] # blocks with a use that is not dominated by a def
+
+    # We do a sorted joint iteration over the instructions listed
+    # in defs and uses following a pattern similar to mergesort
+    last_block, block_has_def = 0, false
+    defs_i = uses_i = 1
+    while defs_i <= lastindex(defs) || uses_i <= lastindex(uses)
+        is_def = uses_i > lastindex(uses) || defs_i <= lastindex(defs) && defs[defs_i] < uses[uses_i]
+        block = block_for_inst(cfg, is_def ? defs[defs_i] : uses[uses_i])
+        defs_i += is_def
+        uses_i += !is_def
+        if last_block != block || is_def && !block_has_def
+            push!(is_def ? bb_defs : bb_uses, block)
+            block_has_def = is_def
         end
-        last_bb = bb
-        if last_def_bb != bb && !is_use
-            push!(bb_defs, bb)
-            last_def_bb = bb
-        end
+        last_block = block
     end
     # To obtain live ins from bb_uses, recursively add predecessors
     extra_liveins = BitSet()
