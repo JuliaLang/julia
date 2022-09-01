@@ -335,10 +335,16 @@ function _is_immutable_type(@nospecialize ty)
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 
-is_mutation_free_argtype(@nospecialize argtype) =
-    is_mutation_free_type(widenconst(ignorelimited(argtype)))
-is_mutation_free_type(@nospecialize ty) =
-    _is_mutation_free_type(unwrap_unionall(ty))
+function is_mutation_free_argtype(@nospecialize argtype)
+    argtype = ignorelimited(argtype)
+    if isa(argtype, Const)
+        if isa(argtype.val, Type)
+            return true
+        end
+        return _is_mutation_free_type(typeof(argtype.val))
+    end
+    return _is_mutation_free_type(widenconst(argtype))
+end
 function _is_mutation_free_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_mutation_free_type(ty.a) && _is_mutation_free_type(ty.b)

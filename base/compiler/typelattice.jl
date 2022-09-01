@@ -482,16 +482,19 @@ end
 
 Widens extended lattice element `x` to native `Type` representation.
 """
-widenconst(::AnyConditional) = Bool
-widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
-widenconst(m::MaybeUndef) = widenconst(m.typ)
-widenconst(::PartialTypeVar) = TypeVar
-widenconst(t::PartialStruct) = t.typ
-widenconst(t::PartialOpaque) = t.typ
-widenconst(t::Type) = t
-widenconst(::TypeVar) = error("unhandled TypeVar")
-widenconst(::TypeofVararg) = error("unhandled Vararg")
-widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+_widenconst(::AnyConditional) = Bool
+_widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+_widenconst(m::MaybeUndef) = widenconst(m.typ)
+_widenconst(::PartialTypeVar) = TypeVar
+_widenconst(t::PartialStruct) = t.typ
+_widenconst(t::PartialOpaque) = t.typ
+_widenconst(t::Type) = t
+_widenconst(::TypeVar) = error("unhandled TypeVar")
+_widenconst(::TypeofVararg) = error("unhandled Vararg")
+_widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
+typeof(_widenconst).name.max_methods = UInt8(length(methods(_widenconst)))
+
+widenconst(@nospecialize(t)) = _widenconst(t)
 
 ####################
 # state management #
