@@ -476,7 +476,7 @@ xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
 (==)(x::T, y::T) where {T<:Number} = x === y
 (< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
-(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
+(<=)(x::T, y::T) where {T<:Real} = (x == y) | (x < y)
 
 rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
 mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)

@@ -4062,3 +4062,15 @@ end
 let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
     @test Core.Compiler.issimplertype(t, t)
 end
+
+# issue #45600
+@test only(code_typed() do
+    while true
+        x = try finally end
+    end
+end)[2] == Union{}
+@test only(code_typed() do
+    while true
+        @time 1
+    end
+end)[2] == Union{}

@@ -6709,7 +6709,7 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
             Type *vtype = julia_type_to_llvm(ctx, jt, &isboxed);
             assert(!isboxed);
             assert(!type_is_ghost(vtype) && "constants should already be handled");
-            Value *lv = new AllocaInst(vtype, 0, jl_symbol_name(s), /*InsertBefore*/ctx.pgcstack);
+            Value *lv = new AllocaInst(vtype, 0, NULL, Align(jl_datatype_align(jt)), jl_symbol_name(s), /*InsertBefore*/ctx.pgcstack);
             if (CountTrackedPointers(vtype).count) {
                 StoreInst *SI = new StoreInst(Constant::getNullValue(vtype), lv, false, Align(sizeof(void*)));
                 SI->insertAfter(ctx.pgcstack);

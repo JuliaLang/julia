@@ -501,7 +501,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
         x = v[i]
         while j > lo
             y = v[j-1]
-            if !lt(o, x, y)
+            if !(lt(o, x, y)::Bool)
                 break
             end
             v[j] = y

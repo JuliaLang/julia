@@ -256,21 +256,24 @@ end
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
-    (nx == size(S, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+    (nx == size(S, 1) == ny) || throw(DimensionMismatch("dot"))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+        return dot(x[1], S.dv[1], y[1])
     end
     dv, ev = S.dv, S.ev
-    x₀ = x[1]
-    x₊ = x[2]
-    sub = transpose(ev[1])
-    r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
-    @inbounds for j in 2:nx-1
-        x₋, x₀, x₊ = x₀, x₊, x[j+1]
-        sup, sub = transpose(sub), transpose(ev[j])
-        r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+    @inbounds begin
+        x₀ = x[1]
+        x₊ = x[2]
+        sub = transpose(ev[1])
+        r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
+        for j in 2:nx-1
+            x₋, x₀, x₊ = x₀, x₊, x[j+1]
+            sup, sub = transpose(sub), transpose(ev[j])
+            r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+        end
+        r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
     end
-    r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
     return r
 end
 
@@ -841,18 +844,21 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(A, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return dot(x[1], A.d[1], y[1])
     end
-    x₀ = x[1]
-    x₊ = x[2]
-    dl, d, du = A.dl, A.d, A.du
-    r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
-    @inbounds for j in 2:nx-1
-        x₋, x₀, x₊ = x₀, x₊, x[j+1]
-        r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+    @inbounds begin
+        x₀ = x[1]
+        x₊ = x[2]
+        dl, d, du = A.dl, A.d, A.du
+        r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
+        for j in 2:nx-1
+            x₋, x₀, x₊ = x₀, x₊, x[j+1]
+            r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+        end
+        r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     end
-    r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     return r
 end
 

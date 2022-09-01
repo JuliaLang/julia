@@ -623,14 +623,14 @@ end
 end
 
 @testset "generalized dot" begin
-    for elty in (Float64, ComplexF64)
-        dv = randn(elty, 5)
-        ev = randn(elty, 4)
-        x = randn(elty, 5)
-        y = randn(elty, 5)
+    for elty in (Float64, ComplexF64), n in (5, 1)
+        dv = randn(elty, n)
+        ev = randn(elty, n-1)
+        x = randn(elty, n)
+        y = randn(elty, n)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, B*y) ≈ dot(x, Matrix(B), y)
         end
         dv = Vector{elty}(undef, 0)
         ev = Vector{elty}(undef, 0)
@@ -638,7 +638,7 @@ end
         y = Vector{elty}(undef, 0)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ dot(zero(elty), zero(elty), zero(elty))
+            @test dot(x, B, y) === zero(elty)
         end
     end
 end
