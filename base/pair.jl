@@ -55,7 +55,7 @@ last(p::Pair) = p.second
 
 convert(::Type{Pair{A,B}}, x::Pair{A,B}) where {A,B} = x
 function convert(::Type{Pair{A,B}}, x::Pair) where {A,B}
-    Pair{A,B}(convert(A, x[1]), convert(B, x[2]))
+    Pair{A,B}(convert(A, x[1]), convert(B, x[2]))::Pair{A,B}
 end
 
 promote_rule(::Type{Pair{A1,B1}}, ::Type{Pair{A2,B2}}) where {A1,B1,A2,B2} =

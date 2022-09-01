@@ -303,7 +303,7 @@ function IOContext(io::IO, dict::ImmutableDict)
     IOContext{typeof(io0)}(io0, dict)
 end
 
-convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
+convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)::IOContext
 
 IOContext(io::IO) = convert(IOContext, io)
 
