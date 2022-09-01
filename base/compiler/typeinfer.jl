@@ -45,6 +45,8 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
     return mi_info
 end
 
+_typeinf_identifier(frame::InferenceFrameInfo) = frame
+
 """
     Core.Compiler.Timing(mi_info, start_time, ...)
 

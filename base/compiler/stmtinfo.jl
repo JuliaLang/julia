@@ -60,7 +60,13 @@ struct ConcreteResult
     ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
 
-const ConstResult = Union{ConstPropResult,ConcreteResult}
+struct SemiConcreteResult
+    mi::MethodInstance
+    ir::IRCode
+    effects::Effects
+end
+
+const ConstResult = Union{ConstPropResult,ConcreteResult, SemiConcreteResult}
 
 """
     info::ConstCallInfo
