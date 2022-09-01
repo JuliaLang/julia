@@ -1754,11 +1754,16 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
-    elseif f === arraysize
-        return arraysize_nothrow(argtypes)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
+    end
+
+    # These builtins are not-vararg, so if we have varars, here, we can't guarantee
+    # the correct number of arguments.
+    (!isempty(argtypes) && isvarargtype(argtypes[end])) && return false
+    if f === arraysize
+        return arraysize_nothrow(argtypes)
     elseif f === Core._typevar
         length(argtypes) == 3 || return false
         return typevar_nothrow(argtypes[1], argtypes[2], argtypes[3])
@@ -1907,9 +1912,8 @@ function isdefined_effects(argtypes::Vector{Any})
     # consistent if the first arg is immutable
     isempty(argtypes) && return EFFECTS_THROWS
     obj = argtypes[1]
-    isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
-    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = isdefined_nothrow(argtypes)
+    consistent = is_immutable_argtype(unwrapva(obj)) ? ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = !isvarargtype(argtypes[end]) && isdefined_nothrow(argtypes)
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
