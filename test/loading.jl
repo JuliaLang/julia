@@ -730,6 +730,14 @@ end
     end
 end
 
+@testset "Issue #25719" begin
+    empty!(LOAD_PATH)
+    @test Base.root_module(Core, :Core) == Core
+    push!(LOAD_PATH, "@stdlib")
+    @test Base.root_module(Base, :Test) == Test
+    @test_throws KeyError(:SomeNonExistentPackage) Base.root_module(Base, :SomeNonExistentPackage)
+end
+
 ## cleanup after tests ##
 
 for env in keys(envs)
@@ -811,8 +819,10 @@ end
         try
             push!(LOAD_PATH, tmp)
             write(joinpath(tmp, "BadCase.jl"), "module badcase end")
-            @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
-                                        check for typos in package module name") (@eval using BadCase)
+            @test_logs (:warn, r"The call to compilecache failed.*") match_mode=:any begin
+                @test_throws ErrorException("package `BadCase` did not define the expected module `BadCase`, \
+                    check for typos in package module name") (@eval using BadCase)
+            end
         finally
             copy!(LOAD_PATH, old_loadpath)
         end
@@ -917,6 +927,64 @@ end
             test_this_prefs(all_prefs["This"])
         finally
             copy!(LOAD_PATH, old_load_path)
+        end
+    end
+end
+
+
+@testset "Loading with incomplete manifest/depot #45977" begin
+    mktempdir() do tmp
+        # Set up a stacked env.
+        cp(joinpath(@__DIR__, "depot"), joinpath(tmp, "depot"))
+
+        mkdir(joinpath(tmp, "Env1"))
+        mkdir(joinpath(tmp, "Global"))
+
+        for env in ["Env1", "Global"]
+            write(joinpath(tmp, env, "Project.toml"), """
+            [deps]
+            Baz = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            """)
+        end
+
+        write(joinpath(tmp, "Global", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "efc7e24c53d6a328011975294a2c75fed2f9800a"
+            """)
+
+        # This SHA does not exist in the depot.
+        write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            [[Baz]]
+            uuid = "6801f525-dc68-44e8-a4e8-cabd286279e7"
+            git-tree-sha1 = "5f2f6e72d001b014b48b26ec462f3714c342e167"
+            """)
+
+
+        old_load_path = copy(LOAD_PATH)
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            empty!(LOAD_PATH)
+            push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+            push!(LOAD_PATH, joinpath(tmp, "Global"))
+
+            pkg = Base.identify_package("Baz")
+            # Package in manifest in current env not present in depot
+            @test Base.locate_package(pkg) !== nothing
+
+            pushfirst!(LOAD_PATH, joinpath(tmp, "Env1"))
+
+            @test Base.locate_package(pkg) === nothing
+
+            write(joinpath(tmp, "Env1", "Manifest.toml"), """
+            """)
+            # Package in current env not present in manifest
+            pkg, env = Base.identify_package_env("Baz")
+            @test Base.locate_package(pkg, env) === nothing
+        finally
+            copy!(LOAD_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_load_path)
         end
     end
 end

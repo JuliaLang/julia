@@ -368,6 +368,12 @@ end
     return out
 end
 
+function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
+    _muldiag_size_check(Da, A)
+    _muldiag_size_check(A, Db)
+    return broadcast(*, Da.diag, A, permutedims(Db.diag))
+end
+
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
     _muldiag!(out, D, V, alpha, beta)
@@ -590,7 +596,20 @@ end
     return C
 end
 
-kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
+kron(A::Diagonal, B::Diagonal) = Diagonal(kron(A.diag, B.diag))
+
+function kron(A::Diagonal, B::SymTridiagonal)
+    kdv = kron(diag(A), B.dv)
+    # We don't need to drop the last element
+    kev = kron(diag(A), _pushzero(_evview(B)))
+    SymTridiagonal(kdv, kev)
+end
+function kron(A::Diagonal, B::Tridiagonal)
+    kd = kron(diag(A), B.d)
+    kdl = _droplast!(kron(diag(A), _pushzero(B.dl)))
+    kdu = _droplast!(kron(diag(A), _pushzero(B.du)))
+    Tridiagonal(kdl, kd, kdu)
+end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     require_one_based_indexing(B)
@@ -675,9 +694,9 @@ for f in (:exp, :cis, :log, :sqrt,
 end
 
 function inv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
-        if D.diag[i] == zero(T)
+        if iszero(D.diag[i])
             throw(SingularException(i))
         end
         Di[i] = inv(D.diag[i])
@@ -686,20 +705,34 @@ function inv(D::Diagonal{T}) where T
 end
 
 function pinv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
-        isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
+        if !iszero(D.diag[i])
+            invD = inv(D.diag[i])
+            if isfinite(invD)
+                Di[i] = invD
+                continue
+            end
+        end
+        # fallback
+        Di[i] = zero(T)
     end
     Diagonal(Di)
 end
 function pinv(D::Diagonal{T}, tol::Real) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
-    if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
-    for i = 1:length(D.diag)
-        if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
-            Di[i]=inv(D.diag[i])
-        else
-            Di[i]=zero(T)
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
+    if !isempty(D.diag)
+        maxabsD = maximum(abs, D.diag)
+        for i = 1:length(D.diag)
+            if abs(D.diag[i]) > tol*maxabsD
+                invD = inv(D.diag[i])
+                if isfinite(invD)
+                    Di[i] = invD
+                    continue
+                end
+            end
+            # fallback
+            Di[i] = zero(T)
         end
     end
     Diagonal(Di)
@@ -756,8 +789,8 @@ end
 /(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
 /(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
-*(A::AbstractTriangular, D::Diagonal) = Base.@invoke *(A::AbstractMatrix, D::Diagonal)
-*(D::Diagonal, A::AbstractTriangular) = Base.@invoke *(D::Diagonal, A::AbstractMatrix)
+*(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
+*(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
 
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 

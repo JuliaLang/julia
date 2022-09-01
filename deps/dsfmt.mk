@@ -1,8 +1,9 @@
 ## DSFMT ##
+include $(SRCDIR)/dsfmt.version
 
 ifneq ($(USE_BINARYBUILDER_DSFMT),1)
 
-DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES -DDSFMT_SHLIB
+DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES -DDSFMT_SHLIB $(SANITIZE_OPTS)
 DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
 		--param max-inline-insns-single=1800 -Wall  -std=c99 -shared
 ifeq ($(ARCH), x86_64)

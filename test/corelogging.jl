@@ -120,8 +120,8 @@ end
     @test length(logger.logs) == 1
     record = logger.logs[1]
     @test record._module == Base.Core
-    @test record.group == :somegroup
-    @test record.id == :asdf
+    @test record.group === :somegroup
+    @test record.id === :asdf
     @test record.file == "/a/file"
     @test record.line == -10
     # Test consistency with shouldlog() function arguments
@@ -435,7 +435,7 @@ end
     (record,), _ = collect_test_logs() do
         @info "test"
     end
-    @test record.group == :corelogging  # name of this file
+    @test record.group === :corelogging  # name of this file
 end
 
 @testset "complicated kwargs logging macro" begin

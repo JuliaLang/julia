@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Test
 const CC = Core.Compiler
 import Core: MethodInstance, CodeInstance
 import .CC: WorldRange, WorldView
@@ -7,7 +8,7 @@ import .CC: WorldRange, WorldView
 # define new `AbstractInterpreter` that satisfies the minimum interface requirements
 # while managing its cache independently
 macro newinterp(name)
-    cachename = gensym(string(name, "Cache"))
+    cachename = Symbol(string(name, "Cache"))
     name = esc(name)
     quote
         struct $cachename
@@ -49,7 +50,7 @@ strangesin(x) = sin(x)
     strangesin(x)
 end |> only === Union{Float64,Nothing}
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
-    Base.@invoke strangesin(x::Float64)
+    @invoke strangesin(x::Float64)
 end |> only === Union{Float64,Nothing}
 
 # effect analysis should figure out that the overlayed method is used
@@ -57,7 +58,7 @@ end |> only === Union{Float64,Nothing}
     strangesin(x)
 end |> !Core.Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,); interp=MTOverlayInterp()) do x
-    Base.@invoke strangesin(x::Float64)
+    @invoke strangesin(x::Float64)
 end |> !Core.Compiler.is_nonoverlayed
 
 # but it should never apply for the native compilation
@@ -65,7 +66,7 @@ end |> !Core.Compiler.is_nonoverlayed
     strangesin(x)
 end |> Core.Compiler.is_nonoverlayed
 @test Base.infer_effects((Any,)) do x
-    Base.@invoke strangesin(x::Float64)
+    @invoke strangesin(x::Float64)
 end |> Core.Compiler.is_nonoverlayed
 
 # fallback to the internal method table
@@ -73,7 +74,7 @@ end |> Core.Compiler.is_nonoverlayed
     cos(x)
 end |> only === Float64
 @test Base.return_types((Any,); interp=MTOverlayInterp()) do x
-    Base.@invoke cos(x::Float64)
+    @invoke cos(x::Float64)
 end |> only === Float64
 
 # not fully covered overlay method match

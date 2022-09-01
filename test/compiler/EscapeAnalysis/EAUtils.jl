@@ -51,7 +51,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
     interp = EscapeAnalyzer(interp, tt, optimize)
     results = Base.code_typed_by_type(tt; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
-    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo===:source)
+    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo === :source)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
@@ -156,7 +156,7 @@ function CC.cache_result!(interp::EscapeAnalyzer, caller::InferenceResult)
     if haskey(interp.cache, caller)
         GLOBAL_ESCAPE_CACHE[caller.linfo] = interp.cache[caller]
     end
-    return Base.@invoke CC.cache_result!(interp::AbstractInterpreter, caller::InferenceResult)
+    return @invoke CC.cache_result!(interp::AbstractInterpreter, caller::InferenceResult)
 end
 
 const GLOBAL_ESCAPE_CACHE = IdDict{MethodInstance,EscapeCache}()
@@ -276,7 +276,7 @@ end
 function Base.show(io::IO, x::EscapeInfo)
     name, color = get_name_color(x)
     if isnothing(name)
-        Base.@invoke show(io::IO, x::Any)
+        @invoke show(io::IO, x::Any)
     else
         printstyled(io, name; color)
     end

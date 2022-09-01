@@ -1323,7 +1323,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # necessary to read at least some part of the buffer,
     # for the "region_active" to have time to be updated
 
-    @test LineEdit.state(repl.mistate).region_active == :off
+    @test LineEdit.state(repl.mistate).region_active === :off
     @test s4 == "anything" # no control characters between the last two occurrences of "anything"
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)

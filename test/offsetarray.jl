@@ -414,6 +414,23 @@ rv = reverse(v)
 cv = copy(v)
 @test reverse!(cv) == rv
 
+@testset "reverse! (issue #45870)" begin
+    @testset for n in [4,5]
+        offset = typemax(Int)-n
+        vo = OffsetArray([1:n;], offset)
+        vo2 = OffsetArray([1:n;], offset)
+        @test reverse!(vo) == OffsetArray(n:-1:1, offset)
+        @test reverse!(vo) == vo2
+        @test_throws BoundsError reverse!(vo, firstindex(vo)-1, firstindex(vo))
+        @test reverse!(vo, firstindex(vo), firstindex(vo)-1) == vo2
+        @test reverse!(vo, firstindex(vo), firstindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)+1) == vo2 # overflow in stop
+        @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
+        @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
+    end
+end
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A) == 16
 @test lastindex(A, 1) == 1
@@ -791,6 +808,22 @@ end
     a = OffsetArray(4:5, 5:6)
     @test reshape(a, :) === a
     @test reshape(a, (:,)) === a
+end
+
+@testset "stack" begin
+    nought = OffsetArray([0, 0.1, 0.01], 0:2)
+    ten = OffsetArray([1,10,100,1000], 10:13)
+
+    @test stack(ten) == ten
+    @test stack(ten .+ nought') == ten .+ nought'
+    @test stack(x^2 for x in ten) == ten.^2
+
+    @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
+    @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
+    @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
+    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
+    @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
+    @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
 end
 
 @testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin

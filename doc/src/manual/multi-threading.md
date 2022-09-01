@@ -20,7 +20,7 @@ specified, then `-t`/`--threads` takes precedence.
 
 The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
-(see [Command-line Options](@ref command-line-options) for more details).
+(see [Command-line Options](@ref command-line-interface) for more details).
 
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
@@ -361,9 +361,6 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * `@threads` currently uses a static schedule, using all threads and assigning
-    equal iteration counts to each. In the future the default schedule is likely
-    to change to be dynamic.
   * The schedule used by `@spawn` is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may

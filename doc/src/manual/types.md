@@ -182,15 +182,14 @@ The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is
 In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
 the others later): [`Integer`](@ref) and [`AbstractFloat`](@ref), separating the world into
 representations of integers and representations of real numbers. Representations of real
-numbers include, of course, floating-point types, but also include other types, such as
-rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
-floating-point representations of real numbers. Integers are further subdivided into
-[`Signed`](@ref) and [`Unsigned`](@ref) varieties.
+numbers include floating-point types, but also include other types, such as rationals.
+`AbstractFloat` includes only floating-point representations of real numbers. Integers
+are further subdivided into [`Signed`](@ref) and [`Unsigned`](@ref) varieties.
 
-The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
-the right-hand type to be an immediate supertype of the newly declared type. It can also be used
-in expressions as a subtype operator which returns `true` when its left operand is a subtype of
-its right operand:
+The `<:` operator in general means "is a subtype of", and, used in declarations like those above,
+declares the right-hand type to be an immediate supertype of the newly declared type. It can also
+be used in expressions as a subtype operator which returns `true` when its left operand is a
+subtype of its right operand:
 
 ```jldoctest
 julia> Integer <: Number
@@ -1124,16 +1123,16 @@ Parametric types can be singleton types when the above condition holds. For exam
 julia> struct NoFieldsParam{T}
        end
 
-julia> Base.issingletontype(NoFieldsParam) # can't be a singleton type ...
+julia> Base.issingletontype(NoFieldsParam) # Can't be a singleton type ...
 false
 
 julia> NoFieldsParam{Int}() isa NoFieldsParam # ... because it has ...
 true
 
-julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances
+julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances.
 true
 
-julia> Base.issingletontype(NoFieldsParam{Int}) # parametrized, it is a singleton
+julia> Base.issingletontype(NoFieldsParam{Int}) # Parametrized, it is a singleton.
 true
 
 julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
@@ -1177,10 +1176,13 @@ Types of closures are not necessarily singletons.
 julia> addy(y) = x -> x + y
 addy (generic function with 1 method)
 
-julia> Base.issingletontype(addy(1))
-false
+julia> typeof(addy(1)) === typeof(addy(2))
+true
 
 julia> addy(1) === addy(2)
+false
+
+julia> Base.issingletontype(typeof(addy(1)))
 false
 ```
 
@@ -1553,8 +1555,8 @@ floating-point numbers, tuples, etc.) as type parameters.  A common example is t
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
-of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{x}`,
-and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
+of custom types. By way of illustration of this idea, let's introduce the parametric type `Val{x}`,
+and its constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
 for cases where you don't need a more elaborate hierarchy.
 
 [`Val`](@ref) is defined as:

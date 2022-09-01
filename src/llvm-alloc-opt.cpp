@@ -585,10 +585,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
         buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(Align(align));
-        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
+        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
-    auto new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext())));
+    Instruction *new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
+    if (orig_inst->getModule()->getDataLayout().getAllocaAddrSpace() != 0)
+        new_inst = cast<Instruction>(prolog_builder.CreateAddrSpaceCast(new_inst, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), orig_inst->getType()->getPointerAddressSpace())));
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -671,7 +673,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), AddressSpace::Generic);
+            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), new_i->getType()->getPointerAddressSpace());
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
@@ -1163,8 +1165,8 @@ bool AllocOpt::doInitialization(Module &M)
 
     DL = &M.getDataLayout();
 
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { Type::getInt8PtrTy(M.getContext()) });
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { Type::getInt8PtrTy(M.getContext()) });
+    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { Type::getInt8PtrTy(M.getContext(), DL->getAllocaAddrSpace()) });
+    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { Type::getInt8PtrTy(M.getContext(), DL->getAllocaAddrSpace()) });
 
     return true;
 }

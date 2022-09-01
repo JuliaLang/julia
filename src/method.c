@@ -314,7 +314,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 if (ma == (jl_value_t*)jl_pure_sym)
                     li->pure = 1;
                 else if (ma == (jl_value_t*)jl_inline_sym)
-                    li->inlineable = 1;
+                    li->inlining_cost = 0x10; // This corresponds to MIN_INLINE_COST
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
@@ -322,13 +322,14 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 6) {
+                    if (jl_expr_nargs(ma) == 7) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
-                        li->purity.overrides.ipo_terminates = jl_unbox_bool(jl_exprarg(ma, 3));
+                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
+                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
                     }
                 }
                 else
@@ -376,7 +377,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
-
+        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
+            li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint8_set(li->ssaflags, j, 0);
         else {
@@ -467,9 +470,10 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlineable = 0;
+    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
+    src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->purity.bits = 0;
@@ -783,6 +787,49 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     return m;
 }
 
+// backedges ------------------------------------------------------------------
+
+// Use this in a `while` loop to iterate over the backedges in a MethodInstance.
+// `*invokesig` will be NULL if the call was made by ordinary dispatch, otherwise
+// it will be the signature supplied in an `invoke` call.
+// If you don't need `invokesig`, you can set it to NULL on input.
+// Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
+{
+    jl_value_t *item = jl_array_ptr_ref(list, i);
+    if (jl_is_method_instance(item)) {
+        // Not an `invoke` call, it's just the MethodInstance
+        if (invokesig != NULL)
+            *invokesig = NULL;
+        *caller = (jl_method_instance_t*)item;
+        return i + 1;
+    }
+    assert(jl_is_type(item));
+    // An `invoke` call, it's a (sig, MethodInstance) pair
+    if (invokesig != NULL)
+        *invokesig = item;
+    *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i + 1);
+    if (*caller)
+        assert(jl_is_method_instance(*caller));
+    return i + 2;
+}
+
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, invokesig);
+    jl_array_ptr_set(list, i++, caller);
+    return i;
+}
+
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_1d_push(list, invokesig);
+    jl_array_ptr_1d_push(list, (jl_value_t*)caller);
+    return;
+}
+
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
@@ -1016,6 +1063,46 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
 
 // root blocks
 
+// This section handles method roots. Roots are GC-preserved items needed to
+// represent lowered, type-inferred, and/or compiled code. These items are
+// stored in a flat list (`m.roots`), and during serialization and
+// deserialization of code we replace C-pointers to these items with a
+// relocatable reference. We use a bipartite reference, `(key, index)` pair,
+// where `key` identifies the module that added the root and `index` numbers
+// just those roots with the same `key`.
+//
+// During precompilation (serialization), we save roots that were added to
+// methods that are tagged with this package's module-key, even for "external"
+// methods not owned by a module currently being precompiled. During
+// deserialization, we load the new roots and append them to the method. When
+// code is deserialized (see ircode.c), we replace the bipartite reference with
+// the pointer to the memory address in the current session. The bipartite
+// reference allows us to cache both roots and references in precompilation .ji
+// files using a naming scheme that is independent of which packages are loaded
+// in arbitrary order.
+//
+// To track the module-of-origin for each root, methods also have a
+// `root_blocks` field that uses run-length encoding (RLE) storing `key` and the
+// (absolute) integer index within `roots` at which a block of roots with that
+// key begins. This makes it possible to look up an individual `(key, index)`
+// pair fairly efficiently. A given `key` may possess more than one block; the
+// `index` continues to increment regardless of block boundaries.
+//
+// Roots with `key = 0` are considered to be of unknown origin, and
+// CodeInstances referencing such roots will remain unserializable unless all
+// such roots were added at the time of system image creation. To track this
+// additional data, we use two fields:
+//
+// - methods have an `nroots_sysimg` field to count the number of roots defined
+//   at the time of writing the system image (such occur first in the list of
+//   roots). These are the cases with `key = 0` that do not prevent
+//   serialization.
+// - CodeInstances have a `relocatability` field which when 1 indicates that
+//   every root is "safe," meaning it was either added at sysimg creation or is
+//   tagged with a non-zero `key`. Even a single unsafe root will cause this to
+//   have value 0.
+
+// Get the key of the current (final) block of roots
 static uint64_t current_root_id(jl_array_t *root_blocks)
 {
     if (!root_blocks)
@@ -1028,6 +1115,7 @@ static uint64_t current_root_id(jl_array_t *root_blocks)
     return blocks[nx2-2];
 }
 
+// Add a new block of `len` roots with key `modid` (module id)
 static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
 {
     assert(jl_is_array(root_blocks));
@@ -1038,6 +1126,7 @@ static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
     blocks[nx2-1] = len;
 }
 
+// Allocate storage for roots
 static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
 {
     if (!m->roots) {
@@ -1050,6 +1139,7 @@ static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
     }
 }
 
+// Add a single root with owner `mod` to a method
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
 {
     JL_GC_PUSH2(&m, &root);
@@ -1066,6 +1156,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     JL_GC_POP();
 }
 
+// Add a list of roots with key `modid` to a method
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
 {
     JL_GC_PUSH2(&m, &roots);
@@ -1105,6 +1196,7 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
     return jl_array_ptr_ref(m->roots, i);
 }
 
+// Count the number of roots added by module with id `key`
 int nroots_with_key(jl_method_t *m, uint64_t key)
 {
     size_t nroots = 0;

@@ -1,4 +1,5 @@
 ## LIBSUITESPARSE ##
+include $(SRCDIR)/libsuitesparse.version
 
 ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG := -DLONGBLAS='long long'
@@ -21,11 +22,11 @@ SUITESPARSE_LIB := $(LDFLAGS) -L"$(abspath $(BUILDDIR))/SuiteSparse-$(LIBSUITESP
 ifeq ($(OS), Darwin)
 SUITESPARSE_LIB += $(RPATH_ESCAPED_ORIGIN)
 endif
-LIBSUITESPARSE_MFLAGS := CC="$(CC)" CXX="$(CXX)" F77="$(FC)" \
+LIBSUITESPARSE_MFLAGS := CC="$(CC) $(SANITIZE_OPTS)" CXX="$(CXX) $(SANITIZE_OPTS)" F77="$(FC)" \
 	  AR="$(AR)" RANLIB="$(RANLIB)" \
 	  BLAS="-L$(build_shlibdir) -lblastrampoline" \
 	  LAPACK="-L$(build_shlibdir) -lblastrampoline" \
-	  LDFLAGS="$(SUITESPARSE_LIB)" CFOPENMP="" CUDA=no CUDA_PATH="" \
+	  LDFLAGS="$(SUITESPARSE_LIB) $(SANITIZE_LDFLAGS) -Wl,--warn-unresolved-symbols" CFOPENMP="" CUDA=no CUDA_PATH="" \
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" \
 	  CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" \
 	  SPQR_CONFIG="$(SPQR_CONFIG)"

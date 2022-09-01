@@ -1928,12 +1928,24 @@ let A = Tuple{Ref{T}, Vararg{T}} where T,
     B = Tuple{Ref{U}, Union{Ref{S}, Ref{U}, Int}, Union{Ref{S}, S}} where S where U,
     C = Tuple{Ref{U}, Union{Ref{S}, Ref{U}, Ref{W}}, Union{Ref{S}, W, V}} where V<:AbstractArray where W where S where U
     I = typeintersect(A, B)
+    Ts = (Tuple{Ref{Int}, Int, Int}, Tuple{Ref{Ref{Int}}, Ref{Int}, Ref{Int}})
     @test I != Union{}
     @test I <: A
-    @test I <: B
-    # avoid stack overflow
+    @test_broken I <: B
+    for T in Ts
+        if T <: A && T <: B
+            @test T <: I
+        end
+    end
     J = typeintersect(A, C)
-    @test_broken J != Union{}
+    @test J != Union{}
+    @test J <: A
+    @test_broken J <: C
+    for T in Ts
+        if T <: A && T <: C
+            @test T <: J
+        end
+    end
 end
 
 let A = Tuple{Dict{I,T}, I, T} where T where I,
@@ -1964,8 +1976,9 @@ let A = Tuple{Any, Type{Ref{_A}} where _A},
     B = Tuple{Type{T}, Type{<:Union{Ref{T}, T}}} where T,
     I = typeintersect(A, B)
     @test I != Union{}
-    # TODO: this intersection result is still too narrow
-    @test_broken Tuple{Type{Ref{Integer}}, Type{Ref{Integer}}} <: I
+    @test Tuple{Type{Ref{Integer}}, Type{Ref{Integer}}} <: I
+    # TODO: this intersection result seems too wide (I == B) ?
+    @test_broken !<:(Tuple{Type{Int}, Type{Int}}, I)
 end
 
 @testintersect(Tuple{Type{T}, T} where T<:(Tuple{Vararg{_A, _B}} where _B where _A),
@@ -1987,3 +2000,23 @@ let A = Tuple{typeof(identity), Type{Union{}}},
     B = Tuple{typeof(identity), typeof(Union{})}
     @test A == B && (Base.isdispatchtuple(A) == Base.isdispatchtuple(B))
 end
+
+# issue #45703
+# requires assertions enabled (to catch discrepancy in obvious_subtype)
+let T = TypeVar(:T, Real),
+    V = TypeVar(:V, AbstractVector{T}),
+    S = Type{Pair{T, V}}
+    @test !(UnionAll(T, UnionAll(V, UnionAll(T, Type{Pair{T, V}}))) <: UnionAll(T, UnionAll(V, Type{Pair{T, V}})))
+    @test !(UnionAll(T, UnionAll(V, UnionAll(T, S))) <: UnionAll(T, UnionAll(V, S)))
+end
+
+# issue #41096
+let C = Val{Val{B}} where {B}
+    @testintersect(Val{<:Union{Missing, Val{false}, Val{true}}}, C, Val{<:Union{Val{true}, Val{false}}})
+    @testintersect(Val{<:Union{Nothing, Val{true}, Val{false}}}, C, Val{<:Union{Val{true}, Val{false}}})
+    @testintersect(Val{<:Union{Nothing, Val{false}}}, C, Val{Val{false}})
+end
+
+#issue #43082
+struct X43082{A, I, B<:Union{Ref{I},I}}; end
+@testintersect(Tuple{X43082{T}, Int} where T, Tuple{X43082{Int}, Any}, Tuple{X43082{Int}, Int})

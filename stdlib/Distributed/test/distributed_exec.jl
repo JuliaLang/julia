@@ -126,7 +126,7 @@ function testf(id)
     @test_throws ErrorException put!(f, :OK) # Cannot put! to a already set future
     @test_throws MethodError take!(f) # take! is unsupported on a Future
 
-    @test fetch(f) == :OK
+    @test fetch(f) === :OK
 end
 
 testf(id_me)
@@ -218,7 +218,7 @@ isready(f)
 @test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == true
 put!(f, :OK)
 @test remotecall_fetch(k->haskey(Distributed.PGRP.refs, k), wid1, fid) == false
-@test fetch(f) == :OK
+@test fetch(f) === :OK
 
 # RemoteException should be thrown on a put! when another process has set the value
 f = Future(wid1)
@@ -270,7 +270,7 @@ function test_remoteref_dgc(id)
 
     # remote value should be deleted after finalizing the ref
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
-    @test fetch(rr) == :OK
+    @test fetch(rr) === :OK
     @test remotecall_fetch(k->(yield();haskey(Distributed.PGRP.refs, k)), id, rrid) == true
     finalize(rr)
     yield(); # flush gc msgs
@@ -349,7 +349,7 @@ function test_regular_io_ser(ref::Distributed.AbstractRemoteRef)
         v = getfield(ref2, fld)
         if isa(v, Number)
             @test v === zero(typeof(v))
-        elseif fld == :lock
+        elseif fld === :lock
             @test v isa ReentrantLock
             @test !islocked(v)
         elseif v !== nothing
@@ -528,7 +528,7 @@ let ex
     bt = ex.captured.processed_bt::Array{Any,1}
     @test length(bt) > 1
     frame, repeated = bt[1]::Tuple{Base.StackTraces.StackFrame, Int}
-    @test frame.func == :foo
+    @test frame.func === :foo
     @test frame.linfo === nothing
     @test repeated == 1
 end
@@ -815,11 +815,11 @@ function f13168(n)
     return val
 end
 let t = schedule(@task f13168(100))
-    @test t.state == :runnable
+    @test t.state === :runnable
     @test t.queue !== nothing
     @test_throws ErrorException schedule(t)
     yield()
-    @test t.state == :done
+    @test t.state === :done
     @test t.queue === nothing
     @test_throws ErrorException schedule(t)
     @test isa(fetch(t), Float64)
@@ -900,7 +900,7 @@ end
             take!(rc)[1] != float(i) && error("Failed")
         end
         return :OK
-    end, id_other, rc_unbuffered) == :OK
+    end, id_other, rc_unbuffered) === :OK
 
 # github issue 33972
 rc_unbuffered_other = RemoteChannel(()->Channel{Int}(0), id_other)
@@ -997,7 +997,7 @@ let
     @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
 
     # Test that the stream is still usable
-    @test remotecall_fetch(()->:test,2) == :test
+    @test remotecall_fetch(()->:test,2) === :test
     ref = remotecall(bad_thunk, 2)
     @test_throws RemoteException fetch(ref)
 end
@@ -1175,11 +1175,11 @@ function launch(manager::ErrorSimulator, params::Dict, launched::Array, c::Condi
     dir = params[:dir]
 
     cmd = `$(Base.julia_cmd(exename)) --startup-file=no`
-    if manager.mode == :timeout
+    if manager.mode === :timeout
         cmd = `$cmd -e "sleep(10)"`
-    elseif manager.mode == :ntries
+    elseif manager.mode === :ntries
         cmd = `$cmd -e "[println(x) for x in 1:1001]"`
-    elseif manager.mode == :exit
+    elseif manager.mode === :exit
         cmd = `$cmd -e "exit(-1)"`
     else
         error("Unknown mode")

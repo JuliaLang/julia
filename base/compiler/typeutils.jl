@@ -4,8 +4,6 @@
 # lattice utilities #
 #####################
 
-isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
-
 # true if Type{T} is inlineable as constant T
 # requires that T is a singleton, s.t. T == S implies T === S
 isconstType(@nospecialize t) = isType(t) && hasuniquerep(t.parameters[1])
@@ -28,6 +26,7 @@ end
 function has_nontrivial_const_info(@nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
+    isa(t, PartialTypeVar) && return true
     isa(t, Const) || return false
     val = t.val
     return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
@@ -104,16 +103,25 @@ function valid_as_lattice(@nospecialize(x))
     return false
 end
 
-# test if non-Type, non-TypeVar `x` can be used to parameterize a type
-function valid_tparam(@nospecialize(x))
-    if isa(x, Tuple)
-        for t in x
-            isa(t, Symbol) || isbits(t) || return false
+function valid_typeof_tparam(@nospecialize(t))
+    if t === Symbol || isbitstype(t)
+        return true
+    end
+    isconcretetype(t) || return false
+    if t <: NamedTuple
+        t = t.parameters[2]
+    end
+    if t <: Tuple
+        for p in t.parameters
+            valid_typeof_tparam(p) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbits(x)
+    return false
 end
+
+# test if non-Type, non-TypeVar `x` can be used to parameterize a type
+valid_tparam(@nospecialize(x)) = valid_typeof_tparam(typeof(x))
 
 function compatible_vatuple(a::DataType, b::DataType)
     vaa = a.parameters[end]
@@ -299,4 +307,42 @@ function unwraptv(@nospecialize t)
         t = t.ub
     end
     return t
+end
+
+# this query is specially written for `adjust_effects` and returns true if a value of this type
+# never involves inconsistency of mutable objects that are allocated somewhere within a call graph
+is_consistent_argtype(@nospecialize ty) = is_consistent_type(widenconst(ignorelimited(ty)))
+is_consistent_type(@nospecialize ty) = _is_consistent_type(unwrap_unionall(ty))
+function _is_consistent_type(@nospecialize ty)
+    if isa(ty, Union)
+        return is_consistent_type(ty.a) && is_consistent_type(ty.b)
+    end
+    # N.B. String and Symbol are mutable, but also egal always, and so they never be inconsistent
+    return ty === String || ty === Symbol || isbitstype(ty)
+end
+
+is_immutable_argtype(@nospecialize ty) = is_immutable_type(widenconst(ignorelimited(ty)))
+is_immutable_type(@nospecialize ty) = _is_immutable_type(unwrap_unionall(ty))
+function _is_immutable_type(@nospecialize ty)
+    if isa(ty, Union)
+        return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
+    end
+    return !isabstracttype(ty) && !ismutabletype(ty)
+end
+
+is_mutation_free_argtype(@nospecialize argtype) =
+    is_mutation_free_type(widenconst(ignorelimited(argtype)))
+is_mutation_free_type(@nospecialize ty) =
+    _is_mutation_free_type(unwrap_unionall(ty))
+function _is_mutation_free_type(@nospecialize ty)
+    if isa(ty, Union)
+        return _is_mutation_free_type(ty.a) && _is_mutation_free_type(ty.b)
+    end
+    if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
+        return true
+    end
+    # this is okay as access and modifcation on global state are tracked separately
+    ty === Module && return true
+    # TODO improve this analysis, e.g. allow `Some{Symbol}`
+    return isbitstype(ty)
 end

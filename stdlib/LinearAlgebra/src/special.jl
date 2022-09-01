@@ -82,7 +82,7 @@ convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
 #     f(x::S, y::T) where {S,T} = x+y
 #     f(y::T, x::S) where {S,T} = f(x, y)
 macro commutative(myexpr)
-    @assert myexpr.head===:(=) || myexpr.head===:function # Make sure it is a function definition
+    @assert Base.is_function_def(myexpr) # Make sure it is a function definition
     y = copy(myexpr.args[1].args[2:end])
     reverse!(y)
     reversed_call = Expr(:(=), Expr(:call,myexpr.args[1].args[1],y...), myexpr.args[1])
@@ -347,10 +347,10 @@ end
 *(A::Diagonal, Q::AbstractQ) = _qrmul(A, Q)
 *(A::Diagonal, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
 
-*(Q::AbstractQ, B::AbstractQ) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = _qrmul(Q, B)
-*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = _qlmul(Q, B)
-*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = _qrmul(Q, B)
+*(Q::AbstractQ, B::AbstractQ) = Q * (B * I)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = Q * (B * I)
+*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)

@@ -265,7 +265,7 @@ end
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
 
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
 
     @test_throws TypeError Atomic{Int128}()

@@ -257,14 +257,14 @@ end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     if isa(arg1, Const)
-        a1 = typeof(arg1.val)
+        arg1t = typeof(arg1.val)
     else
-        a1 = widenconst(arg1)
+        arg1t = widenconst(arg1)
     end
-    if isType(a1)
+    if isType(arg1t)
         return Bool
     end
-    a1 = unwrap_unionall(a1)
+    a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
@@ -307,8 +307,8 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             end
         end
     elseif isa(a1, Union)
-        return tmerge(isdefined_tfunc(a1.a, sym),
-                      isdefined_tfunc(a1.b, sym))
+        return tmerge(isdefined_tfunc(rewrap_unionall(a1.a, arg1t), sym),
+                      isdefined_tfunc(rewrap_unionall(a1.b, arg1t), sym))
     end
     return Bool
 end
@@ -562,6 +562,23 @@ add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_elt
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, (@nospecialize args...)->Nothing, 0)
+function compilerbarrier_tfunc(@nospecialize(setting), @nospecialize(val))
+    # strongest barrier if a precise information isn't available at compiler time
+    # XXX we may want to have "compile-time" error instead for such case
+    isa(setting, Const) || return Any
+    setting = setting.val
+    isa(setting, Symbol) || return Any
+    if setting === :const
+        return widenconst(val)
+    elseif setting === :conditional
+        return widenconditional(val)
+    elseif setting === :type
+        return Any
+    else
+        return Bottom
+    end
+end
+add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, (@nospecialize args...)->Nothing, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -738,7 +755,7 @@ end
 
 function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Type{Bool}}
     if length(argtypes) == 2
-        boundscheck = Bool
+        return true
     elseif length(argtypes) == 3
         boundscheck = argtypes[3]
         if boundscheck === Const(:not_atomic) # TODO: this is assuming not atomic
@@ -749,6 +766,7 @@ function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Ty
     else
         return nothing
     end
+    isvarargtype(boundscheck) && return nothing
     widenconst(boundscheck) !== Bool && return nothing
     boundscheck = widenconditional(boundscheck)
     if isa(boundscheck, Const)
@@ -803,7 +821,7 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     elseif isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
         if !boundscheck && s.name.n_uninitialized == 0
@@ -896,7 +914,7 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
     end
     isa(s, DataType) || return Any
     isabstracttype(s) && return Any
-    if s <: Tuple && !(Int <: widenconst(name))
+    if s <: Tuple && !hasintersect(widenconst(name), Int)
         return Bottom
     end
     if s <: Module
@@ -971,6 +989,57 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
     return rewrap_unionall(R, s00)
 end
 
+function getfield_notundefined(@nospecialize(typ0), @nospecialize(name))
+    typ = unwrap_unionall(typ0)
+    if isa(typ, Union)
+        return getfield_notundefined(rewrap_unionall(typ.a, typ0), name) &&
+               getfield_notundefined(rewrap_unionall(typ.b, typ0), name)
+    end
+    isa(typ, DataType) || return false
+    if typ.name === Tuple.name || typ.name === _NAMEDTUPLE_NAME
+        # tuples and named tuples can't be instantiated with undefined fields,
+        # so we don't need to be conservative here
+        return true
+    end
+    if !isa(name, Const)
+        isvarargtype(name) && return false
+        if !hasintersect(widenconst(name), Union{Int,Symbol})
+            return true # no undefined behavior if thrown
+        end
+        # field isn't known precisely, but let's check if all the fields can't be
+        # initialized with undefined value so to avoid being too conservative
+        fcnt = fieldcount_noerror(typ)
+        fcnt === nothing && return false
+        all(i::Int->is_undefref_fieldtype(fieldtype(typ,i)), 1:fcnt) && return true
+        return false
+    end
+    name = name.val
+    if isa(name, Symbol)
+        fidx = fieldindex(typ, name, false)
+        fidx === nothing && return true # no undefined behavior if thrown
+    elseif isa(name, Int)
+        fidx = name
+    else
+        return true # no undefined behavior if thrown
+    end
+    fcnt = fieldcount_noerror(typ)
+    fcnt === nothing && return false
+    0 < fidx ≤ fcnt || return true # no undefined behavior if thrown
+    ftyp = fieldtype(typ, fidx)
+    is_undefref_fieldtype(ftyp) && return true
+    return fidx ≤ datatype_min_ninitialized(typ)
+end
+# checks if a field of this type will not be initialized with undefined value
+# and the access to that uninitialized field will cause and `UndefRefError`, e.g.,
+# - is_undefref_fieldtype(String) === true
+# - is_undefref_fieldtype(Integer) === true
+# - is_undefref_fieldtype(Any) === true
+# - is_undefref_fieldtype(Int) === false
+# - is_undefref_fieldtype(Union{Int32,Int64}) === false
+function is_undefref_fieldtype(@nospecialize ftyp)
+    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
+end
+
 function setfield!_tfunc(o, f, v, order)
     @nospecialize
     if !isvarargtype(order)
@@ -1020,7 +1089,7 @@ function setfield!_nothrow(s00, name, v)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
         ismutabletype(s) || return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering == :not_atomic
+        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
@@ -1282,18 +1351,7 @@ end
 add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
-function valid_tparam_type(T::DataType)
-    T === Symbol && return true
-    isbitstype(T) && return true
-    if T <: Tuple
-        isconcretetype(T) || return false
-        for P in T.parameters
-            (P === Symbol || isbitstype(P)) || return false
-        end
-        return true
-    end
-    return false
-end
+valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
@@ -1514,12 +1572,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function has_struct_const_info(x)
-    isa(x, PartialTypeVar) && return true
-    isa(x, Conditional) && return true
-    return has_nontrivial_const_info(x)
-end
-
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(argtypes::Vector{Any})
@@ -1538,7 +1590,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_struct_const_info(x)
+        if has_nontrivial_const_info(x)
             anyinfo = true
         else
             if !isvarargtype(x)
@@ -1697,7 +1749,7 @@ end
 # Query whether the given builtin is guaranteed not to throw given the argtypes
 function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     if f === arrayset
-        array_builtin_common_nothrow(argtypes, 4) || return true
+        array_builtin_common_nothrow(argtypes, 4) || return false
         # Additionally check element type compatibility
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
@@ -1778,7 +1830,8 @@ const _EFFECT_FREE_BUILTINS = [
 ]
 
 const _CONSISTENT_BUILTINS = Any[
-    tuple, # tuple is immutable, thus tuples of egal arguments are egal
+    tuple, # Tuple is immutable, thus tuples of egal arguments are egal
+    svec,  # SimpleVector is immutable, thus svecs of egal arguments are egal
     ===,
     typeof,
     nfields,
@@ -1791,76 +1844,172 @@ const _CONSISTENT_BUILTINS = Any[
     Core.ifelse,
     (<:),
     typeassert,
-    throw
+    throw,
+    setfield!,
+]
+
+const _INACCESSIBLEMEM_BUILTINS = Any[
+    (<:),
+    (===),
+    apply_type,
+    arraysize,
+    Core.ifelse,
+    Core.sizeof,
+    svec,
+    fieldtype,
+    isa,
+    isdefined,
+    nfields,
+    throw,
+    tuple,
+    typeassert,
+    typeof,
+]
+
+const _ARGMEM_BUILTINS = Any[
+    arrayref,
+    arrayset,
+    modifyfield!,
+    replacefield!,
+    setfield!,
+    swapfield!,
+]
+
+const _INCONSISTENT_INTRINSICS = Any[
+    Intrinsics.pointerref,      # this one is volatile
+    Intrinsics.arraylen,        # this one is volatile
+    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
+    Intrinsics.have_fma,        # this one depends on the runtime environment
+    Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
+    # ... and list fastmath intrinsics:
+    # join(string.("Intrinsics.", sort(filter(endswith("_fast")∘string, names(Core.Intrinsics)))), ",\n")
+    Intrinsics.add_float_fast,
+    Intrinsics.div_float_fast,
+    Intrinsics.eq_float_fast,
+    Intrinsics.le_float_fast,
+    Intrinsics.lt_float_fast,
+    Intrinsics.mul_float_fast,
+    Intrinsics.ne_float_fast,
+    Intrinsics.neg_float_fast,
+    Intrinsics.rem_float_fast,
+    Intrinsics.sqrt_llvm_fast,
+    Intrinsics.sub_float_fast
+    # TODO needs to revive #31193 to mark this as inconsistent to be accurate
+    # while preserving the currently optimizations for many math operations
+    # Intrinsics.muladd_float,    # this is not interprocedurally consistent
 ]
 
 const _SPECIAL_BUILTINS = Any[
-    Core._apply_iterate
+    Core._apply_iterate,
 ]
 
-function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize rt)
+function isdefined_effects(argtypes::Vector{Any})
+    # consistent if the first arg is immutable
+    isempty(argtypes) && return EFFECTS_THROWS
+    obj = argtypes[1]
+    isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = isdefined_nothrow(argtypes)
+    return Effects(EFFECTS_TOTAL; consistent, nothrow)
+end
+
+function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
+    # consistent if the argtype is immutable
+    isempty(argtypes) && return EFFECTS_THROWS
+    obj = argtypes[1]
+    isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
+    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : CONSISTENT_IF_INACCESSIBLEMEMONLY
+    # access to `isbitstype`-field initialized with undefined value leads to undefined behavior
+    # so should taint `:consistent`-cy while access to uninitialized non-`isbitstype` field
+    # throws `UndefRefError` so doesn't need to taint it
+    # NOTE `getfield_notundefined` conservatively checks if this field is never initialized
+    # with undefined value so that we don't taint `:consistent`-cy too aggressively here
+    if !(length(argtypes) ≥ 2 && getfield_notundefined(widenconst(obj), argtypes[2]))
+        consistent = ALWAYS_FALSE
+    end
+    if getfield_boundscheck(argtypes) !== true
+        # If we cannot independently prove inboundsness, taint consistency.
+        # The inbounds-ness assertion requires dynamic reachability, while
+        # :consistent needs to be true for all input values.
+        # N.B. We do not taint for `--check-bounds=no` here -that happens in
+        # InferenceState.
+        if length(argtypes) ≥ 2 && getfield_nothrow(argtypes[1], argtypes[2], true)
+            nothrow = true
+        else
+            consistent = ALWAYS_FALSE
+            nothrow = false
+        end
+    else
+        nothrow = getfield_nothrow(argtypes)
+    end
+    if hasintersect(widenconst(obj), Module)
+        inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
+    elseif is_mutation_free_argtype(obj)
+        inaccessiblememonly = ALWAYS_TRUE
+    else
+        inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+    end
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
+end
+
+function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
+    consistent = inaccessiblememonly = ALWAYS_FALSE
+    nothrow = false
+    if getglobal_nothrow(argtypes)
+        nothrow = true
+        # typeasserts below are already checked in `getglobal_nothrow`
+        M, s = (argtypes[1]::Const).val::Module, (argtypes[2]::Const).val::Symbol
+        if isconst(M, s)
+            consistent = ALWAYS_TRUE
+            if is_mutation_free_argtype(rt)
+                inaccessiblememonly = ALWAYS_TRUE
+            end
+        end
+    end
+    return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
+end
+
+function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_effects(f, argtypes)
     end
 
     @assert !contains_is(_SPECIAL_BUILTINS, f)
 
-    argtypes′ = argtypes[2:end]
-    if (f === Core.getfield || f === Core.isdefined) && length(argtypes) >= 3
-        # consistent if the argtype is immutable
-        if isvarargtype(argtypes[2])
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
-        end
-        s = widenconst(argtypes[2])
-        if isType(s) || !isa(s, DataType) || isabstracttype(s)
-            return Effects(; effect_free=ALWAYS_TRUE, terminates=ALWAYS_TRUE, nonoverlayed=true)
-        end
-        s = s::DataType
-        consistent = !ismutabletype(s) ? ALWAYS_TRUE : ALWAYS_FALSE
-        if f === Core.getfield && !isvarargtype(argtypes[end]) && getfield_boundscheck(argtypes′) !== true
-            # If we cannot independently prove inboundsness, taint consistency.
-            # The inbounds-ness assertion requires dynamic reachability, while
-            # :consistent needs to be true for all input values.
-            # N.B. We do not taint for `--check-bounds=no` here -that happens in
-            # InferenceState.
-            if getfield_nothrow(argtypes[2], argtypes[3], true)
-                nothrow = ALWAYS_TRUE
-            else
-                consistent = nothrow = ALWAYS_FALSE
-            end
-        else
-            nothrow = (!isvarargtype(argtypes[end]) && builtin_nothrow(f, argtypes′, rt)) ?
-                ALWAYS_TRUE : ALWAYS_FALSE
-        end
-        effect_free = ALWAYS_TRUE
-    elseif f === getglobal && length(argtypes) >= 3
-        if getglobal_nothrow(argtypes′)
-            consistent = isconst( # types are already checked in `getglobal_nothrow`
-                (argtypes[2]::Const).val::Module, (argtypes[3]::Const).val::Symbol) ?
-                ALWAYS_TRUE : ALWAYS_FALSE
-            nothrow = ALWAYS_TRUE
-        else
-            consistent = nothrow = ALWAYS_FALSE
-        end
-        effect_free = ALWAYS_TRUE
+    if f === isdefined
+        return isdefined_effects(argtypes)
+    elseif f === getfield
+        return getfield_effects(argtypes, rt)
+    elseif f === getglobal
+        return getglobal_effects(argtypes, rt)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
-        effect_free = (contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)) ?
-            ALWAYS_TRUE : ALWAYS_FALSE
-        nothrow = (!isvarargtype(argtypes[end]) && builtin_nothrow(f, argtypes′, rt)) ?
-            ALWAYS_TRUE : ALWAYS_FALSE
+        if f === setfield! || f === arrayset
+            effect_free = EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+        elseif contains_is(_EFFECT_FREE_BUILTINS, f) || contains_is(_PURE_BUILTINS, f)
+            effect_free = ALWAYS_TRUE
+        else
+            effect_free = ALWAYS_FALSE
+        end
+        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
+        if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
+            inaccessiblememonly = ALWAYS_TRUE
+        elseif contains_is(_ARGMEM_BUILTINS, f)
+            inaccessiblememonly = INACCESSIBLEMEM_OR_ARGMEMONLY
+        else
+            inaccessiblememonly = ALWAYS_FALSE
+        end
+        return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
     end
-
-    return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
 
-function builtin_nothrow(@nospecialize(f), argtypes::Array{Any, 1}, @nospecialize(rt))
+function builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
     return _builtin_nothrow(f, argtypes, rt)
 end
 
-function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Array{Any,1},
+function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{InferenceState,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
@@ -2017,16 +2166,9 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
         return Effects()
     end
 
-    consistent = !(
-        f === Intrinsics.pointerref ||      # this one is volatile
-        f === Intrinsics.arraylen ||        # this one is volatile
-        f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
-        f === Intrinsics.have_fma ||        # this one depends on the runtime environment
-        f === Intrinsics.cglobal            # cglobal lookup answer changes at runtime
-        ) ? ALWAYS_TRUE : ALWAYS_FALSE
+    consistent = contains_is(_INCONSISTENT_INTRINSICS, f) ? ALWAYS_FALSE : ALWAYS_TRUE
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = (!isvarargtype(argtypes[end]) && intrinsic_nothrow(f, argtypes[2:end])) ?
-        ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && intrinsic_nothrow(f, argtypes))
 
     return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow)
 end
@@ -2175,5 +2317,89 @@ function get_binding_type_tfunc(@nospecialize(M), @nospecialize(s))
     return Type
 end
 add_tfunc(Core.get_binding_type, 2, 2, get_binding_type_tfunc, 0)
+
+# foreigncall
+# ===========
+
+# N.B. the `abstract_eval` callback below allows us to use these queries
+# both during abstract interpret and optimization
+
+const FOREIGNCALL_ARG_START = 6
+
+function foreigncall_effects(@specialize(abstract_eval), e::Expr)
+    args = e.args
+    name = args[1]
+    isa(name, QuoteNode) && (name = name.value)
+    isa(name, Symbol) || return EFFECTS_UNKNOWN
+    ndims = alloc_array_ndims(name)
+    if ndims !== nothing
+        if ndims ≠ 0
+            return alloc_array_effects(abstract_eval, args, ndims)
+        else
+            return new_array_effects(abstract_eval, args)
+        end
+    end
+    return EFFECTS_UNKNOWN
+end
+
+function alloc_array_ndims(name::Symbol)
+    if name === :jl_alloc_array_1d
+        return 1
+    elseif name === :jl_alloc_array_2d
+        return 2
+    elseif name === :jl_alloc_array_3d
+        return 3
+    elseif name === :jl_new_array
+        return 0
+    end
+    return nothing
+end
+
+function alloc_array_effects(@specialize(abstract_eval), args::Vector{Any}, ndims::Int)
+    nothrow = alloc_array_nothrow(abstract_eval, args, ndims)
+    return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+end
+
+function alloc_array_nothrow(@specialize(abstract_eval), args::Vector{Any}, ndims::Int)
+    length(args) ≥ ndims+FOREIGNCALL_ARG_START || return false
+    atype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
+    dims = Csize_t[]
+    for i in 1:ndims
+        dim = abstract_eval(args[i+FOREIGNCALL_ARG_START])
+        isa(dim, Const) || return false
+        dimval = dim.val
+        isa(dimval, Int) || return false
+        push!(dims, reinterpret(Csize_t, dimval))
+    end
+    return _new_array_nothrow(atype, ndims, dims)
+end
+
+function new_array_effects(@specialize(abstract_eval), args::Vector{Any})
+    nothrow = new_array_nothrow(abstract_eval, args)
+    return Effects(EFFECTS_TOTAL; consistent=CONSISTENT_IF_NOTRETURNED, nothrow)
+end
+
+function new_array_nothrow(@specialize(abstract_eval), args::Vector{Any})
+    length(args) ≥ FOREIGNCALL_ARG_START+1 || return false
+    atype = instanceof_tfunc(abstract_eval(args[FOREIGNCALL_ARG_START]))[1]
+    dims = abstract_eval(args[FOREIGNCALL_ARG_START+1])
+    isa(dims, Const) || return dims === Tuple{}
+    dimsval = dims.val
+    isa(dimsval, Tuple{Vararg{Int}}) || return false
+    ndims = nfields(dimsval)
+    isa(ndims, Int) || return false
+    dims = Csize_t[reinterpret(Csize_t, dimval) for dimval in dimsval]
+    return _new_array_nothrow(atype, ndims, dims)
+end
+
+function _new_array_nothrow(@nospecialize(atype), ndims::Int, dims::Vector{Csize_t})
+    isa(atype, DataType) || return false
+    eltype = atype.parameters[1]
+    iskindtype(typeof(eltype)) || return false
+    elsz = aligned_sizeof(eltype)
+    return ccall(:jl_array_validate_dims, Cint,
+        (Ptr{Csize_t}, Ptr{Csize_t}, UInt32, Ptr{Csize_t}, Csize_t),
+        #=nel=#RefValue{Csize_t}(), #=tot=#RefValue{Csize_t}(), ndims, dims, elsz) == 0
+end
 
 @specialize
