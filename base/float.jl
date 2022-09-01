@@ -135,6 +135,17 @@ i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
 """
 function exponent_raw_max end
 
+"""
+    uabs(x::Integer)
+
+Return the absolute value of `x`, possibly returning a different type should the
+operation be susceptible to overflow. This typically arises when `x` is a two's complement
+signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
+`uabs(x)` will be an unsigned integer of the same size.
+"""
+uabs(x::Integer) = abs(x)
+uabs(x::BitSigned) = unsigned(abs(x))
+
 ## conversions to floating-point ##
 
 # TODO: deprecate in 2.0
@@ -657,17 +668,6 @@ function _precision(x, base::Integer=2)
 end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
-
-"""
-    uabs(x::Integer)
-
-Return the absolute value of `x`, possibly returning a different type should the
-operation be susceptible to overflow. This typically arises when `x` is a two's complement
-signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
-`uabs(x)` will be an unsigned integer of the same size.
-"""
-uabs(x::Integer) = abs(x)
-uabs(x::BitSigned) = unsigned(abs(x))
 
 
 """
