@@ -273,19 +273,19 @@ needs to make sure that we always visit `B` before `A`.
          DOI: <https://doi.org/10.1145/199448.199464>.
 """
 function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
-    # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
-    pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
-    sort!(pq, by=x->x[2])
+    heap = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
+    heap_order = By(x -> -x[2])
+    heapify!(heap, heap_order)
     phiblocks = Int[]
     # This bitset makes sure we only add a phi node to a given block once.
     processed = BitSet()
     # This bitset implements the `key insight` mentioned above. In particular, it prevents
     # us from visiting a subtree that we have already visited before.
     visited = BitSet()
-    while !isempty(pq)
+    while !isempty(heap)
         # We pop from the end of the array - i.e. the element with the highest level.
-        node, level = pop!(pq)
+        node, level = heappop!(heap, heap_order)
         worklist = Int[]
         push!(worklist, node)
         while !isempty(worklist)
@@ -315,8 +315,7 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
                 # because succ_level <= level, which is the greatest level we have currently
                 # processed. Thus, we have not yet processed any subtrees of level < succ_level.
                 if !(succ in defs)
-                    push!(pq, (succ, succ_level))
-                    sort!(pq, by=x->x[2])
+                    heappush!(heap, (succ, succ_level), heap_order)
                 end
             end
             # Recurse down the current subtree

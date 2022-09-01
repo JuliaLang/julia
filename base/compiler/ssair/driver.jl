@@ -14,6 +14,7 @@ else
     end
 end
 
+include("compiler/ssair/heap.jl")
 include("compiler/ssair/slot2ssa.jl")
 include("compiler/ssair/inlining.jl")
 include("compiler/ssair/verify.jl")
