@@ -816,11 +816,12 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
 end
 
 first(r::OrdinalRange{T}) where {T} = convert(T, r.start)
-first(r::OneTo{T}) where {T} = oneunit(T)
+first(r::OneTo{T}) where {T} = oneunit(T) :: Integer
 first(r::StepRangeLen) = unsafe_getindex(r, 1)
 first(r::LinRange) = r.start
 
 last(r::OrdinalRange{T}) where {T} = convert(T, r.stop) # via steprange_last
+last(r::OneTo{T}) where {T} = r.stop :: Integer
 last(r::StepRangeLen) = unsafe_getindex(r, length(r))
 last(r::LinRange) = r.stop
 
