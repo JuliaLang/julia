@@ -2368,7 +2368,7 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                                     }
                                 }
                             }
-                            invalidate_backedges(&remove_code_instance_from_validation, caller, world, "jl_insert_method_instance");
+                            invalidate_backedges(&remove_code_instance_from_validation, caller, world, "jl_insert_method_instance caller");
                             // The codeinst of this mi haven't yet been removed
                             jl_code_instance_t *codeinst = caller->cache;
                             while (codeinst) {
