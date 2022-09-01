@@ -549,6 +549,25 @@ name of compatibility, perhaps with a warning.)
   arises from `(set! pred char-hex?)` in `parse-number` accepting hex exponent
   digits, all of which are detected as invalid except for a trailing `f` when
   processed by `isnumtok_base`.
+* `begin` and `end` are not parsed as keywords when indexing. Typed comprehensions
+  initially look the same, but can be distinguished from indexing once we handle
+  a `for` token; it is safe to treat `begin` and `end` as keywords afterwards. The
+  reference parser *only* handles this well when there's a newline before `for`:
+  ```julia
+  Any[foo(i)
+      for i in x if begin
+          true
+      end
+  ]
+  ```
+  works, while
+  ```julia
+  Any[foo(i) for i in x if begin
+          true
+      end
+  ]
+  ```
+  does not. JuliaSyntax handles both cases.
 
 ## Parsing / AST oddities and warts
 
