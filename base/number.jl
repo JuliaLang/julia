@@ -4,7 +4,7 @@
 
 # Numbers are convertible
 convert(::Type{T}, x::T)      where {T<:Number} = x
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
     isinteger(x) -> Bool
