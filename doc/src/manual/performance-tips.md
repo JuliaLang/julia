@@ -92,7 +92,11 @@ of this run seriously. For the second run, note that in addition to reporting th
 indicated that a significant amount of memory was allocated. We are here just computing a sum over all elements in
 a vector of 64-bit floats so there should be no need to allocate (heap) memory.
 
-We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or “type-unstable” objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory requires an expensive system call (like `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register memory, with no system call, so one doesn’t typically worry about the performance cost of “allocating” them.
+We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either mutable objects or for creating/growing
+variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable" objects whose type is only known at runtime).  Allocating (or deallocating) such
+blocks of memory may require an expensive system call (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register memory, so one doesn’t typically worry about
+the performance cost of "allocating" them.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability or creating many small temporary arrays.
