@@ -412,8 +412,8 @@ LinearAlgebra.logabsdet
 Base.inv(::AbstractMatrix)
 LinearAlgebra.pinv
 LinearAlgebra.nullspace
-Base.kron(::AbstractVecOrMat,::AbstractVecOrMat)
-Base.kron!(::AbstractVecOrMat, ::AbstractVecOrMat, ::AbstractVecOrMat)
+Base.kron
+Base.kron!
 LinearAlgebra.exp(::StridedMatrix{<:LinearAlgebra.BlasFloat})
 Base.cis(::AbstractMatrix)
 Base.:^(::AbstractMatrix, ::Number)
