@@ -38,7 +38,7 @@ sequence of steps:
 
 - Object graph is traversed and mark bits are set.
 
-- Object pools, malloc'd arrays and big objects are sweeped. On a full sweep, the mark bits of all objects are reset. On a generational sweep,
+- Object pools, malloc'd arrays and big objects are sweeped. On a full sweep, the mark bits of all marked objects are reset. On a generational sweep,
 only the mark bits of marked young objects are reset.
 
 - Mark bits of objects in the remembered set are set, so we don't trigger the write barrier on them again.
