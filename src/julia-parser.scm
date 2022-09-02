@@ -831,12 +831,12 @@
              (body (unpack-block (caddr ex))))
             (deep-map (lambda (s) (if (is-args? s) '_ s)) body))
       ex))
+(define is-lvalue-keyword?
+  (Set '(tuple call parameters macrocall where ::)))
 (define (revert-underscore ex)
   (if (pair? ex)
       (cond ((is-underscore-block? ex) (revert-underscore-block ex))
-            ((eqv? (car ex) 'tuple) (map revert-underscore ex))
-            ((eqv? (car ex) 'call) (map revert-underscore ex))
-            ((eqv? (car ex) 'parameters) (map revert-underscore ex))
+            ((is-lvalue-keyword? (car ex)) (map revert-underscore ex))
             ((eqv? (car ex) 'kw) `(kw ,(revert-underscore (cadr ex)) ,@(cddr ex)))
             (else ex)) ; TODO: map check
       ex))
@@ -1224,7 +1224,7 @@
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
          (let ((lno (line-number-node s)))
-           `(-> ,ex ,(add-line-number (parse-eq* s) lno))))
+           `(-> ,(revert-underscore ex) ,(add-line-number (parse-eq* s) lno))))
         (else
          ex)))))
 
@@ -1573,7 +1573,7 @@
        ((function macro)
         (let* ((loc   (line-number-node s))
                (paren (eqv? (require-token s) #\())
-               (sig   (parse-def s (eq? word 'function) paren)))
+               (sig   (revert-underscore (parse-def s (eq? word 'function) paren))))
           (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of " word " \"" sig "\"")))

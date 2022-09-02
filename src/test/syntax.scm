@@ -221,4 +221,16 @@
   (parse-expect-underscroe "_ = a, (_, b) = t" parse-stmts
     '(= _ (= (tuple a (tuple _ b)) t))
     '(tuple (= _ a) (= (tuple _ b) t)))
+  (parse-expect-underscroe "(_, a) -> 1" parse-stmts
+    '(-> (tuple _ a) (block (line 1 none) 1)))
+  ; array.jl:213
+  (parse-expect-underscroe "elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)" parse-stmts
+    '(= (where (call elsize (macrocall @nospecialize (line 1 none) (:: _ (curly Type A)))) T (<: A (curly Array T))) (block (line 1 none) (call aligned_sizeof T))))
+  ; multidimensional.jl:643
+  (parse-expect-underscroe "@inline simd_inner_length(iter::CartesianPartition, (_, len, _)::Tuple{Int,Int,CartesianIndex}) = len" parse-stmts
+    '(macrocall @inline (line 1 none) (= (call simd_inner_length (:: iter CartesianPartition) (:: (tuple _ len _) (curly Tuple Int Int CartesianIndex))) (block (line 1 none) len))))
+  ; compiler/abstractinterpretation.jl:970
+  (parse-expect-underscroe "function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState) end" parse-stmts
+    '(function (call const_prop_argument_heuristic (:: _ AbstractInterpreter) (:: (tuple (parameters fargs argtypes)) ArgInfo) (:: sv InferenceState)) (block (line 1 none) (line 1 none))))
+  ; compiler/typeinfer.jl:254
   #t)
