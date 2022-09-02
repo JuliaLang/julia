@@ -804,7 +804,45 @@
       `(= ,(cadr ex) ,(add-line-number (caddr ex) `(line ,lno ,current-filename)))
       ex))
 
+(define (is-underscore-block? ex)
+  (define (is-underscore-symbol? s)
+    (and (symbol? s)
+          (= (string.char (string s) 0) #\#)
+          (= (string-lastchar (string s)) #\_)))
+  (if (and (pair? ex) (eq? (car ex) '->) (pair? (cdr ex)))
+      (let* ((arg (cadr ex))
+             (body (cddr ex)))
+          (or (is-underscore-symbol? arg)
+              (and (pair? arg) (is-underscore-symbol? (cadr arg))))) ; first arg means all
+      #f))
+(define (deep-map f t)
+  (if (pair? t)
+      (map (lambda (t) (deep-map f t)) t)
+      (f t)))
+(define (revert-underscore-block ex)
+  (define (unpack-block ex)
+    (if (and (pair? ex) (eqv? (car ex) 'block))
+        (caddr ex)
+        ex))
+  (if (and (pair? ex) (eq? (car ex) '->) (pair? (cdr ex)))
+      (let* ((arg (cadr ex))
+             (args (if (symbol? arg) (list arg) (cdr arg)))
+             (is-args? (Set args))
+             (body (unpack-block (caddr ex))))
+            (deep-map (lambda (s) (if (is-args? s) '_ s)) body))
+      ex))
+(define (revert-underscore ex)
+  (if (pair? ex)
+      (cond ((is-underscore-block? ex) (revert-underscore-block ex))
+            ((eqv? (car ex) 'tuple) (map revert-underscore ex))
+            ((eqv? (car ex) 'call) (map revert-underscore ex))
+            ((eqv? (car ex) 'parameters) (map revert-underscore ex))
+            ((eqv? (car ex) 'kw) `(kw ,(revert-underscore (cadr ex)) ,@(cddr ex)))
+            (else ex)) ; TODO: map check
+      ex))
+
 (define (parse-assignment s down)
+(with-underscore-context #f
   (let* ((ex (down s))
          (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
@@ -818,12 +856,14 @@
                             ex)
                      (list 'call t ex (parse-assignment s down))))
                 ((eq? t '=)
+                 ;; hack _ in existing ex force to '_
                  ;; insert line/file for short-form function defs, otherwise leave alone
-                 (let ((lno (input-port-line (ts:port s))))
+                 (let* ((ex (revert-underscore ex))
+                        (lno (input-port-line (ts:port s))))
                    (short-form-function-loc
                     (list t ex (parse-assignment s down)) lno)))
                 (else
-                 (list t ex (parse-assignment s down))))))))
+                 (list t ex (parse-assignment s down)))))))))
 
 (define (underscore-block args line-node ex)
   (let ((body (if underscore-gen-block `(block ,line-node ,ex) ex)))
