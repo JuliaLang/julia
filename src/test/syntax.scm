@@ -23,7 +23,7 @@
 
 (for-each (lambda (name)
                   (eval `(define ,(symbol (string "-" name "-old")) ,name))
-                  (eval `(parse-define (,name s . args)
+                  (eval `(define (,name s . args)
                                  (apply ,(symbol (string "-" name "-old")) (cons s args)))))
           parse-names)
 
@@ -53,7 +53,6 @@
                (newsy (named-gensy '_))
                (comma-expected-f (comma-expected expected2 newsy #f))
                (comma-expected-t (comma-expected expected2 newsy #t)))
-          (info expected2 comma-expected-f)
           (and result2
                (parse-expect ,(string "(" s "),_") ,production comma-expected-f)
                (parse-expect ,(string "((" s "),_)") ,production comma-expected-t)

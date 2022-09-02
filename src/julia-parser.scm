@@ -244,21 +244,18 @@
 
 (define-macro (with-underscore-context ops . body)
   `(with-bindings ((underscore-context (make-ctx_ ,ops underscore-context)))
-                  (info 'underscore-context-make underscore-context)
                   (let* ((line-node (line-number-node s))
                          (ex ,@body)
                          (args (ctx_:get underscore-context)))
                         (cond
-                          ((not (pair? args))
-                           (info "  " 'underscore ,ops ex))
+                          ((not (pair? args)) ex)
                           ((or (pair? (cdr args))
                                (not (equal? ex (car args))) ; the body is the same as args
                                (not (ctx_:parent underscore-context)))
-                           (info "  " 'underscore-new underscore-context (underscore-block args line-node ex))) ; TODO check or move to parent
+                           (underscore-block args line-node ex))
                           (else
-                           (info "  " 'underscore-unwind underscore-context)
                            (ctx_:unwind! underscore-context)
-                           (info "  " underscore-context ex))))))
+                           ex)))))
 
 ;; --- lexer ---
 
