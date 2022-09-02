@@ -32,7 +32,7 @@ end
 ambig_effects_test(a::Int, b) = 1
 ambig_effects_test(a, b::Int) = 1
 ambig_effects_test(a, b) = 1
-@test_broken !Core.Compiler.is_nothrow(Base.infer_effects(ambig_effects_test, (Int, Any)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(ambig_effects_test, (Int, Any)))
 global ambig_unknown_type_global::Any = 1
 @noinline function conditionally_call_ambig(b::Bool, a)
     if b
