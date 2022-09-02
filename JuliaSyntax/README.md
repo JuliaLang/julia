@@ -435,6 +435,22 @@ julia> text = "x = \"\"\"\n    \$a\n    b\"\"\""
     21:23     │    """                      "\"\"\""
 ```
 
+### Less redundant `block`s
+
+Sometimes `Expr` needs to contain redundant block constructs in order to have a
+place to store `LineNumberNode`s, but we don't need these and avoid adding them
+in several cases:
+* The right hand side of short form function syntax
+* The conditional in `elseif`
+* The body of anonymous functions after the `->`
+
+### Distinct conditional ternary expression
+
+The syntax `a ? b : c` is the same as `if a b else c` in `Expr` so macros can't
+distinguish these cases. Instead, we use a distinct expression head `K"?"` and
+lower to `Expr(:if)` during `Expr` conversion.
+
+
 ## More about syntax kinds
 
 We generally track the type of syntax nodes with a syntax "kind", stored

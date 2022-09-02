@@ -568,10 +568,12 @@ tests = [
     ],
     JuliaSyntax.parse_atom => [
         ":foo"   => "(quote foo)"
-        ": foo"  => "(quote (error-t) foo)"
         # Literal colons
         ":)"     => ":"
         ": end"  => ":"
+        # Whitespace after quoting colon
+        ": foo"  => "(quote (error-t) foo)"
+        ":\nfoo" => "(quote (error-t) foo)"
         # plain equals
         "="      => "(error =)"
         # Identifiers
