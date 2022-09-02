@@ -1013,9 +1013,9 @@ end
 @testset "can_setindex" begin
     @test !can_setindex(1:2)
     @test can_setindex(Vector{Int})
-    @test !ArrayInterfaceCore.can_setindex(UnitRange{Int})
-    @test !ArrayInterfaceCore.can_setindex(Base.ImmutableDict{Int,Int})
-    @test !ArrayInterfaceCore.can_setindex(Tuple{})
-    @test !ArrayInterfaceCore.can_setindex(NamedTuple{(),Tuple{}})
-    @test ArrayInterfaceCore.can_setindex(Dict{Int,Int})
+    @test !can_setindex(UnitRange{Int})
+    @test !can_setindex(Base.ImmutableDict{Int,Int})
+    @test !can_setindex(Tuple{})
+    @test !can_setindex(NamedTuple{(),Tuple{}})
+    @test can_setindex(Dict{Int,Int})
 end
