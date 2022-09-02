@@ -471,6 +471,13 @@ JL_DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a)
          ((a->maxsize + sizeof(void*) + 1 <= GC_MAX_SZCLASS) == (len + sizeof(void*) + 1 <= GC_MAX_SZCLASS)))) {
         jl_value_t *o = jl_array_data_owner(a);
         if (jl_is_string(o)) {
+#ifdef MMTKHEAP
+            // since we need the size of the string to be accurate according to its allocation size, we simply allocate a new string here
+            // instead of changing its size to len as in `*(size_t*)o = len`
+            o = jl_gc_realloc_string(o, len);
+            jl_value_t** owner_addr = (a + jl_array_data_owner_offset(jl_array_ndims(a)));
+            owner_addr = o;
+#endif
             a->flags.isshared = 1;
             *(size_t*)o = len;
             a->nrows = 0;
@@ -497,15 +504,17 @@ JL_DLLEXPORT jl_value_t *jl_alloc_string(size_t len)
     jl_ptls_t ptls = ct->ptls;
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
     if (sz <= GC_MAX_SZCLASS) {
+#ifndef MMTKHEAP
         int pool_id = jl_gc_szclass_align8(allocsz);
         jl_gc_pool_t *p = &ptls->heap.norm_pools[pool_id];
         int osize = jl_gc_sizeclasses[pool_id];
-#ifndef MMTKHEAP
         // We call `jl_gc_pool_alloc_noinline` instead of `jl_gc_pool_alloc` to avoid double-counting in
         // the Allocations Profiler. (See https://github.com/JuliaLang/julia/pull/43868 for more details.)
         s = jl_gc_pool_alloc_noinline(ptls, (char*)p - (char*)ptls, osize);
 #else
-        s = jl_mmtk_gc_alloc_default(ptls, pool_id, osize);
+        int pool_id = jl_gc_szclass_align8(allocsz);
+        int osize = jl_gc_sizeclasses[pool_id];
+        s = jl_mmtk_gc_alloc_default(ptls, pool_id, osize, jl_string_type);
 #endif
     }
     else {

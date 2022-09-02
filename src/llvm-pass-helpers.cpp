@@ -247,7 +247,7 @@ namespace jl_well_known {
 #ifndef MMTKHEAP
                     { Type::getInt8PtrTy(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
 #else
-                    { Type::getInt32Ty(context.getLLVMContext()), Type::getInt32Ty(context.getLLVMContext()) },
+                    { Type::getInt32Ty(context.getLLVMContext()), Type::getInt64Ty(context.getLLVMContext()) },
 #endif
                     false),
                 Function::ExternalLinkage,

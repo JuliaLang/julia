@@ -234,6 +234,9 @@ STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 #else
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
+#ifdef MMTKHEAP
+    return mmtk_malloc_aligned(sz, align);
+#endif
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
         return malloc(sz);
@@ -246,6 +249,14 @@ STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
                                        size_t align)
 {
+#ifdef MMTKHEAP
+    void *res = jl_malloc_aligned(sz, align);
+    if (res != NULL) {
+        memcpy(res, d, oldsz > sz ? sz : oldsz);
+        mmtk_free_aligned(d);
+    }
+    return res;
+#endif
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
         return realloc(d, sz);
@@ -259,7 +270,11 @@ STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
 }
 STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 {
+#ifdef MMTKHEAP
+    mmtk_free_aligned(p);
+#else
     free(p);
+#endif
 }
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
@@ -933,6 +948,8 @@ static inline void maybe_collect(jl_ptls_t ptls)
     else {
         jl_gc_safepoint_(ptls);
     }
+#else
+    mmtk_gc_poll(ptls);
 #endif
 }
 
@@ -1184,10 +1201,18 @@ void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
 {
     if (a->flags.how == 2) {
         char *d = (char*)a->data - a->offset*a->elsize;
+#ifndef MMTKHEAP
         if (a->flags.isaligned)
             jl_free_aligned(d);
         else
             free(d);
+#else
+        if (a->flags.isaligned)
+            mmtk_free_aligned(d);
+        else {
+            mmtk_free(d);
+        }
+#endif
         gc_num.freed += jl_array_nbytes(a);
         gc_num.freecall++;
     }
@@ -3623,7 +3648,6 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
 #ifdef MMTKHEAP
-        mmtk_gc_poll(ptls);
         return mmtk_counted_malloc(sz);
 #endif
     }
@@ -3642,7 +3666,6 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
 #ifdef MMTKHEAP
-        mmtk_gc_poll(ptls);
         return mmtk_counted_calloc(nm, sz);
 #endif
     }
@@ -3683,7 +3706,6 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
             jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
 #ifdef MMTKHEAP
-        mmtk_gc_poll(ptls);
         return mmtk_realloc_with_old_size(p, sz, old);
 #endif
     }
@@ -3863,12 +3885,8 @@ jl_value_t *jl_gc_realloc_string(jl_value_t *s, size_t sz)
     return snew;
 #else
     size_t len = jl_string_len(s);
-    if (sz <= len) return s;
-    jl_taggedvalue_t *v = jl_astaggedvalue(s);
-    size_t strsz = len + sizeof(size_t) + 1;
-
     jl_value_t *snew = jl_alloc_string(sz);
-    memcpy(jl_string_data(snew), jl_string_data(s), len);
+    memcpy(jl_string_data(snew), jl_string_data(s), sz <= len ? sz : len);
     return snew;
 #endif
 }
