@@ -126,7 +126,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             for sig_n in splitsigs
                 result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
                 (; rt, edge, effects) = result
-                edge !== nothing && push!(edges, edge)
+                edge === nothing || push!(edges, edge)
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp, result,
@@ -149,25 +149,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             this_conditional = ignorelimited(this_rt)
             this_rt = widenwrappedconditional(this_rt)
         else
-            if infer_compilation_signature(interp)
-                # Also infer the compilation signature for this method, so it's available
-                # to the compiler in case it ends up needing it (which is likely).
-                csig = get_compileable_sig(method, sig, match.sparams)
-                if csig !== nothing && csig !== sig
-                    # The result of this inference is not directly used, so temporarily empty
-                    # the use set for the current SSA value.
-                    saved_uses = sv.ssavalue_uses[sv.currpc]
-                    sv.ssavalue_uses[sv.currpc] = empty_bitset
-                    abstract_call_method(interp, method, csig, match.sparams, multiple_matches, sv)
-                    sv.ssavalue_uses[sv.currpc] = saved_uses
-                end
-            end
-
             result = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, sv)
             (; rt, edge, effects) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
-            edge !== nothing && push!(edges, edge)
+            edge === nothing || push!(edges, edge)
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
@@ -225,6 +211,26 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     end
 
     rettype = from_interprocedural!(ipo_lattice(interp), rettype, sv, arginfo, conditionals)
+
+    # Also considering inferring the compilation signature for this method, so
+    # it is available to the compiler in case it ends up needing it.
+    if infer_compilation_signature(interp) && 1 == seen == napplicable && rettype !== Any && rettype !== Union{} && !is_removable_if_unused(all_effects)
+        match = applicable[1]::MethodMatch
+        method = match.method
+        sig = match.spec_types
+        mi = specialize_method(match; preexisting=true)
+        if mi !== nothing && !const_prop_methodinstance_heuristic(interp, match, mi::MethodInstance, arginfo, sv)
+            csig = get_compileable_sig(method, sig, match.sparams)
+            if csig !== nothing && csig !== sig
+                # The result of this inference is not directly used, so temporarily empty
+                # the use set for the current SSA value.
+                saved_uses = sv.ssavalue_uses[sv.currpc]
+                sv.ssavalue_uses[sv.currpc] = empty_bitset
+                abstract_call_method(interp, method, csig, match.sparams, multiple_matches, sv)
+                sv.ssavalue_uses[sv.currpc] = saved_uses
+            end
+        end
+    end
 
     if call_result_unused(sv) && !(rettype === Bottom)
         add_remark!(interp, sv, "Call result type was widened because the return value is unused")
