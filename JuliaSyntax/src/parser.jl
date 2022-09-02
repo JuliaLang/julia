@@ -3244,7 +3244,6 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     if leading_kind == K":"
         # symbol/expression quote
         # :foo  ==>  (quote foo)
-        # : foo  ==>  (quote (error-t) foo)
         t = peek_token(ps, 2)
         k = kind(t)
         if is_closing_token(ps, k) && (!is_keyword(k) || preceding_whitespace(t))
@@ -3256,19 +3255,12 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         end
         bump(ps, TRIVIA_FLAG) # K":"
         if preceding_whitespace(t)
-            # : a  ==> (quote (error-t) a))
-            # ===
-            # :
-            # a
-            # ==> (quote (error))
-            bump_trivia(ps, TRIVIA_FLAG,
+            # : foo   ==>  (quote (error-t) foo)
+            # :\nfoo  ==>  (quote (error-t) foo)
+            bump_trivia(ps, TRIVIA_FLAG, skip_newlines=true,
                         error="whitespace not allowed after `:` used for quoting")
             # Heuristic recovery
-            if kind(t) == K"NewlineWs"
-                bump_invisible(ps, K"error")
-            else
-                bump(ps)
-            end
+            bump(ps)
         else
             # Being inside quote makes keywords into identifiers at at the
             # first level of nesting
