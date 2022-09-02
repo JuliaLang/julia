@@ -2134,3 +2134,13 @@ end
 
 # Example from pr#39098
 @testintersect(NTuple, Tuple{Any,Vararg}, Tuple{T, Vararg{T}} where {T})
+
+let A = Pair{NTuple{N, Int}, Val{N}} where N,
+    Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
+          Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2})
+    Cerr = Pair{Tuple{Int, Vararg{Int,N}}, Val{N}} where N
+    for B in Bs
+        @testintersect(A, B, !Cerr)
+        @testintersect(A, B, !Union{})
+    end
+end
