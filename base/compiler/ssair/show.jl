@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file is not loaded into `Core.Compiler` but rather loaded into the context of 
+# `Base.IRShow` and thus does not participate in bootstrapping.
+
 @nospecialize
 
 if Pair != Base.Pair

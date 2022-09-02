@@ -163,7 +163,7 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
-@test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+@test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 
 struct SomethingBits
     x::Base.BitIntegerType

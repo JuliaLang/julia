@@ -273,3 +273,7 @@ to the call site signature.
 """
 infer_compilation_signature(::AbstractInterpreter) = false
 infer_compilation_signature(::NativeInterpreter) = true
+
+typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()

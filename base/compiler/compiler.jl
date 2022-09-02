@@ -121,10 +121,8 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort end
 function sort! end
 function issorted end
-function sortperm end
 include("ordering.jl")
 using .Order
 include("sort.jl")
@@ -152,6 +150,8 @@ function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
+
+include("compiler/abstractlattice.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")

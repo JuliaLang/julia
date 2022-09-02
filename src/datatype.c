@@ -1790,6 +1790,17 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
     return fval != NULL ? 1 : 0;
 }
 
+JL_DLLEXPORT int jl_field_isdefined_checked(jl_value_t *v, size_t i)
+{
+    if (jl_is_module(v)) {
+        jl_type_error("isdefined", (jl_value_t*)jl_symbol_type, jl_box_long(i + 1));
+    }
+    if (i >= jl_nfields(v))
+        return 0;
+    return !!jl_field_isdefined(v, i);
+}
+
+
 JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {
     if (!jl_struct_try_layout(ty) || field > jl_datatype_nfields(ty) || field < 1)

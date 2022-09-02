@@ -1,10 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function is_argtype_match(@nospecialize(given_argtype),
+function is_argtype_match(lattice::AbstractLattice,
+                          @nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
     if is_forwardable_argtype(given_argtype)
-        return is_lattice_equal(given_argtype, cache_argtype)
+        return is_lattice_equal(lattice, given_argtype, cache_argtype)
     end
     return !overridden_by_const
 end
@@ -91,7 +92,7 @@ function matching_cache_argtypes(
     for i in 1:nargs
         given_argtype = given_argtypes[i]
         cache_argtype = cache_argtypes[i]
-        if !is_argtype_match(given_argtype, cache_argtype, false)
+        if !is_argtype_match(fallback_lattice, given_argtype, cache_argtype, false)
             # prefer the argtype we were given over the one computed from `linfo`
             cache_argtypes[i] = given_argtype
             overridden_by_const[i] = true
@@ -207,7 +208,7 @@ function matching_cache_argtypes(linfo::MethodInstance, ::Nothing)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
+function cache_lookup(lattice::AbstractLattice, linfo::MethodInstance, given_argtypes::Vector{Any}, cache::Vector{InferenceResult})
     method = linfo.def::Method
     nargs::Int = method.nargs
     method.isva && (nargs -= 1)
@@ -218,7 +219,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
         cache_argtypes = cached_result.argtypes
         cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargs
-            if !is_argtype_match(given_argtypes[i],
+            if !is_argtype_match(lattice, given_argtypes[i],
                                  cache_argtypes[i],
                                  cache_overridden_by_const[i])
                 cache_match = false
@@ -226,7 +227,7 @@ function cache_lookup(linfo::MethodInstance, given_argtypes::Vector{Any}, cache:
             end
         end
         if method.isva && cache_match
-            cache_match = is_argtype_match(tuple_tfunc(given_argtypes[(nargs + 1):end]),
+            cache_match = is_argtype_match(lattice, tuple_tfunc(lattice, given_argtypes[(nargs + 1):end]),
                                            cache_argtypes[end],
                                            cache_overridden_by_const[end])
         end
