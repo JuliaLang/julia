@@ -20,7 +20,6 @@ use std::collections::HashMap;
 use crate::reference_glue::JuliaFinalizableObject;
 use crate::{ARE_MUTATORS_BLOCKED, BUILDER, UC_COND, STFF_COND, DISABLED_GC, FINALIZERS_RUNNING, USER_TRIGGERED_GC, MUTATORS, MUTATOR_TLS, get_mutator_ref, set_julia_obj_header_size};
 use log::info;
-use crate::util::store_obj_size;
 
 #[no_mangle]
 pub extern "C" fn gc_init(heap_size: usize, calls: *const Julia_Upcalls, header_size: usize) {
@@ -124,7 +123,6 @@ pub extern "C" fn post_alloc(mutator: *mut Mutator<JuliaVM>, refer: ObjectRefere
             memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
         },
         _ => {
-            store_obj_size(refer, bytes);
             memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
         }
     }
@@ -312,6 +310,27 @@ pub extern "C" fn mmtk_malloc(size: usize) -> Address {
 
 #[no_mangle]
 #[cfg(feature = "malloc_counted_size")]
+pub extern "C" fn mmtk_malloc_aligned(size: usize, align: usize) -> Address {
+    // allocate extra bytes to account for original memory that needs to be allocated and its size
+    let ptr_size = std::mem::size_of::<Address>();
+    let size_size = std::mem::size_of::<usize>();
+    assert!(align % ptr_size == 0 && align != 0 && (align / ptr_size).is_power_of_two());
+
+    let extra = (align - 1) + ptr_size + size_size;
+    let mem = memory_manager::counted_malloc(&SINGLETON, size+extra);
+    let result = (mem + extra) & !(align-1);
+    let result = unsafe { Address::from_usize(result) };
+
+    unsafe {
+        (result - ptr_size).store::<Address>(mem);
+        (result - ptr_size - size_size).store::<usize>(size+extra);
+    }
+
+    return result;
+}
+
+#[no_mangle]
+#[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_counted_calloc(num: usize, size: usize) -> Address {
     memory_manager::counted_calloc::<JuliaVM>(&SINGLETON, num, size)
 }
@@ -342,6 +361,20 @@ pub extern "C" fn mmtk_free_with_size(addr: Address, old_size: usize) {
 pub extern "C" fn mmtk_free(addr: Address) {
     memory_manager::free(addr)
 }
+
+#[no_mangle]
+#[cfg(feature = "malloc_counted_size")]
+pub extern "C" fn mmtk_free_aligned(addr: Address) {
+    let ptr_size = std::mem::size_of::<Address>();
+    let size_size = std::mem::size_of::<usize>();
+
+    let (addr, old_size) = unsafe {
+        ((addr - ptr_size).load::<Address>(), (addr - ptr_size - size_size).load::<usize>())
+    };
+
+    memory_manager::free_with_size::<JuliaVM>(&SINGLETON, addr, old_size);
+}
+
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {

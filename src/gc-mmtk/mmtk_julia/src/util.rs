@@ -3,11 +3,10 @@ use crate::api::{start_control_collector, start_worker};
 use mmtk::util::opaque_pointer::*;
 use crate::JuliaVM;
 use mmtk::scheduler::{GCWorker, GCController};
-use crate::{ROOTS, GLOBAL_ROOTS};
+use crate::{ROOTS, JULIA_HEADER_SIZE};
 use mmtk::util::ObjectReference;
 use mmtk::util::Address;
 use enum_map::Enum;
-use crate::scanning::object_is_managed_by_mmtk;
 
 
 #[repr(i32)]
@@ -60,33 +59,8 @@ pub extern "C" fn start_spawned_controller_thread(tls: VMWorkerThread, ctx: *mut
 
 #[no_mangle]
 pub extern "C" fn add_object_to_mmtk_roots(addr: Address) {
-    // let object: ObjectReference = unsafe { addr.load() };
-
-    // let object_addr = object.to_address();
-
-    // println!("Adding root object: address is {:?}", addr );
-
     // if object is not managed by mmtk it needs to be processed to look for pointers to managed objects (i.e. roots)
     ROOTS.lock().unwrap().insert(addr);
-}
-
-#[no_mangle]
-pub extern "C" fn add_object_to_mmtk_global_roots(addr_usize: usize) {    
-    let addr = unsafe { 
-        Address::from_usize(addr_usize)
-    };
-
-    // let object: ObjectReference = unsafe { addr.load() };
-    // let object_addr = object.to_address();
-
-    // if (!GLOBAL_ROOTS.lock().unwrap().contains(&object_addr)) {
-    //     println!("Adding root: address is {:?}, Object is {:?}", addr, object );
-    // }
-
-    // if object is not managed by mmtk it needs to be processed to look for pointers to managed objects (i.e. roots)
-    assert!(!object_is_managed_by_mmtk(addr_usize));
-
-    GLOBAL_ROOTS.lock().unwrap().insert(addr);
 }
 
 #[inline(always)]
@@ -97,5 +71,18 @@ pub fn store_obj_size(obj: ObjectReference, size : usize) {
     }
 }
 
+#[no_mangle]
+pub extern "C" fn store_obj_size_c(obj: ObjectReference, size : usize) {
+    let addr_size = obj.to_address() - 16;
+    unsafe {
+        addr_size.store::<u64>(size as u64);
+    }
+}
 
-
+#[no_mangle]
+pub extern "C" fn get_obj_size(obj: ObjectReference) -> usize {
+    unsafe {
+        let addr_size = obj.to_address() - 2*JULIA_HEADER_SIZE;
+        addr_size.load::<u64>() as usize
+    }
+}

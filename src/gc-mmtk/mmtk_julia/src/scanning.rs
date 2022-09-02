@@ -6,7 +6,7 @@ use mmtk::vm::RootsWorkFactory;
 use mmtk::util::ObjectReference;
 use mmtk::util::opaque_pointer::*;
 use mmtk::scheduler::*;
-use crate::{SINGLETON, ROOTS, GLOBAL_ROOTS, UPCALLS};
+use crate::{SINGLETON, ROOTS, UPCALLS};
 use crate::object_model::BI_MARKING_METADATA_SPEC;
 use mmtk::util::Address;
 use mmtk::MMTK;
@@ -37,8 +37,7 @@ impl Scanning<JuliaVM> for VMScanning {
     }
     fn scan_vm_specific_roots(_tls: VMWorkerThread, mut factory: impl RootsWorkFactory<JuliaVMEdge>) {
         let mut roots: MutexGuard<HashSet<Address>> = ROOTS.lock().unwrap();
-        let global_roots: MutexGuard<HashSet<Address>> = GLOBAL_ROOTS.lock().unwrap();
-        info!("{} thread roots, {} global roots.", roots.len(), global_roots.len());
+        info!("{} thread roots", roots.len());
 
         let mut roots_to_scan = vec![];
 
