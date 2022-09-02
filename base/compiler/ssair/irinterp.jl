@@ -188,7 +188,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
                         ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
                     end
                 end
-                if !(typ ⊑ rt)
+                if !⊑(typeinf_lattice(interp), typ, rt)
                     ir.stmts[idx][:type] = rt
                     return true
                 end
@@ -197,7 +197,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
                 if mi′ !== mi # prevent infinite loop
                     rr = concrete_eval_invoke(interp, ir, mi_cache, sv, inst, mi′)
                     if rr !== nothing
-                        if !(typ ⊑ rr)
+                        if !⊑(typeinf_lattice(interp), typ, rr)
                             ir.stmts[idx][:type] = rr
                             return true
                         end
@@ -227,7 +227,7 @@ end
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache,
     frame::InferenceState, mi::MethodInstance, ir::IRCode, argtypes::Vector{Any})
     argtypes = va_process_argtypes(argtypes, mi)
-    argtypes_refined = Bool[!(ir.argtypes[i] ⊑ argtypes[i]) for i = 1:length(argtypes)]
+    argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
     empty!(ir.argtypes)
     append!(ir.argtypes, argtypes)
     ssa_refined = BitSet()

@@ -254,6 +254,7 @@ function isdefined_nothrow(argtypes::Array{Any, 1})
         return a2 ⊑ Symbol || a2 ⊑ Int
     end
 end
+
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     if isa(arg1, Const)
@@ -307,11 +308,14 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             end
         end
     elseif isa(a1, Union)
-        return tmerge(isdefined_tfunc(rewrap_unionall(a1.a, arg1t), sym),
+        # Results can only be `Const` or `Bool`
+        return tmerge(fallback_lattice,
+                      isdefined_tfunc(rewrap_unionall(a1.a, arg1t), sym),
                       isdefined_tfunc(rewrap_unionall(a1.b, arg1t), sym))
     end
     return Bool
 end
+
 add_tfunc(isdefined, 2, 3, isdefined_tfunc, 1)
 
 function sizeof_nothrow(@nospecialize(x))
@@ -653,7 +657,7 @@ function typeassert_tfunc(@nospecialize(v), @nospecialize(t))
 end
 add_tfunc(typeassert, 2, 2, typeassert_tfunc, 4)
 
-function isa_tfunc(@nospecialize(v), @nospecialize(tt))
+function isa_tfunc(@specialize(𝕃::AbstractLattice), @nospecialize(v), @nospecialize(tt))
     t, isexact = instanceof_tfunc(tt)
     if t === Bottom
         # check if t could be equivalent to typeof(Bottom), since that's valid in `isa`, but the set of `v` is empty
@@ -662,7 +666,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
         return Const(false)
     end
     if !has_free_typevars(t)
-        if v ⊑ t
+        if ⊑(𝕃, v, t)
             if isexact && isnotbrokensubtype(v, t)
                 return Const(true)
             end
@@ -686,6 +690,7 @@ function isa_tfunc(@nospecialize(v), @nospecialize(tt))
     # TODO: handle non-leaftype(t) by testing against lower and upper bounds
     return Bool
 end
+isa_tfunc(@nospecialize(v), @nospecialize(t)) = isa_tfunc(fallback_lattice, v, t)
 add_tfunc(isa, 2, 2, isa_tfunc, 1)
 
 function subtype_tfunc(@nospecialize(a), @nospecialize(b))
@@ -1135,7 +1140,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
-        elseif isconcretetype(RT) && has_nontrivial_const_info(TF2) # isconcrete condition required to form a PartialStruct
+        elseif isconcretetype(RT) && has_nontrivial_const_info(typeinf_lattice(interp), TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
         info = callinfo.info
@@ -1355,7 +1360,7 @@ valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
-function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
+function apply_type_nothrow(@specialize(lattice::AbstractLattice), argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Type && return false
     length(argtypes) >= 1 || return false
     headtypetype = argtypes[1]
@@ -1374,7 +1379,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ai ⊑ TypeVar || ai === DataType
+        if ⊑(lattice, ai, TypeVar) || ai === DataType
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)
@@ -1411,6 +1416,7 @@ function apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt))
     end
     return true
 end
+apply_type_nothrow(argtypes::Array{Any, 1}, @nospecialize(rt)) = apply_type_nothrow(fallback_lattice, argtypes, rt)
 
 const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K, :_L, :_M,
                           :_N, :_O, :_P, :_Q, :_R, :_S, :_T, :_U, :_V, :_W, :_X, :_Y, :_Z]
@@ -1574,7 +1580,7 @@ add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
-function tuple_tfunc(argtypes::Vector{Any})
+function tuple_tfunc(@specialize(lattice::AbstractLattice), argtypes::Vector{Any})
     argtypes = anymap(widenconditional, argtypes)
     all_are_const = true
     for i in 1:length(argtypes)
@@ -1590,7 +1596,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_nontrivial_const_info(x)
+        if has_nontrivial_const_info(lattice, x)
             anyinfo = true
         else
             if !isvarargtype(x)
@@ -1628,6 +1634,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     isdefined(typ, :instance) && return Const(typ.instance)
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
+tuple_tfunc(argtypes::Vector{Any}) = tuple_tfunc(fallback_lattice, argtypes)
 
 arrayref_tfunc(@nospecialize(boundscheck), @nospecialize(ary), @nospecialize idxs...) =
     _arrayref_tfunc(boundscheck, ary, idxs)
@@ -1747,7 +1754,8 @@ function arrayset_typecheck(@nospecialize(arytype), @nospecialize(elmtype))
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
+function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt), @specialize(lattice::AbstractLattice))
+    ⊑ₗ = ⊑(lattice)
     if f === arrayset
         array_builtin_common_nothrow(argtypes, 4) || return false
         # Additionally check element type compatibility
@@ -1756,7 +1764,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return array_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
-        return argtypes[1] ⊑ Symbol
+        return argtypes[1] ⊑ₗ Symbol
     end
 
     # These builtins are not-vararg, so if we have varars, here, we can't guarantee
@@ -1777,16 +1785,16 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         length(argtypes) == 2 || return false
         return fieldtype_nothrow(argtypes[1], argtypes[2])
     elseif f === apply_type
-        return apply_type_nothrow(argtypes, rt)
+        return apply_type_nothrow(lattice, argtypes, rt)
     elseif f === isa
         length(argtypes) == 2 || return false
-        return argtypes[2] ⊑ Type
+        return argtypes[2] ⊑ₗ Type
     elseif f === (<:)
         length(argtypes) == 2 || return false
-        return argtypes[1] ⊑ Type && argtypes[2] ⊑ Type
+        return argtypes[1] ⊑ₗ Type && argtypes[2] ⊑ₗ Type
     elseif f === UnionAll
         return length(argtypes) == 2 &&
-            (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
+            (argtypes[1] ⊑ₗ TypeVar && argtypes[2] ⊑ₗ Type)
     elseif f === isdefined
         return isdefined_nothrow(argtypes)
     elseif f === Core.sizeof
@@ -1797,12 +1805,12 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return isa(rt, Const)
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
-        return argtypes[1] ⊑ Bool
+        return argtypes[1] ⊑ₗ Bool
     elseif f === typeassert
         length(argtypes) == 2 || return false
         a3 = argtypes[2]
-        if (isType(a3) && !has_free_typevars(a3) && argtypes[1] ⊑ a3.parameters[1]) ||
-            (isa(a3, Const) && isa(a3.val, Type) && argtypes[1] ⊑ a3.val)
+        if (isType(a3) && !has_free_typevars(a3) && argtypes[1] ⊑ₗ a3.parameters[1]) ||
+            (isa(a3, Const) && isa(a3.val, Type) && argtypes[1] ⊑ₗ a3.val)
             return true
         end
         return false
@@ -1812,7 +1820,7 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return setglobal!_nothrow(argtypes)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return false
-        return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
+        return argtypes[1] ⊑ₗ Module && argtypes[2] ⊑ₗ Symbol
     elseif f === donotdelete
         return true
     elseif f === Core.finalizer
@@ -2010,13 +2018,13 @@ end
 function builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
-    return _builtin_nothrow(f, argtypes, rt)
+    return _builtin_nothrow(f, argtypes, rt, fallback_lattice)
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{InferenceState,IRCode,Nothing})
     if f === tuple
-        return tuple_tfunc(argtypes)
+        return tuple_tfunc(typeinf_lattice(interp), argtypes)
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
