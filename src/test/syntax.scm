@@ -1,4 +1,31 @@
+(define (info . args)
+        (for-each (lambda (e) (display e) (display " ")) args)
+        (display "\n")
+        (car (reverse! args)))
+(define (stream-pos s)
+  (- (io.pos (aref s 1))
+     (if (aref s 0)
+         0
+         0)))
+(define-macro (parse-define params . body)
+  `(define ,params
+      (let ((start-pos ,(if (member 's params) '(stream-pos s) -1)))
+      (info ',(car params) start-pos ,(if (member 's params) '(ts:last-tok s) -1) "<=")
+      (let ((result (begin ,@body)) (end-pos ,(if (member 's params) '(stream-pos s) -1)))
+           (info ',(car params) (string start-pos ":" end-pos) "=>" result)))))
+
 (load "jlfrontend.scm")
+
+; grep 'define (parse-' julia-parser.scm|sed 's/^(define (\(parse-[^ ]\+\) s.*/\1/g' | grep -v define | tr '\n' ' '
+(define parse-names '(
+  parse-Nary parse-block parse-stmts parse-eq parse-eq* parse-assignment parse-comma parse-pair parse-cond parse-arrow parse-or parse-and parse-comparison parse-pipe< parse-pipe> parse-range parse-chain parse-with-chains parse-expr parse-term parse-rational parse-shift parse-unary-subtype parse-where-chain parse-where parse-juxtapose parse-unary parse-unary-call parse-factor parse-factor-with-initial-ex parse-factor-after parse-decl parse-decl-with-initial-ex parse-call parse-call-with-initial-ex parse-unary-prefix parse-def parse-call-chain parse-subtype-spec parse-struct-field parse-struct-def parse-resword parse-do parse-imports parse-macro-name parse-atsym parse-import-dots parse-import-path parse-import parse-comma-separated parse-comma-separated-assignments parse-iteration-spec parse-comma-separated-iters parse-space-separated-exprs parse-call-arglist parse-arglist parse-vect parse-generator parse-comprehension parse-array parse-cat parse-paren parse-paren- parse-raw-literal parse-string-literal parse-interpolate parse-atom parse-docstring
+))
+
+(for-each (lambda (name)
+                  (eval `(define ,(symbol (string "-" name "-old")) ,name))
+                  (eval `(parse-define (,name s . args)
+                                 (apply ,(symbol (string "-" name "-old")) (cons s args)))))
+          parse-names)
 
 ; ((curry1 parse-atom) (make-token-stream (open-input-string "1")))
 ; ((curry1 parse-raw-literal #\') (make-token-stream (open-input-string "'ls -la'")))
@@ -14,6 +41,23 @@
                  #t
                  (error (string "parse \"" ,s "\" failed: "
                                 result " != " ,expected))))))
+
+(define (comma-expected origin newsy (paren #f))
+  (if paren
+    `(-> ,newsy (tuple ,origin ,newsy))
+    `(tuple ,origin (-> ,newsy ,newsy))))
+(define-macro (parse-expect-underscroe s production expected . expected2)
+  `(and (parse-expect ,s ,production ,expected)
+        (let* ((expected2 ,(if (pair? expected2) (car expected2) expected))
+               (result2 (parse-expect ,(string "(" s ")") ,production expected2))
+               (newsy (named-gensy '_))
+               (comma-expected-f (comma-expected expected2 newsy #f))
+               (comma-expected-t (comma-expected expected2 newsy #t)))
+          (info expected2 comma-expected-f)
+          (and result2
+               (parse-expect ,(string "(" s "),_") ,production comma-expected-f)
+               (parse-expect ,(string "((" s "),_)") ,production comma-expected-t)
+               ))))
 
 (define left-paren #\()
 (define right-paren #\))
@@ -85,9 +129,19 @@
 
 (define underscore-gen-block #f)
 
+; sed -i 's/ \(#[0-9]\+#_\)/ |\1|/g'
 (and
-  (parse-expect "((_+(1))),_" parse-stmts
-    '(-> |#2#_| (tuple (-> |#1#_| (call + |#1#_| 1)) |#2#_|)))
-  (parse-expect "_+_,_" parse-stmts
-    '(-> |#3#_| (tuple (-> (tuple |#1#_| |#2#_|) (call + |#1#_| |#2#_|)) |#3#_|)))
+  (parse-expect-underscroe "(_+(1))" parse-stmts
+    '(-> |#1#_| (call + |#1#_| 1)))
+  (parse-expect-underscroe "_+_" parse-stmts
+    '(-> (tuple |#1#_| |#2#_|) (call + |#1#_| |#2#_|)))
+  (parse-expect-underscroe "f(_)" parse-stmts
+    '(-> |#1#_| (call f |#1#_|)))
+  (parse-expect-underscroe "f(_),_" parse-stmts
+    '(tuple (-> |#1#_| (call f |#1#_|)) (-> |#2#_| |#2#_|))
+    '(-> (tuple |#1#_| |#2#_|) (tuple (call f |#1#_|) |#2#_|)))
+  (parse-expect-underscroe "f(_,_+1)" parse-stmts
+    '(-> |#1#_| (call f |#1#_| (-> |#2#_| (call + |#2#_| 1)))))
+  (parse-expect-underscroe "f(_+1,_)" parse-stmts
+    '(-> |#2#_| (call f (-> |#1#_| (call + |#1#_| 1)) |#2#_|)))
   #t)
