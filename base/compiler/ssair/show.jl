@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file is not loaded into Core.Compiler and does not participate in bootstrapping.
+
 @nospecialize
 
 if Pair != Base.Pair
