@@ -1356,6 +1356,8 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter)
         return (_can_optimize_isa(((jl_uniontype_t*)type)->a, counter) &&
                 _can_optimize_isa(((jl_uniontype_t*)type)->b, counter));
     }
+    if (type == (jl_value_t*)jl_type_type)
+        return true;
     if (jl_is_type_type(type) && jl_pointer_egal(type))
         return true;
     if (jl_has_intersect_type_not_kind(type))
@@ -1438,6 +1440,22 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         // has unique pointer value.
         auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_tparam0(intersected_type)));
         return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
+    }
+    if (intersected_type == (jl_value_t*)jl_type_type) {
+        // Inline jl_is_kind(jl_typeof(x))
+        // N.B. We do the comparison with untracked pointers, because that gives
+        // LLVM more optimization opportunities. That means it is poosible for
+        // `typ` to get GC'ed, but we don't actually care, because we don't ever
+        // dereference it.
+        Value *typ = emit_pointer_from_objref(ctx, emit_typeof_boxed(ctx, x));
+        auto val = ctx.builder.CreateOr(
+            ctx.builder.CreateOr(
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_uniontype_type)),
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_datatype_type))),
+            ctx.builder.CreateOr(
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_unionall_type)),
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_typeofbottom_type))));
+        return std::make_pair(val, false);
     }
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {

@@ -761,3 +761,7 @@ f_isdefined_nospecialize(@nospecialize(x)) = isdefined(x, 1)
 
 @test !occursin("jl_box_int", get_llvm(f_getfield_nospecialize, Tuple{Any}, true, false, false))
 @test !occursin("jl_box_int", get_llvm(f_isdefined_nospecialize, Tuple{Any}, true, false, false))
+
+# Test codegen for isa(::Any, Type)
+f_isa_type(@nospecialize(x)) = isa(x, Type)
+@test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
