@@ -188,6 +188,10 @@
 (define whitespace-newline #f)
 ; enable parsing `where` with high precedence
 (define where-enabled #t)
+; context for underscore anonymous function
+(define underscore-context #f)
+; context for underscore anonymous function
+(define underscore-gen-block #t)
 
 (define current-filename 'none)
 
@@ -216,6 +220,35 @@
 (define-macro (with-whitespace-newline . body)
   `(with-bindings ((whitespace-newline #t))
                   ,@body))
+
+(define (make-ctx_ ops s) (vector '() ops s))
+(define (ctx_:parent s) (aref s 2))
+(define (ctx_:get s) (aref s 0))
+(define (ctx_:add! s ex)
+  (let ((old (aref s 0)))
+       (aset! s 0 (cons ex old))))
+(define (ctx_:unwind! s)
+  (let ((old (ctx_:get s))
+        (parent (aref s 2)))
+       (aset! parent 0 (cons (car old) (ctx_:get parent))))) ; TODO concat list
+
+(define-macro (with-underscore-context ops . body)
+  `(with-bindings ((underscore-context (make-ctx_ ,ops underscore-context)))
+                  (info 'underscore-context-make underscore-context)
+                  (let* ((line-node (line-number-node s))
+                         (ex ,@body)
+                         (args (ctx_:get underscore-context)))
+                        (cond
+                          ((not (pair? args))
+                           (info "  " 'underscore ,ops ex))
+                          ((or (pair? (cdr args))
+                               (not (equal? ex (car args))) ; the body is the same as args
+                               (not (ctx_:parent underscore-context)))
+                           (info "  " 'underscore-new underscore-context (underscore-block args line-node ex))) ; TODO check or move to parent
+                          (else
+                           (info "  " 'underscore-unwind underscore-context)
+                           (ctx_:unwind! underscore-context)
+                           (info "  " underscore-context ex))))))
 
 ;; --- lexer ---
 
@@ -740,10 +773,10 @@
     (if (or (number? t) (and (symbol? t) (not (non-standalone-symbol-token? t))))
         (begin (take-token s)
                (let ((nxt (peek-token s)))
+                 (ts:put-back! s t spc)
                  (if (or (eqv? nxt #\,) (eqv? nxt #\) ) (eqv? nxt #\}) (eqv? nxt #\]))
-                     t
-                     (begin (ts:put-back! s t spc)
-                            (parse-assignment s parse-pair)))))
+                     (parse-atom s)
+                     (parse-assignment s parse-pair))))
         (parse-assignment s parse-pair))))
 
 (define (eventually-call? ex)
@@ -783,8 +816,15 @@
                 (else
                  (list t ex (parse-assignment s down))))))))
 
+(define (underscore-block args line-node ex)
+  (let ((body (if underscore-gen-block `(block ,line-node ,ex) ex)))
+       (if (pair? (cdr args)) ; count > 1
+          `(-> ,(cons 'tuple (reverse args)) ,body)
+          `(-> ,(car args) ,body))))
+
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
+(with-underscore-context 'comma
   (let loop ((ex     (list (parse-pair s)))
              (first? #t)
              (t      (peek-token s)))
@@ -799,9 +839,11 @@
         (begin (take-token s)
                (if (eq? (peek-token s) '=) ;; allow x, = ...
                    (loop ex #f (peek-token s))
-                   (loop (cons (parse-pair s) ex) #f (peek-token s)))))))
+                   (loop (cons (parse-pair s) ex) #f (peek-token s))))))))
 
-(define (parse-pair s) (parse-RtoL s parse-cond is-prec-pair? #f parse-pair))
+(define (parse-pair s)
+  (with-underscore-context 'pair
+    (parse-RtoL s parse-cond is-prec-pair? #f parse-pair)))
 
 (define (parse-cond s)
   (let ((ex (parse-arrow s)))
@@ -2521,6 +2563,15 @@
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
+
+          ;; underscore
+          ((eq? t '_)
+           (if (eq? underscore-context #f) ; switched off in some place like macrocall
+               t
+               (let ((ex (named-gensy "_")))
+                    (take-token s)
+                    (ctx_:add! underscore-context ex)
+                    ex)))
 
           ;; identifier
           ((symbol? t)
