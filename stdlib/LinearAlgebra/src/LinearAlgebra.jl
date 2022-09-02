@@ -462,11 +462,15 @@ _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 # ignored. However, some methods can fail if they read the entired ev
 # rather than just the meaningful elements. This is a helper function
 # for getting only the meaningful elements of ev. See #41089
-_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
+_evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
+
+# append a zero element / drop the last element
+_pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
+_droplast!(A) = deleteat!(A, lastindex(A))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs

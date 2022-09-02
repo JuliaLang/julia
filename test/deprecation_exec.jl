@@ -36,6 +36,11 @@ module DeprecationTests # to test @deprecate
     # test that @deprecate_moved can be overridden by an import
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
+
+    # test that positional and keyword arguments are forwarded when
+    # there is no explicit type annotation
+    new_return_args(args...; kwargs...) = args, NamedTuple(kwargs)
+    @deprecate old_return_args new_return_args
 end # module
 module Foo1234
     export foo1234
@@ -108,6 +113,11 @@ begin # @deprecate
         T21972()
     end
     @test_deprecated "something" f21972()
+
+    # test that positional and keyword arguments are forwarded when
+    # there is no explicit type annotation
+    @test DeprecationTests.old_return_args(1, 2, 3) == ((1, 2, 3),(;))
+    @test DeprecationTests.old_return_args(1, 2, 3; a = 4, b = 5) == ((1, 2, 3), (a = 4, b = 5))
 end
 
 f24658() = depwarn24658()

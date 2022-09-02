@@ -273,19 +273,19 @@ needs to make sure that we always visit `B` before `A`.
          DOI: <https://doi.org/10.1145/199448.199464>.
 """
 function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree::DomTree)
-    # This should be a priority queue, but TODO - sorted array for now
     defs = liveness.def_bbs
-    pq = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
-    sort!(pq, by=x->x[2])
+    heap = Tuple{Int, Int}[(defs[i], domtree.nodes[defs[i]].level) for i in 1:length(defs)]
+    heap_order = By(x -> -x[2])
+    heapify!(heap, heap_order)
     phiblocks = Int[]
     # This bitset makes sure we only add a phi node to a given block once.
     processed = BitSet()
     # This bitset implements the `key insight` mentioned above. In particular, it prevents
     # us from visiting a subtree that we have already visited before.
     visited = BitSet()
-    while !isempty(pq)
+    while !isempty(heap)
         # We pop from the end of the array - i.e. the element with the highest level.
-        node, level = pop!(pq)
+        node, level = heappop!(heap, heap_order)
         worklist = Int[]
         push!(worklist, node)
         while !isempty(worklist)
@@ -315,8 +315,7 @@ function iterated_dominance_frontier(cfg::CFG, liveness::BlockLiveness, domtree:
                 # because succ_level <= level, which is the greatest level we have currently
                 # processed. Thus, we have not yet processed any subtrees of level < succ_level.
                 if !(succ in defs)
-                    push!(pq, (succ, succ_level))
-                    sort!(pq, by=x->x[2])
+                    heappush!(heap, (succ, succ_level), heap_order)
                 end
             end
             # Recurse down the current subtree
@@ -523,23 +522,23 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     # We remove from `uses` any block where all uses are dominated
     # by a def. This prevents insertion of dead phi nodes at the top
     # of such a block if that block happens to be in a loop
-    ordered = Tuple{Int, Int, Bool}[(x, block_for_inst(cfg, x), true) for x in uses]
-    for x in defs
-        push!(ordered, (x, block_for_inst(cfg, x), false))
-    end
-    ordered = sort(ordered, by=x->x[1])
-    bb_defs = Int[]
-    bb_uses = Int[]
-    last_bb = last_def_bb = 0
-    for (_, bb, is_use) in ordered
-        if bb != last_bb && is_use
-            push!(bb_uses, bb)
+    bb_defs = Int[] # blocks with a def
+    bb_uses = Int[] # blocks with a use that is not dominated by a def
+
+    # We do a sorted joint iteration over the instructions listed
+    # in defs and uses following a pattern similar to mergesort
+    last_block, block_has_def = 0, false
+    defs_i = uses_i = 1
+    while defs_i <= lastindex(defs) || uses_i <= lastindex(uses)
+        is_def = uses_i > lastindex(uses) || defs_i <= lastindex(defs) && defs[defs_i] < uses[uses_i]
+        block = block_for_inst(cfg, is_def ? defs[defs_i] : uses[uses_i])
+        defs_i += is_def
+        uses_i += !is_def
+        if last_block != block || is_def && !block_has_def
+            push!(is_def ? bb_defs : bb_uses, block)
+            block_has_def = is_def
         end
-        last_bb = bb
-        if last_def_bb != bb && !is_use
-            push!(bb_defs, bb)
-            last_def_bb = bb
-        end
+        last_block = block
     end
     # To obtain live ins from bb_uses, recursively add predecessors
     extra_liveins = BitSet()

@@ -1580,21 +1580,22 @@ julia> X = sylvester(A, B, C)
  -4.46667   1.93333
   3.73333  -1.8
 
-julia> A*X + X*B + C
-2×2 Matrix{Float64}:
-  2.66454e-15  1.77636e-15
- -3.77476e-15  4.44089e-16
+julia> A*X + X*B ≈ -C
+true
 ```
 """
-function sylvester(A::StridedMatrix{T},B::StridedMatrix{T},C::StridedMatrix{T}) where T<:BlasFloat
+function sylvester(A::AbstractMatrix, B::AbstractMatrix, C::AbstractMatrix)
+    T = promote_type(float(eltype(A)), float(eltype(B)), float(eltype(C)))
+    return sylvester(copy_similar(A, T), copy_similar(B, T), copy_similar(C, T))
+end
+function sylvester(A::AbstractMatrix{T}, B::AbstractMatrix{T}, C::AbstractMatrix{T}) where {T<:BlasFloat}
     RA, QA = schur(A)
     RB, QB = schur(B)
-
-    D = -(adjoint(QA) * (C*QB))
-    Y, scale = LAPACK.trsyl!('N','N', RA, RB, D)
-    rmul!(QA*(Y * adjoint(QB)), inv(scale))
+    D = QA' * C * QB
+    D .= .-D
+    Y, scale = LAPACK.trsyl!('N', 'N', RA, RB, D)
+    rmul!(QA * Y * QB', inv(scale))
 end
-sylvester(A::StridedMatrix{T}, B::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = sylvester(float(A), float(B), float(C))
 
 Base.@propagate_inbounds function _sylvester_2x1!(A, B, C)
     b = B[1]
@@ -1652,18 +1653,19 @@ julia> X = lyap(A, B)
   0.5  -0.5
  -0.5   0.25
 
-julia> A*X + X*A' + B
-2×2 Matrix{Float64}:
- 0.0          6.66134e-16
- 6.66134e-16  8.88178e-16
+julia> A*X + X*A' ≈ -B
+true
 ```
 """
-function lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:BlasFloat}
-    R, Q = schur(A)
-
-    D = -(adjoint(Q) * (C*Q))
-    Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
-    rmul!(Q*(Y * adjoint(Q)), inv(scale))
+function lyap(A::AbstractMatrix, C::AbstractMatrix)
+    T = promote_type(float(eltype(A)), float(eltype(C)))
+    return lyap(copy_similar(A, T), copy_similar(C, T))
 end
-lyap(A::StridedMatrix{T}, C::StridedMatrix{T}) where {T<:Integer} = lyap(float(A), float(C))
+function lyap(A::AbstractMatrix{T}, C::AbstractMatrix{T}) where {T<:BlasFloat}
+    R, Q = schur(A)
+    D = Q' * C * Q
+    D .= .-D
+    Y, scale = LAPACK.trsyl!('N', T <: Complex ? 'C' : 'T', R, R, D)
+    rmul!(Q * Y * Q', inv(scale))
+end
 lyap(a::Union{Real,Complex}, c::Union{Real,Complex}) = -c/(2real(a))

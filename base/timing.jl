@@ -229,8 +229,7 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 !!! compat "Julia 1.8"
     The option to add a description was introduced in Julia 1.8.
 
-!!! compat "Julia 1.9"
-    Recompilation time being shown separately from compilation time was introduced in Julia 1.9
+    Recompilation time being shown separately from compilation time was introduced in Julia 1.8
 
 ```julia-repl
 julia> x = rand(10,10);

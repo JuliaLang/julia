@@ -257,14 +257,14 @@ end
 isdefined_tfunc(arg1, sym, order) = (@nospecialize; isdefined_tfunc(arg1, sym))
 function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
     if isa(arg1, Const)
-        a1 = typeof(arg1.val)
+        arg1t = typeof(arg1.val)
     else
-        a1 = widenconst(arg1)
+        arg1t = widenconst(arg1)
     end
-    if isType(a1)
+    if isType(arg1t)
         return Bool
     end
-    a1 = unwrap_unionall(a1)
+    a1 = unwrap_unionall(arg1t)
     if isa(a1, DataType) && !isabstracttype(a1)
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
@@ -307,8 +307,8 @@ function isdefined_tfunc(@nospecialize(arg1), @nospecialize(sym))
             end
         end
     elseif isa(a1, Union)
-        return tmerge(isdefined_tfunc(a1.a, sym),
-                      isdefined_tfunc(a1.b, sym))
+        return tmerge(isdefined_tfunc(rewrap_unionall(a1.a, arg1t), sym),
+                      isdefined_tfunc(rewrap_unionall(a1.b, arg1t), sym))
     end
     return Bool
 end
@@ -562,6 +562,23 @@ add_tfunc(atomic_pointerswap, 3, 3, (a, v, order) -> (@nospecialize; pointer_elt
 add_tfunc(atomic_pointermodify, 4, 4, atomic_pointermodify_tfunc, 5)
 add_tfunc(atomic_pointerreplace, 5, 5, atomic_pointerreplace_tfunc, 5)
 add_tfunc(donotdelete, 0, INT_INF, (@nospecialize args...)->Nothing, 0)
+function compilerbarrier_tfunc(@nospecialize(setting), @nospecialize(val))
+    # strongest barrier if a precise information isn't available at compiler time
+    # XXX we may want to have "compile-time" error instead for such case
+    isa(setting, Const) || return Any
+    setting = setting.val
+    isa(setting, Symbol) || return Any
+    if setting === :const
+        return widenconst(val)
+    elseif setting === :conditional
+        return widenconditional(val)
+    elseif setting === :type
+        return Any
+    else
+        return Bottom
+    end
+end
+add_tfunc(compilerbarrier, 2, 2, compilerbarrier_tfunc, 5)
 add_tfunc(Core.finalizer, 2, 4, (@nospecialize args...)->Nothing, 5)
 
 # more accurate typeof_tfunc for vararg tuples abstract only in length
@@ -1334,18 +1351,7 @@ end
 add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 
 # Like `valid_tparam`, but in the type domain.
-function valid_tparam_type(T::DataType)
-    T === Symbol && return true
-    isbitstype(T) && return true
-    if T <: Tuple
-        isconcretetype(T) || return false
-        for P in T.parameters
-            (P === Symbol || isbitstype(P)) || return false
-        end
-        return true
-    end
-    return false
-end
+valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
@@ -1566,12 +1572,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
 end
 add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 
-function has_struct_const_info(x)
-    isa(x, PartialTypeVar) && return true
-    isa(x, Conditional) && return true
-    return has_nontrivial_const_info(x)
-end
-
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(argtypes::Vector{Any})
@@ -1590,7 +1590,7 @@ function tuple_tfunc(argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_struct_const_info(x)
+        if has_nontrivial_const_info(x)
             anyinfo = true
         else
             if !isvarargtype(x)
@@ -1754,11 +1754,16 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         return arrayset_typecheck(argtypes[2], argtypes[3])
     elseif f === arrayref || f === const_arrayref
         return array_builtin_common_nothrow(argtypes, 3)
-    elseif f === arraysize
-        return arraysize_nothrow(argtypes)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
         return argtypes[1] ⊑ Symbol
+    end
+
+    # These builtins are not-vararg, so if we have varars, here, we can't guarantee
+    # the correct number of arguments.
+    (!isempty(argtypes) && isvarargtype(argtypes[end])) && return false
+    if f === arraysize
+        return arraysize_nothrow(argtypes)
     elseif f === Core._typevar
         length(argtypes) == 3 || return false
         return typevar_nothrow(argtypes[1], argtypes[2], argtypes[3])
@@ -1854,7 +1859,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     apply_type,
     arraysize,
     Core.ifelse,
-    sizeof,
+    Core.sizeof,
     svec,
     fieldtype,
     isa,
@@ -1907,9 +1912,8 @@ function isdefined_effects(argtypes::Vector{Any})
     # consistent if the first arg is immutable
     isempty(argtypes) && return EFFECTS_THROWS
     obj = argtypes[1]
-    isvarargtype(obj) && return Effects(EFFECTS_THROWS; consistent=ALWAYS_FALSE)
-    consistent = is_immutable_argtype(obj) ? ALWAYS_TRUE : ALWAYS_FALSE
-    nothrow = isdefined_nothrow(argtypes)
+    consistent = is_immutable_argtype(unwrapva(obj)) ? ALWAYS_TRUE : ALWAYS_FALSE
+    nothrow = !isvarargtype(argtypes[end]) && isdefined_nothrow(argtypes)
     return Effects(EFFECTS_TOTAL; consistent, nothrow)
 end
 
@@ -2010,7 +2014,7 @@ function builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
-                           sv::Union{InferenceState,Nothing})
+                           sv::Union{InferenceState,IRCode,Nothing})
     if f === tuple
         return tuple_tfunc(argtypes)
     end
@@ -2176,7 +2180,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::Union{InferenceState, IRCode})
     if length(argtypes) == 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -2192,10 +2196,14 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     # Run the abstract_call without restricting abstract call
                     # sites. Otherwise, our behavior model of abstract_call
                     # below will be wrong.
-                    old_restrict = sv.restrict_abstract_call_sites
-                    sv.restrict_abstract_call_sites = false
-                    call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
-                    sv.restrict_abstract_call_sites = old_restrict
+                    if isa(sv, InferenceState)
+                        old_restrict = sv.restrict_abstract_call_sites
+                        sv.restrict_abstract_call_sites = false
+                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                        sv.restrict_abstract_call_sites = old_restrict
+                    else
+                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                    end
                     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
@@ -2206,7 +2214,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
                         return CallMeta(Const(rt), EFFECTS_TOTAL, info)
-                    elseif !isempty(sv.pclimitations)
+                    elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes

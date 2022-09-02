@@ -80,6 +80,12 @@ function in(idx::Int, bsbmp::BitSetBoundedMinPrioritySet)
     return idx in bsbmp.elems
 end
 
+function append!(bsbmp::BitSetBoundedMinPrioritySet, itr)
+    for val in itr
+        push!(bsbmp, val)
+    end
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -206,11 +212,13 @@ end
 
 Effects(state::InferenceState) = state.ipo_effects
 
-function merge_effects!(caller::InferenceState, effects::Effects)
+function merge_effects!(::AbstractInterpreter, caller::InferenceState, effects::Effects)
     caller.ipo_effects = merge_effects(caller.ipo_effects, effects)
 end
-merge_effects!(caller::InferenceState, callee::InferenceState) =
-    merge_effects!(caller, Effects(callee))
+
+merge_effects!(interp::AbstractInterpreter, caller::InferenceState, callee::InferenceState) =
+    merge_effects!(interp, caller, Effects(callee))
+merge_effects!(interp::AbstractInterpreter, caller::IRCode, effects::Effects) = nothing
 
 is_effect_overridden(sv::InferenceState, effect::Symbol) = is_effect_overridden(sv.linfo, effect)
 function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
@@ -226,15 +234,15 @@ function InferenceResult(
     return _InferenceResult(linfo, arginfo)
 end
 
-add_remark!(::AbstractInterpreter, sv::InferenceState, remark) = return
+add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
-function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::InferenceState)
-    return sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
+function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
+    return isa(sv, InferenceState) && sv.restrict_abstract_call_sites && !isdispatchtuple(callsig)
 end
-function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::InferenceState)
+function bail_out_call(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
     return rt === Any
 end
-function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::InferenceState)
+function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{InferenceState, IRCode})
     return rt === Any
 end
 
@@ -479,11 +487,14 @@ function add_cycle_backedge!(frame::InferenceState, caller::InferenceState, curr
 end
 
 # temporarily accumulate our edges to later add as backedges in the callee
-function add_backedge!(li::MethodInstance, caller::InferenceState)
+function add_backedge!(li::MethodInstance, caller::InferenceState, invokesig::Union{Nothing,Type}=nothing)
     isa(caller.linfo.def, Method) || return # don't add backedges to toplevel exprs
     edges = caller.stmt_edges[caller.currpc]
     if edges === nothing
         edges = caller.stmt_edges[caller.currpc] = []
+    end
+    if invokesig !== nothing
+        push!(edges, invokesig)
     end
     push!(edges, li)
     return nothing

@@ -1987,9 +1987,8 @@ mutable struct TupleParam{P}
     x::Bool
 end
 
-function tupledispatch(a::TupleParam{(1,:a)})
-    a.x
-end
+tupledispatch(a::TupleParam{(1,:a)}) = a.x
+tupledispatch(a::TupleParam{(1,(:a,))}) = 42
 
 # tuples can be used as type params
 let t1 = TupleParam{(1,:a)}(true),
@@ -2001,6 +2000,10 @@ let t1 = TupleParam{(1,:a)}(true),
     # dispatch works properly
     @test tupledispatch(t1) == true
     @test_throws MethodError tupledispatch(t2)
+
+    @test tupledispatch(TupleParam{(1,(:a,))}(true)) === 42
+    @test_throws TypeError TupleParam{NamedTuple{(:a,), Tuple{Any}}((1,))}
+    @test_throws TypeError Val{NamedTuple{(:a,), Tuple{NamedTuple{<:Any,Tuple{Int}}}}(((x=2,),))}
 end
 
 # issue #5254
@@ -7808,6 +7811,13 @@ end
 import .Foo45350: x45350
 f45350() = (global x45350 = 2)
 @test_throws ErrorException f45350()
+
+# #46503 - redefine `invoke`d methods
+foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
+foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
+@test 0 <= foo46503(1, nothing) <= 1
+foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
+@test 10 <= foo46503(1, nothing) <= 11
 
 @testset "effect override on Symbol(::String)" begin
     @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
