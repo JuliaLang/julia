@@ -225,7 +225,7 @@
 ;; #f means no _ allowed in context, would parsed as is
 ;; 'paren means _ could not cross this scope, mostly in explicit (_+1) or (_, 1)
 ;; 'comma means _ would unwind if it is the only token in context like in f(_, 1)
-;; note (f(_),1) would unwind to x->(f(x),1)
+;; note (f(_),1) would unwind to (x->f(x),1)
 (define (make-ctx_ ops s)
   (and ops (vector '() ops s)))
 (define (ctx_:parent s) (and s (aref s 2)))
@@ -237,10 +237,10 @@
 (define (ctx_:unwind! s)
   (let ((ex (car (aref s 0))))
        (aset! s 0 (cdr (aref s 0)))
-       (let loop ((current s) (parent (aref s 2)))
+       (let ((current s) (parent (aref s 2)))
           (if (or (not parent) (equal? (ctx_:ops current) 'paren))
               (ctx_:add! current ex)
-              (loop parent (aref parent 2))))))
+              (ctx_:add! parent ex)))))
 
 (define-macro (with-underscore-context ops . body)
   `(with-bindings ((underscore-context (make-ctx_ ,ops underscore-context)))

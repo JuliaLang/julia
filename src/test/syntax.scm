@@ -134,13 +134,42 @@
     '(-> |#1#_| (call + |#1#_| 1)))
   (parse-expect-underscroe "_+_" parse-stmts
     '(-> (tuple |#1#_| |#2#_|) (call + |#1#_| |#2#_|)))
+  (parse-expect-underscroe "_,_" parse-stmts
+    '(tuple (-> |#1#_| |#1#_|) (-> |#2#_| |#2#_|))
+    '(-> (tuple |#1#_| |#2#_|) (tuple |#1#_| |#2#_|)))
+  (parse-expect-underscroe "_+1,_" parse-stmts
+    '(tuple (-> |#1#_| (call + |#1#_| 1)) (-> |#2#_| |#2#_|))
+    '(-> |#2#_| (tuple (-> |#1#_| (call + |#1#_| 1)) |#2#_|)))
   (parse-expect-underscroe "f(_)" parse-stmts
     '(-> |#1#_| (call f |#1#_|)))
   (parse-expect-underscroe "f(_),_" parse-stmts
     '(tuple (-> |#1#_| (call f |#1#_|)) (-> |#2#_| |#2#_|))
-    '(-> (tuple |#1#_| |#2#_|) (tuple (call f |#1#_|) |#2#_|)))
+    '(-> |#2#_| (tuple (-> |#1#_| (call f |#1#_|)) |#2#_|)))
   (parse-expect-underscroe "f(_,_+1)" parse-stmts
     '(-> |#1#_| (call f |#1#_| (-> |#2#_| (call + |#2#_| 1)))))
   (parse-expect-underscroe "f(_+1,_)" parse-stmts
     '(-> |#2#_| (call f (-> |#1#_| (call + |#1#_| 1)) |#2#_|)))
+  (parse-expect-underscroe "_.a(_).b(_)" parse-stmts
+    '(-> (tuple |#1#_| |#2#_| |#3#_|) (call (|.| (call (|.| |#1#_| 'a) |#2#_|) 'b) |#3#_|)))
+  (parse-expect-underscroe "_.a(_).b(_),_" parse-stmts
+    '(tuple (-> (tuple |#1#_| |#2#_| |#3#_|) (call (|.| (call (|.| |#1#_| 'a) |#2#_|) 'b) |#3#_|)) (-> |#4#_| |#4#_|))
+    '(-> |#4#_| (tuple (-> (tuple |#1#_| |#2#_| |#3#_|) (call (|.| (call (|.| |#1#_| 'a) |#2#_|) 'b) |#3#_|)) |#4#_|)))
+  (parse-expect-underscroe "b(_) + 1", parse-stmts
+    '(-> |#1#_| (call + (call b |#1#_|) 1)))
+  (parse-expect-underscroe "(1, b(_, 2))", parse-stmts
+    '(tuple 1 (-> |#1#_| (call b |#1#_| 2))))
+  (parse-expect-underscroe "(1, b(_, 2)+1)", parse-stmts
+    '(tuple 1 (-> |#1#_| (call + (call b |#1#_| 2) 1))))
+  (parse-expect-underscroe "a(1, b(_, 2))", parse-stmts
+    '(call a 1 (-> |#1#_| (call b |#1#_| 2))))
+  (parse-expect-underscroe "a(1, b(_, 2)+1)", parse-stmts
+    '(call a 1 (-> |#1#_| (call + (call b |#1#_| 2) 1))))
+  (parse-expect-underscroe "f(_, _+1) + 2", parse-stmts
+    '(-> |#1#_| (call + (call f |#1#_| (-> |#2#_| (call + |#2#_| 1))) 2)))
+
+  (parse-expect-underscroe "a=_" parse-stmts
+    '(= a (-> |#1#_| |#1#_|))
+    '(-> |#1#_| (= a |#1#_|)))
+  (parse-expect-underscroe "a=_+1" parse-stmts ; shall (a=_+1) means x->a=x+1
+    '(= a (-> |#1#_| (call + |#1#_| 1))))
   #t)
