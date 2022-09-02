@@ -452,3 +452,9 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
+
+
+_mapreduce(f, op, a::IndexStyle, x::Transpose) = _mapreduce(f∘transpose, op, a, x.parent)
+_mapreduce(f, op, a::IndexStyle, x::Adjoint) = _mapreduce(f∘adjoint, op, a, x.parent)
+_mapreduce(f, op, x::Transpose) = _mapreduce(f∘transpose, op, IndexStyle(x.parent), x.parent)
+_mapreduce(f, op, x::Adjoint) = _mapreduce(f∘adjoint, op, IndexStyle(x.parent), x.parent)
