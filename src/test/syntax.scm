@@ -196,8 +196,8 @@
 
   ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-350505877
   (parse-expect-underscroe "data |> map(f, _) |> filter(g, _) |> innerjoin(_, some_other_data) |> reduce(h, v0, _)" parse-stmts
-    ; TODO: treat special case of |> and <|
-    '(-> (tuple |#1#_| |#2#_| |#3#_| |#4#_|) (call |\|>| (call |\|>| (call |\|>| (call |\|>| data (call map f |#1#_|)) (call filter g |#2#_|)) (call innerjoin |#3#_| some_other_data)) (call reduce h v0 |#4#_|))))
+    ; TODO: treat special case of <|
+    '(call |\|>| (call |\|>| (call |\|>| (call |\|>| data (-> |#1#_| (call map f |#1#_|))) (-> |#2#_| (call filter g |#2#_|))) (-> |#3#_| (call innerjoin |#3#_| some_other_data))) (-> |#4#_| (call reduce h v0 |#4#_|))))
 
   ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-350562318
   (parse-expect-underscroe "2_+3" parse-stmts
@@ -363,8 +363,7 @@
 
   ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-600239227
   (parse-expect-underscroe "df |> filter(_.age > 50, _)" parse-stmts
-    ; BROKEN: TODO
-    '(-> |#2#_| (call |\|>| df (call filter (-> |#1#_| (call > (|.| |#1#_| 'age) 50)) |#2#_|))))
+    '(call |\|>| df (-> |#2#_| (call filter (-> |#1#_| (call > (|.| |#1#_| 'age) 50)) |#2#_|))))
 
   ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-605531476
   ; (parse-expect-underscroe "" parse-stmts

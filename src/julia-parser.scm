@@ -900,7 +900,14 @@
             (else ex)))))
 
 (define (parse-pipe< s) (parse-RtoL s parse-pipe> is-prec-pipe<? #f parse-pipe<))
-(define (parse-pipe> s) (parse-LtoR s parse-range is-prec-pipe>?))
+(define (parse-pipe> s)
+  (let loop ((ex (parse-range s))
+             (t  (peek-token s)))
+     (if (is-prec-pipe>? t)
+         (begin (take-token s)
+                (let ((nex (with-underscore-context 'paren (parse-range s))))
+                     (loop (list 'call t ex nex) (peek-token s))))
+         ex)))
 
 ;; parse ranges and postfix ...
 ;; colon is strange; 3 arguments with 2 colons yields one call:
