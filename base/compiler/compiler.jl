@@ -121,10 +121,8 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort end
 function sort! end
 function issorted end
-function sortperm end
 include("ordering.jl")
 using .Order
 include("sort.jl")
