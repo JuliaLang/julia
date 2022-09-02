@@ -75,7 +75,7 @@ end
 function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
-    while !(curblock in allblocks)
+    while !(curblock in allblocks) && curblock !== 0
         curblock = domtree.idoms_bb[curblock]
     end
     return curblock
@@ -289,7 +289,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                             # path, with a different type constraint. We may have
                             # to redo some work here with the wider typeconstraint
                             push!(worklist_defs, new_def)
-                            push!(worklist_constraints, tmerge(new_constraint, visited_constraints[new_def]))
+                            push!(worklist_constraints, tmerge(OptimizerLattice(), new_constraint, visited_constraints[new_def]))
                         end
                         continue
                     end
@@ -348,12 +348,12 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     isa(which, Const) || return false
     which.val === :captures || return false
     oc = argextype(def.args[2], compact)
-    return oc ⊑ Core.OpaqueClosure
+    return oc ⊑ₒ Core.OpaqueClosure
 end
 
 struct LiftedValue
-    x
-    LiftedValue(@nospecialize x) = new(x)
+    val
+    LiftedValue(@nospecialize val) = new(val)
 end
 const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
 
@@ -528,13 +528,15 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
 end
 
+isa_tfunc_opt(@nospecialize(v), @nospecialize(t)) = isa_tfunc(OptimizerLattice(), v, t)
+
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(isa_tfunc_opt, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
@@ -578,7 +580,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
         visited_phinodes, cmp, lifting_cache, Bool,
         lifted_leaves::LiftedLeaves, val, nothing)::LiftedValue
 
-    compact[idx] = lifted_val.x
+    compact[idx] = lifted_val.val
 end
 
 struct LiftedPhi
@@ -626,7 +628,7 @@ function perform_lifting!(compact::IncrementalCompact,
         end
     end
 
-    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.x : nothing
+    the_leaf_val = isa(the_leaf, LiftedValue) ? the_leaf.val : nothing
     if !isa(the_leaf_val, SSAValue)
         all_same = false
     end
@@ -690,7 +692,7 @@ function perform_lifting!(compact::IncrementalCompact,
                     resize!(new_node.values, length(new_node.values)+1)
                     continue
                 end
-                val = lifted_val.x
+                val = lifted_val.val
                 if isa(val, AnySSAValue)
                     callback = (@nospecialize(pi), @nospecialize(idx)) -> true
                     val = simple_walk(compact, val, callback)
@@ -718,6 +720,101 @@ function perform_lifting!(compact::IncrementalCompact,
     end
 
     return stmt_val # N.B. should never happen
+end
+
+function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
+    if length(stmt.args) != 4
+        return
+    end
+
+    vec = stmt.args[3]
+    val = stmt.args[4]
+    valT = argextype(val, compact)
+    (isa(valT, Const) && isa(valT.val, Int)) || return
+    valI = valT.val::Int
+    (1 <= valI) || return
+
+    if isa(vec, SimpleVector)
+        if valI <= length(val)
+            compact[idx] = vec[valI]
+        end
+        return
+    end
+
+    if isa(vec, SSAValue)
+        def = compact[vec][:inst]
+        if is_known_call(def, Core.svec, compact)
+            nargs = length(def.args)
+            if valI <= nargs-1
+                compact[idx] = def.args[valI+1]
+            end
+            return
+        elseif is_known_call(def, Core._compute_sparams, compact)
+            res = _lift_svec_ref(def, compact)
+            if res !== nothing
+                compact[idx] = res.val
+            end
+            return
+        end
+    end
+end
+
+# TODO: We could do the whole lifing machinery here, but really all
+# we want to do is clean this up when it got inserted by inlining,
+# which always targets simple `svec` call or `_compute_sparams`,
+# so this specialized lifting would be enough
+@inline function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
+    m = argextype(def.args[2], compact)
+    isa(m, Const) || return nothing
+    m = m.val
+    isa(m, Method) || return nothing
+    # TODO: More general structural analysis of the intersection
+    length(def.args) >= 3 || return nothing
+    sig = m.sig
+    isa(sig, UnionAll) || return nothing
+    tvar = sig.var
+    sig = sig.body
+    isa(sig, DataType) || return nothing
+    sig.name === Tuple.name || return nothing
+    length(sig.parameters) >= 1 || return nothing
+
+    i = let sig=sig
+        findfirst(j->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    end
+    i === nothing && return nothing
+    let sig=sig
+        any(j->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
+    end && return nothing
+
+    arg = sig.parameters[i]
+    isa(arg, DataType) || return nothing
+
+    rarg = def.args[2 + i]
+    isa(rarg, SSAValue) || return nothing
+    argdef = compact[rarg][:inst]
+    if isexpr(argdef, :new)
+        rarg = argdef.args[1]
+        isa(rarg, SSAValue) || return nothing
+        argdef = compact[rarg][:inst]
+    end
+
+    is_known_call(argdef, Core.apply_type, compact) || return nothing
+    length(argdef.args) == 3 || return nothing
+
+    applyT = argextype(argdef.args[2], compact)
+    isa(applyT, Const) || return nothing
+    applyT = applyT.val
+
+    isa(applyT, UnionAll) || return nothing
+    applyTvar = applyT.var
+    applyTbody = applyT.body
+
+    isa(applyTbody, DataType) || return nothing
+    applyTbody.name == arg.name || return nothing
+    length(applyTbody.parameters) == length(arg.parameters) == 1 || return nothing
+    applyTbody.parameters[1] === applyTvar || return nothing
+    arg.parameters[1] === tvar || return nothing
+    return LiftedValue(argdef.args[3])
 end
 
 # NOTE we use `IdSet{Int}` instead of `BitSet` for in these passes since they work on IR after inlining,
@@ -828,6 +925,8 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
         else # TODO: This isn't the best place to put these
             if is_known_call(stmt, typeassert, compact)
                 canonicalize_typeassert!(compact, idx, stmt)
+            elseif is_known_call(stmt, Core._svec_ref, compact)
+                lift_svec_ref!(compact, idx, stmt)
             elseif is_known_call(stmt, (===), compact)
                 lift_comparison!(===, compact, idx, stmt, lifting_cache)
             elseif is_known_call(stmt, isa, compact)
@@ -924,7 +1023,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             @assert val !== nothing
         end
 
-        compact[idx] = val === nothing ? nothing : val.x
+        compact[idx] = val === nothing ? nothing : val.val
     end
 
     non_dce_finish!(compact)
@@ -1349,7 +1448,7 @@ function adce_pass!(ir::IRCode)
                 r = searchsorted(unionphis, val.id; by = first)
                 if !isempty(r)
                     unionphi = unionphis[first(r)]
-                    t = tmerge(unionphi[2], stmt.typ)
+                    t = tmerge(OptimizerLattice(), unionphi[2], stmt.typ)
                     unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
                 end
             end
@@ -1357,7 +1456,7 @@ function adce_pass!(ir::IRCode)
             if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
-                if isexact && argextype(stmt.args[2], compact) ⊑ ty
+                if isexact && argextype(stmt.args[2], compact) ⊑ₒ ty
                     compact[idx] = nothing
                     continue
                 end
@@ -1386,7 +1485,7 @@ function adce_pass!(ir::IRCode)
                     if !isempty(r)
                         unionphi = unionphis[first(r)]
                         unionphis[first(r)] = Pair{Int,Any}(unionphi[1],
-                            tmerge(unionphi[2], inst[:type]))
+                            tmerge(OptimizerLattice(), unionphi[2], inst[:type]))
                     end
                 end
             end
@@ -1402,7 +1501,7 @@ function adce_pass!(ir::IRCode)
             continue
         elseif t === Any
             continue
-        elseif compact.result[phi][:type] ⊑ t
+        elseif compact.result[phi][:type] ⊑ₒ t
             continue
         end
         to_drop = Int[]

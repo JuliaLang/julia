@@ -28,6 +28,7 @@
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
+#include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
@@ -751,7 +752,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createAddressSanitizerFunctionPass());
 #endif
 #if defined(_COMPILER_MSAN_ENABLED_)
-        PM->add(createMemorySanitizerPass(true));
+        PM->add(createMemorySanitizerLegacyPassPass());
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
@@ -906,7 +907,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAddressSanitizerFunctionPass());
 #endif
 #if defined(_COMPILER_MSAN_ENABLED_)
-    PM->add(createMemorySanitizerPass(true));
+    PM->add(createMemorySanitizerLegacyPassPass());
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());

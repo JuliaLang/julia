@@ -121,10 +121,8 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort end
 function sort! end
 function issorted end
-function sortperm end
 include("ordering.jl")
 using .Order
 include("sort.jl")
@@ -139,11 +137,11 @@ something(x::Any, y...) = x
 ############
 
 include("compiler/cicache.jl")
+include("compiler/methodtable.jl")
 include("compiler/effects.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
-include("compiler/methodtable.jl")
 
 function argextype end # imported by EscapeAnalysis
 function stmt_effect_free end # imported by EscapeAnalysis
@@ -152,6 +150,8 @@ function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
+
+include("compiler/abstractlattice.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
@@ -164,7 +164,7 @@ include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
-include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+include("compiler/optimize.jl")
 
 # required for bootstrap because sort.jl uses extrema
 # to decide whether to dispatch to counting sort.

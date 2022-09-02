@@ -1078,17 +1078,6 @@ end
     nothing
 end
 
-# Test that the Core._apply_iterate bail path taints effects
-function f_apply_bail(f)
-    f(()...)
-    return nothing
-end
-f_call_apply_bail(f) = f_apply_bail(f)
-@test !fully_eliminated(f_call_apply_bail, Tuple{Function})
-
-# Test that arraysize has proper effect modeling
-@test fully_eliminated(M->(size(M, 2); nothing), Tuple{Matrix{Float64}})
-
 # DCE of non-inlined callees
 @noinline noninlined_dce_simple(a) = identity(a)
 @test fully_eliminated((String,)) do s
@@ -1114,72 +1103,6 @@ end
 @test_broken fully_eliminated((Union{Symbol,String},)) do s
     noninlined_dce_new(s)
     nothing
-end
-
-# Test that ambigous calls don't accidentally get nothrow effect
-ambig_effect_test(a::Int, b) = 1
-ambig_effect_test(a, b::Int) = 1
-ambig_effect_test(a, b) = 1
-global ambig_unknown_type_global=1
-@noinline function conditionally_call_ambig(b::Bool, a)
-    if b
-        ambig_effect_test(a, ambig_unknown_type_global)
-    end
-    return 0
-end
-function call_call_ambig(b::Bool)
-    conditionally_call_ambig(b, 1)
-    return 1
-end
-@test !fully_eliminated(call_call_ambig, Tuple{Bool})
-
-# Test that a missing methtable identification gets tainted
-# appropriately
-struct FCallback; f::Union{Nothing, Function}; end
-f_invoke_callback(fc) = let f=fc.f; (f !== nothing && f(); nothing); end
-function f_call_invoke_callback(f::FCallback)
-    f_invoke_callback(f)
-    return nothing
-end
-@test !fully_eliminated(f_call_invoke_callback, Tuple{FCallback})
-
-# https://github.com/JuliaLang/julia/issues/41694
-Base.@assume_effects :terminates_globally function issue41694(x)
-    res = 1
-    1 < x < 20 || throw("bad")
-    while x > 1
-        res *= x
-        x -= 1
-    end
-    return res
-end
-@test fully_eliminated() do
-    issue41694(2)
-end
-
-Base.@assume_effects :terminates_globally function recur_termination1(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
-    return x * recur_termination1(x-1)
-end
-@test fully_eliminated() do
-    recur_termination1(12)
-end
-Base.@assume_effects :terminates_globally function recur_termination21(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
-    return recur_termination22(x)
-end
-recur_termination22(x) = x * recur_termination21(x-1)
-@test fully_eliminated() do
-    recur_termination21(12) + recur_termination22(12)
-end
-
-const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
-Base.@assume_effects :foldable concrete_eval(
-    f, args...; kwargs...) = f(args...; kwargs...)
-@test fully_eliminated() do
-    concrete_eval(getindex, ___CONST_DICT___, :a)
 end
 
 # https://github.com/JuliaLang/julia/issues/44732
@@ -1244,22 +1167,6 @@ function maybe_error_int(x::Int)
 end
 @test fully_eliminated() do
     return maybe_error_int(1)
-end
-
-# Test that effect modeling for return_type doesn't incorrectly pick
-# up the effects of the function being analyzed
-function f_throws()
-    error()
-end
-
-@noinline function return_type_unused(x)
-    Core.Compiler.return_type(f_throws, Tuple{})
-    return x+1
-end
-
-@test fully_eliminated(Tuple{Int}) do x
-    return_type_unused(x)
-    return nothing
 end
 
 # Test that inlining doesn't accidentally delete a bad return_type call
@@ -1394,9 +1301,7 @@ let src = code_typed1(Tuple{Any}) do x
             DoAllocNoEscapeSparam(x)
         end
     end
-    # This requires more inlining enhancments. For now just make sure this
-    # doesn't error.
-    @test count(isnew, src.code) in (0, 1) # == 0
+    @test count(isnew, src.code) == 0
 end
 
 # Test noinline finalizer
@@ -1519,3 +1424,30 @@ function oc_capture_oc(z)
     return oc2(z)
 end
 @test fully_eliminated(oc_capture_oc, (Int,))
+
+@eval struct OldVal{T}
+    x::T
+    (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
+end
+with_unmatched_typeparam1(x::OldVal{i}) where {i} = i
+with_unmatched_typeparam2() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
+function with_unmatched_typeparam3()
+    f(x::OldVal{i}) where {i} = i
+    r = 0
+    for i = 1:10000
+        r += f(OldVal{i}())
+    end
+    return r
+end
+
+@testset "Inlining with unmatched type parameters" begin
+    let src = code_typed1(with_unmatched_typeparam1, (Any,))
+        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+    end
+    let src = code_typed1(with_unmatched_typeparam2)
+        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+    end
+    let src = code_typed1(with_unmatched_typeparam3)
+        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+    end
+end

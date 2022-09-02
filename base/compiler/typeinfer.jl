@@ -45,6 +45,8 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
     return mi_info
 end
 
+_typeinf_identifier(frame::InferenceFrameInfo) = frame
+
 """
     Core.Compiler.Timing(mi_info, start_time, ...)
 
@@ -312,7 +314,9 @@ function CodeInstance(
             const_flags = 0x00
         end
     end
-    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
+    relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] :
+                     inferred_result === nothing ? UInt8(1) : UInt8(0)
+    # relocatability = isa(inferred_result, Vector{UInt8}) ? inferred_result[end] : UInt8(0)
     return CodeInstance(result.linfo,
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
@@ -346,9 +350,9 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
     end
 end
 
-function transform_result_for_cache(interp::AbstractInterpreter, linfo::MethodInstance,
-                                    valid_worlds::WorldRange, @nospecialize(inferred_result),
-                                    ipo_effects::Effects)
+function transform_result_for_cache(interp::AbstractInterpreter,
+    linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
+    inferred_result = result.src
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState
@@ -383,7 +387,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
 
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
-        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result.src, result.ipo_effects)
+        inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
@@ -537,7 +541,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         # annotate fulltree with type information,
         # either because we are the outermost code, or we might use this later
         doopt = (me.cached || me.parent !== nothing)
-        recompute_cfg = type_annotate!(me, doopt)
+        changemap = type_annotate!(interp, me, doopt)
+        recompute_cfg = changemap !== nothing
         if doopt && may_optimize(interp)
             me.result.src = OptimizationState(me, OptimizationParams(interp), interp, recompute_cfg)
         else
@@ -561,17 +566,12 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
 end
 
 function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    i = 1
-    while i <= length(edges)
-        to = edges[i]
+    for (typ, to) in BackedgeIterator(edges)
         if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any), to, caller)
-            i += 1
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
         else
             typeassert(to, Core.MethodTable)
-            typ = edges[i + 1]
             ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
-            i += 2
         end
     end
 end
@@ -651,7 +651,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
-        if !(sv.slottypes[id] ⊑ typ)
+        if !⊑(typeinf_lattice(sv.interp), sv.slottypes[id], typ)
             return TypedSlot(id, typ)
         end
         return x
@@ -693,7 +693,7 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
 end
 
 # annotate types of all symbols in AST
-function type_annotate!(sv::InferenceState, run_optimizer::Bool)
+function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)
@@ -770,9 +770,9 @@ function type_annotate!(sv::InferenceState, run_optimizer::Bool)
         deleteat!(stmt_info, inds)
         deleteat!(ssaflags, inds)
         renumber_ir_elements!(body, changemap)
-        return true
+        return changemap
     else
-        return false
+        return nothing
     end
 end
 
@@ -795,18 +795,18 @@ function union_caller_cycle!(a::InferenceState, b::InferenceState)
     return
 end
 
-function merge_call_chain!(parent::InferenceState, ancestor::InferenceState, child::InferenceState)
+function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, ancestor::InferenceState, child::InferenceState)
     # add backedge of parent <- child
     # then add all backedges of parent <- parent.parent
     # and merge all of the callers into ancestor.callers_in_cycle
     # and ensure that walking the parent list will get the same result (DAG) from everywhere
     # Also taint the termination effect, because we can no longer guarantee the absence
     # of recursion.
-    merge_effects!(parent, Effects(EFFECTS_TOTAL; terminates=false))
+    merge_effects!(interp, parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
         add_cycle_backedge!(child, parent, parent.currpc)
         union_caller_cycle!(ancestor, child)
-        merge_effects!(child, Effects(EFFECTS_TOTAL; terminates=false))
+        merge_effects!(interp, child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
         child === ancestor && break
         parent = child.parent::InferenceState
@@ -842,7 +842,7 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
                 poison_callstack(parent, frame)
                 return true
             end
-            merge_call_chain!(parent, frame, frame)
+            merge_call_chain!(interp, parent, frame, frame)
             return frame
         end
         for caller in frame.callers_in_cycle
@@ -851,7 +851,7 @@ function resolve_call_cycle!(interp::AbstractInterpreter, linfo::MethodInstance,
                     poison_callstack(parent, frame)
                     return true
                 end
-                merge_call_chain!(parent, frame, caller)
+                merge_call_chain!(interp, parent, frame, caller)
                 return caller
             end
         end

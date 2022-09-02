@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file is not loaded into `Core.Compiler` but rather loaded into the context of
+# `Base.IRShow` and thus does not participate in bootstrapping.
+
 @nospecialize
 
 if Pair != Base.Pair
@@ -810,7 +813,9 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
-    show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
+    let io = IOContext(io, :maxssaid=>length(ir.stmts))
+        show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
+    end
     finish_show_ir(io, cfg, config)
 end
 
@@ -818,7 +823,9 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
     cfg = compute_basic_blocks(ci.code)
-    show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+    let io = IOContext(io, :maxssaid=>length(ci.code))
+        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+    end
     finish_show_ir(io, cfg, config)
 end
 
@@ -837,7 +844,9 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
         end
     end
     pop_new_node! = new_nodes_iter(compact)
-    bb_idx = show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, cfg, 1; pop_new_node!)
+    bb_idx = let io = IOContext(io, :maxssaid=>length(compact.result))
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, cfg, 1; pop_new_node!)
+    end
 
     # Print uncompacted nodes from the original IR
     stmts = compact.ir.stmts
@@ -847,8 +856,9 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
         # config.line_info_preprinter(io, "", compact.idx)
         printstyled(io, "─"^(width-indent-1), '\n', color=:red)
     end
-
-    show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
+    let io = IOContext(io, :maxssaid=>length(compact.ir.stmts))
+        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
+    end
 
     finish_show_ir(io, cfg, config)
 end

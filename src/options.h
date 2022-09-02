@@ -166,8 +166,12 @@
 // sanitizer defaults ---------------------------------------------------------
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+#if defined(_COMPILER_ASAN_ENABLED_)
+// No MEMDEBUG for msan - we just poison allocated memory directly.
 #define MEMDEBUG
+#endif
+
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define KEEP_BODIES
 #endif
 
