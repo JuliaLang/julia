@@ -1213,7 +1213,7 @@ julia> A == [1, 2, 3]
 true
 ````
 """
-function insert(src::AbstractVector, index, item)
+function insert(src::AbstractVector, index::Integer, item)
     src_idx = firstindex(src)
     src_end = lastindex(src)
     if index == (src_end + 1)
