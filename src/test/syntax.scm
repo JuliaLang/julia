@@ -7,13 +7,18 @@
      (if (aref s 0)
          0
          0)))
+(define parse-level (list '() 0 'toplevel ))
+(define-macro (with-level current . body)
+  `(with-bindings ((parse-level (list (car parse-level) (+ (cadr parse-level) 1) ,current)))
+                  ,@body))
 (define-macro (parse-define params . body)
   `(define ,params
-      (let ((start-pos ,(if (member 's params) '(stream-pos s) -1)))
-      (info ',(car params) start-pos ,(if (member 's params) '(ts:last-tok s) -1) "<=")
-      (let ((result (begin ,@body)) (end-pos ,(if (member 's params) '(stream-pos s) -1)))
-           (info ',(car params) (string start-pos ":" end-pos) "=>" result)))))
-
+      (with-level ',(car params)
+        (let ((start-pos ,(if (member 's params) '(stream-pos s) -1)))
+          (info (cdr parse-level) start-pos ,(if (member 's params) '(ts:last-tok s) -1) "<=")
+          (let ((result (begin ,@body)) (end-pos ,(if (member 's params) '(stream-pos s) -1)))
+              (info (cdr parse-level) (string start-pos ":" end-pos) "=>" result))))))
+(define enable-debug #f)
 (load "jlfrontend.scm")
 
 ; grep 'define (parse-' julia-parser.scm|sed 's/^(define (\(parse-[^ ]\+\) s.*/\1/g' | grep -v define | tr '\n' ' '
@@ -21,11 +26,12 @@
   parse-Nary parse-block parse-stmts parse-eq parse-eq* parse-assignment parse-comma parse-pair parse-cond parse-arrow parse-or parse-and parse-comparison parse-pipe< parse-pipe> parse-range parse-chain parse-with-chains parse-expr parse-term parse-rational parse-shift parse-unary-subtype parse-where-chain parse-where parse-juxtapose parse-unary parse-unary-call parse-factor parse-factor-with-initial-ex parse-factor-after parse-decl parse-decl-with-initial-ex parse-call parse-call-with-initial-ex parse-unary-prefix parse-def parse-call-chain parse-subtype-spec parse-struct-field parse-struct-def parse-resword parse-do parse-imports parse-macro-name parse-atsym parse-import-dots parse-import-path parse-import parse-comma-separated parse-comma-separated-assignments parse-iteration-spec parse-comma-separated-iters parse-space-separated-exprs parse-call-arglist parse-arglist parse-vect parse-generator parse-comprehension parse-array parse-cat parse-paren parse-paren- parse-raw-literal parse-string-literal parse-interpolate parse-atom parse-docstring
 ))
 
-(for-each (lambda (name)
-                  (eval `(define ,(symbol (string "-" name "-old")) ,name))
-                  (eval `(define (,name s . args)
-                                 (apply ,(symbol (string "-" name "-old")) (cons s args)))))
-          parse-names)
+(and enable-debug
+  (for-each (lambda (name)
+                    (eval `(define ,(symbol (string "-" name "-old")) ,name))
+                    (eval `(parse-define (,name s . args)
+                                  (apply ,(symbol (string "-" name "-old")) (cons s args)))))
+            parse-names))
 
 ; ((curry1 parse-atom) (make-token-stream (open-input-string "1")))
 ; ((curry1 parse-raw-literal #\') (make-token-stream (open-input-string "'ls -la'")))
@@ -233,4 +239,13 @@
   (parse-expect-underscroe "function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState) end" parse-stmts
     '(function (call const_prop_argument_heuristic (:: _ AbstractInterpreter) (:: (tuple (parameters fargs argtypes)) ArgInfo) (:: sv InferenceState)) (block (line 1 none) (line 1 none))))
   ; compiler/typeinfer.jl:254
+  (parse-expect-underscroe "(caller for (caller, _, _) = results)" parse-stmts
+    '(generator caller (= (tuple caller _ _) results)))
+  (parse-expect-underscroe "(caller for (caller, _, _) in results)" parse-stmts
+    '(generator caller (= (tuple caller _ _) results)))
+  (parse-expect-underscroe "for (caller, _, _) in results end" parse-stmts
+    '(for (= (tuple caller _ _) results) (block (line 1 none) (line 1 none))))
+  ; compiler/ssair/inlining.jl:404
+  (parse-expect-underscroe "for ((_, idx′), stmt′) in inline_compact end" parse-stmts
+    '(for (= (tuple (tuple _ idx′) stmt′) inline_compact) (block (line 1 none) (line 1 none))))
   #t)

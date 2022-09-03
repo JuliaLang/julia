@@ -189,7 +189,7 @@
 ; enable parsing `where` with high precedence
 (define where-enabled #t)
 ; context for underscore anonymous function
-(define underscore-context #f)
+(define underscore-context #t)
 ; context for underscore anonymous function
 (define underscore-gen-block #t)
 
@@ -221,24 +221,29 @@
   `(with-bindings ((whitespace-newline #t))
                   ,@body))
 
-;; ops should be #f, 'paren, 'comma
+;; ops should be #f, #t, 'paren, 'comma
 ;; #f means no _ allowed in context, would parsed as is
+;; #t means no _ allowed in context, but could create a new context
+;; 'stmt means no _ allowed in context, should be created in subcontext
 ;; 'paren means _ could not cross this scope, mostly in explicit (_+1) or (_, 1)
 ;; 'comma means _ would unwind if it is the only token in context like in f(_, 1)
 ;; note (f(_),1) would unwind to (x->f(x),1)
 (define (make-ctx_ ops s)
-  (and ops (vector '() ops s)))
-(define (ctx_:parent s) (and s (aref s 2)))
-(define (ctx_:ops s) (and s (aref s 1)))
-(define (ctx_:get s) (and s (aref s 0)))
+  (and s (if (or (boolean? ops) (eqv? ops 'stmt))
+             ops
+             (vector '() ops s))))
+(define (ctx_:parent s) (and (vector? s) (aref s 2)))
+(define (ctx_:ops s) (and (vector? s) (aref s 1)))
+(define (ctx_:get s) (and (vector? s) (aref s 0)))
 (define (ctx_:add! s ex)
-  (let ((old (aref s 0)))
-       (aset! s 0 (cons ex old))))
+  (and (vector? s)
+    (let ((old (aref s 0)))
+        (aset! s 0 (cons ex old)))))
 (define (ctx_:unwind! s)
   (let ((ex (car (aref s 0))))
        (aset! s 0 (cdr (aref s 0)))
        (let ((current s) (parent (aref s 2)))
-          (if (or (not parent) (equal? (ctx_:ops current) 'paren))
+          (if (or (not (vector? parent)) (equal? (ctx_:ops current) 'paren))
               (ctx_:add! current ex)
               (ctx_:add! parent ex)))))
 
@@ -251,7 +256,7 @@
                           ((not (pair? args)) ex)
                           ((or (pair? (cdr args))
                                (not (equal? ex (car args))) ; the body is the same as args
-                               (not (ctx_:parent underscore-context)))
+                               (not (vector? (ctx_:parent underscore-context))))
                            (underscore-block args line-node ex))
                           (else
                            (ctx_:unwind! underscore-context)
@@ -751,13 +756,13 @@
 ;; the principal non-terminals follow, in increasing precedence order
 
 (define (parse-block s (down parse-eq))
-(with-underscore-context #f ; no underscore could cross block
+(with-underscore-context #t ; no underscore could cross block
   (parse-Nary s down '(#\newline #\;) 'block
               (lambda (x) (memq x '(end else elseif catch finally))) #t)))
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
-(with-underscore-context #f ; no underscore could cross top-level stmts
+(with-underscore-context #t ; no underscore could cross top-level stmts
   (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-eq))
                         '(#\;) 'toplevel (lambda (x) (eqv? x #\newline)) #f)))
     ;; check for unparsed junk after an expression
@@ -842,7 +847,7 @@
       ex))
 
 (define (parse-assignment s down)
-(with-underscore-context #f
+(with-underscore-context 'stmt
   (let* ((ex (down s))
          (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
@@ -873,7 +878,7 @@
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
-(with-underscore-context #f
+(with-underscore-context 'stmt
   (let loop ((ex     (list (parse-pair s)))
              (first? #t)
              (t      (peek-token s)))
@@ -1853,7 +1858,7 @@
           (begin (take-token s)
                  (peek-token s))
           t)))
-  (let* ((lhs (let ((lhs- (with-space-sensitive (parse-pipe< s))))
+  (let* ((lhs (let ((lhs- (with-underscore-context #f (with-space-sensitive (parse-pipe< s)))))
                 (if (eq? lhs- 'outer)
                     (let ((nxt (peek-token- s)))
                       (if (memq nxt '(= in ∈))
@@ -2622,12 +2627,12 @@
 
           ;; underscore
           ((eq? t '_)
-           (if (eq? underscore-context #f) ; switched off in some place like macrocall
-               t
+           (take-token s)
+           (if (vector? underscore-context) ; switched off in some place like macrocall
                (let ((ex (named-gensy '_)))
-                    (take-token s)
                     (ctx_:add! underscore-context ex)
-                    ex)))
+                    ex)
+               t))
 
           ;; identifier
           ((symbol? t)
