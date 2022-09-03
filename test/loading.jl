@@ -5,7 +5,7 @@ original_depot_path = copy(Base.DEPOT_PATH)
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-@test (@__LINE__) == 6
+@test (@__LINE__) == 8
 
 macro macro_caller_lineno()
     @test 9 == (@__LINE__) != __source__.line > 12
