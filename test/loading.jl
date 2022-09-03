@@ -8,7 +8,7 @@ using Test
 @test (@__LINE__) == 8
 
 macro macro_caller_lineno()
-    @test 9 == (@__LINE__) != __source__.line > 12
+    @test 11 == (@__LINE__) != __source__.line > 14
     return __source__.line
 end
 
