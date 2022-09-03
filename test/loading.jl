@@ -12,7 +12,7 @@ macro macro_caller_lineno()
     return __source__.line
 end
 
-@test @macro_caller_lineno() == (@__LINE__) > 12
+@test @macro_caller_lineno() == (@__LINE__) > 14
 
 # @__LINE__ in a macro expands to the location of the macrocall in the source
 # while __source__.line is the location of the macro caller
