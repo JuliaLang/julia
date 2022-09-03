@@ -812,22 +812,24 @@ function rewrite_apply_exprargs!(
     return new_argtypes
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, match::MethodMatch, effects::Effects)
-    mi = specialize_method(match; compilesig=true)
+function compileable_specialization(et::Union{EdgeTracker, Nothing},
+        match::MethodMatch, effects::Effects; compilesig_invokes = true)
+    mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, linfo::MethodInstance, effects::Effects)
-    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=true)
+function compileable_specialization(et::Union{EdgeTracker, Nothing},
+        linfo::MethodInstance, effects::Effects; compilesig_invokes = true)
+    mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     et !== nothing && push!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects)
-    return compileable_specialization(et, result.linfo, effects)
+function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects; kwargs...)
+    return compileable_specialization(et, result.linfo, effects; kwargs...)
 end
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
@@ -866,12 +868,14 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !state.params.inlining || is_stmt_noinline(flag)
-        return compileable_specialization(et, match, effects)
+        return compileable_specialization(et, match, effects;
+            compilesig_invokes=state.params.compilesig_invokes)
     end
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
-    src === nothing && return compileable_specialization(et, match, effects)
+    src === nothing && return compileable_specialization(et, match, effects;
+        compilesig_invokes=state.params.compilesig_invokes)
 
     et !== nothing && add_edge!(et, invokesig, mi)
     return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
@@ -944,7 +948,8 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any}, invokesig,
 
     # See if there exists a specialization for this method signature
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
-    isa(mi, MethodInstance) || return compileable_specialization(et, match, Effects())
+    isa(mi, MethodInstance) || return compileable_specialization(et,
+        match, Effects(); compilesig_invokes=state.params.compilesig_invokes)
 
     todo = InliningTodo(mi, match, argtypes, invokesig)
     # If we don't have caches here, delay resolving this MethodInstance
@@ -1232,7 +1237,8 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
             length(info.results) == 1 || return nothing
             match = info.results[1]::MethodMatch
             match.fully_covers || return nothing
-            case = compileable_specialization(state.et, match, Effects())
+            case = compileable_specialization(state.et, match, Effects();
+                compilesig_invokes=state.params.compilesig_invokes)
             case === nothing && return nothing
             stmt.head = :invoke_modify
             pushfirst!(stmt.args, case.invoke)
@@ -1449,7 +1455,8 @@ end
 
 function concrete_result_item(result::ConcreteResult, state::InliningState)
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        case = compileable_specialization(state.et, result.mi, result.effects)
+        case = compileable_specialization(state.et, result.mi, result.effects;
+            compilesig_invokes = state.params.compilesig_invokes)
         @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
         return case
     end
