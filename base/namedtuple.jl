@@ -377,6 +377,7 @@ julia> Base.setindex(nt, "a", :a)
 """
 setindex(nt::NamedTuple, v, idx::Symbol) = merge(nt, (; idx => v))
 function setindex(nt::NamedTuple, vs, idxs::AbstractVector{Symbol})
+    length(vs) == length(idxs) || throw_setindex_mismatch(v, idxs)
     merge(nt, (; [i => v for (i,v) in zip(idxs, vs)]...))
 end
 
