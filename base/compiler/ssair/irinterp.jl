@@ -222,7 +222,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
 end
 
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache,
-        mi::MethodInstance, ir::IRCode, argtypes::Vector{Any})
+        mi::MethodInstance, ir::IRCode, argtypes::Vector{Any}; extra_reprocess = nothing)
     argtypes = va_process_argtypes(argtypes, mi)
     argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
     empty!(ir.argtypes)
@@ -280,7 +280,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
         for idx = stmts
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
-            any_refined = false
+            any_refined = extra_reprocess === nothing ? false : (idx in extra_reprocess)
             for ur in userefs(inst)
                 val = ur[]
                 if isa(val, Argument)
