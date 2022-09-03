@@ -209,7 +209,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
             return false
         elseif isa(inst, PiNode)
             rr = tmeet(argextype(inst.val, ir), inst.typ)
-            if !(typ ⊑ rr)
+            if !⊑(typeinf_lattice(interp), typ, rr)
                 ir.stmts[idx][:type] = rr
                 return true
             end
@@ -377,7 +377,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
         end
         inst = ir.stmts[idx][:inst]::ReturnNode
         rt = argextype(inst.val, ir)
-        ultimate_rt = tmerge(ultimate_rt, rt)
+        ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
     end
 
     return ultimate_rt
