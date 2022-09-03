@@ -18,7 +18,7 @@
           (info (cdr parse-level) start-pos ,(if (member 's params) '(ts:last-tok s) -1) "<=")
           (let ((result (begin ,@body)) (end-pos ,(if (member 's params) '(stream-pos s) -1)))
               (info (cdr parse-level) (string start-pos ":" end-pos) "=>" result))))))
-(define enable-debug #f)
+(define enable-debug #t)
 (load "jlfrontend.scm")
 
 ; grep 'define (parse-' julia-parser.scm|sed 's/^(define (\(parse-[^ ]\+\) s.*/\1/g' | grep -v define | tr '\n' ' '
@@ -248,4 +248,16 @@
   ; compiler/ssair/inlining.jl:404
   (parse-expect-underscroe "for ((_, idx′), stmt′) in inline_compact end" parse-stmts
     '(for (= (tuple (tuple _ idx′) stmt′) inline_compact) (block (line 1 none) (line 1 none))))
+  ; compiler/tfuncs.jl:2274
+  (parse-expect-underscroe "function setglobal!_tfunc(@nospecialize(M), @nospecialize(s), @nospecialize(v), @nospecialize(_=Symbol)) end" parse-stmts
+    '(function (call setglobal!_tfunc (macrocall @nospecialize (line 1 none) M) (macrocall @nospecialize (line 1 none) s) (macrocall @nospecialize (line 1 none) v) (macrocall @nospecialize (line 1 none) (= _ Symbol))) (block (line 1 none) (line 1 none))))
+  ; compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl:1353
+  (parse-expect-underscroe "escape_builtin!(::typeof(===), _...) = return false" parse-stmts
+    '(= (call escape_builtin! (:: (call typeof ===)) (... _)) (block (line 1 none) (return (false)))))
+  ; compiler/codegen.jl:356
+  (parse-expect-underscroe "mktemp() do f_22330, _ end" parse-stmts
+    '(do (call mktemp) (-> (tuple f_22330 _) (block (line 1 none)))))
+  ; lock.jl:45
+  (parse-expect-underscroe "struct ReentrantLock <: AbstractLock\n_::NTuple{Int === Int32 ? 2 : 3, Int}\nend" parse-stmts
+    '(struct (false) (<: ReentrantLock AbstractLock) (block (line 2 none) (:: _ (curly NTuple (if (call === Int Int32) 2 3) Int)))))
   #t)

@@ -1459,12 +1459,13 @@
       x))
 
 (define (parse-struct-field s)
+(with-underscore-context #f ;; disbale struct field for now
   (let ((tok (peek-token s)))
     ;; allow `const x` only as a struct field
     (if (eq? tok 'const)
         (begin (take-token s)
                `(const ,(parse-eq s)))
-        (parse-eq s))))
+        (parse-eq s)))))
 
 (define (parse-struct-def s mut? word)
   (if (reserved-word? (peek-token s))
@@ -1735,7 +1736,7 @@
    (with-normal-context
     (let ((doargs (if (memv (peek-token s) '(#\newline #\;))
                       '()
-                      (parse-comma-separated s parse-range))))
+                      (with-underscore-context #f (parse-comma-separated s parse-range)))))
       `(-> (tuple ,@doargs)
            ,(begin0 (parse-block s)
                     (expect-end s 'do)))))))
