@@ -777,37 +777,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // widen Type{x} to typeof(x) in argument position
         if (!vb.occurs_inv)
             vb.lb = widen_Type(vb.lb);
-        // fill variable values into `envout` up to `envsz`
-        if (e->envidx < e->envsz) {
-            jl_value_t *val;
-            if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
-                val = (jl_value_t*)jl_wrap_vararg(NULL, NULL);
-            else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
-                val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
-            else if (vb.lb == vb.ub)
-                val = vb.lb;
-            else if (vb.lb != jl_bottom_type)
-                // TODO: for now return the least solution, which is what
-                // method parameters expect.
-                val = vb.lb;
-            else if (vb.lb == u->var->lb && vb.ub == u->var->ub)
-                val = (jl_value_t*)u->var;
-            else
-                val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
-            jl_value_t *oldval = e->envout[e->envidx];
-            // if we try to assign different variable values (due to checking
-            // multiple union members), consider the value unknown.
-            if (oldval && !jl_egal(oldval, val))
-                e->envout[e->envidx] = (jl_value_t*)u->var;
-            else
-                e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
-            // TODO: substitute the value (if any) of this variable into previous envout entries
         }
-    }
-    else {
-        ans = R ? subtype(t, u->body, e, param) :
-                  subtype(u->body, t, e, param);
-    }
+    else
+        ans = subtype(u->body, t, e, param);
 
     // handle the "diagonal dispatch" rule, which says that a type var occurring more
     // than once, and only in covariant position, is constrained to concrete types. E.g.
@@ -852,6 +824,33 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
             }
             btemp = btemp->prev;
         }
+    }
+
+    // fill variable values into `envout` up to `envsz`
+    if (R && ans && e->envidx < e->envsz) {
+        jl_value_t *val;
+        if (vb.intvalued && vb.lb == (jl_value_t*)jl_any_type)
+            val = (jl_value_t*)jl_wrap_vararg(NULL, NULL);
+        else if (!vb.occurs_inv && vb.lb != jl_bottom_type)
+            val = is_leaf_bound(vb.lb) ? vb.lb : (jl_value_t*)jl_new_typevar(u->var->name, jl_bottom_type, vb.lb);
+        else if (vb.lb == vb.ub)
+            val = vb.lb;
+        else if (vb.lb != jl_bottom_type)
+            // TODO: for now return the least solution, which is what
+            // method parameters expect.
+            val = vb.lb;
+        else if (vb.lb == u->var->lb && vb.ub == u->var->ub)
+            val = (jl_value_t*)u->var;
+        else
+            val = (jl_value_t*)jl_new_typevar(u->var->name, vb.lb, vb.ub);
+        jl_value_t *oldval = e->envout[e->envidx];
+        // if we try to assign different variable values (due to checking
+        // multiple union members), consider the value unknown.
+        if (oldval && !jl_egal(oldval, val))
+            e->envout[e->envidx] = (jl_value_t*)u->var;
+        else
+            e->envout[e->envidx] = fix_inferred_var_bound(u->var, val);
+        // TODO: substitute the value (if any) of this variable into previous envout entries
     }
 
     JL_GC_POP();
@@ -1394,10 +1393,18 @@ static int exists_subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_value_
         e->Lunions.more = 0;
         if (subtype(x, y, e, param))
             return 1;
-        restore_env(e, saved, se);
         int set = e->Runions.more;
-        if (!set)
+        if (set) {
+            // We preserve `envout` here as `subtype_unionall` needs previous assigned env values.
+            int oldidx = e->envidx;
+            e->envidx = e->envsz;
+            restore_env(e, saved, se);
+            e->envidx = oldidx;
+        }
+        else {
+            restore_env(e, saved, se);
             return 0;
+        }
         for (int i = set; i <= lastset; i++)
             statestack_set(&e->Runions, i, 0);
         lastset = set - 1;
@@ -3046,7 +3053,15 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                         record_var_occurrence(yy, e, param);
                         return y;
                     }
-                    return intersect(y, xub, e, param);
+                    if (!xx || xx->offset == 0)
+                        return intersect(y, xub, e, param);
+                    // try to propagate the x's offset to xub.
+                    jl_varbinding_t *tvb = lookup(e, (jl_tvar_t*)xub);
+                    assert(tvb && tvb->offset == 0);
+                    tvb->offset = xx->offset;
+                    jl_value_t *res = intersect(y, xub, e, param);
+                    tvb->offset = 0;
+                    return res;
                 }
                 record_var_occurrence(yy, e, param);
                 if (!jl_is_type(ylb) && !jl_is_typevar(ylb)) {
