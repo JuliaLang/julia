@@ -77,7 +77,7 @@ ERROR: BoundsError: attempt to access Tuple{Int64, Int64, Int64} at index [4]
 [...]
 ```
 """
-function deleteat(x::Tuple, i)
+function deleteat(x::Tuple, i::Integer)
     @boundscheck checkindex(Bool, eachindex(x), i) || throw(BoundsError(x, i))
     _deleteat(x, i)
 end
@@ -85,6 +85,22 @@ function _deleteat(x::Tuple{Vararg{Any,N}}, i::Integer) where {N}
     @inline
     ntuple(j -> j < i ? getfield(x, j) : getfield(x, j + 1), Val{N-1}())
 end
+
+"""
+    deleteat(t::Tuple, inds)
+
+Return a new tuple without the itmes at the indices given by `inds`.
+
+# Examples
+
+```jldoctest
+julia> x = (6, 5, 4);
+
+julia> deleteat(x, [2, 3])
+(6,)
+```
+"""
+deleteat(t::Tuple, inds) = (deleteat!(Any[t...], inds)...,)
 
 function insert(x::Tuple{Vararg{Any,N}}, index::Integer, item) where {N}
     @boundscheck 1 <= index <= (length(x) + 1) || throw(BoundsError(x, index))
