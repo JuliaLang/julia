@@ -380,7 +380,7 @@ See also [`isvalid`](@ref), [`ncodeunits`](@ref), [`lastindex`](@ref),
 
 # Examples
 ```jldoctest
-julia> length("jμΛIα")
+julia> length("jυΛIα")
 5
 ```
 """
