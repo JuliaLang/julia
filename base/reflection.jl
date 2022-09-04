@@ -871,13 +871,13 @@ function to_tuple_type(@nospecialize(t))
     t
 end
 
-function signature_type(@nospecialize(f), @nospecialize(args))
-    f_type = isa(f, Type) ? Type{f} : typeof(f)
-    if isa(args, Type)
-        u = unwrap_unionall(args)
-        return rewrap_unionall(Tuple{f_type, u.parameters...}, args)
+function signature_type(@nospecialize(f), @nospecialize(argtypes))
+    ft = Core.Typeof(f)
+    if isa(argtypes, Type)
+        u = unwrap_unionall(argtypes)
+        return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
     else
-        return Tuple{f_type, args...}
+        return Tuple{ft, argtypes...}
     end
 end
 
@@ -1221,13 +1221,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.OpaqueClosure)
         return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
-    else
-        tt = Tuple{ft, types...}
-    end
+    tt = signature_type(f, types)
     return code_typed_by_type(tt; optimize, debuginfo, world, interp)
 end
 
@@ -1347,13 +1341,7 @@ function code_ircode(
     if isa(f, Core.OpaqueClosure)
         error("OpaqueClosure not supported")
     end
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft,u.parameters...}, types)
-    else
-        tt = Tuple{ft,types...}
-    end
+    tt = signature_type(f, types)
     return code_ircode_by_type(tt; world, interp, optimize_until)
 end
 
@@ -1427,13 +1415,19 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
         return Core.Compiler.builtin_effects(f, argtypes, rt)
     end
-    effects = Core.Compiler.EFFECTS_TOTAL
-    matches = _methods(f, types, -1, world)::Vector
-    if isempty(matches)
-        # this call is known to throw MethodError
-        return Core.Compiler.Effects(effects; nothrow=false)
+    tt = signature_type(f, types)
+    result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    if result === missing
+        # unanalyzable call, return the unknown effects
+        return Core.Compiler.Effects()
     end
-    for match in matches
+    (; matches) = result
+    effects = Core.Compiler.EFFECTS_TOTAL
+    if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
+        # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+        effects = Core.Compiler.Effects(effects; nothrow=false)
+    end
+    for match in matches.matches
         match = match::Core.MethodMatch
         frame = Core.Compiler.typeinf_frame(interp,
             match.method, match.spec_types, match.sparams, #=run_optimizer=#false)

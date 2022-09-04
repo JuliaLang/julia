@@ -247,9 +247,9 @@ function bail_out_apply(::AbstractInterpreter, @nospecialize(rt), sv::Union{Infe
 end
 
 function any_inbounds(code::Vector{Any})
-    for i=1:length(code)
+    for i = 1:length(code)
         stmt = code[i]
-        if isa(stmt, Expr) && stmt.head === :inbounds
+        if isexpr(stmt, :inbounds)
             return true
         end
     end
