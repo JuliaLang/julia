@@ -2642,7 +2642,7 @@
                        (else (list 'quote
                            ;; being inside quote makes `end` non-special again. issue #27690
                            (with-bindings ((end-symbol #f))
-                                          (parse-atom s #f))))))))
+                                          (with-underscore-context #f (parse-atom s #f)))))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))

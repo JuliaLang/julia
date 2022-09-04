@@ -18,7 +18,7 @@
           (info (cdr parse-level) start-pos ,(if (member 's params) '(ts:last-tok s) -1) "<=")
           (let ((result (begin ,@body)) (end-pos ,(if (member 's params) '(stream-pos s) -1)))
               (info (cdr parse-level) (string start-pos ":" end-pos) "=>" result))))))
-(define enable-debug #t)
+(define enable-debug #f)
 (load "jlfrontend.scm")
 
 ; grep 'define (parse-' julia-parser.scm|sed 's/^(define (\(parse-[^ ]\+\) s.*/\1/g' | grep -v define | tr '\n' ' '
@@ -278,4 +278,7 @@
   (parse-expect-underscore "struct ReentrantLock <: AbstractLock\n_::NTuple{Int === Int32 ? 2 : 3, Int}\nend" parse-stmts
     '(struct (false) (<: ReentrantLock AbstractLock) (block (line 2 none) (:: _ (curly NTuple (if (call === Int Int32) 2 3) Int)))))
   #t)
+  ; normal.jl:222 in @eval
+  (parse-expect-underscore "_randfun = Symbol(:_, randfun)" parse-stmts
+    '(= _randfun (call Symbol '_ randfun)))
 )
