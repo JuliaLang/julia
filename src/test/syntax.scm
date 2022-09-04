@@ -38,6 +38,8 @@
 (define (curry1 func . args)
   (lambda (s) (apply func (cons s args))))
 
+(define underscore-gen-block #f)
+
 (define-macro (parse-expect s production expected)
   `(let ((production-name ',(if (list? production) (cadr production) production)))
         (info "======>" 'test (string "'" ,s "'") production-name)
@@ -68,11 +70,22 @@
 (define right-paren #\))
 
 (and
+(and
   (parse-expect "1+1" parse-stmts '(call + 1 1))
   (parse-expect "x->x,1" parse-stmts '(tuple (-> x (block (line 1 none) x)) 1))
   (parse-expect "(sqrt ∘ +)(3, 6)" parse-stmts '(call (call ∘ sqrt +) 3 6))
   (parse-expect "b, c" parse-comma '(tuple b c))
   (parse-expect "b" parse-comma 'b)
+  (parse-expect "(x::Int, a::Array{T} where T>:Int) -> 1" parse-stmts
+    '(-> (tuple (:: x Int) (:: a (where (curly Array T) (>: T Int)))) (block (line 1 none) 1)))
+  (parse-expect "((x::Int, a::Array{T}) where T>:Int) -> 1" parse-stmts
+    '(-> (where (tuple (:: x Int) (:: a (curly Array T))) (>: T Int)) (block (line 1 none) 1)))
+  (parse-expect "(x::Int, a::Array{T} where T>:Int) -> 1" parse-stmts
+    '(-> (tuple (:: x Int) (:: a (where (curly Array T) (>: T Int)))) (block (line 1 none) 1)))
+  (parse-expect "x::Int -> 1" parse-stmts
+    '(-> (:: x Int) (block (line 1 none) 1)))
+  (parse-expect "::Int -> 1" parse-stmts
+    '(-> (:: Int) (block (line 1 none) 1)))
 
   (parse-expect "&" parse-unary-prefix '&)
   (parse-expect "&a" parse-unary-prefix '(& a))
@@ -132,7 +145,6 @@
   (parse-expect "a, b" parse-eq* 'a)
   #t)
 
-(define underscore-gen-block #f)
 
 ; sed -i 's/ \(#[0-9]\+#_\)/ |\1|/g'
 ;; this test case are align with that in scala
@@ -175,12 +187,10 @@
     '(-> |#1#_| (call + (call f |#1#_| (-> |#2#_| (call + |#2#_| 1))) 2)))
 
   (parse-expect-underscore "a=_" parse-stmts
-    '(= a (-> |#1#_| |#1#_|))
-    '(-> |#1#_| (= a |#1#_|)))
+    '(= a (-> |#1#_| |#1#_|)))
   (parse-expect-underscore "a=_+1" parse-stmts ; shall (a=_+1) means x->a=x+1
     '(= a (-> |#1#_| (call + |#1#_| 1))))
   #t)
-
 
 (and
   (parse-expect-underscore "[_, _+1]" parse-stmts
@@ -229,6 +239,10 @@
     '(tuple (= _ a) (= (tuple _ b) t)))
   (parse-expect-underscore "(_, a) -> 1" parse-stmts
     '(-> (tuple _ a) (block (line 1 none) 1)))
+  (parse-expect-underscore "_ -> 1" parse-stmts
+    '(-> _ (block (line 1 none) 1)))
+  (parse-expect-underscore "_::Int -> 1" parse-stmts
+    '(-> (:: _ Int) (block (line 1 none) 1)))
   ; array.jl:213
   (parse-expect-underscore "elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)" parse-stmts
     '(= (where (call elsize (macrocall @nospecialize (line 1 none) (:: _ (curly Type A)))) T (<: A (curly Array T))) (block (line 1 none) (call aligned_sizeof T))))
@@ -254,6 +268,9 @@
   ; compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl:1353
   (parse-expect-underscore "escape_builtin!(::typeof(===), _...) = return false" parse-stmts
     '(= (call escape_builtin! (:: (call typeof ===)) (... _)) (block (line 1 none) (return (false)))))
+  ; compiler/inference.jl:2196
+  (parse-expect-underscore "@test @inferred(g26172(Val(10))) === ntuple(_ -> nothing, 10)" parse-stmts
+    '(macrocall @test (line 1 none) (call === (macrocall @inferred (line 1 none) (call g26172 (call Val 10))) (call ntuple (-> _ (block (line 1 none) nothing)) 10))))
   ; compiler/codegen.jl:356
   (parse-expect-underscore "mktemp() do f_22330, _ end" parse-stmts
     '(do (call mktemp) (-> (tuple f_22330 _) (block (line 1 none)))))
@@ -261,3 +278,4 @@
   (parse-expect-underscore "struct ReentrantLock <: AbstractLock\n_::NTuple{Int === Int32 ? 2 : 3, Int}\nend" parse-stmts
     '(struct (false) (<: ReentrantLock AbstractLock) (block (line 2 none) (:: _ (curly NTuple (if (call === Int Int32) 2 3) Int)))))
   #t)
+)

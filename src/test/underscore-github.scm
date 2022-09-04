@@ -95,8 +95,7 @@
 
   ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-356279351
   (parse-expect-underscore "_ -> 1" parse-stmts
-    ; not know how this mean
-    '(-> |#1#_| (-> |#1#_| (block (line 1 none) 1))))
+    '(-> _ (block (line 1 none) 1)))
 
   ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-414069218
   ; df = CSV.read(file) |> @map({_.col1, _.col2}) |> DataFrame
