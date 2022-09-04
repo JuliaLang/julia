@@ -21,7 +21,7 @@ T24Linear(::Type{T}, dims::Int...) where T = T24Linear(T, dims)
 T24Linear(::Type{T}, dims::NTuple{N,Int}) where {T,N} = T24Linear{T,N,dims}()
 
 T24Linear(     X::AbstractArray{T,N}) where {T,N  } = T24Linear{T,N}(X)
-T24Linear{T  }(X::AbstractArray{_,N}) where {T,N,_} = T24Linear{T,N}(X)
+T24Linear{T  }(X::AbstractArray{_T,N}) where {T,N,_T} = T24Linear{T,N}(X)
 T24Linear{T,N}(X::AbstractArray     ) where {T,N  } = T24Linear{T,N,size(X)}(X...)
 
 Base.size(::T24Linear{T,N,dims}) where {T,N,dims} = dims
@@ -40,7 +40,7 @@ TSlow(::Type{T}, dims::NTuple{N,Int}) where {T,N} = TSlow{T,N}(Dict{NTuple{N,Int
 
 TSlow{T,N}(X::TSlow{T,N})         where {T,N  } = X
 TSlow(     X::AbstractArray{T,N}) where {T,N  } = TSlow{T,N}(X)
-TSlow{T  }(X::AbstractArray{_,N}) where {T,N,_} = TSlow{T,N}(X)
+TSlow{T  }(X::AbstractArray{_T,N}) where {T,N,_T} = TSlow{T,N}(X)
 TSlow{T,N}(X::AbstractArray     ) where {T,N  } = begin
     A = TSlow(T, size(X))
     for I in CartesianIndices(X)
