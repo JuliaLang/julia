@@ -52,7 +52,7 @@
   (if paren
     `(-> ,newsy (tuple ,origin ,newsy))
     `(tuple ,origin (-> ,newsy ,newsy))))
-(define-macro (parse-expect-underscroe s production expected . expected2)
+(define-macro (parse-expect-underscore s production expected . expected2)
   `(and (parse-expect ,s ,production ,expected)
         (let* ((expected2 ,(if (pair? expected2) (car expected2) expected))
                (result2 (parse-expect ,(string "(" s ")") ,production expected2))
@@ -137,127 +137,127 @@
 ; sed -i 's/ \(#[0-9]\+#_\)/ |\1|/g'
 ;; this test case are align with that in scala
 (and
-  (parse-expect-underscroe "(_+(1))" parse-stmts
+  (parse-expect-underscore "(_+(1))" parse-stmts
     '(-> |#1#_| (call + |#1#_| 1)))
-  (parse-expect-underscroe "_+_" parse-stmts
+  (parse-expect-underscore "_+_" parse-stmts
     '(-> (tuple |#1#_| |#2#_|) (call + |#1#_| |#2#_|)))
-  (parse-expect-underscroe "_,_" parse-stmts
+  (parse-expect-underscore "_,_" parse-stmts
     '(tuple (-> |#1#_| |#1#_|) (-> |#2#_| |#2#_|))
     '(-> (tuple |#1#_| |#2#_|) (tuple |#1#_| |#2#_|)))
-  (parse-expect-underscroe "_+1,_" parse-stmts
+  (parse-expect-underscore "_+1,_" parse-stmts
     '(tuple (-> |#1#_| (call + |#1#_| 1)) (-> |#2#_| |#2#_|))
     '(-> |#2#_| (tuple (-> |#1#_| (call + |#1#_| 1)) |#2#_|)))
-  (parse-expect-underscroe "f(_)" parse-stmts
+  (parse-expect-underscore "f(_)" parse-stmts
     '(-> |#1#_| (call f |#1#_|)))
-  (parse-expect-underscroe "f(_),_" parse-stmts
+  (parse-expect-underscore "f(_),_" parse-stmts
     '(tuple (-> |#1#_| (call f |#1#_|)) (-> |#2#_| |#2#_|))
     '(-> |#2#_| (tuple (-> |#1#_| (call f |#1#_|)) |#2#_|)))
-  (parse-expect-underscroe "f(_,_+1)" parse-stmts
+  (parse-expect-underscore "f(_,_+1)" parse-stmts
     '(-> |#1#_| (call f |#1#_| (-> |#2#_| (call + |#2#_| 1)))))
-  (parse-expect-underscroe "f(_+1,_)" parse-stmts
+  (parse-expect-underscore "f(_+1,_)" parse-stmts
     '(-> |#2#_| (call f (-> |#1#_| (call + |#1#_| 1)) |#2#_|)))
-  (parse-expect-underscroe "_.a(_).b(_)" parse-stmts
+  (parse-expect-underscore "_.a(_).b(_)" parse-stmts
     '(-> (tuple |#1#_| |#2#_| |#3#_|) (call (|.| (call (|.| |#1#_| 'a) |#2#_|) 'b) |#3#_|)))
-  (parse-expect-underscroe "_.a(_).b(_),_" parse-stmts
+  (parse-expect-underscore "_.a(_).b(_),_" parse-stmts
     '(tuple (-> (tuple |#1#_| |#2#_| |#3#_|) (call (|.| (call (|.| |#1#_| 'a) |#2#_|) 'b) |#3#_|)) (-> |#4#_| |#4#_|))
     '(-> |#4#_| (tuple (-> (tuple |#1#_| |#2#_| |#3#_|) (call (|.| (call (|.| |#1#_| 'a) |#2#_|) 'b) |#3#_|)) |#4#_|)))
-  (parse-expect-underscroe "b(_) + 1", parse-stmts
+  (parse-expect-underscore "b(_) + 1", parse-stmts
     '(-> |#1#_| (call + (call b |#1#_|) 1)))
-  (parse-expect-underscroe "(1, b(_, 2))", parse-stmts
+  (parse-expect-underscore "(1, b(_, 2))", parse-stmts
     '(tuple 1 (-> |#1#_| (call b |#1#_| 2))))
-  (parse-expect-underscroe "(1, b(_, 2)+1)", parse-stmts
+  (parse-expect-underscore "(1, b(_, 2)+1)", parse-stmts
     '(tuple 1 (-> |#1#_| (call + (call b |#1#_| 2) 1))))
-  (parse-expect-underscroe "a(1, b(_, 2))", parse-stmts
+  (parse-expect-underscore "a(1, b(_, 2))", parse-stmts
     '(call a 1 (-> |#1#_| (call b |#1#_| 2))))
-  (parse-expect-underscroe "a(1, b(_, 2)+1)", parse-stmts
+  (parse-expect-underscore "a(1, b(_, 2)+1)", parse-stmts
     '(call a 1 (-> |#1#_| (call + (call b |#1#_| 2) 1))))
-  (parse-expect-underscroe "f(_, _+1) + 2", parse-stmts
+  (parse-expect-underscore "f(_, _+1) + 2", parse-stmts
     '(-> |#1#_| (call + (call f |#1#_| (-> |#2#_| (call + |#2#_| 1))) 2)))
 
-  (parse-expect-underscroe "a=_" parse-stmts
+  (parse-expect-underscore "a=_" parse-stmts
     '(= a (-> |#1#_| |#1#_|))
     '(-> |#1#_| (= a |#1#_|)))
-  (parse-expect-underscroe "a=_+1" parse-stmts ; shall (a=_+1) means x->a=x+1
+  (parse-expect-underscore "a=_+1" parse-stmts ; shall (a=_+1) means x->a=x+1
     '(= a (-> |#1#_| (call + |#1#_| 1))))
   #t)
 
 
 (and
-  (parse-expect-underscroe "[_, _+1]" parse-stmts
+  (parse-expect-underscore "[_, _+1]" parse-stmts
     '(-> |#1#_| (vect |#1#_| (-> |#2#_| (call + |#2#_| 1)))))
-  (parse-expect-underscroe "[_+a for a in arr]" parse-stmts ; shall this be x->[x+a for a in arr]
+  (parse-expect-underscore "[_+a for a in arr]" parse-stmts ; shall this be x->[x+a for a in arr]
     '(comprehension (generator (-> |#1#_| (call + |#1#_| a)) (= a arr))))
-  (parse-expect-underscroe "_[_]" parse-stmts
+  (parse-expect-underscore "_[_]" parse-stmts
     '(-> (tuple |#1#_| |#2#_|) (ref |#1#_| |#2#_|)))
-  (parse-expect-underscroe "_[_, _]" parse-stmts
+  (parse-expect-underscore "_[_, _]" parse-stmts
     '(-> (tuple |#1#_| |#2#_| |#3#_|) (ref |#1#_| |#2#_| |#3#_|)))
-  (parse-expect-underscroe "_[_, _+1]" parse-stmts
+  (parse-expect-underscore "_[_, _+1]" parse-stmts
     '(-> (tuple |#1#_| |#2#_|) (ref |#1#_| |#2#_| (-> |#3#_| (call + |#3#_| 1)))))
   #t)
 
 (load "test/underscore-github.scm")
 
 (and
-  (parse-expect-underscroe "_=1" parse-stmts
+  (parse-expect-underscore "_=1" parse-stmts
     '(= _ 1))
-  (parse-expect-underscroe "f(_) = 1" parse-stmts
+  (parse-expect-underscore "f(_) = 1" parse-stmts
     '(= (call f _) (block (line 1 none) 1)))
-  (parse-expect-underscroe "f(_; a=_, _=2) = 1" parse-stmts
+  (parse-expect-underscore "f(_; a=_, _=2) = 1" parse-stmts
     '(= (call f (parameters (kw a (-> |#2#_| |#2#_|)) (kw _ 2)) _) (block (line 1 none) 1)))
-  (parse-expect-underscroe "f((x, _)) = 1" parse-stmts
+  (parse-expect-underscore "f((x, _)) = 1" parse-stmts
     '(= (call f (tuple x _)) (block (line 1 none) 1)))
-  (parse-expect-underscroe "f((x, _); a=_) = 1" parse-stmts
+  (parse-expect-underscore "f((x, _); a=_) = 1" parse-stmts
     '(= (call f (parameters (kw a (-> |#2#_| |#2#_|))) (tuple x _)) (block (line 1 none) 1)))
-  (parse-expect-underscroe "a, _ = t" parse-stmts
+  (parse-expect-underscore "a, _ = t" parse-stmts
     '(= (tuple a _) t)
     '(tuple a (= _ t)))
-  (parse-expect-underscroe "a, _... = t" parse-stmts
+  (parse-expect-underscore "a, _... = t" parse-stmts
     '(= (tuple a (... _)) t)
     '(tuple a (= (... _) t)))
-  (parse-expect-underscroe "a, f(_) = t" parse-stmts
+  (parse-expect-underscore "a, f(_) = t" parse-stmts
     '(= (tuple a (call f _)) t)
     '(tuple a (= (call f _) (block (line 1 none) t))))
-  (parse-expect-underscroe "a, (_, b) = t" parse-stmts
+  (parse-expect-underscore "a, (_, b) = t" parse-stmts
     '(= (tuple a (tuple _ b)) t)
     '(tuple a (= (tuple _ b) t)))
 
-  (parse-expect-underscroe "a, (_, b) = _ = t" parse-stmts
+  (parse-expect-underscore "a, (_, b) = _ = t" parse-stmts
     '(= (tuple a (tuple _ b)) (= _ t))
     '(tuple a (= (tuple _ b) (= _ t))))
-  (parse-expect-underscroe "_ = a, (_, b) = t" parse-stmts
+  (parse-expect-underscore "_ = a, (_, b) = t" parse-stmts
     '(= _ (= (tuple a (tuple _ b)) t))
     '(tuple (= _ a) (= (tuple _ b) t)))
-  (parse-expect-underscroe "(_, a) -> 1" parse-stmts
+  (parse-expect-underscore "(_, a) -> 1" parse-stmts
     '(-> (tuple _ a) (block (line 1 none) 1)))
   ; array.jl:213
-  (parse-expect-underscroe "elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)" parse-stmts
+  (parse-expect-underscore "elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)" parse-stmts
     '(= (where (call elsize (macrocall @nospecialize (line 1 none) (:: _ (curly Type A)))) T (<: A (curly Array T))) (block (line 1 none) (call aligned_sizeof T))))
   ; multidimensional.jl:643
-  (parse-expect-underscroe "@inline simd_inner_length(iter::CartesianPartition, (_, len, _)::Tuple{Int,Int,CartesianIndex}) = len" parse-stmts
+  (parse-expect-underscore "@inline simd_inner_length(iter::CartesianPartition, (_, len, _)::Tuple{Int,Int,CartesianIndex}) = len" parse-stmts
     '(macrocall @inline (line 1 none) (= (call simd_inner_length (:: iter CartesianPartition) (:: (tuple _ len _) (curly Tuple Int Int CartesianIndex))) (block (line 1 none) len))))
   ; compiler/abstractinterpretation.jl:970
-  (parse-expect-underscroe "function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState) end" parse-stmts
+  (parse-expect-underscore "function const_prop_argument_heuristic(_::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState) end" parse-stmts
     '(function (call const_prop_argument_heuristic (:: _ AbstractInterpreter) (:: (tuple (parameters fargs argtypes)) ArgInfo) (:: sv InferenceState)) (block (line 1 none) (line 1 none))))
   ; compiler/typeinfer.jl:254
-  (parse-expect-underscroe "(caller for (caller, _, _) = results)" parse-stmts
+  (parse-expect-underscore "(caller for (caller, _, _) = results)" parse-stmts
     '(generator caller (= (tuple caller _ _) results)))
-  (parse-expect-underscroe "(caller for (caller, _, _) in results)" parse-stmts
+  (parse-expect-underscore "(caller for (caller, _, _) in results)" parse-stmts
     '(generator caller (= (tuple caller _ _) results)))
-  (parse-expect-underscroe "for (caller, _, _) in results end" parse-stmts
+  (parse-expect-underscore "for (caller, _, _) in results end" parse-stmts
     '(for (= (tuple caller _ _) results) (block (line 1 none) (line 1 none))))
   ; compiler/ssair/inlining.jl:404
-  (parse-expect-underscroe "for ((_, idx′), stmt′) in inline_compact end" parse-stmts
+  (parse-expect-underscore "for ((_, idx′), stmt′) in inline_compact end" parse-stmts
     '(for (= (tuple (tuple _ idx′) stmt′) inline_compact) (block (line 1 none) (line 1 none))))
   ; compiler/tfuncs.jl:2274
-  (parse-expect-underscroe "function setglobal!_tfunc(@nospecialize(M), @nospecialize(s), @nospecialize(v), @nospecialize(_=Symbol)) end" parse-stmts
+  (parse-expect-underscore "function setglobal!_tfunc(@nospecialize(M), @nospecialize(s), @nospecialize(v), @nospecialize(_=Symbol)) end" parse-stmts
     '(function (call setglobal!_tfunc (macrocall @nospecialize (line 1 none) M) (macrocall @nospecialize (line 1 none) s) (macrocall @nospecialize (line 1 none) v) (macrocall @nospecialize (line 1 none) (= _ Symbol))) (block (line 1 none) (line 1 none))))
   ; compiler/ssair/EscapeAnalysis/EscapeAnalysis.jl:1353
-  (parse-expect-underscroe "escape_builtin!(::typeof(===), _...) = return false" parse-stmts
+  (parse-expect-underscore "escape_builtin!(::typeof(===), _...) = return false" parse-stmts
     '(= (call escape_builtin! (:: (call typeof ===)) (... _)) (block (line 1 none) (return (false)))))
   ; compiler/codegen.jl:356
-  (parse-expect-underscroe "mktemp() do f_22330, _ end" parse-stmts
+  (parse-expect-underscore "mktemp() do f_22330, _ end" parse-stmts
     '(do (call mktemp) (-> (tuple f_22330 _) (block (line 1 none)))))
   ; lock.jl:45
-  (parse-expect-underscroe "struct ReentrantLock <: AbstractLock\n_::NTuple{Int === Int32 ? 2 : 3, Int}\nend" parse-stmts
+  (parse-expect-underscore "struct ReentrantLock <: AbstractLock\n_::NTuple{Int === Int32 ? 2 : 3, Int}\nend" parse-stmts
     '(struct (false) (<: ReentrantLock AbstractLock) (block (line 2 none) (:: _ (curly NTuple (if (call === Int Int32) 2 3) Int)))))
   #t)
