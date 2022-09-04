@@ -134,7 +134,7 @@ julia> signbit(-4.1)
 true
 ```
 """
-signbit(x::Real) = x < 0
+signbit(x::Real) = x < zero(x)
 
 """
     sign(x)
