@@ -65,6 +65,10 @@
                (parse-expect ,(string "(" s "),_") ,production comma-expected-f)
                (parse-expect ,(string "((" s "),_)") ,production comma-expected-t)
                ))))
+(define-macro (parse-expect-underscore-function s production expected expected2)
+  `(and (parse-expect ,s ,production ,expected)
+        (parse-expect ,(string "function " s " end") parse-stmts '(function ,,expected2 (block (line 1 none) (line 1 none))))
+        (parse-expect ,(string s " = 1") parse-stmts '(= ,,expected2 (block (line 1 none) 1)))))
 
 (define left-paren #\()
 (define right-paren #\))
@@ -187,6 +191,9 @@
     '(-> |#1#_| (call + (call f |#1#_| (-> |#2#_| (call + |#2#_| 1))) 2)))
 
   (parse-expect-underscore "a=_" parse-stmts
+    '(= a (-> |#1#_| |#1#_|))
+    '(-> |#1#_| (= a |#1#_|)))
+  (parse-expect-underscore "a=(_)" parse-stmts
     '(= a (-> |#1#_| |#1#_|)))
   (parse-expect-underscore "a=_+1" parse-stmts ; shall (a=_+1) means x->a=x+1
     '(= a (-> |#1#_| (call + |#1#_| 1))))
@@ -243,6 +250,38 @@
     '(-> _ (block (line 1 none) 1)))
   (parse-expect-underscore "_::Int -> 1" parse-stmts
     '(-> (:: _ Int) (block (line 1 none) 1)))
+
+  (parse-expect-underscore-function "f(_)" parse-stmts
+    '(-> |#1#_| (call f |#1#_|))
+    '(call f _))
+  (parse-expect-underscore-function "f(_::Any)" parse-stmts
+    '(-> |#1#_| (call f (:: |#1#_| Any)))
+    '(call f (:: _ Any)))
+  (parse-expect-underscore-function "f((_, a)::Pair)" parse-stmts
+    '(call f (:: (-> |#1#_| (tuple |#1#_| a)) Pair))
+    '(call f (:: (tuple _ a) Pair)))
+  (parse-expect-underscore-function "f(_, a)" parse-stmts
+    '(-> |#1#_| (call f |#1#_| a))
+    '(call f _ a))
+  (parse-expect-underscore-function "f(_; a)" parse-stmts
+    '(-> |#1#_| (call f (parameters a) |#1#_|))
+    '(call f (parameters a) _))
+  (parse-expect-underscore-function "f(_; _)" parse-stmts
+    '(-> (tuple |#1#_| |#2#_|) (call f (parameters |#2#_|) |#1#_|))
+    '(call f (parameters _) _))
+  (parse-expect-underscore-function "f(_; _=_)" parse-stmts
+    '(-> (tuple |#1#_| |#3#_|) (call f (parameters (kw _ |#3#_|)) |#1#_|))
+    '(call f (parameters (kw _ (-> |#3#_| |#3#_|))) _))
+  (parse-expect-underscore-function "f(a; kw=_)" parse-stmts
+    '(-> |#1#_| (call f (parameters (kw kw |#1#_|)) a))
+    '(call f (parameters (kw kw (-> |#1#_| |#1#_|))) a))
+  (parse-expect-underscore-function "f(a; kw=_+1)" parse-stmts
+    '(call f (parameters (kw kw (-> |#1#_| (call + |#1#_| 1)))) a)
+    '(call f (parameters (kw kw (-> |#1#_| (call + |#1#_| 1)))) a))
+  (parse-expect-underscore-function "f(_, _=_; kw=_)" parse-stmts
+    '(-> (tuple |#1#_| |#3#_| |#4#_|) (call f (parameters (kw kw |#4#_|)) |#1#_| (kw _ |#3#_|)))
+    '(call f (parameters (kw kw (-> |#4#_| |#4#_|))) _ (kw _ (-> |#3#_| |#3#_|))))
+
   ; array.jl:213
   (parse-expect-underscore "elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)" parse-stmts
     '(= (where (call elsize (macrocall @nospecialize (line 1 none) (:: _ (curly Type A)))) T (<: A (curly Array T))) (block (line 1 none) (call aligned_sizeof T))))
@@ -293,8 +332,22 @@
     '(call * 2000.0 (macrocall @__str (line 1 none) "x")))
   (parse-expect-underscore "_\"x\"_" parse-stmts
     '(macrocall @__str (line 1 none) "x" "_"))
+  ; test/syntax.jl:1431
+  (parse-expect "
+    A = function (s, o...)
+      f(a, b) do
+      end
+    end,
+    B = function (s, o...)
+      f(a, b) do
+      end
+    end" parse-stmts
+    '(= A (= (tuple (function (tuple s (... o)) (block (line 2 none) (line 3 none) (do (call f a b) (-> (tuple) (block (line 4 none)))))) B) (function (tuple s (... o)) (block (line 6 none) (line 7 none) (do (call f a b) (-> (tuple) (block (line 8 none)))))))))
   ; test/syntax.jl:1864
   (parse-expect-underscore "f30656(T) = (t, _)::Pair -> t >= T" parse-stmts
     '(= (call f30656 T) (block (line 1 none) (-> (:: (tuple t _) Pair) (block (line 1 none) (call >= t T))))))
+  ; test/misc.jl:709
+  (parse-expect-underscore "function closefunc(_) end" parse-stmts
+    '(function (call closefunc _) (block (line 1 none) (line 1 none))))
   #t)
 )

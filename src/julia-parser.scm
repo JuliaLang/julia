@@ -225,6 +225,7 @@
 ;; #f means no _ allowed in context, would parsed as is
 ;; #t means no _ allowed in context, but could create a new context
 ;; 'stmt means no _ allowed in context, should be created in subcontext
+;;   the difference between #t and 'stmt is that #t could changes #f, while 'stmt leave #f as is
 ;; 'paren means _ could not cross this scope, mostly in explicit (_+1) or (_, 1)
 ;; 'comma means _ would unwind if it is the only token in context like in f(_, 1)
 ;; note (f(_),1) would unwind to (x->f(x),1)
@@ -258,15 +259,14 @@
                   (let* ((line-node (line-number-node s))
                          (ex ,@body)
                          (args (ctx_:get underscore-context)))
-                        (cond
-                          ((not (pair? args)) ex)
-                          ((or (pair? (cdr args))
-                               (not (equal? ex (car args))) ; the body is the same as args
-                               (not (vector? (ctx_:parent underscore-context))))
-                           (underscore-block args line-node ex))
-                          (else
-                           (ctx_:unwind! underscore-context)
-                           ex)))))
+                        (if (and (length= args 1)
+                                 (is-underscore-symbol? ex)
+                                 (eqv? (get-decl-name ex) (car args)))
+                            (ctx_:unwind! underscore-context)
+                            '())
+                        (if (not (pair? (ctx_:get underscore-context)))
+                            ex
+                            (underscore-block args line-node ex)))))
 
 ;; --- lexer ---
 
@@ -777,7 +777,7 @@
           (error (string "extra token \"" t "\" after end of expression"))))
     ex)))
 
-(define (parse-eq s) (parse-assignment s parse-comma))
+(define (parse-eq s) (with-underscore-context 'stmt (parse-assignment s parse-comma)))
 
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
 ;; an element of an argument list
@@ -815,8 +815,10 @@
       `(= ,(cadr ex) ,(add-line-number (caddr ex) `(line ,lno ,current-filename)))
       ex))
 
+(define (is-car? ex head)
+  (and (pair? ex) (eqv? (car ex) head)))
 (define (get-decl-name s)
-  (if (and (pair? s) (eqv? (car s) '::))
+  (if (and (is-car? s '::))
       (if (pair? (cdr s)) (cadr s) '()) ; (:: Int) would return '()
       s))
 (define (is-underscore-symbol? s (in-decl #t))
@@ -825,14 +827,14 @@
          (= (string.char (string s) 0) #\#)
          (= (string-lastchar (string s)) #\_))))
 (define (is-underscore-block? ex)
-  (if (and (pair? ex) (eq? (car ex) '->) (pair? (cdr ex)))
+  (if (and (is-car? ex '->) (pair? (cdr ex)))
       (let* ((arg (cadr ex))
              (body (cddr ex)))
           (or (is-underscore-symbol? arg)
-              (and (pair? arg) (is-underscore-symbol? (cadr arg))))) ; first arg means all
+              (and (pair? arg) (pair? (cdr arg)) (is-underscore-symbol? (cadr arg))))) ; first arg means all
       #f))
 (define (underscore-block args line-node ex)
-  (let ((body (if underscore-gen-block `(block ,line-node ,ex) ex)))
+  (let ((body (if (and underscore-gen-block line-node) `(block ,line-node ,ex) ex)))
        (if (pair? (cdr args)) ; count > 1
           `(-> ,(cons 'tuple (reverse args)) ,body)
           `(-> ,(car args) ,body))))
@@ -842,10 +844,10 @@
       (f t)))
 (define (revert-underscore-block ex)
   (define (unpack-block ex)
-    (if (and (pair? ex) (eqv? (car ex) 'block))
+    (if (and (is-car? ex 'block))
         (caddr ex)
         ex))
-  (if (and (pair? ex) (eq? (car ex) '->) (pair? (cdr ex)))
+  (if (and (is-car? ex '->) (pair? (cdr ex)))
       (let* ((arg (cadr ex))
              (args-decl (if (symbol? arg) (list arg) (cdr arg)))
              (args (map (lambda (a) (if (symbol? a) a (cadr a))) args-decl))
@@ -854,16 +856,61 @@
             (deep-map (lambda (s) (if (is-args? s) '_ s)) body))
       ex))
 (define is-lvalue-keyword?
-  (Set '(tuple call parameters macrocall where)))
+  (Set '(tuple parameters macrocall where)))
+;; when we see `->` in `ex ->` or `=` in `ex =`, we would apply revert-underscore for ex
+;; for `->` revert-current-underscore! would also be applied for special case `_ -> 1`
+;; revert-underscore would take care of all tuple: `(_, 1)`, call `f(_)`,
+;;   kw `(_=b)` (only key but not value here), and also `parameters, where, ::` for parameters
+;;   it shall not apply to anything thinked as right value
 (define (revert-underscore ex)
-  (if (pair? ex)
-      (cond ((is-underscore-block? ex) (revert-underscore-block ex))
-            ((is-lvalue-keyword? (car ex)) (map revert-underscore ex))
-            ((eqv? (car ex) 'kw) `(kw ,(revert-underscore (cadr ex)) ,@(cddr ex)))
-            ((and (eqv? (car ex) '::) (pair? (cdr ex)))
-             `(:: ,(revert-underscore (cadr ex)) ,@(cddr ex)))
-            (else ex)) ; TODO: map check
-      ex))
+  (define (parse-rvalue ex) ; return args (no sort)
+    (cond ((pair? ex) (apply append (map parse-rvalue ex)))
+          ((is-underscore-block? ex) '())
+          ((is-underscore-symbol? ex #f) (list ex))
+          (else '())))
+  (define (revert-rvalue ex args line)
+    (let* ((is-used? (Set (parse-rvalue ex)))
+           (args (filter is-used? args))) ; TODO: not filter when is-used? empty
+         (if (pair? args)
+             (underscore-block args line ex)
+             ex)))
+  (define (unpack-block ex) ; might has line-node
+    (let* ((args (cadr ex))
+           (args (if (is-car? args 'tuple) (cdr args) (list args)))
+           (args (map get-decl-name args))
+           (body (caddr ex)))
+          (if (and (is-car? body 'block))
+              (list args (cadr body) (caddr body))
+              (list args #f body))))
+  (define (revert-lvalue ex firstcall args line)
+    (if (pair? ex)
+        (cond ((is-underscore-block? ex)
+               (let ((block (unpack-block ex)))
+                    (revert-lvalue (caddr block)
+                                   firstcall
+                                   (append (car block) args) ; TODO: sort args here
+                                   (cadr block))))
+
+              ((eqv? (car ex) 'call)
+               (if firstcall
+                   (map (lambda (e) (revert-lvalue e #f args line)) ex)
+                   (revert-rvalue ex args line)))
+
+              ((or (memq (car ex) '(kw =)) ; TODO: consider where here
+                   (and (eqv? (car ex) '::) (pair? (cdr ex))))
+               (let ((lvalue (revert-lvalue (cadr ex) firstcall args line))
+                     (rvalue (map (lambda (e) (revert-rvalue e args line)) (cddr ex)))) ; should be only one
+                    `(,(car ex) ,lvalue ,@rvalue)))
+
+              ((or (is-lvalue-keyword? (car ex)) args)
+               (map (lambda (e) (revert-lvalue e firstcall args line)) ex))
+
+              (else
+               (let ((is-args? (Set args)))
+                    (deep-map (lambda (e) (if (is-args? e) '_ e)) ex)))) ; TODO: curly
+        (cond ((is-underscore-symbol? ex #f) '_)
+              (ex))))
+  (revert-lvalue ex #t '() #f))
 (define (revert-current-underscore! ex)
   (revert-underscore
     (if (is-underscore-symbol? ex)
@@ -874,7 +921,6 @@
         ex)))
 
 (define (parse-assignment s down)
-(with-underscore-context 'stmt
   (let* ((ex (down s))
          (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
@@ -890,12 +936,12 @@
                 ((eq? t '=)
                  ;; hack _ in existing ex force to '_
                  ;; insert line/file for short-form function defs, otherwise leave alone
-                 (let* ((ex (revert-underscore ex))
+                 (let* ((ex (revert-current-underscore! ex))
                         (lno (input-port-line (ts:port s))))
                    (short-form-function-loc
                     (list t ex (parse-assignment s down)) lno)))
                 (else
-                 (list t ex (parse-assignment s down)))))))))
+                 (list t ex (parse-assignment s down))))))))
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
@@ -1600,7 +1646,8 @@
        ((function macro)
         (let* ((loc   (line-number-node s))
                (paren (eqv? (require-token s) #\())
-               (sig   (revert-underscore (parse-def s (eq? word 'function) paren))))
+               ; TODO: design context to remove revert
+               (sig   (revert-underscore (with-underscore-context #t (parse-def s (eq? word 'function) paren)))))
           (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of " word " \"" sig "\"")))
