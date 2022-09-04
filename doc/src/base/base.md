@@ -61,6 +61,23 @@ Finally:
 and `outer` is parsed as a keyword when used to modify the scope of a variable in an iteration specification of a `for` loop.
 Creation of variables named `where`, `in`, `isa` or `outer` is allowed though.
 
+Unlike `in`, `isa` and `outer`, `where` remains being an operator when used in special operations as stated above
+(regardless of the fact that it may have been used as a name of a variable in that same global namespace):
+```julia
+julia> begin
+
+       where = 10
+
+       function add(x::T, y::T) where T<:Integer
+           x + y
+       end
+
+       print(add(where, where))
+
+       end
+20
+```
+
 ```@docs
 module
 export
