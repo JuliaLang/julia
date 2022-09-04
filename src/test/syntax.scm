@@ -277,8 +277,24 @@
   ; lock.jl:45
   (parse-expect-underscore "struct ReentrantLock <: AbstractLock\n_::NTuple{Int === Int32 ? 2 : 3, Int}\nend" parse-stmts
     '(struct (false) (<: ReentrantLock AbstractLock) (block (line 2 none) (:: _ (curly NTuple (if (call === Int Int32) 2 3) Int)))))
-  #t)
   ; normal.jl:222 in @eval
   (parse-expect-underscore "_randfun = Symbol(:_, randfun)" parse-stmts
     '(= _randfun (call Symbol '_ randfun)))
+  ; test/testhelpers/arrayindexingtypes.jl:24
+  ; T24Linear{T  }(X::AbstractArray{_,N}) where {T,N,_} = T24Linear{T,N}(X)
+  ; test/intfuncs.jl:247
+  (parse-expect-underscore "try gcdx(x, m)[1] == 1 catch _ true end" parse-stmts
+    '(try (block (line 1 none) (call == (ref (call gcdx x m) 1) 1)) _ (block (line 1 none) (true))))
+  ; https://github.com/JuliaLang/julia/pull/39139
+  ; @test [_ for _ in 1:5] == 1:5
+
+  ; test/syntax.jl:1188
+  (parse-expect-underscore "2e3_\"x\"" parse-stmts
+    '(call * 2000.0 (macrocall @__str (line 1 none) "x")))
+  (parse-expect-underscore "_\"x\"_" parse-stmts
+    '(macrocall @__str (line 1 none) "x" "_"))
+  ; test/syntax.jl:1864
+  (parse-expect-underscore "f30656(T) = (t, _)::Pair -> t >= T" parse-stmts
+    '(= (call f30656 T) (block (line 1 none) (-> (:: (tuple t _) Pair) (block (line 1 none) (call >= t T))))))
+  #t)
 )

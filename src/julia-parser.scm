@@ -831,6 +831,11 @@
           (or (is-underscore-symbol? arg)
               (and (pair? arg) (is-underscore-symbol? (cadr arg))))) ; first arg means all
       #f))
+(define (underscore-block args line-node ex)
+  (let ((body (if underscore-gen-block `(block ,line-node ,ex) ex)))
+       (if (pair? (cdr args)) ; count > 1
+          `(-> ,(cons 'tuple (reverse args)) ,body)
+          `(-> ,(car args) ,body))))
 (define (deep-map f t)
   (if (pair? t)
       (map (lambda (t) (deep-map f t)) t)
@@ -860,12 +865,13 @@
             (else ex)) ; TODO: map check
       ex))
 (define (revert-current-underscore! ex)
-  (if (is-underscore-symbol? ex)
-      (let ((old (ctx_:pop! underscore-context))) ; TODO: map check
-           (cond ((eqv? old ex) '_)
-                 ((eqv? old (get-decl-name ex)) `(:: _ ,@(cddr ex)))
-                 (else (error "internal: pop current error" (info old ex)))))
-      (revert-underscore-block ex)))
+  (revert-underscore
+    (if (is-underscore-symbol? ex)
+        (let ((old (ctx_:pop! underscore-context))) ; TODO: map check
+            (cond ((eqv? old ex) '_)
+                  ((eqv? old (get-decl-name ex)) `(:: _ ,@(cddr ex)))
+                  (else (error "internal: pop current error" (info old ex)))))
+        ex)))
 
 (define (parse-assignment s down)
 (with-underscore-context 'stmt
@@ -890,12 +896,6 @@
                     (list t ex (parse-assignment s down)) lno)))
                 (else
                  (list t ex (parse-assignment s down)))))))))
-
-(define (underscore-block args line-node ex)
-  (let ((body (if underscore-gen-block `(block ,line-node ,ex) ex)))
-       (if (pair? (cdr args)) ; count > 1
-          `(-> ,(cons 'tuple (reverse args)) ,body)
-          `(-> ,(car args) ,body))))
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
@@ -1677,7 +1677,7 @@
                           finalb
                           elseb)
                     (let* ((loc (line-number-node s))
-                           (var (if nl #f (parse-eq* s)))
+                           (var (if nl #f (with-underscore-context #f (parse-eq* s))))
                            (var? (and (not nl) (or (symbol? var)
                                                    (and (length= var 2) (eq? (car var) '$))
                                                    (error (string "invalid syntax \"catch " (deparse var) "\"")))))
@@ -2650,11 +2650,13 @@
           ;; underscore
           ((eq? t '_)
            (take-token s)
-           (if (vector? underscore-context) ; switched off in some place like macrocall
-               (let ((ex (named-gensy '_)))
-                    (ctx_:add! underscore-context ex)
-                    ex)
-               t))
+           (cond ((and (eqv? (peek-token s) #\") (not (ts:space? s)))
+                  t) ; str macro _"a" parsed to @__str "a"
+                 ((vector? underscore-context)
+                  (let ((ex (named-gensy '_)))
+                       (ctx_:add! underscore-context ex)
+                       ex))  ; switched off in some place like lvalue
+                 (else t)))
 
           ;; identifier
           ((symbol? t)
