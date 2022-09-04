@@ -156,6 +156,9 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
 
+!!! note
+    If `x` is an `Irrational` number, then `T` is a required argument.
+
 # Examples
 ```jldoctest
 julia> rationalize(5.6)
@@ -166,6 +169,13 @@ julia> a = rationalize(BigInt, 10.3)
 
 julia> typeof(numerator(a))
 BigInt
+
+julia> rationalize(π)
+ERROR: MethodError: no method matching rationalize(::Irrational{:π})
+[...]
+
+julia> rationalize(Int8, π)
+22//7
 ```
 """
 function rationalize(::Type{T}, x::AbstractFloat, tol::Real) where T<:Integer
