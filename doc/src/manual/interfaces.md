@@ -739,7 +739,7 @@ in one or two dimensional outputs, but produce an `Array` for any other dimensio
 
 | Methods to implement              | Default definition           | Brief description                                                                     |
 |:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
-| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof((x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return fieldnames intended to be kept as private |
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof(x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return property names intended to be kept as private |
 | `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty(x, :s)`.  |
 | `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!(x, :s, v)`. Should return `v`.|
 
