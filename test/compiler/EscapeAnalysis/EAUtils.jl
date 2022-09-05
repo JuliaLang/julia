@@ -51,7 +51,7 @@ function code_escapes(@nospecialize(f), @nospecialize(types=Base.default_tt(f));
     interp = EscapeAnalyzer(interp, tt, optimize)
     results = Base.code_typed_by_type(tt; optimize=true, world, interp)
     isone(length(results)) || throw(ArgumentError("`code_escapes` only supports single analysis result"))
-    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo===:source)
+    return EscapeResult(interp.ir, interp.state, interp.linfo, debuginfo === :source)
 end
 
 # in order to run a whole analysis from ground zero (e.g. for benchmarking, etc.)
@@ -70,7 +70,8 @@ import Core:
 import .CC:
     InferenceResult, OptimizationState, IRCode, copy as cccopy,
     @timeit, convert_to_ircode, slot2reg, compact!, ssa_inlining_pass!, sroa_pass!,
-    adce_pass!, type_lift_pass!, JLOptions, verify_ir, verify_linetable
+    adce_pass!, type_lift_pass!, JLOptions, verify_ir, verify_linetable,
+    SemiConcreteResult
 import .EA: analyze_escapes, ArgEscapeCache, EscapeInfo, EscapeState, is_ipo_profitable
 
 # when working outside of Core.Compiler,
@@ -176,8 +177,10 @@ function cache_escapes!(interp::EscapeAnalyzer,
 end
 
 function get_escape_cache(interp::EscapeAnalyzer)
-    return function (linfo::Union{InferenceResult,MethodInstance})
+    return function (linfo::Union{InferenceResult,MethodInstance,SemiConcreteResult})
         if isa(linfo, InferenceResult)
+            ecache = get(interp.cache, linfo, nothing)
+        elseif isa(linfo, SemiConcreteResult)
             ecache = get(interp.cache, linfo, nothing)
         else
             ecache = get(GLOBAL_ESCAPE_CACHE, linfo, nothing)

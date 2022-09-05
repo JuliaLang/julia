@@ -66,7 +66,15 @@ function repl_cmd(cmd, out)
             end
             cmd = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        try
+            run(ignorestatus(cmd))
+        catch
+            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
     end
     nothing
 end

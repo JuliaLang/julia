@@ -229,8 +229,7 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 !!! compat "Julia 1.8"
     The option to add a description was introduced in Julia 1.8.
 
-!!! compat "Julia 1.9"
-    Recompilation time being shown separately from compilation time was introduced in Julia 1.9
+    Recompilation time being shown separately from compilation time was introduced in Julia 1.8
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -353,9 +352,11 @@ macro timev(msg, ex)
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
+        cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
+            cumulative_compile_timing(false);
             compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
         local diff = GC_Diff(gc_num(), stats)

@@ -56,7 +56,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop llvm
 	llvm-final-gc-lowering llvm-pass-helpers llvm-late-gc-lowering llvm-ptls \
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -116,24 +116,29 @@ endif
 
 ifeq ($(JULIACODEGEN),LLVM)
 ifneq ($(USE_SYSTEM_LLVM),0)
+# USE_SYSTEM_LLVM != 0
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs --system-libs)
 # HACK: llvm-config doesn't correctly point to shared libs on all platforms
 #       https://github.com/JuliaLang/julia/issues/29981
 else
+# USE_SYSTEM_LLVM == 0
 ifneq ($(USE_LLVM_SHLIB),1)
+# USE_LLVM_SHLIB != 1
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --libs $(CG_LLVM_LIBS) --link-static) $($(LLVM_LDFLAGS) $(shell $(LLVM_CONFIG_HOST) --system-libs 2> /dev/null)
 else
+# USE_LLVM_SHLIB == 1
 ifeq ($(OS), Darwin)
 CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 else
-CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM-14jl
-endif
-endif
-endif
+CG_LLVMLINK += $(LLVM_LDFLAGS) $(LLVM_SHARED_LINK_FLAG)
+endif # OS
+endif # USE_LLVM_SHLIB
+endif # USE_SYSTEM_LLVM
+
 ifeq ($(USE_LLVM_SHLIB),1)
 FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
-endif
+endif # JULIACODEGEN == LLVM
 
 RT_LLVM_LINK_ARGS := $(shell $(LLVM_CONFIG_HOST) --libs $(RT_LLVM_LIBS) --system-libs --link-static)
 RT_LLVMLINK += $(LLVM_LDFLAGS) $(RT_LLVM_LINK_ARGS)
@@ -312,6 +317,7 @@ $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $
 $(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h
+$(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(SRCDIR)/passes.h $(SRCDIR)/jitlayers.h
 
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h

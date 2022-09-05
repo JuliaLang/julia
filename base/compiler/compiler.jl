@@ -67,6 +67,22 @@ include("refvalue.jl")
 
 # the same constructor as defined in float.jl, but with a different name to avoid redefinition
 _Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))
+# fld(x,y) == div(x,y) - ((x>=0) != (y>=0) && rem(x,y) != 0 ? 1 : 0)
+fld(x::T, y::T) where {T<:Unsigned} = div(x, y)
+function fld(x::T, y::T) where T<:Integer
+    d = div(x, y)
+    return d - (signbit(x ⊻ y) & (d * y != x))
+end
+# cld(x,y) = div(x,y) + ((x>0) == (y>0) && rem(x,y) != 0 ? 1 : 0)
+function cld(x::T, y::T) where T<:Unsigned
+    d = div(x, y)
+    return d + (d * y != x)
+end
+function cld(x::T, y::T) where T<:Integer
+    d = div(x, y)
+    return d + (((x > 0) == (y > 0)) & (d * y != x))
+end
+
 
 # checked arithmetic
 const checked_add = +
@@ -105,10 +121,8 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort end
 function sort! end
 function issorted end
-function sortperm end
 include("ordering.jl")
 using .Order
 include("sort.jl")
@@ -123,11 +137,11 @@ something(x::Any, y...) = x
 ############
 
 include("compiler/cicache.jl")
+include("compiler/methodtable.jl")
 include("compiler/effects.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
-include("compiler/methodtable.jl")
 
 function argextype end # imported by EscapeAnalysis
 function stmt_effect_free end # imported by EscapeAnalysis
@@ -136,6 +150,8 @@ function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
+
+include("compiler/abstractlattice.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
@@ -148,7 +164,7 @@ include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
-include("compiler/optimize.jl") # TODO: break this up further + extract utilities
+include("compiler/optimize.jl")
 
 # required for bootstrap because sort.jl uses extrema
 # to decide whether to dispatch to counting sort.

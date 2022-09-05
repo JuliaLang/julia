@@ -59,7 +59,7 @@ Mainly used for testing or interactive use.
 """
 inflate_ir(ci::CodeInfo, linfo::MethodInstance) = inflate_ir!(copy(ci), linfo)
 inflate_ir(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any}) = inflate_ir!(copy(ci), sptypes, argtypes)
-inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ Any for i = 1:length(ci.slotflags) ])
+inflate_ir(ci::CodeInfo) = inflate_ir(ci, Any[], Any[ ci.slottypes === nothing ? Any : (ci.slottypes::Vector{Any})[i] for i = 1:length(ci.slotflags) ])
 
 function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
     @assert isempty(ir.new_nodes)
@@ -86,7 +86,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         elseif isa(stmt, GotoIfNot)
             code[i] = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            code[i] = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
+            code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isexpr(stmt, :enter)
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
             code[i] = stmt

@@ -179,8 +179,8 @@ function check_for_missing_packages_and_run_hooks(ast)
 end
 
 function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
-    ast.head == :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head in [:using, :import]
+    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
+    if ast.head === :using || ast.head === :import
         for arg in ast.args
             arg = arg::Expr
             arg1 = first(arg.args)
@@ -467,7 +467,7 @@ mutable struct LineEditREPL <: AbstractREPL
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
-outstream(r::LineEditREPL) = r.t isa TTYTerminal ? r.t.out_stream : r.t
+outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t

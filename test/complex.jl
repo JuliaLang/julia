@@ -935,6 +935,7 @@ end
     @test cispi(0.0+0.0im) == cispi(0)
     @test cispi(1.0+0.0im) == cispi(1)
     @test cispi(2.0+0.0im) == cispi(2)
+    @test cispi(5im) ≈ exp(-5pi) rtol=1e-10 # https://github.com/JuliaLang/julia/pull/45945
 end
 
 @testset "exp2" begin

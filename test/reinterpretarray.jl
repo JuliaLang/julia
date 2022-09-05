@@ -197,6 +197,9 @@ end
         end
         @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end
+    # issue 46113
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(A)
 end
 
 @testset "strides for ReshapedReinterpretArray" begin
