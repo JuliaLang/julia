@@ -989,7 +989,7 @@ jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
 // 2. An "extended entry": a mixture of raw data and pointers to julia objects
 //    which must be treated as GC roots.
 //
-// A single extended entry is seralized using multiple elements from the raw
+// A single extended entry is serialized using multiple elements from the raw
 // buffer; if `e` is the pointer to the first slot we have:
 //
 //   e[0]  JL_BT_NON_PTR_ENTRY  - Special marker to distinguish extended entries

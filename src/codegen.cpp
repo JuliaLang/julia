@@ -7202,7 +7202,7 @@ static jl_llvm_functions_t
 #endif
         if (returninfo.cc == jl_returninfo_t::Union) {
             param.addAttribute(Attribute::NonNull);
-            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(returninfo.union_bytes);
             param.addAlignmentAttr(returninfo.union_align);
         }
@@ -7212,7 +7212,7 @@ static jl_llvm_functions_t
             TypeSize sz = DL.getTypeAllocSize(RT);
             Align al = DL.getPrefTypeAlign(RT);
             param.addAttribute(Attribute::NonNull);
-            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
             param.addAlignmentAttr(al);
         }
@@ -7227,7 +7227,7 @@ static jl_llvm_functions_t
         AttrBuilder param(f->getAttributes().getParamAttributes(Arg->getArgNo()));
 #endif
         param.addAttribute(Attribute::NonNull);
-        // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+        // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
         size_t size = returninfo.return_roots * sizeof(jl_value_t*);
         param.addDereferenceableAttr(size);
         param.addAlignmentAttr(Align(sizeof(jl_value_t*)));
