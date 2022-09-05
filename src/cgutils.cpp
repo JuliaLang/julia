@@ -431,7 +431,7 @@ static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_
 {
     B.addAttribute(Attribute::NonNull);
     B.addAttribute(Attribute::NoUndef);
-    // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+    // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
     size_t size = dereferenceable_size(jt);
     if (size) {
         B.addDereferenceableAttr(size);
@@ -444,7 +444,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
 {
     if (isa<PointerType>(LI->getType())) {
         if (!can_be_null)
-            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(LI->getContext(), None));
         if (size) {
             Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), size));
@@ -3348,7 +3348,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
-        // TODO: make this a lifetime_end & dereferencable annotation?
+        // TODO: make this a lifetime_end & dereferenceable annotation?
         ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
     if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
