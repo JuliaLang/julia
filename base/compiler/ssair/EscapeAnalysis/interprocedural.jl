@@ -6,7 +6,7 @@ import Core.Compiler:
     call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction, validate_sparams,
     specialize_method, invoke_rewrite
 
-const Linfo = Union{MethodInstance,InferenceResult}
+const Linfo = Union{MethodInstance,InferenceResult,SemiConcreteResult}
 struct CallInfo
     linfos::Vector{Linfo}
     nothrow::Bool

@@ -1407,6 +1407,7 @@ let
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
+    res = @test_throws MethodError unsafe_wrap(Vector{UInt8}, pointer(Int32[1]), (sizeof(Int32),))
 end
 
 struct FooBar2515
@@ -7826,3 +7827,7 @@ end
 @testset "error message for getfield with bad integer type" begin
     @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end
+
+# Correct isdefined error for isdefined of Module of Int fld
+f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
+@test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1

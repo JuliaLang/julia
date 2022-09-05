@@ -60,6 +60,7 @@ struct OptimizationParams
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
+    compilesig_invokes::Bool
     trust_inference::Bool
 
     # Duplicating for now because optimizer inlining requires it.
@@ -77,6 +78,7 @@ struct OptimizationParams
             max_methods::Int = 3,
             tuple_splat::Int = 32,
             union_splitting::Int = 4,
+            compilesig_invokes::Bool = true,
             trust_inference::Bool = false
         )
         return new(
@@ -85,6 +87,7 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            compilesig_invokes,
             trust_inference,
             max_methods,
             tuple_splat,
@@ -273,3 +276,7 @@ to the call site signature.
 """
 infer_compilation_signature(::AbstractInterpreter) = false
 infer_compilation_signature(::NativeInterpreter) = true
+
+typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()

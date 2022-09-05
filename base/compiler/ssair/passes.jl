@@ -75,7 +75,7 @@ end
 function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
-    while !(curblock in allblocks)
+    while !(curblock in allblocks) && curblock !== 0
         curblock = domtree.idoms_bb[curblock]
     end
     return curblock
@@ -289,7 +289,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                             # path, with a different type constraint. We may have
                             # to redo some work here with the wider typeconstraint
                             push!(worklist_defs, new_def)
-                            push!(worklist_constraints, tmerge(new_constraint, visited_constraints[new_def]))
+                            push!(worklist_constraints, tmerge(OptimizerLattice(), new_constraint, visited_constraints[new_def]))
                         end
                         continue
                     end
@@ -348,7 +348,7 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     isa(which, Const) || return false
     which.val === :captures || return false
     oc = argextype(def.args[2], compact)
-    return oc ⊑ Core.OpaqueClosure
+    return oc ⊑ₒ Core.OpaqueClosure
 end
 
 struct LiftedValue
@@ -528,13 +528,15 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
 end
 
+isa_tfunc_opt(@nospecialize(v), @nospecialize(t)) = isa_tfunc(OptimizerLattice(), v, t)
+
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(isa_tfunc_opt, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
@@ -1446,7 +1448,7 @@ function adce_pass!(ir::IRCode)
                 r = searchsorted(unionphis, val.id; by = first)
                 if !isempty(r)
                     unionphi = unionphis[first(r)]
-                    t = tmerge(unionphi[2], stmt.typ)
+                    t = tmerge(OptimizerLattice(), unionphi[2], stmt.typ)
                     unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
                 end
             end
@@ -1454,7 +1456,7 @@ function adce_pass!(ir::IRCode)
             if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
-                if isexact && argextype(stmt.args[2], compact) ⊑ ty
+                if isexact && argextype(stmt.args[2], compact) ⊑ₒ ty
                     compact[idx] = nothing
                     continue
                 end
@@ -1483,7 +1485,7 @@ function adce_pass!(ir::IRCode)
                     if !isempty(r)
                         unionphi = unionphis[first(r)]
                         unionphis[first(r)] = Pair{Int,Any}(unionphi[1],
-                            tmerge(unionphi[2], inst[:type]))
+                            tmerge(OptimizerLattice(), unionphi[2], inst[:type]))
                     end
                 end
             end
@@ -1499,7 +1501,7 @@ function adce_pass!(ir::IRCode)
             continue
         elseif t === Any
             continue
-        elseif compact.result[phi][:type] ⊑ t
+        elseif compact.result[phi][:type] ⊑ₒ t
             continue
         end
         to_drop = Int[]

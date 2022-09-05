@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test, Distributed, Random
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -1449,3 +1451,6 @@ precompile_test_harness("__init__ cachepath") do load_path
           """)
     @test isa((@eval (using InitCachePath; InitCachePath)), Module)
 end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)

@@ -104,6 +104,7 @@ export
     istril,
     istriu,
     kron,
+    kron!,
     ldiv!,
     ldlt!,
     ldlt,

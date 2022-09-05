@@ -343,6 +343,7 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
         @info "Unable to deploy the documentation: DOCUMENTER_KEY missing"
         return Documenter.DeployDecision(; all_ok=false)
     end
+    release = match(r"release-([0-9]+\.[0-9]+)", Base.GIT_VERSION_INFO.branch)
     if Base.GIT_VERSION_INFO.tagged_commit
         # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
         ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,
@@ -351,6 +352,10 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder)
     elseif Base.GIT_VERSION_INFO.branch == "master"
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder=devurl)
+    elseif !isnothing(release)
+        # If this is a non-tag build from a release-* branch, we deploy them as dev docs into the
+        # appropriate vX.Y-dev subdirectory.
+        return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder="v$(release[1])-dev")
     end
     @info """
     Unable to deploy the documentation: invalid GIT_VERSION_INFO
