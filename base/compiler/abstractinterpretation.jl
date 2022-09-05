@@ -799,17 +799,11 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
             return true
         else
             # TODO: is_nothrow is not an actual requirement here, this is just a hack
-            # to avoid entering semi concrete eval while it doesn't properly propagate no_throw
+            # to avoid entering semi concrete eval while it doesn't properly propagate :nothrow
             return is_nothrow(result.effects) ? false : nothing
         end
-    else
-        return nothing
     end
-    # if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-    #   return is_all_const_arg(arginfo)
-    # else
-    #   return nothing
-    # end
+    return nothing
 end
 
 is_all_const_arg((; argtypes)::ArgInfo) = is_all_const_arg(argtypes)
@@ -829,16 +823,6 @@ function collect_const_args(argtypes::Vector{Any}, start::Int=2)
                     (a::DataType).instance
                 end for i = 2:length(argtypes) ]
 end
-
-function collect_semi_const_args(argtypes::Vector{Any}, start::Int=2)
-    return Any[ let a = widenconditional(argtypes[i])
-                    isa(a, Const) ? a.val :
-                    isconstType(a) ? (a::DataType).parameters[1] :
-                    isdefined(a, :instance) ? (a::DataType).instance :
-                    nothing
-                end for i in start:length(argtypes) ]
-end
-
 
 function invoke_signature(invokesig::Vector{Any})
     ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
@@ -922,6 +906,10 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter, resul
             end
         end
     end
+    if !force_const_prop(interp, f, match.method) && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
+        add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
+        return nothing
+    end
     # try constant prop'
     inf_cache = get_inference_cache(interp)
     inf_result = cache_lookup(typeinf_lattice(interp), mi, arginfo.argtypes, inf_cache)
@@ -981,12 +969,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::Me
         add_remark!(interp, sv, "[constprop] Failed to specialize")
         return nothing
     end
-    mi = mi::MethodInstance
-    if !force && !const_prop_methodinstance_heuristic(interp, match, mi, arginfo, sv)
-        add_remark!(interp, sv, "[constprop] Disabled by method instance heuristic")
-        return nothing
-    end
-    return mi
+    return mi::MethodInstance
 end
 
 function const_prop_entry_heuristic(interp::AbstractInterpreter, result::MethodCallResult, sv::InferenceState)

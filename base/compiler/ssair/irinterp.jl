@@ -130,6 +130,15 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ir::IRCode, mi_cache,
     return nothing
 end
 
+function collect_semi_const_args(argtypes::Vector{Any}, start::Int=2)
+    return Any[ let a = widenconditional(argtypes[i])
+                    isa(a, Const) ? a.val :
+                    isconstType(a) ? (a::DataType).parameters[1] :
+                    isdefined(a, :instance) ? (a::DataType).instance :
+                    nothing
+                end for i in start:length(argtypes) ]
+end
+
 function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::MethodInstance,
                                 mi_cache,
                                 tpdum::TwoPhaseDefUseMap, idx::Int, bb::Union{Int, Nothing},
