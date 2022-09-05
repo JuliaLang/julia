@@ -1452,5 +1452,29 @@ precompile_test_harness("__init__ cachepath") do load_path
     @test isa((@eval (using InitCachePath; InitCachePath)), Module)
 end
 
+# Test that precompilation can handle invalidated methods created from `precompile`,
+# not via backedges.
+precompile_test_harness("Issue #46558") do load_path
+    write(joinpath(load_path, "Foo46558.jl"),
+        """
+        module Foo46558
+        foo(x::Real) = 1
+        end
+        """)
+    write(joinpath(load_path, "Bar46558.jl"),
+        """
+        module Bar46558
+        using Foo46558
+        precompile(Foo46558.foo, (Int,))
+        end
+        """)
+    Base.compilecache(Base.PkgId("Foo46558"))
+    Base.compilecache(Base.PkgId("Bar46558"))
+    Foo = (@eval (using Foo46558; Foo46558))
+    @eval ($Foo.foo)(x::Int) = 2
+    Bar = (@eval (using Bar46558; Bar46558))
+    @test (@eval $Foo.foo(1)) == 2
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
