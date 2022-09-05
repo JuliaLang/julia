@@ -1072,7 +1072,7 @@ end
     @test Float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
     @test Float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
 
-    # Test lsb/msb gaps of 53 (wont fit in 64 bit mantissa) 
+    # Test lsb/msb gaps of 53 (wont fit in 64 bit mantissa)
     @test Float64(Int128(4503599627370497)) == 4.503599627370497e15
     @test Float64(UInt128(4503599627370497)) == 4.503599627370497e15
     # Test 2^104±37 (104 bits is cutoff for which case is run in the conversion algorithm)
