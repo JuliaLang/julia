@@ -1490,7 +1490,7 @@ end
 end
 
 # returns the width of the written prompt
-function write_prompt(terminal, s::Union{AbstractString,Function}, color::Bool)
+function write_prompt(terminal::AbstractTerminal, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)
@@ -1548,7 +1548,7 @@ function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
     return ret
 end
 
-function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override = false)
+function add_nested_key!(keymap::Dict{Char, Any}, key::Union{String, Char}, value; override::Bool = false)
     y = iterate(key)
     while y !== nothing
         c, i = y
@@ -1563,7 +1563,7 @@ function add_nested_key!(keymap::Dict, key::Union{String, Char}, value; override
         elseif !(c in keys(keymap) && isa(keymap[c], Dict))
             keymap[c] = Dict{Char,Any}()
         end
-        keymap = keymap[c]
+        keymap = keymap[c]::Dict{Char, Any}
     end
 end
 
@@ -1708,7 +1708,7 @@ end
 function getEntry(keymap::Dict{Char,Any},key::Union{String,Char})
     v = keymap
     for c in key
-        if !haskey(v,c)
+        if !(haskey(v,c)::Bool)
             return nothing
         end
         v = v[c]

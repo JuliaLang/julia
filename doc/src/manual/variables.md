@@ -111,15 +111,17 @@ variable name. For example, if `+ᵃ` is an operator, then `+ᵃx` must be writt
 it from `+ ᵃx` where `ᵃx` is the variable name.
 
 
-A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values but cannot be used to assign values to other variables.
-More technically, they can only be used as an [L-value](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue), but not as an
- [R-value](https://en.wikipedia.org/wiki/R-value):
+A particular class of variable names is one that contains only underscores. These identifiers can only be assigned values, which are immediately discarded, and cannot therefore be used to assign values to other variables (i.e., they cannot be used as [`rvalues`](https://en.wikipedia.org/wiki/Value_(computer_science)#Assignment:_l-values_and_r-values)) or use the last value
+assigned to them in any way.
 
 ```julia-repl
 julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
 julia> y = ___
+ERROR: syntax: all-underscore identifier used as rvalue
+
+julia> println(___)
 ERROR: syntax: all-underscore identifier used as rvalue
 ```
 
@@ -135,7 +137,7 @@ ERROR: syntax: unexpected "="
 
 Some Unicode characters are considered to be equivalent in identifiers.
 Different ways of entering Unicode combining characters (e.g., accents)
-are treated as equivalent (specifically, Julia identifiers are [NFC](http://www.macchiato.com/unicode/nfc-faq)-normalized).
+are treated as equivalent (specifically, Julia identifiers are [NFC](https://www.macchiato.com/unicode-intl-sw/nfc-faq)-normalized).
 Julia also includes a few non-standard equivalences for characters that are
 visually similar and are easily entered by some input methods. The Unicode
 characters `ɛ` (U+025B: Latin small letter open e) and `µ` (U+00B5: micro sign)
