@@ -1451,3 +1451,15 @@ end
         @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
     end
 end
+
+# Test that semi-concrete eval can inline constant results
+function twice_sitofp(x::Int, y::Int)
+    x = Base.sitofp(Float64, x)
+    y = Base.sitofp(Float64, y)
+    return (x, y)
+end
+call_twice_sitofp(x::Int) = twice_sitofp(x, 2)
+
+let src = code_typed1(call_twice_sitofp, (Int,))
+    @test count(iscall((src, Base.sitofp)), src.code) == 1
+end

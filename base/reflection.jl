@@ -1413,7 +1413,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.Builtin)
         argtypes = Any[types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(f, argtypes, rt)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))

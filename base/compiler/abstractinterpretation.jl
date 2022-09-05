@@ -1760,7 +1760,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_finalizer(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        effects = builtin_effects(f, argtypes[2:end], rt)
+        effects = builtin_effects(typeinf_lattice(interp), f, argtypes[2:end], rt)
         return CallMeta(rt, effects, false)
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information

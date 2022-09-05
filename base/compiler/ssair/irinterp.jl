@@ -182,7 +182,11 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
                     (;rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, mi)
                     # All other effects already guaranteed effect free by construction
                     if is_nothrow(effects)
-                        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+                        if isa(rt, Const) && is_inlineable_constant(rt.val)
+                            ir.stmts[idx][:inst] = quoted(rt.val)
+                        else
+                            ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+                        end
                     end
                 end
                 if !⊑(typeinf_lattice(interp), typ, rt)

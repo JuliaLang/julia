@@ -1754,7 +1754,7 @@ function arrayset_typecheck(@nospecialize(arytype), @nospecialize(elmtype))
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt), @specialize(lattice::AbstractLattice))
+function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     ⊑ₗ = ⊑(lattice)
     if f === arrayset
         array_builtin_common_nothrow(argtypes, 4) || return false
@@ -1981,7 +1981,7 @@ function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_effects(@specialize(lattice::AbstractLattice), f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_effects(f, argtypes)
     end
@@ -1994,6 +1994,10 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         return getfield_effects(argtypes, rt)
     elseif f === getglobal
         return getglobal_effects(argtypes, rt)
+    elseif f === Core.get_binding_type
+        length(argtypes) == 2 || return EFFECTS_THROWS
+        effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
+        return Effects(EFFECTS_TOTAL; effect_free)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
         if f === setfield! || f === arrayset
@@ -2003,7 +2007,7 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
+        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(lattice, f, argtypes, rt))
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2015,10 +2019,10 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
     end
 end
 
-function builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
-    return _builtin_nothrow(f, argtypes, rt, fallback_lattice)
+    return _builtin_nothrow(lattice, f, argtypes, rt)
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
