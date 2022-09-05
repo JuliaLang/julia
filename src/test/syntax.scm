@@ -197,6 +197,14 @@
     '(= a (-> |#1#_| |#1#_|)))
   (parse-expect-underscore "a=_+1" parse-stmts ; shall (a=_+1) means x->a=x+1
     '(= a (-> |#1#_| (call + |#1#_| 1))))
+  (parse-expect-underscore "if a _ else _+1 end" parse-stmts
+    '(if a (block (line 1 none) (-> |#1#_| |#1#_|)) (block (line 1 none) (-> |#2#_| (call + |#2#_| 1)))))
+  (parse-expect-underscore "_ -> 1" parse-stmts
+    '(-> _ (block (line 1 none) 1)))
+  (parse-expect-underscore "_ -> _" parse-stmts
+    '(-> _ (block (line 1 none) (-> |#2#_| |#2#_|))))
+  (parse-expect-underscore "_ -> _+1" parse-stmts
+    '(-> _ (block (line 1 none) (-> |#2#_| (call + |#2#_| 1)))))
   #t)
 
 (and

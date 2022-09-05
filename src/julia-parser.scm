@@ -1296,7 +1296,7 @@
          ;; -> is unusual: it binds tightly on the left and
          ;; loosely on the right.
          (let ((lno (line-number-node s)))
-           `(-> ,(revert-current-underscore! ex) ,(add-line-number (parse-eq* s) lno))))
+           `(-> ,(revert-current-underscore! ex) ,(add-line-number (with-underscore-context 'stmt (parse-eq* s)) lno))))
         (else
          ex)))))
 
