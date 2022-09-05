@@ -327,6 +327,14 @@
   ; https://github.com/JuliaLang/julia/pull/39139
   ; @test [_ for _ in 1:5] == 1:5
 
+  ; test/REPL.jl:
+  (parse-expect "CompletionFoo.?([1,2,3], 2.0)" parse-stmts
+    '(call (|.| CompletionFoo '?) (vect 1 2 3) 2.0))
+  ; REPL/src/REPLCompletions.jl
+  (parse-expect-underscore "_([1,2,3], 2.0)" parse-stmts
+    '(-> |#1#_| (call |#1#_| (vect 1 2 3) 2.0)))
+  (parse-expect-underscore "__([1,2,3], 2.0)" parse-stmts
+    '(call __ (vect 1 2 3) 2.0))
   ; test/syntax.jl:1188
   (parse-expect-underscore "2e3_\"x\"" parse-stmts
     '(call * 2000.0 (macrocall @__str (line 1 none) "x")))

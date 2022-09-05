@@ -887,7 +887,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             end
         end
         moreargs = !endswith(rexm.captures[2], ')')
-        callstr = "_(" * rexm.captures[2]
+        callstr = "__(" * rexm.captures[2]
         if moreargs
             callstr *= ')'
         end
