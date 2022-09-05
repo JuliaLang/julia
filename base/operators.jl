@@ -185,7 +185,7 @@ Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
 a fixed total order compatible with `min`.
 
 Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
-[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+[`missing`](@ref) are ordered as smaller than any regular value with `missing`
 smaller than `NaN`.
 
 So `isless` defines an ascending total order with `NaN` and `missing` as the
