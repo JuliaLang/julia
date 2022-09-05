@@ -362,7 +362,7 @@ function is_lattice_equal(lattice::PartialsLattice, @nospecialize(a), @nospecial
         widenconst(a) == widenconst(b) || return false
         a.fields === b.fields && return true # fast path
         for i in 1:length(a.fields)
-            is_lattice_equal(a.fields[i], b.fields[i]) || return false
+            is_lattice_equal(lattice, a.fields[i], b.fields[i]) || return false
         end
         return true
     end

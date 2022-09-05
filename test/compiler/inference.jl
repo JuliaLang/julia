@@ -4097,7 +4097,7 @@ end == Rational
 # vararg-tuple comparison within `PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
-    @test Core.Compiler.issimplertype(t, t)
+    @test Core.Compiler.issimplertype(Core.Compiler.fallback_lattice, t, t)
 end
 
 # check the inference convergence with an empty vartable:
