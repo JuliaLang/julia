@@ -180,7 +180,7 @@ end
         else
             @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
         end
-        # non-integer-multipled classified
+        # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
             @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else

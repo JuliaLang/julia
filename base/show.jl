@@ -615,7 +615,7 @@ function make_typealias(@nospecialize(x::Type))
                         env = env::SimpleVector
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
                         #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
-                        #       (or detect and reverse the compution of it here).
+                        #       (or detect and reverse the computation of it here).
                         #   T = Array{Array{T,1}, 1} where T
                         #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
                         #   env[1].ub.var == T.var

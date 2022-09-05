@@ -680,7 +680,7 @@ end
 # returns `nothing` otherwise
 function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
     block = block_for_inst(sv.cfg, idx)
-    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignement is dominating this block
+    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
         pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
         stmt = sv.src.code[pc]
         isexpr(stmt, :(=)) || continue

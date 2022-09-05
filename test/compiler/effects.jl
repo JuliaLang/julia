@@ -28,7 +28,7 @@ end
     return nothing
 end
 
-# Test that ambigous calls don't accidentally get nothrow effect
+# Test that ambiguous calls don't accidentally get nothrow effect
 ambig_effects_test(a::Int, b) = 1
 ambig_effects_test(a, b::Int) = 1
 ambig_effects_test(a, b) = 1
@@ -367,7 +367,7 @@ end
 
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
 # as the cached effects can be easily wrong otherwise
-# since the inference curently doesn't track "world-age" of global variables
+# since the inference currently doesn't track "world-age" of global variables
 @eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
 setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
 let effects = Base.infer_effects() do

@@ -1162,7 +1162,7 @@ end
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
-        n==-2 && return rx*rx #keep compatability with literal_pow
+        n==-2 && return rx*rx #keep compatibility with literal_pow
         isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
         x = rx
         n = -n

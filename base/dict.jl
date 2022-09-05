@@ -205,7 +205,7 @@ end
         end
     end
 
-    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    @assert h.age == age0 "Muliple concurrent writes to Dict detected!"
     h.age += 1
     h.slots = slots
     h.keys = keys

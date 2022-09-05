@@ -103,7 +103,7 @@ end
         min = Top(T,Base.min)
         max = Top(T,Base.max)
         (==) = Top(T,_compare)
-        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equalvient
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equivalent
         @test minmax(3., 5.) == (3., 5.)
         @test minmax(5., 3.) == (3., 5.)
         @test minmax(3., NaN) ≣ (NaN, NaN)

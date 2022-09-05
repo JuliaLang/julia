@@ -66,7 +66,7 @@ Not all non-leaf types are particularly problematic for performance, and the per
 characteristics of a particular type is an implementation detail of the compiler.
 `code_warntype` will err on the side of coloring types red if they might be a performance
 concern, so some types may be colored red even if they do not impact performance.
-Small unions of concrete types are usually not a concern, so these are highlighed in yellow.
+Small unions of concrete types are usually not a concern, so these are highlighted in yellow.
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 

@@ -140,7 +140,7 @@ function has_safe_def(
         # if this block has already been examined, bail out to avoid infinite cycles
         pred in seen && return false
         idx = last(ir.cfg.blocks[pred].stmts)
-        # NOTE `idx` isn't a load, thus we can use inclusive coondition within the `find_def_for_use`
+        # NOTE `idx` isn't a load, thus we can use inclusive condition within the `find_def_for_use`
         def, _, _ = find_def_for_use(ir, domtree, allblocks, du, idx, true)
         # will throw since we already checked this `:new` site doesn't define this field
         def == newidx && return false

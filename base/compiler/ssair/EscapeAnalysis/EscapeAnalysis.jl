@@ -773,7 +773,7 @@ A preparatory linear scan before the escape analysis on `ir` to find:
     This array dimension analysis to compute `arrayinfo` is very local and doesn't account
     for flow-sensitivity nor complex aliasing.
     Ideally this dimension analysis should be done as a part of type inference that
-    propagates array dimenstions in a flow sensitive way.
+    propagates array dimensions in a flow sensitive way.
 """
 function compute_frameinfo(ir::IRCode, call_resolved::Bool)
     nstmts, nnewnodes = length(ir.stmts), length(ir.new_nodes.stmts)
@@ -1876,13 +1876,13 @@ end
 # # COMBAK do we want to enable this (and also backport this to Base for array allocations?)
 # import Core.Compiler: Cint, svec
 # function validate_foreigncall_args(args::Vector{Any},
-#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convension::Symbol)
+#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convention::Symbol)
 #     length(args) ≥ 5 || return false
 #     normalize(args[1]) === name || return false
 #     args[2] === rt || return false
 #     args[3] === argtypes || return false
 #     args[4] === vararg || return false
-#     normalize(args[5]) === convension || return false
+#     normalize(args[5]) === convention || return false
 #     return true
 # end
 

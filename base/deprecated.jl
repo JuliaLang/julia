@@ -290,7 +290,7 @@ cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not re
 @deprecate unsafe_indices(A) axes(A) false
 @deprecate unsafe_length(r) length(r) false
 
-# these were internal type aliases, but some pacakges seem to be relying on them
+# these were internal type aliases, but some packages seem to be relying on them
 const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
 const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,

@@ -6914,9 +6914,9 @@ g27209(x) = f27209(x ? nothing : 1.0)
 # Issue 27240
 @inline function foo27240()
     if rand(Bool)
-        return foo_nonexistant_27240
+        return foo_nonexistent_27240
     else
-        return bar_nonexistant_27240
+        return bar_nonexistent_27240
     end
 end
 bar27240() = foo27240()

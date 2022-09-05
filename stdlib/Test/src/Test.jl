@@ -1314,7 +1314,7 @@ end
 # With begin/end or function call
 
 When @testset is used, with begin/end or a single function call, the macro
-starts a new test set in which to evaulate the given expression.
+starts a new test set in which to evaluate the given expression.
 
 If no custom testset type is given it defaults to creating a `DefaultTestSet`.
 `DefaultTestSet` records all the results and, if there are any `Fail`s or
@@ -1518,7 +1518,7 @@ end
 
 function failfast_print()
     printstyled("\nFail-fast enabled:"; color = Base.error_color(), bold=true)
-    printstyled(" Fail or Error occured\n\n"; color = Base.error_color())
+    printstyled(" Fail or Error occurred\n\n"; color = Base.error_color())
 end
 
 """
