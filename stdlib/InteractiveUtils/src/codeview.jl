@@ -27,15 +27,14 @@ end
 
 # displaying type warnings
 
-function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
-    used || return nothing
-    get(io, :show_type, true) || return nothing
-    str = "::$ty"
+function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
+    (show_type && used) || return nothing
+    str = "::$type"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Union && is_expected_union(ty)
+    elseif type isa Union && is_expected_union(type)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
-    elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
+    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
         Base.emphasize(io, str)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
@@ -141,13 +140,13 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
                 end
                 print(io, "  ", slotnames[i])
                 if isa(slottypes, Vector{Any})
-                    warntype_type_printer(io, slottypes[i], true)
+                    warntype_type_printer(io; type=slottypes[i], used=true)
                 end
                 println(io)
             end
         end
         print(io, "Body")
-        warntype_type_printer(io, rettype, true)
+        warntype_type_printer(io; type=rettype, used=true)
         println(io)
         irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
         Base.IRShow.show_ir(lambda_io, src, irshow_config)
