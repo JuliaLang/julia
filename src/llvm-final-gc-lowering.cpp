@@ -237,14 +237,12 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
         builder.CreateStore(new_cursor, cursor_ptr);
 
         // ptls->gc_num.allocd += osize;
-        if(jl_options.malloc_log == JL_LOG_USER || jl_options.malloc_log == JL_LOG_ALL) {
-            auto pool_alloc_pos = ConstantInt::get(Type::getInt64Ty(target->getContext()), offsetof(jl_tls_states_t, gc_num) + offsetof(jl_thread_gc_num_t, allocd));
-            auto pool_alloc_i8 = builder.CreateGEP(Type::getInt8Ty(target->getContext()), ptls, pool_alloc_pos);
-            auto pool_alloc_tls = builder.CreateBitCast(pool_alloc_i8, PointerType::get(Type::getInt64Ty(target->getContext()), 0), "pool_alloc");
-            auto pool_allocd = builder.CreateLoad(Type::getInt64Ty(target->getContext()), pool_alloc_tls);
-            auto pool_allocd_total = builder.CreateAdd(pool_allocd, pool_osize);
-            builder.CreateStore(pool_allocd_total, pool_alloc_tls);
-        }
+        auto pool_alloc_pos = ConstantInt::get(Type::getInt64Ty(target->getContext()), offsetof(jl_tls_states_t, gc_num));
+        auto pool_alloc_i8 = builder.CreateGEP(Type::getInt8Ty(target->getContext()), ptls, pool_alloc_pos);
+        auto pool_alloc_tls = builder.CreateBitCast(pool_alloc_i8, PointerType::get(Type::getInt64Ty(target->getContext()), 0), "pool_alloc");
+        auto pool_allocd = builder.CreateLoad(Type::getInt64Ty(target->getContext()), pool_alloc_tls);
+        auto pool_allocd_total = builder.CreateAdd(pool_allocd, pool_osize);
+        builder.CreateStore(pool_allocd_total, pool_alloc_tls);
 
         auto v_raw = builder.CreateNSWAdd(result, ConstantInt::get(Type::getInt64Ty(target->getContext()), sizeof(jl_taggedvalue_t)));
         auto v_as_ptr = builder.CreateIntToPtr(v_raw, poolAllocFunc->getReturnType());
