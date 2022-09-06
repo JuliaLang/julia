@@ -1,4 +1,3 @@
-
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
     src = code.inferred
     mi = code.def
@@ -110,8 +109,8 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ir::IRCode, mi_cache,
     code === nothing && return nothing
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, ir)
     effects = decode_effects(code.ipo_purity_bits)
-    if is_foldable(effects) && is_all_const_arg(argtypes)
-        args = collect_semi_const_args(argtypes, 1)
+    if is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1)
+        args = collect_const_args(argtypes, #=start=#1)
         world = get_world_counter(interp)
         value = try
             Core._call_in_world_total(world, args...)
