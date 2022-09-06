@@ -795,7 +795,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -3088,7 +3088,7 @@ unused and delete the entire benchmark code).
 ```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)

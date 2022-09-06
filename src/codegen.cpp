@@ -994,6 +994,18 @@ static const auto jlgetnthfieldchecked_func = new JuliaFunction{
             Attributes(C, {Attribute::NonNull}),
             None); },
 };
+static const auto jlfieldisdefinedchecked_func = new JuliaFunction{
+    XSTR(jl_field_isdefined_checked),
+    [](LLVMContext &C) {
+        auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
+        return FunctionType::get(getInt32Ty(C),
+            {T_prjlvalue, getSizeTy(C)}, false);
+    },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            AttributeSet(),
+            Attributes(C, {}),
+            None); },
+};
 static const auto jlgetcfunctiontrampoline_func = new JuliaFunction{
     XSTR(jl_get_cfunction_trampoline),
     [](LLVMContext &C) {
@@ -1176,7 +1188,8 @@ static const auto &builtin_func_map() {
           { jl_f_apply_type_addr,         new JuliaFunction{XSTR(jl_f_apply_type), get_func_sig, get_func_attrs} },
           { jl_f_donotdelete_addr,        new JuliaFunction{XSTR(jl_f_donotdelete), get_donotdelete_sig, get_donotdelete_func_attrs} },
           { jl_f_compilerbarrier_addr,    new JuliaFunction{XSTR(jl_f_compilerbarrier), get_func_sig, get_func_attrs} },
-          { jl_f_finalizer_addr,          new JuliaFunction{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} }
+          { jl_f_finalizer_addr,          new JuliaFunction{XSTR(jl_f_finalizer), get_func_sig, get_func_attrs} },
+          { jl_f__svec_ref_addr,          new JuliaFunction{XSTR(jl_f__svec_ref), get_func_sig, get_func_attrs} }
         };
     return builtins;
 }
@@ -3451,6 +3464,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         }
                     }
                 }
+                Value *vidx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
                 if (jl_is_tuple_type(utt) && is_tupletype_homogeneous(utt->parameters, true)) {
                     // For tuples, we can emit code even if we don't know the exact
                     // type (e.g. because we don't know the length). This is possible
@@ -3466,7 +3480,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         if (jl_is_vararg(jt))
                             jt = jl_unwrap_vararg(jt);
                         assert(jl_is_datatype(jt));
-                        Value *vidx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
                         // This is not necessary for correctness, but allows to omit
                         // the extra code for getting the length of the tuple
                         if (!bounds_check_enabled(ctx, boundscheck)) {
@@ -3484,6 +3497,12 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                         return true;
                     }
                 }
+
+                // Unknown object, but field known to be integer
+                vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+                Value *fld_val = ctx.builder.CreateCall(prepare_call(jlgetnthfieldchecked_func), { boxed(ctx, obj), vidx });
+                *ret = mark_julia_type(ctx, fld_val, true, jl_any_type);
+                return true;
             }
         }
         // TODO: generic getfield func with more efficient calling convention
@@ -3653,6 +3672,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         const jl_cgval_t &obj = argv[1];
         const jl_cgval_t &fld = argv[2];
         jl_datatype_t *stt = (jl_datatype_t*)obj.typ;
+        ssize_t fieldidx = -1;
         if (jl_is_type_type((jl_value_t*)stt)) {
             // the representation type of Type{T} is either typeof(T), or unknown
             // TODO: could use `issingletontype` predicate here, providing better type knowledge
@@ -3664,11 +3684,10 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
         if (!jl_is_concrete_type((jl_value_t*)stt) || jl_is_array_type(stt) ||
             stt == jl_module_type) { // TODO: use ->layout here instead of concrete_type
-            return false;
+            goto isdefined_unknown_idx;
         }
         assert(jl_is_datatype(stt));
 
-        ssize_t fieldidx = -1;
         if (fld.constant && jl_is_symbol(fld.constant)) {
             jl_sym_t *sym = (jl_sym_t*)fld.constant;
             fieldidx = jl_field_index(stt, sym, 0);
@@ -3677,7 +3696,15 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             fieldidx = jl_unbox_long(fld.constant) - 1;
         }
         else {
-            return false;
+isdefined_unknown_idx:
+            if (nargs == 3 || fld.typ != (jl_value_t*)jl_long_type)
+                return false;
+            Value *vidx = emit_unbox(ctx, getSizeTy(ctx.builder.getContext()), fld, (jl_value_t*)jl_long_type);
+            vidx = ctx.builder.CreateSub(vidx, ConstantInt::get(getSizeTy(ctx.builder.getContext()), 1));
+            Value *isd = ctx.builder.CreateCall(prepare_call(jlfieldisdefinedchecked_func), { boxed(ctx, obj), vidx });
+            isd = ctx.builder.CreateTrunc(isd, getInt8Ty(ctx.builder.getContext()));
+            *ret = mark_julia_type(ctx, isd, false, jl_bool_type);
+            return true;
         }
         enum jl_memory_order order = jl_memory_order_unspecified;
         if (nargs == 3) {
@@ -7175,7 +7202,7 @@ static jl_llvm_functions_t
 #endif
         if (returninfo.cc == jl_returninfo_t::Union) {
             param.addAttribute(Attribute::NonNull);
-            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(returninfo.union_bytes);
             param.addAlignmentAttr(returninfo.union_align);
         }
@@ -7185,7 +7212,7 @@ static jl_llvm_functions_t
             TypeSize sz = DL.getTypeAllocSize(RT);
             Align al = DL.getPrefTypeAlign(RT);
             param.addAttribute(Attribute::NonNull);
-            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
             param.addAlignmentAttr(al);
         }
@@ -7200,7 +7227,7 @@ static jl_llvm_functions_t
         AttrBuilder param(f->getAttributes().getParamAttributes(Arg->getArgNo()));
 #endif
         param.addAttribute(Attribute::NonNull);
-        // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+        // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
         size_t size = returninfo.return_roots * sizeof(jl_value_t*);
         param.addDereferenceableAttr(size);
         param.addAlignmentAttr(Align(sizeof(jl_value_t*)));

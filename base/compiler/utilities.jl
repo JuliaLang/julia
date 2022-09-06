@@ -268,14 +268,16 @@ end
 
 const empty_backedge_iter = BackedgeIterator(Any[])
 
+const MethodInstanceOrTable = Union{MethodInstance, Core.MethodTable}
+const BackedgePair = Pair{Union{Type, Nothing, MethodInstanceOrTable}, MethodInstanceOrTable}
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
     i > length(backedges) && return nothing
     item = backedges[i]
-    isa(item, MethodInstance) && return (nothing, item), i+1           # regular dispatch
-    isa(item, Core.MethodTable) && return (backedges[i+1], item), i+2  # abstract dispatch
-    return (item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
+    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
 end
 
 #########
@@ -291,6 +293,17 @@ function singleton_type(@nospecialize(ft))
         return ft.instance
     end
     return nothing
+end
+
+function maybe_singleton_const(@nospecialize(t))
+    if isa(t, DataType)
+        if isdefined(t, :instance)
+            return Const(t.instance)
+        elseif isconstType(t)
+            return Const(t.parameters[1])
+        end
+    end
+    return t
 end
 
 ###################

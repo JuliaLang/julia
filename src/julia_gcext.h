@@ -76,7 +76,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // Sweep functions will not automatically be called for objects of
 // foreign types, as that may not always be desired. Only calling
 // jl_gc_schedule_foreign_sweepfunc() on an object of a foreign type
-// will result in the custome sweep function actually being called.
+// will result in the custom sweep function actually being called.
 // This must be done at most once per object and should usually be
 // done right after allocating the object.
 JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t * bj);

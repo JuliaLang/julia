@@ -9,6 +9,7 @@ New language features
   handled via `Base.split_rest`. ([#42902])
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
+* Nested combinations of tuples and named tuples of symbols are now allowed as type parameters ([#46300]).
 
 Language changes
 ----------------

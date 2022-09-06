@@ -31,7 +31,8 @@ import Core.Compiler: # Core.Compiler specific definitions
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
-    setfield!_nothrow, alloc_array_ndims, check_effect_free!
+    setfield!_nothrow, alloc_array_ndims, stmt_effect_free, check_effect_free!,
+    SemiConcreteResult
 
 include(x) = _TOP_MOD.include(@__MODULE__, x)
 if _TOP_MOD === Core.Compiler
@@ -772,7 +773,7 @@ A preparatory linear scan before the escape analysis on `ir` to find:
     This array dimension analysis to compute `arrayinfo` is very local and doesn't account
     for flow-sensitivity nor complex aliasing.
     Ideally this dimension analysis should be done as a part of type inference that
-    propagates array dimenstions in a flow sensitive way.
+    propagates array dimensions in a flow sensitive way.
 """
 function compute_frameinfo(ir::IRCode, call_resolved::Bool)
     nstmts, nnewnodes = length(ir.stmts), length(ir.new_nodes.stmts)
@@ -1875,13 +1876,13 @@ end
 # # COMBAK do we want to enable this (and also backport this to Base for array allocations?)
 # import Core.Compiler: Cint, svec
 # function validate_foreigncall_args(args::Vector{Any},
-#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convension::Symbol)
+#     name::Symbol, @nospecialize(rt), argtypes::SimpleVector, nreq::Int, convention::Symbol)
 #     length(args) ≥ 5 || return false
 #     normalize(args[1]) === name || return false
 #     args[2] === rt || return false
 #     args[3] === argtypes || return false
 #     args[4] === vararg || return false
-#     normalize(args[5]) === convension || return false
+#     normalize(args[5]) === convention || return false
 #     return true
 # end
 

@@ -3,7 +3,7 @@
 module TestGivens
 
 using Test, LinearAlgebra, Random
-using LinearAlgebra: rmul!, lmul!, Givens
+using LinearAlgebra: Givens, Rotation
 
 # Test givens rotations
 @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
@@ -14,7 +14,7 @@ using LinearAlgebra: rmul!, lmul!, Givens
     end
     @testset for A in (raw_A, view(raw_A, 1:10, 1:10))
         Ac = copy(A)
-        R = LinearAlgebra.Rotation(LinearAlgebra.Givens{elty}[])
+        R = Rotation(Givens{elty}[])
         for j = 1:8
             for i = j+2:10
                 G, _ = givens(A, j+1, i, j)
@@ -25,14 +25,19 @@ using LinearAlgebra: rmul!, lmul!, Givens
                 @test lmul!(G,Matrix{elty}(I, 10, 10)) == [G[i,j] for i=1:10,j=1:10]
 
                 @testset "transposes" begin
-                    @test G'*G*Matrix(elty(1)I, 10, 10)   ≈ Matrix(I, 10, 10)
+                    @test (@inferred G'*G)*Matrix(elty(1)I, 10, 10) ≈ Matrix(I, 10, 10)
                     @test (G*Matrix(elty(1)I, 10, 10))*G' ≈ Matrix(I, 10, 10)
-                    @test copy(R')*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
+                    @test (@inferred copy(R'))*(R*Matrix(elty(1)I, 10, 10)) ≈ Matrix(I, 10, 10)
                     @test_throws ErrorException transpose(G)
                     @test_throws ErrorException transpose(R)
                 end
             end
         end
+        @test (R')' === R
+        @test R * A ≈ (A' * R')' ≈ lmul!(R, copy(A))
+        @test A * R ≈ (R' * A')' ≈ rmul!(copy(A), R)
+        @test R' * A ≈ lmul!(R', copy(A))
+        @test A * R' ≈ rmul!(copy(A), R')
         @test_throws ArgumentError givens(A, 3, 3, 2)
         @test_throws ArgumentError givens(one(elty),zero(elty),2,2)
         G, _ = givens(one(elty),zero(elty),11,12)

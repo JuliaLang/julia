@@ -22,7 +22,7 @@ Some are used by the cluster manager to add workers to an already-initialized ho
   * `count` -- the number of workers to be launched on the host
   * `exename` -- the path to the Julia executable on the host, defaults to `"\$(Sys.BINDIR)/julia"` or
     `"\$(Sys.BINDIR)/julia-debug"`
-  * `exeflags` -- flags to use when lauching Julia remotely
+  * `exeflags` -- flags to use when launching Julia remotely
 
 The `userdata` field is used to store information for each worker by external managers.
 

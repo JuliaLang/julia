@@ -23,12 +23,18 @@ function hasuniquerep(@nospecialize t)
     return false
 end
 
-function has_nontrivial_const_info(@nospecialize t)
+function has_nontrivial_const_info(lattice::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
-    isa(t, Const) || return false
-    val = t.val
-    return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+    return has_nontrivial_const_info(widenlattice(lattice), t)
+end
+function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
+    isa(t, PartialTypeVar) && return true
+    if isa(t, Const)
+        val = t.val
+        return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+    end
+    return has_nontrivial_const_info(widenlattice(lattice), t)
 end
 
 has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
@@ -102,16 +108,25 @@ function valid_as_lattice(@nospecialize(x))
     return false
 end
 
-# test if non-Type, non-TypeVar `x` can be used to parameterize a type
-function valid_tparam(@nospecialize(x))
-    if isa(x, Tuple)
-        for t in x
-            isa(t, Symbol) || isbits(t) || return false
+function valid_typeof_tparam(@nospecialize(t))
+    if t === Symbol || isbitstype(t)
+        return true
+    end
+    isconcretetype(t) || return false
+    if t <: NamedTuple
+        t = t.parameters[2]
+    end
+    if t <: Tuple
+        for p in t.parameters
+            valid_typeof_tparam(p) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbits(x)
+    return false
 end
+
+# test if non-Type, non-TypeVar `x` can be used to parameterize a type
+valid_tparam(@nospecialize(x)) = valid_typeof_tparam(typeof(x))
 
 function compatible_vatuple(a::DataType, b::DataType)
     vaa = a.parameters[end]

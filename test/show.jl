@@ -1438,7 +1438,7 @@ struct var"#X#" end
 var"#f#"() = 2
 struct var"%X%" end  # Invalid name without '#'
 
-# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# (Just to make this test more sustainable,) we don't necessarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
 @test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
 @test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))

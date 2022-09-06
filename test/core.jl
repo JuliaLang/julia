@@ -1407,6 +1407,7 @@ let
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
+    res = @test_throws MethodError unsafe_wrap(Vector{UInt8}, pointer(Int32[1]), (sizeof(Int32),))
 end
 
 struct FooBar2515
@@ -1987,9 +1988,8 @@ mutable struct TupleParam{P}
     x::Bool
 end
 
-function tupledispatch(a::TupleParam{(1,:a)})
-    a.x
-end
+tupledispatch(a::TupleParam{(1,:a)}) = a.x
+tupledispatch(a::TupleParam{(1,(:a,))}) = 42
 
 # tuples can be used as type params
 let t1 = TupleParam{(1,:a)}(true),
@@ -2001,6 +2001,10 @@ let t1 = TupleParam{(1,:a)}(true),
     # dispatch works properly
     @test tupledispatch(t1) == true
     @test_throws MethodError tupledispatch(t2)
+
+    @test tupledispatch(TupleParam{(1,(:a,))}(true)) === 42
+    @test_throws TypeError TupleParam{NamedTuple{(:a,), Tuple{Any}}((1,))}
+    @test_throws TypeError Val{NamedTuple{(:a,), Tuple{NamedTuple{<:Any,Tuple{Int}}}}(((x=2,),))}
 end
 
 # issue #5254
@@ -6910,9 +6914,9 @@ g27209(x) = f27209(x ? nothing : 1.0)
 # Issue 27240
 @inline function foo27240()
     if rand(Bool)
-        return foo_nonexistant_27240
+        return foo_nonexistent_27240
     else
-        return bar_nonexistant_27240
+        return bar_nonexistent_27240
     end
 end
 bar27240() = foo27240()
@@ -7823,3 +7827,7 @@ end
 @testset "error message for getfield with bad integer type" begin
     @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
 end
+
+# Correct isdefined error for isdefined of Module of Int fld
+f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
+@test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
