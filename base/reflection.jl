@@ -547,7 +547,7 @@ end
     isprimitivetype(T) -> Bool
 
 Determine whether type `T` was declared as a primitive type
-(i.e. using the `primitive` keyword).
+(i.e. using the `primitive type` syntax).
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -648,7 +648,7 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
     isabstracttype(T)
 
 Determine whether type `T` was declared as an abstract type
-(i.e. using the `abstract` keyword).
+(i.e. using the `abstract type` syntax).
 
 # Examples
 ```jldoctest
