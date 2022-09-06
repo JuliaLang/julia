@@ -600,7 +600,7 @@ mutable struct LazyDomtree
     domtree::DomTree
     LazyDomtree(ir::IRCode) = new(ir)
 end
-function get(x::LazyDomtree)
+function get!(x::LazyDomtree)
     isdefined(x, :domtree) && return x.domtree
     return @timeit "domtree 2" x.domtree = construct_domtree(x.ir.cfg.blocks)
 end
@@ -636,7 +636,7 @@ function perform_lifting!(compact::IncrementalCompact,
     if all_same
         dominates_all = true
         if lazydomtree !== nothing
-            domtree = get(lazydomtree)
+            domtree = get!(lazydomtree)
             for item in visited_phinodes
                 if !dominates_ssa(compact, domtree, the_leaf_val, item)
                     dominates_all = false
@@ -1231,7 +1231,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             if isempty(ldu.live_in_bbs)
                 phiblocks = Int[]
             else
-                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get(lazydomtree))
+                phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get!(lazydomtree))
             end
             allblocks = sort!(vcat(phiblocks, ldu.def_bbs); alg=QuickSort)
             blocks[fidx] = phiblocks, allblocks
@@ -1239,7 +1239,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                 for i = 1:length(du.uses)
                     use = du.uses[i]
                     if use.kind === :isdefined
-                        if has_safe_def(ir, get(lazydomtree), allblocks, du, newidx, use.idx)
+                        if has_safe_def(ir, get!(lazydomtree), allblocks, du, newidx, use.idx)
                             ir[SSAValue(use.idx)][:inst] = true
                         else
                             all_eliminated = false
@@ -1252,7 +1252,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                             continue
                         end
                     end
-                    has_safe_def(ir, get(lazydomtree), allblocks, du, newidx, use.idx) || @goto skip
+                    has_safe_def(ir, get!(lazydomtree), allblocks, du, newidx, use.idx) || @goto skip
                 end
             else # always have some definition at the allocation site
                 for i = 1:length(du.uses)
@@ -1267,7 +1267,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # Compute domtree now, needed below, now that we have finished compacting the IR.
         # This needs to be after we iterate through the IR with `IncrementalCompact`
         # because removing dead blocks can invalidate the domtree.
-        domtree = get(lazydomtree)
+        domtree = get!(lazydomtree)
         local preserve_uses = nothing
         for fidx in 1:ndefuse
             du = fielddefuse[fidx]
