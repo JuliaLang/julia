@@ -67,7 +67,7 @@ id = LibGit2.addblob!(repo, blob_file)
 function addblob!(repo::GitRepo, path::AbstractString)
     ensure_initialized()
     id_ref = Ref{GitHash}()
-    @check ccall((:git_blob_create_fromdisk, :libgit2), Cint,
+    @check ccall((:git_blob_create_from_disk, :libgit2), Cint,
                  (Ptr{GitHash}, Ptr{Cvoid}, Cstring),
                  id_ref, repo.ptr, path)
     return id_ref[]

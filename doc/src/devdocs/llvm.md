@@ -28,31 +28,31 @@ The difference between an intrinsic and a builtin is that a builtin is a first c
 that can be used like any other Julia function.  An intrinsic can operate only on unboxed data,
 and therefore its arguments must be statically typed.
 
-### Alias Analysis
+### [Alias Analysis](@id LLVM-Alias-Analysis)
 
-Julia currently uses LLVM's [Type Based Alias Analysis](http://llvm.org/docs/LangRef.html#tbaa-metadata).
+Julia currently uses LLVM's [Type Based Alias Analysis](https://llvm.org/docs/LangRef.html#tbaa-metadata).
 To find the comments that document the inclusion relationships, look for `static MDNode*` in
 `src/codegen.cpp`.
 
-The `-O` option enables LLVM's [Basic Alias Analysis](http://llvm.org/docs/AliasAnalysis.html#the-basicaa-pass).
+The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/AliasAnalysis.html#the-basic-aa-pass).
 
 ## Building Julia with a different version of LLVM
 
-The default version of LLVM is specified in `deps/Versions.make`. You can override it by creating
+The default version of LLVM is specified in `deps/llvm.version`. You can override it by creating
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
-LLVM_VER = 6.0.1
+LLVM_VER = 13.0.0
 ```
 
-Besides the LLVM release numerals, you can also use `LLVM_VER = svn` to build against the latest
-development version of LLVM.
+Besides the LLVM release numerals, you can also use `DEPS_GIT = llvm` in combination with
+`USE_BINARYBUILDER_LLVM = 0` to build against the latest development version of LLVM.
 
 You can also specify to build a debug version of LLVM, by setting either `LLVM_DEBUG = 1` or
 `LLVM_DEBUG = Release` in your `Make.user` file. The former will be a fully unoptimized build
 of LLVM and the latter will produce an optimized build of LLVM. Depending on your needs the
 latter will suffice and it quite a bit faster. If you use `LLVM_DEBUG = Release` you will also
-want to set `LLVM_ASSERTIONS = 1` to enable diagonstics for different passes. Only `LLVM_DEBUG = 1`
+want to set `LLVM_ASSERTIONS = 1` to enable diagnostics for different passes. Only `LLVM_DEBUG = 1`
 implies that option by default.
 
 ## Passing options to LLVM
@@ -60,8 +60,8 @@ implies that option by default.
 You can pass options to LLVM via the environment variable `JULIA_LLVM_ARGS`.
 Here are example settings using `bash` syntax:
 
-  * `export JULIA_LLVM_ARGS = -print-after-all` dumps IR after each pass.
-  * `export JULIA_LLVM_ARGS = -debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
+  * `export JULIA_LLVM_ARGS=-print-after-all` dumps IR after each pass.
+  * `export JULIA_LLVM_ARGS=-debug-only=loop-vectorize` dumps LLVM `DEBUG(...)` diagnostics for
     loop vectorizer. If you get warnings about "Unknown command line argument", rebuild LLVM with
     `LLVM_ASSERTIONS = 1`.
 
@@ -79,17 +79,11 @@ environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
 image, one could do:
 ```
-opt -load libjulia.so -julia -o opt.bc unopt.bc
+opt -enable-new-pm=0 -load libjulia-codegen.so -julia -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```
 This system image can then be loaded by `julia` as usual.
-
-Alternatively, you can
-use `--output-jit-bc jit.bc` to obtain a trace of all IR passed to the JIT.
-This is useful for code that cannot be run as part of the sysimg generation
-process (e.g. because it creates unserializable state). However, the resulting
-`jit.bc` does not include sysimage data, and can thus not be used as such.
 
 It is also possible to dump an LLVM IR module for just one Julia function,
 using:
@@ -108,12 +102,12 @@ above.
 Improving LLVM code generation usually involves either changing Julia lowering to be more friendly
 to LLVM's passes, or improving a pass.
 
-If you are planning to improve a pass, be sure to read the [LLVM developer policy](http://llvm.org/docs/DeveloperPolicy.html).
+If you are planning to improve a pass, be sure to read the [LLVM developer policy](https://llvm.org/docs/DeveloperPolicy.html).
 The best strategy is to create a code example in a form where you can use LLVM's `opt` tool to
 study it and the pass of interest in isolation.
 
 1. Create an example Julia code of interest.
-2. Use `JULIA_LLVM_ARGS = -print-after-all` to dump the IR.
+2. Use `JULIA_LLVM_ARGS=-print-after-all` to dump the IR.
 3. Pick out the IR at the point just before the pass of interest runs.
 4. Strip the debug metadata and fix up the TBAA metadata by hand.
 
@@ -133,15 +127,11 @@ array. However, this would betray the SSA nature of the uses at the call site,
 making optimizations (including GC root placement), significantly harder.
 Instead, we emit it as follows:
 ```llvm
-%bitcast = bitcast @any_unoptimized_call to %jl_value_t *(*)(%jl_value_t *, %jl_value_t *)
-call cc 37 %jl_value_t *%bitcast(%jl_value_t *%arg1, %jl_value_t *%arg2)
+call %jl_value_t *@julia.call(jl_value_t *(*)(...) @any_unoptimized_call, %jl_value_t *%arg1, %jl_value_t *%arg2)
 ```
-The special `cc 37` annotation marks the fact that this call site is really using
-the jlcall calling convention. This allows us to retain the SSA-ness of the
+This allows us to retain the SSA-ness of the
 uses throughout the optimizer. GC root placement will later lower this call to
-the original C ABI. In the code the calling convention number is represented by
-the `JLCALL_F_CC` constant. In addition, there is the `JLCALL_CC` calling
-convention which functions similarly, but omits the first argument.
+the original C ABI.
 
 ## GC root placement
 

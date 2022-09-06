@@ -8,10 +8,12 @@ using Dates
 @testset "trunc" begin
     dt = Dates.Date(2012, 12, 21)
     @test trunc(dt, Dates.Year) == Dates.Date(2012)
+    @test trunc(dt, Dates.Quarter) == Dates.Date(2012, 10)
     @test trunc(dt, Dates.Month) == Dates.Date(2012, 12)
     @test trunc(dt, Dates.Day) == Dates.Date(2012, 12, 21)
     dt = Dates.DateTime(2012, 12, 21, 16, 30, 20, 200)
     @test trunc(dt, Dates.Year) == Dates.DateTime(2012)
+    @test trunc(dt, Dates.Quarter) == Dates.DateTime(2012, 10)
     @test trunc(dt, Dates.Month) == Dates.DateTime(2012, 12)
     @test trunc(dt, Dates.Day) == Dates.DateTime(2012, 12, 21)
     @test trunc(dt, Dates.Hour) == Dates.DateTime(2012, 12, 21, 16)

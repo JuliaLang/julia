@@ -14,6 +14,8 @@ typemax(::Type{Bool}) = true
 Boolean not. Implements [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
 returning [`missing`](@ref) if `x` is `missing`.
 
+See also [`~`](@ref) for bitwise not.
+
 # Examples
 ```jldoctest
 julia> !true
@@ -26,15 +28,11 @@ julia> !missing
 missing
 
 julia> .![true false true]
-1×3 BitArray{2}:
+1×3 BitMatrix:
  0  1  0
 ```
 """
-function !(x::Bool)
-    ## We need a better heuristic to detect this automatically
-    @_pure_meta
-    return not_int(x)
-end
+!(x::Bool) = not_int(x)
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = and_int(x, y)
@@ -66,13 +64,85 @@ julia> false ⊻ false
 false
 
 julia> [true; true; false] .⊻ [true; false; false]
-3-element BitArray{1}:
+3-element BitVector:
  0
  1
  0
 ```
 """
 xor(x::Bool, y::Bool) = (x != y)
+
+"""
+    nand(x, y)
+    ⊼(x, y)
+
+Bitwise nand (not and) of `x` and `y`. Implements
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one of the arguments is `missing`.
+
+The infix operation `a ⊼ b` is a synonym for `nand(a,b)`, and
+`⊼` can be typed by tab-completing `\\nand` or `\\barwedge` in the Julia REPL.
+
+# Examples
+```jldoctest
+julia> nand(true, false)
+true
+
+julia> nand(true, true)
+false
+
+julia> nand(true, missing)
+missing
+
+julia> false ⊼ false
+true
+
+julia> [true; true; false] .⊼ [true; false; false]
+3-element BitVector:
+ 0
+ 1
+ 1
+```
+"""
+nand(x...) = ~(&)(x...)
+
+"""
+    nor(x, y)
+    ⊽(x, y)
+
+Bitwise nor (not or) of `x` and `y`. Implements
+[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
+returning [`missing`](@ref) if one of the arguments is `missing` and the
+other is not `true`.
+
+The infix operation `a ⊽ b` is a synonym for `nor(a,b)`, and
+`⊽` can be typed by tab-completing `\\nor` or `\\barvee` in the Julia REPL.
+
+# Examples
+```jldoctest
+julia> nor(true, false)
+false
+
+julia> nor(true, true)
+false
+
+julia> nor(true, missing)
+false
+
+julia> false ⊽ false
+true
+
+julia> false ⊽ missing
+missing
+
+julia> [true; true; false] .⊽ [true; false; false]
+3-element BitVector:
+ 0
+ 0
+ 1
+```
+"""
+nor(x...) = ~(|)(x...)
 
 >>(x::Bool, c::UInt) = Int(x) >> c
 <<(x::Bool, c::UInt) = Int(x) << c

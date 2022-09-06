@@ -19,7 +19,8 @@ Base.runtests
 The `Test` module provides simple *unit testing* functionality. Unit testing is a way to
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
-of specifying the behaviors your code should have when complete.
+of specifying the behaviors your code should have when complete. You may also want to look at the
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -93,29 +94,33 @@ of inputs. In the event a test fails, the default behavior is to throw an except
 However, it is normally preferable to run the rest of the tests first to get a better picture
 of how many errors there are in the code being tested.
 
+!!! note
+    The `@testset` will create a local scope of its own when running the tests in it.
+
 The `@testset` macro can be used to group tests into *sets*. All the tests in a test set will
 be run, and at the end of the test set a summary will be printed. If any of the tests failed,
 or could not be evaluated due to an error, the test set will then throw a `TestSetException`.
 
 ```@docs
 Test.@testset
+Test.TestSetException
 ```
 
 We can put our tests for the `foo(x)` function in a test set:
 
-```jldoctest testfoo
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @test foo("a")   == 1
            @test foo("ab")  == 4
            @test foo("abc") == 9
        end;
-Test Summary: | Pass  Total
-Foo Tests     |    3      3
+Test Summary: | Pass  Total  Time
+Foo Tests     |    3      3  0.0s
 ```
 
 Test sets can also be nested:
 
-```jldoctest testfoo
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -126,14 +131,49 @@ julia> @testset "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total
-Foo Tests     |    8      8
+Test Summary: | Pass  Total  Time
+Foo Tests     |    8      8  0.0s
 ```
 
-In the event that a nested test set has no failures, as happened here, it will be hidden in the
-summary. If we do have a test failure, only the details for the failed test sets will be shown:
+As well as call functions:
 
-```julia-repl
+```jldoctest testfoo; filter = r"[0-9\.]+s"
+julia> f(x) = @test isone(x)
+f (generic function with 1 method)
+
+julia> @testset f(1);
+Test Summary: | Pass  Total  Time
+f             |    1      1  0.0s
+```
+
+This can be used to allow for factorization of test sets, making it easier to run individual
+test sets by running the associated functions instead.
+Note that in the case of functions, the test set will be given the name of the called function.
+In the event that a nested test set has no failures, as happened here, it will be hidden in the
+summary, unless the `verbose=true` option is passed:
+
+```jldoctest testfoo; filter = r"[0-9\.]+s"
+julia> @testset verbose = true "Foo Tests" begin
+           @testset "Animals" begin
+               @test foo("cat") == 9
+               @test foo("dog") == foo("cat")
+           end
+           @testset "Arrays $i" for i in 1:3
+               @test foo(zeros(i)) == i^2
+               @test foo(fill(1.0, i)) == i^2
+           end
+       end;
+Test Summary: | Pass  Total  Time
+Foo Tests     |    8      8  0.0s
+  Animals     |    2      2  0.0s
+  Arrays 1    |    2      2  0.0s
+  Arrays 2    |    2      2  0.0s
+  Arrays 3    |    2      2  0.0s
+```
+
+If we do have a test failure, only the details for the failed test sets will be shown:
+
+```julia-repl; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @testset "Felines" begin
@@ -153,11 +193,21 @@ Arrays: Test Failed
   Expression: foo(fill(1.0, 4)) == 15
    Evaluated: 16 == 15
 [...]
-Test Summary: | Pass  Fail  Total
-Foo Tests     |    3     1      4
-  Animals     |    2            2
-  Arrays      |    1     1      2
+Test Summary: | Pass  Fail  Total  Time
+Foo Tests     |    3     1      4  0.0s
+  Animals     |    2            2  0.0s
+  Arrays      |    1     1      2  0.0s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
+```
+
+## Testing Log Statements
+
+One can use the [`@test_logs`](@ref) macro to test log statements, or use a [`TestLogger`](@ref).
+
+```@docs
+Test.@test_logs
+Test.TestLogger
+Test.LogRecord
 ```
 
 ## Other Test Macros
@@ -176,10 +226,16 @@ Test Failed at none:1
    Evaluated: 1 ≈ 0.999999
 ERROR: There was an error during testing
 ```
+You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
+after the `≈` comparison:
+```jldoctest
+julia> @test 1 ≈ 0.999999  rtol=1e-5
+Test Passed
+```
+Note that this is not a specific feature of the `≈` but rather a general feature of the `@test` macro: `@test a <op> b key=val` is transformed by the macro into `@test op(a, b, key=val)`. It is, however, particularly useful for `≈` tests.
 
 ```@docs
 Test.@inferred
-Test.@test_logs
 Test.@test_deprecated
 Test.@test_warn
 Test.@test_nowarn
@@ -262,6 +318,18 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+## Test utilities
+
+```@docs
+Test.GenericArray
+Test.GenericDict
+Test.GenericOrder
+Test.GenericSet
+Test.GenericString
+Test.detect_ambiguities
+Test.detect_unbound_args
 ```
 
 ```@meta

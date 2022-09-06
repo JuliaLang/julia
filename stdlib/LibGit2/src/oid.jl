@@ -13,7 +13,8 @@ function GitHash(ptr::Ptr{UInt8})
     end
     ensure_initialized()
     oid_ptr = Ref(GitHash())
-    ccall((:git_oid_fromraw, :libgit2), Cvoid, (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
+    @check ccall((:git_oid_fromraw, :libgit2), Cint,
+                 (Ptr{GitHash}, Ptr{UInt8}), oid_ptr, ptr)
     return oid_ptr[]
 end
 
@@ -153,7 +154,7 @@ end
 
 Get a shortened identifier (`GitShortHash`) of `obj`. The minimum length (in characters)
 is determined by the `core.abbrev` config option, and will be of sufficient length to
-unambiuously identify the object in the repository.
+unambiguously identify the object in the repository.
 """
 function GitShortHash(obj::GitObject)
     ensure_initialized()

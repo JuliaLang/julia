@@ -2,34 +2,50 @@
 
 ## semantic version numbers (https://semver.org/)
 
+const VerTuple = Tuple{Vararg{Union{UInt64,String}}}
+
 const VInt = UInt32
 """
     VersionNumber
 
-Version number type which follow the specifications of
-[semantic versioning](https://semver.org/), composed of major, minor
+Version number type which follows the specifications of
+[semantic versioning (semver)](https://semver.org/), composed of major, minor
 and patch numeric values, followed by pre-release and build
-alpha-numeric annotations. See also [`@v_str`](@ref).
+alpha-numeric annotations.
+
+`VersionNumber` objects can be compared with all of the standard comparison
+operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+
+See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
+from semver-format literal strings, [`VERSION`](@ref) for the `VersionNumber`
+of Julia itself, and [Version Number Literals](@ref man-version-number-literals)
+in the manual.
 
 # Examples
 ```jldoctest
-julia> VersionNumber("1.2.3")
+julia> a = VersionNumber(1, 2, 3)
 v"1.2.3"
 
-julia> VersionNumber("2.0.1-rc1")
+julia> a >= v"1.2"
+true
+
+julia> b = VersionNumber("2.0.1-rc1")
 v"2.0.1-rc1"
+
+julia> b >= v"2.0.1"
+false
 ```
 """
 struct VersionNumber
     major::VInt
     minor::VInt
     patch::VInt
-    prerelease::Tuple{Vararg{Union{UInt64,String}}}
-    build::Tuple{Vararg{Union{UInt64,String}}}
+    prerelease::VerTuple
+    build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::Tuple{Vararg{Union{UInt64,String}}},
-            bld::Tuple{Vararg{Union{UInt64,String}}})
+            pre::VerTuple,
+            bld::VerTuple)
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -64,6 +80,7 @@ VersionNumber(major::Integer, minor::Integer = 0, patch::Integer = 0,
         map(x->x isa Integer ? UInt64(x) : String(x), bld))
 
 VersionNumber(v::Tuple) = VersionNumber(v...)
+VersionNumber(v::VersionNumber) = v
 
 function print(io::IO, v::VersionNumber)
     v == typemax(VersionNumber) && return print(io, "∞")
@@ -98,19 +115,17 @@ const VERSION_REGEX = r"^
 $"ix
 
 function split_idents(s::AbstractString)
-    idents = split(s, '.')
-    ntuple(length(idents)) do i
-        ident = idents[i]
-        occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident)
-    end
+    idents = eachsplit(s, '.')
+    pidents = Union{UInt64,String}[occursin(r"^\d+$", ident) ? parse(UInt64, ident) : String(ident) for ident in idents]
+    return tuple(pidents...)::VerTuple
 end
 
-function VersionNumber(v::AbstractString)
+function tryparse(::Type{VersionNumber}, v::AbstractString)
     v == "∞" && return typemax(VersionNumber)
-    m = match(VERSION_REGEX, v)
-    m === nothing && throw(ArgumentError("invalid version string: $v"))
+    m = match(VERSION_REGEX, String(v)::String)
+    m === nothing && return nothing
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = parse(VInt, major)
+    major = parse(VInt, major::AbstractString)
     minor = minor !== nothing ? parse(VInt, minor) : VInt(0)
     patch = patch !== nothing ? parse(VInt, patch) : VInt(0)
     if prerl !== nothing && !isempty(prerl) && prerl[1] == '-'
@@ -118,8 +133,16 @@ function VersionNumber(v::AbstractString)
     end
     prerl = prerl !== nothing ? split_idents(prerl) : minus !== nothing ? ("",) : ()
     build = build !== nothing ? split_idents(build) : plus  !== nothing ? ("",) : ()
-    return VersionNumber(major, minor, patch, prerl, build)
+    return VersionNumber(major, minor, patch, prerl::VerTuple, build::VerTuple)
 end
+
+function parse(::Type{VersionNumber}, v::AbstractString)
+    ver = tryparse(VersionNumber, v)
+    ver === nothing && throw(ArgumentError("invalid version string: $v"))
+    return ver
+end
+
+VersionNumber(v::AbstractString) = parse(VersionNumber, v)
 
 """
     @v_str
@@ -137,25 +160,22 @@ v"2.0.1-rc1"
 """
 macro v_str(v); VersionNumber(v); end
 
-typemin(::Type{VersionNumber}) = v"0-"
-
 function typemax(::Type{VersionNumber})
     ∞ = typemax(VInt)
     VersionNumber(∞, ∞, ∞, (), ("",))
 end
+
+typemin(::Type{VersionNumber}) = v"0-"
 
 ident_cmp(a::Integer, b::Integer) = cmp(a, b)
 ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(
-    A::Tuple{Vararg{Union{Integer,String}}},
-    B::Tuple{Vararg{Union{Integer,String}}},
-)
-    for (a, b) in zip(A, B)
-       c = ident_cmp(a,b)::Int
-       (c != 0) && return c
+function ident_cmp(A::VerTuple, B::VerTuple)
+    for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
+        c = ident_cmp(a, b)
+        (c != 0) && return c
     end
     length(A) < length(B) ? -1 :
     length(B) < length(A) ? +1 : 0
@@ -216,12 +236,12 @@ nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.
 """
     VERSION
 
-A `VersionNumber` object describing which version of Julia is in use. For details see
+A [`VersionNumber`](@ref) object describing which version of Julia is in use. See also
 [Version Number Literals](@ref man-version-number-literals).
 """
 const VERSION = try
     ver = VersionNumber(VERSION_STRING)
-    if !isempty(ver.prerelease)
+    if !isempty(ver.prerelease) && !GIT_VERSION_INFO.tagged_commit
         if GIT_VERSION_INFO.build_number >= 0
             ver = VersionNumber(ver.major, ver.minor, ver.patch, (ver.prerelease..., GIT_VERSION_INFO.build_number), ver.build)
         else
@@ -244,6 +264,8 @@ const libllvm_version = if endswith(libllvm_version_string, "jl")
 else
     VersionNumber(libllvm_version_string)
 end
+
+libllvm_path() = ccall(:jl_get_libllvm, Any, ())
 
 function banner(io::IO = stdout)
     if GIT_VERSION_INFO.tagged_commit

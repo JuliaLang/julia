@@ -57,15 +57,16 @@ Parameter `sep::Integer` is number of spaces to put between elements.
 Alignment is reported as a vector of (left,right) tuples, one for each
 column going across the screen.
 """
-function alignment(io::IO, X::AbstractVecOrMat,
-        rows::AbstractVector, cols::AbstractVector,
-        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer)
-    a = Tuple{Int, Int}[]
+function alignment(io::IO, @nospecialize(X::AbstractVecOrMat),
+        rows::AbstractVector{T}, cols::AbstractVector{V},
+        cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer,
+        #= `size(X) may not infer, set this in caller =# ncols::Integer=size(X, 2)) where {T,V}
+    a = Tuple{T, V}[]
     for j in cols # need to go down each column one at a time
         l = r = 0
         for i in rows # plumb down and see what largest element sizes are
             if isassigned(X,i,j)
-                aij = alignment(io, X[i,j])
+                aij = alignment(io, X[i,j])::Tuple{Int,Int}
             else
                 aij = undef_ref_alignment
             end
@@ -78,7 +79,7 @@ function alignment(io::IO, X::AbstractVecOrMat,
             break
         end
     end
-    if 1 < length(a) < length(axes(X,2))
+    if 1 < length(a) < ncols
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop!(a)
         end
@@ -94,13 +95,14 @@ is specified as string sep.
 `print_matrix_row` will also respect compact output for elements.
 """
 function print_matrix_row(io::IO,
-        X::AbstractVecOrMat, A::Vector,
-        i::Integer, cols::AbstractVector, sep::AbstractString)
+        @nospecialize(X::AbstractVecOrMat), A::Vector,
+        i::Integer, cols::AbstractVector, sep::AbstractString,
+        #= `axes(X)` may not infer, set this in caller =# idxlast::Integer=last(axes(X, 2)))
     for (k, j) = enumerate(cols)
         k > length(A) && break
         if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
             x = X[i,j]
-            a = alignment(io, x)
+            a = alignment(io, x)::Tuple{Int,Int}
 
             # First try 3-arg show
             sx = sprint(show, "text/plain", x, context=io, sizehint=0)
@@ -114,7 +116,7 @@ function print_matrix_row(io::IO,
             sx = undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1]) # pad on left and right as needed
-        r = j == axes(X, 2)[end] ? "" : repeat(" ", A[k][2]-a[2])
+        r = j == idxlast ? "" : repeat(" ", A[k][2]-a[2])
         prettysx = replace_in_print_matrix(X,i,j,sx)
         print(io, l, prettysx, r)
         if k < length(A); print(io, sep); end
@@ -166,18 +168,23 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                       vdots::AbstractString = "\u22ee",
                       ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
-    if !get(io, :limit, false)
+    _print_matrix(io, inferencebarrier(X), pre, sep, post, hdots, vdots, ddots, hmod, vmod, unitrange(axes(X,1)), unitrange(axes(X,2)))
+end
+
+function _print_matrix(io, @nospecialize(X::AbstractVecOrMat), pre, sep, post, hdots, vdots, ddots, hmod, vmod, rowsA, colsA)
+    hmod, vmod = Int(hmod)::Int, Int(vmod)::Int
+    ncols, idxlast = length(colsA), last(colsA)
+    if !(get(io, :limit, false)::Bool)
         screenheight = screenwidth = typemax(Int)
     else
-        sz = displaysize(io)
+        sz = displaysize(io)::Tuple{Int,Int}
         screenheight, screenwidth = sz[1] - 4, sz[2]
     end
-    screenwidth -= length(pre) + length(post)
-    presp = repeat(" ", length(pre))  # indent each row to match pre string
+    screenwidth -= length(pre)::Int + length(post)::Int
+    presp = repeat(" ", length(pre)::Int)  # indent each row to match pre string
     postsp = ""
     @assert textwidth(hdots) == textwidth(ddots)
-    sepsize = length(sep)
-    rowsA, colsA = UnitRange(axes(X,1)), UnitRange(axes(X,2))
+    sepsize = length(sep)::Int
     m, n = length(rowsA), length(colsA)
     # To figure out alignments, only need to look at as many rows as could
     # fit down screen. If screen has at least as many rows as A, look at A.
@@ -186,33 +193,37 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
     halfheight = div(screenheight,2)
     if m > screenheight
         rowsA = [rowsA[(0:halfheight-1) .+ firstindex(rowsA)]; rowsA[(end-div(screenheight-1,2)+1):end]]
+    else
+        rowsA = [rowsA;]
     end
     # Similarly for columns, only necessary to get alignments for as many
     # columns as could conceivably fit across the screen
     maxpossiblecols = div(screenwidth, 1+sepsize)
     if n > maxpossiblecols
         colsA = [colsA[(0:maxpossiblecols-1) .+ firstindex(colsA)]; colsA[(end-maxpossiblecols+1):end]]
+    else
+	    colsA = [colsA;]
     end
-    A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize)
+    A = alignment(io, X, rowsA, colsA, screenwidth, screenwidth, sepsize, ncols)
     # Nine-slicing is accomplished using print_matrix_row repeatedly
     if m <= screenheight # rows fit vertically on screen
         if n <= length(A) # rows and cols fit so just print whole matrix in one piece
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,A,i,colsA,sep)
+                print_matrix_row(io, X,A,i,colsA,sep,idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
             end
         else # rows fit down screen but cols don't, so need horizontal ellipsis
-            c = div(screenwidth-length(hdots)+1,2)+1  # what goes to right of ellipsis
-            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize)) # alignments for right
-            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
-            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize) # alignments for left of ellipsis
+            c = div(screenwidth-length(hdots)::Int+1,2)+1  # what goes to right of ellipsis
+            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize, ncols)) # alignments for right
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
+            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize, ncols) # alignments for left of ellipsis
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
-                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep,idxlast)
+                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)::Int))
+                print_matrix_row(io, X, Ralign, i, (n - length(Ralign)) .+ colsA, sep, idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != last(rowsA); println(io); end
             end
@@ -221,7 +232,7 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
         if n <= length(A) # rows don't fit, cols do, so only vertical ellipsis
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,A,i,colsA,sep)
+                print_matrix_row(io, X,A,i,colsA,sep,idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
@@ -231,16 +242,16 @@ function print_matrix(io::IO, X::AbstractVecOrMat,
                 end
             end
         else # neither rows nor cols fit, so use all 3 kinds of dots
-            c = div(screenwidth-length(hdots)+1,2)+1
-            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize))
-            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)
-            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize)
+            c = div(screenwidth-length(hdots)::Int+1,2)+1
+            Ralign = reverse(alignment(io, X, rowsA, reverse(colsA), c, c, sepsize, ncols))
+            c = screenwidth - sum(map(sum,Ralign)) - (length(Ralign)-1)*sepsize - length(hdots)::Int
+            Lalign = alignment(io, X, rowsA, colsA, c, c, sepsize, ncols)
             r = mod((length(Ralign)-n+1),vmod) # where to put dots on right half
             for i in rowsA
                 print(io, i == first(rowsA) ? pre : presp)
-                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep)
-                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)))
-                print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep)
+                print_matrix_row(io, X,Lalign,i,colsA[1:length(Lalign)],sep,idxlast)
+                print(io, (i - first(rowsA)) % hmod == 0 ? hdots : repeat(" ", length(hdots)::Int))
+                print_matrix_row(io, X,Ralign,i,(n-length(Ralign)).+colsA,sep,idxlast)
                 print(io, i == last(rowsA) ? post : postsp)
                 if i != rowsA[end] || i == rowsA[halfheight]; println(io); end
                 if i == rowsA[halfheight]
@@ -263,14 +274,21 @@ end
 
 # typeinfo agnostic
 # n-dimensional arrays
-function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices::Bool)
+show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bool) =
+    _show_nd(io, inferencebarrier(a), print_matrix, show_full, map(unitrange, axes(a)))
+
+function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, show_full::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
     limit::Bool = get(io, :limit, false)
     if isempty(a)
         return
     end
-    tailinds = tail(tail(axes(a)))
+    tailinds = tail(tail(axs))
     nd = ndims(a)-2
-    for I in CartesianIndices(tailinds)
+    show_full || print(io, "[")
+    Is = CartesianIndices(tailinds)
+    lastidxs = first(Is).I
+    reached_last_d = false
+    for I in Is
         idxs = I.I
         if limit
             for i = 1:nd
@@ -279,14 +297,15 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                 if length(ind) > 10
                     if ii == ind[firstindex(ind)+3] && all(d->idxs[d]==first(tailinds[d]),1:i-1)
                         for j=i+1:nd
-                            szj = length(axes(a, j+2))
+                            szj = length(axs[j+2])
                             indj = tailinds[j]
                             if szj>10 && first(indj)+2 < idxs[j] <= last(indj)-3
                                 @goto skip
                             end
                         end
-                        #println(io, idxs)
-                        print(io, "...\n\n")
+                        print(io, ";"^(i+2))
+                        print(io, " \u2026 ")
+                        show_full && print(io, "\n\n")
                         @goto skip
                     end
                     if ind[firstindex(ind)+2] < ii <= ind[end-3]
@@ -295,16 +314,38 @@ function show_nd(io::IO, a::AbstractArray, print_matrix::Function, label_slices:
                 end
             end
         end
-        if label_slices
-            print(io, "[:, :, ")
-            for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
-            println(io, idxs[end], "] =")
+        if show_full
+            _show_nd_label(io, a, idxs)
         end
-        slice = view(a, axes(a,1), axes(a,2), idxs...)
-        print_matrix(io, slice)
-        print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        slice = view(a, axs[1], axs[2], idxs...)
+        if show_full
+            print_matrix(io, slice)
+            print(io, idxs == map(last,tailinds) ? "" : "\n\n")
+        else
+            idxdiff = lastidxs .- idxs .< 0
+            if any(idxdiff)
+                lastchangeindex = 2 + findlast(idxdiff)
+                print(io, ";"^lastchangeindex)
+                lastchangeindex == ndims(a) && (reached_last_d = true)
+                print(io, " ")
+            end
+            print_matrix(io, slice)
+        end
         @label skip
+        lastidxs = idxs
     end
+    if !show_full
+        reached_last_d || print(io, ";"^(nd+2))
+        print(io, "]")
+    end
+end
+
+function _show_nd_label(io::IO, a::AbstractArray, idxs)
+    print(io, "[:, :, ")
+    for i = 1:length(idxs)-1
+        print(io, idxs[i], ", ")
+    end
+    println(io, idxs[end], "] =")
 end
 
 # print_array: main helper functions for show(io, text/plain, array)
@@ -369,14 +410,18 @@ end
 `_show_nonempty(io, X::AbstractMatrix, prefix)` prints matrix X with opening and closing square brackets,
 preceded by `prefix`, supposed to encode the type of the elements.
 """
-function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
+_show_nonempty(io::IO, X::AbstractMatrix, prefix::String) =
+    _show_nonempty(io, inferencebarrier(X), prefix, false, axes(X))
+
+function _show_nonempty(io::IO, @nospecialize(X::AbstractMatrix), prefix::String, drop_brackets::Bool, axs::Tuple{AbstractUnitRange,AbstractUnitRange})
     @assert !isempty(X)
     limit = get(io, :limit, false)::Bool
-    indr, indc = axes(X,1), axes(X,2)
+    indr, indc = axs
     nr, nc = length(indr), length(indc)
     rdots, cdots = false, false
-    rr1, rr2 = UnitRange{Int}(indr), 1:0
-    cr1, cr2 = UnitRange{Int}(indc), 1:0
+    rr1, rr2 = unitrange(indr), 1:0
+    cr1 = unitrange(indc)
+    cr2 = first(cr1) .+ (0:-1)
     if limit
         if nr > 4
             rr1, rr2 = rr1[1:2], rr1[nr-1:nr]
@@ -387,7 +432,7 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
             cdots = true
         end
     end
-    print(io, prefix, "[")
+    drop_brackets || print(io, prefix, "[")
     for rr in (rr1, rr2)
         for i in rr
             for cr in (cr1, cr2)
@@ -407,14 +452,18 @@ function _show_nonempty(io::IO, X::AbstractMatrix, prefix::String)
                 end
             end
         end
-        last(rr) != nr && rdots && print(io, "\u2026 ; ")
+        last(rr) != last(indr) && rdots && print(io, "\u2026 ; ")
     end
-    print(io, "]")
+    if !drop_brackets
+        nc > 1 || print(io, ";;")
+        print(io, "]")
+    end
+    return nothing
 end
 
 
 _show_nonempty(io::IO, X::AbstractArray, prefix::String) =
-    show_nd(io, X, (io, slice) -> _show_nonempty(io, slice, prefix), false)
+    show_nd(io, X, (io, slice) -> _show_nonempty(io, inferencebarrier(slice), prefix, true, axes(slice)), false)
 
 # a specific call path is used to show vectors (show_vector)
 _show_nonempty(::IO, ::AbstractVector, ::String) =
@@ -423,7 +472,10 @@ _show_nonempty(::IO, ::AbstractVector, ::String) =
 _show_nonempty(io::IO, X::AbstractArray{T,0} where T, prefix::String) = print_array(io, X)
 
 # NOTE: it's not clear how this method could use the :typeinfo attribute
-_show_empty(io::IO, X::Array{T}) where {T} = print(io, "Array{", T, "}(undef,", join(size(X),','), ')')
+function _show_empty(io::IO, X::Array)
+    show(io, typeof(X))
+    print(io, "(undef, ", join(size(X),", "), ')')
+end
 _show_empty(io, X::AbstractArray) = summary(io, X)
 
 # typeinfo aware (necessarily)
@@ -446,7 +498,7 @@ function show_zero_dim(io::IO, X::AbstractArray{T, 0}) where T
         print(io, "fill(")
         show(io, X[])
     else
-        print(io, "Array{", T, ",0}(")
+        print(io, "Array{", T, ", 0}(")
         show(io, undef)
     end
     print(io, ")")
@@ -516,9 +568,9 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx
-            string(typeof(X).name), false
+            sprint(show_type_name, typeof(X).name), false
         elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
-            string(typeof(X).name), true
+            sprint(show_type_name, typeof(X).name), true
         else
             string(typeof(X)), false
         end
@@ -529,7 +581,7 @@ function typeinfo_prefix(io::IO, X)
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
-            string(unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
         else
             string(eltype_X), false
         end

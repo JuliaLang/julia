@@ -1,0 +1,27 @@
+From cdff2f0237f663e0f68155655a8b66d05c1ec716 Mon Sep 17 00:00:00 2001
+From: Edward Thomson <ethomson@edwardthomson.com>
+Date: Mon, 13 Jun 2022 21:34:01 -0400
+Subject: [PATCH] repo: allow administrator to own the configuration
+
+Update our ownership checks that were introduced in libgit2 v1.4.3
+(to combat CVE 2022-24765). These were not compatible with git's; git
+itself allows administrators to own the path. Our checks now match
+this behavior.
+---
+ src/libgit2/repository.c  | 2 +-
+ tests/libgit2/repo/open.c | 5 +++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/repository.c b/src/repository.c
+index 48a0b70f519..d2484318f10 100644
+--- a/src/repository.c
++++ b/src/repository.c
+@@ -512,7 +512,7 @@ static int validate_ownership(const char *repo_path)
+ 	bool is_safe;
+ 	int error;
+ 
+-	if ((error = git_fs_path_owner_is_current_user(&is_safe, repo_path)) < 0) {
++	if ((error = git_fs_path_owner_is_system_or_current_user(&is_safe, repo_path)) < 0) {
+ 		if (error == GIT_ENOTFOUND)
+ 			error = 0;
+ 

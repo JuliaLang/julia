@@ -71,17 +71,17 @@ the output (e.g. to avoid overflow).
 # Examples
 ```jldoctest
 julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  4  5  6
 
 julia> cumsum(a, dims=1)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  2  3
  5  7  9
 
 julia> cumsum(a, dims=2)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  3   6
  4  9  15
 ```
@@ -94,12 +94,12 @@ julia> cumsum(a, dims=2)
 
     ```jldoctest
     julia> cumsum(Int8[100, 28])
-    2-element Array{Int64,1}:
+    2-element Vector{Int64}:
      100
      128
 
     julia> accumulate(+,Int8[100, 28])
-    2-element Array{Int8,1}:
+    2-element Vector{Int8}:
       100
      -128
     ```
@@ -116,35 +116,29 @@ end
 """
     cumsum(itr)
 
-Cumulative sum an iterator. See also [`cumsum!`](@ref)
-to use a preallocated output array, both for performance and to control the precision of the
-output (e.g. to avoid overflow).
+Cumulative sum of an iterator.
+
+See also [`accumulate`](@ref) to apply functions other than `+`.
 
 !!! compat "Julia 1.5"
     `cumsum` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
-julia> cumsum([1, 1, 1])
-3-element Array{Int64,1}:
+julia> cumsum(1:3)
+3-element Vector{Int64}:
  1
- 2
  3
+ 6
 
-julia> cumsum([fill(1, 2) for i in 1:3])
-3-element Array{Array{Int64,1},1}:
+julia> cumsum((true, false, true, false, true))
+(1, 1, 2, 2, 3)
+
+julia> cumsum(fill(1, 2) for i in 1:3)
+3-element Vector{Vector{Int64}}:
  [1, 1]
  [2, 2]
  [3, 3]
-
-julia> cumsum((1, 1, 1))
-(1, 2, 3)
-
-julia> cumsum(x^2 for x in 1:3)
-3-element Array{Int64,1}:
-  1
-  5
- 14
 ```
 """
 cumsum(x::AbstractVector) = cumsum(x, dims=1)
@@ -177,18 +171,15 @@ to control the precision of the output (e.g. to avoid overflow).
 
 # Examples
 ```jldoctest
-julia> a = [1 2 3; 4 5 6]
-2×3 Array{Int64,2}:
- 1  2  3
- 4  5  6
+julia> a = Int8[1 2 3; 4 5 6];
 
 julia> cumprod(a, dims=1)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1   2   3
  4  10  18
 
 julia> cumprod(a, dims=2)
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1   2    6
  4  20  120
 ```
@@ -200,9 +191,9 @@ end
 """
     cumprod(itr)
 
-Cumulative product of an iterator. See also
-[`cumprod!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow).
+Cumulative product of an iterator.
+
+See also [`cumprod!`](@ref), [`accumulate`](@ref), [`cumsum`](@ref).
 
 !!! compat "Julia 1.5"
     `cumprod` on a non-array iterator requires at least Julia 1.5.
@@ -210,25 +201,21 @@ to control the precision of the output (e.g. to avoid overflow).
 # Examples
 ```jldoctest
 julia> cumprod(fill(1//2, 3))
-3-element Array{Rational{Int64},1}:
+3-element Vector{Rational{Int64}}:
  1//2
  1//4
  1//8
 
-julia> cumprod([fill(1//3, 2, 2) for i in 1:3])
-3-element Array{Array{Rational{Int64},2},1}:
- [1//3 1//3; 1//3 1//3]
- [2//9 2//9; 2//9 2//9]
- [4//27 4//27; 4//27 4//27]
+julia> cumprod((1, 2, 1, 3, 1))
+(1, 2, 2, 6, 6)
 
-julia> cumprod((1, 2, 1))
-(1, 2, 2)
-
-julia> cumprod(x^2 for x in 1:3)
-3-element Array{Int64,1}:
-  1
-  4
- 36
+julia> cumprod("julia")
+5-element Vector{String}:
+ "j"
+ "ju"
+ "jul"
+ "juli"
+ "julia"
 ```
 """
 cumprod(x::AbstractVector) = cumprod(x, dims=1)
@@ -241,8 +228,11 @@ cumprod(itr) = accumulate(mul_prod, itr)
 Cumulative operation `op` along the dimension `dims` of `A` (providing `dims` is optional
 for vectors). An initial value `init` may optionally be provided by a keyword argument. See
 also [`accumulate!`](@ref) to use a preallocated output array, both for performance and
-to control the precision of the output (e.g. to avoid overflow). For common operations
-there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod`](@ref)
+to control the precision of the output (e.g. to avoid overflow).
+
+For common operations there are specialized variants of `accumulate`,
+see [`cumsum`](@ref), [`cumprod`](@ref). For a lazy version, see
+[`Iterators.accumulate`](@ref).
 
 !!! compat "Julia 1.5"
     `accumulate` on a non-array iterator requires at least Julia 1.5.
@@ -250,40 +240,33 @@ there are specialized variants of `accumulate`, see: [`cumsum`](@ref), [`cumprod
 # Examples
 ```jldoctest
 julia> accumulate(+, [1,2,3])
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  3
  6
 
-julia> accumulate(*, [1,2,3])
-3-element Array{Int64,1}:
- 1
- 2
- 6
+julia> accumulate(min, (1, -2, 3, -4, 5), init=0)
+(0, -2, -2, -4, -4)
 
-julia> accumulate(+, [1,2,3]; init=100)
-3-element Array{Int64,1}:
- 101
- 103
- 106
+julia> accumulate(/, (2, 4, Inf), init=100)
+(50.0, 12.5, 0.0)
 
-julia> accumulate(min, [1,2,-1]; init=0)
-3-element Array{Int64,1}:
-  0
-  0
- -1
+julia> accumulate(=>, i^2 for i in 1:3)
+3-element Vector{Any}:
+          1
+        1 => 4
+ (1 => 4) => 9
 
-julia> accumulate(+, fill(1, 3, 3), dims=1)
-3×3 Array{Int64,2}:
- 1  1  1
- 2  2  2
- 3  3  3
+julia> accumulate(+, fill(1, 3, 4))
+3×4 Matrix{Int64}:
+ 1  4  7  10
+ 2  5  8  11
+ 3  6  9  12
 
-julia> accumulate(+, fill(1, 3, 3), dims=2)
-3×3 Array{Int64,2}:
- 1  2  3
- 1  2  3
- 1  2  3
+julia> accumulate(+, fill(1, 2, 5), dims=2, init=100.0)
+2×5 Matrix{Float64}:
+ 101.0  102.0  103.0  104.0  105.0
+ 101.0  102.0  103.0  104.0  105.0
 ```
 """
 function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
@@ -291,13 +274,13 @@ function accumulate(op, A; dims::Union{Nothing,Integer}=nothing, kw...)
         # This branch takes care of the cases not handled by `_accumulate!`.
         return collect(Iterators.accumulate(op, A; kw...))
     end
-    nt = kw.data
-    if nt isa NamedTuple{()}
+    nt = values(kw)
+    if isempty(kw)
         out = similar(A, promote_op(op, eltype(A), eltype(A)))
-    elseif nt isa NamedTuple{(:init,)}
+    elseif keys(nt) === (:init,)
         out = similar(A, promote_op(op, typeof(nt.init), eltype(A)))
     else
-        throw(ArgumentError("acccumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
     accumulate!(op, out, A; dims=dims, kw...)
 end
@@ -316,51 +299,49 @@ end
 
 Cumulative operation `op` on `A` along the dimension `dims`, storing the result in `B`.
 Providing `dims` is optional for vectors.  If the keyword argument `init` is given, its
-value is used to instantiate the accumulation. See also [`accumulate`](@ref).
+value is used to instantiate the accumulation.
+
+See also [`accumulate`](@ref), [`cumsum!`](@ref), [`cumprod!`](@ref).
 
 # Examples
 ```jldoctest
 julia> x = [1, 0, 2, 0, 3];
 
-julia> y = [0, 0, 0, 0, 0];
+julia> y = rand(5);
 
 julia> accumulate!(+, y, x);
 
 julia> y
-5-element Array{Int64,1}:
- 1
- 1
- 3
- 3
- 6
+5-element Vector{Float64}:
+ 1.0
+ 1.0
+ 3.0
+ 3.0
+ 6.0
 
-julia> A = [1 2; 3 4];
+julia> A = [1 2 3; 4 5 6];
 
-julia> B = [0 0; 0 0];
+julia> B = similar(A);
 
-julia> accumulate!(-, B, A, dims=1);
+julia> accumulate!(-, B, A, dims=1)
+2×3 Matrix{Int64}:
+  1   2   3
+ -3  -3  -3
 
-julia> B
-2×2 Array{Int64,2}:
-  1   2
- -2  -2
-
-julia> accumulate!(-, B, A, dims=2);
-
-julia> B
-2×2 Array{Int64,2}:
- 1  -1
- 3  -1
+julia> accumulate!(*, B, A, dims=2, init=10)
+2×3 Matrix{Int64}:
+ 10   20    60
+ 40  200  1200
 ```
 """
 function accumulate!(op, B, A; dims::Union{Integer, Nothing} = nothing, kw...)
-    nt = kw.data
-    if nt isa NamedTuple{()}
+    nt = values(kw)
+    if isempty(kw)
         _accumulate!(op, B, A, dims, nothing)
-    elseif nt isa NamedTuple{(:init,)}
+    elseif keys(kw) === (:init,)
         _accumulate!(op, B, A, dims, Some(nt.init))
     else
-        throw(ArgumentError("acccumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
+        throw(ArgumentError("accumulate! does not support the keyword arguments $(setdiff(keys(nt), (:init,)))"))
     end
 end
 
@@ -441,7 +422,7 @@ function _accumulate1!(op, B, v1, A::AbstractVector, dim::Integer)
     inds = LinearIndices(A)
     inds == LinearIndices(B) || throw(DimensionMismatch("LinearIndices of A and B don't match"))
     dim > 1 && return copyto!(B, A)
-    (i1, state) = iterate(inds) # We checked earlier that A isn't empty
+    (i1, state) = iterate(inds)::NTuple{2,Any} # We checked earlier that A isn't empty
     cur_val = v1
     B[i1] = cur_val
     next = iterate(inds, state)

@@ -5,10 +5,11 @@ technical computing languages pay a lot of attention to their array implementati
 of other containers. Julia does not treat arrays in any special way. The array library is implemented
 almost completely in Julia itself, and derives its performance from the compiler, just like any
 other code written in Julia. As such, it's also possible to define custom array types by inheriting
-from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array) for more details
-on implementing a custom array type.
+from [`AbstractArray`](@ref). See the [manual section on the AbstractArray interface](@ref man-interface-array)
+for more details on implementing a custom array type.
 
-An array is a collection of objects stored in a multi-dimensional grid. In the most general case,
+An array is a collection of objects stored in a multi-dimensional grid. Zero-dimensional arrays
+are allowed, see [this FAQ entry](@ref faq-array-0dim). In the most general case,
 an array may contain objects of type [`Any`](@ref). For most computational purposes, arrays should contain
 objects of a more specific type, such as [`Float64`](@ref) or [`Int32`](@ref).
 
@@ -25,7 +26,7 @@ it makes avoiding unwanted copying of arrays difficult. By convention, a
 function name ending with a `!` indicates that it will mutate or destroy the
 value of one or more of its arguments (compare, for example, [`sort`](@ref) and [`sort!`](@ref)).
 Callees must make explicit copies to ensure that they don't modify inputs that
-they don't intend to change. Many non- mutating functions are implemented by
+they don't intend to change. Many non-mutating functions are implemented by
 calling a function of the same name with an added `!` at the end on an explicit
 copy of the input, and returning that copy.
 
@@ -64,29 +65,29 @@ omitted it will default to [`Float64`](@ref).
 | [`deepcopy(A)`](@ref)                          | copy `A`, recursively copying its elements                                                                                                                                                                                                   |
 | [`similar(A, T, dims...)`](@ref)               | an uninitialized array of the same type as `A` (dense, sparse, etc.), but with the specified element type and dimensions. The second and third arguments are both optional, defaulting to the element type and dimensions of `A` if omitted. |
 | [`reinterpret(T, A)`](@ref)                    | an array with the same binary data as `A`, but with element type `T`                                                                                                                                                                         |
-| [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values in the half-open interval ``[0, 1)``                                                                                                                                       |
+| [`rand(T, dims...)`](@ref)                     | an `Array` with random, iid [^1] and uniformly distributed values. For floating point types `T`, the values lie in the half-open interval ``[0, 1)``.                                                                                                                                       |
 | [`randn(T, dims...)`](@ref)                    | an `Array` with random, iid and standard normally distributed values                                                                                                                                                                         |
 | [`Matrix{T}(I, m, n)`](@ref)                   | `m`-by-`n` identity matrix. Requires `using LinearAlgebra` for [`I`](@ref).                                                                                                                                                                                                                   |
-| [`range(start, stop=stop, length=n)`](@ref)    | range of `n` linearly spaced elements from `start` to `stop`                                                                                                                                                                                 |
+| [`range(start, stop, n)`](@ref)                | a range of `n` linearly spaced elements from `start` to `stop` |
 | [`fill!(A, x)`](@ref)                          | fill the array `A` with the value `x`                                                                                                                                                                                                        |
-| [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`                                                                                                                                                                                                         |
+| [`fill(x, dims...)`](@ref)                     | an `Array` filled with the value `x`. In particular, `fill(x)` constructs a zero-dimensional `Array` containing `x`. |
 
 [^1]: *iid*, independently and identically distributed.
 
 To see the various ways we can pass dimensions to these functions, consider the following examples:
 ```jldoctest
 julia> zeros(Int8, 2, 3)
-2×3 Array{Int8,2}:
+2×3 Matrix{Int8}:
  0  0  0
  0  0  0
 
 julia> zeros(Int8, (2, 3))
-2×3 Array{Int8,2}:
+2×3 Matrix{Int8}:
  0  0  0
  0  0  0
 
 julia> zeros((2, 3))
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  0.0  0.0  0.0
  0.0  0.0  0.0
 ```
@@ -95,18 +96,19 @@ Here, `(2, 3)` is a [`Tuple`](@ref) and the first argument — the element type 
 ## [Array literals](@id man-array-literals)
 
 Arrays can also be directly constructed with square braces; the syntax `[A, B, C, ...]`
-creates a one dimensional array (i.e., a vector) containing the comma-separated arguments as
+creates a one-dimensional array (i.e., a vector) containing the comma-separated arguments as
 its elements. The element type ([`eltype`](@ref)) of the resulting array is automatically
 determined by the types of the arguments inside the braces. If all the arguments are the
 same type, then that is its `eltype`. If they all have a common
 [promotion type](@ref conversion-and-promotion) then they get converted to that type using
 [`convert`](@ref) and that type is the array's `eltype`. Otherwise, a heterogeneous array
 that can hold anything — a `Vector{Any}` — is constructed; this includes the literal `[]`
-where no arguments are given.
+where no arguments are given. [Array literal can be typed](@ref man-array-typed-literal) with
+the syntax `T[A, B, C, ...]` where `T` is a type.
 
 ```jldoctest
 julia> [1,2,3] # An array of `Int`s
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  2
  3
@@ -115,7 +117,13 @@ julia> promote(1, 2.3, 4//5) # This combination of Int, Float64 and Rational pro
 (1.0, 2.3, 0.8)
 
 julia> [1, 2.3, 4//5] # Thus that's the element type of this Array
-3-element Array{Float64,1}:
+3-element Vector{Float64}:
+ 1.0
+ 2.3
+ 0.8
+
+julia> Float32[1, 2.3, 4//5] # Specify element type manually
+3-element Vector{Float32}:
  1.0
  2.3
  0.8
@@ -126,18 +134,18 @@ Any[]
 
 ### [Concatenation](@id man-array-concatenation)
 
-If the arguments inside the square brackets are separated by semicolons (`;`) or newlines
+If the arguments inside the square brackets are separated by single semicolons (`;`) or newlines
 instead of commas, then their contents are _vertically concatenated_ together instead of
 the arguments being used as elements themselves.
 
 ```jldoctest
 julia> [1:2, 4:5] # Has a comma, so no concatenation occurs. The ranges are themselves the elements
-2-element Array{UnitRange{Int64},1}:
+2-element Vector{UnitRange{Int64}}:
  1:2
  4:5
 
 julia> [1:2; 4:5]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
  1
  2
  4
@@ -146,7 +154,7 @@ julia> [1:2; 4:5]
 julia> [1:2
         4:5
         6]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
  1
  2
  4
@@ -154,54 +162,176 @@ julia> [1:2
  6
 ```
 
-Similarly, if the arguments are separated by tabs or spaces, then their contents are
+Similarly, if the arguments are separated by tabs or spaces or double semicolons, then their contents are
 _horizontally concatenated_ together.
 
 ```jldoctest
 julia> [1:2  4:5  7:8]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  4  7
  2  5  8
 
 julia> [[1,2]  [4,5]  [7,8]]
-2×3 Array{Int64,2}:
+2×3 Matrix{Int64}:
  1  4  7
  2  5  8
 
 julia> [1 2 3] # Numbers can also be horizontally concatenated
-1×3 Array{Int64,2}:
+1×3 Matrix{Int64}:
  1  2  3
+
+julia> [1;; 2;; 3;; 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
 ```
 
-Using semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
+Single semicolons (or newlines) and spaces (or tabs) can be combined to concatenate
 both horizontally and vertically at the same time.
 
 ```jldoctest
 julia> [1 2
         3 4]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  3  4
 
 julia> [zeros(Int, 2, 2) [1; 2]
         [3 4]            5]
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  0  0  1
  0  0  2
  3  4  5
+
+julia> [[1 1]; 2 3; [4 4]]
+3×2 Matrix{Int64}:
+ 1  1
+ 2  3
+ 4  4
+```
+
+Spaces (and tabs) have a higher precedence than semicolons, performing any horizontal
+concatenations first and then concatenating the result. Using double semicolons for the
+horizontal concatenation, on the other hand, performs any vertical concatenations before
+horizontally concatenating the result.
+
+```jldoctest
+julia> [zeros(Int, 2, 2) ; [3 4] ;; [1; 2] ; 5]
+3×3 Matrix{Int64}:
+ 0  0  1
+ 0  0  2
+ 3  4  5
+
+julia> [1:2; 4;; 1; 3:4]
+3×2 Matrix{Int64}:
+ 1  1
+ 2  3
+ 4  4
+```
+
+Just as `;` and `;;` concatenate in the first and second dimension, using more semicolons
+extends this same general scheme. The number of semicolons in the separator specifies the
+particular dimension, so `;;;` concatenates in the third dimension, `;;;;` in the 4th, and
+so on. Fewer semicolons take precedence, so the lower dimensions are generally concatenated
+first.
+
+```jldoctest
+julia> [1; 2;; 3; 4;; 5; 6;;;
+        7; 8;; 9; 10;; 11; 12]
+2×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
+
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
+```
+
+Like before, spaces (and tabs) for horizontal concatenation have a higher precedence than
+any number of semicolons. Thus, higher-dimensional arrays can also be written by specifying
+their rows first, with their elements textually arranged in a manner similar to their layout:
+
+```jldoctest
+julia> [1 3 5
+        2 4 6;;;
+        7 9 11
+        8 10 12]
+2×3×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  3  5
+ 2  4  6
+
+[:, :, 2] =
+ 7   9  11
+ 8  10  12
+
+julia> [1 2;;; 3 4;;;; 5 6;;; 7 8]
+1×2×2×2 Array{Int64, 4}:
+[:, :, 1, 1] =
+ 1  2
+
+[:, :, 2, 1] =
+ 3  4
+
+[:, :, 1, 2] =
+ 5  6
+
+[:, :, 2, 2] =
+ 7  8
+
+julia> [[1 2;;; 3 4];;;; [5 6];;; [7 8]]
+1×2×2×2 Array{Int64, 4}:
+[:, :, 1, 1] =
+ 1  2
+
+[:, :, 2, 1] =
+ 3  4
+
+[:, :, 1, 2] =
+ 5  6
+
+[:, :, 2, 2] =
+ 7  8
+```
+
+Although they both mean concatenation in the second dimension, spaces (or tabs) and `;;`
+cannot appear in the same array expression unless the double semicolon is simply serving as
+a "line continuation" character. This allows a single horizontal concatenation to span
+multiple lines (without the line break being interpreted as a vertical concatenation).
+
+```jldoctest
+julia> [1 2 ;;
+       3 4]
+1×4 Matrix{Int64}:
+ 1  2  3  4
+```
+
+Terminating semicolons may also be used to add trailing length 1 dimensions.
+
+```jldoctest
+julia> [1;;]
+1×1 Matrix{Int64}:
+ 1
+
+julia> [2; 3;;;]
+2×1×1 Array{Int64, 3}:
+[:, :, 1] =
+ 2
+ 3
 ```
 
 More generally, concatenation can be accomplished through the [`cat`](@ref) function.
 These syntaxes are shorthands for function calls that themselves are convenience functions:
 
-| Syntax            | Function        | Description                                        |
-|:----------------- |:--------------- |:-------------------------------------------------- |
-|                   | [`cat`](@ref)   | concatenate input arrays along dimension(s) `k`    |
-| `[A; B; C; ...]`  | [`vcat`](@ref)  | shorthand for `cat(A...; dims=1)                   |
-| `[A B C ...]`     | [`hcat`](@ref)  | shorthand for `cat(A...; dims=2)                   |
-| `[A B; C D; ...]` | [`hvcat`](@ref) | simultaneous vertical and horizontal concatenation |
+| Syntax                 | Function         | Description                                                                                                |
+|:---------------------- |:---------------- |:---------------------------------------------------------------------------------------------------------- |
+|                        | [`cat`](@ref)    | concatenate input arrays along dimension(s) `k`                                                            |
+| `[A; B; C; ...]`       | [`vcat`](@ref)   | shorthand for `cat(A...; dims=1)                                                                           |
+| `[A B C ...]`          | [`hcat`](@ref)   | shorthand for `cat(A...; dims=2)                                                                           |
+| `[A B; C D; ...]`      | [`hvcat`](@ref)  | simultaneous vertical and horizontal concatenation                                                         |
+| `[A; C;; B; D;;; ...]` | [`hvncat`](@ref) | simultaneous n-dimensional concatenation, where number of semicolons indicate the dimension to concatenate |
 
-### Typed array literals
+### [Typed array literals](@id man-array-typed-literal)
 
 An array with a specific element type can be constructed using the syntax `T[A, B, C, ...]`. This
 will construct a 1-d array with element type `T`, initialized to contain elements `A`, `B`, `C`,
@@ -212,11 +342,11 @@ result.
 
 ```jldoctest
 julia> [[1 2] [3 4]]
-1×4 Array{Int64,2}:
+1×4 Matrix{Int64}:
  1  2  3  4
 
 julia> Int8[[1 2] [3 4]]
-1×4 Array{Int8,2}:
+1×4 Matrix{Int8}:
  1  2  3  4
 ```
 
@@ -293,7 +423,7 @@ us add a third argument to [`map`](@ref):
 
 ```jldoctest
 julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
-2×2 Array{Tuple{Float64,Int64},2}:
+2×2 Matrix{Tuple{Float64, Int64}}:
  (0.5, 1)       (0.333333, 3)
  (0.333333, 2)  (0.25, 4)
 ```
@@ -311,7 +441,7 @@ keywords:
 
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i]
-6-element Array{Tuple{Int64,Int64},1}:
+6-element Vector{Tuple{Int64, Int64}}:
  (1, 1)
  (2, 1)
  (2, 2)
@@ -326,7 +456,7 @@ Generated values can be filtered using the `if` keyword:
 
 ```jldoctest
 julia> [(i,j) for i=1:3 for j=1:i if i+j == 4]
-2-element Array{Tuple{Int64,Int64},1}:
+2-element Vector{Tuple{Int64, Int64}}:
  (2, 2)
  (3, 1)
 ```
@@ -356,7 +486,7 @@ Example:
 
 ```jldoctest
 julia> A = reshape(collect(1:16), (2, 2, 2, 2))
-2×2×2×2 Array{Int64,4}:
+2×2×2×2 Array{Int64, 4}:
 [:, :, 1, 1] =
  1  3
  2  4
@@ -377,7 +507,7 @@ julia> A[1, 2, 1, 1] # all scalar indices
 3
 
 julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
-2×1×2×1 Array{Int64,4}:
+2×1×2×1 Array{Int64, 4}:
 [:, :, 1, 1] =
  1
  2
@@ -387,7 +517,7 @@ julia> A[[1, 2], [1], [1, 2], [1]] # all vector indices
  6
 
 julia> A[[1, 2], [1], [1, 2], 1] # a mix of index types
-2×1×2 Array{Int64,3}:
+2×1×2 Array{Int64, 3}:
 [:, :, 1] =
  1
  2
@@ -408,12 +538,12 @@ Example:
 julia> A = reshape(collect(1:16), (2, 2, 2, 2));
 
 julia> A[[1 2; 1 2]]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1  2
  1  2
 
 julia> A[[1 2; 1 2], 1, 2, 1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  5  6
  5  6
 ```
@@ -441,12 +571,12 @@ julia> x = reshape(1:16, 4, 4)
  4  8  12  16
 
 julia> x[2:3, 2:end-1]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  6  10
  7  11
 
 julia> x[1, [2 3; 4 1]]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
   5  9
  13  1
 ```
@@ -470,7 +600,7 @@ overwritten with the value of `X`, [`convert`](@ref)ing to the
 [`eltype`](@ref) of `A` if necessary.
 
 
-If any index `I_k` selects more than one location, then the right hand side `X` must be an
+If any index `I_k` is itself an array, then the right hand side `X` must also be an
 array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
 the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
 `A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
@@ -496,7 +626,7 @@ Example:
 
 ```jldoctest
 julia> x = collect(reshape(1:9, 3, 3))
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1  4  7
  2  5  8
  3  6  9
@@ -506,7 +636,7 @@ julia> x[3, 3] = -9;
 julia> x[1:2, 1:2] = [-1 -4; -2 -5];
 
 julia> x
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  -1  -4   7
  -2  -5   8
   3   6  -9
@@ -534,7 +664,7 @@ indices and can be converted to such by [`to_indices`](@ref):
 Some examples:
 ```jldoctest
 julia> A = reshape(collect(1:2:18), (3, 3))
-3×3 Array{Int64,2}:
+3×3 Matrix{Int64}:
  1   7  13
  3   9  15
  5  11  17
@@ -543,13 +673,13 @@ julia> A[4]
 7
 
 julia> A[[2, 5, 8]]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   3
   9
  15
 
 julia> A[[1 4; 3 8]]
-2×2 Array{Int64,2}:
+2×2 Matrix{Int64}:
  1   7
  5  15
 
@@ -557,19 +687,25 @@ julia> A[[]]
 Int64[]
 
 julia> A[1:2:5]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  1
  5
  9
 
 julia> A[2, :]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
   3
   9
  15
 
 julia> A[:, 3]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
+ 13
+ 15
+ 17
+
+julia> A[:, 3:3]
+3×1 Matrix{Int64}:
  13
  15
  17
@@ -605,7 +741,7 @@ accessing the diagonal elements from the first "page" of `A` from above:
 
 ```jldoctest cartesianindex
 julia> page = A[:,:,1]
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
@@ -615,7 +751,7 @@ julia> page[[CartesianIndex(1,1),
              CartesianIndex(2,2),
              CartesianIndex(3,3),
              CartesianIndex(4,4)]]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   6
  11
@@ -629,14 +765,14 @@ to extract both diagonals from the two pages at the same time:
 
 ```jldoctest cartesianindex
 julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), 1]
-4-element Array{Int64,1}:
+4-element Vector{Int64}:
   1
   6
  11
  16
 
 julia> A[CartesianIndex.(axes(A, 1), axes(A, 2)), :]
-4×2 Array{Int64,2}:
+4×2 Matrix{Int64}:
   1  17
   6  22
  11  27
@@ -671,19 +807,19 @@ julia> x = reshape(1:16, 4, 4)
  4  8  12  16
 
 julia> x[[false, true, true, false], :]
-2×4 Array{Int64,2}:
+2×4 Matrix{Int64}:
  2  6  10  14
  3  7  11  15
 
 julia> mask = map(ispow2, x)
-4×4 Array{Bool,2}:
+4×4 Matrix{Bool}:
  1  0  0  0
  1  0  0  0
  0  0  0  0
  1  1  0  1
 
 julia> x[mask]
-5-element Array{Int64,1}:
+5-element Vector{Int64}:
   1
   2
   4
@@ -710,7 +846,7 @@ one-dimensional vector with [`vec`](@ref).
 
 ```jldoctest linindexing
 julia> A = [2 6; 4 7; 3 1]
-3×2 Array{Int64,2}:
+3×2 Matrix{Int64}:
  2  6
  4  7
  3  1
@@ -735,7 +871,7 @@ julia> LinearIndices(A)[2, 2]
 5
 ```
 
-It's important to note that there's a very large assymmetry in the performance
+It's important to note that there's a very large asymmetry in the performance
 of these conversions. Converting a linear index to a set of cartesian indices
 requires dividing and taking the remainder, whereas going the other way is just
 multiplies and adds. In modern processors, integer division can be 10-50 times
@@ -746,7 +882,7 @@ full set of cartesian indices to do their lookup (see [`IndexStyle`](@ref) to
 introspect which is which). As such, when iterating over an entire array, it's
 much better to iterate over [`eachindex(A)`](@ref) instead of `1:length(A)`.
 Not only will the former be much faster in cases where `A` is `IndexCartesian`,
-but it will also support OffsetArrays, too.
+but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
 
 #### Omitted and extra indices
 
@@ -795,7 +931,7 @@ allows vectors to be indexed like one-column matrices, for example:
 
 ```jldoctest
 julia> A = [8,6,7]
-3-element Array{Int64,1}:
+3-element Vector{Int64}:
  8
  6
  7
@@ -929,17 +1065,17 @@ iterated over or indexed into elementwise.
 
 ```jldoctest
 julia> convert.(Float32, [1, 2])
-2-element Array{Float32,1}:
+2-element Vector{Float32}:
  1.0
  2.0
 
 julia> ceil.(UInt8, [1.2 3.4; 5.6 6.7])
-2×2 Array{UInt8,2}:
+2×2 Matrix{UInt8}:
  0x02  0x04
  0x06  0x07
 
 julia> string.(1:3, ". ", ["First", "Second", "Third"])
-3-element Array{String,1}:
+3-element Vector{String}:
  "1. First"
  "2. Second"
  "3. Third"
@@ -969,7 +1105,7 @@ be quite different from conventional arrays. For example, elements might be comp
 rather than stored. However, any concrete `AbstractArray{T,N}` type should generally implement
 at least [`size(A)`](@ref) (returning an `Int` tuple), [`getindex(A,i)`](@ref) and [`getindex(A,i1,...,iN)`](@ref getindex);
 mutable arrays should also implement [`setindex!`](@ref). It is recommended that these operations
-have nearly constant time complexity, or technically Õ(1) complexity, as otherwise some array
+have nearly constant time complexity, as otherwise some array
 functions may be unexpectedly slow. Concrete types should also typically provide a [`similar(A,T=eltype(A),dims=size(A))`](@ref)
 method, which is used to allocate a similar array for [`copy`](@ref) and other out-of-place
 operations. No matter how an `AbstractArray{T,N}` is represented internally, `T` is the type of

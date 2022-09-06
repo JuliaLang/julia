@@ -1,0 +1,1 @@
+Dict{String,Any}("after" => Dict{String,Any}("value" => "3141.5927","type" => "float"),"exponent" => Dict{String,Any}("value" => "3e14","type" => "float"),"before" => Dict{String,Any}("value" => "3141.5927","type" => "float"))

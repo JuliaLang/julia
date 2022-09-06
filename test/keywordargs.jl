@@ -287,9 +287,17 @@ end
     @test g21147(((1,),), 2) === Int
 end
 @testset "issue #21510" begin
-    f21510(; Base.@nospecialize a = 2) = a
-    @test f21510(a=:b) == :b
+    f21510(; @nospecialize a = 2) = a
+    @test f21510(a=:b) === :b
     @test f21510() == 2
+end
+@testset "issue #34516" begin
+    f34516(; @nospecialize(x)) = 0
+    f34516(y; @nospecialize(x::Any)) = 1
+    @test_throws UndefKeywordError f34516()
+    @test_throws UndefKeywordError f34516(1)
+    g34516(@nospecialize(x); k=0) = 0
+    @test first(methods(Core.kwfunc(g34516))).nospecialize != 0
 end
 @testset "issue #21518" begin
     a = 0
@@ -366,3 +374,16 @@ using InteractiveUtils
 no_kw_args(x::Int) = 0
 @test_throws MethodError no_kw_args(1, k=1)
 @test_throws MethodError no_kw_args("", k=1)
+
+# issue #40964
+f40964(xs::Int...=1; k = 2) = (xs, k)
+@test f40964() === ((1,), 2)
+@test f40964(7, 8) === ((7,8), 2)
+@test f40964(7, 8, k=0) === ((7,8), 0)
+# issue #41416
+@test f40964(; k = 1) === ((1,), 1)
+f41416(a...="a"; b=true) = (b, a)
+@test f41416()           === (true, ("a",))
+@test f41416(;b=false)   === (false, ("a",))
+@test f41416(33)         === (true, (33,))
+@test f41416(3; b=false) === (false, (3,))

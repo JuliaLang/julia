@@ -1,9 +1,30 @@
-# Documentation
+# [Documentation](@id man-documentation)
+
+## Accessing Documentation
+
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
+
+```julia
+?cos
+?@time
+?r""
+```
+
+will show documentation for the relevant function, macro or string macro respectively. Most Julia
+environments provide a way to access documentation directly:
+- [VS Code](https://www.julia-vscode.org/) shows documentation when you hover over a function name.
+  You can also use the Julia panel in the sidebar to search for documentation.
+- In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
+- In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+under the cursor.
+
+## Writing Documentation
 
 Julia enables package developers and users to document functions, types and other objects easily
-via a built-in documentation system since Julia 0.4.
+via a built-in documentation system.
 
-The basic syntax is simple: any string appearing at the toplevel right before an object
+The basic syntax is simple: any string appearing just before an object
 (function, macro, type or instance) will be interpreted as documenting it (these are called
 *docstrings*). Note that no blank lines or comments may intervene between a docstring and
 the documented object. Here is a basic example:
@@ -29,8 +50,9 @@ Here is a more complex example, still using Markdown:
 """
     bar(x[, y])
 
-Compute the Bar index between `x` and `y`. If `y` is missing, compute
-the Bar index between all pairs of columns of `x`.
+Compute the Bar index between `x` and `y`.
+
+If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
 ```julia-repl
@@ -90,10 +112,10 @@ As in the example above, we recommend following some simple conventions when wri
 5. Provide hints to related functions.
 
    Sometimes there are functions of related functionality. To increase discoverability please provide
-   a short list of these in a `See also:` paragraph.
+   a short list of these in a `See also` paragraph.
 
    ```
-   See also: [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref)
+   See also [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref).
    ```
 6. Include any code examples in an `# Examples` section.
 
@@ -127,8 +149,7 @@ As in the example above, we recommend following some simple conventions when wri
        Calling `rand` and other RNG-related functions should be avoided in doctests since they will not
        produce consistent outputs during different Julia sessions. If you would like to show some random
        number generation related functionality, one option is to explicitly construct and seed your own
-       [`MersenneTwister`](@ref) (or other pseudorandom number generator) and pass it to the functions you are
-       doctesting.
+       RNG object (see [`Random`](@ref Random-Numbers)) and pass it to the functions you are doctesting.
 
        Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
        (`/` or `\`) will also affect the reproducibility of some doctests.
@@ -201,21 +222,6 @@ As in the example above, we recommend following some simple conventions when wri
    `# Extended help` header. The typical help-mode will show only the
    material above the header; you can access the full help by adding a '?'
    at the beginning of the expression (i.e., "??foo" rather than "?foo").
-
-## Accessing Documentation
-
-Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
-by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
-
-```julia
-?cos
-?@time
-?r""
-```
-
-will show documentation for the relevant function, macro or string macro respectively. In
-[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
-under the cursor.
 
 ## Functions & Methods
 
@@ -342,17 +348,17 @@ for your custom type that returns the documentation on a per-instance basis. For
 
 ```julia
 struct MyType
-    value::String
+    value::Int
 end
 
 Docs.getdoc(t::MyType) = "Documentation for MyType with value $(t.value)"
 
-x = MyType("x")
-y = MyType("y")
+x = MyType(1)
+y = MyType(2)
 ```
 
-`?x` will display "Documentation for MyType with value x" while `?y` will display
-"Documentation for MyType with value y".
+`?x` will display "Documentation for MyType with value 1" while `?y` will display
+"Documentation for MyType with value 2".
 
 ## Syntax Guide
 
@@ -495,7 +501,7 @@ end
 
 Documenting a `baremodule` by placing a docstring above the expression automatically imports
 `@doc` into the module. These imports must be done manually when the module expression is not
-documented. Empty `baremodule`s cannot be documented.
+documented.
 
 ### Global Variables
 

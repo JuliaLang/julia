@@ -7,6 +7,9 @@
 Like [`getindex`](@ref), but returns a view into the parent string `s`
 within range `i:j` or `r` respectively instead of making a copy.
 
+The [`@views`](@ref) macro converts any string slices `s[i:j]` into
+substrings `SubString(s, i, j)` in a block of code.
+
 # Examples
 ```jldoctest
 julia> SubString("abc", 1, 2)
@@ -25,7 +28,7 @@ struct SubString{T<:AbstractString} <: AbstractString
     ncodeunits::Int
 
     function SubString{T}(s::T, i::Int, j::Int) where T<:AbstractString
-        i ≤ j || return new(s, 0, 0)
+        i ≤ j || return new(s, 0, 0)
         @boundscheck begin
             checkbounds(s, i:j)
             @inbounds isvalid(s, i) || string_index_err(s, i)
@@ -44,8 +47,8 @@ end
     SubString(s.string, s.offset+i, s.offset+j)
 end
 
-SubString(s::AbstractString) = SubString(s, 1, lastindex(s))
-SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s))
+SubString(s::AbstractString) = SubString(s, 1, lastindex(s)::Int)
+SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::Int)
 
 @propagate_inbounds view(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)
 @propagate_inbounds maybeview(s::AbstractString, r::AbstractUnitRange{<:Integer}) = view(s, r)
@@ -55,6 +58,11 @@ convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
     SubString(convert(S, s))
 convert(::Type{T}, s::T) where {T<:SubString} = s
 
+# Regex match allows only Union{String, SubString{String}} so define conversion to this type
+convert(::Type{Union{String, SubString{String}}}, s::String) = s
+convert(::Type{Union{String, SubString{String}}}, s::SubString{String}) = s
+convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)
+
 function String(s::SubString{String})
     parent = s.string
     copy = GC.@preserve parent unsafe_string(pointer(parent, s.offset+1), s.ncodeunits)
@@ -62,7 +70,7 @@ function String(s::SubString{String})
 end
 
 ncodeunits(s::SubString) = s.ncodeunits
-codeunit(s::SubString) = codeunit(s.string)
+codeunit(s::SubString) = codeunit(s.string)::CodeunitType
 length(s::SubString) = length(s.string, s.offset+1, s.offset+s.ncodeunits)
 
 function codeunit(s::SubString, i::Integer)
@@ -75,7 +83,7 @@ function iterate(s::SubString, i::Integer=firstindex(s))
     @boundscheck checkbounds(s, i)
     y = iterate(s.string, s.offset + i)
     y === nothing && return nothing
-    c, i = y
+    c, i = y::Tuple{AbstractChar,Int}
     return c, i - s.offset
 end
 
@@ -87,7 +95,7 @@ end
 function isvalid(s::SubString, i::Integer)
     ib = true
     @boundscheck ib = checkbounds(Bool, s, i)
-    @inbounds return ib && isvalid(s.string, s.offset + i)
+    @inbounds return ib && isvalid(s.string, s.offset + i)::Bool
 end
 
 byte_string_classify(s::SubString{String}) =
@@ -98,6 +106,11 @@ isvalid(s::SubString{String}) = isvalid(String, s)
 
 thisind(s::SubString{String}, i::Int) = _thisind_str(s, i)
 nextind(s::SubString{String}, i::Int) = _nextind_str(s, i)
+
+function ==(a::Union{String, SubString{String}}, b::Union{String, SubString{String}})
+    s = sizeof(a)
+    s == sizeof(b) && 0 == _memcmp(a, b, s)
+end
 
 function cmp(a::SubString{String}, b::SubString{String})
     na = sizeof(a)
@@ -117,6 +130,11 @@ end
 pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
+function hash(s::SubString{String}, h::UInt)
+    h += memhash_seed
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
+end
+
 """
     reverse(s::AbstractString) -> AbstractString
 
@@ -135,13 +153,21 @@ and encoding. If they return a string with a different encoding, they must also 
 ```jldoctest
 julia> reverse("JuliaLang")
 "gnaLailuJ"
+```
 
-julia> reverse("ax̂e") # combining characters can lead to surprising results
+!!! note
+    The examples below may be rendered differently on different systems.
+    The comments indicate how they're supposed to be rendered
+
+Combining characters can lead to surprising results:
+
+```jldoctest
+julia> reverse("ax̂e") # hat is above x in the input, above e in the output
 "êxa"
 
 julia> using Unicode
 
-julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes
+julia> join(reverse(collect(graphemes("ax̂e")))) # reverses graphemes; hat is above x in both in- and output
 "ex̂a"
 ```
 """
@@ -158,6 +184,10 @@ end
 
 string(a::String)            = String(a)
 string(a::SubString{String}) = String(a)
+
+function Symbol(s::SubString{String})
+    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int), s, sizeof(s))
+end
 
 @inline function __unsafe_string!(out, c::Char, offs::Integer) # out is a (new) String (or StringVector)
     x = bswap(reinterpret(UInt32, c))
@@ -183,19 +213,37 @@ end
     return n
 end
 
-function string(a::Union{Char, String, SubString{String}}...)
+@inline function __unsafe_string!(out, s::Symbol, offs::Integer)
+    n = sizeof(s)
+    GC.@preserve s out unsafe_copyto!(pointer(out, offs), unsafe_convert(Ptr{UInt8},s), n)
+    return n
+end
+
+function string(a::Union{Char, String, SubString{String}, Symbol}...)
     n = 0
     for v in a
+        # 4 types is too many for automatic Union-splitting, so we split manually
+        # and allow one specializable call site per concrete type
         if v isa Char
             n += ncodeunits(v)
-        else
+        elseif v isa String
             n += sizeof(v)
+        elseif v isa SubString{String}
+            n += sizeof(v)
+        else
+            n += sizeof(v::Symbol)
         end
     end
     out = _string_n(n)
     offs = 1
     for v in a
-        offs += __unsafe_string!(out, v, offs)
+        if v isa Char
+            offs += __unsafe_string!(out, v, offs)
+        elseif v isa String || v isa SubString{String}
+            offs += __unsafe_string!(out, v, offs)
+        else
+            offs += __unsafe_string!(out, v::Symbol, offs)
+        end
     end
     return out
 end
@@ -217,4 +265,17 @@ function repeat(s::Union{String, SubString{String}}, r::Integer)
     return out
 end
 
-getindex(s::AbstractString, r::UnitRange{<:Integer}) = SubString(s, r)
+function filter(f, s::Union{String, SubString{String}})
+    out = StringVector(sizeof(s))
+    offset = 1
+    for c in s
+        if f(c)
+            offset += __unsafe_string!(out, c, offset)
+        end
+    end
+    resize!(out, offset-1)
+    sizehint!(out, offset-1)
+    return String(out)
+end
+
+getindex(s::AbstractString, r::AbstractUnitRange{<:Integer}) = SubString(s, r)

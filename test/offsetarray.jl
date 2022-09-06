@@ -2,12 +2,11 @@
 
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
-using DelimitedFiles
+import .Main.OffsetArrays: IdOffsetRange
 using Random
 using LinearAlgebra
-using Statistics
-
-const OAs_name = join(fullname(OffsetArrays), ".")
+using Base: IdentityUnitRange
+using Test
 
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
@@ -18,14 +17,15 @@ let
 v0 = rand(4)
 v = OffsetArray(v0, (-3,))
 h = OffsetArray([-1,1,-2,2,0], (-3,))
-@test axes(v) == (-2:1,)
+@test axes(v) === (OffsetArrays.IdOffsetRange(Base.OneTo(4), -3),)
 @test size(v) == (4,)
 @test size(v, 1) == 4
+@test_throws DimensionMismatch Array(v)
 
 A0 = [1 3; 2 4]
 A = OffsetArray(A0, (-1,2))                   # IndexLinear
 S = OffsetArray(view(A0, 1:2, 1:2), (-1,2))   # IndexCartesian
-@test axes(A) == axes(S) == (0:1, 3:4)
+@test axes(A) === axes(S) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), -1), OffsetArrays.IdOffsetRange(Base.OneTo(2), 2))
 @test size(A) == (2,2)
 @test size(A, 1) == 2
 
@@ -110,6 +110,15 @@ let a1 = [11,12,13], a2 = [1 2; 3 4]
     @test_throws BoundsError i2[1:2:5]
 end
 
+# issue #37274
+let a = 1:3
+    oa = OffsetArray(a, 0:2)
+    b = @view oa[0]
+    @test b[] == b[1] == b[1,1] == 1
+    @test_throws BoundsError b[0]
+    @test_throws BoundsError b[2]
+end
+
 # logical indexing
 @test A[A .> 2] == [3,4]
 @test_throws BoundsError h[trues(2)]
@@ -132,13 +141,13 @@ S = view(A, :, 3)
 @test S[0] == 1
 @test S[1] == 2
 @test_throws BoundsError S[2]
-@test axes(S) === (Base.IdentityUnitRange(0:1),)
+@test axes(S) === (Base.IdentityUnitRange(OffsetArrays.IdOffsetRange(Base.OneTo(2), -1)),)
 S = view(A, 0, :)
 @test S == OffsetArray([1,3], (A.offsets[2],))
 @test S[3] == 1
 @test S[4] == 3
 @test_throws BoundsError S[1]
-@test axes(S) === (Base.IdentityUnitRange(3:4),)
+@test axes(S) === (Base.IdentityUnitRange(OffsetArrays.IdOffsetRange(Base.OneTo(2), 2)),)
 S = view(A, 0:0, 4)
 @test S == [3]
 @test S[1] == 3
@@ -157,17 +166,17 @@ S = view(A, :, :)
 @test S[0,4] == S[3] == 3
 @test S[1,4] == S[4] == 4
 @test_throws BoundsError S[1,1]
-@test axes(S) === Base.IdentityUnitRange.((0:1, 3:4))
+@test axes(S) === Base.IdentityUnitRange.((OffsetArrays.IdOffsetRange(Base.OneTo(2), -1), OffsetArrays.IdOffsetRange(Base.OneTo(2), 2)))
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/27
 g = OffsetArray(Vector(-2:3), (-3,))
 gv = view(g, -1:2)
 @test axes(gv, 1) === Base.OneTo(4)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-2,)))
-@test axes(gv, 1) === Base.IdentityUnitRange(-1:2)
+@test axes(gv, 1) === OffsetArrays.IdOffsetRange(Base.OneTo(4), -2)
 @test collect(gv) == -1:2
 gv = view(g, OffsetArray(-1:2, (-1,)))
-@test axes(gv, 1) === Base.IdentityUnitRange(0:3)
+@test axes(gv, 1) === OffsetArrays.IdOffsetRange(Base.OneTo(4), -1)
 @test collect(gv) == -1:2
 
 # iteration
@@ -198,7 +207,7 @@ str = String(take!(io))
 show(io, parent(v))
 @test str == String(take!(io))
 smry = summary(v)
-@test occursin("OffsetArray{Float64,1", smry)
+@test occursin("OffsetArray(::Vector{Float64", smry)
 @test occursin("with indices -1:1", smry)
 function cmp_showf(printfunc, io, A; options = ())
     ioc = IOContext(io, :limit => true, :compact => true, options...)
@@ -215,18 +224,18 @@ cmp_showf(Base.print_matrix, io, OffsetArray(rand(10^3,10^3), (10,-9))) # neithe
 cmp_showf(Base.print_matrix, io, OffsetArray(reshape(range(-0.212121212121, stop=2/11, length=3*29), 3, 29), (-2, -15)); options=(:displaysize=>(53,210),))
 cmp_showf(show, io, OffsetArray(collect(1:100), (100,)))   # issue #31641
 
-targets1 = ["0-dimensional $OAs_name.OffsetArray{Float64,0,Array{Float64,0}}:\n1.0",
-            "1-element $OAs_name.OffsetArray{Float64,1,Array{Float64,1}} with indices 2:2:\n 1.0",
-            "1×1 $OAs_name.OffsetArray{Float64,2,Array{Float64,2}} with indices 2:2×3:3:\n 1.0",
-            "1×1×1 $OAs_name.OffsetArray{Float64,3,Array{Float64,3}} with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
-            "1×1×1×1 $OAs_name.OffsetArray{Float64,4,Array{Float64,4}} with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
+targets1 = ["0-dimensional OffsetArray(::Array{Float64, 0}) with eltype Float64:\n1.0",
+            "1-element OffsetArray(::Vector{Float64}, 2:2) with eltype Float64 with indices 2:2:\n 1.0",
+            "1×1 OffsetArray(::Matrix{Float64}, 2:2, 3:3) with eltype Float64 with indices 2:2×3:3:\n 1.0",
+            "1×1×1 OffsetArray(::Array{Float64, 3}, 2:2, 3:3, 4:4) with eltype Float64 with indices 2:2×3:3×4:4:\n[:, :, 4] =\n 1.0",
+            "1×1×1×1 OffsetArray(::Array{Float64, 4}, 2:2, 3:3, 4:4, 5:5) with eltype Float64 with indices 2:2×3:3×4:4×5:5:\n[:, :, 4, 5] =\n 1.0"]
 targets2 = ["(fill(1.0), fill(1.0))",
             "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])",
-            "([1.0], [1.0])"]
+            "([1.0;;], [1.0;;])",
+            "([1.0;;;], [1.0;;;])",
+            "([1.0;;;;], [1.0;;;;])"]
 @testset "printing of OffsetArray with n=$n" for n = 0:4
-    a = OffsetArray(fill(1.,ntuple(d->1,n)), ntuple(identity,n))
+    a = OffsetArray(fill(1.,ntuple(Returns(1),n)), ntuple(identity,n))
     show(IOContext(io, :limit => true), MIME("text/plain"), a)
     @test String(take!(io)) == targets1[n+1]
     show(IOContext(io, :limit => true), MIME("text/plain"), (a,a))
@@ -234,7 +243,7 @@ targets2 = ["(fill(1.0), fill(1.0))",
 end
 P = OffsetArray(rand(8,8), (1,1))
 PV = view(P, 2:3, :)
-@test endswith(summary(PV), "with indices Base.OneTo(2)×2:9")
+@test endswith(summary(PV), "with indices Base.OneTo(2)×$(repr(axes(P,2)))")
 
 # Similar
 B = similar(A, Float32)
@@ -246,26 +255,26 @@ B = similar(A, (3,4))
 @test axes(B) === (Base.OneTo(3), Base.OneTo(4))
 B = similar(A, (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === Base.IdentityUnitRange.((-3:3, 1:4))
+@test axes(B) === (OffsetArrays.IdOffsetRange(Base.OneTo(7), -4), OffsetArrays.IdOffsetRange(Base.OneTo(4)))
 B = similar(parent(A), (-3:3,1:4))
 @test isa(B, OffsetArray{Int,2})
-@test axes(B) === Base.IdentityUnitRange.((-3:3, 1:4))
+@test axes(B) === (OffsetArrays.IdOffsetRange(Base.OneTo(7), -4), OffsetArrays.IdOffsetRange(Base.OneTo(4)))
 
 # Indexing with OffsetArray indices
 i1 = OffsetArray([2,1], (-5,))
 i1 = OffsetArray([2,1], -5)
 b = A0[i1, 1]
-@test axes(b) === (Base.IdentityUnitRange(-4:-3),)
+@test axes(b) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), -5),)
 @test b[-4] == 2
 @test b[-3] == 1
 b = A0[1,i1]
-@test axes(b) === (Base.IdentityUnitRange(-4:-3),)
+@test axes(b) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), -5),)
 @test b[-4] == 3
 @test b[-3] == 1
 v = view(A0, i1, 1)
-@test axes(v) === (Base.IdentityUnitRange(-4:-3),)
+@test axes(v) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), -5),)
 v = view(A0, 1:1, i1)
-@test axes(v) === (Base.OneTo(1), Base.IdentityUnitRange(-4:-3))
+@test axes(v) === (Base.OneTo(1), OffsetArrays.IdOffsetRange(Base.OneTo(2), -5))
 
 # copyto! and fill!
 a = OffsetArray{Int}(undef, (-3:-1,))
@@ -394,7 +403,7 @@ v2 = copy(v)
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1),Base.IdentityUnitRange(-2:1))
+@test axes(v') === (Base.OneTo(1), OffsetArrays.IdOffsetRange(Base.OneTo(4), -3))
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)
@@ -405,12 +414,29 @@ rv = reverse(v)
 cv = copy(v)
 @test reverse!(cv) == rv
 
+@testset "reverse! (issue #45870)" begin
+    @testset for n in [4,5]
+        offset = typemax(Int)-n
+        vo = OffsetArray([1:n;], offset)
+        vo2 = OffsetArray([1:n;], offset)
+        @test reverse!(vo) == OffsetArray(n:-1:1, offset)
+        @test reverse!(vo) == vo2
+        @test_throws BoundsError reverse!(vo, firstindex(vo)-1, firstindex(vo))
+        @test reverse!(vo, firstindex(vo), firstindex(vo)-1) == vo2
+        @test reverse!(vo, firstindex(vo), firstindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)+1) == vo2 # overflow in stop
+        @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
+        @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
+    end
+end
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A) == 16
 @test lastindex(A, 1) == 1
 @test lastindex(A, 2) == 9
 @test A ≈ A
-@test axes(A') === Base.IdentityUnitRange.((6:9, -2:1))
+@test axes(A') === (OffsetArrays.IdOffsetRange(Base.OneTo(4), 5), OffsetArrays.IdOffsetRange(Base.OneTo(4), -3))
 @test parent(copy(A')) == copy(parent(A)')
 @test collect(A) == parent(A)
 @test maximum(A) == maximum(parent(A))
@@ -448,13 +474,10 @@ I = findall(!iszero, z)
 @test findall(x->x>0, h) == [-1,1]
 @test findall(x->x<0, h) == [-2,0]
 @test findall(x->x==0, h) == [2]
-@test mean(A_3_3) == median(A_3_3) == 5
-@test mean(x->2x, A_3_3) == 10
-@test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], A_3_3.offsets)
-@test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), A_3_3.offsets)
-@test var(A_3_3) == 7.5
-@test std(A_3_3, dims=1) == OffsetArray([1 1 1], A_3_3.offsets)
-@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
+@test sum(A_3_3) == 45
+@test sum(x->2x, A_3_3) == 90
+@test sum(A_3_3, dims=1) == OffsetArray([6 15 24], A_3_3.offsets)
+@test sum(A_3_3, dims=2) == OffsetArray(reshape([12,15,18],(3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
@@ -483,11 +506,6 @@ B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
         @test sum(v) ≈ sum(parent(v))
     end
 end
-
-io = IOBuffer()
-writedlm(io, A)
-seek(io, 0)
-@test readdlm(io, eltype(A)) == parent(A)
 
 amin, amax = extrema(parent(A))
 @test clamp.(A, (amax+amin)/2, amax).parent == clamp.(parent(A), (amax+amin)/2, amax)
@@ -521,6 +539,12 @@ soa = OffsetArray([2,2,3], typemax(Int)-4)
 @test rotr90(A) == OffsetArray(rotr90(parent(A)), A.offsets[[2,1]])
 @test reverse(A, dims=1) == OffsetArray(reverse(parent(A), dims=1), A.offsets)
 @test reverse(A, dims=2) == OffsetArray(reverse(parent(A), dims=2), A.offsets)
+@test reverse(A) == reverse!(reverse(A, dims=1), dims=2)
+
+Aodd = OffsetArray(rand(3,5), (-3,5))
+@test reverse(Aodd, dims=1) == OffsetArray(reverse(parent(Aodd), dims=1), Aodd.offsets)
+@test reverse(Aodd, dims=2) == OffsetArray(reverse(parent(Aodd), dims=2), Aodd.offsets)
+@test reverse(Aodd) == reverse!(reverse(Aodd, dims=1), dims=2)
 
 @test A .+ 1 == OffsetArray(parent(A) .+ 1, A.offsets)
 @test 2*A == OffsetArray(2*parent(A), A.offsets)
@@ -576,9 +600,21 @@ module SimilarUR
     end
     ur = MyURange(1,3)
     a = Vector{Int}(undef, 2)
-    @test_throws MethodError similar(a, ur)
-    @test_throws MethodError similar(a, Float64, ur)
-    @test_throws MethodError similar(a, Float64, (ur,))
+
+    function catch_exception(f, args...)
+        try
+            f(args...)
+        catch err
+            return err
+        end
+    end
+    # type-piracy https://github.com/JuliaArrays/OffsetArrays.jl/issues/87
+    @test_broken (catch_exception(similar, a, ur) isa MethodError)
+    @test_broken (catch_exception(similar, a, Float64, ur) isa MethodError)
+    @test_broken (catch_exception(similar, a, Float64, (ur,)) isa MethodError)
+    # @test_throws MethodError similar(a, ur)
+    # @test_throws MethodError similar(a, Float64, ur)
+    # @test_throws MethodError similar(a, Float64, (ur,))
     @test_throws MethodError similar(a, (2.0,3.0))
 end
 
@@ -607,4 +643,215 @@ end
     @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:9, -6:-6, 1:1), B)
     @test_throws DimensionMismatch maximum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-4, 7:7, -6:-5, 1:1), B)
+end
+
+@testset "first/last n elements of vector" begin
+    v0 = rand(6)
+    v = OffsetArray(v0, (-3,))
+    @test_throws ArgumentError first(v, -2)
+    @test first(v, 2) == v[begin:begin+1]
+    @test first(v, 100) == v0
+    @test first(v, 100) !== v
+    @test first(v, 1) == [v[begin]]
+    @test_throws ArgumentError last(v, -2)
+    @test last(v, 2) == v[end-1:end]
+    @test last(v, 100) == v0
+    @test last(v, 100) !== v
+    @test last(v, 1) == [v[end]]
+end
+
+@testset "Resizing OffsetVectors" begin
+    local a = OffsetVector(rand(5),-3)
+    axes(a,1) == -2:2
+    length(a) == 5
+    resize!(a,3)
+    length(a) == 3
+    axes(a,1) == -2:0
+    @test_throws ArgumentError resize!(a,-3)
+end
+
+@testset "issue #37199: offset range indices" begin
+    # https://github.com/JuliaArrays/OffsetArrays.jl/issues/133
+    A0 = [1 3; 2 4]
+    A = OffsetArray(A0, (-1,2))
+
+    r = OffsetArrays.IdOffsetRange(1:2, -1)
+    v1 = view(A, r, 3)
+    @test v1[0] == 1
+    @test v1[1] == 2
+    @test axes(v1, 1) == axes(r, 1)
+    v2 = view(A, UnitRange(r), 3)
+    for (indflat, indoffset) in enumerate(r)
+        @test v1[indoffset] == v2[indflat]
+    end
+
+    r = OffsetArrays.IdOffsetRange(1:2, 2)
+    v1 = view(A, 1, r)
+    @test v1[3] == 2
+    @test v1[4] == 4
+    @test axes(v1, 1) == axes(r, 1)
+    v2 = view(A, 1, UnitRange(r))
+    for (indflat, indoffset) in enumerate(r)
+        @test v1[indoffset] == v2[indflat]
+    end
+
+    a12 = zeros(3:8, 3:4)
+    r = OffsetArrays.IdOffsetRange(Base.OneTo(3), 5)
+    a12[r, 4] .= 3
+    @test all(a12[r, 4] .== 3)
+    @test all(a12[UnitRange(r), 4] .== 3)
+
+    # https://github.com/JuliaArrays/OffsetArrays.jl/issues/100
+    S = view(A, axes(A)...)
+    @test S == A
+    @test S[0,3] == S[1] == 1
+    @test S[1,3] == S[2] == 2
+    @test S[0,4] == S[3] == 3
+    @test S[1,4] == S[4] == 4
+    @test_throws BoundsError S[1,1]
+    @test axes(S) == OffsetArrays.IdOffsetRange.((0:1, 3:4))
+    S = view(A, axes(A, 1), 3)
+    @test S == A[:, 3]
+    @test S[0] == 1
+    @test S[1] == 2
+    @test_throws BoundsError S[length(S)]
+    @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), )
+    S = view(A, 1, axes(A, 2))
+    @test S == A[1, :]
+    @test S[3] == 2
+    @test S[4] == 4
+    @test_throws BoundsError S[1]
+    @test axes(S) == (OffsetArrays.IdOffsetRange(3:4), )
+
+    A0 = collect(reshape(1:24, 2, 3, 4))
+    A = OffsetArray(A0, (-1,2,1))
+    S = view(A, axes(A, 1), 3:4, axes(A, 3))
+    @test S == A[:, 3:4, :]
+    @test S[0, 1, 2] == A[0, 3, 2]
+    @test S[0, 2, 2] == A[0, 4, 2]
+    @test S[1, 1, 2] == A[1, 3, 2]
+    @test axes(S) == (OffsetArrays.IdOffsetRange(0:1), Base.OneTo(2), OffsetArrays.IdOffsetRange(2:5))
+end
+
+@testset "Zero-index indexing" begin
+    @test OffsetArray([6], 2:2)[] == 6
+    @test OffsetArray(fill(6, 1, 1), 2:2, 3:3)[] == 6
+    @test OffsetArray(fill(6))[] == 6
+    @test_throws BoundsError OffsetArray([6,7], 2:3)[]
+    @test_throws BoundsError OffsetArray([6 7], 2:2, 2:3)[]
+    @test_throws BoundsError OffsetArray([], 2:1)[]
+end
+
+@testset "IdentityUnitRange indexing" begin
+    a = OffsetVector(3:4, 2:3)
+    ax = IdentityUnitRange(2:3)
+    @test a[ax[2]] == a[ax][2]
+
+    s = -2:2:4
+    r = 5:8
+    y = OffsetArray(s, r)
+    @test axes(y) == (r,)
+    @test step(y) == step(s)
+
+    a = OffsetVector(3:4, 10:11)
+    ax = OffsetArrays.IdOffsetRange(5:6, 5)
+    @test axes(a[ax]) == axes(ax)
+    for i in axes(ax,1)
+        @test a[ax[i]] == a[ax][i]
+    end
+
+    ax = IdentityUnitRange(10:11)
+    @test axes(a[ax]) == axes(ax)
+    for i in axes(ax,1)
+        @test a[ax[i]] == a[ax][i]
+    end
+end
+
+@testset "show OffsetMatrix" begin
+    Y = reshape(1:25, 5, 5)
+    X = OffsetArray(Y, -2:2, -4:0)
+
+    io = IOBuffer()
+    show(io, X)
+    strX = String(take!(io))
+    show(io, Y)
+    strY = String(take!(io))
+    @test strX == strY
+
+    io_limit = IOContext(io, :limit => true)
+    show(io_limit, X)
+    strX = String(take!(io))
+    show(io_limit, Y)
+    strY = String(take!(io))
+    @test strX == strY
+end
+
+@testset "vector indexing (issue #39896)" begin
+    a = collect(1:10)
+    r = Base.IdentityUnitRange(2:3)
+    b = a[r]
+    @test axes(b) == axes(r)
+    for i in r
+        @test b[i] == a[r[i]]
+    end
+end
+
+@testset "proper partition for non-1-indexed vector" begin
+    @test Iterators.partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(collect(1:10),10), 5) |> collect == [1:5,6:10] # OffsetVector
+    @test Iterators.partition(OffsetArray(reshape(1:9,3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
+    @test Iterators.partition(OffsetArray(reshape(collect(1:9),3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
+    @test Iterators.partition(IdOffsetRange(2:7,10), 5) |> collect == [12:16,17:17] # IdOffsetRange
+end
+
+@testset "reshape" begin
+    a = OffsetArray(4:5, 5:6)
+    @test reshape(a, :) === a
+    @test reshape(a, (:,)) === a
+end
+
+@testset "stack" begin
+    nought = OffsetArray([0, 0.1, 0.01], 0:2)
+    ten = OffsetArray([1,10,100,1000], 10:13)
+
+    @test stack(ten) == ten
+    @test stack(ten .+ nought') == ten .+ nought'
+    @test stack(x^2 for x in ten) == ten.^2
+
+    @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
+    @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
+    @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
+    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
+    @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
+    @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
+end
+
+@testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
+    x = OffsetArray([1 2; 3 4], -10:-9, 9:10)  # 2×2 OffsetArray{...} with indices -10:-9×9:10
+
+    # begin/end with offset indices
+    @test (@view x[begin, 9])[] == 1
+    @test (@view x[-10, end])[] == 2
+    @test (@view x[-9, begin])[] == 3
+    @test (@view x[end, 10])[] == 4
+    @test (@view x[begin, begin])[] == 1
+    @test (@view x[begin, end])[] == 2
+    @test (@view x[end, begin])[] == 3
+    @test (@view x[end, end])[] == 4
+
+    # nested usages of begin/end
+    y = OffsetArray([-10, -9], (5,))
+    @test (@view x[begin, -y[end]])[] == 1
+    @test (@view x[y[begin], end])[] == 2
+    @test (@view x[end, -y[end]])[] == 3
+    @test (@view x[y[end], end])[] == 4
+end
+
+@testset "CartesianIndices (issue #40035)" begin
+    A = OffsetArray(big(1):big(2), 0);
+    B = OffsetArray(1:2, 0);
+    # axes of an OffsetArray may be converted to an AbstractUnitRange,
+    # but the conversion to an OrdinalRange was not defined.
+    # this is fixed in #40038, so the evaluation of its CartesianIndices should work
+    @test CartesianIndices(A) == CartesianIndices(B)
 end

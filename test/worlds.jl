@@ -12,13 +12,13 @@ begin
     f265a(x::Any) = 1
     @test g265a() == 1
     @test Base.return_types(g265a, ()) == Any[Int]
-    @test Core.Compiler.return_type(g265a, ()) == Int
+    @test Core.Compiler.return_type(g265a, Tuple{}) == Int
 
     f265a(x::Any) = 2.0
     @test g265a() == 2.0
 
     @test Base.return_types(g265a, ()) == Any[Float64]
-    @test Core.Compiler.return_type(g265a, ()) == Float64
+    @test Core.Compiler.return_type(g265a, Tuple{}) == Float64
 end
 
 # test signature widening
@@ -29,13 +29,13 @@ begin
     end
     @test g265b(1) == 1
     @test Base.return_types(g265b, (Int,)) == Any[Int]
-    @test Core.Compiler.return_type(g265b, (Int,)) == Int
+    @test Core.Compiler.return_type(g265b, Tuple{Int,}) == Int
 
     f265b(x::Any) = 2.0
     @test g265b(1) == 1
     @test g265b(2) == 2.0
     @test Base.return_types(g265b, (Int,)) == Any[Union{Int, Float64}]
-    @test Core.Compiler.return_type(g265b, (Int,)) == Union{Int, Float64}
+    @test Core.Compiler.return_type(g265b, Tuple{Int,}) == Union{Int, Float64}
 end
 
 # test signature narrowing
@@ -44,13 +44,13 @@ begin
     f265c(x::Any) = 1
     @test g265c() == 1
     @test Base.return_types(g265c, ()) == Any[Int]
-    @test Core.Compiler.return_type(g265c, ()) == Int
+    @test Core.Compiler.return_type(g265c, Tuple{}) == Int
 
     f265c(x::Int) = 2.0
     @test g265c() == 2.0
 
     @test Base.return_types(g265c, ()) == Any[Float64]
-    @test Core.Compiler.return_type(g265c, ()) == Float64
+    @test Core.Compiler.return_type(g265c, Tuple{}) == Float64
 end
 
 # test constructor narrowing
@@ -78,7 +78,7 @@ end
 @test_throws MethodError B265_(2)
 @test_throws MethodError B265_(3)
 @test Base.return_types(B265_, (Int,)) == Any[B265{Int}]
-@test Core.Compiler.return_type(B265_, (Int,)) == B265{Int}
+@test Core.Compiler.return_type(B265_, Tuple{Int,}) == B265{Int}
 
   # add new constructors
 B265(x::Float64, dummy::Nothing) = B265{Float64}(x, dummy)
@@ -89,8 +89,8 @@ B265(x::Any, dummy::Nothing) = B265{UInt8}(x, dummy)
 @test (B265_(2)::B265{Float64}).field1 === 2.0e0
 @test (B265_(3)::B265{UInt8}).field1 === 0x03
 
-@test Base.return_types(B265_, (Int,)) == Any[B265]
-@test Core.Compiler.return_type(B265_, (Int,)) == B265
+@test B265{UInt8} <: only(Base.return_types(B265_, (Int,))) <: B265
+@test B265{UInt8} <: Core.Compiler.return_type(B265_, Tuple{Int,}) <: B265
 
 
 # test oldworld call / inference
@@ -107,8 +107,24 @@ end
 
 g265() = [f265(x) for x in 1:3.]
 wc265 = get_world_counter()
-f265(::Any) = 1.0
-@test wc265 + 1 == get_world_counter()
+wc265_41332a = Task(tls_world_age)
+@test tls_world_age() == wc265
+(function ()
+    global wc265_41332b = Task(tls_world_age)
+    @eval f265(::Any) = 1.0
+    global wc265_41332c = Base.invokelatest(Task, tls_world_age)
+    global wc265_41332d = Task(tls_world_age)
+    nothing
+end)()
+@test wc265 + 2 == get_world_counter() == tls_world_age()
+schedule(wc265_41332a)
+schedule(wc265_41332b)
+schedule(wc265_41332c)
+schedule(wc265_41332d)
+@test wc265 == fetch(wc265_41332a)
+@test wc265 + 1 == fetch(wc265_41332b)
+@test wc265 + 2 == fetch(wc265_41332c)
+@test wc265 + 1 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
@@ -120,15 +136,15 @@ f265(::Int) = 1
 @test put_n_take!(tls_world_age, ()) == wc265
 
 @test g265() == Int[1, 1, 1]
-@test Core.Compiler.return_type(f265, (Any,)) == Union{Float64, Int}
-@test Core.Compiler.return_type(f265, (Int,)) == Int
-@test Core.Compiler.return_type(f265, (Float64,)) == Float64
+@test Core.Compiler.return_type(f265, Tuple{Any,}) == Union{Float64, Int}
+@test Core.Compiler.return_type(f265, Tuple{Int,}) == Int
+@test Core.Compiler.return_type(f265, Tuple{Float64,}) == Float64
 
 @test put_n_take!(g265, ()) == Float64[1.0, 1.0, 1.0]
-@test put_n_take!(Core.Compiler.return_type, (f265, (Any,))) == Float64
-@test put_n_take!(Core.Compiler.return_type, (f265, (Int,))) == Float64
-@test put_n_take!(Core.Compiler.return_type, (f265, (Float64,))) == Float64
-@test put_n_take!(Core.Compiler.return_type, (f265, (Float64,))) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Any,})) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Int,})) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Float64,})) == Float64
+@test put_n_take!(Core.Compiler.return_type, (f265, Tuple{Float64,})) == Float64
 
 # test that reflection ignores worlds
 @test Base.return_types(f265, (Any,)) == Any[Int, Float64]
@@ -136,7 +152,9 @@ f265(::Int) = 1
 
 # test for method errors
 h265() = true
-loc_h265 = "$(@__FILE__):$(@__LINE__() - 1)"
+file = @__FILE__
+Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
+loc_h265 = "@ $(@__MODULE__) $file:$(@__LINE__() - 3)"
 @test h265()
 @test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)
@@ -152,7 +170,7 @@ let ex = t265.exception
         MethodError: no method matching h265()
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
     @test startswith(str, cmps)
-    cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
+    cmps = "\n  h265() (method too new to be called from this world context.)\n   $loc_h265"
     @test occursin(cmps, str)
 end
 
@@ -173,7 +191,7 @@ f_gen265(x::Type{Int}) = 3
 # intermediate worlds by later additions to the method table that
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
-g26506(x) = f26506(x[1])
+g26506(x) = Base.inferencebarrier(f26506)(x[1])
 z = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z) # Places an entry for f26506(::String) in mt.name.cache
@@ -199,3 +217,159 @@ end
 notify(c26506_1)
 wait(c26506_2)
 @test result26506[1] == 3
+
+# issue #38435
+f38435(::Int, ::Any) = 1
+f38435(::Any, ::Int) = 2
+g38435(x) = f38435(x, x)
+@test_throws MethodError(f38435, (1, 1), Base.get_world_counter()) g38435(1)
+f38435(::Int, ::Int) = 3.0
+@test g38435(1) === 3.0
+
+
+## Invalidation tests
+
+function instance(f, types)
+    m = which(f, types)
+    inst = nothing
+    tt = Tuple{typeof(f), types...}
+    specs = m.specializations
+    if isa(specs, Nothing)
+    elseif isa(specs, Core.SimpleVector)
+        for i = 1:length(specs)
+            mi = specs[i]
+            if mi isa Core.MethodInstance
+                if mi.specTypes <: tt && tt <: mi.specTypes
+                    inst = mi
+                    break
+                end
+            end
+        end
+    else
+        Base.visit(specs) do mi
+            if mi.specTypes === tt
+                inst = mi
+            end
+        end
+    end
+    return inst
+end
+
+function worlds(mi::Core.MethodInstance)
+    w = Tuple{UInt,UInt}[]
+    if isdefined(mi, :cache)
+        ci = mi.cache
+        push!(w, (ci.min_world, ci.max_world))
+        while isdefined(ci, :next)
+            ci = ci.next
+            push!(w, (ci.min_world, ci.max_world))
+        end
+    end
+    return w
+end
+
+# avoid adding this to Base
+function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
+    return ci1.code == ci2.code &&
+           ci1.codelocs == ci2.codelocs &&
+           ci1.ssavaluetypes == ci2.ssavaluetypes &&
+           ci1.ssaflags == ci2.ssaflags &&
+           ci1.method_for_inference_limit_heuristics == ci2.method_for_inference_limit_heuristics &&
+           ci1.linetable == ci2.linetable &&
+           ci1.slotnames == ci2.slotnames &&
+           ci1.slotflags == ci2.slotflags &&
+           ci1.slottypes == ci2.slottypes &&
+           ci1.rettype == ci2.rettype
+end
+equal(p1::Pair, p2::Pair) = p1.second == p2.second && equal(p1.first, p2.first)
+
+## Union-splitting based on state-of-the-world: check that each invalidation corresponds to new code
+applyf35855(c) = f35855(c[1])
+f35855(::Int) = 1
+f35855(::Float64) = 2
+applyf35855([1])
+applyf35855([1.0])
+applyf35855(Any[1])
+wint   = worlds(instance(applyf35855, (Vector{Int},)))
+wfloat = worlds(instance(applyf35855, (Vector{Float64},)))
+wany2  = worlds(instance(applyf35855, (Vector{Any},)))
+src2 = code_typed(applyf35855, (Vector{Any},))[1]
+f35855(::String) = 3
+applyf35855(Any[1])
+@test worlds(instance(applyf35855, (Vector{Int},))) == wint
+@test worlds(instance(applyf35855, (Vector{Float64},))) == wfloat
+wany3 = worlds(instance(applyf35855, (Vector{Any},)))
+src3 = code_typed(applyf35855, (Vector{Any},))[1]
+@test !(wany3 == wany2) || equal(src3, src2) # code doesn't change unless you invalidate
+f35855(::AbstractVector) = 4
+applyf35855(Any[1])
+wany4 = worlds(instance(applyf35855, (Vector{Any},)))
+src4 = code_typed(applyf35855, (Vector{Any},))[1]
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
+f35855(::Dict) = 5
+applyf35855(Any[1])
+wany5 = worlds(instance(applyf35855, (Vector{Any},)))
+src5 = code_typed(applyf35855, (Vector{Any},))[1]
+@test (wany5 == wany4) == equal(src5, src4)
+f35855(::Set) = 6    # with current settings, this shouldn't invalidate
+applyf35855(Any[1])
+wany6 = worlds(instance(applyf35855, (Vector{Any},)))
+src6 = code_typed(applyf35855, (Vector{Any},))[1]
+@test wany6 == wany5
+@test equal(src6, src5)
+
+applyf35855_2(c) = f35855_2(c[1])
+f35855_2(::Int) = 1
+f35855_2(::Float64) = 2
+applyf35855_2(Any[1])
+wany3 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src3 = code_typed(applyf35855_2, (Vector{Any},))[1]
+f35855_2(::AbstractVector) = 4
+applyf35855_2(Any[1])
+wany4 = worlds(instance(applyf35855_2, (Vector{Any},)))
+src4 = code_typed(applyf35855_2, (Vector{Any},))[1]
+@test !(wany4 == wany3) || equal(src4, src3) # code doesn't change unless you invalidate
+
+## ambiguities do not trigger invalidation
+m = which(+, (Char, UInt8))
+mi = Core.Compiler.specialize_method(m, Tuple{typeof(+), AbstractChar, UInt8}, Core.svec())
+w = worlds(mi)
+
+abstract type FixedPoint35855{T <: Integer} <: Real end
+struct Normed35855 <: FixedPoint35855{UInt8}
+    i::UInt8
+    Normed35855(i::Integer, _) = new(i % UInt8)
+end
+(::Type{X})(x::Real) where {T, X<:FixedPoint35855{T}} = X(round(T, typemax(T)*x), 0)
+@test worlds(mi) == w
+
+mi = instance(convert, (Type{Nothing}, String))
+w = worlds(mi)
+abstract type Colorant35855 end
+Base.convert(::Type{C}, c) where {C<:Colorant35855} = false
+@test worlds(mi) == w
+
+# NamedTuple and extensions of eltype
+outer(anyc) = inner(anyc[])
+inner(s::Union{Vector,Dict}; kw=false) = inneri(s, kwi=maximum(s), kwb=kw)
+inneri(s, args...; kwargs...) = inneri(IOBuffer(), s, args...; kwargs...)
+inneri(io::IO, s::Union{Vector,Dict}; kwi=0, kwb=false) = (print(io, first(s), " "^kwi, kwb); String(take!(io)))
+@test outer(Ref{Any}([1,2,3])) == "1   false"
+mi = instance(Core.kwfunc(inneri), (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
+w = worlds(mi)
+abstract type Container{T} end
+Base.eltype(::Type{C}) where {T,C<:Container{T}} = T
+@test worlds(mi) == w
+
+# invoke_in_world
+f_inworld(x) = "world one; x=$x"
+g_inworld(x; y) = "world one; x=$x, y=$y"
+wc_aiw1 = get_world_counter()
+# redefine f_inworld, g_inworld, and check that we can invoke both versions
+f_inworld(x) = "world two; x=$x"
+g_inworld(x; y) = "world two; x=$x, y=$y"
+wc_aiw2 = get_world_counter()
+@test Base.invoke_in_world(wc_aiw1, f_inworld, 2) == "world one; x=2"
+@test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
+@test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
+@test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"

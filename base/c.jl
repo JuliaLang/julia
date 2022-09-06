@@ -129,7 +129,7 @@ A C-style string composed of the native wide character type
 [`Cwchar_t`](@ref)s. `Cwstring`s are NUL-terminated. For
 C-style strings composed of the native character
 type, see [`Cstring`](@ref). For more information
-about string interopability with C, see the
+about string interoperability with C, see the
 [manual](@ref man-bits-types).
 
 """
@@ -142,7 +142,7 @@ A C-style string composed of the native character type
 [`Cchar`](@ref)s. `Cstring`s are NUL-terminated. For
 C-style strings composed of the native wide character
 type, see [`Cwstring`](@ref). For more information
-about string interopability with C, see the
+about string interoperability with C, see the
 [manual](@ref man-bits-types).
 """
 Cstring
@@ -270,6 +270,21 @@ reasonably represented in the target encoding; it always succeeds for
 conversions between UTF-XX encodings, even for invalid Unicode data.
 
 Only conversion to/from UTF-8 is currently supported.
+
+# Examples
+```jldoctest
+julia> str = "αβγ"
+"αβγ"
+
+julia> transcode(UInt16, str)
+3-element Vector{UInt16}:
+ 0x03b1
+ 0x03b2
+ 0x03b3
+
+julia> transcode(String, transcode(UInt16, str))
+"αβγ"
+```
 """
 function transcode end
 
@@ -414,6 +429,18 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
     return dst
 end
 
+function unsafe_string(p::Ptr{T}, length::Integer) where {T<:Union{UInt16,UInt32,Cwchar_t}}
+    transcode(String, unsafe_wrap(Array, p, length; own=false))
+end
+function unsafe_string(cw::Cwstring)
+    p = convert(Ptr{Cwchar_t}, cw)
+    n = 1
+    while unsafe_load(p, n) != 0
+        n += 1
+    end
+    return unsafe_string(p, n - 1)
+end
+
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end
 # functions should always be called in matched pairs, ideally via:
@@ -521,6 +548,12 @@ function expand_ccallable(rt, def)
     error("expected method definition in @ccallable")
 end
 
+"""
+    @ccallable(def)
+
+Make the annotated function be callable from C using its name. This can, for example,
+be used to expose functionality as a C-API when creating a custom Julia sysimage.
+"""
 macro ccallable(def)
     expand_ccallable(nothing, def)
 end
@@ -631,8 +664,8 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
         sym = Symbol(string("arg", i, "root"))
         sym2 = Symbol(string("arg", i, ))
         earg, etype = esc(arg), esc(type)
-        push!(lowering, :($sym = Base.cconvert($etype, $earg)))
-        push!(lowering, :($sym2 = Base.unsafe_convert($etype, $sym)))
+        push!(lowering, :(local $sym = $(GlobalRef(Base, :cconvert))($etype, $earg)))
+        push!(lowering, :(local $sym2 = $(GlobalRef(Base, :unsafe_convert))($etype, $sym)))
         push!(realargs, sym2)
         push!(gcroots, sym)
     end
@@ -681,7 +714,7 @@ with a Julia variable named `s`. See also `ccall`.
 
 Varargs are supported with the following convention:
 
-    @ccall sprintf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
+    @ccall printf("%s = %d"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
 
 The semicolon is used to separate required arguments (of which there
 must be at least one) from variadic arguments.
@@ -699,4 +732,8 @@ name, if desired `"libglib-2.0".g_uri_escape_string(...`
 """
 macro ccall(expr)
     return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
+end
+
+macro ccall_effects(effects::UInt8, expr)
+    return ccall_macro_lower((:ccall, effects), ccall_macro_parse(expr)...)
 end

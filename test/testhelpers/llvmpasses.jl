@@ -24,4 +24,3 @@ function emit(f, tt...)
     end
     counter+=1
 end
-

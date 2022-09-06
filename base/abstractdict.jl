@@ -31,9 +31,13 @@ function in(p, a::AbstractDict)
 end
 
 function summary(io::IO, t::AbstractDict)
-    n = length(t)
     showarg(io, t, true)
-    print(io, " with ", n, (n==1 ? " entry" : " entries"))
+    if Base.IteratorSize(t) isa HasLength
+        n = length(t)
+        print(io, " with ", n, (n==1 ? " entry" : " entries"))
+    else
+        print(io, "(...)")
+    end
 end
 
 struct KeySet{K, T <: AbstractDict{K}} <: AbstractSet{K}
@@ -45,7 +49,7 @@ struct ValueIterator{T<:AbstractDict}
 end
 
 function summary(io::IO, iter::T) where {T<:Union{KeySet,ValueIterator}}
-    print(io, T.name, " for a ")
+    print(io, T.name.name, " for a ")
     summary(io, iter.dict)
 end
 
@@ -61,6 +65,8 @@ function iterate(v::Union{KeySet,ValueIterator}, state...)
     y === nothing && return nothing
     return (y[1][isa(v, KeySet) ? 1 : 2], y[2])
 end
+
+copy(v::KeySet) = copymutable(v)
 
 in(k, v::KeySet) = get(v.dict, k, secret_table_token) !== secret_table_token
 
@@ -86,12 +92,12 @@ return the elements in the same order.
 # Examples
 ```jldoctest
 julia> D = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
+Dict{Char, Int64} with 2 entries:
   'a' => 2
   'b' => 3
 
 julia> collect(keys(D))
-2-element Array{Char,1}:
+2-element Vector{Char}:
  'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
  'b': ASCII/Unicode U+0062 (category Ll: Letter, lowercase)
 ```
@@ -112,12 +118,12 @@ return the elements in the same order.
 # Examples
 ```jldoctest
 julia> D = Dict('a'=>2, 'b'=>3)
-Dict{Char,Int64} with 2 entries:
+Dict{Char, Int64} with 2 entries:
   'a' => 2
   'b' => 3
 
 julia> collect(values(D))
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  2
  3
 ```
@@ -130,6 +136,38 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+
+# Examples
+```jldoctest
+julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> pairs(a)
+Dict{String, Int64} with 3 entries:
+  "c" => 3
+  "b" => 2
+  "a" => 1
+
+julia> foreach(println, pairs(["a", "b", "c"]))
+1 => "a"
+2 => "b"
+3 => "c"
+
+julia> (;a=1, b=2, c=3) |> pairs |> collect
+3-element Vector{Pair{Symbol, Int64}}:
+ :a => 1
+ :b => 2
+ :c => 3
+
+julia> (;a=1, b=2, c=3) |> collect
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+```
 """
 pairs(collection) = Generator(=>, keys(collection), values(collection))
 
@@ -151,7 +189,10 @@ empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
 copy(a::AbstractDict) = merge!(empty(a), a)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
+function copy!(dst::AbstractDict, src::AbstractDict)
+    dst === src && return dst
+    merge!(empty!(dst), src)
+end
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)
@@ -168,7 +209,7 @@ julia> d2 = Dict(1 => 4, 4 => 5);
 julia> merge!(d1, d2);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 4
@@ -176,6 +217,9 @@ Dict{Int64,Int64} with 3 entries:
 """
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
+        if haslength(d) && haslength(other)
+            sizehint!(d, length(d) + length(other))
+        end
         for (k,v) in other
             d[k] = v
         end
@@ -209,7 +253,7 @@ julia> d2 = Dict(1 => 4, 4 => 5);
 julia> mergewith!(+, d1, d2);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 4
   1 => 6
@@ -217,25 +261,27 @@ Dict{Int64,Int64} with 3 entries:
 julia> mergewith!(-, d1, d1);
 
 julia> d1
-Dict{Int64,Int64} with 3 entries:
+Dict{Int64, Int64} with 3 entries:
   4 => 0
   3 => 0
   1 => 0
 
-julia> foldl(mergewith!(+), [d1, d2]; init=Dict{Int64,Int64}())
-Dict{Int64,Int64} with 3 entries:
+julia> foldl(mergewith!(+), [d1, d2]; init=Dict{Int64, Int64}())
+Dict{Int64, Int64} with 3 entries:
   4 => 5
   3 => 0
   1 => 4
 ```
 """
 function mergewith!(combine, d::AbstractDict, others::AbstractDict...)
-    for other in others
-        for (k,v) in other
-            d[k] = haskey(d, k) ? combine(d[k], v) : v
-        end
+    foldl(mergewith!(combine), others; init = d)
+end
+
+function mergewith!(combine, d1::AbstractDict, d2::AbstractDict)
+    for (k, v) in d2
+        d1[k] = haskey(d1, k) ? combine(d1[k], v) : v
     end
-    return d
+    return d1
 end
 
 mergewith!(combine) = (args...) -> mergewith!(combine, args...)
@@ -245,7 +291,7 @@ merge!(combine::Callable, args...) = mergewith!(combine, args...)
 """
     keytype(type)
 
-Get the key type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the key type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,7 +305,7 @@ keytype(a::AbstractDict) = keytype(typeof(a))
 """
     valtype(type)
 
-Get the value type of an dictionary type. Behaves similarly to [`eltype`](@ref).
+Get the value type of a dictionary type. Behaves similarly to [`eltype`](@ref).
 
 # Examples
 ```jldoctest
@@ -277,27 +323,28 @@ Construct a merged collection from the given collections. If necessary, the
 types of the resulting collection will be promoted to accommodate the types of
 the merged collections. If the same key is present in another collection, the
 value for that key will be the value it has in the last collection listed.
+See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{String,Float64} with 2 entries:
+Dict{String, Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict("baz" => 17, "bar" => 4711)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> merge(a, b)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 4711.0
   "baz" => 17.0
   "foo" => 0.0
 
 julia> merge(b, a)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 42.0
   "baz" => 17.0
   "foo" => 0.0
@@ -326,17 +373,17 @@ Method `merge(combine::Union{Function,Type}, args...)` as an alias of
 # Examples
 ```jldoctest
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
-Dict{String,Float64} with 2 entries:
+Dict{String, Float64} with 2 entries:
   "bar" => 42.0
   "foo" => 0.0
 
 julia> b = Dict("baz" => 17, "bar" => 4711)
-Dict{String,Int64} with 2 entries:
+Dict{String, Int64} with 2 entries:
   "bar" => 4711
   "baz" => 17
 
 julia> mergewith(+, a, b)
-Dict{String,Float64} with 3 entries:
+Dict{String, Float64} with 3 entries:
   "bar" => 4753.0
   "baz" => 17.0
   "foo" => 0.0
@@ -370,13 +417,13 @@ The function `f` is passed `key=>value` pairs.
 # Example
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
-Dict{Int64,String} with 3 entries:
+Dict{Int64, String} with 3 entries:
   2 => "b"
   3 => "c"
   1 => "a"
 
 julia> filter!(p->isodd(p.first), d)
-Dict{Int64,String} with 2 entries:
+Dict{Int64, String} with 2 entries:
   3 => "c"
   1 => "a"
 ```
@@ -412,12 +459,12 @@ The function `f` is passed `key=>value` pairs.
 # Examples
 ```jldoctest
 julia> d = Dict(1=>"a", 2=>"b")
-Dict{Int64,String} with 2 entries:
+Dict{Int64, String} with 2 entries:
   2 => "b"
   1 => "a"
 
 julia> filter(p->isodd(p.first), d)
-Dict{Int64,String} with 1 entry:
+Dict{Int64, String} with 1 entry:
   1 => "a"
 ```
 """
@@ -477,6 +524,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     return anymissing ? missing : true
 end
 
+# Fallback implementation
+sizehint!(d::AbstractDict, n) = d
+
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)
     hv = hasha_seed
@@ -523,7 +573,7 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<((sizeof(T)<<3)-leading_zeros(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
@@ -553,12 +603,12 @@ of `dict` then it will be converted to the value type if possible and otherwise 
 # Examples
 ```jldoctest
 julia> d = Dict(:a => 1, :b => 2)
-Dict{Symbol,Int64} with 2 entries:
+Dict{Symbol, Int64} with 2 entries:
   :a => 1
   :b => 2
 
 julia> map!(v -> v-1, values(d))
-Base.ValueIterator for a Dict{Symbol,Int64} with 2 entries. Values:
+ValueIterator for a Dict{Symbol, Int64} with 2 entries. Values:
   0
   1
 ```

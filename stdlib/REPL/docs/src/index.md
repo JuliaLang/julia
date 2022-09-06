@@ -22,7 +22,7 @@ and a `julia>` prompt.
 
 ### The Julian mode
 
-The REPL has four main modes of operation. The first and most common is the Julian prompt. It
+The REPL has five main modes of operation. The first and most common is the Julian prompt. It
 is the default mode of operation; each new line initially starts with `julia>`. It is here that
 you can enter Julia expressions. Hitting return or enter after a complete expression has been
 entered will evaluate the entry and show the result of the last expression.
@@ -32,7 +32,7 @@ julia> string(1 + 2)
 "3"
 ```
 
-There are a number useful features unique to interactive work. In addition to showing the result,
+There are a number of useful features unique to interactive work. In addition to showing the result,
 the REPL also binds the result to the variable `ans`. A trailing semicolon on the line can be
 used as a flag to suppress showing the result.
 
@@ -45,7 +45,7 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
 text that starts with `julia> ` into the REPL. In that case, only expressions starting with
-`julia> ` are parsed, others are removed. This makes it is possible to paste a chunk of code
+`julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code
 that has been copied from a REPL session without having to scrub away prompts and outputs. This
 feature is enabled by default but can be disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`.
 If it is enabled, you can try it out by pasting the code block above this paragraph straight into
@@ -120,6 +120,23 @@ search: Int32 UInt32
   32-bit signed integer type.
 ```
 
+A string or regex literal searches all docstrings using [`apropos`](@ref):
+
+```
+help?> "aprop"
+REPL.stripmd
+Base.Docs.apropos
+
+help?> r"ap..p"
+Base.:∘
+Base.shell_escape_posixly
+Distributed.CachingPool
+REPL.stripmd
+Base.Docs.apropos
+```
+
+Another feature of help mode is the ability to access extended docstrings. You can do this by typing something like `??Print` rather than `?Print` which will display the `# Extended help` section from the source codes documentation.
+
 Help mode can be exited by pressing backspace at the beginning of the line.
 
 ### [Shell mode](@id man-shell-mode)
@@ -173,6 +190,14 @@ C:\Users\elm>dir
 02/02/2020  08:06    <DIR>          .atom
 ```
 
+### Pkg mode
+
+The Package manager mode accepts specialized commands for loading and updating packages. It is entered
+by pressing the `]` key at the Julian REPL prompt and exited by pressing CTRL-C or pressing the backspace key
+at the beginning of the line. The prompt for this mode is `pkg>`. It supports its own help-mode, which is
+entered by pressing `?` at the beginning  of the line of the `pkg>` prompt. The Package manager mode is
+documented in the Pkg manual, available at [https://julialang.github.io/Pkg.jl/v1/](https://julialang.github.io/Pkg.jl/v1/).
+
 ### Search modes
 
 In all of the above modes, the executed lines get saved to a history file, which can be searched.
@@ -186,6 +211,10 @@ Just as `^R` is a reverse search, `^S` is a forward search, with the prompt ```(
  The two may be used in conjunction with each other to move through the previous or next matching
 results, respectively.
 
+All executed commands in the Julia REPL are logged into `~/.julia/logs/repl_history.jl` along with a timestamp of when it was executed
+and the current REPL mode you were in. Search mode queries this log file in order to find the commands which you previously ran.
+This can be disabled at startup by passing the `--history-file=no` flag to Julia.
+
 ## Key bindings
 
 The Julia REPL makes great use of key bindings. Several control-key bindings were already introduced
@@ -196,7 +225,7 @@ to do so), or pressing Esc and then the key.
 
 | Keybinding          | Description                                                                                                |
 |:------------------- |:---------------------------------------------------------------------------------------------------------- |
-| **Program control** |                                                                                                            |
+| **Program control** |                                                                                                            |
 | `^D`                | Exit (when buffer is empty)                                                                                |
 | `^C`                | Interrupt or cancel                                                                                        |
 | `^L`                | Clear console screen                                                                                       |
@@ -204,7 +233,7 @@ to do so), or pressing Esc and then the key.
 | meta-Return/Enter   | Insert new line without executing it                                                                       |
 | `?` or `;`          | Enter help or shell mode (when at start of a line)                                                         |
 | `^R`, `^S`          | Incremental history search, described above                                                                |
-| **Cursor movement** |                                                                                                            |
+| **Cursor movement** |                                                                                                            |
 | Right arrow, `^F`   | Move right one character                                                                                   |
 | Left arrow, `^B`    | Move left one character                                                                                    |
 | ctrl-Right, `meta-F`| Move right one word                                                                                        |
@@ -222,7 +251,7 @@ to do so), or pressing Esc and then the key.
 | `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
 | `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
-| **Editing**         |                                                                                                            |
+| **Editing**         |                                                                                                            |
 | Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
@@ -241,9 +270,10 @@ to do so), or pressing Esc and then the key.
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | indent the current line on the right                                                                       |
-| `meta-.`            | insert last word from previous history entry                                                               |
+| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
+| `meta-.`            | Insert last word from previous history entry                                                               |
+| `meta-e`            | Edit the current input in an editor                                                                        |
 
 ### Customizing keybindings
 
@@ -283,6 +313,27 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 
 In both the Julian and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
+
+```julia-repl
+julia> x[TAB]
+julia> xor
+```
+
+In some cases it only completes part of the name, up to the next ambiguity:
+
+```julia-repl
+julia> mapf[TAB]
+julia> mapfold
+```
+
+If you hit tab again, then you get the list of things that might complete this:
+
+```julia-repl
+julia> mapfold[TAB]
+mapfoldl mapfoldr
+```
+
+Like other components of the REPL, the search is case-sensitive:
 
 ```julia-repl
 julia> stri[TAB]
@@ -342,6 +393,46 @@ shell> /[TAB]
 .dockerinit bin/         dev/         home/        lib64/       mnt/         proc/        run/         srv/         tmp/         var/
 ```
 
+Dictionary keys can also be tab completed:
+
+```julia-repl
+julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
+Dict{String,Int64} with 3 entries:
+  "qwer2" => 2
+  "asdf"  => 3
+  "qwer1" => 1
+
+julia> foo["q[TAB]
+
+"qwer1" "qwer2"
+julia> foo["qwer
+```
+
+Tab completion can also help completing fields:
+
+```julia-repl
+julia> x = 3 + 4im;
+
+julia> julia> x.[TAB][TAB]
+im re
+
+julia> import UUIDs
+
+julia> UUIDs.uuid[TAB][TAB]
+uuid1        uuid4         uuid5        uuid_version
+```
+
+Fields for output from functions can also be completed:
+
+```julia-repl
+julia> split("","")[1].[TAB]
+lastindex  offset  string
+```
+
+The completion of fields for output from functions uses type inference, and it can only suggest
+fields if the function is type stable.
+
+
 Tab completion can help with investigation of the available methods matching the input arguments:
 
 ```julia-repl
@@ -369,38 +460,54 @@ The completion of the methods uses type inference and can therefore see if the a
 even if the arguments are output from functions. The function needs to be type stable for the
 completion to be able to remove non-matching methods.
 
-Tab completion can also help completing fields:
+If you wonder which methods can be used with particular argument types, use `?` as the function name.
+This shows an example of looking for functions in InteractiveUtils that accept a single string:
 
 ```julia-repl
-julia> import UUIDs
-
-julia> UUIDs.uuid[TAB]
-uuid1        uuid4         uuid_version
+julia> InteractiveUtils.?("somefile")[TAB]
+edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
+less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
 ```
 
-Fields for output from functions can also be completed:
+This listed methods in the `InteractiveUtils` module that can be called on a string.
+By default, this excludes methods where all arguments are typed as `Any`,
+but you can see those too by holding down SHIFT-TAB instead of TAB:
 
 ```julia-repl
-julia> split("","")[1].[TAB]
-lastindex  offset  string
+julia> InteractiveUtils.?("somefile")[SHIFT-TAB]
+apropos(string) in REPL at REPL/src/docview.jl:796
+clipboard(x) in InteractiveUtils at InteractiveUtils/src/clipboard.jl:64
+code_llvm(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:221
+code_native(f) in InteractiveUtils at InteractiveUtils/src/codeview.jl:243
+edit(path::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:197
+edit(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:225
+eval(x) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:3
+include(x) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:3
+less(file::AbstractString) in InteractiveUtils at InteractiveUtils/src/editless.jl:266
+less(f) in InteractiveUtils at InteractiveUtils/src/editless.jl:274
+report_bug(kind) in InteractiveUtils at InteractiveUtils/src/InteractiveUtils.jl:391
+separate_kwargs(args...; kwargs...) in InteractiveUtils at InteractiveUtils/src/macros.jl:7
 ```
 
-The completion of fields for output from functions uses type inference, and it can only suggest
-fields if the function is type stable.
+You can also use ` ?("somefile")[TAB]`  and look across all modules, but the method lists can be long.
 
-Dictionary keys can also be tab completed:
+By omitting the closing parenthesis, you can include functions that might require additional arguments:
 
 ```julia-repl
-julia> foo = Dict("qwer1"=>1, "qwer2"=>2, "asdf"=>3)
-Dict{String,Int64} with 3 entries:
-  "qwer2" => 2
-  "asdf"  => 3
-  "qwer1" => 1
+julia> using Mmap
 
-julia> foo["q[TAB]
-
-"qwer1" "qwer2"
-julia> foo["qwer
+help?> Mmap.?("file",[TAB]
+Mmap.Anonymous(name::String, readonly::Bool, create::Bool) in Mmap at Mmap/src/Mmap.jl:16
+mmap(file::AbstractString) in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}) where T<:Array in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<:Array, N} in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:Array, N} in Mmap at Mmap/src/Mmap.jl:245
+mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:Array in Mmap at Mmap/src/Mmap.jl:251
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:Array in Mmap at Mmap/src/Mmap.jl:251
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
+mmap(file::AbstractString, ::Type{T}, dims::Tuple{Vararg{Integer, N}}, offset::Integer; grow, shared) where {T<:BitArray, N} in Mmap at Mmap/src/Mmap.jl:316
+mmap(file::AbstractString, ::Type{T}, len::Integer) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
+mmap(file::AbstractString, ::Type{T}, len::Integer, offset::Integer; grow, shared) where T<:BitArray in Mmap at Mmap/src/Mmap.jl:322
 ```
 
 ## Customizing Colors
@@ -448,6 +555,65 @@ messages respectively in magenta, yellow, and cyan you can add the following to 
 ENV["JULIA_ERROR_COLOR"] = :magenta
 ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
+```
+
+
+## Changing the contextual module which is active at the REPL
+
+When entering expressions at the REPL, they are by default evaluated in the `Main` module;
+
+```julia-repl
+julia> @__MODULE__
+Main
+```
+
+It is possible to change this contextual module via the function
+`REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
+and pressing the keybinding Alt-m (the cursor must be on the module name). The
+active module is shown in the prompt:
+
+```julia-repl
+julia> using REPL
+
+julia> REPL.activate(Base)
+
+(Base) julia> @__MODULE__
+Base
+
+(Base) julia> using REPL # Need to load REPL into Base module to use it
+
+(Base) julia> REPL.activate(Main)
+
+julia>
+
+julia> Core<Alt-m> # using the keybinding to change module
+
+(Core) julia>
+
+(Core) julia> Main<Alt-m> # going back to Main via keybinding
+
+julia>
+```
+
+Functions that take an optional module argument often defaults to the REPL
+context module. As an example, calling `varinfo()` will show the variables of
+the current active module:
+
+```julia-repl
+julia> module CustomMod
+           export var, f
+           var = 1
+           f(x) = x^2
+       end;
+
+julia> REPL.activate(CustomMod)
+
+(Main.CustomMod) julia> varinfo()
+  name         size summary
+  ––––––––– ––––––– ––––––––––––––––––––––––––––––––––
+  CustomMod         Module
+  f         0 bytes f (generic function with 1 method)
+  var       8 bytes Int64
 ```
 
 ## TerminalMenus
@@ -527,7 +693,7 @@ Output:
 
 ```
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -544,61 +710,133 @@ You like the following fruits:
 
 ### Customization / Configuration
 
-All interface customization is done through the keyword only
-`TerminalMenus.config()` function.
+#### ConfiguredMenu subtypes
 
-#### Arguments
+Starting with Julia 1.6, the recommended way to configure menus is via the constructor.
+For instance, the default multiple-selection menu
 
- - `charset::Symbol=:na`: ui characters to use (`:ascii` or `:unicode`); overridden by other arguments
- - `cursor::Char='>'|'→'`: character to use for cursor
- - `up_arrow::Char='^'|'↑'`: character to use for up arrow
- - `down_arrow::Char='v'|'↓'`: character to use for down arrow
- - `checked::String="[X]"|"✓"`: string to use for checked
- - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
- - `scroll::Symbol=:na`: If `:wrap` then wrap the cursor around top and bottom, if :`nowrap` do not wrap cursor
- - `supress_output::Bool=false`: For testing. If true, menu will not be printed to console.
- - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
-
-#### Examples
-
-```julia
+```
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
    [X] orange
    [ ] grape
  > [X] strawberry
 v  [ ] blueberry
-Set([4, 2])
+```
 
-julia> TerminalMenus.config(charset=:unicode)
+can instead be rendered with Unicode selection and navigation characters with
+
+```julia-repl
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    ⬚ apple
    ✓ orange
    ⬚ grape
  → ✓ strawberry
 ↓  ⬚ blueberry
-Set([4, 2])
+```
 
-julia> TerminalMenus.config(checked="YEP!", unchecked="NOPE", cursor='⧐')
+More fine-grained configuration is also possible:
+
+```julia-repl
+julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YEP!", unchecked="NOPE", cursor='⧐');
 
 julia> request(menu)
-[press: d=done, a=all, n=none]
+julia> request(menu)
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    NOPE apple
    YEP! orange
    NOPE grape
  ⧐ YEP! strawberry
 ↓  NOPE blueberry
-Set([4, 2])
-
 ```
+
+Aside from the overall `charset` option, for `RadioMenu` the configurable options are:
+
+ - `cursor::Char='>'|'→'`: character to use for cursor
+ - `up_arrow::Char='^'|'↑'`: character to use for up arrow
+ - `down_arrow::Char='v'|'↓'`: character to use for down arrow
+ - `updown_arrow::Char='I'|'↕'`: character to use for up/down arrow in one-line page
+ - `scroll_wrap::Bool=false`: optionally wrap-around at the beginning/end of a menu
+ - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
+
+`MultiSelectMenu` adds:
+
+ - `checked::String="[X]"|"✓"`: string to use for checked
+ - `unchecked::String="[ ]"|"⬚")`: string to use for unchecked
+
+You can create new menu types of your own.
+Types that are derived from `TerminalMenus.ConfiguredMenu` configure the menu options at construction time.
+
+#### Legacy interface
+
+Prior to Julia 1.6, and still supported throughout Julia 1.x, one can also configure menus by calling
+`TerminalMenus.config()`.
 
 ## References
 
+### REPL
+
 ```@docs
 Base.atreplinit
+```
+
+### TerminalMenus
+
+### Menus
+
+```@docs
+REPL.TerminalMenus.RadioMenu
+REPL.TerminalMenus.MultiSelectMenu
+```
+
+#### Configuration
+
+```@docs
+REPL.TerminalMenus.Config
+REPL.TerminalMenus.MultiSelectConfig
+REPL.TerminalMenus.config
+```
+
+#### User interaction
+
+```@docs
+REPL.TerminalMenus.request
+```
+
+#### AbstractMenu extension interface
+
+Any subtype of `AbstractMenu` must be mutable, and must contain the fields `pagesize::Int` and
+`pageoffset::Int`.
+Any subtype must also implement the following functions:
+
+```@docs
+REPL.TerminalMenus.pick
+REPL.TerminalMenus.cancel
+REPL.TerminalMenus.writeline
+```
+
+It must also implement either `options` or `numoptions`:
+
+```@docs
+REPL.TerminalMenus.options
+REPL.TerminalMenus.numoptions
+```
+
+If the subtype does not have a field named `selected`, it must also implement
+
+```@docs
+REPL.TerminalMenus.selected
+```
+
+The following are optional but can allow additional customization:
+
+```@docs
+REPL.TerminalMenus.header
+REPL.TerminalMenus.keypress
 ```

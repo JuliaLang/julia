@@ -25,6 +25,8 @@ isinteger(x::Integer) = true
 Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
+See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
+
 # Examples
 ```jldoctest
 julia> iszero(0.0)
@@ -59,6 +61,22 @@ true
 """
 isone(x) = x == one(x) # fallback method
 
+"""
+    isfinite(f) -> Bool
+
+Test whether a number is finite.
+
+# Examples
+```jldoctest
+julia> isfinite(5)
+true
+
+julia> isfinite(NaN32)
+false
+```
+"""
+isfinite(x::Number) = iszero(x - x)
+
 size(x::Number) = ()
 size(x::Number, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 axes(x::Number) = ()
@@ -68,21 +86,28 @@ ndims(x::Number) = 0
 ndims(::Type{<:Number}) = 0
 length(x::Number) = 1
 firstindex(x::Number) = 1
+firstindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 lastindex(x::Number) = 1
+lastindex(x::Number, d::Int) = d < 1 ? throw(BoundsError()) : 1
 IteratorSize(::Type{<:Number}) = HasShape{0}()
 keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
-    @_inline_meta
-    @boundscheck i == 1 || throw(BoundsError())
+    @inline
+    @boundscheck i == 1 || throw(BoundsError(x, i))
     x
 end
 function getindex(x::Number, I::Integer...)
-    @_inline_meta
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @inline
+    @boundscheck all(isone, I) || throw(BoundsError(x, I))
     x
 end
+get(x::Number, i::Integer, default) = isone(i) ? x : default
+get(x::Number, ind::Tuple, default) = all(isone, ind) ? x : default
+get(f::Callable, x::Number, i::Integer) = isone(i) ? x : f()
+get(f::Callable, x::Number, ind::Tuple) = all(isone, ind) ? x : f()
+
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x # some code treats numbers as collection-like
@@ -91,6 +116,8 @@ copy(x::Number) = x # some code treats numbers as collection-like
     signbit(x)
 
 Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+
+See also [`sign`](@ref) and [`copysign`](@ref).
 
 # Examples
 ```jldoctest
@@ -113,6 +140,23 @@ signbit(x::Real) = x < 0
     sign(x)
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).
+
+See also [`signbit`](@ref), [`zero`](@ref), [`copysign`](@ref), [`flipsign`](@ref).
+
+# Examples
+```jldoctest
+julia> sign(-4.0)
+-1.0
+
+julia> sign(99)
+1
+
+julia> sign(-0.0)
+-0.0
+
+julia> sign(0 + im)
+0.0 + 1.0im
+```
 """
 sign(x::Number) = iszero(x) ? x/abs(oneunit(x)) : x/abs(x)
 sign(x::Real) = ifelse(x < zero(x), oftype(one(x),-1), ifelse(x > zero(x), one(x), typeof(one(x))(x)))
@@ -124,12 +168,24 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 
 Squared absolute value of `x`.
 
+This can be faster than `abs(x)^2`, especially for complex
+numbers where `abs(x)` requires a square root via [`hypot`](@ref).
+
+See also [`abs`](@ref), [`conj`](@ref), [`real`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs2(-3)
 9
+
+julia> abs2(3.0 + 4.0im)
+25.0
+
+julia> sum(abs2, [1+2im, 3+4im])  # LinearAlgebra.norm(x)^2
+30
 ```
 """
+abs2(x::Number) = abs(x)^2
 abs2(x::Real) = x*x
 
 """
@@ -204,10 +260,18 @@ inv(x::Number) = one(x)/x
 
 Multiply `x` and `y`, giving the result as a larger type.
 
+See also [`promote`](@ref), [`Base.add_sum`](@ref).
+
 # Examples
 ```jldoctest
-julia> widemul(Float32(3.), 4.)
-12.0
+julia> widemul(Float32(3.0), 4.0) isa BigFloat
+true
+
+julia> typemax(Int8) * typemax(Int8)
+1
+
+julia> widemul(typemax(Int8), typemax(Int8))  # == 127^2
+16129
 ```
 """
 widemul(x::Number, y::Number) = widen(x)*widen(y)
@@ -221,8 +285,11 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
 
 """
     zero(x)
+    zero(::Type)
 
 Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+
+See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
 # Examples
 ```jldoctest
@@ -233,7 +300,7 @@ julia> zero(big"2.0")
 0.0
 
 julia> zero(rand(2,2))
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.0  0.0
  0.0  0.0
 ```
@@ -260,6 +327,9 @@ should return an identity value of the same precision
 
 If you want a quantity that is of the same type as `x`, or of type `T`,
 even if `x` is dimensionful, use [`oneunit`](@ref) instead.
+
+See also the [`identity`](@ref) function,
+and `I` in [`LinearAlgebra`](@ref man-linalg) for the identity matrix.
 
 # Examples
 ```jldoctest

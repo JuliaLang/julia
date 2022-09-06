@@ -9,7 +9,7 @@ This method is used to display the exception after a call to [`throw`](@ref).
 # Examples
 ```jldoctest
 julia> struct MyException <: Exception
-           msg::AbstractString
+           msg::String
        end
 
 julia> function Base.showerror(io::IO, err::MyException)
@@ -31,7 +31,7 @@ showerror(io::IO, ex) = show(io, ex)
 
 show_index(io::IO, x::Any) = show(io, x)
 show_index(io::IO, x::Slice) = show_index(io, x.indices)
-show_index(io::IO, x::LogicalIndex) = show_index(io, x.mask)
+show_index(io::IO, x::LogicalIndex) = summary(io, x.mask)
 show_index(io::IO, x::OneTo) = print(io, "1:", x.stop)
 show_index(io::IO, x::Colon) = print(io, ':')
 
@@ -42,7 +42,6 @@ function showerror(io::IO, ex::BoundsError)
         print(io, ": attempt to access ")
         summary(io, ex.a)
         if isdefined(ex, :i)
-            !isa(ex.a, AbstractArray) && print(io, "\n ")
             print(io, " at index [")
             if ex.i isa AbstractRange
                 print(io, ex.i)
@@ -86,16 +85,14 @@ end
 
 function showerror(io::IO, ex, bt; backtrace=true)
     try
-        with_output_color(get(io, :color, false) ? error_color() : :nothing, io) do io
-            showerror(io, ex)
-        end
+        showerror(io, ex)
     finally
         backtrace && show_backtrace(io, bt)
     end
 end
 
 function showerror(io::IO, ex::LoadError, bt; backtrace=true)
-    print(io, "LoadError: ")
+    !isa(ex.error, LoadError) && print(io, "LoadError: ")
     showerror(io, ex.error, bt, backtrace=backtrace)
     print(io, "\nin expression starting at $(ex.file):$(ex.line)")
 end
@@ -155,6 +152,7 @@ showerror(io::IO, ex::KeyError) = (print(io, "KeyError: key ");
                                    print(io, " not found"))
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: ", ex.msg)
+showerror(io::IO, ex::DimensionMismatch) = print(io, "DimensionMismatch: ", ex.msg)
 showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
@@ -162,14 +160,8 @@ showerror(io::IO, ex::UndefKeywordError) =
     print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    if ex.var in [:UTF16String, :UTF32String, :WString, :utf16, :utf32, :wstring, :RepString]
-        return showerror(io, ErrorException("""
-        `$(ex.var)` has been moved to the package LegacyStrings.jl:
-        Run Pkg.add("LegacyStrings") to install LegacyStrings on Julia v0.5-;
-        Then do `using LegacyStrings` to get `$(ex.var)`.
-        """))
-    end
     print(io, "UndefVarError: $(ex.var) not defined")
+    Experimental.show_error_hints(io, ex)
 end
 
 function showerror(io::IO, ex::InexactError)
@@ -179,7 +171,11 @@ function showerror(io::IO, ex::InexactError)
     Experimental.show_error_hints(io, ex)
 end
 
-typesof(args...) = Tuple{Any[ Core.Typeof(a) for a in args ]...}
+function showerror(io::IO, ex::CanonicalIndexError)
+    print(io, "CanonicalIndexError: ", ex.func, " not defined for ", ex.type)
+end
+
+typesof(@nospecialize args...) = Tuple{Any[ Core.Typeof(args[i]) for i in 1:length(args) ]...}
 
 function print_with_compare(io::IO, @nospecialize(a::DataType), @nospecialize(b::DataType), color::Symbol)
     if a.name === b.name
@@ -208,19 +204,20 @@ function print_with_compare(io::IO, @nospecialize(a), @nospecialize(b), color::S
     end
 end
 
-function show_convert_error(io::IO, ex::MethodError, @nospecialize(arg_types_param))
+function show_convert_error(io::IO, ex::MethodError, arg_types_param)
     # See #13033
     T = striptype(ex.args[1])
     if T === nothing
         print(io, "First argument to `convert` must be a Type, got ", ex.args[1])
     else
-        print_one_line = isa(T, DataType) && isa(arg_types_param[2], DataType) && T.name != arg_types_param[2].name
+        p2 = arg_types_param[2]
+        print_one_line = isa(T, DataType) && isa(p2, DataType) && T.name != p2.name
         printstyled(io, "Cannot `convert` an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, arg_types_param[2], T, :light_green)
+        print_with_compare(io, p2, T, :light_green)
         printstyled(io, " to an object of type ")
         print_one_line || printstyled(io, "\n  ")
-        print_with_compare(io, T, arg_types_param[2], :light_red)
+        print_with_compare(io, T, p2, :light_red)
     end
 end
 
@@ -228,13 +225,14 @@ function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
     is_arg_types = isa(ex.args, DataType)
-    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
-    if length(meth) > 1
+    if isa(meth, MethodList) && length(meth) > 1
         return showerror_ambiguous(io, meth, f, arg_types)
     end
     arg_types_param::SimpleVector = arg_types.parameters
+    show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
     name = ft.name.mt.name
@@ -246,12 +244,15 @@ function showerror(io::IO, ex::MethodError)
         name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
-        ex = MethodError(f, ex.args[3:end])
+        ex = MethodError(f, ex.args[3:end::Int])
     end
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
-    elseif isempty(methods(f)) && isa(f, DataType) && f.abstract
+    elseif f === mapreduce_empty || f === reduce_empty
+        print(io, "reducing over an empty collection is not allowed; consider supplying `init` to the reducer")
+        show_candidates = false
+    elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
@@ -271,9 +272,8 @@ function showerror(io::IO, ex::MethodError)
         if !isempty(kwargs)
             print(io, "; ")
             for (i, (k, v)) in enumerate(kwargs)
-                print(io, k, "=")
-                show(IOContext(io, :limit => true), v)
-                i == length(kwargs) || print(io, ", ")
+                print(io, k, "::", typeof(v))
+                i == length(kwargs)::Int || print(io, ", ")
             end
         end
         print(io, ")")
@@ -284,13 +284,11 @@ function showerror(io::IO, ex::MethodError)
         if any(x -> x <: AbstractArray{<:Number}, arg_types_param) &&
             any(x -> x <: Number, arg_types_param)
 
-            nouns = Dict(
-                Base.:+ => "addition",
-                Base.:- => "subtraction",
-            )
+            nounf = f === Base.:+ ? "addition" : "subtraction"
             varnames = ("scalar", "array")
             first, second = arg_types_param[1] <: Number ? varnames : reverse(varnames)
-            print(io, "\nFor element-wise $(nouns[f]), use broadcasting with dot syntax: $first .$f $second")
+            fstring = f === Base.:+ ? "+" : "-"  # avoid depending on show_default for functions (invalidation)
+            print(io, "\nFor element-wise $nounf, use broadcasting with dot syntax: $first .$fstring $second")
         end
     end
     if ft <: AbstractArray
@@ -314,18 +312,18 @@ function showerror(io::IO, ex::MethodError)
         vec_args = []
         hasrows = false
         for arg in ex.args
-            isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
+            isrow = isa(arg,Array) && ndims(arg)::Int==2 && size(arg,1)::Int==1
             hasrows |= isrow
             push!(vec_args, isrow ? vec(arg) : arg)
         end
-        if hasrows && applicable(f, vec_args...)
+        if hasrows && applicable(f, vec_args...) && isempty(kwargs)
             print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.",
                       "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].",
                       "\nYou can convert to a column vector with the vec() function.")
         end
     end
     Experimental.show_error_hints(io, ex, arg_types_param, kwargs)
-    try
+    show_candidates && try
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
@@ -335,7 +333,7 @@ end
 striptype(::Type{T}) where {T} = T
 striptype(::Any) = nothing
 
-function showerror_ambiguous(io::IO, meth, f, args)
+function showerror_ambiguous(io::IO, meths, f, args)
     print(io, "MethodError: ")
     show_signature_function(io, isa(f, Type) ? Type{f} : typeof(f))
     print(io, "(")
@@ -344,21 +342,25 @@ function showerror_ambiguous(io::IO, meth, f, args)
         print(io, "::", a)
         i < length(p) && print(io, ", ")
     end
-    print(io, ") is ambiguous. Candidates:")
+    println(io, ") is ambiguous.\n\nCandidates:")
     sigfix = Any
-    for m in meth
-        print(io, "\n  ", m)
+    for m in meths
+        print(io, "  ")
+        show_method(io, m; digit_align_width=0)
+        println(io)
         sigfix = typeintersect(m.sig, sigfix)
     end
     if isa(unwrap_unionall(sigfix), DataType) && sigfix <: Tuple
-        if all(m->morespecific(sigfix, m.sig), meth)
-            print(io, "\nPossible fix, define\n  ")
-            Base.show_tuple_as_call(io, :function,  sigfix)
-        else
-            println(io)
-            print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
-            print(io, "adding a new method more specific than any of the existing applicable methods.")
+        let sigfix=sigfix
+            if all(m->morespecific(sigfix, m.sig), meths)
+                print(io, "\nPossible fix, define\n  ")
+                Base.show_tuple_as_call(io, :function,  sigfix)
+            else
+                print(io, "To resolve the ambiguity, try making one of the methods more specific, or ")
+                print(io, "adding a new method more specific than any of the existing applicable methods.")
+            end
         end
+        println(io)
     end
     nothing
 end
@@ -373,6 +375,13 @@ function showerror_nostdio(err, msg::AbstractString)
     ccall(:jl_printf, Cint, (Ptr{Cvoid},Cstring), stderr_stream, "\n")
 end
 
+stacktrace_expand_basepaths()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_EXPAND_BASEPATHS", "false")) === true
+stacktrace_contract_userdir()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_CONTRACT_HOMEDIR", "true")) === true
+stacktrace_linebreaks()::Bool =
+    tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
+
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
     is_arg_types = isa(ex.args, DataType)
     arg_types = is_arg_types ? ex.args : typesof(ex.args...)
@@ -383,15 +392,15 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     ft = typeof(f)
     lines = []
     # These functions are special cased to only show if first argument is matched.
-    special = f in [convert, getindex, setindex!]
-    funcs = Any[(f, arg_types_param)]
+    special = f === convert || f === getindex || f === setindex!
+    funcs = Tuple{Any,Vector{Any}}[(f, arg_types_param)]
 
     # An incorrect call method produces a MethodError for convert.
     # It also happens that users type convert when they mean call. So
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Compiler.has_free_typevars(at1)
+        if isType(at1) && !Core.Compiler.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -401,12 +410,17 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
             buf = IOBuffer()
             iob0 = iob = IOContext(buf, io)
             tv = Any[]
-            sig0 = method.sig
+            if func isa Core.OpaqueClosure
+                sig0 = signature_type(func, typeof(func).parameters[1])
+            else
+                sig0 = method.sig
+            end
             while isa(sig0, UnionAll)
                 push!(tv, sig0.var)
                 iob = IOContext(iob, :unionall_env => sig0.var)
                 sig0 = sig0.body
             end
+            sig0 = sig0::DataType
             s1 = sig0.parameters[1]
             sig = sig0.parameters[2:end]
             print(iob, "  ")
@@ -424,7 +438,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # If isvarargtype then it checks whether the rest of the input arguments matches
                 # the varargtype
                 if Base.isvarargtype(sig[i])
-                    sigstr = (unwrap_unionall(sig[i]).parameters[1], "...")
+                    sigstr = (unwrapva(unwrap_unionall(sig[i])), "...")
                     j = length(t_i)
                 else
                     sigstr = (sig[i],)
@@ -438,8 +452,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
                     if get(io, :color, false)
-                        Base.with_output_color(Base.error_color(), iob) do iob
-                            print(iob, "::", sigstr...)
+                        let sigstr=sigstr
+                            Base.with_output_color(Base.error_color(), iob) do iob
+                                print(iob, "::", sigstr...)
+                            end
                         end
                     else
                         print(iob, "!Matched::", sigstr...)
@@ -459,7 +475,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # It ensures that methods like f(a::AbstractString...) gets the correct
                 # number of right_matches
                 for t in arg_types_param[length(sig):end]
-                    if t <: rewrap_unionall(unwrap_unionall(sig[end]).parameters[1], method.sig)
+                    if t <: rewrap_unionall(unwrapva(unwrap_unionall(sig[end])), method.sig)
                         right_matches += 1
                     end
                 end
@@ -472,7 +488,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                     for (k, sigtype) in enumerate(sig[length(t_i)+1:end])
                         sigtype = isvarargtype(sigtype) ? unwrap_unionall(sigtype) : sigtype
                         if Base.isvarargtype(sigtype)
-                            sigstr = (sigtype.parameters[1], "...")
+                            sigstr = (unwrapva(sigtype::Core.TypeofVararg), "...")
                         else
                             sigstr = (sigtype,)
                         end
@@ -480,8 +496,10 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                             print(iob, ", ")
                         end
                         if get(io, :color, false)
-                            Base.with_output_color(Base.error_color(), iob) do iob
-                                print(iob, "::", sigstr...)
+                            let sigstr=sigstr
+                                Base.with_output_color(Base.error_color(), iob) do iob
+                                    print(iob, "::", sigstr...)
+                                end
                             end
                         else
                             print(iob, "!Matched::", sigstr...)
@@ -495,13 +513,18 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 print(iob, ")")
                 show_method_params(iob0, tv)
-                print(iob, " at ", method.file, ":", method.line)
-                if !isempty(kwargs)
+                file, line = updated_methodloc(method)
+                if file === nothing
+                    file = string(method.file)
+                end
+                stacktrace_contract_userdir() && (file = contractuser(file))
+
+                if !isempty(kwargs)::Bool
                     unexpected = Symbol[]
                     if isempty(kwords) || !(any(endswith(string(kword), "...") for kword in kwords))
                         for (k, v) in kwargs
-                            if !(k in kwords)
-                                push!(unexpected, k)
+                            if !(k::Symbol in kwords)
+                                push!(unexpected, k::Symbol)
                             end
                         end
                     end
@@ -517,6 +540,12 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 elseif ex.world > reinterpret(UInt, method.deleted_world)
                     print(iob, " (method deleted before this world age.)")
                 end
+                println(iob)
+
+                m = parentmodule_before_main(method.module)
+                modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+                print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
+
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
             end
@@ -525,7 +554,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
 
     if !isempty(lines) # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            print(io, "\nClosest candidates are:")
+            print(io, "\n\nClosest candidates are:")
             sort!(lines, by = x -> -x[2])
             i = 0
             for line in lines
@@ -537,20 +566,9 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 i += 1
                 print(io, String(take!(line[1])))
             end
+            println(io) # extra newline for spacing to stacktrace
         end
     end
-end
-
-# Contains file name and file number. Gets set when a backtrace
-# or methodlist is shown. Used by the REPL to make it possible to open
-# the location of a stackframe/method in the editor.
-global LAST_SHOWN_LINE_INFOS = Tuple{String, Int}[]
-
-function show_trace_entry(io, frame, n; prefix = "")
-    push!(LAST_SHOWN_LINE_INFOS, (string(frame.file), frame.line))
-    print(io, "\n", prefix)
-    show(io, frame, full_path=true)
-    n > 1 && print(io, " (repeats ", n, " times)")
 end
 
 # In case the line numbers in the source code have changed since the code was compiled,
@@ -564,9 +582,27 @@ end
 # replace `sf` as needed.
 const update_stackframes_callback = Ref{Function}(identity)
 
+const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
+const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
+
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
+    num_frames = length(trace)
+    ndigits_max = ndigits(num_frames)
+
+    println(io, "\nStacktrace:")
+
+    for (i, (frame, n)) in enumerate(trace)
+        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        if i < num_frames
+            println(io)
+            print_linebreaks && println(io)
+        end
+    end
+end
+
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
+function show_reduced_backtrace(io::IO, t::Vector)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -612,66 +648,151 @@ function show_reduced_backtrace(io::IO, t::Vector, with_prefix::Bool)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
+    println(io, "\nStacktrace:")
+
+    ndigits_max = ndigits(length(t))
+
     push!(repeated_cycle, (0,0,0)) # repeated_cycle is never empty
     frame_counter = 1
     for i in 1:length(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-        if with_prefix
-            show_trace_entry(io, frame, n, prefix = string(" [", frame_counter, "] "))
-        else
-            show_trace_entry(io, frame, n)
+
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+
+        if i < length(displayed_stackframes)
+            println(io)
+            stacktrace_linebreaks() && println(io)
         end
+
         while repeated_cycle[1][1] == i # never empty because of the initial (0,0,0)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
-            print(io, "\n ... (the last ", cycle_length, " lines are repeated ",
-                  repetitions, " more time", repetitions>1 ? "s)" : ")")
+            printstyled(io,
+                "--- the last ", cycle_length, " lines are repeated ",
+                  repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
+            if i < length(displayed_stackframes)
+                println(io)
+                stacktrace_linebreaks() && println(io)
+            end
             frame_counter += cycle_length * repetitions
         end
         frame_counter += 1
     end
 end
 
+
+# Print a stack frame where the module color is determined by looking up the parent module in
+# `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
+# from `modulecolorcycler`.
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
+    m = Base.parentmodule(frame)
+    modulecolor = if m !== nothing
+        m = parentmodule_before_main(m)
+        get!(() -> popfirst!(modulecolorcycler), modulecolordict, m)
+    else
+        :default
+    end
+    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
+end
+
+# Gets the topmost parent module that isn't Main
+function parentmodule_before_main(m)
+    while parentmodule(m) !== m
+        pm = parentmodule(m)
+        pm == Main && break
+        m = pm
+    end
+    m
+end
+
+# Print a stack frame where the module color is set manually with `modulecolor`.
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
+    file, line = string(frame.file), frame.line
+    file = fixup_stdlib_path(file)
+    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
+
+    # Used by the REPL to make it possible to open
+    # the location of a stackframe/method in the editor.
+    if haskey(io, :last_shown_line_infos)
+        push!(io[:last_shown_line_infos], (string(frame.file), frame.line))
+    end
+
+    inlined = getfield(frame, :inlined)
+    modul = parentmodule(frame)
+
+    digit_align_width = ndigits_max + 2
+
+    # frame number
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
+    print(io, " ")
+
+    StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
+    if n > 1
+        printstyled(io, " (repeats $n times)"; color=:light_black)
+    end
+    println(io)
+
+    # @ Module path / file : line
+    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
+
+    # inlined
+    printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
+end
+
+function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+    printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
+
+    # module
+    if modul !== nothing && modulecolor !== nothing
+        print(io, " ")
+        printstyled(io, modul, color = modulecolor)
+    end
+
+    # filepath
+    stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
+    stacktrace_contract_userdir() && (file = contractuser(file))
+    print(io, " ")
+    dir = dirname(file)
+    !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
+
+    # filename, separator, line
+    printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+end
+
 function show_backtrace(io::IO, t::Vector)
-    resize!(LAST_SHOWN_LINE_INFOS, 0)
-    filtered = process_backtrace(t)
+    if haskey(io, :last_shown_line_infos)
+        empty!(io[:last_shown_line_infos])
+    end
+
+    # t is a pre-processed backtrace (ref #12856)
+    if t isa Vector{Any}
+        filtered = t
+    else
+        filtered = process_backtrace(t)
+    end
     isempty(filtered) && return
 
     if length(filtered) == 1 && StackTraces.is_top_level_frame(filtered[1][1])
-        f = filtered[1][1]
-        if f.line == 0 && f.file == Symbol("")
+        f = filtered[1][1]::StackFrame
+        if f.line == 0 && f.file === Symbol("")
             # don't show a single top-level frame with no location info
             return
         end
     end
 
-    print(io, "\nStacktrace:")
-    if length(filtered) < BIG_STACKTRACE_SIZE
-        # Fast track: no duplicate stack frame detection.
-        try invokelatest(update_stackframes_callback[], filtered) catch end
-        frame_counter = 0
-        for (last_frame, n) in filtered
-            frame_counter += 1
-            show_trace_entry(IOContext(io, :backtrace => true), last_frame, n, prefix = string(" [", frame_counter, "] "))
-        end
+    if length(filtered) > BIG_STACKTRACE_SIZE
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
         return
     end
 
-    show_reduced_backtrace(IOContext(io, :backtrace => true), filtered, true)
+    try invokelatest(update_stackframes_callback[], filtered) catch end
+    # process_backtrace returns a Vector{Tuple{Frame, Int}}
+    show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+    return
 end
 
-function show_backtrace(io::IO, t::Vector{Any})
-    # t is a pre-processed backtrace (ref #12856)
-    if length(t) < BIG_STACKTRACE_SIZE
-        try invokelatest(update_stackframes_callback[], t) catch end
-        for entry in t
-            show_trace_entry(io, entry...)
-        end
-    else
-        show_reduced_backtrace(io, t, false)
-    end
-end
 
 function is_kw_sorter_name(name::Symbol)
     sn = string(name)
@@ -681,22 +802,22 @@ end
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
 function _simplify_include_frames(trace)
-    i = length(trace)
-    kept_frames = trues(i)
+    kept_frames = trues(length(trace))
     first_ignored = nothing
-    while i >= 1
-        frame, _ = trace[i]
+    for i in length(trace):-1:1
+        frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
-        if isnothing(first_ignored)
+        if first_ignored === nothing
             if mod === Base && frame.func === :_include
                 # Hide include() machinery by default
                 first_ignored = i
             end
         else
+            first_ignored = first_ignored::Int
             # Hack: allow `mod==nothing` as a workaround for inlined functions.
             # TODO: Fix this by improving debug info.
             if mod in (Base,Core,nothing) && 1+first_ignored-i <= 5
-                if frame.func == :eval
+                if frame.func === :eval
                     kept_frames[i:first_ignored] .= false
                     first_ignored = nothing
                 end
@@ -705,10 +826,9 @@ function _simplify_include_frames(trace)
                 first_ignored = nothing
             end
         end
-        i -= 1
     end
-    if !isnothing(first_ignored)
-        kept_frames[i:first_ignored] .= false
+    if first_ignored !== nothing
+        kept_frames[1:first_ignored] .= false
     end
     return trace[kept_frames]
 end
@@ -756,18 +876,18 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     return _simplify_include_frames(ret)
 end
 
-function show_exception_stack(io::IO, stack::Vector)
+function show_exception_stack(io::IO, stack)
     # Display exception stack with the top of the stack first.  This ordering
     # means that the user doesn't have to scroll up in the REPL to discover the
     # root cause.
     nexc = length(stack)
     for i = nexc:-1:1
         if nexc != i
-            printstyled(io, "caused by [exception ", i, "]\n", color=:light_black)
+            printstyled(io, "\ncaused by: ", color=error_color())
         end
         exc, bt = stack[i]
         showerror(io, exc, bt, backtrace = bt!==nothing)
-        println(io)
+        i == 1 || println(io)
     end
 end
 
@@ -780,3 +900,41 @@ function show(io::IO, ip::InterpreterIP)
         print(io, " in $(ip.code) at statement $(Int(ip.stmt))")
     end
 end
+
+# handler for displaying a hint in case the user tries to call
+# the instance of a number (probably missing the operator)
+# eg: (1 + 2)(3 + 4)
+function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if ex.f isa Number
+        print(io, "\nMaybe you forgot to use an operator such as ")
+        printstyled(io, "*, ^, %, / etc. ", color=:cyan)
+        print(io, "?")
+    end
+end
+
+Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
+
+# Display a hint in case the user tries to use the + operator on strings
+# (probably attempting concatenation)
+function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f == +) && all(i -> i <: AbstractString, arg_types)
+        print(io, "\nString concatenation is performed with ")
+        printstyled(io, "*", color=:cyan)
+        print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
+    end
+end
+
+Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
+
+# ExceptionStack implementation
+size(s::ExceptionStack) = size(s.stack)
+getindex(s::ExceptionStack, i::Int) = s.stack[i]
+
+function show(io::IO, ::MIME"text/plain", stack::ExceptionStack)
+    nexc = length(stack)
+    printstyled(io, nexc, "-element ExceptionStack", nexc == 0 ? "" : ":\n")
+    show_exception_stack(io, stack)
+end
+show(io::IO, stack::ExceptionStack) = show(io, MIME("text/plain"), stack)

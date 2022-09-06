@@ -1,11 +1,14 @@
 # [Multi-Threading](@id man-multithreading)
 
+Visit this [blog post](https://julialang.org/blog/2019/07/multithreading/) for a presentation
+of Julia multi-threading features.
+
 ## Starting Julia with multiple threads
 
 By default, Julia starts up with a single thread of execution. This can be verified by using the
 command [`Threads.nthreads()`](@ref):
 
-```julia-repl
+```jldoctest
 julia> Threads.nthreads()
 1
 ```
@@ -15,10 +18,17 @@ The number of execution threads is controlled either by using the
 [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) environment variable. When both are
 specified, then `-t`/`--threads` takes precedence.
 
+The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
+(`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
+(see [Command-line Options](@ref command-line-interface) for more details).
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
 
+!!! compat "Julia 1.7"
+    Using `auto` as value of the environment variable `JULIA_NUM_THREADS` requires at least Julia 1.7.
+    In older versions, this value is ignored.
 Lets start Julia with 4 threads:
 
 ```bash
@@ -34,7 +44,7 @@ julia> Threads.nthreads()
 
 But we are currently on the master thread. To check, we use the function [`Threads.threadid`](@ref)
 
-```julia-repl
+```jldoctest
 julia> Threads.threadid()
 1
 ```
@@ -62,7 +72,61 @@ julia> Threads.threadid()
     three processes have 2 threads enabled. For more fine grained control over worker
     threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
-## Data-race freedom
+## [Threadpools](@id man-threadpools)
+
+When a program's threads are busy with many tasks to run, tasks may experience
+delays which may negatively affect the responsiveness and interactivity of the
+program. To address this, you can specify that a task is interactive when you
+[`Threads.@spawn`](@ref) it:
+
+```julia
+using Base.Threads
+@spawn :interactive f()
+```
+
+Interactive tasks should avoid performing high latency operations, and if they
+are long duration tasks, should yield frequently.
+
+Julia may be started with one or more threads reserved to run interactive tasks:
+
+```bash
+$ julia --threads 3,1
+```
+
+The environment variable `JULIA_NUM_THREADS` can also be used similarly:
+```bash
+export JULIA_NUM_THREADS=3,1
+```
+
+This starts Julia with 3 threads in the `:default` threadpool and 1 thread in
+the `:interactive` threadpool:
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreads()
+4
+
+julia> nthreadpools()
+2
+
+julia> threadpool()
+:default
+
+julia> nthreads(:interactive)
+1
+```
+
+Either or both numbers can be replaced with the word `auto`, which causes
+Julia to choose a reasonable default.
+
+## Communication and synchronization
+
+Although Julia's threads can communicate through shared memory, it is notoriously
+difficult to write correct and data-race free multi-threaded code. Julia's
+[`Channel`](@ref)s are thread-safe and may be used to communicate safely.
+
+### Data-race freedom
 
 You are entirely responsible for ensuring that your program is data-race free,
 and nothing promised here can be assumed if you do not observe that
@@ -73,24 +137,25 @@ can be observed from multiple threads. For example, in most cases you should
 use the following code pattern:
 
 ```julia-repl
-julia> lock(a) do
+julia> lock(lk) do
            use(a)
        end
 
 julia> begin
-           lock(a)
+           lock(lk)
            try
                use(a)
            finally
-               unlock(a)
+               unlock(lk)
            end
        end
 ```
+where `lk` is a lock (e.g. `ReentrantLock()`) and `a` data.
 
 Additionally, Julia is not memory safe in the presence of a data race. Be very
-careful about reading a global variable (or closure variable) if another thread
-might write to it! Instead, always use the lock pattern above when changing any
-data (such as assigning to a global) visible to multiple threads.
+careful about reading _any_ data if another thread might write to it!
+Instead, always use the lock pattern above when changing data (such as assigning
+to a global or closure variable) accessed by other threads.
 
 ```julia
 Thread 1:
@@ -100,11 +165,11 @@ global b = true
 
 Thread 2:
 while !b; end
-bad(a) # it is NOT safe to access `a` here!
+bad_read1(a) # it is NOT safe to access `a` here!
 
 Thread 3:
 while !@isdefined(a); end
-use(a) # it is NOT safe to access `a` here
+bad_read2(a) # it is NOT safe to access `a` here
 ```
 
 ## The `@threads` Macro
@@ -113,7 +178,7 @@ Let's work a simple example using our native threads. Let us create an array of 
 
 ```jldoctest
 julia> a = zeros(10)
-10-element Array{Float64,1}:
+10-element Vector{Float64}:
  0.0
  0.0
  0.0
@@ -143,7 +208,7 @@ to its assigned locations:
 
 ```julia-repl
 julia> a
-10-element Array{Float64,1}:
+10-element Vector{Float64}:
  1.0
  1.0
  1.0
@@ -178,14 +243,17 @@ julia> Threads.@threads for id in 1:4
        end
 
 julia> old_is
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  0.0
  1.0
  7.0
  3.0
 
+julia> i[]
+ 10
+
 julia> ids
-4-element Array{Float64,1}:
+4-element Vector{Float64}:
  1.0
  2.0
  3.0
@@ -223,11 +291,28 @@ julia> acc[]
 1000
 ```
 
-!!! note
-    Not *all* primitive types can be wrapped in an `Atomic` tag. Supported types
-    are `Int8`, `Int16`, `Int32`, `Int64`, `Int128`, `UInt8`, `UInt16`, `UInt32`,
-    `UInt64`, `UInt128`, `Float16`, `Float32`, and `Float64`. Additionally,
-    `Int128` and `UInt128` are not supported on AAarch32 and ppc64le.
+
+## [Per-field atomics](@id man-atomics)
+
+We can also use atomics on a more granular level using the [`@atomic`](@ref
+Base.@atomic), [`@atomicswap`](@ref Base.@atomicswap), and
+[`@atomicreplace`](@ref Base.@atomicreplace) macros.
+
+Specific details of the memory model and other details of the design are written
+in the [Julia Atomics
+Manifesto](https://gist.github.com/vtjnash/11b0031f2e2a66c9c24d33e810b34ec0),
+which will later be published formally.
+
+Any field in a struct declaration can be decorated with `@atomic`, and then any
+write must be marked with `@atomic` also, and must use one of the defined atomic
+orderings (`:monotonic`, `:acquire`, `:release`, `:acquire_release`, or
+`:sequentially_consistent`). Any read of an atomic field can also be annotated
+with an atomic ordering constraint, or will be done with monotonic (relaxed)
+ordering if unspecified.
+
+!!! compat "Julia 1.7"
+    Per-field atomics requires at least Julia 1.7.
+
 
 ## Side effects and mutable function arguments
 
@@ -236,6 +321,7 @@ When using multi-threading we have to be careful when using functions that are n
 For instance functions that have a
 [name ending with `!`](@ref bang-convention)
 by convention modify their arguments and thus are not pure.
+
 
 ## @threadcall
 
@@ -275,12 +361,6 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * After a task starts running on a certain thread (e.g. via `@spawn`), it
-    will always be restarted on the same thread after blocking. In the future
-    this limitation will be removed, and tasks will migrate between threads.
-  * `@threads` currently uses a static schedule, using all threads and assigning
-    equal iteration counts to each. In the future the default schedule is likely
-    to change to be dynamic.
   * The schedule used by `@spawn` is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may
@@ -301,47 +381,47 @@ rather pointless as a finalizer). This leads us to a bit of a conundrum.
 There are a few approaches to dealing with this problem:
 
 1. When single-threaded, code could call the internal `jl_gc_enable_finalizers`
-C function to prevent finalizers from being scheduled
-inside a critical region. Internally, this is used inside some functions (such
-as our C locks) to prevent recursion when doing certain operations (incremental
-package loading, codegen, etc.). The combination of a lock and this flag
-can be used to make finalizers safe.
+   C function to prevent finalizers from being scheduled
+   inside a critical region. Internally, this is used inside some functions (such
+   as our C locks) to prevent recursion when doing certain operations (incremental
+   package loading, codegen, etc.). The combination of a lock and this flag
+   can be used to make finalizers safe.
 
 2. A second strategy, employed by Base in a couple places, is to explicitly
-delay a finalizer until it may be able to acquire its lock non-recursively.
-The following example demonstrates how this strategy could be applied to
-`Distributed.finalize_ref`:
+   delay a finalizer until it may be able to acquire its lock non-recursively.
+   The following example demonstrates how this strategy could be applied to
+   `Distributed.finalize_ref`:
 
-```
-function finalize_ref(r::AbstractRemoteRef)
-    if r.where > 0 # Check if the finalizer is already run
-        if islocked(client_refs) || !trylock(client_refs)
-            # delay finalizer for later if we aren't free to acquire the lock
-            finalizer(finalize_ref, r)
-            return nothing
-        end
-        try # `lock` should always be followed by `try`
-            if r.where > 0 # Must check again here
-                # Do actual cleanup here
-                r.where = 0
-            end
-        finally
-            unlock(client_refs)
-        end
-    end
-    nothing
-end
-```
+   ```julia
+   function finalize_ref(r::AbstractRemoteRef)
+       if r.where > 0 # Check if the finalizer is already run
+           if islocked(client_refs) || !trylock(client_refs)
+               # delay finalizer for later if we aren't free to acquire the lock
+               finalizer(finalize_ref, r)
+               return nothing
+           end
+           try # `lock` should always be followed by `try`
+               if r.where > 0 # Must check again here
+                   # Do actual cleanup here
+                   r.where = 0
+               end
+           finally
+               unlock(client_refs)
+           end
+       end
+       nothing
+   end
+   ```
 
 3. A related third strategy is to use a yield-free queue. We don't currently
-have a lock-free queue implemented in Base, but
-`Base.InvasiveLinkedListSynchronized{T}` is suitable. This can frequently be a
-good strategy to use for code with event loops. For example, this strategy is
-employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
-don't do any explicit work inside the `finalizer`, and instead add it to a queue
-to run at a safer time. In fact, Julia's task scheduler already uses this, so
-defining the finalizer as `x -> @spawn do_cleanup(x)` is one example of this
-approach. Note however that this doesn't control which thread `do_cleanup`
-runs on, so `do_cleanup` would still need to acquire a lock. That
-doesn't need to be true if you implement your own queue, as you can explicitly
-only drain that queue from your thread.
+   have a lock-free queue implemented in Base, but
+   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This can frequently be a
+   good strategy to use for code with event loops. For example, this strategy is
+   employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
+   don't do any explicit work inside the `finalizer`, and instead add it to a queue
+   to run at a safer time. In fact, Julia's task scheduler already uses this, so
+   defining the finalizer as `x -> @spawn do_cleanup(x)` is one example of this
+   approach. Note however that this doesn't control which thread `do_cleanup`
+   runs on, so `do_cleanup` would still need to acquire a lock. That
+   doesn't need to be true if you implement your own queue, as you can explicitly
+   only drain that queue from your thread.

@@ -1,14 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-let nextidx = 0
+let nextidx = Threads.Atomic{Int}(0)
     global nextproc
     function nextproc()
-        p = -1
-        if p == -1
-            p = workers()[(nextidx % nworkers()) + 1]
-            nextidx += 1
-        end
-        p
+        idx = Threads.atomic_add!(nextidx, 1)
+        return workers()[(idx % nworkers()) + 1]
     end
 end
 
@@ -187,7 +183,11 @@ Instead, local variables can be broadcast using interpolation:
 The optional argument `procs` allows specifying a subset of all
 processes to have execute the expression.
 
-Equivalent to calling `remotecall_eval(Main, procs, expr)`.
+Similar to calling `remotecall_eval(Main, procs, expr)`, but with two extra features:
+
+    - `using` and `import` statements run on the calling process first, to ensure
+      packages are precompiled.
+    - The current source file path used by `include` is propagated to other processes.
 """
 macro everywhere(ex)
     procs = GlobalRef(@__MODULE__, :procs)
@@ -198,7 +198,8 @@ macro everywhere(procs, ex)
     imps = extract_imports(ex)
     return quote
         $(isempty(imps) ? nothing : Expr(:toplevel, imps...)) # run imports locally first
-        let ex = $(Expr(:quote, ex)), procs = $(esc(procs))
+        let ex = Expr(:toplevel, :(task_local_storage()[:SOURCE_PATH] = $(get(task_local_storage(), :SOURCE_PATH, nothing))), $(esc(Expr(:quote, ex)))),
+            procs = $(esc(procs))
             remotecall_eval(Main, procs, ex)
         end
     end
@@ -221,10 +222,10 @@ function remotecall_eval(m::Module, procs, ex)
             if pid == myid()
                 run_locally += 1
             else
-                @sync_add remotecall(Core.eval, pid, m, ex)
+                @async_unwrap remotecall_wait(Core.eval, pid, m, ex)
             end
         end
-        yield() # ensure that the remotecall_fetch have had a chance to start
+        yield() # ensure that the remotecalls have had a chance to start
 
         # execute locally last as we do not want local execution to block serialization
         # of the request to remote nodes.
@@ -270,13 +271,14 @@ function preduce(reducer, f, R)
         schedule(t)
         push!(w_exec, t)
     end
-    reduce(reducer, [fetch(t) for t in w_exec])
+    reduce(reducer, Any[fetch(t) for t in w_exec])
 end
 
 function pfor(f, R)
-    @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
+    t = @async @sync for c in splitrange(Int(firstindex(R)), Int(lastindex(R)), nworkers())
         @spawnat :any f(R, first(c), last(c))
     end
+    errormonitor(t)
 end
 
 function make_preduce_body(var, body)
@@ -341,6 +343,9 @@ macro distributed(args...)
     var = loop.args[1].args[1]
     r = loop.args[1].args[2]
     body = loop.args[2]
+    if Meta.isexpr(body, :block) && body.args[end] isa LineNumberNode
+        resize!(body.args, length(body.args) - 1)
+    end
     if na==1
         syncvar = esc(Base.sync_varname)
         return quote

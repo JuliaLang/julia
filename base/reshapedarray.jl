@@ -69,7 +69,7 @@ the specified dimensions is equal to the length of the original array
 # Examples
 ```jldoctest
 julia> A = Vector(1:16)
-16-element Array{Int64,1}:
+16-element Vector{Int64}:
   1
   2
   3
@@ -88,14 +88,14 @@ julia> A = Vector(1:16)
  16
 
 julia> reshape(A, (4, 4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
 julia> reshape(A, 2, :)
-2×8 Array{Int64,2}:
+2×8 Matrix{Int64}:
  1  3  5  7   9  11  13  15
  2  4  6  8  10  12  14  16
 
@@ -113,9 +113,10 @@ reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
 
 # Allow missing dimensions with Colon():
 reshape(parent::AbstractVector, ::Colon) = parent
+reshape(parent::AbstractVector, ::Tuple{Colon}) = parent
 reshape(parent::AbstractArray, dims::Int...) = reshape(parent, dims)
 reshape(parent::AbstractArray, dims::Union{Int,Colon}...) = reshape(parent, dims)
-reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = _reshape(parent, _reshape_uncolon(parent, dims))
+reshape(parent::AbstractArray, dims::Tuple{Vararg{Union{Int,Colon}}}) = reshape(parent, _reshape_uncolon(parent, dims))
 @inline function _reshape_uncolon(A, dims)
     @noinline throw1(dims) = throw(DimensionMismatch(string("new dimensions $(dims) ",
         "may have at most one omitted dimension specified by `Colon()`")))
@@ -146,14 +147,14 @@ end
 # product of trailing dims into the last element
 rdims_trailing(l, inds...) = length(l) * rdims_trailing(inds...)
 rdims_trailing(l) = length(l)
-rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(i -> OneTo(1), Val(N)), inds)
+rdims(out::Val{N}, inds::Tuple) where {N} = rdims(ntuple(Returns(OneTo(1)), Val(N)), inds)
 rdims(out::Tuple{}, inds::Tuple{}) = () # N == 0, M == 0
 rdims(out::Tuple{}, inds::Tuple{Any}) = ()
 rdims(out::Tuple{}, inds::NTuple{M,Any}) where {M} = ()
 rdims(out::Tuple{Any}, inds::Tuple{}) = out # N == 1, M == 0
 rdims(out::NTuple{N,Any}, inds::Tuple{}) where {N} = out # N > 1, M == 0
 rdims(out::Tuple{Any}, inds::Tuple{Any}) = inds # N == 1, M == 1
-rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (OneTo(rdims_trailing(inds...)),) # N == 1, M > 1
+rdims(out::Tuple{Any}, inds::NTuple{M,Any}) where {M} = (oneto(rdims_trailing(inds...)),) # N == 1, M > 1
 rdims(out::NTuple{N,Any}, inds::NTuple{N,Any}) where {N} = inds # N > 1, M == N
 rdims(out::NTuple{N,Any}, inds::NTuple{M,Any}) where {N,M} = (first(inds), rdims(tail(out), tail(inds))...) # N > 1, M > 1, M != N
 
@@ -185,7 +186,7 @@ end
 _reshape(v::ReshapedArray{<:Any,1}, dims::Dims{1}) = _reshape(v.parent, dims)
 _reshape(R::ReshapedArray, dims::Dims) = _reshape(R.parent, dims)
 
-function __reshape(p::Tuple{AbstractArray,IndexCartesian}, dims::Dims)
+function __reshape(p::Tuple{AbstractArray,IndexStyle}, dims::Dims)
     parent = p[1]
     strds = front(size_to_strides(map(length, axes(parent))..., 1))
     strds1 = map(s->max(1,Int(s)), strds)  # for resizing empty arrays
@@ -204,10 +205,11 @@ function __reshape(p::Tuple{AbstractArray,IndexLinear}, dims::Dims)
 end
 
 size(A::ReshapedArray) = A.dims
+length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
 parent(A::ReshapedArray) = A.parent
-parentindices(A::ReshapedArray) = map(OneTo, size(parent(A)))
+parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
 reinterpret(::Type{T}, A::ReshapedArray, dims::Dims) where {T} = reinterpret(T, parent(A), dims)
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)
 
@@ -241,7 +243,7 @@ end
 
 @inline function _unsafe_getindex(A::ReshapedArray{T,N}, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     I = ind2sub_rs(axp, A.mi, i)
     _unsafe_getindex_rs(parent(A), I)
 end
@@ -265,7 +267,7 @@ end
 
 @inline function _unsafe_setindex!(A::ReshapedArray{T,N}, val, indices::Vararg{Int,N}) where {T,N}
     axp = axes(A.parent)
-    i = offset_if_vec(Base._sub2ind(size(A), indices...), axp)
+    i = offset_if_vec(_sub2ind(size(A), indices...), axp)
     @inbounds parent(A)[ind2sub_rs(axes(A.parent), A.mi, i)...] = val
     val
 end
@@ -286,8 +288,58 @@ viewindexing(I::Tuple{Slice, ReshapedUnitRange, Vararg{ScalarIndex}}) = IndexLin
 viewindexing(I::Tuple{ReshapedRange, Vararg{ScalarIndex}}) = IndexLinear()
 compute_stride1(s, inds, I::Tuple{ReshapedRange, Vararg{Any}}) = s*step(I[1].parent)
 compute_offset1(parent::AbstractVector, stride1::Integer, I::Tuple{ReshapedRange}) =
-    (@_inline_meta; first(I[1]) - first(axes1(I[1]))*stride1)
+    (@inline; first(I[1]) - first(axes1(I[1]))*stride1)
 substrides(strds::NTuple{N,Int}, I::Tuple{ReshapedUnitRange, Vararg{Any}}) where N =
     (size_to_strides(strds[1], size(I[1])...)..., substrides(tail(strds), tail(I))...)
 unsafe_convert(::Type{Ptr{T}}, V::SubArray{T,N,P,<:Tuple{Vararg{Union{RangeIndex,ReshapedUnitRange}}}}) where {T,N,P} =
     unsafe_convert(Ptr{T}, V.parent) + (first_index(V)-1)*sizeof(T)
+
+
+_checkcontiguous(::Type{Bool}, A::AbstractArray) = false
+# `strides(A::DenseArray)` calls `size_to_strides` by default.
+# Thus it's OK to assume all `DenseArray`s are contiguously stored.
+_checkcontiguous(::Type{Bool}, A::DenseArray) = true
+_checkcontiguous(::Type{Bool}, A::ReshapedArray) = _checkcontiguous(Bool, parent(A))
+_checkcontiguous(::Type{Bool}, A::FastContiguousSubArray) = _checkcontiguous(Bool, parent(A))
+
+function strides(a::ReshapedArray)
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    apsz::Dims = size(a.parent)
+    apst::Dims = strides(a.parent)
+    msz, mst, n = merge_adjacent_dim(apsz, apst) # Try to perform "lazy" reshape
+    n == ndims(a.parent) && return size_to_strides(mst, size(a)...) # Parent is stridevector like
+    return _reshaped_strides(size(a), 1, msz, mst, n, apsz, apst)
+end
+
+function _reshaped_strides(::Dims{0}, reshaped::Int, msz::Int, ::Int, ::Int, ::Dims, ::Dims)
+    reshaped == msz && return ()
+    throw(ArgumentError("Input is not strided."))
+end
+function _reshaped_strides(sz::Dims, reshaped::Int, msz::Int, mst::Int, n::Int, apsz::Dims, apst::Dims)
+    st = reshaped * mst
+    reshaped = reshaped * sz[1]
+    if length(sz) > 1 && reshaped == msz && sz[2] != 1
+        msz, mst, n = merge_adjacent_dim(apsz, apst, n + 1)
+        reshaped = 1
+    end
+    sts = _reshaped_strides(tail(sz), reshaped, msz, mst, n, apsz, apst)
+    return (st, sts...)
+end
+
+merge_adjacent_dim(::Dims{0}, ::Dims{0}) = 1, 1, 0
+merge_adjacent_dim(apsz::Dims{1}, apst::Dims{1}) = apsz[1], apst[1], 1
+function merge_adjacent_dim(apsz::Dims{N}, apst::Dims{N}, n::Int = 1) where {N}
+    sz, st = apsz[n], apst[n]
+    while n < N
+        szₙ, stₙ = apsz[n+1], apst[n+1]
+        if sz == 1
+            sz, st = szₙ, stₙ
+        elseif stₙ == st * sz || szₙ == 1
+            sz *= szₙ
+        else
+            break
+        end
+        n += 1
+    end
+    return sz, st, n
+end

@@ -4,7 +4,7 @@
     GitAnnotated(repo::GitRepo, commit_id::GitHash)
     GitAnnotated(repo::GitRepo, ref::GitReference)
     GitAnnotated(repo::GitRepo, fh::FetchHead)
-    GitAnnotated(repo::GitRepo, comittish::AbstractString)
+    GitAnnotated(repo::GitRepo, committish::AbstractString)
 
 An annotated git commit carries with it information about how it was looked up and
 why, so that rebase or merge operations have more information about the context of
@@ -40,8 +40,8 @@ function GitAnnotated(repo::GitRepo, fh::FetchHead)
     return GitAnnotated(repo, ann_ref_ref[])
 end
 
-function GitAnnotated(repo::GitRepo, comittish::AbstractString)
-    obj = GitObject(repo, comittish)
+function GitAnnotated(repo::GitRepo, committish::AbstractString)
+    obj = GitObject(repo, committish)
     cmt = peel(GitCommit, obj)
     return GitAnnotated(repo, GitHash(cmt))
 end

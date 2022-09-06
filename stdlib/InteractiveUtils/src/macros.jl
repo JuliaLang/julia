@@ -2,9 +2,9 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!
+import Base: typesof, insert!, replace_ref_begin_end!
 
-separate_kwargs(args...; kwargs...) = (args, kwargs.data)
+separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
 """
 Transform a dot expression into one where each argument has been replaced by a
@@ -15,7 +15,7 @@ function recursive_dotcalls!(ex, args, i=1)
     if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
                           (ex.head !== :call || string(ex.args[1])[1] != '.'))
         newarg = Symbol('x', i)
-        if ex.head === :...
+        if Meta.isexpr(ex, :...)
             push!(args, only(ex.args))
             return Expr(:..., newarg), i+1
         else
@@ -32,6 +32,9 @@ function recursive_dotcalls!(ex, args, i=1)
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
+    if Meta.isexpr(ex0, :ref)
+        ex0 = replace_ref_begin_end!(ex0)
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -42,9 +45,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if ex0.head === :. || (ex0.head === :call && string(ex0.args[1])[1] == '.')
+        if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
             codemacro = startswith(string(fcn), "code_")
-            if codemacro && ex0.args[2] isa Expr
+            if codemacro && (ex0.head === :call || ex0.args[2] isa Expr)
                 # Manually wrap a dot call in a function
                 args = Any[]
                 ex, i = recursive_dotcalls!(copy(ex0), args)
@@ -68,12 +71,20 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 end
                 fully_qualified_symbol &= ex1 isa Symbol
                 if fully_qualified_symbol
-                    if string(fcn) == "which"
-                        return quote $(fcn)($(esc(ex0.args[1])), $(ex0.args[2])) end
-                    else
-                        return Expr(:call, :error, "expression is not a function call or symbol")
+                    return quote
+                        local arg1 = $(esc(ex0.args[1]))
+                        if isa(arg1, Module)
+                            $(if string(fcn) == "which"
+                                  :(which(arg1, $(ex0.args[2])))
+                              else
+                                  :(error("expression is not a function call"))
+                              end)
+                        else
+                            local args = typesof($(map(esc, ex0.args)...))
+                            $(fcn)(Base.getproperty, args)
+                        end
                     end
-                elseif ex0.args[2] isa Expr
+                else
                     return Expr(:call, :error, "dot expressions are not lowered to "
                                 * "a single function call, so @$fcn cannot analyze "
                                 * "them. You may want to use Meta.@lower to identify "
@@ -145,12 +156,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     exret = Expr(:none)
     if ex.head === :call
         if any(e->(isa(e, Expr) && e.head === :(...)), ex0.args) &&
-            (ex.args[1] === GlobalRef(Core,:_apply) ||
-             ex.args[1] === GlobalRef(Base,:_apply))
+            (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
+             ex.args[1] === GlobalRef(Base,:_apply_iterate))
             # check for splatting
-            exret = Expr(:call, ex.args[1], fcn,
-                        Expr(:tuple, esc(ex.args[2]),
-                            Expr(:call, typesof, map(esc, ex.args[3:end])...)))
+            exret = Expr(:call, ex.args[2], fcn,
+                        Expr(:tuple, esc(ex.args[3]),
+                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
         else
             exret = Expr(:call, fcn, esc(ex.args[1]),
                          Expr(:call, typesof, map(esc, ex.args[2:end])...), kws...)
@@ -166,7 +177,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
 end
 
 """
-Same behaviour as gen_call_with_extracted_types except that keyword arguments
+Same behaviour as `gen_call_with_extracted_types` except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
@@ -179,7 +190,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             if length(x.args) != 2
                 return Expr(:call, :error, "Invalid keyword argument: $x")
             end
-            push!(kws, Expr(:kw, x.args[1], x.args[2]))
+            push!(kws, Expr(:kw, esc(x.args[1]), esc(x.args[2])))
         else
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
@@ -211,7 +222,7 @@ end
 macro code_typed(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
     quote
-        results = $thecall
+        local results = $thecall
         length(results) == 1 ? results[1] : results
     end
 end
@@ -219,8 +230,19 @@ end
 macro code_lowered(ex0...)
     thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
     quote
-        results = $thecall
+        local results = $thecall
         length(results) == 1 ? results[1] : results
+    end
+end
+
+macro time_imports(ex)
+    quote
+        try
+            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+            $(esc(ex))
+        finally
+            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+        end
     end
 end
 
@@ -229,7 +251,7 @@ end
 
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
-It calls out to the `functionloc` function.
+It calls out to the [`functionloc`](@ref) function.
 """
 :@functionloc
 
@@ -239,23 +261,29 @@ It calls out to the `functionloc` function.
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns the `Method` object for the method that would be called for those arguments. Applied
 to a variable, it returns the module in which the variable was bound. It calls out to the
-`which` function.
+[`which`](@ref) function.
+
+See also: [`@less`](@ref), [`@edit`](@ref).
 """
 :@which
 
 """
     @less
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`less`](@ref)
 function on the resulting expression.
+
+See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
 :@less
 
 """
     @edit
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`edit`](@ref)
 function on the resulting expression.
+
+See also: [`@less`](@ref), [`@which`](@ref).
 """
 :@edit
 
@@ -311,10 +339,51 @@ by putting them and their value before the function call, like this:
 Evaluates the arguments to the function or macro call, determines their types, and calls
 [`code_native`](@ref) on the resulting expression.
 
-Set the optional keyword argument `debuginfo` by putting it before the function call, like this:
+Set any of the optional keyword arguments `syntax`, `debuginfo`, `binary` or `dump_module`
+by putting it before the function call, like this:
 
-    @code_native debuginfo=:default f(x)
+    @code_native syntax=:intel debuginfo=:default binary=true dump_module=false f(x)
 
-`debuginfo` may be one of `:source` (default) or `:none`, to specify the verbosity of code comments.
+* Set assembly syntax by setting `syntax` to `:att` (default) for AT&T syntax or `:intel` for Intel syntax.
+* Specify verbosity of code comments by setting `debuginfo` to `:source` (default) or `:none`.
+* If `binary` is `true`, also print the binary machine code for each instruction precedented by an abbreviated address.
+* If `dump_module` is `false`, do not print metadata such as rodata or directives.
+
+See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and [`@code_lowered`](@ref)
 """
 :@code_native
+
+"""
+    @time_imports
+
+A macro to execute an expression and produce a report of any time spent importing packages and their
+dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
+
+!!! note
+    During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.
+
+```julia-repl
+julia> @time_imports using CSV
+     50.7 ms  Parsers 17.52% compilation time
+      0.2 ms  DataValueInterfaces
+      1.6 ms  DataAPI
+      0.1 ms  IteratorInterfaceExtensions
+      0.1 ms  TableTraits
+     17.5 ms  Tables
+     26.8 ms  PooledArrays
+    193.7 ms  SentinelArrays 75.12% compilation time
+      8.6 ms  InlineStrings
+     20.3 ms  WeakRefStrings
+      2.0 ms  TranscodingStreams
+      1.4 ms  Zlib_jll
+      1.8 ms  CodecZlib
+      0.8 ms  Compat
+     13.1 ms  FilePathsBase 28.39% compilation time
+   1681.2 ms  CSV 92.40% compilation time
+```
+
+!!! compat "Julia 1.8"
+    This macro requires at least Julia 1.8
+
+"""
+:@time_imports

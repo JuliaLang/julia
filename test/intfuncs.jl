@@ -2,6 +2,8 @@
 
 using Random
 
+is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
+
 @testset "gcd/lcm" begin
     # All Integer data types take different code paths -- test all
     # TODO: Test gcd and lcm for BigInt.
@@ -12,6 +14,7 @@ using Random
         @test gcd(T(0), T(15)) === T(15)
         @test gcd(T(15), T(0)) === T(15)
         if T <: Signed
+            @test gcd(T(-12)) === T(12)
             @test gcd(T(0), T(-15)) === T(15)
             @test gcd(T(-15), T(0)) === T(15)
             @test gcd(T(3), T(-15)) === T(3)
@@ -78,6 +81,7 @@ using Random
         @test lcm(T(0), T(3)) === T(0)
         @test lcm(T(0), T(0)) === T(0)
         if T <: Signed
+            @test lcm(T(-12)) === T(12)
             @test lcm(T(0), T(-4)) === T(0)
             @test lcm(T(-4), T(0)) === T(0)
             @test lcm(T(4), T(-6)) === T(12)
@@ -144,6 +148,11 @@ using Random
     @test gcd(0xf, 20) == 5
     @test gcd(UInt32(6), Int8(-50)) == 2
     @test gcd(typemax(UInt), -16) == 1
+
+    @testset "effects" begin
+        @test is_effect_free(gcd, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
+    end
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -154,6 +163,7 @@ end
         @test gcd(T[3, 15]) === T(3)
         @test gcd(T[0, 15]) === T(15)
         if T <: Signed
+            @test gcd(T[-12]) === T(12)
             @test gcd(T[3,-15]) === T(3)
             @test gcd(T[-3,-15]) === T(3)
         end
@@ -163,12 +173,12 @@ end
         @test gcd(T[2, 4, 3, 5]) === T(1)
 
         @test lcm(T[]) === T(1)
-        @test lcm(T[2]) === T(2)
         @test lcm(T[2, 3]) === T(6)
         @test lcm(T[4, 6]) === T(12)
         @test lcm(T[3, 0]) === T(0)
         @test lcm(T[0, 0]) === T(0)
         if T <: Signed
+            @test lcm(T[-2]) === T(2)
             @test lcm(T[4, -6]) === T(12)
             @test lcm(T[-4, -6]) === T(12)
         end
@@ -201,17 +211,49 @@ end
     @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
     @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
     @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
+
+    # test error path
+    struct MyOtherRational <: Real
+        val::Rational{Int}
+    end
+    @test_throws MethodError gcd(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError lcm(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
 
 @testset "invmod" begin
-    @test invmod(6, 31) == 26
-    @test invmod(-1, 3) == 2
-    @test invmod(1, -3) == -2
-    @test invmod(-1, -3) == -1
-    @test invmod(0x2, 0x3) == 2
-    @test invmod(2, 0x3) == 2
-    @test invmod(0x8, -3) == -1
+    @test invmod(6, 31) === 26
+    @test invmod(-1, 3) === 2
+    @test invmod(1, -3) === -2
+    @test invmod(-1, -3) === -1
+    @test invmod(0x2, 0x3) === 0x2
+    @test invmod(2, 0x3) === UInt(2)
+    @test invmod(0x8, -3) === -1
     @test_throws DomainError invmod(0, 3)
+
+    # For issue 29971
+    @test invmod(UInt8(1), typemax(UInt8))  === 0x01
+    @test invmod(UInt16(1), typemax(UInt16)) === 0x0001
+    @test invmod(UInt32(1), typemax(UInt32)) === 0x0000_0001
+    @test invmod(UInt64(1), typemax(UInt64)) === 0x0000_0000_0000_0001
+
+    for T in (UInt8, UInt16, UInt32, UInt64, UInt128, Int8, Int16, Int32, Int64, Int128, BigInt)
+        @test invmod(T(3), T(124))::T == 83
+    end
+
+    for T in (Int8, UInt8)
+        for x in typemin(T):typemax(T)
+            for m in typemin(T):typemax(T)
+                if m != 0 && try gcdx(x, m)[1] == 1 catch _ true end
+                    y = invmod(x, m)
+                    @test mod(widemul(y, x), m) == mod(1, m)
+                    @test div(y, m) == 0
+                else
+                    @test_throws DomainError invmod(x, m)
+                end
+            end
+        end
+    end
 end
 
 @testset "powermod" begin
@@ -237,6 +279,9 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
+    @test prevpow(Int64(10), Int64(1234567890123456789)) === Int64(1000000000000000000)
+    @test prevpow(10, 101.0) === 100
+    @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end
@@ -298,12 +343,15 @@ end
 
 end
 
+primitive type BitString128 128 end
+
 @testset "bin/oct/dec/hex/bits" begin
     @test string(UInt32('3'), base = 2) == "110011"
     @test string(UInt32('3'), pad = 7, base = 2) == "0110011"
     @test string(3, base = 2) == "11"
     @test string(3, pad = 2, base = 2) == "11"
     @test string(3, pad = Int32(2), base = Int32(2)) == "11"
+    @test string(3, pad = typemin(Int128) + 3, base = 0x2) == "11"
     @test string(3, pad = 3, base = 2) == "011"
     @test string(-3, base = 2) == "-11"
     @test string(-3, pad = 3, base = 2) == "-011"
@@ -328,6 +376,7 @@ end
     @test bitstring(1035) == (Int == Int32 ? "00000000000000000000010000001011" :
         "0000000000000000000000000000000000000000000000000000010000001011")
     @test bitstring(Int128(3)) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
+    @test bitstring(reinterpret(BitString128, Int128(3))) == "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000011"
 end
 
 @testset "digits/base" begin
@@ -337,6 +386,8 @@ end
     # The following have bases powers of 2, but don't enter the fast path
     @test digits(-3, base = 2) == -[1, 1]
     @test digits(-42, base = 4) == -[2, 2, 2]
+
+    @test_throws DomainError string(5, base = typemin(Int128) + 10)
 
     @testset "digits/base with bases powers of 2" begin
         @test digits(4, base = 2) == [0, 0, 1]
@@ -446,3 +497,31 @@ end
 for b in [-100:-2; 2:100;]
     @test Base.ndigits0z(0, b) == 0
 end
+
+@testset "constant prop in gcd" begin
+    ci = code_typed(() -> gcd(14, 21))[][1]
+    @test ci.code == Any[Core.ReturnNode(7)]
+
+    ci = code_typed(() -> 14 // 21)[][1]
+    @test ci.code == Any[Core.ReturnNode(2 // 3)]
+end
+@testset "binomial" begin
+    for T in (Int8, Int16, Int32, Int64)
+        for x in rand(-isqrt(typemax(T)):isqrt(typemax(T)), 1000)
+            @test binomial(x,T(1)) == x
+            x>=0 && @test binomial(x,x-T(1)) == x
+            @test binomial(x,T(2)) == div(x*(x-1), 2)
+            x>=0 && @test binomial(x,x-T(2)) == div(x*(x-1), 2)
+        end
+        @test @inferred(binomial(one(T),one(T))) isa T
+    end
+    for x in ((false,false), (false,true), (true,false), (true,true))
+        @test binomial(x...) == (x != (false,true))
+    end
+end
+
+# concrete-foldability
+@test Base.infer_effects(gcd, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable

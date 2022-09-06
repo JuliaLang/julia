@@ -1,8 +1,18 @@
+#ifndef AppName
 #define AppName "Julia"
+#endif
+
+#ifndef DirName
+#define DirName AppName + "-" + AppVersion
+#endif
+
 #define AppNameLong AppName + " " + AppVersion
 #define AppMainExeName "bin\julia.exe"
 #define CurrentYear GetDateTimeString('yyyy', '', '')
-#define DirName AppName + " " + AppVersion
+
+#ifndef AppId
+#define AppId DirName
+#endif
 
 
 [LangOptions]
@@ -20,12 +30,12 @@ UninstallAppFullTitle=Uninstaller - {#AppNameLong}
 WizardSelectDir=Select Installation Directory
 SelectDirDesc=
 SelectDirLabel3=
-SelectDirBrowseLabel=Restart installer as Administrator to install {#AppName} system wide.%n%n%nInstallation directory:
+SelectDirBrowseLabel=Installation directory:
 WizardPreparing=Installing
 PreparingDesc=
 InstallingLabel=
 ClickFinish=
-FinishedHeadingLabel=Installation Successfull
+FinishedHeadingLabel=Installation Successful
 FinishedLabelNoIcons=[name] has been successfully installed.
 FinishedLabel=[name] has been successfully installed.
 StatusExtractFiles=Extracting...
@@ -45,12 +55,12 @@ SelectTasksDesc=
 
 
 [Setup]
-AppId={{054B4BC6-BD30-45C8-A623-8F5BA6EBD55D}
+AppId={#AppId}
 AppName={#AppName}
 AppVersion={#AppVersion}
 AppPublisher=Julia Language
 AppPublisherURL=https://julialang.org
-AppCopyright=Copyright 2009-{#CurrentYear}; Julia Langage
+AppCopyright=Copyright 2009-{#CurrentYear}; Julia Language
 VersionInfoDescription=Julia Installer
 PrivilegesRequiredOverridesAllowed=commandline
 WizardStyle=modern
@@ -73,24 +83,33 @@ SetupIconFile={#RepoDir}\contrib\windows\julia.ico
 UninstallDisplayName={#AppNameLong}
 UninstallDisplayIcon={app}\{#AppMainExeName}
 UninstallFilesDir={app}\uninstall
+ChangesEnvironment=true
 
+#ifdef Sign
+SignTool=mysigntool
+#endif
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+AdditionalIcons=Icons:
+Other=%nOther:
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a Desktop shortcut"
-Name: "startmenu"; Description: "Create a Start Menu entry"
+Name: "desktopicon"; Description: "Create a Desktop shortcut"; GroupDescription: "{cm:AdditionalIcons}";
+Name: "startmenu"; Description: "Create a Start Menu entry"; GroupDescription: "{cm:AdditionalIcons}";
+Name: "addtopath"; Description: "Add {#AppName} to PATH"; GroupDescription: "{cm:Other}"; Flags: unchecked;
 
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; Excludes: "{#AppMainExeName}"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs;
+Source: "{#SourceDir}\{#AppMainExeName}"; DestDir: "{app}\bin"; Flags: ignoreversion sign;
 
 
 [Icons]
-Name: "{autostartmenu}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
 Name: "{autodesktop}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: desktopicon
+Name: "{autostartmenu}\{#AppNameLong}"; Filename: "{app}\{#AppMainExeName}"; WorkingDir: "{%USERPROFILE}"; Tasks: startmenu
 
 
 [Run]
@@ -99,9 +118,14 @@ Filename: "{app}"; Description: "Open {#AppName} directory"; Flags: nowait posti
 Filename: "https://docs.julialang.org"; Description: "Open documentation"; Flags: nowait postinstall skipifsilent unchecked shellexec
 
 
+[Registry]
+Root: HKA; Subkey: "{code:GetEnvironmentKey}"; ValueType: expandsz; ValueName: "Path"; ValueData: "{olddata};{app}\bin"; Tasks: addtopath; Check: NeedsAddPath(ExpandConstant('{app}\bin'))
+
 [Code]
 
 procedure InitializeWizard;
+var
+  InfoLabel: TNewStaticText;
 begin
   WizardForm.Bevel.Visible := False;
   WizardForm.Bevel1.Visible := False;
@@ -112,6 +136,13 @@ begin
   WizardForm.InnerPage.Color := WizardForm.Color;
   WizardForm.TasksList.Color := WizardForm.Color;
   WizardForm.ReadyMemo.Color := WizardForm.Color;
+
+  if not IsAdmin then begin
+    InfoLabel := TNewStaticText.Create(WizardForm);
+    InfoLabel.Parent := WizardForm.SelectDirPage;
+    InfoLabel.Top := WizardForm.DirEdit.Top + WizardForm.DirEdit.Height + ScaleY(16);
+    InfoLabel.Caption := 'Restart installer as Administrator to install {#AppName} system wide'
+  end;
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
@@ -129,4 +160,74 @@ begin
   UninstallProgressForm.Color := clWhite;
   UninstallProgressForm.Bevel.Visible := False;
   UninstallProgressForm.Bevel1.Visible := False;
+end;
+
+function GetEnvironmentKey(Param: string): string;
+begin
+  if IsAdminInstallMode then
+    Result := 'System\CurrentControlSet\Control\Session Manager\Environment'
+  else
+    Result := 'Environment';
+end;
+
+// https://stackoverflow.com/a/23838239/261019
+procedure Explode(var Dest: TArrayOfString; Text: String; Separator: String);
+var
+  i, p: Integer;
+begin
+  i := 0;
+  repeat
+    SetArrayLength(Dest, i+1);
+    p := Pos(Separator,Text);
+    if p > 0 then begin
+      Dest[i] := Copy(Text, 1, p-1);
+      Text := Copy(Text, p + Length(Separator), Length(Text));
+      i := i + 1;
+    end else begin
+      Dest[i] := Text;
+      Text := '';
+    end;
+  until Length(Text)=0;
+end;
+
+// https://stackoverflow.com/questions/3304463/how-do-i-modify-the-path-environment-variable-when-running-an-inno-setup-install
+function NeedsAddPath(Param: string): boolean;
+var
+  OrigPath: string;
+begin
+  if not RegQueryStringValue(HKA, GetEnvironmentKey(''), 'Path', OrigPath)
+  then begin
+    Result := True;
+    exit;
+  end;
+  Result := Pos(';' + Param + ';', ';' + OrigPath + ';') = 0;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Path: string;
+  ExePath: string;
+  Parts: TArrayOfString;
+  NewPath: string;
+  i: Integer;
+begin
+  if not CurUninstallStep = usUninstall then begin
+    exit;
+  end;
+  if not RegQueryStringValue(HKA, GetEnvironmentKey(''), 'Path', Path)
+  then begin
+    exit;
+  end;
+  NewPath := '';
+  ExePath := ExpandConstant('{app}\bin')
+  Explode(Parts, Path, ';');
+  for i:=0 to GetArrayLength(Parts)-1 do begin
+    if CompareText(Parts[i], ExePath) <> 0 then begin
+      NewPath := NewPath + Parts[i];
+      if i < GetArrayLength(Parts) - 1 then begin
+        NewPath := NewPath + ';';
+      end;
+    end;
+  end;
+  RegWriteExpandStringValue(HKA, GetEnvironmentKey(''), 'Path', NewPath);
 end;

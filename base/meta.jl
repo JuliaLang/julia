@@ -9,14 +9,24 @@ using ..CoreLogging
 
 export quot,
        isexpr,
+       isidentifier,
+       isoperator,
+       isunaryoperator,
+       isbinaryoperator,
+       ispostfixoperator,
+       replace_sourceloc!,
        show_sexpr,
        @dump
+
+using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+import Base: isexpr
 
 """
     Meta.quot(ex)::Expr
 
-Quote expression `ex` to produce an expression with head `quote`. This can for instance be used to represent objects of type `Expr` in the AST.
-See also the manual section about [QuoteNode](@ref man-quote-node).
+Quote expression `ex` to produce an expression with head `quote`. This can for
+instance be used to represent objects of type `Expr` in the AST. See also the
+manual section about [QuoteNode](@ref man-quote-node).
 
 # Examples
 ```jldoctest
@@ -38,7 +48,10 @@ quot(ex) = Expr(:quote, ex)
 """
     Meta.isexpr(ex, head[, n])::Bool
 
-Check if `ex` is an expression with head `head` and `n` arguments.
+Return true if `ex` is an `Expr` with the given type `head` and optionally that
+the argument list is of length `n`. `head` may be a `Symbol` or collection of
+`Symbol`s. For example, to check that a macro was passed a function call
+expression, you might use `isexpr(ex, :call)`.
 
 # Examples
 ```jldoctest
@@ -61,9 +74,36 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), head::Symbol) = isa(ex, Expr) && ex.head === head
-isexpr(@nospecialize(ex), heads::Union{Set,Vector,Tuple}) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isexpr(ex, heads) && length(ex.args) == n
+isexpr
+
+"""
+    replace_sourceloc!(location, expr)
+
+Overwrite the caller source location for each macro call in `expr`, returning
+the resulting AST.  This is useful when you need to wrap a macro inside a
+macro, and want the inner macro to see the `__source__` location of the outer
+macro.  For example:
+
+```
+macro test_is_one(ex)
+    replace_sourceloc!(__source__, :(@test \$(esc(ex)) == 1))
+end
+@test_is_one 2
+```
+
+`@test` now reports the location of the call `@test_is_one 2` to the user,
+rather than line 2 where `@test` is used as an implementation detail.
+"""
+function replace_sourceloc!(sourceloc, @nospecialize(ex))
+    if ex isa Expr
+        if ex.head === :macrocall
+            ex.args[2] = sourceloc
+        end
+        map!(e -> replace_sourceloc!(sourceloc, e), ex.args, ex.args)
+    end
+    return ex
+end
+
 
 """
     Meta.show_sexpr([io::IO,], ex)
@@ -146,41 +186,52 @@ The expression passed to the [`parse`](@ref) function could not be interpreted a
 expression.
 """
 struct ParseError <: Exception
-    msg::AbstractString
+    msg::String
 end
 
 function _parse_string(text::AbstractString, filename::AbstractString,
-                       index::Integer, options)
+                       lineno::Integer, index::Integer, options)
     if index < 1 || index > ncodeunits(text) + 1
         throw(BoundsError(text, index))
     end
-    ex, offset = Core._parse(text, filename, index-1, options)
+    ex, offset::Int = Core._parse(text, filename, lineno, index-1, options)
     ex, offset+1
 end
 
 """
     parse(str, start; greedy=true, raise=true, depwarn=true)
 
-Parse the expression string and return an expression (which could later be passed to eval
-for execution). `start` is the index of the first character to start parsing. If `greedy` is
-`true` (default), `parse` will try to consume as much input as it can; otherwise, it will
-stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically
-valid expressions will return `Expr(:incomplete, "(error message)")`. If `raise` is `true`
-(default), syntax errors other than incomplete expressions will raise an error. If `raise`
-is `false`, `parse` will return an expression that will raise an error upon evaluation. If
-`depwarn` is `false`, deprecation warnings will be suppressed.
+Parse the expression string and return an expression (which could later be
+passed to eval for execution). `start` is the code unit index into `str` of the
+first character to start parsing at (as with all string indexing, these are not
+character indices). If `greedy` is `true` (default), `parse` will try to consume
+as much input as it can; otherwise, it will stop as soon as it has parsed a
+valid expression. Incomplete but otherwise syntactically valid expressions will
+return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default),
+syntax errors other than incomplete expressions will raise an error. If `raise`
+is `false`, `parse` will return an expression that will raise an error upon
+evaluation. If `depwarn` is `false`, deprecation warnings will be suppressed.
 
 ```jldoctest
-julia> Meta.parse("x = 3, y = 5", 7)
-(:(y = 5), 13)
+julia> Meta.parse("(α, β) = 3, 5", 1) # start of string
+(:((α, β) = (3, 5)), 16)
 
-julia> Meta.parse("x = 3, y = 5", 5)
-(:((3, y) = 5), 13)
+julia> Meta.parse("(α, β) = 3, 5", 1, greedy=false)
+(:((α, β)), 9)
+
+julia> Meta.parse("(α, β) = 3, 5", 16) # end of string
+(nothing, 16)
+
+julia> Meta.parse("(α, β) = 3, 5", 11) # index of 3
+(:((3, 5)), 16)
+
+julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
+(3, 13)
 ```
 """
 function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
                depwarn::Bool=true)
-    ex, pos = _parse_string(str, "none", pos, greedy ? :statement : :atom)
+    ex, pos = _parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
     if raise && isa(ex,Expr) && ex.head === :error
         throw(ParseError(ex.args[1]))
     end
@@ -224,12 +275,12 @@ function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
     return ex
 end
 
-function parseatom(text::AbstractString, pos::Integer; filename="none")
-    return _parse_string(text, filename, pos, :atom)
+function parseatom(text::AbstractString, pos::Integer; filename="none", lineno=1)
+    return _parse_string(text, String(filename), lineno, pos, :atom)
 end
 
-function parseall(text::AbstractString; filename="none")
-    ex,_ = _parse_string(text, filename, 1, :all)
+function parseall(text::AbstractString; filename="none", lineno=1)
+    ex,_ = _parse_string(text, String(filename), lineno, 1, :all)
     return ex
 end
 
@@ -302,10 +353,26 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         x.edges .+= slot_offset
         return x
     end
+    if isa(x, Core.ReturnNode)
+        return Core.ReturnNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.GotoIfNot)
+        return Core.GotoIfNot(
+            _partially_inline!(x.cond, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+            x.dest + statement_offset,
+        )
+    end
     if isa(x, Expr)
         head = x.head
         if head === :static_parameter
-            return QuoteNode(static_param_values[x.args[1]])
+            if isassigned(static_param_values, x.args[1])
+                return QuoteNode(static_param_values[x.args[1]])
+            end
+            return x
         elseif head === :cfunction
             @assert !isa(type_signature, UnionAll) || !isempty(spvals)
             if !isa(x.args[2], QuoteNode) # very common no-op
@@ -325,7 +392,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Symbol)
+                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt8}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,
@@ -348,7 +415,31 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
             x.args[2] += statement_offset
         elseif head === :enter
             x.args[1] += statement_offset
-        elseif !is_meta_expr_head(head)
+        elseif head === :isdefined
+            arg = x.args[1]
+            # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true
+            if isa(arg, Core.SlotNumber)
+                id = arg.id
+                if 1 <= id <= length(slot_replacements)
+                    replacement = slot_replacements[id]
+                    if isa(replacement, Union{Core.SlotNumber, GlobalRef, Symbol})
+                        return Expr(:isdefined, replacement)
+                    else
+                        @assert !isa(replacement, Expr)
+                        return true
+                    end
+                end
+                return Expr(:isdefined, Core.SlotNumber(id + slot_offset))
+            elseif isexpr(arg, :static_parameter)
+                if isassigned(static_param_values, arg.args[1])
+                    return true
+                end
+                return x
+            else
+                @assert isa(arg, Union{GlobalRef, Symbol})
+                return x
+            end
+        elseif !Core.Compiler.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
@@ -357,7 +448,5 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
-
-is_meta_expr_head(head::Symbol) = (head === :inbounds || head === :boundscheck || head === :meta || head === :loopinfo)
 
 end # module

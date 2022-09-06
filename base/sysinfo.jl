@@ -35,20 +35,19 @@ export BINDIR,
 
 import ..Base: show
 
-global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
 """
-    Sys.BINDIR
+    Sys.BINDIR::String
 
 A string containing the full path to the directory containing the `julia` executable.
 """
-:BINDIR
+global BINDIR::String = ccall(:jl_get_julia_bindir, Any, ())::String
 
 """
-    Sys.STDLIB
+    Sys.STDLIB::String
 
 A string containing the full path to the directory containing the `stdlib` packages.
 """
-STDLIB = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
+global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSION.minor)" # for bootstrap
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
@@ -56,7 +55,7 @@ const BUILD_STDLIB_PATH = STDLIB
 # helper to avoid triggering precompile warnings
 
 """
-    Sys.CPU_THREADS
+    Sys.CPU_THREADS::Int
 
 The number of logical CPU cores available in the system, i.e. the number of threads
 that the CPU can run concurrently. Note that this is not necessarily the number of
@@ -65,36 +64,38 @@ CPU cores, for example, in the presence of
 
 See Hwloc.jl or CpuId.jl for extended information, including number of physical cores.
 """
-CPU_THREADS = 1 # for bootstrap, changed on startup
+global CPU_THREADS::Int = 1 # for bootstrap, changed on startup
 
 """
-    Sys.ARCH
+    Sys.ARCH::Symbol
 
 A symbol representing the architecture of the build configuration.
 """
-const ARCH = ccall(:jl_get_ARCH, Any, ())
+const ARCH = ccall(:jl_get_ARCH, Any, ())::Symbol
 
 
 """
-    Sys.KERNEL
+    Sys.KERNEL::Symbol
 
 A symbol representing the name of the operating system, as returned by `uname` of the build configuration.
 """
-const KERNEL = ccall(:jl_get_UNAME, Any, ())
+const KERNEL = ccall(:jl_get_UNAME, Any, ())::Symbol
 
 """
-    Sys.MACHINE
+    Sys.MACHINE::String
 
 A string containing the build triple.
 """
-const MACHINE = Base.MACHINE
+const MACHINE = Base.MACHINE::String
 
 """
-    Sys.WORD_SIZE
+    Sys.WORD_SIZE::Int
 
 Standard word size on the current machine, in bits.
 """
 const WORD_SIZE = Core.sizeof(Int) * 8
+
+global SC_CLK_TCK::Clong, CPU_NAME::String, JIT::String
 
 function __init__()
     env_threads = nothing
@@ -114,6 +115,12 @@ function __init__()
     global SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global CPU_NAME = ccall(:jl_get_cpu_name, Ref{String}, ())
     global JIT = ccall(:jl_get_JIT, Ref{String}, ())
+    __init_build()
+    nothing
+end
+# Populate the paths needed by sysimg compilation, e.g. `generate_precompile.jl`,
+# without pulling in anything unnecessary like `CPU_NAME`
+function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
@@ -280,8 +287,8 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of getrusage(2) on Linux and FreeBSD.
-    - windows api `GetProcessMemoryInfo`
+    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
 
@@ -493,7 +500,7 @@ function which(program_name::String)
         # If we have been given just a program name (not a relative or absolute
         # path) then we should search `PATH` for it here:
         pathsep = iswindows() ? ';' : ':'
-        path_dirs = abspath.(split(get(ENV, "PATH", ""), pathsep))
+        path_dirs = map(abspath, eachsplit(get(ENV, "PATH", ""), pathsep))
 
         # On windows we always check the current directory as well
         if iswindows()
@@ -510,7 +517,7 @@ function which(program_name::String)
             program_path = joinpath(path_dir, pname)
             # If we find something that matches our name and we can execute
             if isfile(program_path) && isexecutable(program_path)
-                return realpath(program_path)
+                return program_path
             end
         end
     end

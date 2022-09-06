@@ -367,6 +367,17 @@ size_t ios_readprep(ios_t *s, size_t n)
     return (size_t)(s->size - s->bpos);
 }
 
+// attempt to fill the buffer. returns the number of bytes available if we
+// have read the whole file, or -1 if there might be more data.
+ssize_t ios_fillbuf(ios_t *s)
+{
+    size_t nb = s->maxsize - s->bpos;
+    size_t got = ios_readprep(s, nb);
+    if (got < nb)
+        return (ssize_t)got;
+    return -1;
+}
+
 static void _write_update_pos(ios_t *s)
 {
     if (s->bpos > s->ndirty) s->ndirty = s->bpos;
@@ -533,6 +544,20 @@ int64_t ios_pos(ios_t *s)
     else if (s->state == bst_rd)
         fdpos -= (s->size - s->bpos);
     return fdpos;
+}
+
+int64_t ios_filesize(ios_t *s)
+{
+    int64_t fdpos = s->fpos;
+    if (fdpos == (int64_t)-1) {
+        fdpos = lseek(s->fd, 0, SEEK_CUR);
+        if (fdpos == (int64_t)-1)
+            return fdpos;
+        s->fpos = fdpos;
+    }
+    off_t sz = lseek(s->fd, 0, SEEK_END);
+    lseek(s->fd, (off_t)fdpos, SEEK_SET);
+    return sz;
 }
 
 int ios_trunc(ios_t *s, size_t size)
@@ -936,6 +961,7 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
         goto open_file_err;
 
     s = ios_fd(s, fd, 1, 1);
+    s->fpos = 0;
     if (!rd)
         s->readable = 0;
     if (!wr)
@@ -1079,9 +1105,12 @@ int ios_ungetc(int c, ios_t *s)
 {
     if (s->state == bst_wr)
         return IOS_EOF;
+    if (c == '\n') s->lineno--;
+    if (s->u_colno > 0) s->u_colno--;
     if (s->bpos > 0) {
         s->bpos--;
-        s->buf[s->bpos] = (char)c;
+        if (s->buf[s->bpos] != (char)c)
+            s->buf[s->bpos] = (char)c;
         s->_eof = 0;
         return c;
     }
@@ -1103,11 +1132,14 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
     char c0;
     char buf[8];
 
-    c = ios_getc(s);
-    if (c == IOS_EOF)
+    c = ios_peekc(s);
+    if (c == IOS_EOF) {
+        s->_eof = 1;
         return IOS_EOF;
+    }
     c0 = (char)c;
     if ((unsigned char)c0 < 0x80) {
+        (void)ios_getc(s); // consume peeked char, increment lineno
         *pwc = (uint32_t)(unsigned char)c0;
         if (c == '\n')
             s->u_colno = 0;
@@ -1115,13 +1147,12 @@ int ios_getutf8(ios_t *s, uint32_t *pwc)
             s->u_colno += utf8proc_charwidth(*pwc);
         return 1;
     }
-    if (ios_ungetc(c, s) == IOS_EOF)
-        return IOS_EOF;
     sz = u8_seqlen(&c0);
     if (!isutf(c0) || sz > 4)
         return 0;
     if (ios_readprep(s, sz) < sz)
-        // NOTE: this can return EOF even if some bytes are available
+        // NOTE: this returns EOF even though some bytes are available,
+        // so we do not set s->_eof on this code path
         return IOS_EOF;
     int valid = u8_isvalid(&s->buf[s->bpos], sz);
     if (valid) {

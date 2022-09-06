@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# NOTE: This type needs to be kept in sync with jl_options in src/julia.h
+# NOTE: This type needs to be kept in sync with jl_options in src/jloptions.h
 struct JLOptions
     quiet::Int8
     banner::Int8
@@ -9,7 +9,9 @@ struct JLOptions
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
-    nthreads::Int32
+    nthreadpools::Int16
+    nthreads::Int16
+    nthreads_per_pool::Ptr{Int16}
     nprocs::Int32
     machine_file::Ptr{UInt8}
     project::Ptr{UInt8}
@@ -20,7 +22,9 @@ struct JLOptions
     compile_enabled::Int8
     code_coverage::Int8
     malloc_log::Int8
+    tracked_path::Ptr{UInt8}
     opt_level::Int8
+    opt_level_min::Int8
     debug_level::Int8
     check_bounds::Int8
     depwarn::Int8
@@ -44,6 +48,11 @@ struct JLOptions
     incremental::Int8
     image_file_specified::Int8
     warn_scope::Int8
+    image_codegen::Int8
+    rr_detach::Int8
+    strip_metadata::Int8
+    strip_ir::Int8
+    heap_size_hint::UInt64
 end
 
 # This runs early in the sysimage != is not defined yet
@@ -82,4 +91,8 @@ function unsafe_load_commands(v::Ptr{Ptr{UInt8}})
         i += 1
     end
     return cmds
+end
+
+function is_file_tracked(file::Symbol)
+    return ccall(:jl_is_file_tracked, Cint, (Any,), file) == 1
 end
