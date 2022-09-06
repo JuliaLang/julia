@@ -69,8 +69,10 @@ let cfg = CFG(BasicBlock[
 ], Int[])
     dfs = Compiler.DFS(cfg.blocks)
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
-    let correct_idoms = Compiler.naive_idoms(cfg.blocks)
+    let correct_idoms = Compiler.naive_idoms(cfg.blocks),
+        correct_pidoms = Compiler.naive_idoms(cfg.blocks, true)
         @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
+        @test Compiler.construct_postdomtree(cfg.blocks).idoms_bb == correct_pidoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -82,6 +84,7 @@ let cfg = CFG(BasicBlock[
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
                 cfg′ = CFG(blocks, cfg.index)
                 @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
+                @test Compiler.construct_postdomtree(cfg′.blocks).idoms_bb == correct_pidoms
             end
         end
     end
