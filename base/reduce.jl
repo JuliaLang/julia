@@ -855,8 +855,15 @@ end
 ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
-# TODO: optimize for inputs <: AbstractFloat
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
+# optimization for IEEEFloat
+function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
+    (x1, x2), (y1, y2) = x, y
+    anynan = isnan(x1)|isnan(y1)
+    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
+    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1, z2
+end
 
 ## findmax, findmin, argmax & argmin
 

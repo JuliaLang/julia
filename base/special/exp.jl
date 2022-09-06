@@ -70,31 +70,30 @@ LogB(::Val{:ℯ}, ::Type{Float16}) = -0.6931472f0
 LogB(::Val{10}, ::Type{Float16}) = -0.30103f0
 
 # Range reduced kernels
-@inline function expm1b_kernel(::Val{2}, x::Float64)
+function expm1b_kernel(::Val{2}, x::Float64)
     return x * evalpoly(x, (0.6931471805599393, 0.24022650695910058,
                             0.05550411502333161, 0.009618129548366803))
 end
-@inline function expm1b_kernel(::Val{:ℯ}, x::Float64)
+function expm1b_kernel(::Val{:ℯ}, x::Float64)
     return x * evalpoly(x, (0.9999999999999912, 0.4999999999999997,
                             0.1666666857598779, 0.04166666857598777))
 end
-
-@inline function expm1b_kernel(::Val{10}, x::Float64)
+function expm1b_kernel(::Val{10}, x::Float64)
     return x * evalpoly(x, (2.3025850929940255, 2.6509490552391974,
                             2.034678825384765, 1.1712552025835192))
 end
 
-@inline function expb_kernel(::Val{2}, x::Float32)
+function expb_kernel(::Val{2}, x::Float32)
     return evalpoly(x, (1.0f0, 0.6931472f0, 0.2402265f0,
                         0.05550411f0, 0.009618025f0,
                         0.0013333423f0, 0.00015469732f0, 1.5316464f-5))
 end
-@inline function expb_kernel(::Val{:ℯ}, x::Float32)
+function expb_kernel(::Val{:ℯ}, x::Float32)
     return evalpoly(x, (1.0f0, 1.0f0, 0.5f0, 0.16666667f0,
                         0.041666217f0, 0.008333249f0,
                         0.001394858f0, 0.00019924171f0))
 end
-@inline function expb_kernel(::Val{10}, x::Float32)
+function expb_kernel(::Val{10}, x::Float32)
     return evalpoly(x, (1.0f0, 2.3025851f0, 2.650949f0,
                         2.0346787f0, 1.1712426f0, 0.53937745f0,
                         0.20788547f0, 0.06837386f0))
@@ -175,12 +174,10 @@ const J_TABLE = (0x0000000000000000, 0xaac00b1afa5abcbe, 0x9b60163da9fb3335, 0xa
                  0xa66f0f9c1cb64129, 0x93af252b376bba97, 0xacdf3ac948dd7273, 0x99df50765b6e4540, 0x9faf6632798844f8,
                  0xa12f7bfdad9cbe13, 0xaeef91d802243c88, 0x874fa7c1819e90d8, 0xacdfbdba3692d513, 0x62efd3c22b8f71f1, 0x74afe9d96b2a23d9)
 
-# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
-# because the effect analysis currently can't prove it in the presence of `@inbounds` or
-# `:boundscheck`, but still the access to `J_TABLE` is really safe here
-Base.@assume_effects :consistent @inline function table_unpack(ind::Int32)
+# :nothrow needed since the compiler can't prove `ind` is inbounds.
+Base.@assume_effects :nothrow function table_unpack(ind::Int32)
     ind = ind & 255 + 1 # 255 == length(J_TABLE) - 1
-    j = @inbounds J_TABLE[ind]
+    j = getfield(J_TABLE, ind) # use getfield so the compiler can prove consistent
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
     jL = reinterpret(Float64, JL_CONST | (j>>8))
     return jU, jL
@@ -224,7 +221,7 @@ end
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
             twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
+            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
         #k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
@@ -249,7 +246,7 @@ end
         if k <= -53
             # The UInt64 forces promotion. (Only matters for 32 bit systems.)
             twopk = (k + UInt64(53)) << 52
-            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*(2.0^-53)
+            return reinterpret(T, twopk + reinterpret(UInt64, small_part))*0x1p-53
         end
         #k == 1024 && return (small_part * 2.0) * 2.0^1023
     end
@@ -325,8 +322,8 @@ for (func, fast_func, base) in ((:exp2,  :exp2_fast,  Val(2)),
                                 (:exp,   :exp_fast,   Val(:ℯ)),
                                 (:exp10, :exp10_fast, Val(10)))
     @eval begin
-        $func(x::Union{Float16,Float32,Float64}) = exp_impl(x, $base)
-        $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x, $base)
+        @noinline $func(x::Union{Float16,Float32,Float64}) = exp_impl(x, $base)
+        @noinline $fast_func(x::Union{Float32,Float64}) = exp_impl_fast(x, $base)
     end
 end
 

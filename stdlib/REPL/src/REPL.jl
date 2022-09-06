@@ -467,7 +467,7 @@ mutable struct LineEditREPL <: AbstractREPL
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
-outstream(r::LineEditREPL) = r.t isa TTYTerminal ? r.t.out_stream : r.t
+outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t

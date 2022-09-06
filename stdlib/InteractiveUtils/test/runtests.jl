@@ -51,6 +51,23 @@ tag = "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
+for u in Any[
+    Union{Int, UInt},
+    Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
+    Union{Char, UInt8, UInt},
+    Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
+    Union{Missing, Nothing}
+]
+    @test InteractiveUtils.is_expected_union(u)
+end
+
+for u in Any[
+    Union{Nothing, Tuple{Vararg{Char}}},
+    Union{Missing, Array},
+    Union{Int, Tuple{Any, Int}}
+]
+    @test !InteractiveUtils.is_expected_union(u)
+end
 mutable struct Stable{T,N}
     A::Array{T,N}
 end
@@ -686,6 +703,17 @@ end
         let io = IOBuffer()
             code_llvm(io, oc, Tuple{})
             @test occursin(InteractiveUtils.OC_MISMATCH_WARNING, String(take!(io)))
+        end
+    end
+end
+
+@testset "begin/end in gen_call_with_extracted_types users" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            a = [1,2]
+            @test (@code_typed a[1:end]).second == Vector{Int}
+            @test (@code_llvm a[begin:2]) === nothing
+            @test (@code_native a[begin:end]) === nothing
         end
     end
 end

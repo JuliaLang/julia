@@ -9,44 +9,60 @@ import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
 
 export
+# Note: `xFUNC_NAME` is a placeholder for not exported BLAS fucntions
+#   ref: http://www.netlib.org/blas/blasqr.pdf
 # Level 1
-    asum,
-    axpy!,
-    axpby!,
-    blascopy!,
-    dotc,
-    dotu,
+    # xROTG
+    # xROTMG
     rot!,
+    # xROTM
+    # xSWAP
     scal!,
     scal,
+    blascopy!,
+    axpy!,
+    axpby!,
+    # xDOT
+    dotc,
+    dotu,
+    # xxDOT
     nrm2,
+    asum,
     iamax,
 # Level 2
-    gbmv!,
-    gbmv,
     gemv!,
     gemv,
+    gbmv!,
+    gbmv,
     hemv!,
     hemv,
+    # xHBMV
     hpmv!,
+    symv!,
+    symv,
     sbmv!,
     sbmv,
     spmv!,
-    spr!,
-    symv!,
-    symv,
-    trsv!,
-    trsv,
     trmv!,
     trmv,
+    # xTBMV
+    # xTPMV
+    trsv!,
+    trsv,
+    # xTBSV
+    # xTPSV
     ger!,
-    syr!,
+    # xGERU
+    # xGERC
     her!,
+    # xHPR
+    # xHER2
+    # xHPR2
+    syr!,
+    spr!,
+    # xSYR2
+    # xSPR2
 # Level 3
-    herk!,
-    herk,
-    her2k!,
-    her2k,
     gemm!,
     gemm,
     symm!,
@@ -55,8 +71,12 @@ export
     hemm,
     syrk!,
     syrk,
+    herk!,
+    herk,
     syr2k!,
     syr2k,
+    her2k!,
+    her2k,
     trmm!,
     trmm,
     trsm!,
@@ -147,7 +167,7 @@ end
 # Level 1
 # A help function to pick the pointer and inc for 1d like inputs.
 @inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
-    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simpify runtime check when possibe
+    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simplify runtime check when possibe
     st, ptr = checkedstride(x), pointer(x)
     isnothing(stride0check) || (st == 0 && throw(stride0check))
     ptr += min(st, 0) * sizeof(eltype(x)) * (length(x) - 1)
@@ -969,6 +989,9 @@ The scalar inputs `α` and `β` must be complex or real numbers.
 The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
 
 Return the updated `y`.
+
+!!! compat "Julia 1.5"
+    `hpmv!` requires at least Julia 1.5.
 """
 hpmv!
 
@@ -1126,6 +1149,9 @@ The scalar inputs `α` and `β` must be real.
 The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
 
 Return the updated `y`.
+
+!!! compat "Julia 1.5"
+    `spmv!` requires at least Julia 1.5.
 """
 spmv!
 
@@ -1194,6 +1220,9 @@ The scalar input `α` must be real.
 
 The array inputs `x` and `AP` must all be of `Float32` or `Float64` type.
 Return the updated `AP`.
+
+!!! compat "Julia 1.8"
+    `spr!` requires at least Julia 1.8.
 """
 spr!
 

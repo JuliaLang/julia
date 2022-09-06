@@ -404,8 +404,8 @@ let err_str
     @test occursin("MethodError: no method matching +(::$Int, ::Vector{Float64})", err_str)
     @test occursin("For element-wise addition, use broadcasting with dot syntax: scalar .+ array", err_str)
     err_str = @except_str rand(5) - 1//3 MethodError
-    @test occursin("MethodError: no method matching +(::Vector{Float64}, ::Rational{$Int})", err_str)
-    @test occursin("For element-wise addition, use broadcasting with dot syntax: array .+ scalar", err_str)
+    @test occursin("MethodError: no method matching -(::Vector{Float64}, ::Rational{$Int})", err_str)
+    @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
 
@@ -431,25 +431,25 @@ let err_str,
     Base.stacktrace_contract_userdir() && (sp = Base.contractuser(sp))
 
     @test sprint(show, which(String, Tuple{})) ==
-        "String()\n     @ $curmod_str $sp:$(method_defs_lineno + 0)"
+        "String() @ $curmod_str $sp:$(method_defs_lineno + 0)"
     @test sprint(show, which("a", Tuple{})) ==
-        "(::String)()\n     @ $curmod_str $sp:$(method_defs_lineno + 1)"
+        "(::String)() @ $curmod_str $sp:$(method_defs_lineno + 1)"
     @test sprint(show, which(EightBitType, Tuple{})) ==
-        "$(curmod_prefix)EightBitType()\n     @ $curmod_str $sp:$(method_defs_lineno + 2)"
+        "$(curmod_prefix)EightBitType() @ $curmod_str $sp:$(method_defs_lineno + 2)"
     @test sprint(show, which(reinterpret(EightBitType, 0x54), Tuple{})) ==
-        "(::$(curmod_prefix)EightBitType)()\n     @ $curmod_str $sp:$(method_defs_lineno + 3)"
+        "(::$(curmod_prefix)EightBitType)() @ $curmod_str $sp:$(method_defs_lineno + 3)"
     @test sprint(show, which(EightBitTypeT, Tuple{})) ==
-        "$(curmod_prefix)EightBitTypeT()\n     @ $curmod_str $sp:$(method_defs_lineno + 4)"
+        "$(curmod_prefix)EightBitTypeT() @ $curmod_str $sp:$(method_defs_lineno + 4)"
     @test sprint(show, which(EightBitTypeT{Int32}, Tuple{})) ==
-        "$(curmod_prefix)EightBitTypeT{T}() where T\n     @ $curmod_str $sp:$(method_defs_lineno + 5)"
+        "$(curmod_prefix)EightBitTypeT{T}() where T @ $curmod_str $sp:$(method_defs_lineno + 5)"
     @test sprint(show, which(reinterpret(EightBitTypeT{Int32}, 0x54), Tuple{})) ==
-        "(::$(curmod_prefix)EightBitTypeT)()\n     @ $curmod_str $sp:$(method_defs_lineno + 6)"
+        "(::$(curmod_prefix)EightBitTypeT)() @ $curmod_str $sp:$(method_defs_lineno + 6)"
     @test startswith(sprint(show, which(Complex{Int}, Tuple{Int})),
                      "Complex{T}(")
     @test startswith(sprint(show, which(getfield(Base, Symbol("@doc")), Tuple{LineNumberNode, Module, Vararg{Any}})),
-                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...)\n     @ Core boot.jl:")
+                     "var\"@doc\"(__source__::LineNumberNode, __module__::Module, x...) @ Core boot.jl:")
     @test startswith(sprint(show, which(FunctionLike(), Tuple{})),
-                     "(::$(curmod_prefix)FunctionLike)()\n     @ $curmod_str $sp:$(method_defs_lineno + 7)")
+                     "(::$(curmod_prefix)FunctionLike)() @ $curmod_str $sp:$(method_defs_lineno + 7)")
     @test startswith(sprint(show, which(StructWithUnionAllMethodDefs{<:Integer}, (Any,))),
                      "($(curmod_prefix)StructWithUnionAllMethodDefs{T} where T<:Integer)(x)")
     @test repr("text/plain", FunctionLike()) == "(::$(curmod_prefix)FunctionLike) (generic function with 1 method)"
@@ -927,4 +927,9 @@ for (expr, errmsg) in
         e
     end
     @test contains(sprint(showerror, err), errmsg)
+end
+
+let err_str
+    err_str = @except_str "a" + "b" MethodError
+    @test occursin("String concatenation is performed with *", err_str)
 end

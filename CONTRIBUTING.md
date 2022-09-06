@@ -269,7 +269,7 @@ Be sure to change the UUID value back before making the pull request.
 
 ### Contributing to patch releases
 
-The process of creating a patch release is roughly as follows:
+The process of [creating a patch release](https://docs.julialang.org/en/v1/devdocs/build/distributing/#Point-releasing-101) is roughly as follows:
 
 1. Create a new branch (e.g. `backports-release-1.6`) against the relevant minor release
    branch (e.g. `release-1.6`). Usually a corresponding pull request is created as well.

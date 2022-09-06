@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
+
 Profile.clear()
 Profile.init()
 
