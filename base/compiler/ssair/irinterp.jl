@@ -17,6 +17,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     return CallMeta(Any, Effects(), false)
 end
 
+function collect_limitations!(@nospecialize(typ), ::IRCode)
+    @assert !isa(typ, LimitedAccuracy) "semi-concrete eval on recursive call graph"
+    return typ
+end
+
 mutable struct TwoPhaseVectorView <: AbstractVector{Int}
     const data::Vector{Int}
     count::Int

@@ -393,11 +393,6 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function collect_limitations!(@nospecialize(typ), ::IRCode)
-    @assert !isa(typ, LimitedAccuracy) "semi-concrete eval on recursive call graph"
-    return typ
-end
-
 function from_interconditional(ipo_lattice::AbstractLattice, @nospecialize(typ),
         sv::InferenceState, (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
     lattice = widenlattice(ipo_lattice)
@@ -798,18 +793,12 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         if is_all_const_arg(arginfo, #=start=#2)
             return true
         else
-            # TODO: is_nothrow is not an actual requirement here, this is just a hack
-            # to avoid entering semi concrete eval while it doesn't properly propagate no_throw
+            # TODO: `is_nothrow` is not an actual requirement here, this is just a hack
+            # to avoid entering semi concrete eval while it doesn't properly override effects
             return is_nothrow(result.effects) ? false : nothing
         end
-    else
-        return nothing
     end
-    # if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-    #   return is_all_const_arg(arginfo)
-    # else
-    #   return nothing
-    # end
+    return nothing
 end
 
 is_all_const_arg(arginfo::ArgInfo, start::Int) = is_all_const_arg(arginfo.argtypes, start::Int)
