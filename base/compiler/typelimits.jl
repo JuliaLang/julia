@@ -304,7 +304,7 @@ end
 
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
-function issimplertype(@nospecialize(typea), @nospecialize(typeb))
+function issimplertype(lattice::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
     typea = ignorelimited(typea)
     typeb = ignorelimited(typeb)
     typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
@@ -315,14 +315,14 @@ function issimplertype(@nospecialize(typea), @nospecialize(typeb))
         for i = 1:length(typea.fields)
             ai = unwrapva(typea.fields[i])
             bi = fieldtype(aty, i)
-            is_lattice_equal(ai, bi) && continue
+            is_lattice_equal(lattice, ai, bi) && continue
             tni = _typename(widenconst(ai))
             if tni isa Const
                 bi = (tni.val::Core.TypeName).wrapper
-                is_lattice_equal(ai, bi) && continue
+                is_lattice_equal(lattice, ai, bi) && continue
             end
             bi = getfield_tfunc(typeb, Const(i))
-            is_lattice_equal(ai, bi) && continue
+            is_lattice_equal(lattice, ai, bi) && continue
             # It is not enough for ai to be simpler than bi: it must exactly equal
             # (for this, an invariant struct field, by contrast to
             # type_more_complex above which handles covariant tuples).
@@ -335,14 +335,14 @@ function issimplertype(@nospecialize(typea), @nospecialize(typeb))
         typeb isa Const && return true
         typeb isa Conditional || return false
         is_same_conditionals(typea, typeb) || return false
-        issimplertype(typea.thentype, typeb.thentype) || return false
-        issimplertype(typea.elsetype, typeb.elsetype) || return false
+        issimplertype(lattice, typea.thentype, typeb.thentype) || return false
+        issimplertype(lattice, typea.elsetype, typeb.elsetype) || return false
     elseif typea isa InterConditional # ibid
         typeb isa Const && return true
         typeb isa InterConditional || return false
         is_same_conditionals(typea, typeb) || return false
-        issimplertype(typea.thentype, typeb.thentype) || return false
-        issimplertype(typea.elsetype, typeb.elsetype) || return false
+        issimplertype(lattice, typea.thentype, typeb.thentype) || return false
+        issimplertype(lattice, typea.elsetype, typeb.elsetype) || return false
     elseif typea isa PartialOpaque
         # TODO
     end
@@ -356,10 +356,10 @@ end
     typea === typeb && return typea
 
     suba = ⊑(lattice, typea, typeb)
-    suba && issimplertype(typeb, typea) && return typeb
+    suba && issimplertype(lattice, typeb, typea) && return typeb
     subb = ⊑(lattice, typeb, typea)
     suba && subb && return typea
-    subb && issimplertype(typea, typeb) && return typea
+    subb && issimplertype(lattice, typea, typeb) && return typea
     return nothing
 end
 
