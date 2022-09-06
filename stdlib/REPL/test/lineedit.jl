@@ -906,3 +906,17 @@ end
     @test get_last_word("a[b[]]") == "b"
     @test get_last_word("a[]") == "a[]"
 end
+
+@testset "issue #45836" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+    strings = ["abcdef", "123456", "ijklmn"]
+    REPL.LineEdit.show_completions(promptstate, strings)
+    completion = String(take!(term.out_stream))
+    @test completion == "\033[0B\n\rabcdef\r\033[8C123456\r\033[16Cijklmn\n"
+    strings2 = ["abcdef", "123456\nijklmn"]
+    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+    REPL.LineEdit.show_completions(promptstate, strings2)
+    completion2 = String(take!(term.out_stream))
+    @test completion2 == "\033[0B\nabcdef\n123456\nijklmn\n"
+end
