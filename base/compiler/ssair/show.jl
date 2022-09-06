@@ -830,6 +830,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
 end
 
 function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+    compact_cfg = CFG(compact.result_bbs, Int[first(compact.result_bbs[i].stmts) for i in 2:length(compact.result_bbs)])
     cfg = compact.ir.cfg
     (_, width) = displaysize(io)
 
@@ -845,7 +846,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     end
     pop_new_node! = new_nodes_iter(compact)
     bb_idx = let io = IOContext(io, :maxssaid=>length(compact.result))
-        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, cfg, 1; pop_new_node!)
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
     end
 
     # Print uncompacted nodes from the original IR
