@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 struct PkgId
     uuid::Union{UUID,Nothing}
     name::String
@@ -40,4 +42,3 @@ function binunpack(s::String)
     name = read(io, String)
     return PkgId(UUID(uuid), name)
 end
-

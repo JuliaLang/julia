@@ -7,7 +7,10 @@ module LibGit2
 
 import Base: ==
 using Base: something, notnothing
+using Base64: base64decode
+using NetworkOptions
 using Printf: @printf
+using SHA: sha1, sha256
 
 export with, GitRepo, GitConfig
 
@@ -84,7 +87,7 @@ is in the repository.
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file);
 
@@ -227,7 +230,7 @@ Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 
 # Examples
 ```julia-repl
-julia> repo = LibGit2.GitRepo(repo_path);
+julia> repo = GitRepo(repo_path);
 
 julia> LibGit2.add!(repo, test_file1);
 
@@ -474,7 +477,7 @@ current changes. Note that this detaches the current HEAD.
 
 # Examples
 ```julia
-repo = LibGit2.init(repo_path)
+repo = LibGit2.GitRepo(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
     write(f, "111\n")
 end
@@ -958,23 +961,32 @@ end
 
 ## lazy libgit2 initialization
 
+const ENSURE_INITIALIZED_LOCK = ReentrantLock()
+
+@noinline function throw_negative_refcount_error(x::Int)
+    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
+end
+
 function ensure_initialized()
-    x = Threads.atomic_cas!(REFCOUNT, 0, 1)
-    if x < 0
-        negative_refcount_error(x)::Union{}
-    end
-    if x == 0
-        initialize()
+    lock(ENSURE_INITIALIZED_LOCK) do
+        x = Threads.atomic_cas!(REFCOUNT, 0, 1)
+        x > 0 && return
+        x < 0 && throw_negative_refcount_error(x)
+        try initialize()
+        catch
+            Threads.atomic_sub!(REFCOUNT, 1)
+            @assert REFCOUNT[] == 0
+            rethrow()
+        end
     end
     return nothing
 end
 
-@noinline function negative_refcount_error(x::Int)
-    error("Negative LibGit2 REFCOUNT $x\nThis shouldn't happen, please file a bug report!")
-end
-
 @noinline function initialize()
     @check ccall((:git_libgit2_init, :libgit2), Cint, ())
+
+    cert_loc = NetworkOptions.ca_roots()
+    cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
 
     atexit() do
         # refcount zero, no objects to be finalized
@@ -982,29 +994,42 @@ end
             ccall((:git_libgit2_shutdown, :libgit2), Cint, ())
         end
     end
-
-    # Look for OpenSSL env variable for CA bundle (linux only)
-    # windows and macOS use the OS native security backends
-    @static if Sys.islinux()
-        cert_loc = if "SSL_CERT_DIR" in keys(ENV)
-            ENV["SSL_CERT_DIR"]
-        elseif "SSL_CERT_FILE" in keys(ENV)
-            ENV["SSL_CERT_FILE"]
-        else
-            # If we have a bundled ca cert file, point libgit2 at that so SSL connections work.
-            abspath(ccall(:jl_get_julia_bindir, Any, ())::String, Base.DATAROOTDIR, "julia", "cert.pem")
-        end
-        set_ssl_cert_locations(cert_loc)
-    end
 end
 
 function set_ssl_cert_locations(cert_loc)
-    cert_file = isfile(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_dir  = isdir(cert_loc) ? cert_loc : Cstring(C_NULL)
-    cert_file == C_NULL && cert_dir == C_NULL && return
-    @check ccall((:git_libgit2_opts, :libgit2), Cint,
-          (Cint, Cstring...),
-          Cint(Consts.SET_SSL_CERT_LOCATIONS), cert_file, cert_dir)
+    cert_file = cert_dir = Cstring(C_NULL)
+    if isdir(cert_loc) # directories
+        cert_dir = cert_loc
+    else # files, /dev/null, non-existent paths, etc.
+        cert_file = cert_loc
+    end
+    ret = @ccall "libgit2".git_libgit2_opts(
+        Consts.SET_SSL_CERT_LOCATIONS::Cint;
+        cert_file::Cstring,
+        cert_dir::Cstring)::Cint
+    ret >= 0 && return ret
+    err = Error.GitError(ret)
+    err.class == Error.SSL &&
+        err.msg == "TLS backend doesn't support certificate locations" ||
+        throw(err)
+    var = nothing
+    for v in NetworkOptions.CA_ROOTS_VARS
+        haskey(ENV, v) && (var = v)
+    end
+    @assert var !== nothing # otherwise we shouldn't be here
+    msg = """
+    Your Julia is built with a SSL/TLS engine that libgit2 doesn't know how to configure to use a file or directory of certificate authority roots, but your environment specifies one via the $var variable. If you believe your system's root certificates are safe to use, you can `export JULIA_SSL_CA_ROOTS_PATH=""` in your environment to use those instead.
+    """
+    throw(Error.GitError(err.class, err.code, chomp(msg)))
+end
+
+"""
+    trace_set(level::Union{Integer,GIT_TRACE_LEVEL})
+
+Sets the system tracing configuration to the specified level.
+"""
+function trace_set(level::Union{Integer,Consts.GIT_TRACE_LEVEL}, cb=trace_cb())
+    @check @ccall "libgit2".git_trace_set(level::Cint, cb::Ptr{Cvoid})::Cint
 end
 
 end # module

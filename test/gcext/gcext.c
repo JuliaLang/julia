@@ -491,7 +491,7 @@ void task_scanner(jl_task_t *task, int root_task)
     jl_active_task_stack(task, &start_stack, &end_stack, &total_start_stack, &total_end_stack);
 
     // this is the live stack of a thread. Is it ours?
-    if (start_stack && task == (jl_task_t *)jl_get_current_task()) {
+    if (start_stack && task == (jl_task_t*)jl_get_current_task()) {
         if (!(lt_ptr(start_stack, &var_on_frame) && lt_ptr(&var_on_frame, end_stack))) {
             // error, current stack frame must be on the live stack.
             jl_error("stack frame not part of the current task");
@@ -561,8 +561,10 @@ void sweep_stack_data(jl_value_t *p)
 {
     obj_sweeps++;
     dynstack_t *stk = (dynstack_t *)p;
-    if (stk->size > stk->capacity)
-        jl_error("internal error during sweeping");
+    if (stk->size > stk->capacity) {
+        assert(0 && "internal error during sweeping");
+        abort();
+    }
 }
 
 // Safely execute Julia code
@@ -647,10 +649,6 @@ int main()
             "let dir = dirname(unsafe_string(Base.JLOptions().julia_bin))\n"
             // disable the package manager
             "    ENV[\"JULIA_PKGDIR\"] = joinpath(dir, \"disabled\")\n"
-            // locate files relative to the "embedding" executable
-            "    stdlib = filter(env -> startswith(Base.find_package(Base, "
-            "\"Distributed\"), env), Base.load_path())[end]\n"
-            "    push!(empty!(LOAD_PATH), dir, stdlib)\n"
             "end");
 
     checked_eval_string(

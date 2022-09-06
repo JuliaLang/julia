@@ -365,7 +365,7 @@ end
 let f17314 = x -> x < 0 ? false : x
     @test eltype(broadcast(f17314, 1:3)) === Int
     @test eltype(broadcast(f17314, -1:1)) === Integer
-    @test eltype(broadcast(f17314, Int[])) == Union{Bool,Int}
+    @test eltype(broadcast(f17314, Int[])) === Integer
 end
 let io = IOBuffer()
     broadcast(x->print(io,x), 1:5) # broadcast with side effects
@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test_broken Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, Tuple{typeof(aa),}) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -691,16 +691,19 @@ end
     @test a == [1 1; 2 2; 3 3]
 end
 
-@testset "scalar .=" begin
-    A = [[1,2,3],4:5,6]
+@testset "scalar .= and promotion" begin
+    A = [[1, 2, 3], 4:5, 6]
+    @test A isa Vector{Any}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
-    A = [[1,2,3],4:5]
+    A = [[1, 2, 3], 4:5]
+    @test A isa Vector{Vector{Int}}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test A[2] == [0, 0]
 end
 
 # Issue #22180
@@ -852,6 +855,39 @@ let
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
 
+# issue 43847: collect preserves shape of broadcasted
+let
+    bc = Broadcast.broadcasted(*, [1 2; 3 4], 2)
+    @test collect(Iterators.product(bc, bc)) == collect(Iterators.product(copy(bc), copy(bc)))
+
+    a1 = AD1(rand(2,3))
+    bc1 = Broadcast.broadcasted(*, a1, 2)
+    @test collect(Iterators.product(bc1, bc1)) == collect(Iterators.product(copy(bc1), copy(bc1)))
+
+    # using ndims of second arg
+    bc2 = Broadcast.broadcasted(*, 2, a1)
+    @test collect(Iterators.product(bc2, bc2)) == collect(Iterators.product(copy(bc2), copy(bc2)))
+
+    # >2 args
+    bc3 = Broadcast.broadcasted(*, a1, 3, a1)
+    @test collect(Iterators.product(bc3, bc3)) == collect(Iterators.product(copy(bc3), copy(bc3)))
+
+    # including a tuple and custom array type
+    bc4 = Broadcast.broadcasted(*, (1,2,3), AD1(rand(3)))
+    @test collect(Iterators.product(bc4, bc4)) == collect(Iterators.product(copy(bc4), copy(bc4)))
+
+    # testing ArrayConflict
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
+
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted((1,2,3),a1,zeros(3,3,3)))) === Base.HasShape{3}()
+
+    # inference on nested
+    bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
+    bc_nest = Base.broadcasted(+, bc , bc)
+    @test @inferred(Base.IteratorSize(bc_nest)) === Base.HasShape{1}()
+ end
+
 # issue #31295
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
@@ -867,13 +903,13 @@ end
     ys = 1:2:20
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
     @test IndexStyle(bc) == IndexLinear()
-    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
 
     xs2 = reshape(xs, 1, :)
     ys2 = reshape(ys, 1, :)
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
     @test IndexStyle(bc) == IndexCartesian()
-    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
 
     xs = 1:5:3*5
     ys = 1:4:3*4
@@ -914,6 +950,12 @@ end
     # hit the `foldl` branch:
     @test IndexStyle(bcraw) == IndexCartesian()
     @test reduce(paren, bcraw) == foldl(paren, xs)
+
+    # issue #41055
+    bc = Broadcast.instantiate(Broadcast.broadcasted(Base.literal_pow, Ref(^), [1,2], Ref(Val(2))))
+    @test sum(bc, dims=1, init=0) == [5]
+    bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
+    @test prod(bc, dims=1, init="") == ["acbc"]
 end
 
 # treat Pair as scalar:
@@ -944,3 +986,145 @@ p = rand(4,4); r = rand(2,4);
 p0 = copy(p)
 @views @. p[1:2, :] += r
 @test p[1:2, :] ≈ p0[1:2, :] + r
+
+@test identity(.+) == Broadcast.BroadcastFunction(+)
+@test identity.(.*) == Broadcast.BroadcastFunction(*)
+@test map(.+, [[1,2], [3,4]], [5, 6]) == [[6,7], [9,10]]
+@test repr(.!) == "Base.Broadcast.BroadcastFunction(!)"
+@test eval(:(.+)) == Base.BroadcastFunction(+)
+
+@testset "Issue #5187: Broadcasting of short-circuiting ops" begin
+    ex = Meta.parse("A .< 1 .|| A .> 2")
+    @test ex == :((A .< 1) .|| (A .> 2))
+    @test ex.head == :.||
+    ex = Meta.parse("A .< 1 .&& A .> 2")
+    @test ex == :((A .< 1) .&& (A .> 2))
+    @test ex.head == :.&&
+
+    A = -1:4
+    @test (A .< 1 .|| A .> 2) == [true, true, false, false, true, true]
+    @test (A .>= 1 .&& A .<= 2) == [false, false, true, true, false, false]
+
+    mutable struct F5187; x; end
+    (f::F5187)(x) = (f.x += x)
+    @test (iseven.(1:4) .&& (F5187(0)).(ones(4))) == [false, 1, false, 2]
+    @test (iseven.(1:4) .|| (F5187(0)).(ones(4))) == [1, true, 2, true]
+    r = 1:4; o = ones(4); f = F5187(0);
+    @test (@. iseven(r) && f(o)) == [false, 1, false, 2]
+    @test (@. iseven(r) || f(o)) == [3, true, 4, true]
+
+    @test (iseven.(1:8) .&& iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
+    @test (iseven.(1:8) .|| iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+    r = 1:8; o = ones(8); f1 = F5187(0); f2 = F5187(0)
+    @test (@. iseven(r) && iseven(f1(o)) && f2(o)) == [false,false,false,1,false,false,false,2]
+    @test (@. iseven(r) || iseven(f1(o)) || f2(o)) == [3,true,true,true,4,true,true,true]
+    @test (iseven.(1:8) .&& iseven.((F5187(0)).(ones(8))) .&& (F5187(0)).(ones(8))) == [false,false,false,1,false,false,false,2]
+    @test (iseven.(1:8) .|| iseven.((F5187(0)).(ones(8))) .|| (F5187(0)).(ones(8))) == [1,true,true,true,2,true,true,true]
+end
+
+@testset "Issue #28382: inferrability of broadcast with Union eltype" begin
+    @test isequal([1, 2] .+ [3.0, missing], [4.0, missing])
+    @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
+                                                     Vector{Union{Float64, Missing}}}) ==
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
+    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
+                                             Vector{Union{Float64, Missing}}}) ==
+        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
+    @test isequal(tuple.([1, 2], [3.0, missing]), [(1, 3.0), (2, missing)])
+    @test Core.Compiler.return_type(broadcast, Tuple{typeof(tuple), Vector{Int},
+                                                     Vector{Union{Float64, Missing}}}) ==
+        Union{Vector{Tuple{Int, Missing}}, Vector{Tuple{Int, Any}}, Vector{Tuple{Int, Float64}}}
+    # Check that corner cases do not throw an error
+    @test isequal(broadcast(x -> x === 1 ? nothing : x, [1, 2, missing]),
+                  [nothing, 2, missing])
+    @test isequal(broadcast(x -> x === 1 ? nothing : x, Any[1, 2, 3.0, missing]),
+                  [nothing, 2, 3, missing])
+    @test broadcast((x,y)->(x==1 ? 1.0 : x, y), [1 2 3], ["a", "b", "c"]) ==
+        [(1.0, "a") (2, "a") (3, "a")
+         (1.0, "b") (2, "b") (3, "b")
+         (1.0, "c") (2, "c") (3, "c")]
+    @test typeof.([iszero, isdigit]) == [typeof(iszero), typeof(isdigit)]
+    @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
+    @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
+                  [[1, 2],[missing, 1]])
+    @test broadcast(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
+end
+
+@testset "Issue #28382: eltype inconsistent with getindex" begin
+    struct Cyclotomic <: Number
+    end
+
+    Base.eltype(::Type{<:Cyclotomic}) = Tuple{Int,Int}
+
+    Base.:*(c::T, x::Cyclotomic) where {T<:Real} = [1, 2]
+    Base.:*(x::Cyclotomic, c::T) where {T<:Real} = [1, 2]
+
+    @test Cyclotomic() .* [2, 3] == [[1, 2], [1, 2]]
+end
+
+@testset "inplace broadcast with trailing singleton dims" begin
+    for (a, b, c) in (([1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)),
+            ([1 2; 3 4], reshape([5 6; 7 8], 2, 2, 1), reshape([9 10; 11 12], 2, 2, 1, 1)))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b
+        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
+
+        a_ = copy(a)
+        a_ .= b .+ c
+        @test a_ == dropdims(b .+ c, dims=(findall(==(1), size(c))...,))
+
+        a_ = copy(a)
+        a_ .*= c
+        @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
+    end
+end
+
+@testset "Issue #40309: still gives a range after #40320" begin
+    @test Base.broadcasted_kwsyntax(+, [1], [2]) isa Broadcast.Broadcasted{<:Any, <:Any, typeof(+)}
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
+    @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
+end
+
+@testset "#42063" begin
+    buf = IOBuffer()
+    @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
+    @test String(take!(buf)) == "1\n2\n3\n"
+end
+
+@testset "Memory allocation inconsistency in broadcasting #41565" begin
+    function test(y)
+        y .= 0 .- y ./ (y.^2) # extra allocation
+        return y
+    end
+    arr = rand(1000)
+    @allocated test(arr)
+    @test (@allocated test(arr)) == 0
+end
+
+@testset "Fix type unstable .&& #43470" begin
+    function test(x, y)
+        return (x .> 0.0) .&& (y .> 0.0)
+    end
+    x = randn(2)
+    y = randn(2)
+    @inferred(test(x, y)) == [0, 0]
+end
+
+@testset "issue #45903, in place broadcast into a bit-masked bitmatrix" begin
+    A = BitArray(ones(3,3))
+    pos = randn(3,3)
+    A[pos .< 0] .= false
+    @test all(>=(0), pos[A])
+    @test count(A) == count(>=(0), pos)
+end
+
+# test that `Broadcast` definition is defined as total and eligible for concrete evaluation
+import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
+@test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
+    Core.Compiler.is_foldable

@@ -6,8 +6,8 @@
 to the process of deducing the types of later values from the types of
 input values. Julia's approach to inference has been described in blog
 posts
-([1](https://juliacomputing.com/blog/2016/04/04/inference-convergence.html),
-[2](https://juliacomputing.com/blog/2017/05/15/inference-converage2.html)).
+([1](https://juliacomputing.com/blog/2016/04/inference-convergence/),
+[2](https://juliacomputing.com/blog/2017/05/inference-converage2/)).
 
 ## Debugging compiler.jl
 
@@ -37,9 +37,8 @@ m = first(mths)
 interp = Core.Compiler.NativeInterpreter()
 sparams = Core.svec()      # this particular method doesn't have type-parameters
 optimize = true            # run all inference optimizations
-cached = false             # force inference to happen (do not use cached results)
 types = Tuple{typeof(convert), atypes.parameters...} # Tuple{typeof(convert), Type{Int}, UInt}
-Core.Compiler.typeinf_code(interp, types, sparams, optimize, cached)
+Core.Compiler.typeinf_code(interp, m, types, sparams, optimize)
 ```
 
 If your debugging adventures require a `MethodInstance`, you can look it up by
@@ -50,16 +49,12 @@ A `CodeInfo` object may be obtained with
 ci = (@code_typed convert(Int, UInt(1)))[1]
 ```
 
-## The inlining algorithm (inline_worthy)
+## The inlining algorithm (`inline_worthy`)
 
-Much of the hardest work for inlining runs in
-`inlining_pass`. However, if your question is "why didn't my function
-inline?" then you will most likely be interested in `isinlineable` and
-its primary callee, `inline_worthy`. `isinlineable` handles a number
-of special cases (e.g., critical functions like `next` and `done`,
-incorporating a bonus for functions that return tuples, etc.). The
-main decision-making happens in `inline_worthy`, which returns `true`
-if the function should be inlined.
+Much of the hardest work for inlining runs in `ssa_inlining_pass!`.
+However, if your question is "why didn't my function inline?"
+then you will most likely be interested in `inline_worthy`,
+which makes a decision to inline the function call or not.
 
 `inline_worthy` implements a cost-model, where "cheap" functions get
 inlined; more specifically, we inline functions if their anticipated
@@ -91,7 +86,7 @@ input and output types were inferred in advance) is assigned a fixed
 cost (currently 20 cycles). In contrast, a `:call` expression, for
 functions other than intrinsics/builtins, indicates that the call will
 require dynamic dispatch, in which case we assign a cost set by
-`Params.inline_nonleaf_penalty` (currently set at 1000). Note
+`Params.inline_nonleaf_penalty` (currently set at `1000`). Note
 that this is not a "first-principles" estimate of the raw cost of
 dynamic dispatch, but a mere heuristic indicating that dynamic
 dispatch is extremely expensive.
@@ -101,7 +96,7 @@ Each statement gets analyzed for its total cost in a function called
 as follows:
 ```jldoctest; filter=r"tuple.jl:\d+"
 julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
-map(f, t::Tuple{Any}) in Base at tuple.jl:179
+map(f, t::Tuple{Any}) @ Base tuple.jl:273
   0 1 ─ %1  = Base.getfield(_3, 1, true)::Int64
   1 │   %2  = Base.sitofp(Float64, %1)::Float64
   2 │   %3  = Base.lt_float(%2, 0.0)::Bool

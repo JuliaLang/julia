@@ -1,11 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Distributed, Random
+using Test, Random
 using Test: guardseed
+using Serialization
+using Distributed: RemoteException
 
-import Logging: Debug, Info, Warn
+import Logging: Debug, Info, Warn, with_logger
 
 @testset "@test" begin
+    atol = 1
+    a = (; atol=2)
     @test true
     @test 1 == 1
     @test 1 != 2
@@ -18,11 +22,28 @@ import Logging: Debug, Info, Warn
     @test isapprox(1, 1, atol=0.1)
     @test isapprox(1, 1; atol=0.1)
     @test isapprox(1, 1; [(:atol, 0)]...)
+    @test isapprox(1, 2; atol)
+    @test isapprox(1, 3; a.atol)
+end
+@testset "@test with skip/broken kwargs" begin
+    # Make sure the local variables can be used in conditions
+    a = 1
+    @test 2 + 2 == 4 broken=false
+    @test error() broken=true
+    @test !Sys.iswindows() broken=Sys.iswindows()
+    @test 1 ≈ 2 atol=1 broken=a==2
+    @test false skip=true
+    @test true skip=false
+    @test Grogu skip=isone(a)
+    @test 41 ≈ 42 rtol=1 skip=false
 end
 @testset "@test keyword precedence" begin
+    atol = 2
     # post-semicolon keyword, suffix keyword, pre-semicolon keyword
     @test isapprox(1, 2, atol=0) atol=1
     @test isapprox(1, 3, atol=0; atol=2) atol=1
+    @test isapprox(1, 2, atol=0; atol)
+    @test isapprox(1, 3, atol=0; atol) atol=1
 end
 @testset "@test should only evaluate the arguments once" begin
     g = Int[]
@@ -75,14 +96,20 @@ end
                    "Thrown: ErrorException")
     @test endswith(sprint(show, @test_throws ErrorException("test") error("test")),
                    "Thrown: ErrorException")
+    @test endswith(sprint(show, @test_throws "a test" error("a test")),
+                   "Message: \"a test\"")
+    @test occursin("Message: \"DomainError",
+                   sprint(show, @test_throws r"sqrt\([Cc]omplex" sqrt(-1)))
+    @test endswith(sprint(show, @test_throws str->occursin("a t", str) error("a test")),
+                   "Message: \"a test\"")
+    @test endswith(sprint(show, @test_throws ["BoundsError", "access", "1-element", "at index [2]"] [1][2]),
+                   "Message: \"BoundsError: attempt to access 1-element Vector{$Int} at index [2]\"")
+    @test_throws "\"" throw("\"")
+    @test_throws Returns(false) throw(Returns(false))
 end
 # Test printing of Fail results
-mutable struct NoThrowTestSet <: Test.AbstractTestSet
-    results::Vector
-    NoThrowTestSet(desc) = new([])
-end
-Test.record(ts::NoThrowTestSet, t::Test.Result) = (push!(ts.results, t); t)
-Test.finish(ts::NoThrowTestSet) = ts.results
+include("nothrow_testset.jl")
+
 let fails = @testset NoThrowTestSet begin
         # 1 - Fail - wrong exception
         @test_throws OverflowError error()
@@ -127,6 +154,15 @@ let fails = @testset NoThrowTestSet begin
         @test startswith(str1, str2)
         # 20 - Fail - endswith
         @test endswith(str1, str2)
+        # 21 - Fail - contains
+        @test contains(str1, str2)
+        # 22 - Fail - Type Comparison
+        @test typeof(1) <: typeof("julia")
+        # 23 - 26 - Fail - wrong message
+        @test_throws "A test" error("a test")
+        @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
+        @test_throws str->occursin("a T", str) error("a test")
+        @test_throws ["BoundsError", "acess", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -231,13 +267,50 @@ let fails = @testset NoThrowTestSet begin
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
     end
+
+    let str = sprint(show, fails[21])
+        @test occursin("Expression: contains(str1, str2)", str)
+        @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
+    end
+
+    let str = sprint(show, fails[22])
+        @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
+        @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
+    end
+
+    let str = sprint(show, fails[23])
+        @test occursin("Expected: \"A test\"", str)
+        @test occursin("Message: \"a test\"", str)
+    end
+
+    let str = sprint(show, fails[24])
+        @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
+        @test occursin(r"Message: .*Try sqrt\(Complex", str)
+    end
+
+    let str = sprint(show, fails[25])
+        @test occursin("Expected: < match function >", str)
+        @test occursin("Message: \"a test\"", str)
+    end
+
+    let str = sprint(show, fails[26])
+        @test occursin("Expected: [\"BoundsError\", \"acess\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
+    end
+
 end
 
+struct BadError <: Exception end
+Base.show(io::IO, ::BadError) = throw("I am a bad error")
 let errors = @testset NoThrowTestSet begin
         # 1 - Error - unexpected pass
         @test_broken true
         # 2 - Error - converting a call into a comparison
         @test ==(1, 1:2...)
+        # 3 - Error - objects with broken show
+        @test throw(BadError())
+        @test BadError()
+        throw(BadError())
     end
 
     for err in errors
@@ -253,15 +326,27 @@ let errors = @testset NoThrowTestSet begin
         @test occursin("Expression: ==(1, 1:2...)", str)
         @test occursin("MethodError: no method matching ==(::$Int, ::$Int, ::$Int)", str)
     end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression: throw(BadError())\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression: BadError()\n       Value: #=ERROR showing error of type $BadError=# \"I am a bad error\"\nStacktrace:\n", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Got exception outside of a @test\n  #=ERROR showing exception stack=# \"I am a bad error\"\n  Stacktrace:\n", str)
+    end
 end
 
 let retval_tests = @testset NoThrowTestSet begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
-        pass_mock = Test.Pass(:test, 1, 2, LineNumberNode(0, "A Pass Mock"))
+        pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
         error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
         @test Test.record(ts, error_mock) isa Test.Error
-        fail_mock = Test.Fail(:test, 1, 2, 3, LineNumberNode(0, "A Fail Mock"))
+        fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
         @test Test.record(ts, fail_mock) isa Test.Fail
         broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
         @test Test.record(ts, broken_mock) isa Test.Broken
@@ -324,19 +409,19 @@ end
                 @test true
                 @test false
                 @test 1 == 1
-                @test 2 == :foo
+                @test 2 === :foo
                 @test 3 == 3
                 @testset "d" begin
                     @test 4 == 4
                 end
                 @testset begin
-                    @test :blank != :notblank
+                    @test :blank !== :notblank
                 end
             end
             @testset "inner1" begin
                 @test 1 == 1
                 @test 2 == 2
-                @test 3 == :bar
+                @test 3 === :bar
                 @test 4 == 4
                 @test_throws ErrorException 1+1
                 @test_throws ErrorException error()
@@ -394,7 +479,7 @@ end
         @test total_broken == 0
     end
     ts.anynonpass = false
-    deleteat!(Test.get_testset().results,1)
+    deleteat!(Test.get_testset().results, 1)
 end
 
 @test .1+.1+.1 ≈ .3
@@ -479,7 +564,7 @@ import Test: record, finish
 using Test: get_testset_depth, get_testset
 using Test: AbstractTestSet, Result, Pass, Fail, Error
 struct CustomTestSet <: Test.AbstractTestSet
-    description::AbstractString
+    description::String
     foo::Int
     results::Vector
     # constructor takes a description string and options keyword arguments
@@ -675,13 +760,13 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
                 @test foo(fill(1., 4)) == 15
             end
         end'`), stderr=devnull), String)
-    @test occursin("""
-        Test Summary: | Pass  Fail  Total
-        Foo Tests     |    2     2      4
-          Animals     |    1     1      2
-            Felines   |    1            1
-            Canines   |          1      1
-          Arrays      |    1     1      2
+    @test occursin(r"""
+        Test Summary: | Pass  Fail  Total  Time
+        Foo Tests     |    2     2      4  \s*\d*.\ds
+          Animals     |    1     1      2  \s*\d*.\ds
+            Felines   |    1            1  \s*\d*.\ds
+            Canines   |          1      1  \s*\d*.\ds
+          Arrays      |    1     1      2  \s*\d*.\ds
         """, msg)
 end
 
@@ -752,6 +837,8 @@ end
     @test occursin("Evaluated: 0.9 ≈ 0.1 (nans=true, atol=0.01)", msg)
 end
 
+erronce() = @error "an error" maxlog=1
+
 @testset "@test_logs" begin
     function foo(n)
         @info "Doing foo with n=$n"
@@ -780,6 +867,17 @@ end
 
     @test_logs (Debug,"Iteration 5") min_level=Debug match_mode=:any foo(10)
 
+    # Respect `maxlog` (#41625). We check we only find one logging message.
+    @test_logs (:error, "an error") (erronce(); erronce())
+
+    # Test `respect_maxlog=false`:
+    test_logger = Test.TestLogger(; respect_maxlog=false)
+    with_logger(test_logger) do
+        erronce()
+        erronce()
+    end
+    @test length(test_logger.logs) == 2
+
     # Test failures
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
         @test_logs (Warn,) foo(1)
@@ -795,33 +893,34 @@ end
     @test startswith(fails[4].value, "ErrorException")
 end
 
-function newfunc()
-    42
-end
-@deprecate oldfunc newfunc
-
-@testset "@test_deprecated" begin
-    @test_deprecated oldfunc()
-
-    # Expression passthrough
-    if Base.JLOptions().depwarn != 2
-        @test (@test_deprecated oldfunc()) == 42
-
-        fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
-            @test_deprecated newfunc()
-            @test_deprecated r"Not found in message" oldfunc()
+let code = quote
+        function newfunc()
+            42
         end
-        @test length(fails) == 2
-        @test fails[1] isa Test.LogTestFailure
-        @test fails[2] isa Test.LogTestFailure
-    else
-        @warn """Omitting `@test_deprecated` tests which can't yet
-                 be tested in --depwarn=error mode"""
+        @deprecate oldfunc newfunc
+
+        @testset "@test_deprecated" begin
+            @test_deprecated oldfunc()
+            @test Base.JLOptions().depwarn == 1
+
+            @test (@test_deprecated oldfunc()) == 42
+
+            fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
+                @test_deprecated newfunc()
+                @test_deprecated r"Not found in message" oldfunc()
+            end
+            @test length(fails) == 2
+            @test fails[1] isa Test.LogTestFailure
+            @test fails[2] isa Test.LogTestFailure
+        end
     end
+    incl = "include($(repr(joinpath(@__DIR__, "nothrow_testset.jl"))))"
+    cmd = `$(Base.julia_cmd()) --startup-file=no --depwarn=yes -e 'using Test' -e $incl -e $code`
+    @test success(pipeline(cmd))
 end
 
 @testset "@testset preserves GLOBAL_RNG's state, and re-seeds it" begin
-    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_RNG.seed)` block
+    # i.e. it behaves as if it was wrapped in a `guardseed(GLOBAL_SEED)` block
     seed = rand(UInt128)
     Random.seed!(seed)
     a = rand()
@@ -837,6 +936,29 @@ end
     Random.seed!(seed)
     @test a == rand()
     @test b == rand()
+
+    # Even when seed!() is called within a testset A, subsequent testsets
+    # should start with the same "global RNG state" as what A started with,
+    # such that the test `refvalue == rand(Int)` below succeeds.
+    # Currently, this means that Random.GLOBAL_SEED has to be restored,
+    # in addition to the state of Random.default_rng().
+    GLOBAL_SEED_orig = Random.GLOBAL_SEED
+    local refvalue
+    @testset "GLOBAL_SEED is also preserved (setup)" begin
+        @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+        refvalue = rand(Int)
+        Random.seed!()
+        @test GLOBAL_SEED_orig != Random.GLOBAL_SEED
+    end
+    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "GLOBAL_SEED is also preserved (forloop)" for _=1:3
+        @test refvalue == rand(Int)
+        Random.seed!()
+    end
+    @test GLOBAL_SEED_orig == Random.GLOBAL_SEED
+    @testset "GLOBAL_SEED is also preserved (beginend)" begin
+        @test refvalue == rand(Int)
+    end
 end
 
 @testset "InterruptExceptions #21043" begin
@@ -952,4 +1074,350 @@ end
         @error "push/pop_testset invariance test failed" cmd Text(String(take!(io)))
     end
     @test ok
+end
+
+let ex = :(something_complex + [1, 2, 3])
+    b = PipeBuffer()
+    let t = Test.Pass(:test, (ex, 1), (ex, 2), (ex, 3), LineNumberNode(@__LINE__, @__FILE__))
+        serialize(b, t)
+        @test string(t) == string(deserialize(b))
+        @test eof(b)
+    end
+    let t = Test.Broken(:test, ex)
+        serialize(b, t)
+        @test string(t) == string(deserialize(b))
+        @test eof(b)
+    end
+end
+
+@testset "verbose option" begin
+    expected = r"""
+    Test Summary:             | Pass  Total  Time
+    Parent                    |    9      9  \s*\d*.\ds
+      Child 1                 |    3      3  \s*\d*.\ds
+        Child 1.1 (long name) |    1      1  \s*\d*.\ds
+        Child 1.2             |    1      1  \s*\d*.\ds
+        Child 1.3             |    1      1  \s*\d*.\ds
+      Child 2                 |    3      3  \s*\d*.\ds
+      Child 3                 |    3      3  \s*\d*.\ds
+        Child 3.1             |    1      1  \s*\d*.\ds
+        Child 3.2             |    1      1  \s*\d*.\ds
+        Child 3.3             |    1      1  \s*\d*.\ds
+    """
+
+    mktemp() do f, _
+        write(f,
+        """
+        using Test
+
+        @testset "Parent" verbose = true begin
+            @testset "Child 1" verbose = true begin
+                @testset "Child 1.1 (long name)" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 1.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 1.3" begin
+                    @test 1 == 1
+                end
+            end
+
+            @testset "Child 2" begin
+                @testset "Child 2.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 2.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 2.3" begin
+                    @test 1 == 1
+                end
+            end
+
+            @testset "Child 3" verbose = true begin
+                @testset "Child 3.1" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 3.2" begin
+                    @test 1 == 1
+                end
+
+                @testset "Child 3.3" begin
+                    @test 1 == 1
+                end
+            end
+        end
+        """)
+        cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+        result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+        @test occursin(expected, result)
+    end
+end
+
+@testset "failfast option" begin
+    @testset "non failfast (default)" begin
+        expected = r"""
+        Test Summary: | Pass  Fail  Error  Total  Time
+        Foo           |    1     2      1      4  \s*\d*.\ds
+          Bar         |    1     1             2  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast passes to child testsets" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        PackageName   |    1      1  \s*\d*.\ds
+          1           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+
+            @testset "Foo" failfast=true begin
+                @testset "1" begin
+                   @test false
+                end
+                @testset "2" begin
+                   @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+    @testset "failfast via env var" begin
+        expected = r"""
+        Test Summary: | Fail  Total  Time
+        Foo           |    1      1  \s*\d*.\ds
+        """
+
+        mktemp() do f, _
+            write(f,
+            """
+            using Test
+            ENV["JULIA_TEST_FAILFAST"] = true
+            @testset "Foo" begin
+                @test false
+                @test error()
+                @testset "Bar" begin
+                    @test false
+                    @test true
+                end
+            end
+            """)
+            cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
+            result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
+            @test occursin(expected, result)
+        end
+    end
+end
+
+# Non-booleans in @test (#35888)
+struct T35888 end
+Base.isequal(::T35888, ::T35888) = T35888()
+Base.:!(::T35888) = missing
+let errors = @testset NoThrowTestSet begin
+        # 1 - evaluates to non-Boolean
+        @test missing
+        # 2 - evaluates to non-Boolean
+        @test !missing
+        # 3 - evaluates to non-Boolean
+        @test isequal(5)
+        # 4 - evaluates to non-Boolean
+        @test !isequal(5)
+        # 5 - evaluates to non-Boolean
+        @test isequal(T35888(), T35888())
+        # 6 - evaluates to non-Boolean
+        @test !isequal(T35888(), T35888())
+        # 7 - evaluates to non-Boolean
+        @test 1 < 2 < missing
+        # 8 - evaluates to non-Boolean
+        @test !(1 < 2 < missing)
+        # 9 - TypeError in chained comparison
+        @test 1 < 2 < missing < 4
+        # 10 - TypeError in chained comparison
+        @test !(1 < 2 < missing < 4)
+    end
+
+    for err in errors
+        @test err isa Test.Error
+    end
+
+    let str = sprint(show, errors[1])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[2])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[3])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: isequal(5)", str)
+    end
+
+    let str = sprint(show, errors[4])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(isequal(5))", str)
+    end
+
+    let str = sprint(show, errors[5])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: isequal(T35888(), T35888())", str)
+        @test occursin("Value: $T35888()", str)
+    end
+
+    let str = sprint(show, errors[6])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(isequal(T35888(), T35888()))", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[7])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: 1 < 2 < missing", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[8])
+        @test occursin("Expression evaluated to non-Boolean", str)
+        @test occursin("Expression: !(1 < 2 < missing)", str)
+        @test occursin("Value: missing", str)
+    end
+
+    let str = sprint(show, errors[9])
+        @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
+        @test occursin("Expression: 1 < 2 < missing < 4", str)
+    end
+
+    let str = sprint(show, errors[10])
+        @test occursin("TypeError: non-boolean (Missing) used in boolean context", str)
+        @test occursin("Expression: !(1 < 2 < missing < 4)", str)
+    end
+end
+
+macro test_macro_throw_1()
+    throw(ErrorException("Real error"))
+end
+macro test_macro_throw_2()
+    throw(LoadError("file", 111, ErrorException("Real error")))
+end
+
+@testset "Soft deprecation of @test_throws LoadError [@]macroexpand[1]" begin
+    # If a macroexpand was detected, undecorated LoadErrors can stand in for any error.
+    # This will throw a deprecation warning.
+    @test_deprecated (@test_throws LoadError macroexpand(@__MODULE__, :(@test_macro_throw_1)))
+    @test_deprecated (@test_throws LoadError @macroexpand @test_macro_throw_1)
+    # Decorated LoadErrors are unwrapped if the actual exception matches the inner, but not the outer, exception, regardless of whether or not a macroexpand is detected.
+    # This will not throw a deprecation warning.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) macroexpand(@__MODULE__, :(@test_macro_throw_1))
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
+    # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
+    @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
+end
+
+# Issue 25483
+mutable struct PassInformationTestSet <: Test.AbstractTestSet
+    results::Vector
+    PassInformationTestSet(desc) = new([])
+end
+Test.record(ts::PassInformationTestSet, t::Test.Result) = (push!(ts.results, t); t)
+Test.finish(ts::PassInformationTestSet) = ts
+@testset "Information in Pass result (Issue 25483)" begin
+    ts = @testset PassInformationTestSet begin
+        @test 1 == 1
+        @test_throws ErrorException throw(ErrorException("Msg"))
+    end
+    test_line_number = (@__LINE__) - 3
+    test_throws_line_number =  (@__LINE__) - 3
+    @test ts.results[1].test_type === :test
+    @test ts.results[1].orig_expr == :(1 == 1)
+    @test ts.results[1].data == Expr(:comparison, 1, :(==), 1)
+    @test ts.results[1].value == true
+    @test ts.results[1].source == LineNumberNode(test_line_number, @__FILE__)
+    @test ts.results[2].test_type === :test_throws
+    @test ts.results[2].orig_expr == :(throw(ErrorException("Msg")))
+    @test ts.results[2].data == ErrorException
+    @test ts.results[2].value == ErrorException("Msg")
+    @test ts.results[2].source == LineNumberNode(test_throws_line_number, @__FILE__)
+end
+
+let
+    f(x) = @test isone(x)
+    function h(x)
+        @testset f(x)
+        @testset "success" begin @test true end
+        @testset for i in 1:3
+            @test !iszero(i)
+        end
+    end
+    tret = @testset h(1)
+    tdesc = @testset "description" h(1)
+    @testset "Function calls" begin
+        @test tret.description == "h"
+        @test tdesc.description == "description"
+        @test length(tret.results) == 5
+        @test tret.results[1].description == "f"
+        @test tret.results[2].description == "success"
+        for i in 1:3
+            @test tret.results[2+i].description == "i = $i"
+        end
+    end
 end

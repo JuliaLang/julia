@@ -73,21 +73,21 @@ catch_exceptions(logger) = true
 
 # Prevent invalidation when packages define custom loggers
 # Using invoke in combination with @nospecialize eliminates backedges to these methods
-function _invoked_shouldlog(logger, level, _module, group, id)
+Base.@constprop :none function _invoked_shouldlog(logger, level, _module, group, id)
     @nospecialize
     return invoke(
         shouldlog,
         Tuple{typeof(logger), typeof(level), typeof(_module), typeof(group), typeof(id)},
         logger, level, _module, group, id
-    )
+    )::Bool
 end
 
 function _invoked_min_enabled_level(@nospecialize(logger))
-    return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)
+    return invoke(min_enabled_level, Tuple{typeof(logger)}, logger)::LogLevel
 end
 
 function _invoked_catch_exceptions(@nospecialize(logger))
-    return invoke(catch_exceptions, Tuple{typeof(logger)}, logger)
+    return invoke(catch_exceptions, Tuple{typeof(logger)}, logger)::Bool
 end
 
 """
@@ -101,7 +101,7 @@ struct NullLogger <: AbstractLogger; end
 min_enabled_level(::NullLogger) = AboveMaxLevel
 shouldlog(::NullLogger, args...) = false
 handle_message(::NullLogger, args...; kwargs...) =
-    error("Null logger handle_message() should not be called")
+    (@nospecialize; error("Null logger handle_message() should not be called"))
 
 
 #-------------------------------------------------------------------------------
@@ -116,7 +116,7 @@ filtered, before any other work is done to construct the log record data
 structure itself.
 
 # Examples
-```
+```julia-repl
 julia> Logging.LogLevel(0) == Logging.Info
 true
 ```
@@ -133,9 +133,29 @@ isless(a::LogLevel, b::LogLevel) = isless(a.level, b.level)
 convert(::Type{LogLevel}, level::Integer) = LogLevel(level)
 
 const BelowMinLevel = LogLevel(-1000001)
+"""
+    Debug
+
+Alias for [`LogLevel(-1000)`](@ref LogLevel).
+"""
 const Debug         = LogLevel(   -1000)
+"""
+    Info
+
+Alias for [`LogLevel(0)`](@ref LogLevel).
+"""
 const Info          = LogLevel(       0)
+"""
+    Warn
+
+Alias for [`LogLevel(1000)`](@ref LogLevel).
+"""
 const Warn          = LogLevel(    1000)
+"""
+    Error
+
+Alias for [`LogLevel(2000)`](@ref LogLevel).
+"""
 const Error         = LogLevel(    2000)
 const AboveMaxLevel = LogLevel( 1000001)
 
@@ -202,7 +222,7 @@ There's also some key value pairs which have conventional meaning:
 
 # Examples
 
-```
+```julia
 @debug "Verbose debugging information.  Invisible by default"
 @info  "An informational message"
 @warn  "Something was odd.  You should pay attention"
@@ -258,7 +278,7 @@ function log_record_id(_module, level, message, log_kws)
     modname = _module === nothing ?  "" : join(fullname(_module), "_")
     # Use an arbitrarily chosen eight hex digits here. TODO: Figure out how to
     # make the id exactly the same on 32 and 64 bit systems.
-    h = UInt32(hash(string(modname, level, message, log_kws)) & 0xFFFFFFFF)
+    h = UInt32(hash(string(modname, level, message, log_kws)::String) & 0xFFFFFFFF)
     while true
         id = Symbol(modname, '_', string(h, base = 16, pad = 8))
         # _log_record_ids is a registry of log record ids for use during
@@ -282,7 +302,7 @@ function issimple(@nospecialize val)
     val isa Number && return true
     val isa Char && return true
     if val isa Expr
-        val.head === :quote && issimple(val[1]) && return true
+        val.head === :quote && issimple(val.args[1]) && return true
         val.head === :inert && return true
     end
     return false
@@ -350,7 +370,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
         let
             level = $level
             std_level = convert(LogLevel, level)
-            if std_level >= getindex(_min_enabled_level)
+            if std_level >= _min_enabled_level[]
                 group = $(log_data._group)
                 _module = $(log_data._module)
                 logger = current_logger_for_env(std_level, group, _module)
@@ -360,6 +380,9 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     # based on arbitrary logger-specific logic.
                     if _invoked_shouldlog(logger, level, _module, group, id)
                         file = $(log_data._file)
+                        if file isa String
+                            file = Base.fixup_stdlib_path(file)
+                        end
                         line = $(log_data._line)
                         local msg, kwargs
                         $(logrecord) && handle_message(
@@ -437,7 +460,7 @@ end
     msg = try
               "Exception while generating log record in module $_module at $filepath:$line"
           catch ex
-              "Exception handling log message: $ex"
+              LazyString("Exception handling log message: ", ex)
           end
     bt = real ? catch_backtrace() : backtrace()
     handle_message(
@@ -458,7 +481,7 @@ function logmsg_shim(level, message, _module, group, id, file, line, kwargs)
 end
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
-const _min_enabled_level = Ref(Debug)
+const _min_enabled_level = Ref{LogLevel}(Debug)
 
 # LogState - a cache of data extracted from the logger, plus the logger itself.
 struct LogState
@@ -474,7 +497,7 @@ function current_logstate()
 end
 
 # helper function to get the current logger, if enabled for the specified message type
-@noinline function current_logger_for_env(std_level::LogLevel, group, _module)
+@noinline Base.@constprop :none function current_logger_for_env(std_level::LogLevel, group, _module)
     logstate = current_logstate()
     if std_level >= logstate.min_enabled_level || env_override_minlevel(group, _module)
         return logstate.logger
@@ -505,7 +528,7 @@ a *global* setting, intended to make debug logging extremely cheap when
 disabled.
 
 # Examples
-```
+```julia
 Logging.disable_logging(Logging.Info) # Disable debug and info
 ```
 """
@@ -516,7 +539,7 @@ end
 let _debug_groups_include::Vector{Symbol} = Symbol[],
     _debug_groups_exclude::Vector{Symbol} = Symbol[],
     _debug_str::String = ""
-global function env_override_minlevel(group, _module)
+global Base.@constprop :none function env_override_minlevel(group, _module)
     debug = get(ENV, "JULIA_DEBUG", "")
     if !(debug === _debug_str)
         _debug_str = debug
@@ -611,21 +634,25 @@ attached to the task.
 """
 current_logger() = current_logstate().logger
 
+const closed_stream = IOBuffer(UInt8[])
+close(closed_stream)
 
 #-------------------------------------------------------------------------------
 # SimpleLogger
 """
-    SimpleLogger(stream=stderr, min_level=Info)
+    SimpleLogger([stream,] min_level=Info)
 
 Simplistic logger for logging all messages with level greater than or equal to
-`min_level` to `stream`.
+`min_level` to `stream`. If stream is closed then messages with log level
+greater or equal to `Warn` will be logged to `stderr` and below to `stdout`.
 """
 struct SimpleLogger <: AbstractLogger
     stream::IO
     min_level::LogLevel
     message_limits::Dict{Any,Int}
 end
-SimpleLogger(stream::IO=stderr, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, level, Dict{Any,Int}())
+SimpleLogger(level=Info) = SimpleLogger(closed_stream, level)
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
     get(logger.message_limits, id, 1) > 0
@@ -634,33 +661,37 @@ min_enabled_level(logger::SimpleLogger) = logger.min_level
 
 catch_exceptions(logger::SimpleLogger) = false
 
-function handle_message(logger::SimpleLogger, level, message, _module, group, id,
+function handle_message(logger::SimpleLogger, level::LogLevel, message, _module, group, id,
                         filepath, line; kwargs...)
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
-    if maxlog isa Integer
-        remaining = get!(logger.message_limits, id, maxlog)
+    if maxlog isa Core.BuiltinInts
+        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
         logger.message_limits[id] = remaining - 1
         remaining > 0 || return
     end
     buf = IOBuffer()
-    iob = IOContext(buf, logger.stream)
+    stream = logger.stream
+    if !(isopen(stream)::Bool)
+        stream = stderr
+    end
+    iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
-    msglines = split(chomp(string(message)), '\n')
-    println(iob, "┌ ", levelstr, ": ", msglines[1])
-    for i in 2:length(msglines)
-        println(iob, "│ ", msglines[i])
+    msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
+    msg1, rest = Iterators.peel(msglines)
+    println(iob, "┌ ", levelstr, ": ", msg1)
+    for msg in rest
+        println(iob, "│ ", msg)
     end
     for (key, val) in kwargs
         key === :maxlog && continue
         println(iob, "│   ", key, " = ", val)
     end
-    println(iob, "└ @ ", something(_module, "nothing"), " ",
-            something(filepath, "nothing"), ":", something(line, "nothing"))
-    write(logger.stream, take!(buf))
+    println(iob, "└ @ ", _module, " ", filepath, ":", line)
+    write(stream, take!(buf))
     nothing
 end
 
-_global_logstate = LogState(SimpleLogger(Core.stderr, CoreLogging.Info))
+_global_logstate = LogState(SimpleLogger())
 
 end # CoreLogging

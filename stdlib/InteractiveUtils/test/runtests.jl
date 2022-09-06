@@ -51,6 +51,23 @@ tag = "UNION"
 @test warntype_hastag(pos_unstable, Tuple{Float64}, tag)
 @test !warntype_hastag(pos_stable, Tuple{Float64}, tag)
 
+for u in Any[
+    Union{Int, UInt},
+    Union{Nothing, Vector{Tuple{String, Tuple{Char, Char}}}},
+    Union{Char, UInt8, UInt},
+    Union{Tuple{Int, Int}, Tuple{Char, Int}, Nothing},
+    Union{Missing, Nothing}
+]
+    @test InteractiveUtils.is_expected_union(u)
+end
+
+for u in Any[
+    Union{Nothing, Tuple{Vararg{Char}}},
+    Union{Missing, Array},
+    Union{Int, Tuple{Any, Int}}
+]
+    @test !InteractiveUtils.is_expected_union(u)
+end
 mutable struct Stable{T,N}
     A::Array{T,N}
 end
@@ -60,7 +77,7 @@ end
 Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
-tag = "ARRAY{FLOAT64, N}"
+tag = "ARRAY"
 @test warntype_hastag(getindex, Tuple{Unstable{Float64},Int}, tag)
 @test !warntype_hastag(getindex, Tuple{Stable{Float64,2},Int}, tag)
 @test warntype_hastag(getindex, Tuple{Stable{Float64},Int}, tag)
@@ -106,6 +123,7 @@ end # module ImportIntrinsics15819
 foo11122(x) = @fastmath x - 1.0
 
 # issue #11122, #13568 and #15819
+tag = "ANY"
 @test !warntype_hastag(+, Tuple{Int,Int}, tag)
 @test !warntype_hastag(-, Tuple{Int,Int}, tag)
 @test !warntype_hastag(*, Tuple{Int,Int}, tag)
@@ -153,15 +171,54 @@ mktemp() do f, io
 end
 
 module _test_varinfo_
-export x
-x = 1.0
+module inner_mod
+inner_x = 1
 end
+import Test: @test
+export x_exported
+x_exported = 1.0
+y_not_exp = 1.0
+z_larger = Vector{Float64}(undef, 3)
+a_smaller = Vector{Float64}(undef, 2)
+end
+
+using Test
+
 @test repr(varinfo(Main, r"^$")) == """
 | name | size | summary |
 |:---- | ----:|:------- |
 """
 let v = repr(varinfo(_test_varinfo_))
-    @test occursin("| x              |   8 bytes | Float64 |", v)
+    @test occursin("| x_exported     |   8 bytes | Float64 |", v)
+    @test !occursin("y_not_exp", v)
+    @test !occursin("@test", v)
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true))
+    @test occursin("x_exported", v)
+    @test occursin("y_not_exp", v)
+    @test !occursin("@test", v)
+    @test findfirst("a_smaller", v)[1] < findfirst("z_larger", v)[1] # check for alphabetical
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, imported = true))
+    @test occursin("x_exported", v)
+    @test !occursin("y_not_exp", v)
+    @test occursin("@test", v)
+    @test !occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true, sortby = :size))
+    @test findfirst("z_larger", v)[1] < findfirst("a_smaller", v)[1] # check for size order
+end
+let v = repr(varinfo(_test_varinfo_, sortby = :summary))
+    @test findfirst("Float64", v)[1] < findfirst("Module", v)[1] # check for summary order
+end
+let v = repr(varinfo(_test_varinfo_, all = true, recursive = true))
+    @test occursin("inner_x", v)
+end
+let v = repr(varinfo(_test_varinfo_, all = true, minsize = 9))
+    @test !occursin("x_exported", v) # excluded: 8 bytes
+    @test occursin("a_smaller", v)
 end
 
 # Issue 14173
@@ -205,7 +262,7 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 
 @test_throws ErrorException("\"this_is_not_defined\" is not defined in module $curmod_str") @which this_is_not_defined
 # issue #13264
-@test (@which vcat(1...)).name == :vcat
+@test (@which vcat(1...)).name === :vcat
 
 # PR #28122, issue #25474
 @test (@which [1][1]).name === :getindex
@@ -217,6 +274,10 @@ const curmod_str = curmod === Main ? "Main" : join(curmod_name, ".")
 @test (@which Int[1; 2]).name === :typed_vcat
 @test (@which [1 2;3 4]).name === :hvcat
 @test (@which Int[1 2;3 4]).name === :typed_hvcat
+# issue #39426
+let x..y = 0
+    @test (@which 1..2).name === :..
+end
 
 # issue #13464
 try
@@ -270,7 +331,7 @@ end
 
 # manually generate a broken function, which will break codegen
 # and make sure Julia doesn't crash
-@eval @noinline f_broken_code() = 0
+@eval @noinline @Base.constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())
    let src = Base.uncompressed_ast(m)
        src.code = Any[
@@ -291,7 +352,7 @@ let err = tempname(),
         redirect_stderr(new_stderr)
         println(new_stderr, "start")
         flush(new_stderr)
-        @eval @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
+        @test occursin("h_broken_code", sprint(code_native, h_broken_code, ()))
         Libc.flush_cstdio()
         println(new_stderr, "end")
         flush(new_stderr)
@@ -301,10 +362,11 @@ let err = tempname(),
         close(new_stderr)
         let errstr = read(err, String)
             @test startswith(errstr, """start
+                end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
                 ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
                 """) || errstr
-            @test endswith(errstr, "\nend\n") || errstr
+            @test !endswith(errstr, "\nend\n") || errstr
         end
         rm(err)
     end
@@ -328,7 +390,7 @@ struct A14637
     x
 end
 a14637 = A14637(0)
-@test (@which a14637.x).name == :getproperty
+@test (@which a14637.x).name === :getproperty
 @test (@functionloc a14637.x)[2] isa Integer
 
 # Issue #28615
@@ -337,6 +399,13 @@ a14637 = A14637(0)
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+
+# Issue # 45889
+@test !isempty(@code_typed 3 .+ 6)
+@test !isempty(@code_typed 3 .+ 6 .+ 7)
+@test !isempty(@code_typed optimize=false (.- [3,4]))
+@test !isempty(@code_typed optimize=false (6 .- [3,4]))
+@test !isempty(@code_typed optimize=false (.- 0.5))
 
 # Issue #36261
 @test (@code_typed max.(1 .+ 3, 5 - 7))[2] == Int
@@ -402,23 +471,36 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
 
     rgx = r"%"
     buf = IOBuffer()
-    output = ""
     #test that the string output is at&t syntax by checking for occurrences of '%'s
     code_native(buf, linear_foo, (), syntax = :att, debuginfo = :none)
-    output = String(take!(buf))
-
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test occursin(rgx, output)
 
     #test that the code output is intel syntax by checking it has no occurrences of '%'
     code_native(buf, linear_foo, (), syntax = :intel, debuginfo = :none)
-    output = String(take!(buf))
-
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
     code_native(buf, linear_foo, ())
     output = String(take!(buf))
-
     @test occursin(rgx, output)
+
+    @testset "binary" begin
+        # check the RET instruction (opcode: C3)
+        ret = r"^; [0-9a-f]{4}: c3$"m
+
+        # without binary flag (default)
+        code_native(buf, linear_foo, (), dump_module=false)
+        output = String(take!(buf))
+        @test !occursin(ret, output)
+
+        # with binary flag
+        for binary in false:true
+            code_native(buf, linear_foo, (); binary, dump_module=false)
+            output = String(take!(buf))
+            @test occursin(ret, output) == binary
+        end
+    end
 end
 
 @testset "error message" begin
@@ -510,8 +592,128 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+@testset "buildbot path updating" begin
+    file, ln = functionloc(versioninfo, Tuple{})
+    @test isfile(file)
+
+    e = try versioninfo("wat")
+    catch e
+        e
+    end
+    @test e isa MethodError
+    m = @which versioninfo()
+    s = sprint(showerror, e)
+    m = match(Regex("@ .+ (.*?):$(m.line)"), s)
+    @test isfile(expanduser(m.captures[1]))
+
+    g() = x
+    e, bt = try code_llvm(g, Tuple{Int})
+    catch e
+        e, catch_backtrace()
+    end
+    @test e isa Exception
+    s = sprint(showerror, e, bt)
+    m = match(r"(\S*InteractiveUtils[\/\\]src\S*):", s)
+    @test isfile(expanduser(m.captures[1]))
+end
+
 @testset "Issue #34434" begin
     io = IOBuffer()
     code_native(io, eltype, Tuple{Int})
     @test occursin("eltype", String(take!(io)))
+end
+
+@testset "Issue #41010" begin
+    struct A41010 end
+
+    struct B41010
+        a::A41010
+    end
+    export B41010
+
+    ms = methodswith(A41010, @__MODULE__) |> collect
+    @test ms[1].name === :B41010
+end
+
+# macro options should accept both literals and variables
+let
+    opt = false
+    @test !(first(@code_typed optimize=opt sum(1:10)).inferred)
+end
+
+@testset "@time_imports" begin
+    mktempdir() do dir
+        cd(dir) do
+            try
+                pushfirst!(LOAD_PATH, dir)
+                foo_file = joinpath(dir, "Foo3242.jl")
+                write(foo_file,
+                    """
+                    module Foo3242
+                    foo() = 1
+                    end
+                    """)
+
+                Base.compilecache(Base.PkgId("Foo3242"))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stdout(f) do
+                    @eval @time_imports using Foo3242
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms  Foo3242", String(buf))
+
+            finally
+                filter!((≠)(dir), LOAD_PATH)
+            end
+        end
+    end
+end
+
+let # `default_tt` should work with any function with one method
+    @test (code_warntype(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_warntype(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_llvm(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_llvm(devnull, function (a::Int)
+        sin(a)
+    end); true)
+    @test (code_native(devnull, function ()
+        sin(42)
+    end); true)
+    @test (code_native(devnull, function (a::Int)
+        sin(a)
+    end); true)
+end
+
+@testset "code_llvm on opaque_closure" begin
+    let ci = code_typed(+, (Int, Int))[1][1]
+        ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+        oc = Core.OpaqueClosure(ir)
+        @test (code_llvm(devnull, oc, Tuple{Int, Int}); true)
+        let io = IOBuffer()
+            code_llvm(io, oc, Tuple{})
+            @test occursin(InteractiveUtils.OC_MISMATCH_WARNING, String(take!(io)))
+        end
+    end
+end
+
+@testset "begin/end in gen_call_with_extracted_types users" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            a = [1,2]
+            @test (@code_typed a[1:end]).second == Vector{Int}
+            @test (@code_llvm a[begin:2]) === nothing
+            @test (@code_native a[begin:end]) === nothing
+        end
+    end
 end

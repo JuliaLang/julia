@@ -102,19 +102,6 @@ function serialize(s::ClusterSerializer, t::Core.TypeName)
     nothing
 end
 
-function serialize(s::ClusterSerializer, t::Task)
-    serialize_cycle(s, t) && return
-    if istaskstarted(t) && !istaskdone(t)
-        error("cannot serialize a running Task")
-    end
-    writetag(s.io, TASK_TAG)
-    serialize(s, t.code)
-    serialize(s, t.storage)
-    serialize(s, t._state)
-    serialize(s, t.result)
-    serialize(s, t.exception)
-end
-
 function serialize(s::ClusterSerializer, g::GlobalRef)
     # Record if required and then invoke the default GlobalRef serializer.
     sym = g.name
@@ -183,7 +170,7 @@ function deserialize_global_from_main(s::ClusterSerializer, sym)
     if sym_isconst
         ccall(:jl_set_const, Cvoid, (Any, Any, Any), Main, sym, v)
     else
-        ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, sym, v)
+        setglobal!(Main, sym, v)
     end
     return nothing
 end
@@ -244,17 +231,6 @@ function deserialize(s::ClusterSerializer, t::Type{<:CapturedException})
     return CapturedException(capex, bt)
 end
 
-function deserialize(s::ClusterSerializer, ::Type{Task})
-    t = Task(nothing)
-    deserialize_cycle(s, t)
-    t.code = deserialize(s)
-    t.storage = deserialize(s)
-    t._state = deserialize(s)::UInt8
-    t.result = deserialize(s)
-    t.exception = deserialize(s)
-    t
-end
-
 """
     clear!(syms, pids=workers(); mod=Main)
 
@@ -267,7 +243,7 @@ An exception is raised if a global constant is requested to be cleared.
 """
 function clear!(syms, pids=workers(); mod=Main)
     @sync for p in pids
-        @sync_add remotecall(clear_impl!, p, syms, mod)
+        @async_unwrap remotecall_wait(clear_impl!, p, syms, mod)
     end
 end
 clear!(sym::Symbol, pid::Int; mod=Main) = clear!([sym], [pid]; mod=mod)

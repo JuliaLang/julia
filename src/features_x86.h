@@ -33,7 +33,7 @@ JL_FEATURE_DEF(bmi, 32 * 2 + 3, 0)
 // JL_FEATURE_DEF(hle, 32 * 2 + 4, 0) // Not used and gone in LLVM 5.0
 JL_FEATURE_DEF(avx2, 32 * 2 + 5, 0)
 JL_FEATURE_DEF(bmi2, 32 * 2 + 8, 0)
-// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Priviledged instruction
+// JL_FEATURE_DEF(invpcid, 32 * 2 + 10, 0) // Privileged instruction
 JL_FEATURE_DEF(rtm, 32 * 2 + 11, 0)
 // JL_FEATURE_DEF(mpx, 32 * 2 + 14, 0) // Deprecated in LLVM 10.0
 JL_FEATURE_DEF(avx512f, 32 * 2 + 16, 0)
@@ -69,12 +69,12 @@ JL_FEATURE_DEF(rdpid, 32 * 3 + 22, 0)
 JL_FEATURE_DEF(cldemote, 32 * 3 + 25, 0)
 JL_FEATURE_DEF(movdiri, 32 * 3 + 27, 0)
 JL_FEATURE_DEF(movdir64b, 32 * 3 + 28, 0)
-JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 90000)
+JL_FEATURE_DEF(enqcmd, 32 * 3 + 29, 0)
 
 // EAX=7,ECX=0: EDX
 // JL_FEATURE_DEF(avx5124vnniw, 32 * 4 + 2, ?????)
 // JL_FEATURE_DEF(avx5124fmaps, 32 * 4 + 3, ?????)
-JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 90000)
+JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
 JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
@@ -108,7 +108,8 @@ JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
 JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 
 // EAX=7,ECX=1: EAX
-JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 90000)
+JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
+JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
 
 // EAX=0x14,ECX=0: EBX
 JL_FEATURE_DEF(ptwrite, 32 * 10 + 4, 0)

@@ -171,26 +171,25 @@ Let's consider some of the abstract types that make up Julia's numerical hierarc
 
 ```julia
 abstract type Number end
-abstract type Real     <: Number end
+abstract type Real          <: Number end
 abstract type AbstractFloat <: Real end
-abstract type Integer  <: Real end
-abstract type Signed   <: Integer end
-abstract type Unsigned <: Integer end
+abstract type Integer       <: Real end
+abstract type Signed        <: Integer end
+abstract type Unsigned      <: Integer end
 ```
 
 The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is its child.
 In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
 the others later): [`Integer`](@ref) and [`AbstractFloat`](@ref), separating the world into
 representations of integers and representations of real numbers. Representations of real
-numbers include, of course, floating-point types, but also include other types, such as
-rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
-floating-point representations of real numbers. Integers are further subdivided into
-[`Signed`](@ref) and [`Unsigned`](@ref) varieties.
+numbers include floating-point types, but also include other types, such as rationals.
+`AbstractFloat` includes only floating-point representations of real numbers. Integers
+are further subdivided into [`Signed`](@ref) and [`Unsigned`](@ref) varieties.
 
-The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
-the right-hand type to be an immediate supertype of the newly declared type. It can also be used
-in expressions as a subtype operator which returns `true` when its left operand is a subtype of
-its right operand:
+The `<:` operator in general means "is a subtype of", and, used in declarations like those above,
+declares the right-hand type to be an immediate supertype of the newly declared type. It can also
+be used in expressions as a subtype operator which returns `true` when its left operand is a
+subtype of its right operand:
 
 ```jldoctest
 julia> Integer <: Number
@@ -430,6 +429,9 @@ julia> bar.baz = 1//2
 1//2
 ```
 
+An extra interface between the fields and the user can be provided through [Instance Properties](@ref man-instance-properties).
+This grants more control on what can be accessed and modified using the `bar.baz` notation.
+
 In order to support mutation, such objects are generally allocated on the heap, and have
 stable memory addresses.
 A mutable object is like a little container that might hold different values over time,
@@ -458,6 +460,30 @@ To recap, two essential properties define immutability in Julia:
     * Mutable values, on the other hand are heap-allocated and passed to
       functions as pointers to heap-allocated values except in cases where the compiler
       is sure that there's no way to tell that this is not what is happening.
+
+In cases where one or more fields of an otherwise mutable struct is known to be immutable,
+one can declare these fields as such using `const` as shown below. This enables some,
+but not all of the optimizations of immutable structs, and can be used to enforce invariants
+on the particular fields marked as `const`.
+
+!!! compat "Julia 1.8"
+    `const` annotating fields of mutable structs requires at least Julia 1.8.
+
+```jldoctest baztype
+julia> mutable struct Baz
+           a::Int
+           const b::Float64
+       end
+
+julia> baz = Baz(1, 1.5);
+
+julia> baz.a = 2
+2
+
+julia> baz.b = 2.0
+ERROR: setfield!: const field .b of type Baz cannot be changed
+[...]
+```
 
 ## [Declared Types](@id man-declared-types)
 
@@ -702,8 +728,13 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 ```jldoctest pointtype
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+
 Closest candidates are:
-  Point(::T, !Matched::T) where T at none:2
+  Point(::T, !Matched::T) where T
+   @ Main none:2
+
+Stacktrace:
+[...]
 ```
 
 Constructor methods to appropriately handle such mixed cases can be defined, but that will not
@@ -896,12 +927,12 @@ signature (when the signature matches).
 
 ### Vararg Tuple Types
 
-The last parameter of a tuple type can be the special type [`Vararg`](@ref), which denotes any number
+The last parameter of a tuple type can be the special value [`Vararg`](@ref), which denotes any number
 of trailing elements:
 
 ```jldoctest
 julia> mytupletype = Tuple{AbstractString,Vararg{Int}}
-Tuple{AbstractString, Vararg{Int64, N} where N}
+Tuple{AbstractString, Vararg{Int64}}
 
 julia> isa(("1",), mytupletype)
 true
@@ -916,10 +947,11 @@ julia> isa(("1",1,2,3.0), mytupletype)
 false
 ```
 
-Notice that `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
+Moreover `Vararg{T}` corresponds to zero or more elements of type `T`. Vararg tuple types are
 used to represent the arguments accepted by varargs methods (see [Varargs Functions](@ref)).
 
-The type `Vararg{T,N}` corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
+The special value `Vararg{T,N}` (when used as the last parameter of a tuple type)
+corresponds to exactly `N` elements of type `T`.  `NTuple{N,T}` is a convenient
 alias for `Tuple{Vararg{T,N}}`, i.e. a tuple type containing exactly `N` elements of type `T`.
 
 ### Named Tuple Types
@@ -1032,8 +1064,8 @@ The `where` keyword itself can be nested inside a more complex declaration. For 
 consider the two types created by the following declarations:
 
 ```jldoctest
-julia> const T1 = Array{Array{T,1} where T, 1}
-Vector{Vector{T} where T} (alias for Array{Array{T, 1} where T, 1})
+julia> const T1 = Array{Array{T, 1} where T, 1}
+Vector{Vector} (alias for Array{Array{T, 1} where T, 1})
 
 julia> const T2 = Array{Array{T, 1}, 1} where T
 Array{Vector{T}, 1} where T
@@ -1091,20 +1123,67 @@ Parametric types can be singleton types when the above condition holds. For exam
 julia> struct NoFieldsParam{T}
        end
 
-julia> Base.issingletontype(NoFieldsParam) # can't be a singleton type ...
+julia> Base.issingletontype(NoFieldsParam) # Can't be a singleton type ...
 false
 
 julia> NoFieldsParam{Int}() isa NoFieldsParam # ... because it has ...
 true
 
-julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances
+julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances.
 true
 
-julia> Base.issingletontype(NoFieldsParam{Int}) # parametrized, it is a singleton
+julia> Base.issingletontype(NoFieldsParam{Int}) # Parametrized, it is a singleton.
 true
 
 julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
 true
+```
+
+## Types of functions
+
+Each function has its own type, which is a subtype of `Function`.
+
+```jldoctest foo41
+julia> foo41(x) = x + 1
+foo41 (generic function with 1 method)
+
+julia> typeof(foo41)
+typeof(foo41) (singleton type of function foo41, subtype of Function)
+```
+
+Note how `typeof(foo41)` prints as itself. This is merely a convention for printing, as it is a first-class object that can be used like any other value:
+
+```jldoctest foo41
+julia> T = typeof(foo41)
+typeof(foo41) (singleton type of function foo41, subtype of Function)
+
+julia> T <: Function
+true
+```
+
+Types of functions defined at top-level are singletons. When necessary, you can compare them with [`===`](@ref).
+
+[Closures](@ref man-anonymous-functions) also have their own type, which is usually printed with names that end in `#<number>`. Names and types for functions defined at different locations are distinct, but not guaranteed to be printed the same way across sessions.
+
+```jldoctest; filter = r"[0-9\.]+"
+julia> typeof(x -> x + 1)
+var"#9#10"
+```
+
+Types of closures are not necessarily singletons.
+
+```jldoctest
+julia> addy(y) = x -> x + y
+addy (generic function with 1 method)
+
+julia> typeof(addy(1)) === typeof(addy(2))
+true
+
+julia> addy(1) === addy(2)
+false
+
+julia> Base.issingletontype(typeof(addy(1)))
+false
 ```
 
 ## [`Type{T}` type selectors](@id man-typet-type)
@@ -1181,7 +1260,7 @@ While `Type` is part of Julia's type hierarchy like any other abstract parametri
 is not commonly used outside method signatures except in some special cases. Another
 important use case for `Type` is sharpening field types which would otherwise be captured
 less precisely, e.g. as [`DataType`](@ref man-declared-types) in the example below where the
-default constuctor could lead to performance problems in code relying on the precise wrapped
+default constructor could lead to performance problems in code relying on the precise wrapped
 type (similarly to [abstract type parameters](@ref man-performance-abstract-container)).
 
 ```jldoctest
@@ -1341,7 +1420,7 @@ REPL and other interactive environments, and also a more compact single-line for
 [`print`](@ref) or for displaying the object as part of another object (e.g. in an array). Although
 by default the `show(io, z)` function is called in both cases, you can define a *different* multi-line
 format for displaying an object by overloading a three-argument form of `show` that takes the
-`text/plain` MIME type as its second argument (see [Multimedia I/O](@ref)), for example:
+`text/plain` MIME type as its second argument (see [Multimedia I/O](@ref Multimedia-I/O)), for example:
 
 ```jldoctest polartype
 julia> Base.show(io::IO, ::MIME"text/plain", z::Polar{T}) where{T} =
@@ -1364,7 +1443,7 @@ julia> [Polar(3, 4.0), Polar(4.0,5.3)]
 where the single-line `show(io, z)` form is still used for an array of `Polar` values.   Technically,
 the REPL calls `display(z)` to display the result of executing a line, which defaults to `show(stdout, MIME("text/plain"), z)`,
 which in turn defaults to `show(stdout, z)`, but you should *not* define new [`display`](@ref)
-methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref)).
+methods unless you are defining a new multimedia display handler (see [Multimedia I/O](@ref Multimedia-I/O)).
 
 Moreover, you can also define `show` methods for other MIME types in order to enable richer display
 (HTML, images, etcetera) of objects in environments that support this (e.g. IJulia).   For example,
@@ -1476,8 +1555,8 @@ floating-point numbers, tuples, etc.) as type parameters.  A common example is t
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
-of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{x}`,
-and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
+of custom types. By way of illustration of this idea, let's introduce the parametric type `Val{x}`,
+and its constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
 for cases where you don't need a more elaborate hierarchy.
 
 [`Val`](@ref) is defined as:

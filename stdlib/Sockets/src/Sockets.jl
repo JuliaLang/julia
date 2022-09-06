@@ -97,7 +97,7 @@ end
 function TCPSocket(fd::OS_HANDLE)
     tcp = TCPSocket()
     iolock_begin()
-    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), pipe.handle, fd)
+    err = ccall(:uv_tcp_open, Int32, (Ptr{Cvoid}, OS_HANDLE), tcp.handle, fd)
     uv_error("tcp_open", err)
     tcp.status = StatusOpen
     iolock_end()
@@ -138,9 +138,6 @@ function TCPServer(; delay=true)
     iolock_end()
     return tcp
 end
-
-isreadable(io::TCPSocket) = isopen(io) || bytesavailable(io) > 0
-iswritable(io::TCPSocket) = isopen(io) && io.status != StatusClosing
 
 """
     accept(server[, client])
@@ -203,7 +200,6 @@ end
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
 
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = C_NULL
     lock(sock.cond)
     try
         sock.status = StatusClosed
@@ -367,7 +363,7 @@ function recvfrom(sock::UDPSocket)
     end
 end
 
-alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), size) # size is always 64k from libuv
+alloc_buf_hook(sock::UDPSocket, size::UInt) = (Libc.malloc(size), Int(size)) # size is always 64k from libuv
 
 function uv_recvcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid}, addr::Ptr{Cvoid}, flags::Cuint)
     sock = @handle_as handle UDPSocket
@@ -572,14 +568,17 @@ end
     nagle(socket::Union{TCPServer, TCPSocket}, enable::Bool)
 
 Enables or disables Nagle's algorithm on a given TCP server or socket.
+
+!!! compat "Julia 1.3"
+    This function requires Julia 1.3 or later.
 """
 function nagle(sock::Union{TCPServer, TCPSocket}, enable::Bool)
     # disable or enable Nagle's algorithm on all OSes
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     err = ccall(:uv_tcp_nodelay, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(!enable))
     # TODO: check err
-    Sockets.iolock_end()
+    iolock_end()
     return err
 end
 
@@ -589,15 +588,15 @@ end
 On Linux systems, the TCP_QUICKACK is disabled or enabled on `socket`.
 """
 function quickack(sock::Union{TCPServer, TCPSocket}, enable::Bool)
-    Sockets.iolock_begin()
-    Sockets.check_open(sock)
+    iolock_begin()
+    check_open(sock)
     @static if Sys.islinux()
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Cvoid}, Cint), sock.handle, Cint(enable)) < 0
             @warn "Networking unoptimized ( Error enabling TCP_QUICKACK : $(Libc.strerror(Libc.errno())) )" maxlog=1
         end
     end
-    Sockets.iolock_end()
+    iolock_end()
     nothing
 end
 
@@ -626,7 +625,7 @@ listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(localhost, port
 listen(host::IPAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host, port); backlog=backlog)
 
 function listen(sock::LibuvServer; backlog::Integer=BACKLOG_DEFAULT)
-    uv_error("listen", trylisten(sock))
+    uv_error("listen", trylisten(sock; backlog=backlog))
     return sock
 end
 
@@ -710,16 +709,17 @@ end
 const localhost = ip"127.0.0.1"
 
 """
-    listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
+    listenany([host::IPAddr,] port_hint; backlog::Integer=BACKLOG_DEFAULT) -> (UInt16, TCPServer)
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
+The backlog argument defines the maximum length to which the queue of pending connections for sockfd may grow.
 """
-function listenany(host::IPAddr, default_port)
+function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
     addr = InetAddr(host, default_port)
     while true
         sock = TCPServer()
-        if bind(sock, addr) && trylisten(sock) == 0
+        if bind(sock, addr) && trylisten(sock; backlog) == 0
             if default_port == 0
                 _addr, port = getsockname(sock)
                 return (port, sock)
@@ -734,7 +734,7 @@ function listenany(host::IPAddr, default_port)
     end
 end
 
-listenany(default_port) = listenany(localhost, default_port)
+listenany(default_port; backlog::Integer=BACKLOG_DEFAULT) = listenany(localhost, default_port; backlog)
 
 function udp_set_membership(sock::UDPSocket, group_addr::String,
                             interface_addr::Union{Nothing, String}, operation)
@@ -803,6 +803,7 @@ socket is connected to. Valid only for connected TCP sockets.
 getpeername(sock::TCPSocket) = _sockname(sock, false)
 
 function _sockname(sock, self=true)
+    sock.status == StatusInit || check_open(sock)
     rport = Ref{Cushort}(0)
     raddress = zeros(UInt8, 16)
     rfamily = Ref{Cuint}(0)

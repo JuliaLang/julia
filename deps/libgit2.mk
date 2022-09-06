@@ -1,6 +1,7 @@
 ## libgit2
+ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
-LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
+LIBGIT2_GIT_URL := https://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
 
@@ -12,9 +13,7 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
-
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -31,7 +30,7 @@ endif
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
@@ -41,8 +40,17 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
+	echo 1 > $@
+
+$(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
+	cd $(LIBGIT2_SRC_PATH) && \
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-win32-ownership.patch
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -75,8 +83,8 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
-	-rm $(build_datarootdir)/julia/cert.pem
-	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
+	-rm -f $(build_datarootdir)/julia/cert.pem
+	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
@@ -89,8 +97,6 @@ $(build_prefix)/manifest/libgit2: $(build_datarootdir)/julia/cert.pem # use libg
 
 else # USE_BINARYBUILDER_LIBGIT2
 
-LIBGIT2_BB_URL_BASE := https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl/releases/download/LibGit2-v$(LIBGIT2_VER)+$(LIBGIT2_BB_REL)
-LIBGIT2_BB_NAME := LibGit2.v$(LIBGIT2_VER)
 $(eval $(call bb-install,libgit2,LIBGIT2,false))
 
 # BB tarball doesn't create a manifest, so directly depend the `install` target
@@ -107,6 +113,8 @@ $(build_datarootdir)/julia/cert.pem: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION
 	mkdir -p $(build_datarootdir)/julia
 	cp $< $@
 
+checksum-mozillacert: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
+	$(JLCHECKSUM) $<
+
 # When "get"'ing libgit2, download the .pem
 get-libgit2: $(SRCCACHE)/cacert-$(MOZILLA_CACERT_VERSION).pem
-

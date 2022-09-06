@@ -19,48 +19,61 @@ Base.init_load_path()
 if Base.is_primary_base_module
 # load some stdlib packages but don't put their names in Main
 let
-    # Stdlibs manually sorted in top down order
+    # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
+    # Run with the `--exclude-jlls` option to filter out all JLL packages
     stdlibs = [
-            # No deps
-            :Base64,
-            :CRC32c,
-            :SHA,
-            :FileWatching,
-            :Unicode,
-            :Mmap,
-            :Serialization,
-            :Libdl,
-            :Printf,
-            :Markdown,
-            :LibGit2,
-            :Logging,
-            :Sockets,
-            :Profile,
-            :Dates,
-            :DelimitedFiles,
-            :Random,
-            :UUIDs,
-            :Future,
-            :LinearAlgebra,
-            :SparseArrays,
-            :SuiteSparse,
-            :Distributed,
-            :SharedArrays,
-            :TOML,
-            :Artifacts,
-            :Pkg,
-            :Test,
-            :REPL,
-            :Statistics,
-            :MozillaCACerts_jll,
-            :LibCURL_jll,
-            :LibCURL,
-            :Downloads,
-            :ArgTools,
-            :Tar,
-        ]
+        # No dependencies
+        :ArgTools,
+        :Artifacts,
+        :Base64,
+        :CRC32c,
+        :FileWatching,
+        :Libdl,
+        :Logging,
+        :Mmap,
+        :NetworkOptions,
+        :SHA,
+        :Serialization,
+        :Sockets,
+        :Unicode,
 
-    maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
+        # 1-depth packages
+        :LinearAlgebra,
+        :Markdown,
+        :Printf,
+        :Random,
+        :Tar,
+
+        # 2-depth packages
+        :Dates,
+        :Distributed,
+        :Future,
+        :InteractiveUtils,
+        :LibGit2,
+        :Profile,
+        :SparseArrays,
+        :UUIDs,
+
+        # 3-depth packages
+        :REPL,
+        :SharedArrays,
+        :TOML,
+        :Test,
+
+        # 4-depth packages
+        :LibCURL,
+
+        # 5-depth packages
+        :Downloads,
+
+        # 6-depth packages
+        :Pkg,
+
+        # 7-depth packages
+        :LazyArtifacts,
+    ]
+    # PackageCompiler can filter out stdlibs so it can be empty
+    maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
@@ -99,17 +112,19 @@ let
     tot_time = tot_time_base + tot_time_stdlib + tot_time_userimg
 
     println("Sysimage built. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time               * 10^9); print(" \n");
-    print("Base: ─────── "); Base.time_print(tot_time_base          * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base          / tot_time) * 100); println("%")
-    print("Stdlibs: ──── "); Base.time_print(tot_time_stdlib * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib / tot_time) * 100); println("%")
+    print("Base ──────── "); Base.time_print(tot_time_base    * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_base    / tot_time) * 100); println("%")
+    print("Stdlibs ───── "); Base.time_print(tot_time_stdlib  * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_stdlib  / tot_time) * 100); println("%")
     if isfile("userimg.jl")
-    print("Userimg: ──── "); Base.time_print(tot_time_userimg       * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg       / tot_time) * 100); println("%")
+    print("Userimg ───── "); Base.time_print(tot_time_userimg * 10^9); print(" "); show(IOContext(stdout, :compact=>true), (tot_time_userimg / tot_time) * 100); println("%")
     end
+    print("Total ─────── "); Base.time_print(tot_time         * 10^9); println();
 
     empty!(LOAD_PATH)
     empty!(DEPOT_PATH)
 end
 
+empty!(Base.TOML_CACHE.d)
+Base.TOML.reinit!(Base.TOML_CACHE.p, "")
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""

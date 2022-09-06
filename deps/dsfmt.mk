@@ -1,30 +1,28 @@
 ## DSFMT ##
+include $(SRCDIR)/dsfmt.version
 
 ifneq ($(USE_BINARYBUILDER_DSFMT),1)
 
-DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
-ifneq ($(USEMSVC), 1)
+DSFMT_CFLAGS := $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES -DDSFMT_SHLIB $(SANITIZE_OPTS)
 DSFMT_CFLAGS += -O3 -finline-functions -fomit-frame-pointer -fno-strict-aliasing \
-		--param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -shared
-else
-DSFMT_CFLAGS += -Wl,-dll,-def:../../libdSFMT.def
-endif
+		--param max-inline-insns-single=1800 -Wall  -std=c99 -shared
 ifeq ($(ARCH), x86_64)
 DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz: | $(SRCCACHE)
-	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://github.com/MersenneTwister-Lab/dSFMT/archive/v$(DSFMT_VER).tar.gz
 	touch -c $@
 
 $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
 	$(JLCHECKSUM) $<
-	-rm -r $(dir $@)
+	rm -rf $(dir $@)
 	mkdir -p $(dir $@)
 	$(TAR) -C $(dir $@) --strip-components 1 -xf $<
-	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.h.patch
-	cd $(dir $@) && patch < $(SRCDIR)/patches/dSFMT.c.patch
 	echo 1 > $@
+
+checksum-dsfmt: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
+	$(JLCHECKSUM) $<
 
 $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted
 	cd $(dir $<) && \
@@ -50,11 +48,11 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libdSFMT.$$(SHLIB_EXT) $$(build_shlibdir)/libdSFMT.$$(SHLIB_EXT)))
 
 clean-dsfmt:
-	-rm $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
-	-rm $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
+	-rm -f $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-compiled
+	-rm -f $(BUILDDIR)/dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 distclean-dsfmt:
-	-rm -rf $(SRCCACHE)/dsfmt*.tar.gz $(SRCCACHE)/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
+	rm -rf $(SRCCACHE)/dsfmt*.tar.gz $(SRCCACHE)/dsfmt-$(DSFMT_VER) $(BUILDDIR)/dsfmt-$(DSFMT_VER)
 
 get-dsfmt: $(SRCCACHE)/dsfmt-$(DSFMT_VER).tar.gz
 extract-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/source-extracted
@@ -65,8 +63,6 @@ check-dsfmt: $(BUILDDIR)/dsfmt-$(DSFMT_VER)/build-checked
 
 else
 
-DSFMT_BB_URL_BASE := https://github.com/JuliaPackaging/Yggdrasil/releases/download/dSFMT-v$(DSFMT_VER)-$(DSFMT_BB_REL)
-DSFMT_BB_NAME := dSFMT.v$(DSFMT_VER)
 $(eval $(call bb-install,dsfmt,DSFMT,false))
 
 endif # USE_BINARYBUILDER_DSFMT

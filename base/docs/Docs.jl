@@ -73,11 +73,16 @@ const modules = Module[]
 const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
-meta(m::Module) = isdefined(m, META) ? getfield(m, META)::METAType : METAType()
+function meta(m::Module)
+    if !isdefined(m, META) || getfield(m, META) === nothing
+        initmeta(m)
+    end
+    return getfield(m, META)::METAType
+end
 
 function initmeta(m::Module)
-    if !isdefined(m, META)
-        Core.eval(m, :(const $META = $(METAType())))
+    if !isdefined(m, META) || getfield(m, META) === nothing
+        Core.eval(m, :($META = $(METAType())))
         push!(modules, m)
     end
     nothing
@@ -231,8 +236,10 @@ function doc!(__module__::Module, b::Binding, str::DocStr, @nospecialize sig = U
     if haskey(m.docs, sig)
         # We allow for docstrings to be updated, but print a warning since it is possible
         # that over-writing a docstring *may* have been accidental.  The warning
-        # is suppressed for symbols in Main, for interactive use (#23011).
-        __module__ === Main || @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
+        # is suppressed for symbols in Main (or current active module),
+        # for interactive use (#23011).
+        __module__ === Base.active_module() ||
+            @warn "Replacing docs for `$b :: $sig` in module `$(__module__)`"
     else
         # The ordering of docstrings for each Binding is defined by the order in which they
         # are initially added. Replacing a specific docstring does not change it's ordering.
@@ -286,14 +293,14 @@ end
 
 uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
-namify(@nospecialize x) = astname(x, isexpr(x, :macro))
+namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
 
 function astname(x::Expr, ismacro::Bool)
-    if isexpr(x, :.)
+    head = x.head
+    if head === :.
         ismacro ? macroname(x) : x
-    # Call overloading, e.g. `(a::A)(b) = b` or `function (a::A)(b) b end` should document `A(b)`
-    elseif (isexpr(x, :function) || isexpr(x, :(=))) && isexpr(x.args[1], :call) && isexpr(x.args[1].args[1], :(::))
-        return astname(x.args[1].args[1].args[end], ismacro)
+    elseif head === :call && isexpr(x.args[1], :(::))
+        return astname((x.args[1]::Expr).args[end], ismacro)
     else
         n = isexpr(x, (:module, :struct)) ? 2 : 1
         astname(x.args[n], ismacro)
@@ -342,11 +349,11 @@ function metadata(__source__, __module__, expr, ismodule)
         P = Pair{Symbol,Any}
         fields = P[]
         last_docstr = nothing
-        for each in expr.args[3].args
+        for each in (expr.args[3]::Expr).args
             if isa(each, Symbol) || isexpr(each, :(::))
                 # a field declaration
                 if last_docstr !== nothing
-                    push!(fields, P(namify(each), last_docstr))
+                    push!(fields, P(namify(each::Union{Symbol,Expr}), last_docstr))
                     last_docstr = nothing
                 end
             elseif isexpr(each, :function) || isexpr(each, :(=))
@@ -354,7 +361,7 @@ function metadata(__source__, __module__, expr, ismodule)
             elseif isa(each, String) || isexpr(each, :string) || isexpr(each, :call) ||
                 (isexpr(each, :macrocall) && each.args[1] === Symbol("@doc_str"))
                 # forms that might be doc strings
-                last_docstr = each
+                last_docstr = each::Union{String,Expr}
             end
         end
         dict = :($(Dict{Symbol,Any})($([(:($(P)($(quot(f)), $d)))::Expr for (f, d) in fields]...)))
@@ -401,8 +408,7 @@ function moduledoc(__source__, __module__, meta, def, def′::Expr)
         def = unblock(def)
         block = def.args[3].args
         if !def.args[1]
-            isempty(block) && error("empty baremodules are not documentable.")
-            insert!(block, 2, :(import Base: @doc))
+            pushfirst!(block, :(import Base: @doc))
         end
         push!(block, docex)
         esc(Expr(:toplevel, def))

@@ -116,6 +116,14 @@ using Test
     @test abs(one(Rational{UInt})) === one(Rational{UInt})
     @test abs(one(Rational{Int})) === one(Rational{Int})
     @test abs(-one(Rational{Int})) === one(Rational{Int})
+
+    # inf addition
+    @test 1//0 + 1//0 == 1//0
+    @test -1//0 - 1//0 == -1//0
+    @test_throws DivideError 1//0 - 1//0
+    @test_throws DivideError -1//0 + 1//0
+    @test Int128(1)//0 + 1//0 isa Rational{Int128}
+    @test 1//0 + Int128(1)//0 isa Rational{Int128}
 end
 
 @testset "Rational methods" begin
@@ -257,6 +265,88 @@ end
         @test read(io2, typeof(rational2)) == rational2
     end
 end
+@testset "parse" begin
+    # Non-negative Int in which parsing is expected to work
+    @test parse(Rational{Int}, string(10)) == 10 // 1
+    @test parse(Rational{Int}, "100/10" ) == 10 // 1
+    @test parse(Rational{Int}, "100 / 10") == 10 // 1
+    @test parse(Rational{Int}, "0 / 10") == 0 // 1
+    @test parse(Rational{Int}, "100//10" ) == 10 // 1
+    @test parse(Rational{Int}, "100 // 10") == 10 // 1
+    @test parse(Rational{Int}, "0 // 10") == 0 // 1
+
+    # Variations of the separator that should throw errors
+    @test_throws ArgumentError parse(Rational{Int}, "100\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 \\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100\\\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 \\\\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100/ /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 / / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100// /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 // / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100///10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 /// 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100÷10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100 ÷ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "100 10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100   10")
+
+    # Zero denominator, negative denominator, and double negative
+    @test_throws ArgumentError parse(Rational{Int}, "0//0")
+    @test parse(Rational{Int}, "1000//-100") == -10 // 1
+    @test parse(Rational{Int}, "-1000//-100") == 10 // 1
+
+    # Negative Int tests in which parsing is expected to work
+    @test parse(Rational{Int}, string(-10)) == -10 // 1
+    @test parse(Rational{Int}, "-100/10" ) == -10 // 1
+    @test parse(Rational{Int}, "-100 / 10") == -10 // 1
+    @test parse(Rational{Int}, "-100//10" ) == -10 // 1
+
+    # Variations of the separator that should throw errors (negative version)
+    @test_throws ArgumentError parse(Rational{Int}, "-100\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 \\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100\\\\10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 \\\\ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100/ /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 / / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100// /10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 // / 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100///10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 /// 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100÷10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100 ÷ 10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100 10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100   10")
+    @test_throws ArgumentError parse(Rational{Int}, "-100 -10" )
+    @test_throws ArgumentError parse(Rational{Int}, "-100   -10")
+    @test_throws ArgumentError parse(Rational{Int}, "100 -10" )
+    @test_throws ArgumentError parse(Rational{Int}, "100   -10")
+    try  # issue 44570
+       parse(Rational{BigInt}, "100 10")
+       @test_broken false
+    catch
+       @test_broken true
+    end
+
+    # A few tests for other Integer types
+    @test parse(Rational{Bool}, "true") == true // true
+    @test parse(Rational{UInt8}, "0xff/0xf") == UInt8(17) // UInt8(1)
+    @test parse(Rational{Int8}, "-0x7e/0xf") == Int8(-126) // Int8(15)
+    @test parse(Rational{BigInt}, "$(big(typemax(Int))*16)/8") == (big(typemax(Int))*2) // big(1)
+    # Mixed notations
+    @test parse(Rational{UInt8}, "0x64//28") == UInt8(25) // UInt8(7)
+    @test parse(Rational{UInt8}, "100//0x1c") == UInt8(25) // UInt8(7)
+
+    # Out of the bounds tests
+    # 0x100 is 256, Int test works for both Int32 and Int64
+    # The error must be throw even if the canonicalized fraction fits
+    # (i.e., would be less than typemax after divided by 2 in examples below,
+    # both over typemax values are even).
+    @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x1")
+    @test_throws OverflowError parse(Rational{UInt8}, "0x100/0x2")
+    @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/1")
+    @test_throws OverflowError parse(Rational{Int}, "$(big(typemax(Int)) + 1)/2")
+end # parse
 
 @testset "round" begin
     @test round(11//2) == round(11//2, RoundNearest) == 6//1 # rounds to closest _even_ integer
@@ -480,6 +570,8 @@ end
         @test gcd(b, a) === T(2)//T(105)
         @test lcm(a, b) === T(30)//T(7)
         if T <: Signed
+            @test gcd(-a) === a
+            @test lcm(-b) === b
             @test gcdx(a, b) === (T(2)//T(105), T(-11), T(4))
             @test gcd(-a, b) === T(2)//T(105)
             @test gcd(a, -b) === T(2)//T(105)
@@ -595,9 +687,36 @@ end
     @test -2//3 * 0x1 == 0x1 * -2//3 == -2//3
 end
 
-@testset "ispow2" begin
+@testset "ispow2 and iseven/isodd" begin
     @test ispow2(4//1)
     @test ispow2(1//8)
     @test !ispow2(3//8)
     @test !ispow2(0//1)
+    @test iseven(4//1) && !isodd(4//1)
+    @test !iseven(3//1) && isodd(3//1)
+    @test !iseven(3//8) && !isodd(3//8)
+end
+
+@testset "checked_den with different integer types" begin
+    @test Base.checked_den(Int8(4), Int32(8)) == Base.checked_den(Int32(4), Int32(8))
+end
+
+@testset "Rational{T} with non-concrete T (issue #41222)" begin
+    @test @inferred(Rational{Integer}(2,3)) isa Rational{Integer}
+end
+
+@testset "issue #41489" begin
+    @test Core.Compiler.return_type(+, NTuple{2, Rational}) == Rational
+    @test Core.Compiler.return_type(-, NTuple{2, Rational}) == Rational
+
+    A=Rational[1 1 1; 2 2 2; 3 3 3]
+    @test @inferred(A*A) isa Matrix{Rational}
+end
+
+@testset "issue #42560" begin
+    @test rationalize(0.5 + 0.5im) == 1//2 + 1//2*im
+    @test rationalize(float(pi)im) == 0//1 + 165707065//52746197*im
+    @test rationalize(Int8, float(pi)im) == 0//1 + 22//7*im
+    @test rationalize(1.192 + 2.233im) == 149//125 + 2233//1000*im
+    @test rationalize(Int8, 1.192 + 2.233im) == 118//99 + 67//30*im
 end

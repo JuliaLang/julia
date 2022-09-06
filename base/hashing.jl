@@ -3,17 +3,27 @@
 ## hashing a single value ##
 
 """
-    hash(x[, h::UInt])
+    hash(x[, h::UInt]) -> UInt
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
-optional second argument `h` is a hash code to be mixed with the result.
+optional second argument `h` is another hash code to be mixed with the result.
 
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
 method recursively in order to mix hashes of the contents with each other (and with `h`).
-Typically, any type that implements `hash` should also implement its own `==` (hence
-`isequal`) to guarantee the property mentioned above. Types supporting subtraction
+Typically, any type that implements `hash` should also implement its own [`==`](@ref) (hence
+[`isequal`](@ref)) to guarantee the property mentioned above. Types supporting subtraction
 (operator `-`) should also implement [`widen`](@ref), which is required to hash
 values inside heterogeneous arrays.
+
+```jldoctest
+julia> a = hash(10)
+0x95ea2955abd45275
+
+julia> hash(10, a) # only use the output of another hash function as the second argument
+0xd42bad54a8575b16
+```
+
+See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
 hash(x::Any) = hash(x, zero(UInt))
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
@@ -21,6 +31,8 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 ## hashing general objects ##
 
 hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
+
+hash(x::Symbol) = objectid(x)
 
 ## core data hashing functions ##
 
@@ -64,6 +76,23 @@ if UInt === UInt64
 else
     hash_uint64(x::UInt64) = hash_64_32(x)
     hash_uint(x::UInt)     = hash_32_32(x)
+end
+
+## efficient value-based hashing of integers ##
+
+hash(x::Int64,  h::UInt) = hash_uint64(bitcast(UInt64, x)) - 3h
+hash(x::UInt64, h::UInt) = hash_uint64(x) - 3h
+hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
+
+function hash_integer(n::Integer, h::UInt)
+    h ⊻= hash_uint((n % UInt) ⊻ h)
+    n = abs(n)
+    n >>>= sizeof(UInt) << 3
+    while n != 0
+        h ⊻= hash_uint((n % UInt) ⊻ h)
+        n >>>= sizeof(UInt) << 3
+    end
+    return h
 end
 
 ## symbol & expression hashing ##

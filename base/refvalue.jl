@@ -38,7 +38,7 @@ isassigned(x::RefValue) = isdefined(x, :x)
 function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefValue{T})::P where T
     if allocatedinline(T)
         p = pointer_from_objref(b)
-    elseif isconcretetype(T) && T.mutable
+    elseif isconcretetype(T) && ismutabletype(T)
         p = pointer_from_objref(b.x)
     else
         # If the slot is not leaf type, it could be either immutable or not.

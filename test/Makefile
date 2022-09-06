@@ -7,7 +7,7 @@ STDLIBDIR := $(build_datarootdir)/julia/stdlib/$(VERSDIR)
 # TODO: this Makefile ignores BUILDDIR, except for computing JULIA_EXECUTABLE
 
 TESTGROUPS = unicode strings compiler
-TESTS = all stdlib $(TESTGROUPS) \
+TESTS = all default stdlib $(TESTGROUPS) \
 		$(patsubst $(STDLIBDIR)/%/,%,$(dir $(wildcard $(STDLIBDIR)/*/.))) \
 		$(filter-out runtests testdefs, \
 			$(patsubst $(SRCDIR)/%.jl,%,$(wildcard $(SRCDIR)/*.jl))) \
@@ -19,7 +19,7 @@ EMBEDDING_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/embedding" "CC=$(CC
 
 GCEXT_ARGS := "JULIA=$(JULIA_EXECUTABLE)" "BIN=$(SRCDIR)/gcext" "CC=$(CC)"
 
-default: all
+default:
 
 $(TESTS):
 	@cd $(SRCDIR) && \
@@ -35,8 +35,11 @@ embedding:
 gcext:
 	@$(MAKE) -C $(SRCDIR)/$@ check $(GCEXT_ARGS)
 
+clangsa:
+	@$(MAKE) -C $(SRCDIR)/$@
+
 clean:
 	@$(MAKE) -C embedding $@ $(EMBEDDING_ARGS)
 	@$(MAKE) -C gcext $@ $(GCEXT_ARGS)
 
-.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clean
+.PHONY: $(TESTS) $(addprefix revise-, $(TESTS)) embedding gcext clangsa clean

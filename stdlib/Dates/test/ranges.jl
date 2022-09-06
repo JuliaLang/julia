@@ -515,7 +515,7 @@ end
 @test length(Dates.Year(1):Dates.Year(1):Dates.Year(10)) == 10
 @test length(Dates.Year(10):Dates.Year(-1):Dates.Year(1)) == 10
 @test length(Dates.Year(10):Dates.Year(-2):Dates.Year(1)) == 5
-@test_throws OverflowError length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year))
+@test length(typemin(Dates.Year):Dates.Year(1):typemax(Dates.Year)) == 0 # overflow
 @test_throws MethodError Dates.Date(0):Dates.DateTime(2000)
 @test_throws MethodError Dates.Date(0):Dates.Year(10)
 @test length(range(Dates.Date(2000), step=Dates.Day(1), length=366)) == 366
@@ -594,6 +594,13 @@ a = Dates.Time(23, 1, 1)
 
     @test length(utm_typemax:Millisecond(1):utm_typemax) == 1
     @test length(utm_typemin:-Millisecond(1):utm_typemin) == 1
+end
+
+# Issue #45816
+@testset "default step for date ranges" begin
+    r = Date(2000, 1, 1):Date(2000, 12, 31)
+    @test step(r) === Day(1)
+    @test length(r) == 366
 end
 
 end  # RangesTest module

@@ -6,7 +6,7 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, clipboard
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard
 
 import Base.Docs.apropos
 
@@ -21,27 +21,61 @@ include("macros.jl")
 include("clipboard.jl")
 
 """
-    varinfo(m::Module=Main, pattern::Regex=r"")
+    varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, minsize::Int = 0)
 
 Return a markdown table giving information about exported global variables in a module, optionally restricted
 to those matching `pattern`.
 
 The memory consumption estimate is an approximate lower bound on the size of the internal structure of the object.
-"""
-function varinfo(m::Module=Main, pattern::Regex=r"")
-    rows =
-        Any[ let value = getfield(m, v)
-                 Any[string(v),
-                     (value===Base || value===Main || value===Core ? "" : format_bytes(summarysize(value))),
-                     summary(value)]
-             end
-             for v in sort!(names(m)) if isdefined(m, v) && occursin(pattern, string(v)) ]
 
+- `all` : also list non-exported objects defined in the module, deprecated objects, and compiler-generated objects.
+- `imported` : also list objects explicitly imported from other modules.
+- `recursive` : recursively include objects in sub-modules, observing the same settings in each.
+- `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
+- `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
+"""
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+    sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
+    rows = Vector{Any}[]
+    workqueue = [(m, ""),]
+    while !isempty(workqueue)
+        m2, prep = popfirst!(workqueue)
+        for v in names(m2; all, imported)
+            if !isdefined(m2, v) || !occursin(pattern, string(v))
+                continue
+            end
+            value = getfield(m2, v)
+            isbuiltin = value === Base || value === Base.active_module() || value === Core
+            if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
+                push!(workqueue, (value, "$prep$v."))
+            end
+            ssize_str, ssize = if isbuiltin
+                    ("", typemax(Int))
+                else
+                    ss = summarysize(value)
+                    (format_bytes(ss), ss)
+                end
+            if ssize >= minsize
+                push!(rows, Any[string(prep, v), ssize_str, summary(value), ssize])
+            end
+        end
+    end
+    let (col, rev) = if sortby === :name
+            1, false
+        elseif sortby === :size
+            4, true
+        elseif sortby === :summary
+            3, false
+        else
+            @assert "unreachable"
+        end
+        sort!(rows; by=r->r[col], rev)
+    end
     pushfirst!(rows, Any["name", "size", "summary"])
 
-    return Markdown.MD(Any[Markdown.Table(rows, Symbol[:l, :r, :l])])
+    return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex) = varinfo(Main, pat)
+varinfo(pat::Regex; kwargs...) = varinfo(Base.active_module(), pat; kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -50,6 +84,12 @@ Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
+
+!!! warning "Warning"
+    The output of this function may contain sensitive information. Before sharing the output,
+    please review the output and remove any data that should not be shared publicly.
+
+See also: [`VERSION`](@ref).
 """
 function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "Julia Version $VERSION")
@@ -82,13 +122,13 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+        for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
     end
 
     if verbose
@@ -101,11 +141,20 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
 
-    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
-                (verbose ?
-                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
-                 [])]
+    function is_nonverbose_env(k::String)
+        return occursin(r"^JULIA_|^DYLD_|^LD_", k)
+    end
+    function is_verbose_env(k::String)
+        return occursin(r"PATH|FLAG|^TERM$|HOME", k) && !is_nonverbose_env(k)
+    end
+    env_strs = String[
+        String["  $(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
+        (verbose ?
+         String["  $(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
+         String[]);
+    ]
     if !isempty(env_strs)
         println(io, "Environment:")
         for str in env_strs
@@ -134,12 +183,12 @@ The optional second argument restricts the search to a particular module or func
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Function, meths = Method[]; supertypes::Bool=false)
+function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
                        (type_close_enough(x, t) ||
-                        (supertypes ? (t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
+                        (supertypes ? (isa(x, Type) && t <: x && (!isa(x,TypeVar) || x.ub != Any)) :
                          (isa(x,TypeVar) && x.ub != Any && t == x.ub)) &&
                         x != Any)
                    end
@@ -156,7 +205,7 @@ function _methodswith(t::Type, m::Module, supertypes::Bool)
     for nm in names(m)
         if isdefined(m, nm)
             f = getfield(m, nm)
-            if isa(f, Function)
+            if isa(f, Base.Callable)
                 methodswith(t, f, meths; supertypes = supertypes)
             end
         end
@@ -175,60 +224,43 @@ function methodswith(t::Type; supertypes::Bool=false)
 end
 
 # subtypes
-function _subtypes(m::Module, x::Type, sts=Base.IdSet{Any}(), visited=Base.IdSet{Module}())
-    push!(visited, m)
+function _subtypes_in!(mods::Array, x::Type)
     xt = unwrap_unionall(x)
-    if !isa(xt, DataType)
-        return sts
-    end
-    xt = xt::DataType
-    for s in names(m, all = true)
-        if isdefined(m, s) && !isdeprecated(m, s)
-            t = getfield(m, s)
-            if isa(t, DataType)
-                t = t::DataType
-                if t.name.name === s && supertype(t).name == xt.name
-                    ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
-                end
-            elseif isa(t, UnionAll)
-                t = t::UnionAll
-                tt = unwrap_unionall(t)
-                isa(tt, DataType) || continue
-                tt = tt::DataType
-                if tt.name.name === s && supertype(tt).name == xt.name
-                    ti = typeintersect(t, x)
-                    ti != Bottom && push!(sts, ti)
-                end
-            elseif isa(t, Module)
-                t = t::Module
-                in(t, visited) || _subtypes(t, x, sts, visited)
-            end
-        end
-    end
-    return sts
-end
-
-function _subtypes_in(mods::Array, x::Type)
-    if !isabstracttype(x)
+    if !isabstracttype(x) || !isa(xt, DataType)
         # Fast path
         return Type[]
     end
-    sts = Base.IdSet{Any}()
-    visited = Base.IdSet{Module}()
-    for m in mods
-        _subtypes(m, x, sts, visited)
+    sts = Vector{Any}()
+    while !isempty(mods)
+        m = pop!(mods)
+        xt = xt::DataType
+        for s in names(m, all = true)
+            if isdefined(m, s) && !isdeprecated(m, s)
+                t = getfield(m, s)
+                dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
+                if isa(dt, DataType)
+                    if dt.name.name === s && dt.name.module == m && supertype(dt).name == xt.name
+                        ti = typeintersect(t, x)
+                        ti != Bottom && push!(sts, ti)
+                    end
+                elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m && t !== m
+                    t === Base || push!(mods, t) # exclude Base, since it also parented by Main
+                end
+            end
+        end
     end
-    return sort!(collect(sts), by=string)
+    return permute!(sts, sortperm(map(string, sts)))
 end
 
-subtypes(m::Module, x::Type) = _subtypes_in([m], x)
+subtypes(m::Module, x::Type) = _subtypes_in!([m], x)
 
 """
     subtypes(T::DataType)
 
 Return a list of immediate subtypes of DataType `T`. Note that all currently loaded subtypes
 are included, including those not visible in the current module.
+
+See also [`supertype`](@ref), [`supertypes`](@ref), [`methodswith`](@ref).
 
 # Examples
 ```jldoctest
@@ -239,7 +271,7 @@ julia> subtypes(Integer)
  Unsigned
 ```
 """
-subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
+subtypes(x::Type) = _subtypes_in!(Base.loaded_modules_array(), x)
 
 """
     supertypes(T::Type)
@@ -247,6 +279,8 @@ subtypes(x::Type) = _subtypes_in(Base.loaded_modules_array(), x)
 Return a tuple `(T, ..., Any)` of `T` and all its supertypes, as determined by
 successive calls to the [`supertype`](@ref) function, listed in order of `<:`
 and terminated by `Any`.
+
+See also [`subtypes`](@ref).
 
 # Examples
 ```jldoctest
@@ -259,74 +293,6 @@ function supertypes(T::Type)
     # note: we return a tuple here, not an Array as for subtypes, because in
     #       the future we could evaluate this function statically if desired.
     return S === T ? (T,) : (T, supertypes(S)...)
-end
-
-# dumptype is for displaying abstract type hierarchies,
-# based on Jameson Nash's typetree.jl in https://github.com/JuliaArchive/Examples
-function dumptype(io::IO, @nospecialize(x), n::Int, indent)
-    print(io, x)
-    n == 0 && return  # too deeply nested
-    isa(x, DataType) && x.abstract && dumpsubtypes(io, x, Main, n, indent)
-    nothing
-end
-
-directsubtype(a::DataType, b::DataType) = supertype(a).name === b.name
-directsubtype(a::UnionAll, b::DataType) = directsubtype(a.body, b)
-directsubtype(a::Union, b::DataType) = directsubtype(a.a, b) || directsubtype(a.b, b)
-# Fallback to handle TypeVar's
-directsubtype(a, b::DataType) = false
-function dumpsubtypes(io::IO, x::DataType, m::Module, n::Int, indent)
-    for s in names(m, all = true)
-        if isdefined(m, s) && !isdeprecated(m, s)
-            t = getfield(m, s)
-            if t === x || t === m
-                continue
-            elseif isa(t, Module) && nameof(t) === s && parentmodule(t) === m
-                # recurse into primary module bindings
-                dumpsubtypes(io, x, t, n, indent)
-            elseif isa(t, UnionAll) && directsubtype(t::UnionAll, x)
-                dt = unwrap_unionall(t)
-                println(io)
-                if isa(dt, DataType) && dt.name.wrapper === t
-                    # primary type binding
-                    print(io, indent, "  ")
-                    dumptype(io, dt, n - 1, string(indent, "  "))
-                else
-                    # aliases to types
-                    print(io, indent, "  ", m, ".", s, "{")
-                    tvar_io::IOContext = io
-                    tp = t
-                    while true
-                        show(tvar_io, tp.var)
-                        tvar_io = IOContext(tvar_io, :unionall_env => tp.var)
-                        tp = tp.body
-                        if isa(tp, UnionAll)
-                            print(io, ", ")
-                        else
-                            print(io, "} = ")
-                            break
-                        end
-                    end
-                    show(tvar_io, tp)
-                end
-            elseif isa(t, Union) && directsubtype(t::Union, x)
-                println(io)
-                print(io, indent, "  ", m, ".", s, " = ", t)
-            elseif isa(t, DataType) && directsubtype(t::DataType, x)
-                println(io)
-                if t.name.module !== m || t.name.name != s
-                    # aliases to types
-                    print(io, indent, "  ", m, ".", s, " = ")
-                    show(io, t)
-                else
-                    # primary type binding
-                    print(io, indent, "  ")
-                    dumptype(io, t, n - 1, string(indent, "  "))
-                end
-            end
-        end
-    end
-    nothing
 end
 
 # TODO: @deprecate peakflops to LinearAlgebra
@@ -365,15 +331,18 @@ function report_bug(kind)
             mktempdir() do tmp
                 old_load_path = copy(LOAD_PATH)
                 push!(empty!(LOAD_PATH), joinpath(tmp, "Project.toml"))
+                old_active_project = Base.ACTIVE_PROJECT[]
+                Base.ACTIVE_PROJECT[] = nothing
                 Pkg.add(Pkg.PackageSpec(BugReportingId.name, BugReportingId.uuid))
                 BugReporting = Base.require(BugReportingId)
                 append!(empty!(LOAD_PATH), old_load_path)
+                Base.ACTIVE_PROJECT[] = old_active_project
             end
         end
     else
         BugReporting = Base.require(BugReportingId)
     end
-    return Base.invokelatest(BugReporting.make_interactive_report, kind)
+    return Base.invokelatest(BugReporting.make_interactive_report, kind, ARGS)
 end
 
 end

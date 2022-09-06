@@ -13,6 +13,11 @@ const Chars = Union{Val{'c'}, Val{'C'}}
 const Strings = Union{Val{'s'}, Val{'S'}}
 const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
+const PositionCounter = Val{'n'}
+
+const MAX_FRACTIONAL_PART_WIDTH = 17  # max significant decimals + 1: `ceil(Int, log10(1 / eps(Float64))) + 1`
+const MAX_INTEGER_PART_WIDTH = 309  # max exponent: `ceil(Int, log10(prevfloat(typemax(Float64))))`
+const MAX_FMT_CHARS_WIDTH = 5  # hash | sign +/- | decimal dot | exponent e/E | exponent sign
 
 """
 Typed representation of a format specifier.
@@ -56,6 +61,9 @@ formatted string directly to `io`.
 
 For convenience, the `Printf.format"..."` string macro form can be used for building
 a `Printf.Format` object at macro-expansion-time.
+
+!!! compat "Julia 1.6"
+    `Printf.Format` requires Julia 1.6 or later.
 """
 struct Format{S, T}
     str::S # original full format string as CodeUnits
@@ -73,17 +81,58 @@ end
 base(T) = T <: HexBases ? 16 : T <: Val{'o'} ? 8 : 10
 char(::Type{Val{c}}) where {c} = c
 
+struct InvalidFormatStringError <: Exception
+    message::String
+    format::String
+    start_color::Int
+    end_color::Int
+end
+
+function Base.showerror(io::IO, err::InvalidFormatStringError)
+    io_has_color = get(io, :color, false)
+
+    println(io, "InvalidFormatStringError: ", err.message)
+    print(io, "    \"", @view(err.format[begin:prevind(err.format, err.start_color)]))
+    invalid_text = @view err.format[err.start_color:err.end_color]
+
+    printstyled(io, invalid_text, color=:red)
+
+    # +1 is okay, since all format characters are single bytes
+    println(io, @view(err.format[err.end_color+1:end]), "\"")
+
+    arrow_error = '-'^(length(invalid_text)-1)
+    arrow = "    " * ' '^err.start_color * arrow_error * "^\n"
+    if io_has_color
+        printstyled(io, arrow, color=:red)
+    else
+        print(io, arrow)
+    end
+end
+
 # parse format string
 function Format(f::AbstractString)
-    isempty(f) && throw(ArgumentError("empty format string"))
+    isempty(f) && throw(InvalidFormatStringError("Format string must not be empty", f, 1, 1))
     bytes = codeunits(f)
     len = length(bytes)
     pos = 1
     b = 0x00
-    while true
+    local last_percent_pos
+
+    # skip ahead to first format specifier
+    while pos <= len
         b = bytes[pos]
         pos += 1
-        (pos > len || (b == UInt8('%') && pos <= len && bytes[pos] != UInt8('%'))) && break
+        if b == UInt8('%')
+            last_percent_pos = pos-1
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, last_percent_pos))
+            if bytes[pos] == UInt8('%')
+                # escaped '%'
+                b = bytes[pos]
+                pos += 1
+            else
+                break
+            end
+        end
     end
     strs = [1:pos - 1 - (b == UInt8('%'))]
     fmts = []
@@ -107,7 +156,7 @@ function Format(f::AbstractString)
             else
                 break
             end
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
         end
@@ -126,7 +175,7 @@ function Format(f::AbstractString)
         precision = 0
         parsedprecdigits = false
         if b == UInt8('.')
-            pos > len && throw(ArgumentError("incomplete format string: '$f'"))
+            pos > len && throw(InvalidFormatStringError("Precision specifier is missing precision", f, last_percent_pos, pos-1))
             parsedprecdigits = true
             b = bytes[pos]
             pos += 1
@@ -142,19 +191,21 @@ function Format(f::AbstractString)
         # parse length modifier (ignored)
         if b == UInt8('h') || b == UInt8('l')
             prev = b
+            pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
             if b == prev
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
                 b = bytes[pos]
                 pos += 1
             end
-        elseif b in b"Ljqtz"
+        elseif b in b"Ljqtz" # q was a synonym for ll above, see `man 3 printf`. Not to be used.
+            pos > len && throw(InvalidFormatStringError("Length modifier is missing type specifier", f, last_percent_pos, pos-1))
             b = bytes[pos]
             pos += 1
         end
         # parse type
-        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(ArgumentError("invalid format string: '$f', invalid type specifier: '$(Char(b))'"))
+        !(b in b"diouxXDOUeEfFgGaAcCsSpn") && throw(InvalidFormatStringError("'$(Char(b))' is not a valid type specifier", f, last_percent_pos, pos-1))
         type = Val{Char(b)}
         if type <: Ints && precision > 0
             zero = false
@@ -171,7 +222,8 @@ function Format(f::AbstractString)
             b = bytes[pos]
             pos += 1
             if b == UInt8('%')
-                pos > len && throw(ArgumentError("invalid format string: '$f'"))
+                last_percent_pos = pos-1
+                pos > len && throw(InvalidFormatStringError("Format specifier is incomplete", f, last_percent_pos, last_percent_pos))
                 if bytes[pos] == UInt8('%')
                     # escaped '%'
                     b = bytes[pos]
@@ -207,15 +259,17 @@ end
 
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
     leftalign, width = spec.leftalign, spec.width
-    if !leftalign && width > 1
-        for _ = 1:(width - 1)
+    c = Char(first(arg))
+    w = textwidth(c)
+    if !leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
     end
-    pos = writechar(buf, pos, arg isa String ? arg[1] : Char(arg))
-    if leftalign && width > 1
-        for _ = 1:(width - 1)
+    pos = writechar(buf, pos, c)
+    if leftalign && width > w
+        for _ = 1:(width - w)
             buf[pos] = UInt8(' ')
             pos += 1
         end
@@ -227,7 +281,8 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    op = p = prec == -1 ? (length(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)) : prec
+    slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)
             buf[pos] = UInt8(' ')
@@ -246,9 +301,9 @@ end
         end
     end
     for c in str
-        p == 0 && break
+        p -= textwidth(c)
+        p < 0 && break
         pos = writechar(buf, pos, c)
-        p -= 1
     end
     if hash && arg isa AbstractString && p > 0
         buf[pos] = UInt8('"')
@@ -276,7 +331,8 @@ fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     bs = base(T)
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
-    x, neg = arg2 < 0 ? (-arg2, true) : (arg2, false)
+    neg = arg2 < 0
+    x = arg2 isa Base.BitSigned ? unsigned(abs(arg2)) : abs(arg2)
     arglen = n + (neg || (plus | space)) +
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)
@@ -365,21 +421,44 @@ For arbitrary precision numerics, you might extend the method like:
 ```julia
 Printf.tofloat(x::MyArbitraryPrecisionType) = BigFloat(x)
 ```
+
+!!! compat "Julia 1.6"
+    This function requires Julia 1.6 or later.
 """
 tofloat(x) = Float64(x)
 tofloat(x::Base.IEEEFloat) = x
 tofloat(x::BigFloat) = x
 
+_snprintf(ptr, siz, str, arg) =
+    @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, siz::Csize_t, str::Ptr{UInt8};
+                                   arg::Ref{BigFloat})::Cint
+
+# Arbitrary constant for a maximum number of bytes we want to output for a BigFloat.
+# 8KiB seems like a reasonable default. Larger BigFloat representations should probably
+# use a custom printing routine. Printing values with results larger than this ourselves
+# seems like a dangerous thing to do.
+const __BIG_FLOAT_MAX__ = 8192
+
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
-    if x isa BigFloat && isfinite(x)
-        ptr = pointer(buf, pos)
-        newpos = @ccall "libmpfr".mpfr_snprintf(ptr::Ptr{UInt8}, (length(buf) - pos + 1)::Csize_t, string(spec; modifier="R")::Ptr{UInt8}; arg::Ref{BigFloat})::Cint
-        newpos > 0 || error("invalid printf formatting for BigFloat")
-        return pos + newpos
-    elseif x isa BigFloat
+    if x isa BigFloat
+        if isfinite(x)
+            GC.@preserve buf begin
+                siz = length(buf) - pos + 1
+                str = string(spec; modifier="R")
+                required_length = _snprintf(pointer(buf, pos), siz, str, x)
+                if required_length > siz
+                    required_length > __BIG_FLOAT_MAX__ &&
+                        throw(ArgumentError("The given BigFloat requires $required_length bytes to be printed, which is more than the maximum of $__BIG_FLOAT_MAX__ bytes supported."))
+                    resize!(buf, required_length + 1)
+                    required_length = _snprintf(pointer(buf, pos), required_length + 1, str, x)
+                end
+                required_length > 0 || throw(ArgumentError("The given BigFloat would produce less than the maximum allowed number of bytes $__BIG_FLOAT_MAX__, but still couldn't be printed fully for an unknown reason."))
+                return pos + required_length
+            end
+        end
         x = Float64(x)
     end
     if T == Val{'e'} || T == Val{'E'}
@@ -387,11 +466,34 @@ tofloat(x::BigFloat) = x
     elseif T == Val{'f'} || T == Val{'F'}
         newpos = Ryu.writefixed(buf, pos, x, prec, plus, space, hash, UInt8('.'))
     elseif T == Val{'g'} || T == Val{'G'}
-        prec = prec == 0 ? 1 : prec
-        x = round(x, sigdigits=prec)
-        newpos = Ryu.writeshortest(buf, pos, x, plus, space, hash, prec, T == Val{'g'} ? UInt8('e') : UInt8('E'), true, UInt8('.'))
+        if isinf(x) || isnan(x)
+            newpos = Ryu.writeshortest(buf, pos, x, plus, space)
+        else
+            # C11-compliant general format
+            prec = prec == 0 ? 1 : prec
+            # format the value in scientific notation and parse the exponent part
+            exp = let p = Ryu.writeexp(buf, pos, x, prec)
+                b1, b2, b3, b4 = buf[p-4], buf[p-3], buf[p-2], buf[p-1]
+                Z = UInt8('0')
+                if b1 == UInt8('e')
+                    # two-digit exponent
+                    sign = b2 == UInt8('+') ? 1 : -1
+                    exp = 10 * (b3 - Z) + (b4 - Z)
+                else
+                    # three-digit exponent
+                    sign = b1 == UInt8('+') ? 1 : -1
+                    exp = 100 * (b2 - Z) + 10 * (b3 - Z) + (b4 - Z)
+                end
+                flipsign(exp, sign)
+            end
+            if -4 ≤ exp < prec
+                newpos = Ryu.writefixed(buf, pos, x, prec - (exp + 1), plus, space, hash, UInt8('.'), !hash)
+            else
+                newpos = Ryu.writeexp(buf, pos, x, prec - 1, plus, space, hash, T == Val{'g'} ? UInt8('e') : UInt8('E'), UInt8('.'), !hash)
+            end
+        end
     elseif T == Val{'a'} || T == Val{'A'}
-        x, neg = x < 0 ? (-x, true) : (x, false)
+        x, neg = x < 0 || x === -Base.zero(x) ? (-x, true) : (x, false)
         newpos = pos
         if neg
             buf[newpos] = UInt8('-')
@@ -422,6 +524,8 @@ tofloat(x::BigFloat) = x
                 buf[newpos] = UInt8('0')
                 newpos += 1
                 if prec > 0
+                    buf[newpos] = UInt8('.')
+                    newpos += 1
                     while prec > 0
                         buf[newpos] = UInt8('0')
                         newpos += 1
@@ -431,6 +535,7 @@ tofloat(x::BigFloat) = x
                 buf[newpos] = T <: Val{'a'} ? UInt8('p') : UInt8('P')
                 buf[newpos + 1] = UInt8('+')
                 buf[newpos + 2] = UInt8('0')
+                newpos += 3
             else
                 if prec > -1
                     s, p = frexp(x)
@@ -513,7 +618,13 @@ tofloat(x::BigFloat) = x
 end
 
 # pointers
-fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, Int(arg), ptrfmt(spec, arg))
+fmt(buf, pos, arg, spec::Spec{Pointer}) = fmt(buf, pos, UInt64(arg), ptrfmt(spec, arg))
+
+# position counters
+function fmt(buf, pos, arg::Ref{<:Integer}, ::Spec{PositionCounter})
+    arg[] = pos - 1
+    pos
+end
 
 # old Printf compat
 function fix_dec end
@@ -523,7 +634,9 @@ function ini_dec end
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
-    buf2 = Base.StringVector(309 + 17 + 5)
+    buf2 = Base.StringVector(
+        MAX_INTEGER_PART_WIDTH + MAX_FRACTIONAL_PART_WIDTH + MAX_FMT_CHARS_WIDTH
+    )
     ise = T <: Union{Val{'e'}, Val{'E'}}
     isg = T <: Union{Val{'g'}, Val{'G'}}
     isf = T <: Val{'f'}
@@ -645,9 +758,16 @@ const UNROLL_UPTO = 16
 # if you have your own buffer + pos, write formatted args directly to it
 @inline function format(buf::Vector{UInt8}, pos::Integer, f::Format, args...)
     # write out first substring
+    escapechar = false
     for i in f.substringranges[1]
-        buf[pos] = f.str[i]
-        pos += 1
+        b = f.str[i]
+        if !escapechar
+            buf[pos] = b
+            pos += 1
+            escapechar = b === UInt8('%')
+        else
+            escapechar = false
+        end
     end
     # for each format, write out arg and next substring
     # unroll up to 16 formats
@@ -656,8 +776,14 @@ const UNROLL_UPTO = 16
         if N >= i
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
@@ -665,32 +791,47 @@ const UNROLL_UPTO = 16
         for i = 17:length(f.formats)
             pos = fmt(buf, pos, args[i], f.formats[i])
             for j in f.substringranges[i + 1]
-                buf[pos] = f.str[j]
-                pos += 1
+                b = f.str[j]
+                if !escapechar
+                    buf[pos] = b
+                    pos += 1
+                    escapechar = b === UInt8('%')
+                else
+                    escapechar = false
+                end
             end
         end
     end
     return pos
 end
 
-plength(f::Spec{T}, x) where {T <: Chars} = max(f.width, 1) + (ncodeunits(x isa AbstractString ? x[1] : Char(x)) - 1)
+function plength(f::Spec{T}, x) where {T <: Chars}
+    c = Char(first(x))
+    w = textwidth(c)
+    return max(f.width, w) + (ncodeunits(c) - w)
+end
 plength(f::Spec{Pointer}, x) = max(f.width, 2 * sizeof(x) + 2)
 
 function plength(f::Spec{T}, x) where {T <: Strings}
     str = string(x)
-    p = f.precision == -1 ? (length(str) + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
-    return max(f.width, p) + (sizeof(str) - length(str))
+    sw = textwidth(str)
+    p = f.precision == -1 ? (sw + (f.hash ? (x isa Symbol ? 1 : 2) : 0)) : f.precision
+    return max(f.width, p) + (sizeof(str) - sw)
 end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
-    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+    return max(
+        f.width,
+        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+    )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, 0 + 309 + 17 + f.hash + 5)
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.precision + 309 + 17 + f.hash + 5)
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
+plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)
     len = sum(length, substringranges)
@@ -710,7 +851,7 @@ plength(f::Spec{T}, x) where {T <: Floats} =
 end
 
 @noinline argmismatch(a, b) =
-    throw(ArgumentError("mismatch between # of format specifiers and provided args: $a != $b"))
+    throw(ArgumentError("Number of format specifiers and number of provided args differ: $a != $b"))
 
 """
     Printf.format(f::Printf.Format, args...) => String
@@ -740,21 +881,56 @@ end
 """
     @printf([io::IO], "%Fmt", args...)
 
-Print `args` using C `printf` style format specification string, with some caveats:
+Print `args` using C `printf` style format specification string.
+Optionally, an `IO` may be passed as the first argument to redirect output.
+
+# Examples
+```jldoctest
+julia> @printf "Hello %s" "world"
+Hello world
+
+julia> @printf "Scientific notation %e" 1.234
+Scientific notation 1.234000e+00
+
+julia> @printf "Scientific notation three digits %.3e" 1.23456
+Scientific notation three digits 1.235e+00
+
+julia> @printf "Decimal two digits %.2f" 1.23456
+Decimal two digits 1.23
+
+julia> @printf "Padded to length 5 %5i" 123
+Padded to length 5   123
+
+julia> @printf "Padded with zeros to length 6 %06i" 123
+Padded with zeros to length 6 000123
+
+julia> @printf "Use shorter of decimal or scientific %g %g" 1.23 12300000.0
+Use shorter of decimal or scientific 1.23 1.23e+07
+```
+
+For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
+See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
+
+# Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
 equally close to the numeric values of two possible output strings, the output
 string further away from zero is chosen.
-Optionally, an `IO`
-may be passed as the first argument to redirect output.
-See also: [`@sprintf`](@ref)
+
 # Examples
 ```jldoctest
-julia> @printf("%f %F %f %F\\n", Inf, Inf, NaN, NaN)
-Inf Inf NaN NaN\n
-julia> @printf "%.0f %.1f %f\\n" 0.5 0.025 -0.0078125
+julia> @printf("%f %F %f %F", Inf, Inf, NaN, NaN)
+Inf Inf NaN NaN
+
+julia> @printf "%.0f %.1f %f" 0.5 0.025 -0.0078125
 0 0.0 -0.007812
 ```
+
+!!! compat "Julia 1.8"
+    Starting in Julia 1.8, `%s` (string) and `%c` (character) widths are computed
+    using [`textwidth`](@ref), which e.g. ignores zero-width characters
+    (such as combining characters for diacritical marks) and treats certain
+    "wide" characters (e.g. emoji) as width `2`.
 """
 macro printf(io_or_fmt, args...)
     if io_or_fmt isa String
@@ -762,8 +938,10 @@ macro printf(io_or_fmt, args...)
         return esc(:($Printf.format(stdout, $fmt, $(args...))))
     else
         io = io_or_fmt
-        isempty(args) && throw(ArgumentError("must provide required format string"))
-        fmt = Format(args[1])
+        isempty(args) && throw(ArgumentError("No format string provided to `@printf` - use like `@printf [io] <format string> [<args...>]."))
+        fmt_str = first(args)
+        fmt_str isa String || throw(ArgumentError("First argument to `@printf` after `io` must be a format string"))
+        fmt = Format(fmt_str)
         return esc(:($Printf.format($io, $fmt, $(Base.tail(args)...))))
     end
 end
@@ -771,7 +949,8 @@ end
 """
     @sprintf("%Fmt", args...)
 
-Return `@printf` formatted output as string.
+Return [`@printf`](@ref) formatted output as string.
+
 # Examples
 ```jldoctest
 julia> @sprintf "this is a %s %15.1f" "test" 34.567
@@ -779,6 +958,7 @@ julia> @sprintf "this is a %s %15.1f" "test" 34.567
 ```
 """
 macro sprintf(fmt, args...)
+    fmt isa String || throw(ArgumentError("First argument to `@sprintf` must be a format string."))
     f = Format(fmt)
     return esc(:($Printf.format($f, $(args...))))
 end

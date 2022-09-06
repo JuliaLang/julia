@@ -56,8 +56,10 @@
  * and update fs:[0xEOC] to contain the address of the stack
  */
 
-#define CNAME jl_setjmp
+#define CNAME ijl_setjmp
 #include "ENTRY.i387.h"
+.globl _jl_setjmp
+_jl_setjmp:
     mov    eax,DWORD PTR [esp+4] // arg 1
     mov    edx,DWORD PTR [esp+0] // rta
     mov    DWORD PTR [eax+0],ebp
@@ -73,8 +75,10 @@
 #include "END.h"
 
 
-#define CNAME jl_longjmp
+#define CNAME ijl_longjmp
 #include "ENTRY.i387.h"
+.globl _jl_longjmp
+_jl_longjmp:
     mov    edx,DWORD PTR [esp+4] // arg 1
     mov    eax,DWORD PTR [esp+8] // arg 2
     mov    ebp,DWORD PTR [edx+24] // seh registration
@@ -87,14 +91,16 @@
     mov    ebp,DWORD PTR [edx+0]
     mov    DWORD PTR [esp],ecx
     test   eax,eax
-    jne    a
+    jne    1f
     inc    eax
-a:  ret    // jmp ecx
+1:  ret    // jmp ecx
 #include "END.h"
 
 
-#define CNAME jl_swapcontext
+#define CNAME ijl_swapcontext
 #include "ENTRY.i387.h"
+.globl _jl_swapcontext
+_jl_swapcontext:
     mov    eax,DWORD PTR [esp+4]
     // save stack registers
     mov    edx,DWORD PTR fs:[8] // stack top (low)
@@ -118,8 +124,10 @@ a:  ret    // jmp ecx
 #include "END.h"
 
 
-#define CNAME jl_setcontext
+#define CNAME ijl_setcontext
 #include "ENTRY.i387.h"
+.globl _jl_setcontext
+_jl_setcontext:
     mov    eax,DWORD PTR [esp+4]
     // restore stack registers
     mov    edx,DWORD PTR [eax+0]
