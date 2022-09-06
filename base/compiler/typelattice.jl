@@ -78,7 +78,7 @@ InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetyp
     InterConditional(slot_id(var), thentype, elsetype)
 
 const AnyConditional = Union{Conditional,InterConditional}
-Conditional(cnd::InterConditional) = Conditinal(cnd.slot, cnd.thentype, cnd.elsetype)
+Conditional(cnd::InterConditional) = Conditional(cnd.slot, cnd.thentype, cnd.elsetype)
 InterConditional(cnd::Conditional) = InterConditional(cnd.slot, cnd.thentype, cnd.elsetype)
 
 struct PartialTypeVar
@@ -106,7 +106,7 @@ struct StateUpdate
 end
 
 # Represent that the type estimate has been approximated, due to "causes"
-# (only used in abstract interpretion, doesn't appear in optimization)
+# (only used in abstract interpretation, doesn't appear in optimization)
 # N.B. in the lattice, this is epsilon smaller than `typ` (except Union{})
 struct LimitedAccuracy
     typ

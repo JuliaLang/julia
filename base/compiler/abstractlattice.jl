@@ -60,7 +60,7 @@ const IPOResultLattice = typeof(InterConditionalsLattice(PartialsLattice(ConstsL
 """
     struct InferenceLattice{L}
 
-The full lattice used for abstract interpration during inference. Takes
+The full lattice used for abstract interpretation during inference. Takes
 a base lattice and adjoins `LimitedAccuracy`.
 """
 struct InferenceLattice{L} <: AbstractLattice
@@ -85,7 +85,7 @@ is_valid_lattice(lattice::OptimizerLattice, @nospecialize(elem)) =
     tmeet(lattice, a, b::Type)
 
 Compute the lattice meet of lattice elements `a` and `b` over the lattice
-`lattice`. If `lattice` is `JLTypeLattice`, this is equiavalent to type
+`lattice`. If `lattice` is `JLTypeLattice`, this is equivalent to type
 intersection. Note that currently `b` is restricted to being a type (interpreted
 as a lattice element in the JLTypeLattice sub-lattice of `lattice`).
 """
@@ -113,7 +113,7 @@ function tmerge end
 
 Compute the lattice ordering (i.e. less-than-or-equal) relationship between
 lattice elements `a` and `b` over the lattice `lattice`. If `lattice` is
-`JLTypeLattice`, this is equiavalent to subtyping.
+`JLTypeLattice`, this is equivalent to subtyping.
 """
 function ⊑ end
 

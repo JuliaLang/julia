@@ -601,7 +601,7 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
 
 # https://github.com/JuliaLang/julia/issues/42078
-# idempotency of callsite inling
+# idempotency of callsite inlining
 function getcache(mi::Core.MethodInstance)
     cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
     codeinf = Core.Compiler.get(cache, mi, nothing)
@@ -638,7 +638,7 @@ let
 end
 
 begin
-    # more idempotency of callsite inling
+    # more idempotency of callsite inlining
     # -----------------------------------
     # this test case requires forced constant propagation for callsite inlined function call,
     # particularly, in the following example, the inlinear will look up `+ₚ(::Point, ::Const(Point(2.25, 4.75)))`
@@ -927,7 +927,7 @@ let # aggressive inlining of single, abstract method match (with constant-prop'e
     # both callsite should be inlined with constant-prop'ed result
     @test count(isinvoke(:isType), src.code) == 2
     @test count(isinvoke(:has_free_typevars), src.code) == 0
-    # `isGoodType(y::Any)` isn't fully convered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
     @test count(iscall((src,isGoodType2)), src.code) == 1
 end
 

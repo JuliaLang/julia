@@ -1011,7 +1011,7 @@ mktempdir() do dir
                     LibGit2.Signature(repo)
                 catch ex
                     # these test configure repo with new signature
-                    # in case when global one does not exsist
+                    # in case when global one does not exist
                     @test isa(ex, LibGit2.Error.GitError) == true
 
                     cfg = LibGit2.GitConfig(repo)

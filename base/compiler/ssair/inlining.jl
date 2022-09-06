@@ -81,7 +81,7 @@ end
 @specialize
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::InliningState, propagate_inbounds::Bool)
-    # Go through the function, performing simple ininlingin (e.g. replacing call by constants
+    # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
@@ -1174,7 +1174,7 @@ function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), sta
         # Narrow opaque closure type
         newT = widenconst(tmeet(OptimizerLattice(), tmerge(OptimizerLattice(), lb, info.unspec.rt), ub))
         if newT != ub
-            # N.B.: Narrowing the ub requires a backdge on the mi whose type
+            # N.B.: Narrowing the ub requires a backedge on the mi whose type
             # information we're using, since a change in that function may
             # invalidate ub result.
             stmt.args[3] = newT
@@ -1329,7 +1329,7 @@ function compute_inlining_cases(infos::Vector{MethodMatchInfo},
         handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, #=allow_typevars=#true)
     elseif length(cases) == 0 && only_method isa Method
         # if the signature is fully covered and there is only one applicable method,
-        # we can try to inline it even in the prescence of unmatched sparams
+        # we can try to inline it even in the presence of unmatched sparams
         # -- But don't try it if we already tried to handle the match in the revisit_idx
         # case, because that'll (necessarily) be the same method.
         if length(infos) > 1
@@ -1676,7 +1676,7 @@ function early_inline_special_case(
         setting = setting.val
         isa(setting, Symbol) || return nothing
         setting === :const || setting === :conditional || setting === :type || return nothing
-        # barrierred successfully already, eliminate it
+        # barriered successfully already, eliminate it
         return SomeCase(stmt.args[3])
     end
     return nothing

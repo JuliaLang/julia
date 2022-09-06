@@ -559,7 +559,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         end
 
         if isdefined(method, :recursion_relation)
-            # We don't recquire the recursion_relation to be transitive, so
+            # We don't require the recursion_relation to be transitive, so
             # apply a hard limit
             hardlimit = true
         end
@@ -855,7 +855,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
         value = try
             Core._call_in_world_total(world, f, args...)
         catch
-            # The evaulation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
+            # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
             return ConstCallResults(Union{}, ConcreteResult(result.edge::MethodInstance, result.effects), result.effects)
         end
         if is_inlineable_constant(value) || call_result_unused(sv)
@@ -1449,7 +1449,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::
             for j = 1:length(ctypes)
                 ct = ctypes[j]::Vector{Any}
                 if isvarargtype(ct[end])
-                    # This is vararg, we're not gonna be able to do any inling,
+                    # This is vararg, we're not gonna be able to do any inlining,
                     # drop the info
                     info = nothing
                     tail = tuple_tail_elem(unwrapva(ct[end]), cti)
