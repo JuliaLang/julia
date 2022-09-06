@@ -335,7 +335,7 @@ add (generic function with 1 method)
 
 julia> """
            add(x, y)
-
+       
        This sums up `x` and `y` and returns the result.
        """
        arithmetic.add
