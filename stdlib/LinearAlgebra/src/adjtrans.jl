@@ -453,8 +453,14 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
 
-
-_mapreduce(f, op, a::IndexStyle, x::Transpose) = _mapreduce(f∘transpose, op, a, x.parent)
-_mapreduce(f, op, a::IndexStyle, x::Adjoint) = _mapreduce(f∘adjoint, op, a, x.parent)
-_mapreduce(f, op, x::Transpose) = _mapreduce(f∘transpose, op, IndexStyle(x.parent), x.parent)
-_mapreduce(f, op, x::Adjoint) = _mapreduce(f∘adjoint, op, IndexStyle(x.parent), x.parent)
+## reductions
+for (ttype, transform) in ((:Adjoint, adjoint), (:Transpose, transpose))
+    @eval _mapreduce(f, op, ::IndexStyle, A::$ttype) =
+        _mapreduce(f∘$transform, op, IndexStyle(parent(A)), parent(A))
+    @eval _mapreduce_dim(f, op, ::Base._InitialValue, A::$ttype, ::Colon) =
+        _mapreduce(f∘$transform, op, IndexStyle(parent(A)), parent(A))
+    @eval Base._count(f, A::$ttype, ::Colon, init) =
+        Base._count(f∘$transform, parent(A), :, init)
+    @eval Base._any(f, A::$ttype, ::Colon) = Base._any(f∘$transform, parent(A), :)
+    @eval Base._all(f, A::$ttype, ::Colon) = Base._all(f∘$transform, parent(A), :)
+end
