@@ -1,6 +1,3 @@
-#![feature(thread_id_value)]
-#![feature(vec_into_raw_parts)]
-
 extern crate log;
 extern crate libc;
 extern crate mmtk;
