@@ -187,7 +187,7 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
     return NULL;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used

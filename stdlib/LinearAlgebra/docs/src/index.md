@@ -1,7 +1,7 @@
 # [Linear Algebra](@id man-linalg)
 
 ```@meta
-DocTestSetup = :(using LinearAlgebra, SparseArrays, SuiteSparse)
+DocTestSetup = :(using LinearAlgebra)
 ```
 
 In addition to (and as part of) its support for multi-dimensional arrays, Julia provides native implementations
@@ -60,7 +60,7 @@ julia> A = [1.5 2 -4; 3 -1 -6; -10 2.3 4]
  -10.0   2.3   4.0
 
 julia> factorize(A)
-LU{Float64, Matrix{Float64}}
+LU{Float64, Matrix{Float64}, Vector{Int64}}
 L factor:
 3×3 Matrix{Float64}:
   1.0    0.0       0.0
@@ -84,7 +84,7 @@ julia> B = [1.5 2 -4; 2 -1 -3; -4 -3 5]
  -4.0  -3.0   5.0
 
 julia> factorize(B)
-BunchKaufman{Float64, Matrix{Float64}}
+BunchKaufman{Float64, Matrix{Float64}, Vector{Int64}}
 D factor:
 3×3 Tridiagonal{Float64, Vector{Float64}}:
  -1.64286   0.0   ⋅
@@ -183,10 +183,10 @@ as well as whether hooks to various optimized methods for them in LAPACK are ava
 |:----------------------------- |:--- |:--- |:--- |:--- |:----------------------------------------------------------- |
 | [`Symmetric`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
 | [`Hermitian`](@ref)           |     |     |     | MV  | [`inv`](@ref), [`sqrt`](@ref), [`exp`](@ref)                |
-| [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
-| [`UnitLowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref)                                |
+| [`UpperTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
+| [`UnitUpperTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
+| [`LowerTriangular`](@ref)     |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
+| [`UnitLowerTriangular`](@ref) |     |     | MV  | MV  | [`inv`](@ref), [`det`](@ref), [`logdet`](@ref)                                |
 | [`UpperHessenberg`](@ref)     |     |     |     | MM  | [`inv`](@ref), [`det`](@ref)                                |
 | [`SymTridiagonal`](@ref)      | M   | M   | MS  | MV  | [`eigmax`](@ref), [`eigmin`](@ref)                          |
 | [`Tridiagonal`](@ref)         | M   | M   | MS  | MV  |                                                             |
@@ -266,7 +266,7 @@ julia> b = [1 2 3; 4 5 6]
  4  5  6
 
 julia> b - U
-ERROR: DimensionMismatch("matrix is not square: dimensions are (2, 3)")
+ERROR: DimensionMismatch: matrix is not square: dimensions are (2, 3)
 Stacktrace:
 [...]
 ```
@@ -308,17 +308,22 @@ of the Linear Algebra documentation.
 
 ## Standard functions
 
-Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/). Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com). Other sparse solvers are available as Julia packages.
+Linear algebra functions in Julia are largely implemented by calling functions from [LAPACK](http://www.netlib.org/lapack/).
+Sparse matrix factorizations call functions from [SuiteSparse](http://suitesparse.com).
+Other sparse solvers are available as Julia packages.
 
 ```@docs
 Base.:*(::AbstractMatrix, ::AbstractMatrix)
 Base.:\(::AbstractMatrix, ::AbstractVecOrMat)
+Base.:/(::AbstractVecOrMat, ::AbstractVecOrMat)
 LinearAlgebra.SingularException
 LinearAlgebra.PosDefException
 LinearAlgebra.ZeroPivotException
 LinearAlgebra.dot
 LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
+LinearAlgebra.axpy!
+LinearAlgebra.axpby!
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
 LinearAlgebra.Bidiagonal
@@ -487,7 +492,8 @@ linear algebra routines it is useful to call the BLAS functions directly.
 
 `LinearAlgebra.BLAS` provides wrappers for some of the BLAS functions. Those BLAS functions
 that overwrite one of the input arrays have names ending in `'!'`.  Usually, a BLAS function has
-four methods defined, for [`Float64`](@ref), [`Float32`](@ref), `ComplexF64`, and `ComplexF32` arrays.
+four methods defined, for [`Float32`](@ref), [`Float64`](@ref), [`ComplexF32`](@ref Complex),
+and [`ComplexF64`](@ref Complex) arrays.
 
 ### [BLAS character arguments](@id stdlib-blas-chars)
 Many BLAS functions accept arguments that determine whether to transpose an argument (`trans`),
@@ -521,63 +527,124 @@ the input argument belongs on (`side`). The possibilities are:
 | `'N'`       | The diagonal values of the matrix `X` will be read.       |
 | `'U'`       | The diagonal of the matrix `X` is assumed to be all ones. |
 
+
 ```@docs
 LinearAlgebra.BLAS
+LinearAlgebra.BLAS.set_num_threads
+LinearAlgebra.BLAS.get_num_threads
+```
+
+BLAS functions can be divided into three groups, also called three levels,
+depending on when they were first proposed, the type of input parameters,
+and the complexity of the operation.
+
+### Level 1 BLAS functions
+
+The level 1 BLAS functions were first proposed in [(Lawson, 1979)][Lawson-1979] and
+define operations between scalars and vectors.
+
+[Lawson-1979]: https://dl.acm.org/doi/10.1145/355841.355847
+
+```@docs
+# xROTG
+# xROTMG
+LinearAlgebra.BLAS.rot!
+# xROTM
+# xSWAP
+LinearAlgebra.BLAS.scal!
+LinearAlgebra.BLAS.scal
+LinearAlgebra.BLAS.blascopy!
+LinearAlgebra.BLAS.axpy!
+LinearAlgebra.BLAS.axpby!
 LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
-LinearAlgebra.BLAS.blascopy!
+# xxDOT
 LinearAlgebra.BLAS.nrm2
 LinearAlgebra.BLAS.asum
-LinearAlgebra.axpy!
-LinearAlgebra.axpby!
-LinearAlgebra.BLAS.scal!
-LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.iamax
-LinearAlgebra.BLAS.ger!
-LinearAlgebra.BLAS.syr!
-LinearAlgebra.BLAS.syrk!
-LinearAlgebra.BLAS.syrk
-LinearAlgebra.BLAS.syr2k!
-LinearAlgebra.BLAS.syr2k
-LinearAlgebra.BLAS.her!
-LinearAlgebra.BLAS.herk!
-LinearAlgebra.BLAS.herk
-LinearAlgebra.BLAS.her2k!
-LinearAlgebra.BLAS.her2k
-LinearAlgebra.BLAS.gbmv!
-LinearAlgebra.BLAS.gbmv
-LinearAlgebra.BLAS.sbmv!
-LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.gemm!
-LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)
+```
+
+### Level 2 BLAS functions
+
+The level 2 BLAS functions were published in [(Dongarra, 1988)][Dongarra-1988],
+and define matrix-vector operations.
+
+[Dongarra-1988]: https://dl.acm.org/doi/10.1145/42288.42291
+
+**return a vector**
+```@docs
 LinearAlgebra.BLAS.gemv!
 LinearAlgebra.BLAS.gemv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.gemv(::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symm!
-LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symv!
-LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.hemm!
-LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
-LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.gbmv!
+LinearAlgebra.BLAS.gbmv
 LinearAlgebra.BLAS.hemv!
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any, ::Any)
 LinearAlgebra.BLAS.hemv(::Any, ::Any, ::Any)
+# hbmv!, hbmv
+LinearAlgebra.BLAS.hpmv!
+LinearAlgebra.BLAS.symv!
+LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.symv(::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.sbmv!
+LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.sbmv(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.spmv!
+LinearAlgebra.BLAS.trmv!
+LinearAlgebra.BLAS.trmv
+# xTBMV
+# xTPMV
+LinearAlgebra.BLAS.trsv!
+LinearAlgebra.BLAS.trsv
+# xTBSV
+# xTPSV
+```
+
+**return a matrix**
+```@docs
+LinearAlgebra.BLAS.ger!
+# xGERU
+# xGERC
+LinearAlgebra.BLAS.her!
+# xHPR
+# xHER2
+# xHPR2
+LinearAlgebra.BLAS.syr!
+LinearAlgebra.BLAS.spr!
+# xSYR2
+# xSPR2
+```
+
+### Level 3 BLAS functions
+
+The level 3 BLAS functions were published in [(Dongarra, 1990)][Dongarra-1990],
+and define matrix-matrix operations.
+
+[Dongarra-1990]: https://dl.acm.org/doi/10.1145/77626.79170
+
+```@docs
+LinearAlgebra.BLAS.gemm!
+LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.gemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.symm!
+LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.symm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm!
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.hemm(::Any, ::Any, ::Any, ::Any)
+LinearAlgebra.BLAS.syrk!
+LinearAlgebra.BLAS.syrk
+LinearAlgebra.BLAS.herk!
+LinearAlgebra.BLAS.herk
+LinearAlgebra.BLAS.syr2k!
+LinearAlgebra.BLAS.syr2k
+LinearAlgebra.BLAS.her2k!
+LinearAlgebra.BLAS.her2k
 LinearAlgebra.BLAS.trmm!
 LinearAlgebra.BLAS.trmm
 LinearAlgebra.BLAS.trsm!
 LinearAlgebra.BLAS.trsm
-LinearAlgebra.BLAS.trmv!
-LinearAlgebra.BLAS.trmv
-LinearAlgebra.BLAS.trsv!
-LinearAlgebra.BLAS.trsv
-LinearAlgebra.BLAS.set_num_threads
-LinearAlgebra.BLAS.get_num_threads
 ```
 
 ## LAPACK functions

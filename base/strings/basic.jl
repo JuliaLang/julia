@@ -16,7 +16,7 @@ about strings:
   * Each `AbstractChar` in a string is encoded by one or more code units
   * Only the index of the first code unit of an `AbstractChar` is a valid index
   * The encoding of an `AbstractChar` is independent of what precedes or follows it
-  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
+  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
 
 [self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
 
@@ -46,8 +46,8 @@ AbstractString
     ncodeunits(s::AbstractString) -> Int
 
 Return the number of code units in a string. Indices that are in bounds to
-access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indices
-are valid – they may not be the start of a character, but they will return a
+access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indices
+are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
 # Examples
@@ -104,7 +104,7 @@ UInt8
 
 See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
@@ -140,7 +140,7 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds isvalid(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
@@ -154,7 +154,7 @@ protocol may assume that `i` is the start of a character in `s`.
 
 See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds iterate(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
 
 ## basic generic definitions ##
@@ -389,7 +389,7 @@ length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
+        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -438,8 +438,8 @@ thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s)::Int + 1
     i == z && return i
-    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
+    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i
@@ -498,7 +498,7 @@ function prevind(s::AbstractString, i::Int, n::Int)
     z = ncodeunits(s) + 1
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && 1 < i
+    while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
     end
     return i - n
@@ -557,7 +557,7 @@ function nextind(s::AbstractString, i::Int, n::Int)
     z = ncodeunits(s)
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && i < z
+    while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)
     end
     return i + n
@@ -780,3 +780,16 @@ julia> codeunits("Juλia")
 ```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
+
+function _split_rest(s::AbstractString, n::Int)
+    lastind = lastindex(s)
+    i = try
+        prevind(s, lastind, n)
+    catch e
+        e isa BoundsError || rethrow()
+        _check_length_split_rest(length(s), n)
+    end
+    last_n = SubString(s, nextind(s, i), lastind)
+    front = s[begin:i]
+    return front, last_n
+end

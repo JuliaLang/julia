@@ -197,7 +197,8 @@ end
 Create all intermediate directories in the `path` as required. Directories are created with
 the permissions `mode` which defaults to `0o777` and is modified by the current file
 creation mask. Unlike [`mkdir`](@ref), `mkpath` does not error if `path` (or parts of it)
-already exists. Return `path`.
+already exists. However, an error will be thrown if `path` (or parts of it) points to an
+existing file. Return `path`.
 
 If `path` includes a filename you will probably want to use `mkpath(dirname(path))` to
 avoid creating a directory using the filename.
@@ -321,7 +322,7 @@ function checkfor_mv_cp_cptree(src::AbstractString, dst::AbstractString, txt::Ab
             if Base.samefile(src, dst)
                 abs_src = islink(src) ? abspath(readlink(src)) : abspath(src)
                 abs_dst = islink(dst) ? abspath(readlink(dst)) : abspath(dst)
-                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir.",
+                throw(ArgumentError(string("'src' and 'dst' refer to the same file/dir. ",
                                            "This is not supported.\n  ",
                                            "`src` refers to: $(abs_src)\n  ",
                                            "`dst` refers to: $(abs_dst)\n")))
@@ -428,6 +429,7 @@ end
 
 """
     touch(path::AbstractString)
+    touch(fd::File)
 
 Update the last-modified timestamp on a file to the current time.
 
@@ -453,18 +455,13 @@ We can see the [`mtime`](@ref) has been modified by `touch`.
 function touch(path::AbstractString)
     f = open(path, JL_O_WRONLY | JL_O_CREAT, 0o0666)
     try
-        if Sys.isunix()
-            ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
-            systemerror(:futimes, ret != 0, extrainfo=path)
-        else
-            t = time()
-            futime(f,t,t)
-        end
+        touch(f)
     finally
         close(f)
     end
     path
 end
+
 
 """
     tempdir()
@@ -554,15 +551,52 @@ end
 
 const temp_prefix = "jl_"
 
-if Sys.iswindows()
+# Use `Libc.rand()` to generate random strings
+function _rand_filename(len = 10)
+    slug = Base.StringVector(len)
+    chars = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for i = 1:len
+        slug[i] = chars[(Libc.rand() % length(chars)) + 1]
+    end
+    return String(slug)
+end
 
-function _win_tempname(temppath::AbstractString, uunique::UInt32)
+
+# Obtain a temporary filename.
+function tempname(parent::AbstractString=tempdir(); max_tries::Int = 100, cleanup::Bool=true)
+    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
+
+    prefix = joinpath(parent, temp_prefix)
+    filename = nothing
+    for i in 1:max_tries
+        filename = string(prefix, _rand_filename())
+        if ispath(filename)
+            filename = nothing
+        else
+            break
+        end
+    end
+
+    if filename === nothing
+        error("tempname: max_tries exhausted")
+    end
+
+    cleanup && temp_cleanup_later(filename)
+    return filename
+end
+
+if Sys.iswindows()
+# While this isn't a true analog of `mkstemp`, it _does_ create an
+# empty file for us, ensuring that other simultaneous calls to
+# `_win_mkstemp()` won't collide, so it's a better name for the
+# function than `tempname()`.
+function _win_mkstemp(temppath::AbstractString)
     tempp = cwstring(temppath)
     temppfx = cwstring(temp_prefix)
     tname = Vector{UInt16}(undef, 32767)
     uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
                     (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, uunique, tname)
+                    tempp, temppfx, UInt32(0), tname)
     windowserror("GetTempFileName", uunique == 0)
     lentname = something(findfirst(iszero, tname))
     @assert lentname > 0
@@ -571,48 +605,12 @@ function _win_tempname(temppath::AbstractString, uunique::UInt32)
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    filename = _win_tempname(parent, UInt32(0))
+    filename = _win_mkstemp(parent)
     cleanup && temp_cleanup_later(filename)
     return (filename, Base.open(filename, "r+"))
 end
 
-# generate a random string from random bytes
-function _rand_string()
-    nchars = 10
-    A = Vector{UInt8}(undef, nchars)
-    windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-        (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-            A, sizeof(A)))
-
-    slug = Base.StringVector(10)
-    chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-    for i = 1:nchars
-        slug[i] = chars[(A[i] % length(chars)) + 1]
-    end
-    return name = String(slug)
-end
-
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    name = _rand_string()
-    filename = joinpath(parent, temp_prefix * name)
-    @assert !ispath(filename)
-    cleanup && temp_cleanup_later(filename)
-    return filename
-end
-
 else # !windows
-
-# Obtain a temporary filename.
-function tempname(parent::AbstractString=tempdir(); cleanup::Bool=true)
-    isdir(parent) || throw(ArgumentError("$(repr(parent)) is not a directory"))
-    p = ccall(:tempnam, Cstring, (Cstring, Cstring), parent, temp_prefix)
-    systemerror(:tempnam, p == C_NULL)
-    s = unsafe_string(p)
-    Libc.free(p)
-    cleanup && temp_cleanup_later(s)
-    return s
-end
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
@@ -622,7 +620,6 @@ function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)
     cleanup && temp_cleanup_later(b)
     return (b, fdio(p, true))
 end
-
 
 end # os-test
 
@@ -796,6 +793,8 @@ By default, `readdir` sorts the list of names it returns. If you want to skip
 sorting the names and get them in the order that the file system lists them,
 you can use `readdir(dir, sort=false)` to opt out of sorting.
 
+See also: [`walkdir`](@ref).
+
 !!! compat "Julia 1.4"
     The `join` and `sort` keyword arguments require at least Julia 1.4.
 
@@ -894,6 +893,8 @@ The directory tree can be traversed top-down or bottom-up.
 If `walkdir` or `stat` encounters a `IOError` it will rethrow the error by default.
 A custom error handling function can be provided through `onerror` keyword argument.
 `onerror` is called with a `IOError` as argument.
+
+See also: [`readdir`](@ref).
 
 # Examples
 ```julia
@@ -1061,7 +1062,7 @@ See also: [`hardlink`](@ref).
 
 !!! compat "Julia 1.6"
     The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
-    symlinks to nonexistant paths on windows would always be file symlinks, and
+    symlinks to nonexistent paths on windows would always be file symlinks, and
     relative symlinks to directories were not supported.
 """
 function symlink(target::AbstractString, link::AbstractString;

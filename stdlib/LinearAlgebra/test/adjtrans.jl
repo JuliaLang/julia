@@ -2,7 +2,7 @@
 
 module TestAdjointTranspose
 
-using Test, LinearAlgebra, SparseArrays
+using Test, LinearAlgebra
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -354,14 +354,6 @@ end
     @test broadcast(+, Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1
     @test broadcast(+, Adjoint(vec), 1im, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec .+ 1im
     @test broadcast(+, Transpose(vec), 1im, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1im
-    # ascertain inference friendliness, ref. https://github.com/JuliaLang/julia/pull/25083#issuecomment-353031641
-    sparsevec = SparseVector([1.0, 2.0, 3.0])
-    @test map(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test map(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Adjoint(sparsevec), 1.0, Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Transpose(sparsevec), 1.0, Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
 end
 
 @testset "Adjoint/Transpose-wrapped vector multiplication" begin

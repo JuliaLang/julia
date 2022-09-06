@@ -34,7 +34,7 @@ assert_havelock(l::AbstractLock, tid::Nothing) = concurrency_violation()
 This struct does not implement a real lock, but instead
 pretends to be always locked on the original thread it was allocated on,
 and simply ignores all other interactions.
-It also does not synchronize tasks; for that use a real lock such as [`RecursiveLock`](@ref).
+It also does not synchronize tasks; for that use a real lock such as [`ReentrantLock`](@ref).
 This can be used in the place of a real lock to, instead, simply and cheaply assert
 that the operation is only occurring on a single cooperatively-scheduled thread.
 It is thus functionally equivalent to allocating a real, recursive, task-unaware lock
@@ -61,12 +61,12 @@ Abstract implementation of a condition object
 for synchronizing tasks objects with a given lock.
 """
 struct GenericCondition{L<:AbstractLock}
-    waitq::InvasiveLinkedList{Task}
+    waitq::IntrusiveLinkedList{Task}
     lock::L
 
-    GenericCondition{L}() where {L<:AbstractLock} = new{L}(InvasiveLinkedList{Task}(), L())
-    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(InvasiveLinkedList{Task}(), l)
-    GenericCondition(l::AbstractLock) = new{typeof(l)}(InvasiveLinkedList{Task}(), l)
+    GenericCondition{L}() where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), L())
+    GenericCondition{L}(l::L) where {L<:AbstractLock} = new{L}(IntrusiveLinkedList{Task}(), l)
+    GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
 end
 
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
@@ -91,7 +91,7 @@ function _wait2(c::GenericCondition, waiter::Task)
         # XXX: Ideally we would be able to unset this
         ct.sticky = true
         tid = Threads.threadid()
-        ccall(:jl_set_task_tid, Cvoid, (Any, Cint), waiter, tid-1)
+        ccall(:jl_set_task_tid, Cint, (Any, Cint), waiter, tid-1)
     end
     return
 end
@@ -139,7 +139,7 @@ is raised as an exception in the woken tasks.
 
 Return the count of tasks woken up. Return 0 if no tasks are waiting on `condition`.
 """
-notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
+@constprop :none notify(c::GenericCondition, @nospecialize(arg = nothing); all=true, error=false) = notify(c, arg, all, error)
 function notify(c::GenericCondition, @nospecialize(arg), all, error)
     assert_havelock(c)
     cnt = 0

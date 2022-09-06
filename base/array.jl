@@ -120,7 +120,7 @@ const DenseVecOrMat{T} = Union{DenseVector{T}, DenseMatrix{T}}
 
 ## Basic functions ##
 
-import Core: arraysize, arrayset, arrayref, const_arrayref
+using Core: arraysize, arrayset, const_arrayref
 
 vect() = Vector{Any}()
 vect(X::T...) where {T} = T[ X[i] for i = 1:length(X) ]
@@ -142,9 +142,7 @@ julia> a = Base.vect(UInt8(1), 2.5, 1//2)
 """
 function vect(X...)
     T = promote_typeof(X...)
-    #T[ X[i] for i=1:length(X) ]
-    # TODO: this is currently much faster. should figure out why. not clear.
-    return copyto!(Vector{T}(undef, length(X)), X)
+    return T[X...]
 end
 
 size(a::Array, d::Integer) = arraysize(a, convert(Int, d))
@@ -154,7 +152,7 @@ size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::D
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(T::Type) = (@_pure_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -193,17 +191,17 @@ end
 
 
 """
-    Base.bitsunionsize(U::Union)
+    Base.bitsunionsize(U::Union) -> Int
 
 For a `Union` of [`isbitstype`](@ref) types, return the size of the largest type; assumes `Base.isbitsunion(U) == true`.
 
 # Examples
 ```jldoctest
 julia> Base.bitsunionsize(Union{Float64, UInt8})
-0x0000000000000008
+8
 
 julia> Base.bitsunionsize(Union{Float64, UInt8, Int128})
-0x0000000000000010
+16
 ```
 """
 function bitsunionsize(u::Union)
@@ -212,8 +210,7 @@ function bitsunionsize(u::Union)
     return sz
 end
 
-length(a::Array) = arraylen(a)
-elsize(::Type{<:Array{T}}) where {T} = aligned_sizeof(T)
+elsize(@nospecialize _::Type{A}) where {T,A<:Array{T}} = aligned_sizeof(T)
 sizeof(a::Array) = Core.sizeof(a)
 
 function isassigned(a::Array, i::Int...)
@@ -325,9 +322,8 @@ end
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
-    if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
-        throw(BoundsError())
-    end
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
     return dest
 end
@@ -362,7 +358,7 @@ Create a shallow copy of `x`: the outer structure is copied, but not all interna
 For example, copying an array produces a new array with identically-same elements as the
 original.
 
-See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref).
+See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
@@ -402,16 +398,19 @@ julia> getindex(Int8, 1, 2, 3)
 """
 function getindex(::Type{T}, vals...) where T
     a = Vector{T}(undef, length(vals))
-    @inbounds for i = 1:length(vals)
-        a[i] = vals[i]
+    if vals isa NTuple
+        @inbounds for i in 1:length(vals)
+            a[i] = vals[i]
+        end
+    else
+        # use afoldl to avoid type instability inside loop
+        afoldl(1, vals...) do i, v
+            @inbounds a[i] = v
+            return i + 1
+        end
     end
     return a
 end
-
-getindex(::Type{T}) where {T} = (@inline; Vector{T}())
-getindex(::Type{T}, x) where {T} = (@inline; a = Vector{T}(undef, 1); @inbounds a[1] = x; a)
-getindex(::Type{T}, x, y) where {T} = (@inline; a = Vector{T}(undef, 2); @inbounds (a[1] = x; a[2] = y); a)
-getindex(::Type{T}, x, y, z) where {T} = (@inline; a = Vector{T}(undef, 3); @inbounds (a[1] = x; a[2] = y; a[3] = z); a)
 
 function getindex(::Type{Any}, @nospecialize vals...)
     a = Vector{Any}(undef, length(vals))
@@ -449,7 +448,7 @@ the `value` that was passed; this means that if the `value` is itself modified,
 all elements of the `fill`ed array will reflect that modification because they're
 _still_ that very `value`. This is of no concern with `fill(1.0, (5,5))` as the
 `value` `1.0` is immutable and cannot itself be modified, but can be unexpected
-with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
+with mutable values like — most commonly — arrays.  For example, `fill([], 3)`
 places _the very same_ empty array in all three locations of the returned vector:
 
 ```jldoctest
@@ -612,7 +611,6 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 ## Conversions ##
 
 convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
-convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -842,8 +840,8 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
-        if el isa T || typeof(el) === T
-            @inbounds dest[i] = el::T
+        if el isa T
+            @inbounds dest[i] = el
             i += 1
         else
             new = setindex_widen_up_to(dest, el, i)
@@ -879,8 +877,8 @@ function grow_to!(dest, itr, st)
     y = iterate(itr, st)
     while y !== nothing
         el, st = y
-        if el isa T || typeof(el) === T
-            push!(dest, el::T)
+        if el isa T
+            push!(dest, el)
         else
             new = push_widen(dest, el)
             return grow_to!(new, itr, st)
@@ -916,10 +914,6 @@ julia> getindex(A, "a")
 ```
 """
 function getindex end
-
-# This is more complicated than it needs to be in order to get Win64 through bootstrap
-@eval getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)
-@eval getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))
 
 # Faster contiguous indexing using copyto! for AbstractUnitRange and Colon
 function getindex(A::Array, I::AbstractUnitRange{<:Integer})
@@ -1057,9 +1051,19 @@ function push!(a::Array{T,1}, item) where T
     return a
 end
 
-function push!(a::Array{Any,1}, @nospecialize item)
+# specialize and optimize the single argument case
+function push!(a::Vector{Any}, @nospecialize x)
     _growend!(a, 1)
-    arrayset(true, a, item, length(a))
+    arrayset(true, a, x, length(a))
+    return a
+end
+function push!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growend!(a, nx)
+    for i = 1:nx
+        arrayset(true, a, x[i], na+i)
+    end
     return a
 end
 
@@ -1241,7 +1245,7 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
-    sizehint!(s, n)
+    sizehint!(s, n) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
 
@@ -1389,6 +1393,22 @@ function pushfirst!(a::Array{T,1}, item) where T
     return a
 end
 
+# specialize and optimize the single argument case
+function pushfirst!(a::Vector{Any}, @nospecialize x)
+    _growbeg!(a, 1)
+    a[1] = x
+    return a
+end
+function pushfirst!(a::Vector{Any}, @nospecialize x...)
+    na = length(a)
+    nx = length(x)
+    _growbeg!(a, nx)
+    for i = 1:nx
+        a[i] = x[i]
+    end
+    return a
+end
+
 """
     popfirst!(collection) -> item
 
@@ -1466,7 +1486,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also: [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1531,6 +1551,23 @@ deleteat!(a::Vector, inds::AbstractVector) = _deleteat!(a, to_indices(a, (inds,)
 
 struct Nowhere; end
 push!(::Nowhere, _) = nothing
+_growend!(::Nowhere, _) = nothing
+
+@inline function _push_deleted!(dltd, a::Vector, ind)
+    if @inbounds isassigned(a, ind)
+        push!(dltd, @inbounds a[ind])
+    else
+        _growend!(dltd, 1)
+    end
+end
+
+@inline function _copy_item!(a::Vector, p, q)
+    if @inbounds isassigned(a, q)
+        @inbounds a[p] = a[q]
+    else
+        _unsetindex!(a, p)
+    end
+end
 
 function _deleteat!(a::Vector, inds, dltd=Nowhere())
     n = length(a)
@@ -1538,7 +1575,7 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
     y === nothing && return a
     (p, s) = y
     checkbounds(a, p)
-    push!(dltd, @inbounds a[p])
+    _push_deleted!(dltd, a, p)
     q = p+1
     while true
         y = iterate(inds, s)
@@ -1552,14 +1589,14 @@ function _deleteat!(a::Vector, inds, dltd=Nowhere())
             end
         end
         while q < i
-            @inbounds a[p] = a[q]
+            _copy_item!(a, p, q)
             p += 1; q += 1
         end
-        push!(dltd, @inbounds a[i])
+        _push_deleted!(dltd, a, i)
         q = i+1
     end
     while q <= n
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += 1; q += 1
     end
     _deleteend!(a, n-p+1)
@@ -1572,7 +1609,7 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     length(inds) == n || throw(BoundsError(a, inds))
     p = 1
     for (q, i) in enumerate(inds)
-        @inbounds a[p] = a[q]
+        _copy_item!(a, p, q)
         p += !i
     end
     _deleteend!(a, n-p+1)
@@ -1740,7 +1777,7 @@ function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
 end
 
 """
-    reverse(v [, start=1 [, stop=length(v) ]] )
+    reverse(v [, start=firstindex(v) [, stop=lastindex(v) ]] )
 
 Return a copy of `v` reversed from start to stop.  See also [`Iterators.reverse`](@ref)
 for reverse-order iteration without making a copy, and in-place [`reverse!`](@ref).
@@ -1813,8 +1850,13 @@ function reverseind(a::AbstractVector, i::Integer)
     first(li) + last(li) - i
 end
 
+# This implementation of `midpoint` is performance-optimized but safe
+# only if `lo <= hi`.
+midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
+
 """
-    reverse!(v [, start=1 [, stop=length(v) ]]) -> v
+    reverse!(v [, start=firstindex(v) [, stop=lastindex(v) ]]) -> v
 
 In-place version of [`reverse`](@ref).
 
@@ -1841,17 +1883,18 @@ julia> A
 """
 function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     s, n = Int(start), Int(stop)
-    liv = LinearIndices(v)
-    if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
-        throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
-        throw(BoundsError(v, n))
-    end
-    r = n
-    @inbounds for i in s:div(s+n-1, 2)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
+    if n > s # non-empty and non-trivial
+        liv = LinearIndices(v)
+        if !(first(liv) ≤ s ≤ last(liv))
+            throw(BoundsError(v, s))
+        elseif !(first(liv) ≤ n ≤ last(liv))
+            throw(BoundsError(v, n))
+        end
+        r = n
+        @inbounds for i in s:midpoint(s, n-1)
+            v[i], v[r] = v[r], v[i]
+            r -= 1
+        end
     end
     return v
 end
@@ -1923,18 +1966,7 @@ julia> findnext(A, CartesianIndex(1, 1))
 CartesianIndex(2, 1)
 ```
 """
-function findnext(A, start)
-    l = last(keys(A))
-    i = oftype(l, start)
-    i > l && return nothing
-    while true
-        A[i] && return i
-        i == l && break
-        # nextind(A, l) can throw/overflow
-        i = nextind(A, i)
-    end
-    return nothing
-end
+findnext(A, start) = findnext(identity, A, start)
 
 """
     findfirst(A)
@@ -1971,14 +2003,7 @@ julia> findfirst(A)
 CartesianIndex(2, 1)
 ```
 """
-function findfirst(A)
-    for (i, a) in pairs(A)
-        if a
-            return i
-        end
-    end
-    return nothing
-end
+findfirst(A) = findfirst(identity, A)
 
 # Needed for bootstrap, and allows defining only an optimized findnext method
 findfirst(A::AbstractArray) = findnext(A, first(keys(A)))
@@ -2114,18 +2139,7 @@ julia> findprev(A, CartesianIndex(2, 1))
 CartesianIndex(2, 1)
 ```
 """
-function findprev(A, start)
-    f = first(keys(A))
-    i = oftype(f, start)
-    i < f && return nothing
-    while true
-        A[i] && return i
-        i == f && break
-        # prevind(A, f) can throw/underflow
-        i = prevind(A, i)
-    end
-    return nothing
-end
+findprev(A, start) = findprev(identity, A, start)
 
 """
     findlast(A)
@@ -2163,14 +2177,7 @@ julia> findlast(A)
 CartesianIndex(2, 1)
 ```
 """
-function findlast(A)
-    for (i, a) in Iterators.reverse(pairs(A))
-        if a
-            return i
-        end
-    end
-    return nothing
-end
+findlast(A) = findlast(identity, A)
 
 # Needed for bootstrap, and allows defining only an optimized findprev method
 findlast(A::AbstractArray) = findprev(A, last(keys(A)))
@@ -2363,19 +2370,43 @@ Int64[]
 function findall(A)
     collect(first(p) for p in pairs(A) if last(p))
 end
+
 # Allocating result upfront is faster (possible only when collection can be iterated twice)
-function findall(A::AbstractArray{Bool})
-    n = count(A)
+function _findall(f::Function, A::AbstractArray{Bool})
+    n = count(f, A)
     I = Vector{eltype(keys(A))}(undef, n)
-    cnt = 1
-    for (i,a) in pairs(A)
-        if a
-            I[cnt] = i
-            cnt += 1
-        end
-    end
-    I
+    isempty(I) && return I
+    _findall(f, I, A)
 end
+
+function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
+    cnt = 1
+    len = length(I)
+    for (k, v) in pairs(A)
+        @inbounds I[cnt] = k
+        cnt += f(v)
+        cnt > len && return I
+    end
+    # In case of impure f, this line could potentially be hit. In that case,
+    # we can't assume I is the correct length.
+    resize!(I, cnt - 1)
+end
+
+function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
+    i = firstindex(A)
+    cnt = 1
+    len = length(I)
+    while cnt ≤ len
+        @inbounds I[cnt] = i
+        cnt += f(@inbounds A[i])
+        i = nextind(A, i)
+    end
+    cnt - 1 == len ? I : resize!(I, cnt - 1)
+end
+
+findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
+findall(f::Fix2{typeof(in)}, A::AbstractArray{Bool}) = _findall(f, A)
+findall(A::AbstractArray{Bool}) = _findall(identity, A)
 
 findall(x::Bool) = x ? [1] : Vector{Int}()
 findall(testf::Function, x::Number) = testf(x) ? [1] : Vector{Int}()
@@ -2545,7 +2576,7 @@ function filter(f, a::Array{T, N}) where {T, N}
     b = Vector{T}(undef, length(a))
     for ai in a
         @inbounds b[j] = ai
-        j = ifelse(f(ai), j+1, j)
+        j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(b, j-1)
     sizehint!(b, length(b))
@@ -2560,7 +2591,7 @@ function filter(f, a::AbstractArray)
     for idx in eachindex(a)
         @inbounds idxs[j] = idx
         ai = @inbounds a[idx]
-        j = ifelse(f(ai), j+1, j)
+        j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(idxs, j-1)
     res = a[idxs]
@@ -2590,7 +2621,7 @@ function filter!(f, a::AbstractVector)
     j = firstindex(a)
     for ai in a
         @inbounds a[j] = ai
-        j = ifelse(f(ai), nextind(a, j), j)
+        j = ifelse(f(ai)::Bool, nextind(a, j), j)
     end
     j > lastindex(a) && return a
     if a isa Vector
@@ -2631,6 +2662,7 @@ end
 
 """
     keepat!(a::Vector, inds)
+    keepat!(a::BitVector, inds)
 
 Remove the items at all the indices which are not given by `inds`,
 and return the modified `a`.
@@ -2655,6 +2687,7 @@ keepat!(a::Vector, inds) = _keepat!(a, inds)
 
 """
     keepat!(a::Vector, m::AbstractVector{Bool})
+    keepat!(a::BitVector, m::AbstractVector{Bool})
 
 The in-place version of logical indexing `a = a[m]`. That is, `keepat!(a, m)` on
 vectors of equal length `a` and `m` will remove all elements from `a` for which

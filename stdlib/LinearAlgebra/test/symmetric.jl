@@ -2,7 +2,7 @@
 
 module TestSymmetric
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 
 Random.seed!(1010)
 
@@ -352,6 +352,9 @@ end
                 C = zeros(eltya,n,n)
                 @test Hermitian(aherm) * a ≈ aherm * a
                 @test a * Hermitian(aherm) ≈ a * aherm
+                # rectangular multiplication
+                @test [a; a] * Hermitian(aherm) ≈ [a; a] * aherm
+                @test Hermitian(aherm) * [a a] ≈ aherm * [a a]
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
                 @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Hermitian(aherm))
@@ -360,6 +363,9 @@ end
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
+                # rectangular multiplication
+                @test Symmetric(asym) * [a a] ≈ asym * [a a]
+                @test [a; a] * Symmetric(asym) ≈ [a; a] * asym
                 @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
@@ -543,20 +549,6 @@ end
     end
 end
 
-@testset "similar should preserve underlying storage type and uplo flag" begin
-    m, n = 4, 3
-    sparsemat = sprand(m, m, 0.5)
-    for SymType in (Symmetric, Hermitian)
-        symsparsemat = SymType(sparsemat)
-        @test isa(similar(symsparsemat), typeof(symsparsemat))
-        @test similar(symsparsemat).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, Float32), SymType{Float32,<:SparseMatrixCSC{Float32}})
-        @test similar(symsparsemat, Float32).uplo == symsparsemat.uplo
-        @test isa(similar(symsparsemat, (n, n)), typeof(sparsemat))
-        @test isa(similar(symsparsemat, Float32, (n, n)), SparseMatrixCSC{Float32})
-    end
-end
-
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
 using .Main.ImmutableArrays
@@ -588,13 +580,13 @@ end
         # Hermitian
         A = Hermitian(fill(1.0+0im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
         @test_throws ArgumentError fill!(A, 2+im)
 
         # Symmetric
         A = Symmetric(fill(1.0+im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
     end
 end
 

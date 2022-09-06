@@ -1,5 +1,26 @@
 # [Documentation](@id man-documentation)
 
+## Accessing Documentation
+
+Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
+by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
+
+```julia
+?cos
+?@time
+?r""
+```
+
+will show documentation for the relevant function, macro or string macro respectively. Most Julia
+environments provide a way to access documentation directly:
+- [VS Code](https://www.julia-vscode.org/) shows documentation when you hover over a function name.
+  You can also use the Julia panel in the sidebar to search for documentation.
+- In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
+- In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
+under the cursor.
+
+## Writing Documentation
+
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system.
 
@@ -201,21 +222,6 @@ As in the example above, we recommend following some simple conventions when wri
    `# Extended help` header. The typical help-mode will show only the
    material above the header; you can access the full help by adding a '?'
    at the beginning of the expression (i.e., "??foo" rather than "?foo").
-
-## Accessing Documentation
-
-Documentation can be accessed at the REPL or in [IJulia](https://github.com/JuliaLang/IJulia.jl)
-by typing `?` followed by the name of a function or macro, and pressing `Enter`. For example,
-
-```julia
-?cos
-?@time
-?r""
-```
-
-will show documentation for the relevant function, macro or string macro respectively. In
-[Juno](http://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
-under the cursor.
 
 ## Functions & Methods
 

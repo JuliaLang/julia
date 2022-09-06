@@ -11,7 +11,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool)
+function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
@@ -40,6 +40,18 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             @verify_error "Unbound GlobalRef not allowed in value position"
             error("")
         end
+    elseif isa(op, Expr)
+        # Only Expr(:boundscheck) is allowed in value position
+        if isforeigncall && arg_idx == 1 && op.head === :call
+            # Allow a tuple in symbol position for foreigncall - this isn't actually
+            # a real call - it's interpreted in global scope by codegen. However,
+            # we do need to keep this a real use, because it could also be a pointer.
+        elseif op.head !== :boundscheck
+            if !allow_frontend_forms || op.head !== :opaque_closure_method
+                @verify_error "Expr not allowed in value position"
+                error("")
+            end
+        end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
         #@Base.show ir
         @verify_error "Left over SSA marker"
@@ -60,7 +72,8 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode, print::Bool=true)
+function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false,
+                   lattice = OptimizerLattice())
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -151,6 +164,14 @@ function verify_ir(ir::IRCode, print::Bool=true)
             @assert length(stmt.edges) == length(stmt.values)
             for i = 1:length(stmt.edges)
                 edge = stmt.edges[i]
+                for j = (i+1):length(stmt.edges)
+                    edge′ = stmt.edges[j]
+                    if edge == edge′
+                        # TODO: Move `unique` to Core.Compiler. For now we assume the predecessor list is
+                        @verify_error "Edge list φ node $idx in bb $bb not unique (double edge?)"
+                        error("")
+                    end
+                end
                 if !(edge == 0 && bb == 1) && !(edge in ir.cfg.blocks[bb].preds)
                     #@Base.show ir.argtypes
                     #@Base.show ir
@@ -162,7 +183,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                 val = stmt.values[i]
                 phiT = ir.stmts[idx][:type]
                 if isa(val, SSAValue)
-                    if !(types(ir)[val] ⊑ phiT)
+                    if !⊑(lattice, types(ir)[val], phiT)
                         #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT
@@ -170,11 +191,8 @@ function verify_ir(ir::IRCode, print::Bool=true)
                         #"""
                         #error("")
                     end
-                elseif isa(val, GlobalRef) || isa(val, Expr)
-                    @verify_error "GlobalRefs and Exprs are not allowed as PhiNode values"
-                    error("")
                 end
-                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print)
+                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print, false, i, allow_frontend_forms)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -183,7 +201,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     @verify_error "Operand $i of PhiC node $idx must be an SSA Value."
                     error("")
                 end
-                if !isa(ir[val], UpsilonNode)
+                if !isa(ir[val][:inst], UpsilonNode)
                     @verify_error "Operand $i of PhiC node $idx must reference an Upsilon node."
                     error("")
                 end
@@ -196,6 +214,7 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     end
                 end
             end
+            isforeigncall = false
             if isa(stmt, Expr)
                 if stmt.head === :(=)
                     if stmt.args[1] isa SSAValue
@@ -211,14 +230,19 @@ function verify_ir(ir::IRCode, print::Bool=true)
                     # blocks, which isn't allowed for regular SSA values, so
                     # we skip the validation below.
                     continue
-                elseif stmt.head === :isdefined && length(stmt.args) == 1 && stmt.args[1] isa GlobalRef
-                    # a GlobalRef isdefined check does not evaluate its argument
+                elseif stmt.head === :foreigncall
+                    isforeigncall = true
+                elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
+                        (stmt.args[1] isa GlobalRef || (stmt.args[1] isa Expr && stmt.args[1].head === :static_parameter))
+                    # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 end
             end
+            n = 1
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx, print)
+                check_op(ir, domtree, op, bb, idx, print, isforeigncall, n, allow_frontend_forms)
+                n += 1
             end
         end
     end

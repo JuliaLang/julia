@@ -72,9 +72,11 @@ Base.MathConstants.catalan
 Base.MathConstants.eulergamma
 Base.MathConstants.golden
 Base.Inf
+Base.Inf64
 Base.Inf32
 Base.Inf16
 Base.NaN
+Base.NaN64
 Base.NaN32
 Base.NaN16
 Base.issubnormal
@@ -111,7 +113,7 @@ Base.@int128_str
 Base.@uint128_str
 ```
 
-## BigFloats and BigInts
+## [BigFloats and BigInts](@id BigFloats-and-BigInts)
 
 The [`BigFloat`](@ref) and [`BigInt`](@ref) types implements
 arbitrary-precision floating point and integer arithmetic, respectively. For

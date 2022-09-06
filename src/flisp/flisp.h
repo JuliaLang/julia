@@ -6,6 +6,14 @@
 
 #include "platform.h"
 #include "libsupport.h"
+#include "utils.h"
+#include "bitvector.h"
+#include "timefuncs.h"
+#include "strtod.h"
+#include "dirpath.h"
+#include "hashing.h"
+#include "ptrhash.h"
+#include "htable.h"
 #include "uv.h"
 
 //#define MEMDEBUG
@@ -320,6 +328,7 @@ typedef float    fl_float_t;
 typedef value_t (*builtin_t)(fl_context_t*, value_t*, uint32_t);
 
 value_t cvalue(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
+value_t cvalue_no_finalizer(fl_context_t *fl_ctx, fltype_t *type, size_t sz) JL_NOTSAFEPOINT;
 void add_finalizer(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_autorelease(fl_context_t *fl_ctx, cvalue_t *cv);
 void cv_pin(fl_context_t *fl_ctx, cvalue_t *cv);
@@ -494,6 +503,7 @@ struct _fl_context_t {
     value_t apply_func, apply_v, apply_e;
 
     value_t jl_sym;
+    value_t jl_char_sym;
     // persistent buffer (avoid repeated malloc/free)
     // for julia_extensions.c: normalize
     size_t jlbuflen;

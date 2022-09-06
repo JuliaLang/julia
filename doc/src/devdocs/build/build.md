@@ -139,7 +139,7 @@ Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
 
-## Required Build Tools and External Libraries
+## [Required Build Tools and External Libraries](@id build-tools)
 
 Building Julia requires that the following software be installed:
 
@@ -167,9 +167,9 @@ Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
-uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blob/master/deps/Versions.make):
+uses are listed in [`deps/$(LibName).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM]** (14.0 + [patches](https://github.com/JuliaLang/llvm-project)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
@@ -202,11 +202,11 @@ uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blo
 [perl]:         https://www.perl.org
 [cmake]:        https://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
-[DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
+[DSFMT]:        https://github.com/MersenneTwister-Lab/dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       https://www.netlib.org/lapack
 [MKL]:          https://software.intel.com/en-us/articles/intel-mkl
-[SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
+[SuiteSparse]:  https://people.engr.tamu.edu/davis/suitesparse.html
 [PCRE]:         https://www.pcre.org
 [LLVM]:         https://www.llvm.org
 [LLVM libunwind]: https://github.com/llvm/llvm-project/tree/main/libunwind
@@ -269,3 +269,37 @@ If you need to build Julia from source with a Git checkout of a stdlib, then use
 For example, if you need to build Julia from source with a Git checkout of Pkg, then use `make DEPS_GIT=Pkg` when building Julia. The `Pkg` repo is in `stdlib/Pkg`, and created initially with a detached `HEAD`. If you're doing this from a pre-existing Julia repository, you may need to `make clean` beforehand.
 
 If you need to build Julia from source with Git checkouts of more than one stdlib, then `DEPS_GIT` should be a space-separated list of the stdlib names. For example, if you need to build Julia from source with a Git checkout of Pkg, Tar, and Downloads, then use `make DEPS_GIT='Pkg Tar Downloads'` when building Julia.
+
+## Building an "assert build" of Julia
+
+An "assert build" of Julia is a build that was built with both `FORCE_ASSERTIONS=1` and
+`LLVM_ASSERTIONS=1`. To build an assert build, define both of the following variables
+in your `Make.user` file:
+
+```
+FORCE_ASSERTIONS=1
+LLVM_ASSERTIONS=1
+```
+
+Please note that assert builds of Julia will be slower than regular (non-assert) builds.
+
+## Building 32-bit Julia on a 64-bit machine
+
+Occasionally, bugs specific to 32-bit architectures may arise, and when this happens it is useful to be able to debug the problem on your local machine.  Since most modern 64-bit systems support running programs built for 32-bit ones, if you don't have to recompile Julia from source (e.g. you mainly need to inspect the behavior of a 32-bit Julia without having to touch the C code), you can likely use a 32-bit build of Julia for your system that you can obtain from the [official downloads page](https://julialang.org/downloads/).
+However, if you do need to recompile Julia from source one option is to use a Docker container of a 32-bit system.  At least for now, building a 32-bit version of Julia is relatively straightforward using [ubuntu 32-bit docker images](https://hub.docker.com/r/i386/ubuntu). In brief, after setting up `docker` here are the required steps:
+
+```sh
+$ docker pull i386/ubuntu
+$ docker run --platform i386 -i -t i386/ubuntu /bin/bash
+```
+
+At this point you should be in a 32-bit machine console (note that `uname` reports the host architecture, so will still say 64-bit, but this will not affect the Julia build). You can add packages and compile code; when you `exit`, all the changes will be lost, so be sure to finish your analysis in a single session or set up a copy/pastable script you can use to set up your environment.
+
+From this point, you should
+
+```sh
+# apt update
+```
+(Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
+
+Then add all the [build dependencies](@ref build-tools), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.

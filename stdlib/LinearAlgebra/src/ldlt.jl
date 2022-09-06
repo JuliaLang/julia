@@ -129,9 +129,11 @@ end
 """
     ldlt(S::SymTridiagonal) -> LDLt
 
-Compute an `LDLt` factorization of the real symmetric tridiagonal matrix `S` such that `S = L*Diagonal(d)*L'`
+Compute an `LDLt` (i.e., ``LDL^T``) factorization of the real symmetric tridiagonal matrix `S` such that `S = L*Diagonal(d)*L'`
 where `L` is a unit lower triangular matrix and `d` is a vector. The main use of an `LDLt`
 factorization `F = ldlt(S)` is to solve the linear system of equations `Sx = b` with `F\\b`.
+
+See also [`bunchkaufman`](@ref) for a similar, but pivoted, factorization of arbitrary symmetric or Hermitian matrices.
 
 # Examples
 ```jldoctest
@@ -160,7 +162,7 @@ julia> S \\ b
 """
 function ldlt(M::SymTridiagonal{T}; shift::Number=false) where T
     S = typeof((zero(T)+shift)/one(T))
-    Mₛ = SymTridiagonal{S}(copy_oftype(M.dv, S), copy_oftype(M.ev, S))
+    Mₛ = SymTridiagonal{S}(copymutable_oftype(M.dv, S), copymutable_oftype(M.ev, S))
     if !iszero(shift)
         Mₛ.dv .+= shift
     end

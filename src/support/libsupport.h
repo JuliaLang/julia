@@ -8,15 +8,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include "dtypes.h"
-#include "utils.h"
 #include "utf8.h"
 #include "ios.h"
-#include "timefuncs.h"
-#include "hashing.h"
-#include "ptrhash.h"
-#include "bitvector.h"
-#include "dirpath.h"
-#include "strtod.h"
 
 #ifdef __cplusplus
 extern "C" {

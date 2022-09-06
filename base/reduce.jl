@@ -140,17 +140,25 @@ what is returned is `itr′` and
 
     op′ = (xfₙ ∘ ... ∘ xf₂ ∘ xf₁)(op)
 """
-_xfadjoint(op, itr) = (op, itr)
-_xfadjoint(op, itr::Generator) =
-    if itr.f === identity
-        _xfadjoint(op, itr.iter)
-    else
-        _xfadjoint(MappingRF(itr.f, op), itr.iter)
-    end
-_xfadjoint(op, itr::Filter) =
-    _xfadjoint(FilteringRF(itr.flt, op), itr.itr)
-_xfadjoint(op, itr::Flatten) =
-    _xfadjoint(FlatteningRF(op), itr.it)
+function _xfadjoint(op, itr)
+    itr′, wrap = _xfadjoint_unwrap(itr)
+    wrap(op), itr′
+end
+
+_xfadjoint_unwrap(itr) = itr, identity
+function _xfadjoint_unwrap(itr::Generator)
+    itr′, wrap = _xfadjoint_unwrap(itr.iter)
+    itr.f === identity && return itr′, wrap
+    return itr′, wrap ∘ Fix1(MappingRF, itr.f)
+end
+function _xfadjoint_unwrap(itr::Filter)
+    itr′, wrap = _xfadjoint_unwrap(itr.itr)
+    return itr′, wrap ∘ Fix1(FilteringRF, itr.flt)
+end
+function _xfadjoint_unwrap(itr::Flatten)
+    itr′, wrap = _xfadjoint_unwrap(itr.it)
+    return itr′, wrap ∘ FlatteningRF
+end
 
 """
     mapfoldl(f, op, itr; [init])
@@ -604,7 +612,7 @@ julia> prod(1:5; init = 1.0)
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
-## maximum & minimum
+## maximum, minimum, & extrema
 _fast(::typeof(min),x,y) = min(x,y)
 _fast(::typeof(max),x,y) = max(x,y)
 function _fast(::typeof(max), x::AbstractFloat, y::AbstractFloat)
@@ -634,11 +642,6 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
     start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
-        # short circuit in case of NaN or missing
-        (v1 == v1) === true || return v1
-        (v2 == v2) === true || return v2
-        (v3 == v3) === true || return v3
-        (v4 == v4) === true || return v4
         @inbounds for i in start:4:simdstop
             v1 = _fast(op, v1, f(A[i+0]))
             v2 = _fast(op, v2, f(A[i+1]))
@@ -785,6 +788,83 @@ Inf
 """
 minimum(a; kw...) = mapreduce(identity, min, a; kw...)
 
+"""
+    extrema(itr; [init]) -> (mn, mx)
+
+Compute both the minimum `mn` and maximum `mx` element in a single pass, and return them
+as a 2-tuple.
+
+The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
+first and second elements are neutral elements for `min` and `max` respectively
+(i.e. which are greater/less than or equal to any other element). As a consequence, when
+`itr` is empty the returned `(mn, mx)` tuple will satisfy `mn ≥ mx`. When `init` is
+specified it may be used even for non-empty `itr`.
+
+!!! compat "Julia 1.8"
+    Keyword argument `init` requires Julia 1.8 or later.
+
+# Examples
+```jldoctest
+julia> extrema(2:10)
+(2, 10)
+
+julia> extrema([9,pi,4.5])
+(3.141592653589793, 9.0)
+
+julia> extrema([]; init = (Inf, -Inf))
+(Inf, -Inf)
+```
+"""
+extrema(itr; kw...) = extrema(identity, itr; kw...)
+
+"""
+    extrema(f, itr; [init]) -> (mn, mx)
+
+Compute both the minimum `mn` and maximum `mx` of `f` applied to each element in `itr` and
+return them as a 2-tuple. Only one pass is made over `itr`.
+
+The value returned for empty `itr` can be specified by `init`. It must be a 2-tuple whose
+first and second elements are neutral elements for `min` and `max` respectively
+(i.e. which are greater/less than or equal to any other element). It is used for non-empty
+collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx)` satisfies
+`mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
+but yet expected result.
+
+!!! compat "Julia 1.2"
+    This method requires Julia 1.2 or later.
+
+!!! compat "Julia 1.8"
+    Keyword argument `init` requires Julia 1.8 or later.
+
+# Examples
+```jldoctest
+julia> extrema(sin, 0:π)
+(0.0, 0.9092974268256817)
+
+julia> extrema(sin, Real[]; init = (1.0, -1.0))  # good, since -1 ≤ sin(::Real) ≤ 1
+(1.0, -1.0)
+```
+"""
+extrema(f, itr; kw...) = mapreduce(ExtremaMap(f), _extrema_rf, itr; kw...)
+
+# Not using closure since `extrema(type, itr)` is a very likely use-case and it's better
+# to avoid type-instability (#23618).
+struct ExtremaMap{F} <: Function
+    f::F
+end
+ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
+@inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
+
+@inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
+# optimization for IEEEFloat
+function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
+    (x1, x2), (y1, y2) = x, y
+    anynan = isnan(x1)|isnan(y1)
+    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
+    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1, z2
+end
+
 ## findmax, findmin, argmax & argmin
 
 """
@@ -817,7 +897,8 @@ julia> findmax(cos, 0:π/2:2π)
 (1.0, 1)
 ```
 """
-findmax(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
+findmax(f, domain) = _findmax(f, domain, :)
+_findmax(f, domain, ::Colon) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmax, pairs(domain) )
 _rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -876,7 +957,8 @@ julia> findmin(cos, 0:π/2:2π)
 ```
 
 """
-findmin(f, domain) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
+findmin(f, domain) = _findmin(f, domain, :)
+_findmin(f, domain, ::Colon) = mapfoldl( ((k, v),) -> (f(v), k), _rf_findmin, pairs(domain) )
 _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
 
 """
@@ -1138,6 +1220,27 @@ function _any(f, itr, ::Colon)
     return anymissing ? missing : false
 end
 
+# Specialized versions of any(f, ::Tuple), avoiding type instabilities for small tuples
+# containing mixed types.
+# We fall back to the for loop implementation all elements have the same type or
+# if the tuple is too large.
+any(f, itr::NTuple) = _any(f, itr, :)  # case of homogeneous tuple
+function any(f, itr::Tuple)            # case of tuple with mixed types
+    length(itr) > 32 && return _any(f, itr, :)
+    _any_tuple(f, false, itr...)
+end
+
+@inline function _any_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    elseif v
+        return true
+    end
+    return _any_tuple(f, anymissing, rest...)
+end
+@inline _any_tuple(f, anymissing) = anymissing ? missing : false
+
 """
     all(p, itr) -> Bool
 
@@ -1188,6 +1291,28 @@ function _all(f, itr, ::Colon)
     return anymissing ? missing : true
 end
 
+# Specialized versions of all(f, ::Tuple), avoiding type instabilities for small tuples
+# containing mixed types. This is similar to any(f, ::Tuple) defined above.
+all(f, itr::NTuple) = _all(f, itr, :)
+function all(f, itr::Tuple)
+    length(itr) > 32 && return _all(f, itr, :)
+    _all_tuple(f, false, itr...)
+end
+
+@inline function _all_tuple(f, anymissing, x, rest...)
+    v = f(x)
+    if ismissing(v)
+        anymissing = true
+    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
+    elseif v
+        nothing
+    else
+        return false
+    end
+    return _all_tuple(f, anymissing, rest...)
+end
+@inline _all_tuple(f, anymissing) = anymissing ? missing : true
+
 ## count
 
 _bool(f) = x->f(x)::Bool
@@ -1221,10 +1346,12 @@ count(itr; init=0) = count(identity, itr; init)
 
 count(f, itr; init=0) = _simple_count(f, itr, init)
 
-function _simple_count(pred, itr, init::T) where {T}
+_simple_count(pred, itr, init) = _simple_count_helper(Generator(pred, itr), init)
+
+function _simple_count_helper(g, init::T) where {T}
     n::T = init
-    for x in itr
-        n += pred(x)::Bool
+    for x in g
+        n += x::Bool
     end
     return n
 end

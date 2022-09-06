@@ -64,7 +64,8 @@ static void unmap_page(void *ptr, size_t size)
 enum class Prot : int {
     RW = PAGE_READWRITE,
     RX = PAGE_EXECUTE,
-    RO = PAGE_READONLY
+    RO = PAGE_READONLY,
+    NO = PAGE_NOACCESS
 };
 
 static void protect_page(void *ptr, size_t size, Prot flags)
@@ -81,7 +82,8 @@ static void protect_page(void *ptr, size_t size, Prot flags)
 enum class Prot : int {
     RW = PROT_READ | PROT_WRITE,
     RX = PROT_READ | PROT_EXEC,
-    RO = PROT_READ
+    RO = PROT_READ,
+    NO = PROT_NONE
 };
 
 static void protect_page(void *ptr, size_t size, Prot flags)
@@ -173,7 +175,7 @@ static intptr_t get_anon_hdl(void)
     if (check_fd_or_close(fd))
         return fd;
 #  endif
-    char shm_name[] = "julia-codegen-0123456789-0123456789/tmp///";
+    char shm_name[JL_PATH_MAX] = "julia-codegen-0123456789-0123456789/tmp///";
     pid_t pid = getpid();
     // `shm_open` can't be mapped exec on mac
 #  ifndef _OS_DARWIN_
@@ -195,8 +197,14 @@ static intptr_t get_anon_hdl(void)
             return fd;
         }
     }
-    snprintf(shm_name, sizeof(shm_name),
-             "/tmp/julia-codegen-%d-XXXXXX", (int)pid);
+    size_t len = sizeof(shm_name);
+    if (uv_os_tmpdir(shm_name, &len) != 0) {
+        // Unknown error; default to `/tmp`
+        snprintf(shm_name, sizeof(shm_name), "/tmp");
+        len = 4;
+    }
+    snprintf(shm_name + len, sizeof(shm_name) - len,
+             "/julia-codegen-%d-XXXXXX", (int)pid);
     fd = mkstemp(shm_name);
     if (check_fd_or_close(fd)) {
         unlink(shm_name);
@@ -641,7 +649,7 @@ protected:
                 unmap_page((void*)block.wr_ptr, block.total);
             }
             else {
-                protect_page((void*)block.wr_ptr, block.total, Prot::RO);
+                protect_page((void*)block.wr_ptr, block.total, Prot::NO);
                 block.state = SplitPtrBlock::WRInit;
             }
         }
@@ -848,8 +856,11 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
                                                     StringRef SectionName)
 {
     // allocating more than one code section can confuse libunwind.
+#if !defined(_COMPILER_MSAN_ENABLED_)
+    // TODO: Figure out why msan needs this.
     assert(!code_allocated);
     code_allocated = true;
+#endif
     total_allocated += Size;
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);

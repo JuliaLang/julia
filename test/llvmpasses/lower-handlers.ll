@@ -1,4 +1,5 @@
-; RUN: opt -load libjulia-internal%shlibext -LowerExcHandlers -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerExcHandlers -S %s | FileCheck %s
+; RUN: opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LowerExcHandlers)' -S %s | FileCheck %s
 
 attributes #1 = { returns_twice }
 declare i32 @julia.except_enter() #1

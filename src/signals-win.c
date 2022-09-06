@@ -2,6 +2,7 @@
 
 // Windows
 // Note that this file is `#include`d by "signal-handling.c"
+#include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 
@@ -387,6 +388,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     jl_gc_debug_critical_error();
                     abort();
                 }
+                jl_check_profile_autostop();
             }
         }
     }

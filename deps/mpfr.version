@@ -1,0 +1,9 @@
+## jll artifact
+MPFR_JLL_NAME := MPFR
+
+## source build
+MPFR_VER := 4.1.0
+
+# Note: jll use a different version `4.1.1+1` ("stdlib/MPFR_jll/Project.toml")
+# See notes in build_tarballs.jl
+#   https://github.com/JuliaPackaging/Yggdrasil/blob/3c877e18dd9bb9b2e79415e00f661a7e37b2aea9/M/MPFR/build_tarballs.jl#L40-L42

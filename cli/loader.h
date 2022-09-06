@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-/* Bring in definitions for `_OS_X_`, `PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
+/* Bring in definitions for `_OS_X_`, `JL_PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
 #include "../src/support/platform.h"
 #include "../src/support/dirpath.h"
 #include "../src/julia_fasttls.h"
@@ -21,8 +21,6 @@
 #define malloc loader_malloc
 #define realloc loader_realloc
 #endif
-
-#include <stdint.h>
 
 #ifdef _OS_WINDOWS_
 
@@ -48,6 +46,8 @@
 #include <dlfcn.h>
 
 #endif
+
+#include <stdint.h>
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_

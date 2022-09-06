@@ -244,9 +244,15 @@ prod2(itr) = invoke(prod, Tuple{Any}, itr)
 
 @test_throws "reducing over an empty" maximum(Int[])
 @test_throws "reducing over an empty" minimum(Int[])
+@test_throws "reducing over an empty" extrema(Int[])
 
 @test maximum(Int[]; init=-1) == -1
 @test minimum(Int[]; init=-1) == -1
+@test extrema(Int[]; init=(1, -1)) == (1, -1)
+
+@test maximum(sin, []; init=-1) == -1
+@test minimum(sin, []; init=1) == 1
+@test extrema(sin, []; init=(1, -1)) == (1, -1)
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -257,6 +263,7 @@ let x = [4,3,5,2]
     @test maximum(x) == 5
     @test minimum(x) == 2
     @test extrema(x) == (2, 5)
+    @test Core.Compiler.extrema(x) == (2, 5)
 
     @test maximum(abs2, x) == 25
     @test minimum(abs2, x) == 4
@@ -388,6 +395,9 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
         @test maximum(x) === minimum(x) === missing
         @test extrema(x) === (missing, missing)
     end
+    # inputs containing both missing and NaN
+    minimum([NaN;zeros(255);missing]) === missing
+    maximum([NaN;zeros(255);missing]) === missing
 end
 
 # findmin, findmax, argmin, argmax
@@ -620,14 +630,14 @@ test18695(r) = sum( t^2 for t in r )
 @test prod(Char['a','b']) == "ab"
 
 @testset "optimized reduce(vcat/hcat, A) for arrays" begin
-    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:2], [1:2, [3.5, 4.5]],
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], AbstractVector{Int}[[3, 4, 5], 1:2], AbstractVector[1:2, [3.5, 4.5]],
                  [[1 2], [3 4; 5 6]], [reshape([1, 2], 2, 1), 3:4])
         X = reduce(vcat, args)
         Y = vcat(args...)
         @test X == Y
         @test typeof(X) === typeof(Y)
     end
-    for args in ([1:2], [[1, 2]], [1:2, 3:4], [[3, 4, 5], 1:3], [1:2, [3.5, 4.5]],
+    for args in ([1:2], [[1, 2]], [1:2, 3:4], AbstractVector{Int}[[3, 4, 5], 1:3], AbstractVector[1:2, [3.5, 4.5]],
                  [[1 2; 3 4], [5 6; 7 8]], [1:2, [5 6; 7 8]], [[5 6; 7 8], [1, 2]])
         X = reduce(hcat, args)
         Y = hcat(args...)
@@ -661,9 +671,22 @@ end
 # issue #38627
 @testset "overflow in mapreduce" begin
     # at len = 16 and len = 1025 there is a change in codepath
-    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+    for len in [1, 15, 16, 1024, 1025, 2048, 2049]
         oa = OffsetArray(repeat([1], len), typemax(Int)-len)
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+# issue #45748
+@testset "foldl's stability for nested Iterators" begin
+    a = Iterators.flatten((1:3, 1:3))
+    b = (2i for i in a if i > 0)
+    c = Base.Generator(Float64, b)
+    d = (sin(i) for i in c if i > 0)
+    @test @inferred(sum(d)) == sum(collect(d))
+    @test @inferred(extrema(d)) == extrema(collect(d))
+    @test @inferred(maximum(c)) == maximum(collect(c))
+    @test @inferred(prod(b)) == prod(collect(b))
+    @test @inferred(minimum(a)) == minimum(collect(a))
 end

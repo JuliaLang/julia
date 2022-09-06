@@ -227,6 +227,7 @@ function compute_domtree_nodes!(domtree::DomTree)
         (idx == 1 || idom == 0) && continue
         push!(domtree.nodes[idom].children, idx)
     end
+    # n.b. now issorted(domtree.nodes[*].children) since idx is sorted above
     # Recursively set level
     update_level!(domtree.nodes, 1, 1)
     return domtree.nodes

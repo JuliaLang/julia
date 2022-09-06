@@ -67,12 +67,12 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return true;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     size_t size = jl_datatype_size(dt);
     if (is_complex64(dt) || is_complex128(dt) || (jl_is_primitivetype(dt) && size <= 8))
         return false;
-    ab.addAttribute(Attribute::ByVal);
+    ab.addByValAttr(Ty);
     return true;
 }
 
@@ -82,7 +82,7 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
         return NULL;
     // special case Complex{Float32} as a return type
     if (is_complex64(dt))
-        return T_int64;
+        return llvm::Type::getInt64Ty(ctx);
     return NULL;
 }
 

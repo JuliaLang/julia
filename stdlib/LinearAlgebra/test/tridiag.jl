@@ -2,7 +2,7 @@
 
 module TestTridiagonal
 
-using Test, LinearAlgebra, SparseArrays, Random
+using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
@@ -221,8 +221,8 @@ end
             @test B == A
             @test isa(similar(A), mat_type{elty})
             @test isa(similar(A, Int), mat_type{Int})
-            @test isa(similar(A, (3, 2)), SparseMatrixCSC)
-            @test isa(similar(A, Int, (3, 2)), SparseMatrixCSC{Int})
+            @test isa(similar(A, (3, 2)), Matrix)
+            @test isa(similar(A, Int, (3, 2)), Matrix{Int})
             @test size(A, 3) == 1
             @test size(A, 1) == n
             @test size(A) == (n, n)
@@ -265,6 +265,12 @@ end
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
             end
+        end
+        @testset "permutedims(::[Sym]Tridiagonal)" begin
+            @test permutedims(permutedims(A)) === A
+            @test permutedims(A) == transpose.(transpose(A))
+            @test permutedims(A, [1, 2]) === A
+            @test permutedims(A, (2, 1)) == permutedims(A)
         end
         if elty != Int
             @testset "Simple unary functions" begin
@@ -400,8 +406,8 @@ end
                     @testset "similar" begin
                         @test isa(similar(Ts), SymTridiagonal{elty})
                         @test isa(similar(Ts, Int), SymTridiagonal{Int})
-                        @test isa(similar(Ts, (3, 2)), SparseMatrixCSC)
-                        @test isa(similar(Ts, Int, (3, 2)), SparseMatrixCSC{Int})
+                        @test isa(similar(Ts, (3, 2)), Matrix)
+                        @test isa(similar(Ts, Int, (3, 2)), Matrix{Int})
                     end
 
                     @test first(logabsdet(Tldlt)) ≈ first(logabsdet(Fs))
@@ -428,7 +434,11 @@ end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ dot(A'x, y)
+            @test dot(x, A, y) ≈ dot(A'x, y) ≈ dot(x, A*y)
+            @test dot([1], SymTridiagonal([1], Int[]), [1]) == 1
+            @test dot([1], Tridiagonal(Int[], [1], Int[]), [1]) == 1
+            @test dot(Int[], SymTridiagonal(Int[], Int[]), Int[]) === 0
+            @test dot(Int[], Tridiagonal(Int[], Int[], Int[]), Int[]) === 0
         end
     end
 end
@@ -474,13 +484,6 @@ end
     x = ones(1)
     @test T*x == ones(1)
     @test SymTridiagonal(ones(0), ones(0)) * ones(0, 2) == ones(0, 2)
-end
-
-@testset "issue #29644" begin
-    F = lu(Tridiagonal(sparse(1.0I, 3, 3)))
-    @test F.L == Matrix(I, 3, 3)
-    @test startswith(sprint(show, MIME("text/plain"), F),
-          "$(LinearAlgebra.LU){Float64, $(LinearAlgebra.Tridiagonal){Float64, SparseArrays.SparseVector")
 end
 
 @testset "Issue 29630" begin
@@ -695,4 +698,35 @@ end
     end
 end
 
+isdefined(Main, :SizedArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "SizedArrays.jl"))
+using .Main.SizedArrays
+@testset "non-number eltype" begin
+    @testset "sum for SymTridiagonal" begin
+        dv = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
+        ev = [SizedArray{(2,2)}(rand(1:2048,2,2)) for i in 1:10]
+        S = SymTridiagonal(dv, ev)
+        Sdense = Matrix(S)
+        @test Sdense == collect(S)
+        @test sum(S) == sum(Sdense)
+        @test sum(S, dims = 1) == sum(Sdense, dims = 1)
+        @test sum(S, dims = 2) == sum(Sdense, dims = 2)
+    end
+    @testset "issymmetric/ishermitian for Tridiagonal" begin
+        @test !issymmetric(Tridiagonal([[1 2;3 4]], [[1 2;2 3], [1 2;2 3]], [[1 2;3 4]]))
+        @test !issymmetric(Tridiagonal([[1 3;2 4]], [[1 2;3 4], [1 2;3 4]], [[1 2;3 4]]))
+        @test issymmetric(Tridiagonal([[1 3;2 4]], [[1 2;2 3], [1 2;2 3]], [[1 2;3 4]]))
+
+        @test ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+0im, [1 2;2 3].+0im], [[1 2;3 4].-im]))
+        @test !ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+0im, [1 2;2 3].+0im], [[1 2;3 4].+im]))
+        @test !ishermitian(Tridiagonal([[1 3;2 4].+im], [[1 2;2 3].+im, [1 2;2 3].+0im], [[1 2;3 4].-im]))
+    end
+    @testset "== between Tridiagonal and SymTridiagonal" begin
+        dv = [SizedArray{(2,2)}([1 2;3 4]) for i in 1:4]
+        ev = [SizedArray{(2,2)}([3 4;1 2]) for i in 1:4]
+        S = SymTridiagonal(dv, ev)
+        Sdense = Matrix(S)
+        @test S == Tridiagonal(diag(Sdense, -1), diag(Sdense),  diag(Sdense, 1)) == S
+        @test S !== Tridiagonal(diag(Sdense, 1), diag(Sdense),  diag(Sdense, 1)) !== S
+    end
+end
 end # module TestTridiagonal

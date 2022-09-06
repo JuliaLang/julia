@@ -32,7 +32,7 @@ julia> string(1 + 2)
 "3"
 ```
 
-There are a number useful features unique to interactive work. In addition to showing the result,
+There are a number of useful features unique to interactive work. In addition to showing the result,
 the REPL also binds the result to the variable `ans`. A trailing semicolon on the line can be
 used as a flag to suppress showing the result.
 
@@ -225,7 +225,7 @@ to do so), or pressing Esc and then the key.
 
 | Keybinding          | Description                                                                                                |
 |:------------------- |:---------------------------------------------------------------------------------------------------------- |
-| **Program control** |                                                                                                            |
+| **Program control** |                                                                                                            |
 | `^D`                | Exit (when buffer is empty)                                                                                |
 | `^C`                | Interrupt or cancel                                                                                        |
 | `^L`                | Clear console screen                                                                                       |
@@ -233,7 +233,7 @@ to do so), or pressing Esc and then the key.
 | meta-Return/Enter   | Insert new line without executing it                                                                       |
 | `?` or `;`          | Enter help or shell mode (when at start of a line)                                                         |
 | `^R`, `^S`          | Incremental history search, described above                                                                |
-| **Cursor movement** |                                                                                                            |
+| **Cursor movement** |                                                                                                            |
 | Right arrow, `^F`   | Move right one character                                                                                   |
 | Left arrow, `^B`    | Move left one character                                                                                    |
 | ctrl-Right, `meta-F`| Move right one word                                                                                        |
@@ -251,7 +251,7 @@ to do so), or pressing Esc and then the key.
 | `^-Space ^-Space`   | Set the "mark" in the editing region and make the region "active", i.e. highlighted                        |
 | `^G`                | De-activate the region (i.e. make it not highlighted)                                                      |
 | `^X^X`              | Exchange the current position with the mark                                                                |
-| **Editing**         |                                                                                                            |
+| **Editing**         |                                                                                                            |
 | Backspace, `^H`     | Delete the previous character, or the whole region when it's active                                        |
 | Delete, `^D`        | Forward delete one character (when buffer has text)                                                        |
 | meta-Backspace      | Delete the previous word                                                                                   |
@@ -270,9 +270,10 @@ to do so), or pressing Esc and then the key.
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | indent the current line on the right                                                                       |
-| `meta-.`            | insert last word from previous history entry                                                               |
+| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
+| `meta-.`            | Insert last word from previous history entry                                                               |
+| `meta-e`            | Edit the current input in an editor                                                                        |
 
 ### Customizing keybindings
 
@@ -556,6 +557,65 @@ ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
 
+
+## Changing the contextual module which is active at the REPL
+
+When entering expressions at the REPL, they are by default evaluated in the `Main` module;
+
+```julia-repl
+julia> @__MODULE__
+Main
+```
+
+It is possible to change this contextual module via the function
+`REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
+and pressing the keybinding Alt-m (the cursor must be on the module name). The
+active module is shown in the prompt:
+
+```julia-repl
+julia> using REPL
+
+julia> REPL.activate(Base)
+
+(Base) julia> @__MODULE__
+Base
+
+(Base) julia> using REPL # Need to load REPL into Base module to use it
+
+(Base) julia> REPL.activate(Main)
+
+julia>
+
+julia> Core<Alt-m> # using the keybinding to change module
+
+(Core) julia>
+
+(Core) julia> Main<Alt-m> # going back to Main via keybinding
+
+julia>
+```
+
+Functions that take an optional module argument often defaults to the REPL
+context module. As an example, calling `varinfo()` will show the variables of
+the current active module:
+
+```julia-repl
+julia> module CustomMod
+           export var, f
+           var = 1
+           f(x) = x^2
+       end;
+
+julia> REPL.activate(CustomMod)
+
+(Main.CustomMod) julia> varinfo()
+  name         size summary
+  ––––––––– ––––––– ––––––––––––––––––––––––––––––––––
+  CustomMod         Module
+  f         0 bytes f (generic function with 1 method)
+  var       8 bytes Int64
+```
+
 ## TerminalMenus
 
 TerminalMenus is a submodule of the Julia REPL and enables small, low-profile interactive menus in the terminal.
@@ -633,7 +693,7 @@ Output:
 
 ```
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -659,7 +719,7 @@ For instance, the default multiple-selection menu
 julia> menu = MultiSelectMenu(options, pagesize=5);
 
 julia> request(menu) # ASCII is used by default
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
    [X] orange
    [ ] grape
@@ -673,7 +733,7 @@ can instead be rendered with Unicode selection and navigation characters with
 julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode);
 
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    ⬚ apple
    ✓ orange
    ⬚ grape
@@ -688,7 +748,7 @@ julia> menu = MultiSelectMenu(options, pagesize=5, charset=:unicode, checked="YE
 
 julia> request(menu)
 julia> request(menu)
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    NOPE apple
    YEP! orange
    NOPE grape
@@ -727,6 +787,13 @@ Base.atreplinit
 ```
 
 ### TerminalMenus
+
+### Menus
+
+```@docs
+REPL.TerminalMenus.RadioMenu
+REPL.TerminalMenus.MultiSelectMenu
+```
 
 #### Configuration
 

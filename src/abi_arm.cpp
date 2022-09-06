@@ -23,7 +23,7 @@
 
 struct ABI_ARMLayout : AbiLayout {
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &abi, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &abi, LLVMContext &ctx, Type *Ty) override
 {
     return false;
 }

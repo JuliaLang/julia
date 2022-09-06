@@ -221,13 +221,6 @@
 
 (define (newline? c) (eqv? c #\newline))
 
-(define (skip-to-eol port)
-  (let ((c (peek-char port)))
-    (cond ((eof-object? c)    c)
-          ((eqv? c #\newline) c)
-          (else               (read-char port)
-                              (skip-to-eol port)))))
-
 (define (op-or-sufchar? c) (or (op-suffix-char? c) (opchar? c)))
 
 (define (read-operator port c0 (postfix? #f))
@@ -495,33 +488,56 @@
        (pair? (cadr t)) (eq? (car (cadr t)) 'core)
        (memq (cadadr t) '(@int128_str @uint128_str @big_str))))
 
+(define (make-bidi-state) '(0 . 0))
+
+(define (update-bidi-state st c)
+  (case c
+    ((#\U202A #\U202B #\U202D #\U202E) (cons (+ (car st) 1) (cdr st))) ;; LRE RLE LRO RLO
+    ((#\U2066 #\U2067 #\U2068)         (cons (car st) (+ (cdr st) 1))) ;; LRI RLI FSI
+    ((#\U202C)                         (cons (- (car st) 1) (cdr st))) ;; PDF
+    ((#\U2069)                         (cons (car st) (- (cdr st) 1))) ;; PDI
+    ((#\newline)                       '(0 . 0))
+    (else st)))
+
+(define (bidi-state-terminated? st) (equal? st '(0 . 0)))
+
+(define (skip-line-comment port)
+  (let ((c (peek-char port)))
+    (cond ((eof-object? c)    c)
+          ((eqv? c #\newline) c)
+          (else               (read-char port)
+                              (skip-line-comment port)))))
+
+(define (skip-multiline-comment port count bds)
+  (let ((c (read-char port)))
+    (if (eof-object? c)
+        (error "incomplete: unterminated multi-line comment #= ... =#") ; NOTE: changing this may affect code in base/client.jl
+        (if (eqv? c #\=)
+            (let ((c (peek-char port)))
+              (if (eqv? c #\#)
+                  (begin
+                    (read-char port)
+                    (if (> count 1)
+                        (skip-multiline-comment port (- count 1) bds)
+                        (if (not (bidi-state-terminated? bds))
+                            (error "unbalanced bidirectional formatting in comment"))))
+                  (skip-multiline-comment port count (update-bidi-state bds c))))
+            (if (eqv? c #\#)
+                (skip-multiline-comment port
+                                        (if (eqv? (peek-char port) #\=)
+                                            (begin (read-char port)
+                                                   (+ count 1))
+                                            count)
+                                        bds)
+                (skip-multiline-comment port count (update-bidi-state bds c)))))))
+
 ;; skip to end of comment, starting at #:  either #...<eol> or #= .... =#.
 (define (skip-comment port)
-  (define (skip-multiline-comment port count)
-    (let ((c (read-char port)))
-      (if (eof-object? c)
-          (error "incomplete: unterminated multi-line comment #= ... =#") ; NOTE: changing this may affect code in base/client.jl
-          (begin (if (eqv? c #\=)
-                     (let ((c (peek-char port)))
-                       (if (eqv? c #\#)
-                           (begin
-                             (read-char port)
-                             (if (> count 1)
-                                 (skip-multiline-comment port (- count 1))))
-                           (skip-multiline-comment port count)))
-                     (if (eqv? c #\#)
-                         (skip-multiline-comment port
-                                                 (if (eqv? (peek-char port) #\=)
-                                                     (begin (read-char port)
-                                                            (+ count 1))
-                                                     count))
-                         (skip-multiline-comment port count)))))))
-
   (read-char port) ; read # that was already peeked
   (if (eqv? (peek-char port) #\=)
       (begin (read-char port) ; read initial =
-             (skip-multiline-comment port 1))
-      (skip-to-eol port)))
+             (skip-multiline-comment port 1 (make-bidi-state)))
+      (skip-line-comment port)))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -619,15 +635,6 @@
 
 (define (space-before-next-token? s)
   (or (skip-ws (ts:port s) #f) (eqv? #\newline (peek-char (ts:port s)))))
-
-;; --- misc ---
-
-; Log a syntax deprecation, attributing it to current-filename and the line
-; number of the stream `s`
-(define (parser-depwarn s what instead)
-  (let ((line (if (number? s) s (input-port-line (if (port? s) s (ts:port s)))))
-        (file current-filename))
-    (frontend-depwarn (format-syntax-deprecation what instead file line #t) file line)))
 
 ;; --- parser ---
 
@@ -1252,10 +1259,16 @@
                        `(|.| ,ex (inert ($ ,dollarex)))))
                     (else
                      (let ((name (parse-atom s #f)))
-                       (if (and (pair? name) (eq? (car name) 'macrocall))
-                           `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
-                                       ,@(cddr name))
-                           `(|.| ,ex (quote ,name))))))))
+                       (cond ((and (pair? name) (eq? (car name) 'macrocall))
+                              `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting A.@B as @A.B
+                                          ,@(cddr name)))
+                             ((and (pair? name) (eq? (car name) 'do) (eq? (caadr name) 'macrocall))
+                              `(do ,(let ((name (cadr name)))
+                                      `(macrocall (|.| ,ex (quote ,(cadr name))) ; move macrocall outside by rewriting `A.@B() do; end` as `@A.B() do; end`
+                                                  ,@(cddr name)))
+                                   ,(caddr name)))
+                           (else
+                            `(|.| ,ex (quote ,name)))))))))
             ((|'|)
              (if (not (ts:space? s))
                  (begin
@@ -1342,11 +1355,19 @@
       (list 'where (rewrap-where x (cadr w)) (caddr w))
       x))
 
+(define (parse-struct-field s)
+  (let ((tok (peek-token s)))
+    ;; allow `const x` only as a struct field
+    (if (eq? tok 'const)
+        (begin (take-token s)
+               `(const ,(parse-eq s)))
+        (parse-eq s))))
+
 (define (parse-struct-def s mut? word)
   (if (reserved-word? (peek-token s))
       (error (string "invalid type name \"" (take-token s) "\"")))
   (let ((sig (parse-subtype-spec s)))
-    (begin0 (list 'struct (if mut? '(true) '(false)) sig (parse-block s))
+    (begin0 (list 'struct (if mut? '(true) '(false)) sig (parse-block s parse-struct-field))
             (expect-end s word))))
 
 ;; consume any number of line endings from a token stream
@@ -1439,7 +1460,7 @@
                (expr  (if (and (pair? assgn) (eq? (car assgn) 'tuple))
                           (cons word (cdr assgn))
                           (list word assgn))))
-          (if const
+          (if const ;; normalize `global const` and `const global`
               `(const ,expr)
               expr)))
        ((const)
@@ -2009,24 +2030,40 @@
                   (where-enabled #t)
                   (whitespace-newline #f)
                   (for-generator #t))
-    (if (eqv? (require-token s) closer)
-        (begin (take-token s)
-               '())
-        (let* ((first (parse-eq* s))
-               (t (peek-token s)))
-          (cond ((or (eqv? t #\,) (eqv? t closer))
-                 (parse-vect s first closer))
-                ((eq? t 'for)
-                 (expect-space-before s 'for)
+    (let ((t (require-token s)))
+      (cond ((eqv? t closer)
+             (take-token s)
+             '())
+            ((eqv? t #\;)
+             (take-token s)
+             (define (loop (n 1))
+               (let ((t (with-whitespace-newline (require-token s))))
                  (take-token s)
-                 (parse-comprehension s first closer))
-                ((eqv? t #\newline)
-                 (take-token s)
-                 (if (memv (peek-token s) (list #\, closer))
-                     (parse-vect s first closer)
-                     (parse-array s first closer #t last-end-symbol)))
-                (else
-                 (parse-array s first closer #f last-end-symbol)))))))
+                 (cond ((eqv? t #\;)
+                        (if (ts:space? s)
+                            (error (string "unexpected space inside "
+                                           (deparse `(ncat ,n)) " expression")))
+                        (loop (+ n 1)))
+                       ((eqv? t closer) `(ncat ,n))
+                       (else (error (string "unexpected \"" t "\" inside "
+                                            (deparse `(ncat ,n)) " expression"))))))
+             (loop))
+            (else
+             (let* ((first (parse-eq* s))
+                    (t (peek-token s)))
+               (cond ((or (eqv? t #\,) (eqv? t closer))
+                      (parse-vect s first closer))
+                     ((eq? t 'for)
+                      (expect-space-before s 'for)
+                      (take-token s)
+                      (parse-comprehension s first closer))
+                     ((eqv? t #\newline)
+                      (take-token s)
+                      (if (memv (peek-token s) (list #\, closer))
+                          (parse-vect s first closer)
+                          (parse-array s first closer #t last-end-symbol)))
+                     (else
+                      (parse-array s first closer #f last-end-symbol)))))))))
 
 (define (kw-to-= e) (if (kwarg? e) (cons '= (cdr e)) e))
 (define (=-to-kw e) (if (assignment? e) (cons 'kw (cdr e)) e))
@@ -2354,24 +2391,28 @@
   (let loop ((c (read-char p))
              (b (open-output-string))
              (e ())
-             (quotes 0))
+             (quotes 0)
+             (bds (make-bidi-state)))
     (cond
       ((eqv? c delim)
        (if (< quotes n)
-           (loop (read-char p) b e (+ quotes 1))
-           (reverse (cons (io.tostring! b) e))))
+           (loop (read-char p) b e (+ quotes 1) bds)
+           (begin
+             (if (not (bidi-state-terminated? bds))
+                 (error "unbalanced bidirectional formatting in string literal"))
+             (reverse (cons (io.tostring! b) e)))))
 
       ((= quotes 1)
        (if (not raw) (write-char #\\ b))
        (write-char delim b)
-       (loop c b e 0))
+       (loop c b e 0 (update-bidi-state bds c)))
 
       ((= quotes 2)
        (if (not raw) (write-char #\\ b))
        (write-char delim b)
        (if (not raw) (write-char #\\ b))
        (write-char delim b)
-       (loop c b e 0))
+       (loop c b e 0 (update-bidi-state bds c)))
 
       ((eqv? c #\\)
        (if raw
@@ -2384,19 +2425,19 @@
                     (io.write b (string.rep "\\" (div count 2)))
                     (if (odd? count)
                         (begin (write-char delim b)
-                               (loop (read-char p) b e 0))
-                        (loop nxch b e 0)))
+                               (loop (read-char p) b e 0 bds))
+                        (loop nxch b e 0 bds)))
                    (else
                     (io.write b (string.rep "\\" count))
                     (write-char nxch b)
-                    (loop (read-char p) b e 0))))
+                    (loop (read-char p) b e 0 (update-bidi-state bds nxch)))))
            (let ((nxch (not-eof-for delim (read-char p))))
              (write-char #\\ b)
              (if (eqv? nxch #\return)
-                 (loop nxch b e 0)
+                 (loop nxch b e 0 bds)
                  (begin
                    (write-char nxch b)
-                   (loop (read-char p) b e 0))))))
+                   (loop (read-char p) b e 0 (update-bidi-state bds nxch)))))))
 
       ((and (eqv? c #\$) (not raw))
        (let* ((ex (parse-interpolate s))
@@ -2406,7 +2447,7 @@
          (loop (read-char p)
                (open-output-string)
                (list* ex (io.tostring! b) e)
-               0)))
+               0 bds)))
 
       ; convert literal \r and \r\n in strings to \n (issue #11988)
       ((eqv? c #\return) ; \r
@@ -2414,11 +2455,11 @@
          (if (eqv? (peek-char p) #\linefeed) ; \r\n
              (read-char p))
          (write-char #\newline b)
-         (loop (read-char p) b e 0)))
+         (loop (read-char p) b e 0 bds)))
 
       (else
        (write-char (not-eof-for delim c) b)
-       (loop (read-char p) b e 0)))))
+       (loop (read-char p) b e 0 (update-bidi-state bds c))))))
 
 (define (not-eof-1 c)
   (if (eof-object? c)
@@ -2454,13 +2495,12 @@
                                       (write-char (not-eof-1 (read-char (ts:port s)))
                                                   b))
                                   (loop (read-char (ts:port s))))))
-                     (let ((str (unescape-string (io.tostring! b))))
-                       (let ((len (string-length str)))
-                         (if (= len 1)
-                             (string.char str 0)
-                             (if (= len 0)
-                                 (error "invalid empty character literal")
-                                 (error "character literal contains multiple characters")))))))))
+                     (let* ((str (unescape-string (io.tostring! b)))
+                            (c   (string.only-julia-char str)))
+                       (or c
+                           (if (= (string-length str) 0)
+                               (error "invalid empty character literal")
+                               (error "character literal contains multiple characters"))))))))
 
           ;; symbol/expression quote
           ((eq? t ':)

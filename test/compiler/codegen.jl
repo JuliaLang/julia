@@ -10,11 +10,16 @@ const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
+const is_debug_build = ccall(:jl_is_debugbuild, Cint, ()) != 0
+function libjulia_codegen_name()
+    is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
+end
+
 # `_dump_function` might be more efficient but it doesn't really matter here...
 get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
     sprint(code_llvm, f, t, raw, dump_module, optimize)
 
-if opt_level > 0
+if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", get_llvm(identity, Tuple{String}))
 end
@@ -51,43 +56,60 @@ end
 
 # This function tests if functions are output when compiled if jl_dump_compiles is enabled.
 # Have to go through pains with recursive function (eval probably not required) to make sure
-# that inlining won't happen.
+# that inlining won't happen. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles()
-    tfile = tempname()
-    io = open(tfile, "w")
-    @eval(test_jl_dump_compiles_internal(x) = x)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
-    @eval test_jl_dump_compiles_internal(1)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(io)
-    tstats = stat(tfile)
-    tempty = tstats.size == 0
-    rm(tfile)
-    @test tempty == false
+    mktemp() do tfile, io
+        @eval(test_jl_dump_compiles_internal(x) = x)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
+        @eval test_jl_dump_compiles_internal(1)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(io)
+        tstats = stat(tfile)
+        tempty = tstats.size == 0
+        @test tempty == false
+    end
 end
 
 # This function tests if a toplevel thunk is output if jl_dump_compiles is enabled.
-# The eval statement creates the toplevel thunk.
+# The eval statement creates the toplevel thunk. (Tests SnoopCompile.jl's @snoopc.)
 function test_jl_dump_compiles_toplevel_thunks()
-    tfile = tempname()
-    io = open(tfile, "w")
-    # Make sure to cause compilation of the eval function
-    # before calling it below.
-    Core.eval(Main, Any[:(nothing)][1])
-    GC.enable(false)  # avoid finalizers to be compiled
-    topthunk = Meta.lower(Main, :(for i in 1:10; end))
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
-    Core.eval(Main, topthunk)
-    ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
-    close(io)
-    GC.enable(true)
-    tstats = stat(tfile)
-    tempty = tstats.size == 0
-    rm(tfile)
-    @test tempty == true
+    mktemp() do tfile, io
+        # Make sure to cause compilation of the eval function
+        # before calling it below.
+        Core.eval(Main, Any[:(nothing)][1])
+        GC.enable(false)  # avoid finalizers to be compiled
+        topthunk = Meta.lower(Main, :(for i in 1:10; end))
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), io.handle)
+        Core.eval(Main, topthunk)
+        ccall(:jl_dump_compiles, Cvoid, (Ptr{Cvoid},), C_NULL)
+        close(io)
+        GC.enable(true)
+        tstats = stat(tfile)
+        tempty = tstats.size == 0
+        @test tempty == true
+    end
 end
 
-if opt_level > 0
+# This function tests if LLVM optimization info is dumped when enabled (Tests
+# SnoopCompile.jl's @snoopl.)
+function test_jl_dump_llvm_opt()
+    mktemp() do func_file, func_io
+        mktemp() do llvm_file, llvm_io
+            @eval(test_jl_dump_compiles_internal(x) = x)
+            ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), func_io.handle)
+            ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), llvm_io.handle)
+            @eval test_jl_dump_compiles_internal(1)
+            ccall(:jl_dump_emitted_mi_name, Cvoid, (Ptr{Cvoid},), C_NULL)
+            ccall(:jl_dump_llvm_opt, Cvoid, (Ptr{Cvoid},), C_NULL)
+            close(func_io)
+            close(llvm_io)
+            @test stat(func_file).size !== 0
+            @test stat(llvm_file).size !== 0
+        end
+    end
+end
+
+if !is_debug_build && opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
     # Make sure `Core.sizeof` call is inlined
@@ -108,6 +130,7 @@ if opt_level > 0
 
     test_jl_dump_compiles()
     test_jl_dump_compiles_toplevel_thunks()
+    test_jl_dump_llvm_opt()
 end
 
 # Make sure we will not elide the allocation
@@ -346,16 +369,16 @@ macro aliasscope(body)
     end)
 end
 
-struct Const{T<:Array}
+struct ConstAliasScope{T<:Array}
     a::T
 end
 
-@eval Base.getindex(A::Const, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
-@eval Base.getindex(A::Const, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
+@eval Base.getindex(A::ConstAliasScope, i1::Int) = Core.const_arrayref($(Expr(:boundscheck)), A.a, i1)
+@eval Base.getindex(A::ConstAliasScope, i1::Int, i2::Int, I::Int...) =  (@inline; Core.const_arrayref($(Expr(:boundscheck)), A.a, i1, i2, I...))
 
 function foo31018!(a, b)
     @aliasscope for i in eachindex(a, b)
-        a[i] = Const(b)[i]
+        a[i] = ConstAliasScope(b)[i]
     end
 end
 io = IOBuffer()
@@ -400,9 +423,15 @@ let src = get_llvm(f33829, Tuple{Float64}, true, true)
     @test !occursin(r"call [^(]*\{}", src)
 end
 
+# Base.vect prior to PR 41696
+function oldvect(X...)
+    T = Base.promote_typeof(X...)
+    return copyto!(Vector{T}(undef, length(X)), X)
+end
+
 let io = IOBuffer()
     # Test for the f(args...) = g(args...) generic codegen optimization
-    code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
+    code_llvm(io, oldvect, Tuple{Vararg{Union{Float64, Int64}}})
     @test !occursin("__apply", String(take!(io)))
 end
 
@@ -472,8 +501,9 @@ function f37262(x)
 end
 @testset "#37262" begin
     str = "store volatile { i8, {}*, {}*, {}*, {}* } zeroinitializer, { i8, {}*, {}*, {}*, {}* }* %phic"
+    str_opaque = "store volatile { i8, ptr, ptr, ptr, ptr } zeroinitializer, ptr %phic"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
-    @test contains(llvmstr, str) || llvmstr
+    @test (contains(llvmstr, str) || contains(llvmstr, str_opaque)) || llvmstr
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
 
@@ -570,7 +600,9 @@ struct A40855
     b::Union{Nothing, Int}
 end
 g() = string(A40855(X40855, 1))
-@test g() == "$(@__MODULE__).A40855($(@__MODULE__).X40855, 1)"
+let mod_prefix = (@__MODULE__) == Core.Main ? "" : "$(@__MODULE__)."
+    @test g() == "$(mod_prefix)A40855($(mod_prefix)X40855, 1)"
+end
 
 # issue #40612
 f40612(a, b) = a|b === a|b
@@ -602,6 +634,15 @@ get_llvm(g41438, ()); # cause allocation of layout
 @test !Base.datatype_pointerfree(S41438.body)
 @test S41438{Int}.layout != C_NULL
 @test !Base.datatype_pointerfree(S41438{Int})
+
+
+# issue #43303
+struct A43303{T}
+    x::Pair{Ptr{T},Ptr{T}}
+end
+@test A43303.body.layout != C_NULL
+@test isbitstype(A43303{Int})
+@test A43303.body.types[1].layout != C_NULL
 
 # issue #41157
 f41157(a, b) = a[1] = b[1]
@@ -639,17 +680,18 @@ U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
 
+
 # test that we can start julia with libjulia-codegen removed; PR #41936
 mktempdir() do pfx
     cp(dirname(Sys.BINDIR), pfx; force=true)
-    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libpath = relpath(dirname(dlpath(libjulia_codegen_name())), dirname(Sys.BINDIR))
     libs_deleted = 0
     for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
-        rm(f; force=true, recursive=true)
+        rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
-    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'println("no codegen!")'`) == "no codegen!"
+    @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
 end
 
 # issue #42645
@@ -672,3 +714,54 @@ function f42645()
   res
 end
 @test ((f42645()::B42645).y::A42645{Int}).x
+
+struct A44921{T}
+    x::T
+end
+function f44921(a)
+    if a === :x
+        A44921(_f) # _f purposefully undefined
+    elseif a === :p
+        g44921(a)
+    end
+end
+function g44921(a)
+    if !@isdefined _f # just needs to be some non constprop-able condition
+        A44921(())
+    end
+end
+@test f44921(:p) isa A44921
+
+# issue #43123
+@noinline cmp43123(a::Some, b::Some) = something(a) === something(b)
+@noinline cmp43123(a, b) = a[] === b[]
+@test cmp43123(Some{Function}(+), Some{Union{typeof(+), typeof(-)}}(+))
+@test !cmp43123(Some{Function}(+), Some{Union{typeof(+), typeof(-)}}(-))
+@test cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(+))
+@test !cmp43123(Ref{Function}(+), Ref{Union{typeof(+), typeof(-)}}(-))
+@test cmp43123(Function[+], Union{typeof(+), typeof(-)}[+])
+@test !cmp43123(Function[+], Union{typeof(+), typeof(-)}[-])
+
+# Test that donotdelete survives through to LLVM time
+f_donotdelete_input(x) = Base.donotdelete(x+1)
+f_donotdelete_const() = Base.donotdelete(1+1)
+@test occursin("call void (...) @jl_f_donotdelete(i64", get_llvm(f_donotdelete_input, Tuple{Int64}, true, false, false))
+@test occursin("call void (...) @jl_f_donotdelete()", get_llvm(f_donotdelete_const, Tuple{}, true, false, false))
+
+# Test 45476 fixes
+struct MaybeTuple45476
+    val::Union{Nothing, Tuple{Float32}}
+end
+
+@test MaybeTuple45476((0,)).val[1] == 0f0
+
+# Test int paths for getfield/isdefined
+f_getfield_nospecialize(@nospecialize(x)) = getfield(x, 1)
+f_isdefined_nospecialize(@nospecialize(x)) = isdefined(x, 1)
+
+@test !occursin("jl_box_int", get_llvm(f_getfield_nospecialize, Tuple{Any}, true, false, false))
+@test !occursin("jl_box_int", get_llvm(f_isdefined_nospecialize, Tuple{Any}, true, false, false))
+
+# Test codegen for isa(::Any, Type)
+f_isa_type(@nospecialize(x)) = isa(x, Type)
+@test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
