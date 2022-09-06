@@ -110,6 +110,8 @@ end
 @assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
     return rationalize(T, big(x), tol=tol)
 end
+rationalize(x::AbstractIrrational; kwargs...) = rationalize(Int, x)
+
 @assume_effects :total function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
     # an @assume_effects :total version of `<` for determining if the rationalization of
     # an irrational number required rounding up or down
