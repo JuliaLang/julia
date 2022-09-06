@@ -1,14 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if isempty(ARGS) || ARGS[1] !== "0"
+if Threads.nthreads() != 1
+    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.nthreads()
+end
+
+if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
 @eval Module() begin
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
+using Base.Meta
 
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
@@ -16,24 +21,43 @@ DOWN_ARROW = "\e[B"
 
 hardcoded_precompile_statements = """
 # used by Revise.jl
-@assert precompile(Tuple{typeof(Base.parse_cache_header), String})
-@assert precompile(Tuple{typeof(pushfirst!), Vector{Any}, Function})
+precompile(Tuple{typeof(Base.parse_cache_header), String})
+precompile(Base.read_dependency_src, (String, String))
+
 # used by Requires.jl
-@assert precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
-@assert precompile(Tuple{typeof(push!), Vector{Function}, Function})
+precompile(Tuple{typeof(get!), Type{Vector{Function}}, Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+precompile(Tuple{typeof(haskey), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+precompile(Tuple{typeof(delete!), Dict{Base.PkgId,Vector{Function}}, Base.PkgId})
+precompile(Tuple{typeof(push!), Vector{Function}, Function})
+
 # miscellaneous
-@assert precompile(Tuple{typeof(Base.require), Base.PkgId})
-@assert precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
-@assert precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
+precompile(Tuple{typeof(Base.require), Base.PkgId})
+precompile(Tuple{typeof(Base.recursive_prefs_merge), Base.Dict{String, Any}})
+precompile(Tuple{typeof(isassigned), Core.SimpleVector, Int})
+precompile(Tuple{typeof(getindex), Core.SimpleVector, Int})
+precompile(Tuple{typeof(Base.Experimental.register_error_hint), Any, Type})
+precompile(Tuple{typeof(Base.display_error), Base.ExceptionStack})
+precompile(Tuple{Core.kwftype(typeof(Type)), NamedTuple{(:sizehint,), Tuple{Int}}, Type{IOBuffer}})
+precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, String, Module))
+precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, Symbol, Module))
+precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
+precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 """
 
-precompile_script = """
+for T in (Float16, Float32, Float64), IO in (IOBuffer, IOContext{IOBuffer}, Base.TTY, IOContext{Base.TTY})
+    global hardcoded_precompile_statements
+    hardcoded_precompile_statements *= "precompile(Tuple{typeof(show), $IO, $T})\n"
+end
+
+repl_script = """
 2+2
 print("")
+printstyled("a", "b")
+display([1])
+display([1 2; 3 4])
 @time 1+1
 ; pwd
+$CTRL_C
 ? reinterpret
 using Ra\t$CTRL_C
 \\alpha\t$CTRL_C
@@ -45,40 +69,73 @@ f(x) = x03
 f(1,2)
 [][1]
 cd("complet_path\t\t$CTRL_C
-# Used by JuliaInterpreter
-push!(Set{Module}(), Main)
-push!(Set{Method}(), first(methods(collect)))
-# Used by Revise
-(setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
-(setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
-get(Base.pkgorigins, Base.PkgId(Base), nothing)
 """
 
-julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
+precompile_script = """
+# NOTE: these were moved to the end of Base.jl. TODO: move back here.
+# # Used by Revise & its dependencies
+# while true  # force inference
+# delete!(push!(Set{Module}(), Base), Main)
+# m = first(methods(+))
+# delete!(push!(Set{Method}(), m), m)
+# empty!(Set())
+# push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+# (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
+# (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
+# (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
+# (setindex!(Dict{Union{GlobalRef,Symbol}, Vector{Int}}(), [1], :two))[:two]
+# (setindex!(IdDict{Type, Union{Missing, Vector{Tuple{LineNumberNode, Expr}}}}(), missing, Int))[Int]
+# Dict{Symbol, Union{Nothing, Bool, Symbol}}(:one => false)[:one]
+# Dict(Base => [:(1+1)])[Base]
+# Dict(:one => [1])[:one]
+# Dict("abc" => Set())["abc"]
+# pushfirst!([], sum)
+# get(Base.pkgorigins, Base.PkgId(Base), nothing)
+# sort!([1,2,3])
+# unique!([1,2,3])
+# cumsum([1,2,3])
+# append!(Int[], BitSet())
+# isempty(BitSet())
+# delete!(BitSet([1,2]), 3)
+# deleteat!(Int32[1,2,3], [1,3])
+# deleteat!(Any[1,2,3], [1,3])
+# Core.svec(1, 2) == Core.svec(3, 4)
+# # copy(Core.Compiler.retrieve_code_info(Core.Compiler.specialize_method(which(+, (Int, Int)), [Int, Int], Core.svec())))
+# any(t->t[1].line > 1, [(LineNumberNode(2,:none),:(1+1))])
+# break   # end force inference
+# end
+"""
+
+julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
 if have_repl
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
+    precompile(Tuple{typeof(getproperty), REPL.REPLBackend, Symbol})
     """
 end
 
-# This is disabled because it doesn't give much benefit
-# and the code in Distributed is poorly typed causing many invalidations
-#=
 Distributed = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
           nothing)
 if Distributed !== nothing
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Distributed.remotecall),Function,Int,Module,Vararg{Any, 100}})
+    precompile(Tuple{typeof(Distributed.procs)})
+    precompile(Tuple{typeof(Distributed.finalize_ref), Distributed.Future})
+    """
+# This is disabled because it doesn't give much benefit
+# and the code in Distributed is poorly typed causing many invalidations
+#=
     precompile_script *= """
     using Distributed
     addprocs(2)
     pmap(x->iseven(x) ? 1 : 0, 1:4)
     @distributed (+) for i = 1:100 Int(rand(Bool)) end
     """
-end
 =#
+end
 
 
 Artifacts = get(Base.loaded_modules,
@@ -88,9 +145,12 @@ if Artifacts !== nothing
     precompile_script *= """
     using Artifacts, Base.BinaryPlatforms, Libdl
     artifacts_toml = abspath(joinpath(Sys.STDLIB, "Artifacts", "test", "Artifacts.toml"))
-    cd(() -> @artifact_str("c_simple"), dirname(artifacts_toml))
+    artifact_hash("HelloWorldC", artifacts_toml)
+    oldpwd = pwd(); cd(dirname(artifacts_toml))
+    macroexpand(Main, :(@artifact_str("HelloWorldC")))
+    cd(oldpwd)
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
-    platforms = [Artifacts.unpack_platform(e, "c_simple", artifacts_toml) for e in artifacts["c_simple"]]
+    platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
     dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
@@ -102,7 +162,8 @@ Pkg = get(Base.loaded_modules,
           nothing)
 
 if Pkg !== nothing
-    precompile_script *= Pkg.precompile_script
+    # TODO: Split Pkg precompile script into REPL and script part
+    repl_script *= Pkg.precompile_script
 end
 
 FileWatching = get(Base.loaded_modules,
@@ -110,8 +171,9 @@ FileWatching = get(Base.loaded_modules,
           nothing)
 if FileWatching !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
-    @assert precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    precompile(Tuple{typeof(FileWatching.watch_file), String, Float64})
+    precompile(Tuple{typeof(FileWatching.watch_file), String, Int})
+    precompile(Tuple{typeof(FileWatching._uv_hook_close), FileWatching.FileMonitor})
     """
 end
 
@@ -129,22 +191,71 @@ Test = get(Base.loaded_modules,
           nothing)
 if Test !== nothing
     hardcoded_precompile_statements *= """
-    @assert precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
-    @assert precompile(Tuple{typeof(Test.testset_beginend), Tuple{String, Expr}, Expr, LineNumberNode})
-    @assert precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
-    @assert precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
+    precompile(Tuple{typeof(Test.do_test), Test.ExecutionResult, Any})
+    precompile(Tuple{typeof(Test.testset_beginend_call), Tuple{String, Expr}, Expr, LineNumberNode})
+    precompile(Tuple{Type{Test.DefaultTestSet}, String})
+    precompile(Tuple{Type{Test.DefaultTestSet}, AbstractString})
+    precompile(Tuple{Core.kwftype(Type{Test.DefaultTestSet}), Any, Type{Test.DefaultTestSet}, AbstractString})
+    precompile(Tuple{typeof(Test.finish), Test.DefaultTestSet})
+    precompile(Tuple{typeof(Test.eval_test), Expr, Expr, LineNumberNode, Bool})
+    precompile(Tuple{typeof(Test._inferred), Expr, Module})
+    precompile(Tuple{typeof(Test.push_testset), Test.DefaultTestSet})
+    precompile(Tuple{typeof(Test.get_alignment), Test.DefaultTestSet, Int})
+    precompile(Tuple{typeof(Test.get_test_result), Any, Any})
+    precompile(Tuple{typeof(Test.do_test_throws), Test.ExecutionResult, Any, Any})
+    precompile(Tuple{typeof(Test.print_counts), Test.DefaultTestSet, Int, Int, Int, Int, Int, Int, Int})
+    precompile(Tuple{typeof(Test._check_testset), Type, Expr})
+    precompile(Tuple{typeof(Test.test_expr!), Any, Any})
+    precompile(Tuple{typeof(Test.test_expr!), Any, Any, Vararg{Any, 100}})
+    precompile(Tuple{typeof(Test.pop_testset)})
+    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{Symbol, Regex}})
+    precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
+    precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
+    precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
+    precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
+    precompile(Tuple{typeof(Test.detect_ambiguities), Any})
+    precompile(Tuple{typeof(Test.collect_test_logs), Function})
+    precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
+    precompile(Tuple{typeof(Test.record), Test.DefaultTestSet, Union{Test.Error, Test.Fail}})
+    precompile(Tuple{typeof(Test.filter_errors), Test.DefaultTestSet})
     """
 end
+
+Profile = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
+          nothing)
+if Profile !== nothing
+    repl_script *= Profile.precompile_script
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UInt})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, UnitRange{Int}, UnitRange{UInt}})
+    precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Vector{Int}, Vector{UInt}})
+    """
+end
+
+const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
 
 function generate_precompile_statements()
     start_time = time_ns()
     debug_output = devnull # or stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
-    # Precompile a package
-    global hardcoded_precompile_statements
+    # Extract the precompile statements from the precompile file
+    statements = Set{String}()
 
+    # From hardcoded statements
+    for statement in split(hardcoded_precompile_statements::String, '\n')
+        push!(statements, statement)
+    end
+
+    # Collect statements from running the script
     mktempdir() do prec_path
+        # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
         path = joinpath(prec_path, pkgname, "src", "$pkgname.jl")
@@ -153,21 +264,25 @@ function generate_precompile_statements()
               module $pkgname
               end
               """)
-        tmp = tempname()
-        # Running compilecache on buildbots fails with
-        # `More than one command line CPU targets specified without a `--output-` flag specified`
-        # so start a new process without a CPU target specified
+        tmp_prec = tempname(prec_path)
+        tmp_proc = tempname(prec_path)
         s = """
-            push!(DEPOT_PATH, $(repr(prec_path)));
-            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp));
+            pushfirst!(DEPOT_PATH, $(repr(prec_path)));
+            Base.PRECOMPILE_TRACE_COMPILE[] = $(repr(tmp_prec));
             Base.compilecache(Base.PkgId($(repr(pkgname))), $(repr(path)))
+            $precompile_script
             """
-        run(`$(julia_exepath()) -O0 --sysimage $sysimg --startup-file=no -Cnative -e $s`)
-        hardcoded_precompile_statements *= "\n" * read(tmp, String)
+        run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        for f in (tmp_prec, tmp_proc)
+            for statement in split(read(f, String), '\n')
+                occursin("Main.", statement) && continue
+                push!(statements, statement)
+            end
+        end
     end
 
     mktemp() do precompile_file, precompile_file_h
-        # Run a repl process and replay our script
+        # Collect statements from running a REPL process and replaying our REPL script
         pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
         if have_repl
@@ -180,11 +295,10 @@ function generate_precompile_statements()
         p = withenv("JULIA_HISTORY" => blackhole,
                     "JULIA_PROJECT" => nothing, # remove from environment
                     "JULIA_LOAD_PATH" => Sys.iswindows() ? "@;@stdlib" : "@:@stdlib",
+                    "JULIA_PKG_PRECOMPILE_AUTO" => "0",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                   --cpu-target=native --startup-file=no --color=yes
-                   -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                   -i $cmdargs```,
+                   --cpu-target=native --startup-file=no -i $cmdargs```,
                    pts, pts, pts; wait=false)
         end
         Base.close_stdio(pts)
@@ -197,27 +311,26 @@ function generate_precompile_statements()
                 Sys.iswindows() && (sleep(0.1); yield(); yield()) # workaround hang - probably a libuv issue?
                 write(output_copy, l)
             end
-            close(output_copy)
-            close(ptm)
         catch ex
-            close(output_copy)
-            close(ptm)
             if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
                 rethrow() # ignore EIO on ptm after pts dies
             end
+        finally
+            close(output_copy)
+            close(ptm)
         end
         # wait for the definitive prompt before start writing to the TTY
-        readuntil(output_copy, "julia>")
+        readuntil(output_copy, JULIA_PROMPT)
         sleep(0.1)
         readavailable(output_copy)
         # Input our script
         if have_repl
-            precompile_lines = split(precompile_script::String, '\n'; keepempty=false)
+            precompile_lines = split(repl_script::String, '\n'; keepempty=false)
             curr = 0
             for l in precompile_lines
                 sleep(0.1)
                 curr += 1
-                print("\rGenerating precompile statements... $curr/$(length(precompile_lines))")
+                print("\rGenerating REPL precompile statements... $curr/$(length(precompile_lines))")
                 # consume any other output
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
@@ -225,9 +338,16 @@ function generate_precompile_statements()
                 write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
-                readuntil(output_copy, "> ")
+                strbuf = ""
+                while true
+                    strbuf *= String(readavailable(output_copy))
+                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(PKG_PROMPT, strbuf) && break
+                    occursin(SHELL_PROMPT, strbuf) && break
+                    occursin(HELP_PROMPT, strbuf) && break
+                    sleep(0.1)
+                end
             end
             println()
         end
@@ -237,57 +357,78 @@ function generate_precompile_statements()
         close(ptm)
         write(debug_output, "\n#### FINISHED ####\n")
 
-        # Extract the precompile statements from the precompile file
-        statements = Set{String}()
-        for statement in eachline(precompile_file_h)
+        for statement in split(read(precompile_file, String), '\n')
             # Main should be completely clean
             occursin("Main.", statement) && continue
             push!(statements, statement)
         end
-
-        for statement in split(hardcoded_precompile_statements::String, '\n')
-            push!(statements, statement)
-        end
-
-        # Create a staging area where all the loaded packages are available
-        PrecompileStagingArea = Module()
-        for (_pkgid, _mod) in Base.loaded_modules
-            if !(_pkgid.name in ("Main", "Core", "Base"))
-                eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
-            end
-        end
-
-        # Execute the collected precompile statements
-        n_succeeded = 0
-        include_time = @elapsed for statement in sort(collect(statements))
-            # println(statement)
-            # The compiler has problem caching signatures with `Vararg{?, N}`. Replacing
-            # N with a large number seems to work around it.
-            statement = replace(statement, r"Vararg{(.*?), N} where N" => s"Vararg{\1, 100}")
-            try
-                Base.include_string(PrecompileStagingArea, statement)
-                n_succeeded += 1
-                print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
-            catch
-                # See #28808
-                # @error "Failed to precompile $statement"
-            end
-        end
-        println()
-        if have_repl
-            # Seems like a reasonable number right now, adjust as needed
-            # comment out if debugging script
-            @assert n_succeeded > 1200
-        end
-
-        tot_time = time_ns() - start_time
-        include_time *= 1e9
-        gen_time = tot_time - include_time
-        println("Precompilation complete. Summary:")
-        print("Total ─────── "); Base.time_print(tot_time); println()
-        print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
-        print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
     end
+
+    # Create a staging area where all the loaded packages are available
+    PrecompileStagingArea = Module()
+    for (_pkgid, _mod) in Base.loaded_modules
+        if !(_pkgid.name in ("Main", "Core", "Base"))
+            eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
+        end
+    end
+
+    # Execute the collected precompile statements
+    n_succeeded = 0
+    include_time = @elapsed for statement in sort!(collect(statements))
+        # println(statement)
+        # XXX: skip some that are broken. these are caused by issue #39902
+        occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
+        occursin("Tuple{Base.Cartesian.var\"#@ncall\", LineNumberNode, Module, Int64, Any, Vararg{Any}}", statement) && continue
+        occursin("Tuple{Base.Cartesian.var\"#@ncall\", LineNumberNode, Module, Int32, Any, Vararg{Any}}", statement) && continue
+        occursin("Tuple{Base.Cartesian.var\"#@nloops\", LineNumberNode, Module, Any, Any, Any, Vararg{Any}}", statement) && continue
+        occursin("Tuple{Core.var\"#@doc\", LineNumberNode, Module, Vararg{Any}}", statement) && continue
+        # XXX: this is strange, as this isn't the correct representation of this
+        occursin("typeof(Core.IntrinsicFunction)", statement) && continue
+        # XXX: this is strange, as this method should not be getting compiled
+        occursin(", Core.Compiler.AbstractInterpreter, ", statement) && continue
+        try
+            ps = Meta.parse(statement)
+            isexpr(ps, :call) || continue
+            popfirst!(ps.args) # precompile(...)
+            ps.head = :tuple
+            l = ps.args[end]
+            if (isexpr(l, :tuple) || isexpr(l, :curly)) && length(l.args) > 0 # Tuple{...} or (...)
+                # XXX: precompile doesn't currently handle overloaded Vararg arguments very well.
+                # Replacing N with a large number works around it.
+                l = l.args[end]
+                if isexpr(l, :curly) && length(l.args) == 2 && l.args[1] === :Vararg # Vararg{T}
+                    push!(l.args, 100) # form Vararg{T, 100} instead
+                end
+            end
+            # println(ps)
+            ps = Core.eval(PrecompileStagingArea, ps)
+            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
+            # Skipping them avoids the warning.
+            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
+            ms isa Vector || continue
+            precompile(ps...)
+            n_succeeded += 1
+            print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
+        catch ex
+            # See #28808
+            @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
+        end
+    end
+    println()
+    if have_repl
+        # Seems like a reasonable number right now, adjust as needed
+        # comment out if debugging script
+        n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
+    end
+
+    include_time *= 1e9
+    gen_time = (time_ns() - start_time) - include_time
+    tot_time = time_ns() - start_time
+
+    println("Precompilation complete. Summary:")
+    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100);     println("%")
+    print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
+    print("Total ─────── "); Base.time_print(tot_time);     println()
 
     return
 end
@@ -296,6 +437,7 @@ generate_precompile_statements()
 
 # As a last step in system image generation,
 # remove some references to build time environment for a more reproducible build.
+Base.Filesystem.temp_cleanup_purge(force=true)
 @eval Base PROGRAM_FILE = ""
 @eval Sys begin
     BINDIR = ""
@@ -305,4 +447,13 @@ empty!(Base.ARGS)
 empty!(Core.ARGS)
 
 end # @eval
+end # if
+
+println("Outputting sysimage file...")
+let pre_output_time = time_ns()
+    # Print report after sysimage has been saved so all time spent can be captured
+    Base.postoutput() do
+        output_time = time_ns() - pre_output_time
+        print("Output ────── "); Base.time_print(output_time); println()
+    end
 end

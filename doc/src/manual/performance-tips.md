@@ -3,13 +3,19 @@
 In the following sections, we briefly go through a few techniques that can help make your Julia
 code run as fast as possible.
 
-## Avoid global variables
+## Performance critical code should be inside a function
 
-A global variable might have its value, and therefore its type, change at any point. This makes
-it difficult for the compiler to optimize code using global variables. Variables should be local,
-or passed as arguments to functions, whenever possible.
+Any code that is performance critical should be inside a function. Code inside functions tends to run much faster than top level code, due to how Julia's compiler works.
 
-Any code that is performance critical or being benchmarked should be inside a function.
+The use of functions is not only important for performance: functions are more reusable and testable, and clarify what steps are being done and what their inputs and outputs are, [Write functions, not just scripts](@ref) is also a recommendation of Julia's Styleguide.
+
+The functions should take arguments, instead of operating directly on global variables, see the next point.
+
+## Avoid untyped global variables
+
+The value of an untyped global variable might change at any point, possibly leading to a change of its type. This makes
+it difficult for the compiler to optimize code using global variables. This also applies to type-valued variables,
+i.e. type aliases on the global level. Variables should be local, or passed as arguments to functions, whenever possible.
 
 We find that global names are frequently constants, and declaring them as such greatly improves
 performance:
@@ -18,7 +24,9 @@ performance:
 const DEFAULT_VAL = 0
 ```
 
-Uses of non-constant globals can be optimized by annotating their types at the point of use:
+If a global is known to always be of the same type, [the type should be annotated](@ref man-typed-globals).
+
+Uses of untyped globals can be optimized by annotating their types at the point of use:
 
 ```julia
 global x = rand(1000)
@@ -70,12 +78,12 @@ julia> function sum_global()
        end;
 
 julia> @time sum_global()
-  0.009639 seconds (7.36 k allocations: 300.310 KiB, 98.32% compilation time)
-496.84883432553846
+  0.011539 seconds (9.08 k allocations: 373.386 KiB, 98.69% compilation time)
+523.0007221951678
 
 julia> @time sum_global()
-  0.000140 seconds (3.49 k allocations: 70.313 KiB)
-496.84883432553846
+  0.000091 seconds (3.49 k allocations: 70.156 KiB)
+523.0007221951678
 ```
 
 On the first call (`@time sum_global()`) the function gets compiled. (If you've not yet used [`@time`](@ref)
@@ -106,12 +114,12 @@ julia> function sum_arg(x)
        end;
 
 julia> @time sum_arg(x)
-  0.006202 seconds (4.18 k allocations: 217.860 KiB, 99.72% compilation time)
-496.84883432553846
+  0.007551 seconds (3.98 k allocations: 200.548 KiB, 99.77% compilation time)
+523.0007221951678
 
 julia> @time sum_arg(x)
-  0.000005 seconds (1 allocation: 16 bytes)
-496.84883432553846
+  0.000006 seconds (1 allocation: 16 bytes)
+523.0007221951678
 ```
 
 The 1 allocation seen is from running the `@time` macro itself in global scope. If we instead run
@@ -121,8 +129,8 @@ the timing in a function, we can see that indeed no allocations are performed:
 julia> time_sum(x) = @time sum_arg(x);
 
 julia> time_sum(x)
-  0.000001 seconds
-496.84883432553846
+  0.000002 seconds
+523.0007221951678
 ```
 
 In some situations, your function may need to allocate memory as part of its operation, and this
@@ -318,7 +326,7 @@ Float32
 
 For all practical purposes, such objects behave identically to those of `MyStillAmbiguousType`.
 
-It's quite instructive to compare the sheer amount code generated for a simple function
+It's quite instructive to compare the sheer amount of code generated for a simple function
 
 ```julia
 func(m::MyType) = m.a+1
@@ -335,6 +343,14 @@ For reasons of length the results are not shown here, but you may wish to try th
 the type is fully-specified in the first case, the compiler doesn't need to generate any code
 to resolve the type at run-time. This results in shorter and faster code.
 
+One should also keep in mind that not-fully-parameterized types behave like abstract types. For example, even though a fully specified `Array{T,n}` is concrete, `Array` itself with no parameters given is not concrete:
+
+```jldoctest myambig3
+julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isconcretetype(Array{Int}), isconcretetype(Array{Int,1})
+(true, true, true, true, true)
+```
+In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
+
 ### Avoid fields with abstract containers
 
 The same best practices also work for container types:
@@ -346,6 +362,10 @@ julia> struct MySimpleContainer{A<:AbstractVector}
 
 julia> struct MyAmbiguousContainer{T}
            a::AbstractVector{T}
+       end
+
+julia> struct MyAlsoAmbiguousContainer
+           a::Array
        end
 ```
 
@@ -371,6 +391,17 @@ julia> b = MyAmbiguousContainer([1:3;]);
 
 julia> typeof(b)
 MyAmbiguousContainer{Int64}
+
+julia> d = MyAlsoAmbiguousContainer(1:3);
+
+julia> typeof(d), typeof(d.a)
+(MyAlsoAmbiguousContainer, Vector{Int64})
+
+julia> d = MyAlsoAmbiguousContainer(1:1.0:3);
+
+julia> typeof(d), typeof(d.a)
+(MyAlsoAmbiguousContainer, Vector{Float64})
+
 ```
 
 For `MySimpleContainer`, the object is fully-specified by its type and parameters, so the compiler
@@ -641,10 +672,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Float64}:
- 2.0
- 2.0
- 2.0
+3-element Vector{Int64}:
+ 2
+ 2
+ 2
 ```
 
 This should be written as:
@@ -663,10 +694,10 @@ julia> function strange_twos(n)
        end;
 
 julia> strange_twos(3)
-3-element Vector{Float64}:
- 2.0
- 2.0
- 2.0
+3-element Vector{Int64}:
+ 2
+ 2
+ 2
 ```
 
 Julia's compiler specializes code for argument types at function boundaries, so in the original
@@ -995,7 +1026,7 @@ consider the two functions:
 ```jldoctest dotfuse
 julia> f(x) = 3x.^2 + 4x + 7x.^3;
 
-julia> fdot(x) = @. 3x^2 + 4x + 7x^3 # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3;
+julia> fdot(x) = @. 3x^2 + 4x + 7x^3; # equivalent to 3 .* x.^2 .+ 4 .* x .+ 7 .* x.^3
 ```
 
 Both `f` and `fdot` compute the same thing. However, `fdot`
@@ -1017,11 +1048,10 @@ julia> @time f.(x);
 
 That is, `fdot(x)` is ten times faster and allocates 1/6 the
 memory of `f(x)`, because each `*` and `+` operation in `f(x)` allocates
-a new temporary array and executes in a separate loop. (Of course,
-if you just do `f.(x)` then it is as fast as `fdot(x)` in this
-example, but in many contexts it is more convenient to just sprinkle
-some dots in your expressions rather than defining a separate function
-for each vectorized operation.)
+a new temporary array and executes in a separate loop. In this example
+`f.(x)` is as fast as `fdot(x)` but in many contexts it is more
+convenient to sprinkle some dots in your expressions than to
+define a separate function for each vectorized operation.
 
 ## [Consider using views for slices](@id man-performance-views)
 
@@ -1064,42 +1094,41 @@ of the `fview` version of the function.
 
 Arrays are stored contiguously in memory, lending themselves to CPU vectorization
 and fewer memory accesses due to caching. These are the same reasons that it is recommended
-to access arrays in column-major order (see above). Irregular access patterns and non-contiguous views
-can drastically slow down computations on arrays because of non-sequential memory access.
+to access arrays in column-major order (see above). Irregular access patterns and non-contiguous
+views can drastically slow down computations on arrays because of non-sequential memory access.
 
-Copying irregularly-accessed data into a contiguous array before operating on it can result
-in a large speedup, such as in the example below. Here, a matrix and a vector are being accessed at
-800,000 of their randomly-shuffled indices before being multiplied. Copying the views into
-plain arrays speeds up the multiplication even with the cost of the copying operation.
+Copying irregularly-accessed data into a contiguous array before repeated access it can result
+in a large speedup, such as in the example below. Here, a matrix is being accessed at
+randomly-shuffled indices before being multiplied. Copying into plain arrays speeds up the
+multiplication even with the added cost of copying and allocation.
 
 ```julia-repl
 julia> using Random
 
-julia> x = randn(1_000_000);
+julia> A = randn(3000, 3000);
 
-julia> inds = shuffle(1:1_000_000)[1:800000];
+julia> x = randn(2000);
 
-julia> A = randn(50, 1_000_000);
+julia> inds = shuffle(1:3000)[1:2000];
 
-julia> xtmp = zeros(800_000);
-
-julia> Atmp = zeros(50, 800_000);
-
-julia> @time sum(view(A, :, inds) * view(x, inds))
-  0.412156 seconds (14 allocations: 960 bytes)
--4256.759568345458
-
-julia> @time begin
-           copyto!(xtmp, view(x, inds))
-           copyto!(Atmp, view(A, :, inds))
-           sum(Atmp * xtmp)
+julia> function iterated_neural_network(A, x, depth)
+           for _ in 1:depth
+               x .= max.(0, A * x)
+           end
+           argmax(x)
        end
-  0.285923 seconds (14 allocations: 960 bytes)
--4256.759568345134
+
+julia> @time iterated_neural_network(view(A, inds, inds), x, 10)
+  0.324903 seconds (12 allocations: 157.562 KiB)
+1569
+
+julia> @time iterated_neural_network(A[inds, inds], x, 10)
+  0.054576 seconds (13 allocations: 30.671 MiB, 13.33% gc time)
+1569
 ```
 
-Provided there is enough memory for the copies, the cost of copying the view to an array is
-far outweighed by the speed boost from doing the matrix multiplication on a contiguous array.
+Provided there is enough memory, the cost of copying the view to an array is outweighed
+by the speed boost from doing the repeated matrix multiplications on a contiguous array.
 
 ## Consider StaticArrays.jl for small fixed-size vector/matrix operations
 
@@ -1446,11 +1475,13 @@ julia> function f(x)
        end;
 
 julia> @code_warntype f(3.2)
-Variables
+MethodInstance for f(::Float64)
+  from f(x) @ Main REPL[9]:1
+Arguments
   #self#::Core.Const(f)
   x::Float64
-  y::UNION{FLOAT64, INT64}
-
+Locals
+  y::Union{Float64, Int64}
 Body::Float64
 1 ─      (y = Main.pos(x))
 │   %2 = (y * x)::Float64
@@ -1471,7 +1502,7 @@ At the top, the inferred return type of the function is shown as `Body::Float64`
 The next lines represent the body of `f` in Julia's SSA IR form.
 The numbered boxes are labels and represent targets for jumps (via `goto`) in your code.
 Looking at the body, you can see that the first thing that happens is that `pos` is called and the
-return value has been inferred as the `Union` type `UNION{FLOAT64, INT64}` shown in uppercase since
+return value has been inferred as the `Union` type `Union{Float64, Int64}` shown in uppercase since
 it is a non-concrete type. This means that we cannot know the exact return type of `pos` based on the
 input types. However, the result of `y*x`is a `Float64` no matter if `y` is a `Float64` or `Int64`
 The net result is that `f(x::Float64)` will not be type-unstable
@@ -1493,21 +1524,21 @@ are color highlighted in yellow, instead of red.
 
 The following examples may help you interpret expressions marked as containing non-leaf types:
 
-  * Function body starting with `Body::UNION{T1,T2})`
+  * Function body starting with `Body::Union{T1,T2})`
       * Interpretation: function with unstable return type
       * Suggestion: make the return value type-stable, even if you have to annotate it
 
-  * `invoke Main.g(%%x::Int64)::UNION{FLOAT64, INT64}`
+  * `invoke Main.g(%%x::Int64)::Union{Float64, Int64}`
       * Interpretation: call to a type-unstable function `g`.
       * Suggestion: fix the function, or if necessary annotate the return value
 
-  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::ANY`
+  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::Any`
       * Interpretation: accessing elements of poorly-typed arrays
       * Suggestion: use arrays with better-defined types, or if necessary annotate the type of individual
         element accesses
 
-  * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
-      * Interpretation: getting a field that is of non-leaf type. In this case, `ArrayContainer` had a
+  * `Base.getfield(%%x, :(:data))::Array{Float64,N} where N`
+      * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter
         of `ArrayContainer`
@@ -1593,11 +1624,3 @@ will not require this degree of programmer annotation to attain performance.
 In the mean time, some user-contributed packages like
 [FastClosures](https://github.com/c42f/FastClosures.jl) automate the
 insertion of `let` statements as in `abmult3`.
-
-## Checking for equality with a singleton
-
-When checking if a value is equal to some singleton it can be
-better for performance to check for identicality (`===`) instead of
-equality (`==`). The same advice applies to using `!==` over `!=`.
-These type of checks frequently occur e.g. when implementing the iteration
-protocol and checking if `nothing` is returned from [`iterate`](@ref).

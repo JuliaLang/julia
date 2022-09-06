@@ -32,7 +32,7 @@ typedef struct {
 
 // initialize hash table, reserving space for `size` expected number of
 // elements. (Expect `h->size > size` for efficient occupancy factor.)
-htable_t *htable_new(htable_t *h, size_t size);
+htable_t *htable_new(htable_t *h, size_t size) JL_NOTSAFEPOINT;
 void htable_free(htable_t *h);
 
 // clear and (possibly) change size

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @propagate_inbounds, @_inline_meta
+using Base: @propagate_inbounds
 import Base: length, size, axes, IndexStyle, getindex, setindex!, parent, vec, convert, similar
 
 ### basic definitions (types, aliases, constructors, abstractarray interface, sundry similar)
@@ -21,23 +21,19 @@ This type is intended for linear algebra usage - for general data manipulation s
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
+julia> A = [3+2im 9+2im; 0 0]
 2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
- 8+7im  4+6im
+ 0+0im  0+0im
 
-julia> adjoint(A)
-2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
- 3-2im  8-7im
- 9-2im  4-6im
+julia> Adjoint(A)
+2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
+ 3-2im  0+0im
+ 9-2im  0+0im
 ```
 """
 struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
-    function Adjoint{T,S}(A::S) where {T,S}
-        checkeltype_adjoint(T, eltype(A))
-        new(A)
-    end
 end
 """
     Transpose
@@ -52,43 +48,19 @@ This type is intended for linear algebra usage - for general data manipulation s
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Matrix{Complex{Int64}}:
- 3+2im  9+2im
- 8+7im  4+6im
+julia> A = [2 3; 0 0]
+2×2 Matrix{Int64}:
+ 2  3
+ 0  0
 
-julia> transpose(A)
-2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
- 3+2im  8+7im
- 9+2im  4+6im
+julia> Transpose(A)
+2×2 transpose(::Matrix{Int64}) with eltype Int64:
+ 2  0
+ 3  0
 ```
 """
 struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
-    function Transpose{T,S}(A::S) where {T,S}
-        checkeltype_transpose(T, eltype(A))
-        new(A)
-    end
-end
-
-function checkeltype_adjoint(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype,ParentEltype}
-    Expected = Base.promote_op(adjoint, ParentEltype)
-    ResultEltype === Expected || error(string(
-        "Element type mismatch. Tried to create an `Adjoint{", ResultEltype, "}` ",
-        "from an object with eltype `", ParentEltype, "`, but the element type of ",
-        "the adjoint of an object with eltype `", ParentEltype, "` must be ",
-        "`", Expected, "`."))
-    return nothing
-end
-
-function checkeltype_transpose(::Type{ResultEltype}, ::Type{ParentEltype}) where {ResultEltype, ParentEltype}
-    Expected = Base.promote_op(transpose, ParentEltype)
-    ResultEltype === Expected || error(string(
-        "Element type mismatch. Tried to create a `Transpose{", ResultEltype, "}` ",
-        "from an object with eltype `", ParentEltype, "`, but the element type of ",
-        "the transpose of an object with eltype `", ParentEltype, "` must be ",
-        "`", Expected, "`."))
-    return nothing
 end
 
 # basic outer constructors
@@ -114,23 +86,83 @@ This operation is intended for linear algebra usage - for general data manipulat
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
+julia> A = [3+2im 9+2im; 0  0]
 2×2 Matrix{Complex{Int64}}:
  3+2im  9+2im
- 8+7im  4+6im
+ 0+0im  0+0im
 
-julia> adjoint(A)
-2×2 Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
- 3-2im  8-7im
- 9-2im  4-6im
+julia> B = A' # equivalently adjoint(A)
+2×2 adjoint(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
+ 3-2im  0+0im
+ 9-2im  0+0im
 
+julia> B isa Adjoint
+true
+
+julia> adjoint(B) === A # the adjoint of an adjoint unwraps the parent
+true
+
+julia> Adjoint(B) # however, the constructor always wraps its argument
+2×2 adjoint(adjoint(::Matrix{Complex{Int64}})) with eltype Complex{Int64}:
+ 3+2im  9+2im
+ 0+0im  0+0im
+
+julia> B[1,2] = 4 + 5im; # modifying B will modify A automatically
+
+julia> A
+2×2 Matrix{Complex{Int64}}:
+ 3+2im  9+2im
+ 4-5im  0+0im
+```
+
+For real matrices, the `adjoint` operation is equivalent to a `transpose`.
+
+```jldoctest
+julia> A = reshape([x for x in 1:4], 2, 2)
+2×2 Matrix{Int64}:
+ 1  3
+ 2  4
+
+julia> A'
+2×2 adjoint(::Matrix{Int64}) with eltype Int64:
+ 1  2
+ 3  4
+
+julia> adjoint(A) == transpose(A)
+true
+```
+
+The adjoint of an `AbstractVector` is a row-vector:
+```jldoctest
 julia> x = [3, 4im]
 2-element Vector{Complex{Int64}}:
  3 + 0im
  0 + 4im
 
-julia> x'x
+julia> x'
+1×2 adjoint(::Vector{Complex{Int64}}) with eltype Complex{Int64}:
+ 3+0im  0-4im
+
+julia> x'x # compute the dot product, equivalently x' * x
 25 + 0im
+```
+
+For a matrix of matrices, the individual blocks are recursively operated on:
+```jldoctest
+julia> A = reshape([x + im*x for x in 1:4], 2, 2)
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  3+3im
+ 2+2im  4+4im
+
+julia> C = reshape([A, 2A, 3A, 4A], 2, 2)
+2×2 Matrix{Matrix{Complex{Int64}}}:
+ [1+1im 3+3im; 2+2im 4+4im]  [3+3im 9+9im; 6+6im 12+12im]
+ [2+2im 6+6im; 4+4im 8+8im]  [4+4im 12+12im; 8+8im 16+16im]
+
+julia> C'
+2×2 adjoint(::Matrix{Matrix{Complex{Int64}}}) with eltype Adjoint{Complex{Int64}, Matrix{Complex{Int64}}}:
+ [1-1im 2-2im; 3-3im 4-4im]    [2-2im 4-4im; 6-6im 8-8im]
+ [3-3im 6-6im; 9-9im 12-12im]  [4-4im 8-8im; 12-12im 16-16im]
 ```
 """
 adjoint(A::AbstractVecOrMat) = Adjoint(A)
@@ -147,15 +179,78 @@ This operation is intended for linear algebra usage - for general data manipulat
 
 # Examples
 ```jldoctest
-julia> A = [3+2im 9+2im; 8+7im  4+6im]
-2×2 Matrix{Complex{Int64}}:
- 3+2im  9+2im
- 8+7im  4+6im
+julia> A = [3 2; 0 0]
+2×2 Matrix{Int64}:
+ 3  2
+ 0  0
 
-julia> transpose(A)
-2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
- 3+2im  8+7im
- 9+2im  4+6im
+julia> B = transpose(A)
+2×2 transpose(::Matrix{Int64}) with eltype Int64:
+ 3  0
+ 2  0
+
+julia> B isa Transpose
+true
+
+julia> transpose(B) === A # the transpose of a transpose unwraps the parent
+true
+
+julia> Transpose(B) # however, the constructor always wraps its argument
+2×2 transpose(transpose(::Matrix{Int64})) with eltype Int64:
+ 3  2
+ 0  0
+
+julia> B[1,2] = 4; # modifying B will modify A automatically
+
+julia> A
+2×2 Matrix{Int64}:
+ 3  2
+ 4  0
+```
+
+For complex matrices, the `adjoint` operation is equivalent to a conjugate-transpose.
+```jldoctest
+julia> A = reshape([Complex(x, x) for x in 1:4], 2, 2)
+2×2 Matrix{Complex{Int64}}:
+ 1+1im  3+3im
+ 2+2im  4+4im
+
+julia> adjoint(A) == conj(transpose(A))
+true
+```
+
+The `transpose` of an `AbstractVector` is a row-vector:
+```jldoctest
+julia> v = [1,2,3]
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+
+julia> transpose(v) # returns a row-vector
+1×3 transpose(::Vector{Int64}) with eltype Int64:
+ 1  2  3
+
+julia> transpose(v) * v # compute the dot product
+14
+```
+
+For a matrix of matrices, the individual blocks are recursively operated on:
+```jldoctest
+julia> C = reshape(1:4, 2, 2)
+2×2 reshape(::UnitRange{Int64}, 2, 2) with eltype Int64:
+ 1  3
+ 2  4
+
+julia> D = reshape([C, 2C, 3C, 4C], 2, 2) # construct a block matrix
+2×2 Matrix{Matrix{Int64}}:
+ [1 3; 2 4]  [3 9; 6 12]
+ [2 6; 4 8]  [4 12; 8 16]
+
+julia> transpose(D) # blocks are recursively transposed
+2×2 transpose(::Matrix{Matrix{Int64}}) with eltype Transpose{Int64, Matrix{Int64}}:
+ [1 2; 3 4]   [2 4; 6 8]
+ [3 6; 9 12]  [4 8; 12 16]
 ```
 """
 transpose(A::AbstractVecOrMat) = Transpose(A)
@@ -166,17 +261,35 @@ transpose(A::Transpose) = A.parent
 adjoint(A::Transpose{<:Real}) = A.parent
 transpose(A::Adjoint{<:Real}) = A.parent
 
+# printing
+function Base.showarg(io::IO, v::Adjoint, toplevel)
+    print(io, "adjoint(")
+    Base.showarg(io, parent(v), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+    return nothing
+end
+function Base.showarg(io::IO, v::Transpose, toplevel)
+    print(io, "transpose(")
+    Base.showarg(io, parent(v), false)
+    print(io, ')')
+    toplevel && print(io, " with eltype ", eltype(v))
+    return nothing
+end
 
 # some aliases for internal convenience use
 const AdjOrTrans{T,S} = Union{Adjoint{T,S},Transpose{T,S}} where {T,S}
 const AdjointAbsVec{T} = Adjoint{T,<:AbstractVector}
+const AdjointAbsMat{T} = Adjoint{T,<:AbstractMatrix}
 const TransposeAbsVec{T} = Transpose{T,<:AbstractVector}
+const TransposeAbsMat{T} = Transpose{T,<:AbstractMatrix}
 const AdjOrTransAbsVec{T} = AdjOrTrans{T,<:AbstractVector}
 const AdjOrTransAbsMat{T} = AdjOrTrans{T,<:AbstractMatrix}
 
 # for internal use below
-wrapperop(A::Adjoint) = adjoint
-wrapperop(A::Transpose) = transpose
+wrapperop(_) = identity
+wrapperop(::Adjoint) = adjoint
+wrapperop(::Transpose) = transpose
 
 # AbstractArray interface, basic definitions
 length(A::AdjOrTrans) = length(A.parent)
@@ -186,8 +299,8 @@ axes(v::AdjOrTransAbsVec) = (Base.OneTo(1), axes(v.parent)...)
 axes(A::AdjOrTransAbsMat) = reverse(axes(A.parent))
 IndexStyle(::Type{<:AdjOrTransAbsVec}) = IndexLinear()
 IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
-@propagate_inbounds getindex(v::AdjOrTransAbsVec, i::Int) = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])
-@propagate_inbounds getindex(A::AdjOrTransAbsMat, i::Int, j::Int) = wrapperop(A)(A.parent[j, i])
+@propagate_inbounds getindex(v::AdjOrTransAbsVec{T}, i::Int) where {T} = wrapperop(v)(v.parent[i-1+first(axes(v.parent)[1])])::T
+@propagate_inbounds getindex(A::AdjOrTransAbsMat{T}, i::Int, j::Int) where {T} = wrapperop(A)(A.parent[j, i])::T
 @propagate_inbounds setindex!(v::AdjOrTransAbsVec, x, i::Int) = (setindex!(v.parent, wrapperop(v)(x), i-1+first(axes(v.parent)[1])); v)
 @propagate_inbounds setindex!(A::AdjOrTransAbsMat, x, i::Int, j::Int) = (setindex!(A.parent, wrapperop(A)(x), j, i); A)
 # AbstractArray interface, additional definitions to retain wrapper over vectors where appropriate
@@ -221,9 +334,12 @@ similar(A::AdjOrTrans) = similar(A.parent, eltype(A), axes(A))
 similar(A::AdjOrTrans, ::Type{T}) where {T} = similar(A.parent, T, axes(A))
 similar(A::AdjOrTrans, ::Type{T}, dims::Dims{N}) where {T,N} = similar(A.parent, T, dims)
 
+# AbstractMatrix{T} constructor for adjtrans vector: preserve wrapped type
+AbstractMatrix{T}(A::AdjOrTransAbsVec) where {T} = wrapperop(A)(AbstractVector{T}(A.parent))
+
 # sundry basic definitions
 parent(A::AdjOrTrans) = A.parent
-vec(v::TransposeAbsVec) = parent(v)
+vec(v::TransposeAbsVec{<:Number}) = parent(v)
 vec(v::AdjointAbsVec{<:Real}) = parent(v)
 
 ### concatenation
@@ -235,7 +351,7 @@ _adjoint_hcat(avs::Union{Number,AdjointAbsVec}...) = adjoint(vcat(map(adjoint, a
 _transpose_hcat(tvs::Union{Number,TransposeAbsVec}...) = transpose(vcat(map(transpose, tvs)...))
 typed_hcat(::Type{T}, avs::Union{Number,AdjointAbsVec}...) where {T} = adjoint(typed_vcat(T, map(adjoint, avs)...))
 typed_hcat(::Type{T}, tvs::Union{Number,TransposeAbsVec}...) where {T} = transpose(typed_vcat(T, map(transpose, tvs)...))
-# otherwise-redundant definitions necessary to prevent hitting the concat methods in sparse/sparsevector.jl
+# otherwise-redundant definitions necessary to prevent hitting the concat methods in LinearAlgebra/special.jl
 hcat(avs::Adjoint{<:Any,<:Vector}...) = _adjoint_hcat(avs...)
 hcat(tvs::Transpose{<:Any,<:Vector}...) = _transpose_hcat(tvs...)
 hcat(avs::Adjoint{T,Vector{T}}...) where {T} = _adjoint_hcat(avs...)
@@ -259,6 +375,25 @@ broadcast(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...
 Broadcast.broadcast_preserving_zero_d(f, avs::Union{Number,AdjointAbsVec}...) = adjoint(broadcast((xs...) -> adjoint(f(adjoint.(xs)...)), quasiparenta.(avs)...))
 Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) = transpose(broadcast((xs...) -> transpose(f(transpose.(xs)...)), quasiparentt.(tvs)...))
 # TODO unify and allow mixed combinations with a broadcast style
+
+
+### reductions
+# faster to sum the Array than to work through the wrapper
+Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Transpose, dims::Colon) =
+    transpose(Base._mapreduce_dim(_sandwich(transpose, f), _sandwich(transpose, op), init, parent(A), dims))
+Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
+    adjoint(Base._mapreduce_dim(_sandwich(adjoint, f), _sandwich(adjoint, op), init, parent(A), dims))
+# sum(A'; dims)
+Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
+    transpose(Base.mapreducedim!(_sandwich(transpose, f), _sandwich(transpose, op), transpose(B), parent(A)))
+Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
+    adjoint(Base.mapreducedim!(_sandwich(adjoint, f), _sandwich(adjoint, op), adjoint(B), parent(A)))
+
+_sandwich(adj::Function, fun) = (xs...,) -> adj(fun(map(adj, xs)...))
+for fun in [:identity, :add_sum, :mul_prod] #, :max, :min]
+    @eval _sandwich(::Function, ::typeof(Base.$fun)) = Base.$fun
+end
+
 
 ### linear algebra
 

@@ -2,6 +2,31 @@
 
 using InteractiveUtils, Test
 
+myzeros(::Type{T}, ::Type{S}, ::Type{R}, dims::Tuple{Vararg{Integer, N}}, dims2::Tuple{Vararg{Integer, M}}) where {T, R, S, M, N} = (x = 1)
+@testset "warntype content" begin
+    io = IOBuffer()
+    code_warntype(IOContext(io, :color => true), myzeros,
+                  Tuple{Type{<:Integer}, Type{>:String}, Type{T} where Signed<:T<:Real, Tuple{Vararg{Int}}, NTuple{4,Int}})
+    seekstart(io)
+    @test startswith(readline(io), "MethodInstance for ")
+    @test occursin(r"^  from myzeros\(::.*Type.*{T}, ::", readline(io))
+    @test occursin(r"^Static Parameters$", readline(io))
+    @test occursin(r"^  T <: .*Integer", readline(io))
+    @test occursin(r"^  .*Signed.* <: R <: .*Real", readline(io))
+    @test occursin(r"^  S >: .*String", readline(io))
+    @test occursin(r"^  M = .*4", readline(io))
+    @test occursin(r"^  N::.*Int", readline(io))
+    @test occursin(r"^Arguments$", readline(io))
+    @test occursin(r"^  #self#.*::Core.Const", readline(io))
+    while readline(io) != "Locals"
+        eof(io) && throw(EOFError())
+    end
+    @test occursin(r"^  x.*::Int", readline(io))
+    @test occursin(r"^Body.*::Int", readline(io))
+    code = read(io, String)
+    @test endswith(code, "\n\n")
+end
+
 @testset "warntype highlighting" begin
     # Make sure that "expected" unions are highlighted with warning color instead of error color
     io = IOBuffer()
@@ -134,10 +159,10 @@ const XU = B * "}" * XB
 
     @testset "attributes" begin
         @test hilight_llvm(
-            """attributes #1 = { uwtable "frame-pointer"="all" "thunk" }""") ==
+            """attributes #1 = { uwtable "frame-pointer"="all" }""") ==
             "$(K)attributes$(XK) $(D)#1$(XD) $EQU " *
             "$U $(K)uwtable$(XK) $(V)\"frame-pointer\"$(XV)$EQU" *
-            "$(V)\"all\"$(XV) $(V)\"thunk\"$(XV) $XU\n"
+            "$(V)\"all\"$(XV) $XU\n"
     end
 
     @testset "terminator" begin
@@ -233,7 +258,7 @@ const XU = B * "}" * XB
                            "to [2 x i16] addrspace(10)*") ==
             "  $(V)%28$(XV) $EQU $(I)bitcast$(XI) $(V)%jl_value_t$(XV) " *
             "$(K)addrspace$(XK)$P$(N)10$(XN)$XP$(D)*$(XD) $(V)%27$(XV) " *
-            "$(K)to$(XK) $S$(N)2$(XN) $(D)x$(XD) $(T)i16$(XD)$XS " *
+            "$(K)to$(XK) $S$(N)2$(XN) $(D)x$(XD) $(T)i16$(XT)$XS " *
             "$(K)addrspace$(XK)$P$(N)10$(XN)$XP$(D)*$(XD)\n"
     end
 

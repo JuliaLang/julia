@@ -62,19 +62,20 @@ Return `true` if `x === nothing`, and return `false` if not.
 
 !!! compat "Julia 1.1"
     This function requires at least Julia 1.1.
+
+See also [`something`](@ref), [`Base.notnothing`](@ref), [`ismissing`](@ref).
 """
-isnothing(::Any) = false
-isnothing(::Nothing) = true
+isnothing(x) = x === nothing
 
 
 """
-    something(x, y...)
+    something(x...)
 
 Return the first value in the arguments which is not equal to [`nothing`](@ref),
 if any. Otherwise throw an error.
 Arguments of type [`Some`](@ref) are unwrapped.
 
-See also [`coalesce`](@ref).
+See also [`coalesce`](@ref), [`skipmissing`](@ref), [`@something`](@ref).
 
 # Examples
 ```jldoctest
@@ -97,3 +98,46 @@ something() = throw(ArgumentError("No value arguments present"))
 something(x::Nothing, y...) = something(y...)
 something(x::Some, y...) = x.value
 something(x::Any, y...) = x
+
+
+"""
+    @something(x...)
+
+Short-circuiting version of [`something`](@ref).
+
+# Examples
+```jldoctest
+julia> f(x) = (println("f(\$x)"); nothing);
+
+julia> a = 1;
+
+julia> a = @something a f(2) f(3) error("Unable to find default for `a`")
+1
+
+julia> b = nothing;
+
+julia> b = @something b f(2) f(3) error("Unable to find default for `b`")
+f(2)
+f(3)
+ERROR: Unable to find default for `b`
+[...]
+
+julia> b = @something b f(2) f(3) Some(nothing)
+f(2)
+f(3)
+
+julia> b === nothing
+true
+```
+
+!!! compat "Julia 1.7"
+    This macro is available as of Julia 1.7.
+"""
+macro something(args...)
+    expr = :(nothing)
+    for arg in reverse(args)
+        expr = :(val = $(esc(arg)); val !== nothing ? val : ($expr))
+    end
+    something = GlobalRef(Base, :something)
+    return :($something($expr))
+end

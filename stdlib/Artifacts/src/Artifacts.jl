@@ -1,20 +1,21 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module Artifacts
 
 import Base: get, SHA1
 using Base.BinaryPlatforms, Base.TOML
 
 export artifact_exists, artifact_path, artifact_meta, artifact_hash,
-       find_artifacts_toml, @artifact_str
+       select_downloadable_artifacts, find_artifacts_toml, @artifact_str
 
 """
     parse_toml(path::String)
 
-Uses Base.TOML to parse a TOML file
+Uses Base.TOML to parse a TOML file. Do not mutate the returned dictionary.
 """
 function parse_toml(path::String)
-    p = Base.TOML.Parser()
-    Base.TOML.reinit!(p, read(path, String); filepath=path)
-    return Base.TOML.parse(p)
+    # Uses the caching mechanics for toml files in Base
+    Base.parsed_toml(path)
 end
 
 # keep in sync with Base.project_names and Base.manifest_names
@@ -58,9 +59,9 @@ end
 """
     ARTIFACT_OVERRIDES
 
-Artifact locations can be overridden by writing `Override.toml` files within the artifact
+Artifact locations can be overridden by writing `Overrides.toml` files within the artifact
 directories of Pkg depots.  For example, in the default depot `~/.julia`, one may create
-a `~/.julia/artifacts/Override.toml` file with the following contents:
+a `~/.julia/artifacts/Overrides.toml` file with the following contents:
 
     78f35e74ff113f02274ce60dab6e92b4546ef806 = "/path/to/replacement"
     c76f8cda85f83a06d17de6c57aabf9e294eb2537 = "fb886e813a4aed4147d5979fcdf27457d20aa35d"
@@ -72,7 +73,7 @@ a `~/.julia/artifacts/Override.toml` file with the following contents:
 This file defines four overrides; two which override specific artifacts identified
 through their content hashes, two which override artifacts based on their bound names
 within a particular package's UUID.  In both cases, there are two different targets of
-the override: overriding to an on-disk location through an absolutet path, and
+the override: overriding to an on-disk location through an absolute path, and
 overriding to another artifact by its content-hash.
 """
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)
@@ -87,7 +88,7 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     #
     # Overrides per UUID/bound name are intercepted upon Artifacts.toml load, and new
     # entries within the "hash" overrides are generated on-the-fly.  Thus, all redirects
-    # mechanisticly happen through the "hash" overrides.
+    # mechanistically happen through the "hash" overrides.
     overrides = Dict{Symbol,Any}(
         # Overrides by UUID
         :UUID => Dict{Base.UUID,Dict{String,Union{String,SHA1}}}(),
@@ -266,22 +267,22 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     if !haskey(entry, "arch")
-        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entrty '$name' missing 'arch' key")
+        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'arch' key")
         return nothing
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict{Symbol, String}()
+    tags = Dict{String, String}()
     for (k, v) in entry
         if v isa String
-            tags[Symbol(k)] = v
+            tags[k] = v
         end
     end
     # Removing some known entries that shouldn't be passed through `tags`
-    delete!(tags, :os)
-    delete!(tags, :arch)
-    delete!(tags, Symbol("git-tree-sha1"))
-    return Platform(entry["arch"], entry["os"]; tags...)
+    delete!(tags, "os")
+    delete!(tags, "arch")
+    delete!(tags, "git-tree-sha1")
+    return Platform(entry["arch"], entry["os"], tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -312,7 +313,7 @@ end
 """
     process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 
-When loading an `Artifacts.toml` file, we must check `Override.toml` files to see if any
+When loading an `Artifacts.toml` file, we must check `Overrides.toml` files to see if any
 of the artifacts within it have been overridden by UUID.  If they have, we honor the
 overrides by inspecting the hashes of the targeted artifacts, then overriding them to
 point to the given override, punting the actual redirection off to the hash-based
@@ -417,7 +418,7 @@ collapsed artifact.  Returns `nothing` if no mapping can be found.
 """
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
-                       pkg_uuid::Union{Base.UUID,Nothing}=nothing)
+                       pkg_uuid::Union{Base.UUID,Nothing}=nothing)::Union{Nothing, SHA1}
     meta = artifact_meta(name, artifacts_toml; platform=platform)
     if meta === nothing
         return nothing
@@ -425,6 +426,50 @@ function artifact_hash(name::String, artifacts_toml::String;
 
     return SHA1(meta["git-tree-sha1"])
 end
+
+function select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::String;
+                                       platform::AbstractPlatform = HostPlatform(),
+                                       pkg_uuid::Union{Nothing,Base.UUID} = nothing,
+                                       include_lazy::Bool = false)
+    artifacts = Dict{String,Any}()
+    for name in keys(artifact_dict)
+        # Get the metadata about this name for the requested platform
+        meta = artifact_meta(name, artifact_dict, artifacts_toml; platform=platform)
+
+        # If there are no instances of this name for the desired platform, skip it
+        # Also skip if there's no `download` stanza (e.g. it's only a local artifact)
+        # or if it's lazy and we're not explicitly looking for lazy artifacts.
+        if meta === nothing || !haskey(meta, "download") || (get(meta, "lazy", false) && !include_lazy)
+            continue
+        end
+
+        # Else, welcome it into the meta-fold
+        artifacts[name] = meta
+    end
+    return artifacts
+end
+
+"""
+    select_downloadable_artifacts(artifacts_toml::String;
+                                  platform = HostPlatform,
+                                  include_lazy = false,
+                                  pkg_uuid = nothing)
+
+Returns a dictionary where every entry is an artifact from the given `Artifacts.toml`
+that should be downloaded for the requested platform.  Lazy artifacts are included if
+`include_lazy` is set.
+"""
+function select_downloadable_artifacts(artifacts_toml::String;
+                                       platform::AbstractPlatform = HostPlatform(),
+                                       include_lazy::Bool = false,
+                                       pkg_uuid::Union{Nothing,Base.UUID} = nothing)
+    if !isfile(artifacts_toml)
+        return Dict{String,Any}()
+    end
+    artifact_dict = load_artifacts_toml(artifacts_toml; pkg_uuid=pkg_uuid)
+    return select_downloadable_artifacts(artifact_dict, artifacts_toml; platform, pkg_uuid, include_lazy)
+end
+
 
 """
     find_artifacts_toml(path::String)
@@ -478,35 +523,59 @@ function jointail(dir, tail)
     end
 end
 
-function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform)
-    if haskey(Base.module_keys, __module__)
+function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
+    moduleroot = Base.moduleroot(__module__)
+    if haskey(Base.module_keys, moduleroot)
         # Process overrides for this UUID, if we know what it is
-        process_overrides(artifact_dict, Base.module_keys[__module__].uuid)
+        process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
     end
 
     # If the artifact exists, we're in the happy path and we can immediately
     # return the path to the artifact:
-    for dir in artifact_paths(hash; honor_overrides=true)
+    dirs = artifact_paths(hash; honor_overrides=true)
+    for dir in dirs
         if isdir(dir)
             return jointail(dir, path_tail)
         end
     end
 
-    # If not, we need to download it.  We look up the Pkg module through `Base.loaded_modules()`
-    # then invoke `ensure_artifact_installed()`:
-    Pkg = first(filter(p-> p[1].name == "Pkg", Base.loaded_modules))[2]
-    return jointail(Pkg.Artifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
+    # If not, try determining what went wrong:
+    meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
+    if meta !== nothing && get(meta, "lazy", false)
+        if lazyartifacts isa Module && isdefined(lazyartifacts, :ensure_artifact_installed)
+            if nameof(lazyartifacts) in (:Pkg, :Artifacts)
+                Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
+            end
+            return jointail(lazyartifacts.ensure_artifact_installed(string(name), artifacts_toml; platform), path_tail)
+        end
+        error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
+    end
+
+    path_str = if length(dirs) == 1
+        "path \"$(first(dirs))\". "
+    else
+        string("paths:\n", join("  " .* contractuser.(dirs), '\n'), '\n')
+    end
+
+    suggestion_str = if query_override(hash) !== nothing
+        "Check that your `Overrides.toml` file is correct (https://pkgdocs.julialang.org/v1/artifacts/#Overriding-artifact-locations)."
+    else
+        "Try `using Pkg; Pkg.instantiate()` to re-install all missing resources if the artifact is part of a package \
+         or call `Pkg.ensure_artifact_installed` (https://pkgdocs.julialang.org/v1/api/#Pkg.Artifacts.ensure_artifact_installed) if not."
+    end
+
+    error("Artifact $(repr(name)) was not found by looking in the $(path_str)$suggestion_str")
 end
 
-"""
+raw"""
     split_artifact_slash(name::String)
 
-Splits an artifact indexing string by path deliminters, isolates the first path element,
+Splits an artifact indexing string by path delimiters, isolates the first path element,
 returning that and the `joinpath()` of the remaining arguments.  This normalizes all path
 separators to the native path separator for the current platform.  Examples:
 
 # Examples
-```jldoctest
+```jldoctest; setup = :(using Artifacts: split_artifact_slash)
 julia> split_artifact_slash("Foo")
 ("Foo", "")
 
@@ -552,7 +621,7 @@ function artifact_slash_lookup(name::String, artifact_dict::Dict,
 
     meta = artifact_meta(artifact_name, artifact_dict, artifacts_toml; platform)
     if meta === nothing
-        error("Cannot locate artifact '$(name)' in '$(artifacts_toml)'")
+        error("Cannot locate artifact '$(name)' for $(triplet(platform)) in '$(artifacts_toml)'")
     end
     hash = SHA1(meta["git-tree-sha1"])
     return artifact_name, artifact_path_tail, hash
@@ -561,11 +630,15 @@ end
 """
     macro artifact_str(name)
 
-Macro that is used to automatically ensure an artifact is installed, and return its
-location on-disk.  Automatically looks the artifact up by name in the project's
-`(Julia)Artifacts.toml` file.  Throws an error on inability to install the requested
-artifact.  If run in the REPL, searches for the toml file starting in the current
-directory, see `find_artifacts_toml()` for more.
+Return the on-disk path to an artifact. Automatically looks the artifact up by
+name in the project's `(Julia)Artifacts.toml` file. Throws an error on if the
+requested artifact is not present. If run in the REPL, searches for the toml
+file starting in the current directory, see `find_artifacts_toml()` for more.
+
+If the artifact is marked "lazy" and the package has `using LazyArtifacts`
+defined, the artifact will be downloaded on-demand with `Pkg` the first time
+this macro tries to compute the path. The files will then be left installed
+locally for later.
 
 If `name` contains a forward or backward slash, all elements after the first slash will
 be taken to be path names indexing into the artifact, allowing for an easy one-liner to
@@ -603,14 +676,24 @@ macro artifact_str(name, platform=nothing)
     # Invalidate calling .ji file if Artifacts.toml file changes
     Base.include_dependency(artifacts_toml)
 
+    # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
+    # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
+    lazyartifacts = nothing
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+        if isdefined(__module__, module_name)
+            lazyartifacts = GlobalRef(__module__, module_name)
+            break
+        end
+    end
+
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
     if isa(name, AbstractString) && platform === nothing
         # To support slash-indexing, we need to split the artifact name from the path tail:
         platform = HostPlatform()
-        local artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
+        artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
         return quote
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform))
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), $(artifact_name), $(artifact_path_tail), $(artifact_dict), $(hash), $(platform), $(lazyartifacts))::String
         end
     else
         if platform === nothing
@@ -619,7 +702,7 @@ macro artifact_str(name, platform=nothing)
         return quote
             local platform = $(esc(platform))
             local artifact_name, artifact_path_tail, hash = artifact_slash_lookup($(esc(name)), $(artifact_dict), $(artifacts_toml), platform)
-            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform)
+            Base.invokelatest(_artifact_str, $(__module__), $(artifacts_toml), artifact_name, artifact_path_tail, $(artifact_dict), hash, platform, $(lazyartifacts))::String
         end
     end
 end
@@ -629,7 +712,7 @@ end
 with_artifacts_directory(f::Function, artifacts_dir::AbstractString) =
     with_artifacts_directory(f, String(artifacts_dir)::String)
 query_override(pkg::Base.UUID, artifact_name::AbstractString; overrides::Dict=load_overrides()) =
-    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}(overrides)))
+    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}, overrides))
 unpack_platform(entry::Dict, name::AbstractString, artifacts_toml::AbstractString) =
     unpack_platform(convert(Dict{String, Any}, entry), String(name)::String, String(artifacts_toml)::String)
 load_artifacts_toml(artifacts_toml::AbstractString; kwargs...) =
@@ -640,11 +723,20 @@ artifact_meta(name::AbstractString, artifact_dict::Dict, artifacts_toml::Abstrac
     artifact_meta(String(name)::String, artifact_dict, String(artifacts_toml)::String; kwargs...)
 artifact_hash(name::AbstractString, artifacts_toml::AbstractString; kwargs...) =
     artifact_hash(String(name)::String, String(artifacts_toml)::String; kwargs...)
+select_downloadable_artifacts(artifact_dict::Dict, artifacts_toml::AbstractString; kwargs...) =
+    select_downloadable_artifacts(artifact_dict, String(artifacts_toml)::String, kwargs...)
+select_downloadable_artifacts(artifacts_toml::AbstractString; kwargs...) =
+    select_downloadable_artifacts(String(artifacts_toml)::String, kwargs...)
 find_artifacts_toml(path::AbstractString) =
     find_artifacts_toml(String(path)::String)
 split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
     artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+
+# Precompilation to reduce latency
+precompile(load_artifacts_toml, (String,))
+precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
+precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 
 end # module Artifacts

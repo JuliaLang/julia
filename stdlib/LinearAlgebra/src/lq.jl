@@ -22,9 +22,15 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64, Matrix{Float64}} with factors L and Q:
-[-8.60233 0.0; 4.41741 -0.697486]
-[-0.581238 -0.813733; -0.813733 0.581238]
+LQ{Float64, Matrix{Float64}, Vector{Float64}}
+L factor:
+2×2 Matrix{Float64}:
+ -8.60233   0.0
+  4.41741  -0.697486
+Q factor:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
+ -0.581238  -0.813733
+ -0.813733   0.581238
 
 julia> S.L * S.Q
 2×2 Matrix{Float64}:
@@ -37,31 +43,32 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-struct LQ{T,S<:AbstractMatrix{T}} <: Factorization{T}
+struct LQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: Factorization{T}
     factors::S
-    τ::Vector{T}
+    τ::C
 
-    function LQ{T,S}(factors, τ) where {T,S<:AbstractMatrix{T}}
+    function LQ{T,S,C}(factors, τ) where {T,S<:AbstractMatrix{T},C<:AbstractVector{T}}
         require_one_based_indexing(factors)
-        new{T,S}(factors, τ)
+        new{T,S,C}(factors, τ)
     end
 end
-LQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQ{T,typeof(factors)}(factors, τ)
-function LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T}
-    LQ(convert(AbstractMatrix{T}, factors), convert(Vector{T}, τ))
-end
+LQ(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T} =
+    LQ{T,typeof(factors),typeof(τ)}(factors, τ)
+LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
+    LQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
+# backwards-compatible constructors (remove with Julia 2.0)
+@deprecate(LQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
+           LQ{T,S,typeof(τ)}(factors, τ), false)
 
 # iteration for destructuring into components
 Base.iterate(S::LQ) = (S.L, Val(:Q))
 Base.iterate(S::LQ, ::Val{:Q}) = (S.Q, Val(:done))
 Base.iterate(S::LQ, ::Val{:done}) = nothing
 
-struct LQPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
-    factors::Matrix{T}
-    τ::Vector{T}
-    LQPackedQ{T,S}(factors::AbstractMatrix{T}, τ::Vector{T}) where {T,S<:AbstractMatrix} = new(factors, τ)
+struct LQPackedQ{T,S<:AbstractMatrix{T},C<:AbstractVector{T}} <: AbstractMatrix{T}
+    factors::S
+    τ::C
 end
-LQPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) where {T} = LQPackedQ{T,typeof(factors)}(factors, τ)
 
 
 """
@@ -92,9 +99,15 @@ julia> A = [5. 7.; -2. -4.]
  -2.0  -4.0
 
 julia> S = lq(A)
-LQ{Float64, Matrix{Float64}} with factors L and Q:
-[-8.60233 0.0; 4.41741 -0.697486]
-[-0.581238 -0.813733; -0.813733 0.581238]
+LQ{Float64, Matrix{Float64}, Vector{Float64}}
+L factor:
+2×2 Matrix{Float64}:
+ -8.60233   0.0
+  4.41741  -0.697486
+Q factor:
+2×2 LinearAlgebra.LQPackedQ{Float64, Matrix{Float64}, Vector{Float64}}:
+ -0.581238  -0.813733
+ -0.813733   0.581238
 
 julia> S.L * S.Q
 2×2 Matrix{Float64}:
@@ -107,14 +120,16 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::StridedMatrix{<:BlasFloat})  = lq!(copy(A))
-lq(x::Number) = lq(fill(x,1,1))
+lq(A::AbstractMatrix{T}) where {T}  = lq!(copymutable_oftype(A, lq_eltype(T)))
+lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
+
+lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
 
 copy(A::LQ) = LQ(copy(A.factors), copy(A.τ))
 
 LQ{T}(A::LQ) where {T} = LQ(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))
-Factorization{T}(A::LQ{T}) where {T} = A
 Factorization{T}(A::LQ) where {T} = LQ{T}(A)
+
 AbstractMatrix(A::LQ) = A.L*A.Q
 AbstractArray(A::LQ) = AbstractMatrix(A)
 Matrix(A::LQ) = Array(AbstractArray(A))
@@ -122,7 +137,7 @@ Array(A::LQ) = Matrix(A)
 
 adjoint(A::LQ) = Adjoint(A)
 Base.copy(F::Adjoint{T,<:LQ{T}}) where {T} =
-    QR{T,typeof(F.parent.factors)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
+    QR{T,typeof(F.parent.factors),typeof(F.parent.τ)}(copy(adjoint(F.parent.factors)), copy(F.parent.τ))
 
 function getproperty(F::LQ, d::Symbol)
     m, n = size(F)
@@ -141,12 +156,12 @@ Base.propertynames(F::LQ, private::Bool=false) =
 getindex(A::LQPackedQ, i::Integer, j::Integer) =
     lmul!(A, setindex!(zeros(eltype(A), size(A, 2)), 1, j))[i]
 
-function show(io::IO, ::MIME"text/plain", C::LQ)
-    println(io, typeof(C), " with factors L and Q:")
-    io = IOContext(io, :compact => true)
-    show(io, C.L)
-    println(io)
-    show(io, C.Q)
+function show(io::IO, mime::MIME{Symbol("text/plain")}, F::LQ)
+    summary(io, F); println(io)
+    println(io, "L factor:")
+    show(io, mime, F.L)
+    println(io, "\nQ factor:")
+    show(io, mime, F.Q)
 end
 
 LQPackedQ{T}(Q::LQPackedQ) where {T} = LQPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
@@ -182,7 +197,7 @@ function lmul!(A::LQ, B::StridedVecOrMat)
 end
 function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    _cut_B(lmul!(Factorization{TAB}(A), copy_oftype(B, TAB)), 1:size(A,1))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copymutable_oftype(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q
@@ -190,20 +205,20 @@ end
 lmul!(A::LQPackedQ{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} = LAPACK.ormlq!('L','N',A.factors,A.τ,B)
 function (*)(A::LQPackedQ, B::StridedVecOrMat)
     TAB = promote_type(eltype(A), eltype(B))
-    lmul!(AbstractMatrix{TAB}(A), copy_oftype(B, TAB))
+    lmul!(AbstractMatrix{TAB}(A), copymutable_oftype(B, TAB))
 end
 
 ### QcB
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasReal} =
-    (A = adjA.parent; LAPACK.ormlq!('L','T',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormlq!('L', 'T', A.factors, A.τ, B))
 lmul!(adjA::Adjoint{<:Any,<:LQPackedQ{T}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
-    (A = adjA.parent; LAPACK.ormlq!('L','C',A.factors,A.τ,B))
+    (A = adjA.parent; LAPACK.ormlq!('L', 'C', A.factors, A.τ, B))
 
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, B::StridedVecOrMat)
     A = adjA.parent
     TAB = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
-        lmul!(adjoint(AbstractMatrix{TAB}(A)), copy_oftype(B, TAB))
+        lmul!(adjoint(AbstractMatrix{TAB}(A)), copymutable_oftype(B, TAB))
     elseif size(B,1) == size(A.factors,1)
         lmul!(adjoint(AbstractMatrix{TAB}(A)), [B; zeros(TAB, size(A.factors, 2) - size(A.factors, 1), size(B, 2))])
     else
@@ -220,11 +235,11 @@ function *(A::LQPackedQ, adjB::Adjoint{<:Any,<:StridedVecOrMat})
     return lmul!(A, BB)
 end
 function *(adjA::Adjoint{<:Any,<:LQPackedQ}, adjB::Adjoint{<:Any,<:StridedVecOrMat})
-    A, B = adjA.parent, adjB.parent
-    TAB = promote_type(eltype(A), eltype(B))
+    B = adjB.parent
+    TAB = promote_type(eltype(adjA.parent), eltype(B))
     BB = similar(B, TAB, (size(B, 2), size(B, 1)))
     adjoint!(BB, B)
-    return lmul!(adjoint(A), BB)
+    return lmul!(adjA, BB)
 end
 
 # in-place right-application of LQPackedQs
@@ -254,7 +269,7 @@ rmul!(A::StridedMatrix{T}, adjB::Adjoint{<:Any,<:LQPackedQ{T}}) where {T<:BlasCo
 function *(A::StridedVecOrMat, adjQ::Adjoint{<:Any,<:LQPackedQ})
     Q = adjQ.parent
     TR = promote_type(eltype(A), eltype(Q))
-    return rmul!(copy_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
+    return rmul!(copymutable_oftype(A, TR), adjoint(AbstractMatrix{TR}(Q)))
 end
 function *(adjA::Adjoint{<:Any,<:StridedMatrix}, adjQ::Adjoint{<:Any,<:LQPackedQ})
     A, Q = adjA.parent, adjQ.parent
@@ -278,7 +293,7 @@ end
 function *(A::StridedVecOrMat, Q::LQPackedQ)
     TR = promote_type(eltype(A), eltype(Q))
     if size(A, 2) == size(Q.factors, 2)
-        C = copy_oftype(A, TR)
+        C = copymutable_oftype(A, TR)
     elseif size(A, 2) == size(Q.factors, 1)
         C = zeros(TR, size(A, 1), size(Q.factors, 2))
         copyto!(C, 1, A, 1, length(A))
@@ -306,17 +321,6 @@ _rightappdimmismatch(rowsorcols) =
         "or (2) the number of rows of that (LQPackedQ) matrix's internal representation ",
         "(the factorization's originating matrix's number of rows)")))
 
-
-function (\)(A::LQ{TA},B::StridedVecOrMat{TB}) where {TA,TB}
-    S = promote_type(TA,TB)
-    m, n = size(A)
-    m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
-    m == size(B,1) || throw(DimensionMismatch("Both inputs should have the same number of rows"))
-    AA = Factorization{S}(A)
-    X = _zeros(S, B, n)
-    X[1:size(B, 1), :] = B
-    return ldiv!(AA, X)
-end
 # With a real lhs and complex rhs with the same precision, we can reinterpret
 # the complex rhs as a real rhs with twice the number of columns
 function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
@@ -330,12 +334,25 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
 end
 
 
-function ldiv!(A::LQ{T}, B::StridedVecOrMat{T}) where T
+function ldiv!(A::LQ, B::StridedVecOrMat)
     require_one_based_indexing(B)
+    m, n = size(A)
+    m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
+
     ldiv!(LowerTriangular(A.L), view(B, 1:size(A,1), axes(B,2)))
     return lmul!(adjoint(A.Q), B)
 end
 
+function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::StridedVecOrMat)
+    require_one_based_indexing(B)
+    m, n = size(Fadj)
+    m >= n || throw(DimensionMismatch("solver does not support underdetermined systems (more columns than rows)"))
+
+    F = parent(Fadj)
+    lmul!(F.Q, B)
+    ldiv!(UpperTriangular(adjoint(F.L)), view(B, 1:size(F,1), axes(B,2)))
+    return B
+end
 
 # In LQ factorization, `Q` is expressed as the product of the adjoint of the
 # reflectors.  Thus, `det` has to be conjugated.

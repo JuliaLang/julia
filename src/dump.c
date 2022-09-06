@@ -8,6 +8,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_gcext.h"
 #include "builtin_proto.h"
 #include "serialize.h"
 
@@ -15,24 +16,105 @@
 #include <dlfcn.h>
 #endif
 
-#ifndef _COMPILER_MICROSOFT_
 #include "valgrind.h"
-#else
-#define RUNNING_ON_VALGRIND 0
-#endif
 #include "julia_assert.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// This file, together with ircode.c, allows (de)serialization between
+// modules and *.ji cache files. `jl_save_incremental` gets called as the final step
+// during package precompilation, and `_jl_restore_incremental` by `using SomePkg`
+// whenever `SomePkg` has not yet been loaded.
+
+// Types, methods, and method instances form a graph that may have cycles, so
+// serialization has to break these cycles. This is handled via "backreferences,"
+// referring to already (de)serialized items by an index. It is critial to ensure
+// that the indexes of these backreferences align precisely during serialization
+// and deserialization, to ensure that these integer indexes mean the same thing
+// under both circumstances. Consequently, if you are modifying this file, be
+// careful to match the sequence, if necessary reserving space for something that will
+// be updated later.
+
+// It is also necessary to save & restore references to externally-defined
+// objects, e.g., for package methods that call methods defined in Base or
+// elsewhere. Consequently during deserialization there's a distinction between
+// "reference" types, methods, and method instances (essentially like a
+// GlobalRef), and "recached" version that refer to the actual entity in the
+// running session. As a concrete example, types have a module in which they are
+// defined, but once defined those types can be used by any dependent package.
+// We don't store the full type definition again in that dependent package, we
+// just encode a reference to that type. In the running session, such references
+// are merely pointers to the type-cache, but the specific address is obviously
+// not likely to be reproducible across sessions (it will differ between the
+// session in which you precompile and the session in which you're using the
+// package). Hence, during serialization we recode them as "verbose" references
+// (that follow Julia syntax to allow them to be reconstructed), but on
+// deserialization we have to replace those verbose references with the
+// appropriate pointer in the user's running session. We complete
+// deserialization before beginning the process of recaching, because we need
+// the backreferences during deserialization and the actual objects during
+// recaching.
+
+// Finally, because our backedge graph is not bidirectional, special handling is
+// required to identify backedges from external methods that call internal methods.
+// These get set aside and restored at the end of deserialization.
+
+// In broad terms, the major steps in serialization are:
+// - starting from a "worklist" of modules, write the header. This stores things
+//   like the Julia build this was precompiled for, the package dependencies,
+//   the list of include files, file modification times, etc.
+// - gather the collection of items to be written to this precompile file. This
+//   includes accessible from the module's binding table (if they are owned by a
+//   worklist module), but also includes things like methods added to external
+//   functions, instances of external methods that were newly type-inferred
+//   while precompiling a worklist module, and backedges of callees that were
+//   called by methods in this package. By and large, these latter items are not
+//   referenced by the module(s) in the package, and so these have to be
+//   extracted by traversing the entire system searching for things that do link
+//   back to a module in the worklist.
+// - serialize all the items. The first time we encounter an item, we serialized
+//   it, and on future references (pointers) to that item we replace them with
+//   with a backreference.  `jl_serialize_*` functions handle this work.
+// - write source text for the files that defined the package. This is primarily
+//   to support Revise.jl.
+
+// Deserialization is the mirror image of serialization, but in some ways is
+// trickier:
+// - we have to merge items into the running session (recaching as described
+//   above) and handle cases like having two dependent packages caching the same
+//   MethodInstance of a dependency
+// - we have to check for invalidation---the user might have loaded other
+//   packages that define methods that supersede some of the dispatches chosen
+//   when the package was precompiled, or this package might define methods that
+//   supercede dispatches for previously-loaded packages. These two
+//   possibilities are checked during backedge and method insertion,
+//   respectively.
+// Both of these mean that deserialization requires one to look up a lot of
+// things in the running session; for example, for invalidation checks we have
+// to do type-intersection between signatures used for MethodInstances and the
+// current session's full MethodTable. In practice, such steps dominate package
+// loading time (it has very little to do with I/O or deserialization
+// performance). Paradoxically, sometimes storing more code in a package can
+// lead to faster performance: references to things in the same .ji file can be
+// precomputed, but external references have to be looked up. You can see this
+// effect in the benchmarks for #43990, where storing external MethodInstances
+// and CodeInstances (more code than was stored previously) actually decreased
+// load times for many packages.
+
+// Note that one should prioritize deserialization performance over serialization performance,
+// since deserialization may be performed much more often than serialization.
+// Certain items are preprocessed during serialization to save work when they are
+// later deserialized.
+
+
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-// hash of definitions for predefined tagged object
+// type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
 static htable_t ser_tag;
-// array of definitions for the predefined tagged object types
-// (reverse of ser_tag)
+// tag => type mapping, the reverse of ser_tag
 static jl_value_t *deser_tag[256];
 // hash of some common symbols, encoded as CommonSym_tag plus 1 byte
 static htable_t common_symbol_tag;
@@ -42,27 +124,54 @@ static jl_value_t *deser_symbols[256];
 // (the order in the serializer stream). the low
 // bit is reserved for flagging certain entries and pos is
 // left shift by 1
-static htable_t backref_table;
+static htable_t backref_table;    // pos = backref_table[obj]
 static int backref_table_numel;
-static arraylist_t backref_list;
+static arraylist_t backref_list;  // obj = backref_list[pos]
+
+// set of all CodeInstances yet to be (in)validated
+static htable_t new_code_instance_validate;
 
 // list of (jl_value_t **loc, size_t pos) entries
 // for anything that was flagged by the deserializer for later
-// type-rewriting of some sort
+// type-rewriting of some sort. pos is the index in backref_list.
 static arraylist_t flagref_list;
+// ref => value hash for looking up the "real" entity from
+// the deserialized ref. Used for entities that must be unique,
+// like types, methods, and method instances
 static htable_t uniquing_table;
 
-// list of (size_t pos, (void *f)(jl_value_t*)) entries
-// for the serializer to mark values in need of rework by function f
+// list of (size_t pos, itemkey) entries
+// for the serializer to mark values in need of rework
 // during deserialization later
+// This includes items that need rehashing (IdDict, TypeMapLevels)
+// and modules.
 static arraylist_t reinit_list;
 
-// list of stuff that is being serialized
+// list of modules being serialized
 // This is not quite globally rooted, but we take care to only
 // ever assigned rooted values here.
 static jl_array_t *serializer_worklist JL_GLOBALLY_ROOTED;
+// The set of external MethodInstances we want to serialize
+// (methods owned by other modules that were first inferred for a
+//  module currently being serialized)
+static htable_t external_mis;
+// Inference tracks newly-inferred MethodInstances during precompilation
+// and registers them by calling jl_set_newly_inferred
+static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
 
-// inverse of backedges tree
+// New roots to add to Methods. These can't be added until after
+// recaching is complete, so we have to hold on to them separately
+// Stored as method => (worklist_key, newroots)
+// The worklist_key is the uuid of the module that triggered addition
+// of `newroots`. This is needed because CodeInstances reference
+// their roots by "index", and we use a bipartite index
+// (module_uuid, integer_index) to make indexes "relocatable"
+// (meaning that users can load modules in different orders and
+//  so the absolute integer index of a root is not reproducible).
+// See the "root blocks" section of method.c for more detail.
+static htable_t queued_method_roots;
+
+// inverse of backedges graph (caller=>callees hash)
 htable_t edges_map;
 
 // list of requested ccallable signatures
@@ -78,7 +187,6 @@ static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
-static arraylist_t builtin_typenames;
 
 static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
 {
@@ -110,6 +218,18 @@ jl_value_t *jl_deser_symbol(uint8_t tag)
     return deser_symbols[tag];
 }
 
+uint64_t jl_worklist_key(jl_array_t *worklist)
+{
+    assert(jl_is_array(worklist));
+    size_t len = jl_array_len(worklist);
+    if (len > 0) {
+        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(worklist, len-1);
+        assert(jl_is_module(topmod));
+        return topmod->build_id;
+    }
+    return 0;
+}
+
 // --- serialize ---
 
 #define jl_serialize_value(s, v) jl_serialize_value_((s), (jl_value_t*)(v), 0)
@@ -133,6 +253,11 @@ static int module_in_worklist(jl_module_t *mod) JL_NOTSAFEPOINT
     return 0;
 }
 
+static int method_instance_in_queue(jl_method_instance_t *mi)
+{
+    return ptrhash_get(&external_mis, mi) != HT_NOTFOUND;
+}
+
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
@@ -143,7 +268,7 @@ static int type_in_worklist(jl_datatype_t *dt) JL_NOTSAFEPOINT
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_unwrap_unionall(jl_tparam(dt, i));
-        // XXX: what about Union and TypeVar??
+        // TODO: what about Union and TypeVar??
         if (type_in_worklist((jl_datatype_t*)(jl_is_datatype(p) ? p : jl_typeof(p))))
             return 1;
     }
@@ -189,6 +314,79 @@ static int type_recursively_external(jl_datatype_t *dt) JL_NOTSAFEPOINT
     return 1;
 }
 
+// When we infer external method instances, ensure they link back to the
+// package. Otherwise they might be, e.g., for external macros
+static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
+{
+    void **bp = ptrhash_bp(visited, mi);
+    // HT_NOTFOUND: not yet analyzed
+    // HT_NOTFOUND + 1: doesn't link back
+    // HT_NOTFOUND + 2: does link back
+    if (*bp != HT_NOTFOUND)
+        return (char*)*bp - (char*)HT_NOTFOUND - 1;
+    *bp = (void*)((char*)HT_NOTFOUND + 1);  // preliminarily mark as "not found"
+    // TODO: this algorithm deals with cycles incorrectly
+    jl_module_t *mod = mi->def.module;
+    if (jl_is_method(mod))
+        mod = ((jl_method_t*)mod)->module;
+    assert(jl_is_module(mod));
+    if (mi->precompiled || module_in_worklist(mod)) {
+        *bp = (void*)((char*)HT_NOTFOUND + 2);      // found
+        return 1;
+    }
+    if (!mi->backedges) {
+        return 0;
+    }
+    size_t i = 0, n = jl_array_len(mi->backedges);
+    jl_method_instance_t *be;
+    while (i < n) {
+        i = get_next_edge(mi->backedges, i, NULL, &be);
+        if (has_backedge_to_worklist(be, visited)) {
+            bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
+            *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// given the list of MethodInstances that were inferred during the
+// build, select those that are external and have at least one
+// relocatable CodeInstance.
+static size_t queue_external_mis(jl_array_t *list)
+{
+    size_t i, n = 0;
+    htable_t visited;
+    if (list) {
+        assert(jl_is_array(list));
+        size_t n0 = jl_array_len(list);
+        htable_new(&visited, n0);
+        for (i = 0; i < n0; i++) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+            assert(jl_is_method_instance(mi));
+            if (jl_is_method(mi->def.value)) {
+                jl_method_t *m = mi->def.method;
+                if (!module_in_worklist(m->module)) {
+                    jl_code_instance_t *ci = mi->cache;
+                    int relocatable = 0;
+                    while (ci) {
+                        if (ci->max_world == ~(size_t)0)
+                            relocatable |= ci->relocatability;
+                        ci = ci->next;
+                    }
+                    if (relocatable && ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
+                        if (has_backedge_to_worklist(mi, &visited)) {
+                            ptrhash_put(&external_mis, mi, mi);
+                            n++;
+                        }
+                    }
+                }
+            }
+        }
+        htable_free(&visited);
+    }
+    return n;
+}
 
 static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_GC_DISABLED
 {
@@ -197,7 +395,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (!internal && jl_unwrap_unionall(dt->name->wrapper) == (jl_value_t*)dt) {
         tag = 6; // external primary type
     }
-    else if (!dt->isconcretetype) {
+    else if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars) {
         tag = 0; // normal struct
     }
     else if (internal) {
@@ -213,8 +411,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 11; // external, but definitely new (still needs caching, but not full unique-ing)
     }
     else {
-        // this'll need unique-ing later
-        // flag this in the backref table as special
+        // this is eligible for (and possibly requires) unique-ing later,
+        // so flag this in the backref table as special
         uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, dt);
         assert(*bp != (uintptr_t)HT_NOTFOUND);
         *bp |= 1;
@@ -271,18 +469,14 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
-    write_uint8(s->s, dt->abstract | (dt->mutabl << 1) | (has_layout << 2) | (has_instance << 3));
+    write_uint8(s->s, has_layout | (has_instance << 1));
     write_uint8(s->s, dt->hasfreetypevars
             | (dt->isconcretetype << 1)
             | (dt->isdispatchtuple << 2)
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
-            | (dt->isinlinealloc << 5)
-            | (dt->has_concrete_subtype << 6)
-            | (dt->cached_by_hash << 7));
-    if (!dt->abstract) {
-        write_uint16(s->s, dt->ninitialized);
-    }
+            | (dt->has_concrete_subtype << 5)
+            | (dt->cached_by_hash << 6));
     write_int32(s->s, dt->hash);
 
     if (has_layout) {
@@ -312,7 +506,6 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
     if (has_instance)
         jl_serialize_value(s, dt->instance);
     jl_serialize_value(s, dt->name);
-    jl_serialize_value(s, dt->names);
     jl_serialize_value(s, dt->parameters);
     jl_serialize_value(s, dt->super);
     jl_serialize_value(s, dt->types);
@@ -349,18 +542,20 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_int8(s->s, 0);
     jl_serialize_value(s, m->parent);
     void **table = m->bindings.table;
-    for (i = 1; i < m->bindings.size; i += 2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
+    for (i = 0; i < m->bindings.size; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            jl_binding_t *b = (jl_binding_t*)table[i+1];
             jl_serialize_value(s, b->name);
-            jl_value_t *e = b->value;
+            jl_value_t *e = jl_atomic_load_relaxed(&b->value);
             if (!b->constp && e && jl_is_cpointer(e) && jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
                 // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                 jl_serialize_cnull(s, jl_typeof(e));
             else
                 jl_serialize_value(s, e);
-            jl_serialize_value(s, b->globalref);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->globalref));
             jl_serialize_value(s, b->owner);
+            jl_serialize_value(s, jl_atomic_load_relaxed(&b->ty));
             write_int8(s->s, (b->deprecated<<3) | (b->constp<<2) | (b->exportp<<1) | (b->imported));
         }
     }
@@ -378,13 +573,14 @@ static void jl_serialize_module(jl_serializer_state *s, jl_module_t *m)
     write_uint8(s->s, m->optlevel);
     write_uint8(s->s, m->compile);
     write_uint8(s->s, m->infer);
+    write_uint8(s->s, m->max_methods);
 }
 
-static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
+static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED
 {
     if (v == NULL) {
         write_uint8(s->s, TAG_NULL);
-        return;
+        return 1;
     }
 
     void *tag = ptrhash_get(&ser_tag, v);
@@ -393,28 +589,29 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         if (t8 <= LAST_TAG)
             write_uint8(s->s, 0);
         write_uint8(s->s, t8);
-        return;
+        return 1;
     }
+
     if (jl_is_symbol(v)) {
         void *idx = ptrhash_get(&common_symbol_tag, v);
         if (idx != HT_NOTFOUND) {
             write_uint8(s->s, TAG_COMMONSYM);
             write_uint8(s->s, (uint8_t)(size_t)idx);
-            return;
+            return 1;
         }
     }
     else if (v == (jl_value_t*)jl_core_module) {
         write_uint8(s->s, TAG_CORE);
-        return;
+        return 1;
     }
     else if (v == (jl_value_t*)jl_base_module) {
         write_uint8(s->s, TAG_BASE);
-        return;
+        return 1;
     }
 
     if (jl_typeis(v, jl_string_type) && jl_string_len(v) == 0) {
         jl_serialize_value(s, jl_an_empty_string);
-        return;
+        return 1;
     }
     else if (!jl_is_uint8(v)) {
         void **bp = ptrhash_bp(&backref_table, v);
@@ -428,7 +625,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 write_uint8(s->s, TAG_BACKREF);
                 write_int32(s->s, pos);
             }
-            return;
+            return 1;
         }
         intptr_t pos = backref_table_numel++;
         if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
@@ -451,6 +648,78 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         pos <<= 1;
         ptrhash_put(&backref_table, v, (char*)HT_NOTFOUND + pos + 1);
+    }
+
+    return 0;
+}
+
+static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst, int skip_partial_opaque, int internal) JL_GC_DISABLED
+{
+    if (internal > 2) {
+        while (codeinst && !codeinst->relocatability)
+            codeinst = codeinst->next;
+    }
+    if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
+        return;
+    }
+    assert(codeinst != NULL); // handle by jl_serialize_generic, but this makes clang-sa happy
+
+    int validate = 0;
+    if (codeinst->max_world == ~(size_t)0)
+        validate = 1; // can check on deserialize if this cache entry is still valid
+    int flags = validate << 0;
+    if (codeinst->invoke == jl_fptr_const_return)
+        flags |= 1 << 2;
+    if (codeinst->precompile)
+        flags |= 1 << 3;
+
+    // CodeInstances with PartialOpaque return type are currently not allowed
+    // to be cached. We skip them in serialization here, forcing them to
+    // be re-infered on reload.
+    int write_ret_type = validate || codeinst->min_world == 0;
+    if (write_ret_type && codeinst->rettype_const &&
+            jl_typeis(codeinst->rettype_const, jl_partial_opaque_type)) {
+        if (skip_partial_opaque) {
+            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal);
+            return;
+        }
+        else {
+            jl_error("Cannot serialize CodeInstance with PartialOpaque rettype");
+        }
+    }
+
+    write_uint8(s->s, TAG_CODE_INSTANCE);
+    write_uint8(s->s, flags);
+    write_uint32(s->s, codeinst->ipo_purity_bits);
+    write_uint32(s->s, jl_atomic_load_relaxed(&codeinst->purity_bits));
+    jl_serialize_value(s, (jl_value_t*)codeinst->def);
+    if (write_ret_type) {
+        jl_serialize_value(s, jl_atomic_load_relaxed(&codeinst->inferred));
+        jl_serialize_value(s, codeinst->rettype_const);
+        jl_serialize_value(s, codeinst->rettype);
+        jl_serialize_value(s, codeinst->argescapes);
+    }
+    else {
+        // skip storing useless data
+        jl_serialize_value(s, NULL);
+        jl_serialize_value(s, NULL);
+        jl_serialize_value(s, jl_any_type);
+        jl_serialize_value(s, jl_nothing);
+    }
+    write_uint8(s->s, codeinst->relocatability);
+    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal);
+}
+
+enum METHOD_SERIALIZATION_MODE {
+    METHOD_INTERNAL = 1,
+    METHOD_EXTERNAL_MT = 2,
+    METHOD_HAS_NEW_ROOTS = 4,
+};
+
+static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_literal) JL_GC_DISABLED
+{
+    if (jl_serialize_generic(s, v)) {
+        return;
     }
 
     size_t i;
@@ -570,9 +839,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     else if (jl_is_method(v)) {
         write_uint8(s->s, TAG_METHOD);
         jl_method_t *m = (jl_method_t*)v;
-        int internal = 1;
-        internal = module_in_worklist(m->module);
-        if (!internal) {
+        uint64_t key = 0;
+        int serialization_mode = 0, nwithkey = 0;
+        if (m->is_for_opaque_closure || module_in_worklist(m->module))
+            serialization_mode |= METHOD_INTERNAL;
+        if (!(serialization_mode & METHOD_INTERNAL)) {
+            key = jl_worklist_key(serializer_worklist);
+            nwithkey = nroots_with_key(m, key);
+            if (nwithkey > 0)
+                serialization_mode |= METHOD_HAS_NEW_ROOTS;
+        }
+        if (!(serialization_mode & METHOD_INTERNAL)) {
             // flag this in the backref table as special
             uintptr_t *bp = (uintptr_t*)ptrhash_bp(&backref_table, v);
             assert(*bp != (uintptr_t)HT_NOTFOUND);
@@ -580,11 +857,44 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)m->sig);
         jl_serialize_value(s, (jl_value_t*)m->module);
-        write_uint8(s->s, internal);
-        if (!internal)
+        if (m->external_mt != NULL) {
+            assert(jl_typeis(m->external_mt, jl_methtable_type));
+            jl_methtable_t *mt = (jl_methtable_t*)m->external_mt;
+            if (!module_in_worklist(mt->module)) {
+                serialization_mode |= METHOD_EXTERNAL_MT;
+            }
+        }
+        write_uint8(s->s, serialization_mode);
+        if (serialization_mode & METHOD_EXTERNAL_MT) {
+            // We reference this method table by module and binding
+            jl_methtable_t *mt = (jl_methtable_t*)m->external_mt;
+            jl_serialize_value(s, mt->module);
+            jl_serialize_value(s, mt->name);
+        }
+        else {
+            jl_serialize_value(s, (jl_value_t*)m->external_mt);
+        }
+        if (!(serialization_mode & METHOD_INTERNAL)) {
+            if (serialization_mode & METHOD_HAS_NEW_ROOTS) {
+                // Serialize the roots that belong to key
+                write_uint64(s->s, key);
+                write_int32(s->s, nwithkey);
+                rle_iter_state rootiter = rle_iter_init(0);
+                uint64_t *rletable = NULL;
+                size_t nblocks2 = 0, nroots = jl_array_len(m->roots);
+                if (m->root_blocks) {
+                    rletable = (uint64_t*)jl_array_data(m->root_blocks);
+                    nblocks2 = jl_array_len(m->root_blocks);
+                }
+                // this visits every item, if it becomes a bottlneck we could hop blocks
+                while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
+                    if (rootiter.key == key)
+                        jl_serialize_value(s, jl_array_ptr_ref(m->roots, rootiter.i));
+            }
             return;
+        }
         jl_serialize_value(s, m->specializations);
-        jl_serialize_value(s, m->speckeyset);
+        jl_serialize_value(s, jl_atomic_load_relaxed(&m->speckeyset));
         jl_serialize_value(s, (jl_value_t*)m->name);
         jl_serialize_value(s, (jl_value_t*)m->file);
         write_int32(s->s, m->line);
@@ -594,22 +904,33 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         write_int32(s->s, m->nkw);
         write_int8(s->s, m->isva);
         write_int8(s->s, m->pure);
+        write_int8(s->s, m->is_for_opaque_closure);
+        write_int8(s->s, m->constprop);
+        write_uint8(s->s, m->purity.bits);
         jl_serialize_value(s, (jl_value_t*)m->slot_syms);
         jl_serialize_value(s, (jl_value_t*)m->roots);
+        jl_serialize_value(s, (jl_value_t*)m->root_blocks);
+        write_int32(s->s, m->nroots_sysimg);
         jl_serialize_value(s, (jl_value_t*)m->ccallable);
         jl_serialize_value(s, (jl_value_t*)m->source);
         jl_serialize_value(s, (jl_value_t*)m->unspecialized);
         jl_serialize_value(s, (jl_value_t*)m->generator);
         jl_serialize_value(s, (jl_value_t*)m->invokes);
+        jl_serialize_value(s, (jl_value_t*)m->recursion_relation);
     }
     else if (jl_is_method_instance(v)) {
-        write_uint8(s->s, TAG_METHOD_INSTANCE);
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure) {
+            jl_error("unimplemented: serialization of MethodInstances for OpaqueClosure");
+        }
+        write_uint8(s->s, TAG_METHOD_INSTANCE);
         int internal = 0;
         if (!jl_is_method(mi->def.method))
             internal = 1;
         else if (module_in_worklist(mi->def.method->module))
             internal = 2;
+        else if (ptrhash_get(&external_mis, (void*)mi) != HT_NOTFOUND)
+            internal = 3;
         write_uint8(s->s, internal);
         if (!internal) {
             // also flag this in the backref table as special
@@ -627,13 +948,17 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         jl_array_t *backedges = mi->backedges;
         if (backedges) {
             // filter backedges to only contain pointers
-            // to items that we will actually store (internal == 2)
-            size_t ins, i, l = jl_array_len(backedges);
-            jl_method_instance_t **b_edges = (jl_method_instance_t**)jl_array_data(backedges);
-            for (ins = i = 0; i < l; i++) {
-                jl_method_instance_t *backedge = b_edges[i];
-                if (module_in_worklist(backedge->def.method->module)) {
-                    b_edges[ins++] = backedge;
+            // to items that we will actually store (internal >= 2)
+            size_t ins = 0, i = 0, l = jl_array_len(backedges);
+            jl_value_t **b_edges = (jl_value_t**)jl_array_data(backedges);
+            jl_value_t *invokeTypes;
+            jl_method_instance_t *backedge;
+            while (i < l) {
+                i = get_next_edge(backedges, i, &invokeTypes, &backedge);
+                if (module_in_worklist(backedge->def.method->module) || method_instance_in_queue(backedge)) {
+                    if (invokeTypes)
+                        b_edges[ins++] = invokeTypes;
+                    b_edges[ins++] = (jl_value_t*)backedge;
                 }
             }
             if (ins != l)
@@ -642,39 +967,20 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 backedges = NULL;
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
-        jl_serialize_value(s, (jl_value_t*)mi->cache);
+        jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
+        jl_serialize_code_instance(s, mi->cache, 1, internal);
     }
     else if (jl_is_code_instance(v)) {
-        write_uint8(s->s, TAG_CODE_INSTANCE);
-        jl_code_instance_t *codeinst = (jl_code_instance_t*)v;
-        int validate = 0;
-        if (codeinst->max_world == ~(size_t)0)
-            validate = 1; // can check on deserialize if this cache entry is still valid
-        int flags = validate << 0;
-        if (codeinst->invoke == jl_fptr_const_return)
-            flags |= 1 << 2;
-        if (codeinst->precompile)
-            flags |= 1 << 3;
-        write_uint8(s->s, flags);
-        jl_serialize_value(s, (jl_value_t*)codeinst->def);
-        if (validate || codeinst->min_world == 0) {
-            jl_serialize_value(s, codeinst->inferred);
-            jl_serialize_value(s, codeinst->rettype_const);
-            jl_serialize_value(s, codeinst->rettype);
-        }
-        else {
-            // skip storing useless data
-            jl_serialize_value(s, NULL);
-            jl_serialize_value(s, NULL);
-            jl_serialize_value(s, jl_any_type);
-        }
-        jl_serialize_value(s, codeinst->next);
+        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0, 2);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
     }
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
+    }
+    else if (jl_typeis(v, jl_opaque_closure_type)) {
+        jl_error("Live opaque closures cannot be serialized");
     }
     else if (jl_typeis(v, jl_string_type)) {
         write_uint8(s->s, TAG_STRING);
@@ -771,8 +1077,24 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 jl_serialize_value(s, tn->wrapper);
                 jl_serialize_value(s, tn->mt);
                 ios_write(s->s, (char*)&tn->hash, sizeof(tn->hash));
+                write_uint8(s->s, tn->abstract | (tn->mutabl << 1) | (tn->mayinlinealloc << 2));
+                write_uint8(s->s, tn->max_methods);
+                if (!tn->abstract)
+                    write_uint16(s->s, tn->n_uninitialized);
+                size_t nb = tn->atomicfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
+                write_int32(s->s, nb);
+                if (nb)
+                    ios_write(s->s, (char*)tn->atomicfields, nb);
+                nb = tn->constfields ? (jl_svec_len(tn->names) + 31) / 32 * sizeof(uint32_t) : 0;
+                write_int32(s->s, nb);
+                if (nb)
+                    ios_write(s->s, (char*)tn->constfields, nb);
             }
             return;
+        }
+
+        if (jl_is_foreign_type(t)) {
+            jl_error("Cannot serialize instances of foreign datatypes");
         }
 
         char *data = (char*)jl_data_ptr(v);
@@ -789,7 +1111,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                         ios_write(s->s, last, prevptr - last);
                     jl_value_t *e = *(jl_value_t**)prevptr;
                     JL_GC_PROMISE_ROOTED(e);
-                    if (t->mutabl && e && jl_field_isptr(t, i - 1) && jl_is_cpointer(e) &&
+                    if (t->name->mutabl && e && jl_field_isptr(t, i - 1) && jl_is_cpointer(e) &&
                         jl_unbox_voidpointer(e) != (void*)-1 && jl_unbox_voidpointer(e) != NULL)
                         // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                         jl_serialize_cnull(s, jl_typeof(e));
@@ -805,7 +1127,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
             }
             if (i == nf)
                 break;
-            if (t->mutabl && jl_is_cpointer_type(jl_field_type(t, i)) && *(void**)ptr != (void*)-1) {
+            if (t->name->mutabl && jl_is_cpointer_type(jl_field_type(t, i)) && *(void**)ptr != (void*)-1) {
                 if (ptr > last)
                     ios_write(s->s, last, ptr - last);
                 char *n = NULL;
@@ -819,6 +1141,28 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
     }
 }
 
+// Used to serialize the external method instances queued in queued_method_roots (from newly_inferred)
+static void serialize_htable_keys(jl_serializer_state *s, htable_t *ht, int nitems)
+{
+    write_int32(s->s, nitems);
+    void **table = ht->table;
+    size_t i, n = 0, sz = ht->size;
+    (void)n;
+    for (i = 0; i < sz; i += 2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            jl_serialize_value(s, (jl_value_t*)table[i]);
+            n += 1;
+        }
+    }
+    assert(n == nitems);
+}
+
+// Create the forward-edge map (caller => callees)
+// the intent of these functions is to invert the backedges tree
+// for anything that points to a method not part of the worklist
+// or method instances not in the queue
+//
+// from MethodTables
 static void jl_collect_missing_backedges_to_mod(jl_methtable_t *mt)
 {
     jl_array_t *backedges = mt->backedges;
@@ -826,33 +1170,41 @@ static void jl_collect_missing_backedges_to_mod(jl_methtable_t *mt)
         size_t i, l = jl_array_len(backedges);
         for (i = 1; i < l; i += 2) {
             jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
-            jl_value_t *missing_callee = jl_array_ptr_ref(backedges, i - 1);
+            jl_value_t *missing_callee = jl_array_ptr_ref(backedges, i - 1);  // signature of abstract callee
             jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller);
             if (*edges == HT_NOTFOUND)
                 *edges = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(*edges, missing_callee);
+            // To stay synchronized with the format from MethodInstances (specifically for `invoke`d calls),
+            // we have to push a pair of values. But in this case the callee is unknown, so we leave it NULL.
+            push_edge(*edges, missing_callee, NULL);
         }
     }
 }
 
-// the intent of this function is to invert the backedges tree
-// for anything that points to a method not part of the worklist
+// from MethodInstances
 static void collect_backedges(jl_method_instance_t *callee) JL_GC_DISABLED
 {
     jl_array_t *backedges = callee->backedges;
     if (backedges) {
-        size_t i, l = jl_array_len(backedges);
-        for (i = 0; i < l; i++) {
-            jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
+        size_t i = 0, l = jl_array_len(backedges);
+        jl_value_t *invokeTypes;
+        jl_method_instance_t *caller;
+        while (i < l) {
+            i = get_next_edge(backedges, i, &invokeTypes, &caller);
             jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, caller);
             if (*edges == HT_NOTFOUND)
                 *edges = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(*edges, (jl_value_t*)callee);
+            push_edge(*edges, invokeTypes, callee);
         }
     }
 }
 
 
+// For functions owned by modules not on the worklist, call this on each method.
+// - if the method is owned by a worklist module, add it to the list of things to be
+//   fully serialized
+// - otherwise (i.e., if it's an external method), check all of its specializations.
+//   Collect all external backedges (may be needed later when we invert this list).
 static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) JL_GC_DISABLED
 {
     jl_array_t *s = (jl_array_t*)closure;
@@ -866,7 +1218,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_method_instance_t *callee = (jl_method_instance_t*)jl_svecref(specializations, i);
-            if (callee != NULL)
+            if ((jl_value_t*)callee != jl_nothing)
                 collect_backedges(callee);
         }
     }
@@ -878,7 +1230,10 @@ static void jl_collect_methtable_from_mod(jl_array_t *s, jl_methtable_t *mt) JL_
     jl_typemap_visitor(mt->defs, jl_collect_methcache_from_mod, (void*)s);
 }
 
-static void jl_collect_lambdas_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DISABLED
+// Collect methods of external functions defined by modules in the worklist
+// "extext" = "extending external"
+// Also collect relevant backedges
+static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DISABLED
 {
     if (module_in_worklist(m))
         return;
@@ -905,7 +1260,17 @@ static void jl_collect_lambdas_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DIS
                     jl_module_t *child = (jl_module_t*)b->value;
                     if (child != m && child->parent == m && child->name == b->name) {
                         // this is the original/primary binding for the submodule
-                        jl_collect_lambdas_from_mod(s, (jl_module_t*)b->value);
+                        jl_collect_extext_methods_from_mod(s, (jl_module_t*)b->value);
+                    }
+                }
+                else if (jl_is_mtable(b->value)) {
+                    jl_methtable_t *mt = (jl_methtable_t*)b->value;
+                    if (mt->module == m && mt->name == b->name) {
+                        // this is probably an external method table, so let's assume so
+                        // as there is no way to precisely distinguish them,
+                        // and the rest of this serializer does not bother
+                        // to handle any method tables specially
+                        jl_collect_methtable_from_mod(s, (jl_methtable_t*)bv);
                     }
                 }
             }
@@ -913,41 +1278,65 @@ static void jl_collect_lambdas_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DIS
     }
 }
 
+static void register_backedge(htable_t *all_callees, jl_value_t *invokeTypes, jl_value_t *c)
+{
+    if (invokeTypes)
+        ptrhash_put(all_callees, invokeTypes, c);
+    else
+        ptrhash_put(all_callees, c, c);
+
+}
+
 // flatten the backedge map reachable from caller into callees
 static void jl_collect_backedges_to(jl_method_instance_t *caller, htable_t *all_callees) JL_GC_DISABLED
 {
-    jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
-                *callees = *pcallees;
-    if (callees != HT_NOTFOUND) {
+    if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller))
+        return;
+    if (ptrhash_has(&edges_map, caller)) {
+        jl_array_t **pcallees = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller),
+                    *callees = *pcallees;
+        assert(callees != HT_NOTFOUND);
         *pcallees = (jl_array_t*) HT_NOTFOUND;
-        size_t i, l = jl_array_len(callees);
-        for (i = 0; i < l; i++) {
-            jl_value_t *c = jl_array_ptr_ref(callees, i);
-            ptrhash_put(all_callees, c, c);
-            if (jl_is_method_instance(c)) {
+        size_t i = 0, l = jl_array_len(callees);
+        jl_method_instance_t *c;
+        jl_value_t *invokeTypes;
+        while (i < l) {
+            i = get_next_edge(callees, i, &invokeTypes, &c);
+            register_backedge(all_callees, invokeTypes, (jl_value_t*)c);
+            if (c && jl_is_method_instance(c)) {
                 jl_collect_backedges_to((jl_method_instance_t*)c, all_callees);
             }
         }
     }
 }
 
-static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
+// Extract `edges` and `ext_targets` from `edges_map`
+// This identifies internal->external edges in the call graph, pulling them out for special treatment.
+static void jl_collect_backedges(jl_array_t *edges, jl_array_t *ext_targets)
 {
-    htable_t all_targets;
-    htable_t all_callees;
+    htable_t all_targets;         // target => tgtindex mapping
+    htable_t all_callees;         // MIs called by worklist methods (eff. Set{MethodInstance})
     htable_new(&all_targets, 0);
     htable_new(&all_callees, 0);
+    jl_value_t *invokeTypes;
+    jl_method_instance_t *c;
     size_t i;
-    void **table = edges_map.table;
-    for (i = 0; i < edges_map.size; i += 2) {
+    void **table = edges_map.table;    // edges is caller => callees
+    size_t table_size = edges_map.size;
+    for (i = 0; i < table_size; i += 2) {
+        assert(table == edges_map.table && table_size == edges_map.size &&
+               "edges_map changed during iteration");
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
-        if (callees != HT_NOTFOUND && module_in_worklist(caller->def.method->module)) {
-            size_t i, l = jl_array_len(callees);
-            for (i = 0; i < l; i++) {
-                jl_value_t *c = jl_array_ptr_ref(callees, i);
-                ptrhash_put(&all_callees, c, c);
-                if (jl_is_method_instance(c)) {
+        if (callees == HT_NOTFOUND)
+            continue;
+        assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
+        if (module_in_worklist(caller->def.method->module) || method_instance_in_queue(caller)) {
+            size_t i = 0, l = jl_array_len(callees);
+            while (i < l) {
+                i = get_next_edge(callees, i, &invokeTypes, &c);
+                register_backedge(&all_callees, invokeTypes, (jl_value_t*)c);
+                if (c && jl_is_method_instance(c)) {
                     jl_collect_backedges_to((jl_method_instance_t*)c, &all_callees);
                 }
             }
@@ -955,23 +1344,26 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
             void **pc = all_callees.table;
             size_t j;
             int valid = 1;
+            int mode;
             for (j = 0; valid && j < all_callees.size; j += 2) {
                 if (pc[j + 1] != HT_NOTFOUND) {
                     jl_value_t *callee = (jl_value_t*)pc[j];
                     void *target = ptrhash_get(&all_targets, (void*)callee);
                     if (target == HT_NOTFOUND) {
-                        jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
                         jl_value_t *sig;
                         if (jl_is_method_instance(callee)) {
-                            sig = callee_mi->specTypes;
+                            sig = ((jl_method_instance_t*)callee)->specTypes;
+                            mode = 1;
                         }
                         else {
                             sig = callee;
+                            callee = (jl_value_t*)pc[j+1];
+                            mode = 2;
                         }
                         size_t min_valid = 0;
                         size_t max_valid = ~(size_t)0;
                         int ambig = 0;
-                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
+                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
                         if (matches == jl_false) {
                             valid = 0;
                             break;
@@ -981,9 +1373,10 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
                             jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
                             jl_array_ptr_set(matches, k, match->method);
                         }
-                        jl_array_ptr_1d_push(t, callee);
-                        jl_array_ptr_1d_push(t, matches);
-                        target = (char*)HT_NOTFOUND + jl_array_len(t) / 2;
+                        jl_array_ptr_1d_push(ext_targets, mode == 1 ? NULL : sig);
+                        jl_array_ptr_1d_push(ext_targets, callee);
+                        jl_array_ptr_1d_push(ext_targets, matches);
+                        target = (char*)HT_NOTFOUND + jl_array_len(ext_targets) / 3;
                         ptrhash_put(&all_targets, (void*)callee, target);
                     }
                     jl_array_grow_end(callees, 1);
@@ -992,8 +1385,8 @@ static void jl_collect_backedges(jl_array_t *s, jl_array_t *t)
             }
             htable_reset(&all_callees, 100);
             if (valid) {
-                jl_array_ptr_1d_push(s, (jl_value_t*)caller);
-                jl_array_ptr_1d_push(s, (jl_value_t*)callees);
+                jl_array_ptr_1d_push(edges, (jl_value_t*)caller);
+                jl_array_ptr_1d_push(edges, (jl_value_t*)callees);
             }
         }
     }
@@ -1069,9 +1462,11 @@ static void write_module_path(ios_t *s, jl_module_t *depmod) JL_NOTSAFEPOINT
     ios_write(s, mname, slen);
 }
 
-// serialize the global _require_dependencies array of pathnames that
-// are include dependencies
-static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *mod_array)
+// Cache file header
+// Serialize the global Base._require_dependencies array of pathnames that
+// are include dependencies. Also write Preferences and return
+// the location of the srctext "pointer" in the header index.
+static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
@@ -1085,10 +1480,11 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
     if (!unique_func)
         unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
     jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)deps};
-    size_t last_age = jl_get_ptls_states()->world_age;
-    jl_get_ptls_states()->world_age = jl_world_counter;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
-    jl_get_ptls_states()->world_age = last_age;
+    ct->world_age = last_age;
 
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
@@ -1126,27 +1522,54 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp, jl_array_t *
 
         // Calculate Preferences hash for current package.
         jl_value_t *prefs_hash = NULL;
+        jl_value_t *prefs_list = NULL;
+        JL_GC_PUSH1(&prefs_list);
         if (jl_base_module) {
             // Toplevel module is the module we're currently compiling, use it to get our preferences hash
             jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
             jl_value_t * prefs_hash_func = jl_get_global(jl_base_module, jl_symbol("get_preferences_hash"));
+            jl_value_t * get_compiletime_prefs_func = jl_get_global(jl_base_module, jl_symbol("get_compiletime_preferences"));
 
-            if (toplevel && prefs_hash_func) {
-                // call get_preferences_hash(__toplevel__)
-                jl_value_t *prefs_hash_args[2] = {prefs_hash_func, (jl_value_t*)toplevel};
-                size_t last_age = jl_get_ptls_states()->world_age;
-                jl_get_ptls_states()->world_age = jl_world_counter;
-                prefs_hash = (jl_value_t*)jl_apply(prefs_hash_args, 2);
-                jl_get_ptls_states()->world_age = last_age;
+            if (toplevel && prefs_hash_func && get_compiletime_prefs_func) {
+                // Temporary invoke in newest world age
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+
+                // call get_compiletime_prefs(__toplevel__)
+                jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
+                prefs_list = (jl_value_t*)jl_apply(args, 2);
+
+                // Call get_preferences_hash(__toplevel__, prefs_list)
+                args[0] = prefs_hash_func;
+                args[2] = prefs_list;
+                prefs_hash = (jl_value_t*)jl_apply(args, 3);
+
+                // Reset world age to normal
+                ct->world_age = last_age;
             }
         }
 
         // If we successfully got the preferences, write it out, otherwise write `0` for this `.ji` file.
-        if (prefs_hash != NULL) {
+        if (prefs_hash != NULL && prefs_list != NULL) {
+            size_t i, l = jl_array_len(prefs_list);
+            for (i = 0; i < l; i++) {
+                jl_value_t *pref_name = jl_array_ptr_ref(prefs_list, i);
+                size_t slen = jl_string_len(pref_name);
+                write_int32(s, slen);
+                ios_write(s, jl_string_data(pref_name), slen);
+            }
+            write_int32(s, 0); // terminator
             write_uint64(s, jl_unbox_uint64(prefs_hash));
         } else {
+            // This is an error path, but let's at least generate a valid `.ji` file.
+            // We declare an empty list of preference names, followed by a zero-hash.
+            // The zero-hash is not what would be generated for an empty set of preferences,
+            // and so this `.ji` file will be invalidated by a future non-erroring pass
+            // through this function.
+            write_int32(s, 0);
             write_uint64(s, 0);
         }
+        JL_GC_POP(); // for prefs_list
 
         // write a dummy file position to indicate the beginning of the source-text
         pos = ios_pos(s);
@@ -1192,22 +1615,15 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     uint8_t flags = read_uint8(s->s);
     uint8_t memflags = read_uint8(s->s);
     dt->size = size;
-    dt->abstract = flags & 1;
-    dt->mutabl = (flags >> 1) & 1;
-    int has_layout = (flags >> 2) & 1;
-    int has_instance = (flags >> 3) & 1;
+    int has_layout = flags & 1;
+    int has_instance = (flags >> 1) & 1;
     dt->hasfreetypevars = memflags & 1;
     dt->isconcretetype = (memflags >> 1) & 1;
     dt->isdispatchtuple = (memflags >> 2) & 1;
     dt->isbitstype = (memflags >> 3) & 1;
     dt->zeroinit = (memflags >> 4) & 1;
-    dt->isinlinealloc = (memflags >> 5) & 1;
-    dt->has_concrete_subtype = (memflags >> 6) & 1;
-    dt->cached_by_hash = (memflags >> 7) & 1;
-    if (!dt->abstract)
-        dt->ninitialized = read_uint16(s->s);
-    else
-        dt->ninitialized = 0;
+    dt->has_concrete_subtype = (memflags >> 5) & 1;
+    dt->cached_by_hash = (memflags >> 6) & 1;
     dt->hash = read_int32(s->s);
 
     if (has_layout) {
@@ -1255,8 +1671,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     }
     dt->name = (jl_typename_t*)jl_deserialize_value(s, (jl_value_t**)&dt->name);
     jl_gc_wb(dt, dt->name);
-    dt->names = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->names);
-    jl_gc_wb(dt, dt->names);
     dt->parameters = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&dt->parameters);
     jl_gc_wb(dt, dt->parameters);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
@@ -1320,7 +1734,7 @@ static jl_value_t *jl_deserialize_value_array(jl_serializer_state *s, uint8_t ta
         isptr = (elsize >> 15) & 1;
         hasptr = (elsize >> 14) & 1;
         isunion = (elsize >> 13) & 1;
-        elsize = elsize & 0x3fff;
+        elsize = elsize & 0x1fff;
     }
     uintptr_t pos = backref_list.len;
     arraylist_push(&backref_list, NULL);
@@ -1387,22 +1801,52 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     jl_gc_wb(m, m->sig);
     m->module = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&m->module);
     jl_gc_wb(m, m->module);
-    int internal = read_uint8(s->s);
-    if (!internal) {
+    int serialization_mode = read_uint8(s->s);
+    if (serialization_mode & METHOD_EXTERNAL_MT) {
+        jl_module_t *mt_mod = (jl_module_t*)jl_deserialize_value(s, NULL);
+        jl_sym_t *mt_name = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        m->external_mt = jl_get_global(mt_mod, mt_name);
+        jl_gc_wb(m, m->external_mt);
+        assert(jl_typeis(m->external_mt, jl_methtable_type));
+    }
+    else {
+        m->external_mt = jl_deserialize_value(s, &m->external_mt);
+        jl_gc_wb(m, m->external_mt);
+    }
+    if (!(serialization_mode & METHOD_INTERNAL)) {
         assert(loc != NULL && loc != HT_NOTFOUND);
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)pos);
+        if (serialization_mode & METHOD_HAS_NEW_ROOTS) {
+            uint64_t key = read_uint64(s->s);
+            int i, nnew = read_int32(s->s);
+            jl_array_t *newroots = jl_alloc_vec_any(nnew);
+            jl_value_t **data = (jl_value_t**)jl_array_data(newroots);
+            for (i = 0; i < nnew; i++)
+                data[i] = jl_deserialize_value(s, &(data[i]));
+            // Storing the new roots in `m->roots` risks losing them due to recaching
+            // (which replaces pointers to `m` with ones to the "live" method).
+            // Put them in separate storage so we can find them later.
+            assert(ptrhash_get(&queued_method_roots, m) == HT_NOTFOUND);
+            // In storing the key, on 32-bit platforms we need two slots. Might as well do this for all platforms.
+            jl_svec_t *qmrval = jl_alloc_svec_uninit(3);    // GC is disabled
+            jl_svec_data(qmrval)[0] = (jl_value_t*)(uintptr_t)(key & ((((uint64_t)1) << 32) - 1));          // lo bits
+            jl_svec_data(qmrval)[1] = (jl_value_t*)(uintptr_t)((key >> 32) & ((((uint64_t)1) << 32) - 1));  // hi bits
+            jl_svec_data(qmrval)[2] = (jl_value_t*)newroots;
+            ptrhash_put(&queued_method_roots, m, qmrval);
+        }
         return (jl_value_t*)m;
     }
     m->specializations = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->specializations);
     jl_gc_wb(m, m->specializations);
-    m->speckeyset = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->speckeyset);
-    jl_gc_wb(m, m->speckeyset);
+    jl_array_t *speckeyset = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->speckeyset);
+    jl_atomic_store_relaxed(&m->speckeyset, speckeyset);
+    jl_gc_wb(m, speckeyset);
     m->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
     jl_gc_wb(m, m->name);
     m->file = (jl_sym_t*)jl_deserialize_value(s, NULL);
     m->line = read_int32(s->s);
-    m->primary_world = jl_world_counter;
+    m->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     m->deleted_world = ~(size_t)0;
     m->called = read_int32(s->s);
     m->nargs = read_int32(s->s);
@@ -1410,11 +1854,18 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
     m->nkw = read_int32(s->s);
     m->isva = read_int8(s->s);
     m->pure = read_int8(s->s);
+    m->is_for_opaque_closure = read_int8(s->s);
+    m->constprop = read_int8(s->s);
+    m->purity.bits = read_uint8(s->s);
     m->slot_syms = jl_deserialize_value(s, (jl_value_t**)&m->slot_syms);
     jl_gc_wb(m, m->slot_syms);
     m->roots = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->roots);
     if (m->roots)
         jl_gc_wb(m, m->roots);
+    m->root_blocks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&m->root_blocks);
+    if (m->root_blocks)
+        jl_gc_wb(m, m->root_blocks);
+    m->nroots_sysimg = read_int32(s->s);
     m->ccallable = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&m->ccallable);
     if (m->ccallable) {
         jl_gc_wb(m, m->ccallable);
@@ -1431,6 +1882,9 @@ static jl_value_t *jl_deserialize_value_method(jl_serializer_state *s, jl_value_
         jl_gc_wb(m, m->generator);
     m->invokes = jl_deserialize_value(s, (jl_value_t**)&m->invokes);
     jl_gc_wb(m, m->invokes);
+    m->recursion_relation = jl_deserialize_value(s, (jl_value_t**)&m->recursion_relation);
+    if (m->recursion_relation)
+        jl_gc_wb(m, m->recursion_relation);
     JL_MUTEX_INIT(&m->writelock);
     return (jl_value_t*)m;
 }
@@ -1444,6 +1898,10 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
     uintptr_t pos = backref_list.len;
     arraylist_push(&backref_list, mi);
     int internal = read_uint8(s->s);
+    if (internal == 1) {
+        mi->uninferred = jl_deserialize_value(s, &mi->uninferred);
+        jl_gc_wb(mi, mi->uninferred);
+    }
     mi->specTypes = (jl_value_t*)jl_deserialize_value(s, (jl_value_t**)&mi->specTypes);
     jl_gc_wb(mi, mi->specTypes);
     mi->def.value = jl_deserialize_value(s, &mi->def.value);
@@ -1456,15 +1914,14 @@ static jl_value_t *jl_deserialize_value_method_instance(jl_serializer_state *s, 
         return (jl_value_t*)mi;
     }
 
-    if (internal == 1) {
-        mi->uninferred = jl_deserialize_value(s, &mi->uninferred);
-        jl_gc_wb(mi, mi->uninferred);
-    }
     mi->sparam_vals = (jl_svec_t*)jl_deserialize_value(s, (jl_value_t**)&mi->sparam_vals);
     jl_gc_wb(mi, mi->sparam_vals);
     mi->backedges = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->backedges);
     if (mi->backedges)
         jl_gc_wb(mi, mi->backedges);
+    mi->callbacks = (jl_array_t*)jl_deserialize_value(s, (jl_value_t**)&mi->callbacks);
+    if (mi->callbacks)
+        jl_gc_wb(mi, mi->callbacks);
     mi->cache = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&mi->cache);
     if (mi->cache)
         jl_gc_wb(mi, mi->cache);
@@ -1480,23 +1937,32 @@ static jl_value_t *jl_deserialize_value_code_instance(jl_serializer_state *s, jl
     int flags = read_uint8(s->s);
     int validate = (flags >> 0) & 3;
     int constret = (flags >> 2) & 1;
+    codeinst->ipo_purity_bits = read_uint32(s->s);
+    jl_atomic_store_relaxed(&codeinst->purity_bits, read_uint32(s->s));
     codeinst->def = (jl_method_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->def);
     jl_gc_wb(codeinst, codeinst->def);
-    codeinst->inferred = jl_deserialize_value(s, &codeinst->inferred);
-    jl_gc_wb(codeinst, codeinst->inferred);
+    jl_value_t *inferred = jl_deserialize_value(s, NULL);
+    jl_atomic_store_release(&codeinst->inferred, inferred);
+    jl_gc_wb(codeinst, inferred);
     codeinst->rettype_const = jl_deserialize_value(s, &codeinst->rettype_const);
     if (codeinst->rettype_const)
         jl_gc_wb(codeinst, codeinst->rettype_const);
     codeinst->rettype = jl_deserialize_value(s, &codeinst->rettype);
     jl_gc_wb(codeinst, codeinst->rettype);
+    codeinst->argescapes = jl_deserialize_value(s, &codeinst->argescapes);
+    jl_gc_wb(codeinst, codeinst->argescapes);
     if (constret)
         codeinst->invoke = jl_fptr_const_return;
     if ((flags >> 3) & 1)
         codeinst->precompile = 1;
+    codeinst->relocatability = read_uint8(s->s);
+    assert(codeinst->relocatability <= 1);
     codeinst->next = (jl_code_instance_t*)jl_deserialize_value(s, (jl_value_t**)&codeinst->next);
     jl_gc_wb(codeinst, codeinst->next);
-    if (validate)
-        codeinst->min_world = jl_world_counter;
+    if (validate) {
+        codeinst->min_world = jl_atomic_load_acquire(&jl_world_counter);
+        ptrhash_put(&new_code_instance_validate, codeinst, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
+    }
     return (jl_value_t*)codeinst;
 }
 
@@ -1521,17 +1987,21 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     jl_gc_wb(m, m->parent);
 
     while (1) {
-        jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s, NULL);
-        if (name == NULL)
+        jl_sym_t *asname = (jl_sym_t*)jl_deserialize_value(s, NULL);
+        if (asname == NULL)
             break;
-        jl_binding_t *b = jl_get_binding_wr(m, name, 1);
-        b->value = jl_deserialize_value(s, &b->value);
-        jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
-        if (b->value != NULL) jl_gc_wb(m, b->value);
-        b->globalref = jl_deserialize_value(s, &b->globalref);
-        if (b->globalref != NULL) jl_gc_wb(m, b->globalref);
+        jl_binding_t *b = jl_get_binding_wr(m, asname, 1);
+        b->name = (jl_sym_t*)jl_deserialize_value(s, (jl_value_t**)&b->name);
+        jl_value_t *bvalue = jl_deserialize_value(s, (jl_value_t**)&b->value);
+        *(jl_value_t**)&b->value = bvalue;
+        if (bvalue != NULL) jl_gc_wb(m, bvalue);
+        jl_value_t *bglobalref = jl_deserialize_value(s, (jl_value_t**)&b->globalref);
+        *(jl_value_t**)&b->globalref = bglobalref;
+        if (bglobalref != NULL) jl_gc_wb(m, bglobalref);
         b->owner = (jl_module_t*)jl_deserialize_value(s, (jl_value_t**)&b->owner);
         if (b->owner != NULL) jl_gc_wb(m, b->owner);
+        jl_value_t *bty = jl_deserialize_value(s, (jl_value_t**)&b->ty);
+        *(jl_value_t**)&b->ty = bty;
         int8_t flags = read_int8(s->s);
         b->deprecated = (flags>>3) & 1;
         b->constp = (flags>>2) & 1;
@@ -1555,7 +2025,8 @@ static jl_value_t *jl_deserialize_value_module(jl_serializer_state *s) JL_GC_DIS
     m->optlevel = read_int8(s->s);
     m->compile = read_int8(s->s);
     m->infer = read_int8(s->s);
-    m->primary_world = jl_world_counter;
+    m->max_methods = read_int8(s->s);
+    m->primary_world = jl_atomic_load_acquire(&jl_world_counter);
     return (jl_value_t*)m;
 }
 
@@ -1605,7 +2076,7 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
         if (entry->max_world == ~(size_t)0) {
             if (entry->min_world > 1) {
                 // update world validity to reflect current state of the counter
-                entry->min_world = jl_world_counter;
+                entry->min_world = jl_atomic_load_acquire(&jl_world_counter);
             }
         }
         else {
@@ -1634,7 +2105,6 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             memset(tn, 0, sizeof(jl_typename_t));
             tn->cache = jl_emptysvec; // the cache is refilled later (tag 5)
             tn->linearcache = jl_emptysvec; // the cache is refilled later (tag 5)
-            tn->partial = NULL;
             backref_list.items[pos] = tn;
         }
         jl_module_t *m = (jl_module_t*)jl_deserialize_value(s, NULL);
@@ -1646,9 +2116,30 @@ static jl_value_t *jl_deserialize_value_any(jl_serializer_state *s, uint8_t tag,
             jl_gc_wb(tn, tn->names);
             tn->wrapper = jl_deserialize_value(s, &tn->wrapper);
             jl_gc_wb(tn, tn->wrapper);
+            tn->Typeofwrapper = NULL;
             tn->mt = (jl_methtable_t*)jl_deserialize_value(s, (jl_value_t**)&tn->mt);
             jl_gc_wb(tn, tn->mt);
             ios_read(s->s, (char*)&tn->hash, sizeof(tn->hash));
+            int8_t flags = read_int8(s->s);
+            tn->_reserved = 0;
+            tn->abstract = flags & 1;
+            tn->mutabl = (flags>>1) & 1;
+            tn->mayinlinealloc = (flags>>2) & 1;
+            tn->max_methods = read_uint8(s->s);
+            if (tn->abstract)
+                tn->n_uninitialized = 0;
+            else
+                tn->n_uninitialized = read_uint16(s->s);
+            size_t nfields = read_int32(s->s);
+            if (nfields) {
+                tn->atomicfields = (uint32_t*)malloc(nfields);
+                ios_read(s->s, (char*)tn->atomicfields, nfields);
+            }
+            nfields = read_int32(s->s);
+            if (nfields) {
+                tn->constfields = (uint32_t*)malloc(nfields);
+                ios_read(s->s, (char*)tn->constfields, nfields);
+            }
         }
         else {
             jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(jl_get_global(m, sym));
@@ -1810,44 +2301,219 @@ static jl_value_t *jl_deserialize_value(jl_serializer_state *s, jl_value_t **loc
     }
 }
 
+// Add methods to external (non-worklist-owned) functions
 static void jl_insert_methods(jl_array_t *list)
 {
     size_t i, l = jl_array_len(list);
     for (i = 0; i < l; i += 2) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
-        jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_array_ptr_ref(list, i + 1);
         assert(jl_is_method(meth));
-        jl_methtable_t *mt = jl_method_table_for((jl_value_t*)meth->sig);
+        assert(!meth->is_for_opaque_closure);
+        jl_tupletype_t *simpletype = (jl_tupletype_t*)jl_array_ptr_ref(list, i + 1);
+        jl_methtable_t *mt = jl_method_get_table(meth);
         assert((jl_value_t*)mt != jl_nothing);
         jl_method_table_insert(mt, meth, simpletype);
+    }
+}
+
+void remove_code_instance_from_validation(jl_code_instance_t *codeinst)
+{
+    ptrhash_remove(&new_code_instance_validate, codeinst);
+}
+
+static int do_selective_invoke_backedge_invalidation(jl_methtable_t *mt, jl_value_t *mworld, jl_method_instance_t *mi, size_t world)
+{
+    jl_value_t *invokeTypes;
+    jl_method_instance_t *caller;
+    size_t jins = 0, j0, j = 0, nbe = jl_array_len(mi->backedges);
+    while (j < nbe) {
+        j0 = j;
+        j = get_next_edge(mi->backedges, j, &invokeTypes, &caller);
+        if (invokeTypes) {
+            struct jl_typemap_assoc search = {invokeTypes, world, NULL, 0, ~(size_t)0};
+            jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
+            if (entry) {
+                jl_value_t *imworld = entry->func.value;
+                if (jl_is_method(imworld) && mi->def.method == (jl_method_t*)imworld) {
+                    // this one is OK
+                    // in case we deleted some earlier ones, move this earlier
+                    for (; j0 < j; jins++, j0++) {
+                        jl_array_ptr_set(mi->backedges, jins, jl_array_ptr_ref(mi->backedges, j0));
+                    }
+                    continue;
+                }
+            }
+        }
+        invalidate_backedges(&remove_code_instance_from_validation, caller, world, "jl_insert_method_instance caller");
+        // The codeinst of this mi haven't yet been removed
+        jl_code_instance_t *codeinst = caller->cache;
+        while (codeinst) {
+            remove_code_instance_from_validation(codeinst);
+            codeinst = codeinst->next;
+        }
+    }
+    jl_array_del_end(mi->backedges, j - jins);
+    if (jins == 0) {
+        return 0;
+    }
+    return 1;
+}
+
+static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
+{
+    size_t i, l = jl_array_len(list);
+    // Validate the MethodInstances
+    jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
+    memset(jl_array_data(valids), 1, l);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    for (i = 0; i < l; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        int valid = 1;
+        assert(jl_is_method_instance(mi));
+        if (jl_is_method(mi->def.method)) {
+            jl_method_t *m = mi->def.method;
+            if (m->deleted_world != ~(size_t)0) {
+                // The method we depended on has been deleted, invalidate
+                valid = 0;
+            } else {
+                // Is this still the method we'd be calling?
+                jl_methtable_t *mt = jl_method_table_for(mi->specTypes);
+                struct jl_typemap_assoc search = {(jl_value_t*)mi->specTypes, world, NULL, 0, ~(size_t)0};
+                jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
+                if (entry) {
+                    jl_value_t *mworld = entry->func.value;
+                    if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
+                        if (!mi->backedges) {
+                            valid = 0;
+                        } else {
+                            // There's still a chance this is valid, if any caller made this via `invoke` and the invoke-signature is still valid.
+                            // Selectively go through all the backedges, invalidating those not made via `invoke` and validating those that are.
+                            if (!do_selective_invoke_backedge_invalidation(mt, mworld, mi, world)) {
+                                m = (jl_method_t*)mworld;
+                                valid = 0;
+                            }
+                        }
+                    }
+                }
+            }
+            if (!valid) {
+                // None of the callers were valid, so invalidate `mi` too
+                jl_array_uint8_set(valids, i, 0);
+                invalidate_backedges(&remove_code_instance_from_validation, mi, world, "jl_insert_method_instance");
+                jl_code_instance_t *codeinst = mi->cache;
+                while (codeinst) {
+                    remove_code_instance_from_validation(codeinst);
+                    codeinst = codeinst->next;
+                }
+                if (_jl_debug_method_invalidation) {
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)m);
+                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, jl_cstr_to_string("jl_method_table_insert")); // GC disabled
+                }
+            }
+        }
+    }
+    // While it's tempting to just remove the invalidated MIs altogether,
+    // this hurts the ability of SnoopCompile to diagnose problems.
+    for (i = 0; i < l; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_method_instance_t *milive = jl_specializations_get_or_insert(mi);
+        ptrhash_put(&uniquing_table, mi, milive);  // store the association for the 2nd pass
+    }
+    // We may need to fix up the backedges for the ones that didn't "go live"
+    for (i = 0; i < l; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_method_instance_t *milive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, mi);
+        if (milive != mi) {
+            // A previously-loaded module compiled this method, so the one we deserialized will be dropped.
+            // But make sure the backedges are copied over.
+            jl_value_t *invokeTypes;
+            jl_method_instance_t *be, *belive;
+            if (mi->backedges) {
+                if (!milive->backedges) {
+                    // Copy all the backedges (after looking up the live ones)
+                    size_t j = 0, jlive = 0, n = jl_array_len(mi->backedges);
+                    milive->backedges = jl_alloc_vec_any(n);
+                    jl_gc_wb(milive, milive->backedges);
+                    while (j < n) {
+                        j = get_next_edge(mi->backedges, j, &invokeTypes, &be);
+                        belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
+                        if (belive == HT_NOTFOUND)
+                            belive = be;
+                        jlive = set_next_edge(milive->backedges, jlive, invokeTypes, belive);
+                    }
+                } else {
+                    // Copy the missing backedges (this is an O(N^2) algorithm, but many methods have few MethodInstances)
+                    size_t j = 0, k, n = jl_array_len(mi->backedges), nlive = jl_array_len(milive->backedges);
+                    jl_value_t *invokeTypes2;
+                    jl_method_instance_t *belive2;
+                    while (j < n) {
+                        j = get_next_edge(mi->backedges, j, &invokeTypes, &be);
+                        belive = (jl_method_instance_t*)ptrhash_get(&uniquing_table, be);
+                        if (belive == HT_NOTFOUND)
+                            belive = be;
+                        int found = 0;
+                        k = 0;
+                        while (k < nlive) {
+                            k = get_next_edge(milive->backedges, k, &invokeTypes2, &belive2);
+                            if (belive == belive2 && ((invokeTypes == NULL && invokeTypes2 == NULL) ||
+                                    (invokeTypes && invokeTypes2 && jl_egal(invokeTypes, invokeTypes2)))) {
+                                found = 1;
+                                break;
+                            }
+                        }
+                        if (!found)
+                            push_edge(milive->backedges, invokeTypes, belive);
+                    }
+                }
+            }
+            // Additionally, if we have CodeInstance(s) and the running CodeInstance is world-limited, transfer it
+            if (mi->cache && jl_array_uint8_ref(valids, i)) {
+                if (!milive->cache || milive->cache->max_world < ~(size_t)0) {
+                    jl_code_instance_t *cilive = milive->cache, *ci;
+                    milive->cache = mi->cache;
+                    jl_gc_wb(milive, milive->cache);
+                    ci = mi->cache;
+                    ci->def = milive;
+                    while (ci->next) {
+                        ci = ci->next;
+                        ci->def = milive;
+                    }
+                    ci->next = cilive;
+                    jl_gc_wb(ci, ci->next);
+                }
+            }
+        }
     }
 }
 
 // verify that these edges intersect with the same methods as before
 static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
 {
-    size_t i, l = jl_array_len(targets) / 2;
+    size_t i, l = jl_array_len(targets) / 3;
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
+    jl_value_t *loctag = NULL;
+    JL_GC_PUSH1(&loctag);
     *pvalids = valids;
     for (i = 0; i < l; i++) {
-        jl_value_t *callee = jl_array_ptr_ref(targets, i * 2);
+        jl_value_t *invokesig = jl_array_ptr_ref(targets, i * 3);
+        jl_value_t *callee = jl_array_ptr_ref(targets, i * 3 + 1);
         jl_method_instance_t *callee_mi = (jl_method_instance_t*)callee;
         jl_value_t *sig;
-        if (jl_is_method_instance(callee)) {
-            sig = callee_mi->specTypes;
+        if (callee && jl_is_method_instance(callee)) {
+            sig = invokesig == NULL ? callee_mi->specTypes : invokesig;
         }
         else {
-            sig = callee;
+            sig = callee == NULL ? invokesig : callee;
         }
-        jl_array_t *expected = (jl_array_t*)jl_array_ptr_ref(targets, i * 2 + 1);
+        jl_array_t *expected = (jl_array_t*)jl_array_ptr_ref(targets, i * 3 + 2);
         assert(jl_is_array(expected));
         int valid = 1;
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
         int ambig = 0;
         // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
-        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, -1, 0, jl_world_counter, &min_valid, &max_valid, &ambig);
+        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
         if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }
@@ -1870,22 +2536,30 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
             }
         }
         jl_array_uint8_set(valids, i, valid);
+        if (!valid && _jl_debug_method_invalidation) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)callee);
+            loctag = jl_cstr_to_string("insert_backedges_callee");
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+        }
     }
+    JL_GC_POP();
 }
 
-static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
+// Restore backedges to external targets
+// `edges` = [caller1, targets_indexes1, ...], the list of worklist-owned methods calling external methods.
+// `ext_targets` is [invokesig1, callee1, matches1, ...], the global set of non-worklist callees of worklist-owned methods.
+static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
 {
-    // map(enable, ((list[i] => targets[list[i + 1] .* 2]) for i in 1:2:length(list) if all(valids[list[i + 1]])))
-    size_t i, l = jl_array_len(list);
+    // foreach(enable, ((edges[2i-1] => ext_targets[edges[2i] .* 3]) for i in 1:length(edges)÷2 if all(valids[edges[2i]])))
+    size_t i, l = jl_array_len(edges);
     jl_array_t *valids = NULL;
     jl_value_t *loctag = NULL;
     JL_GC_PUSH2(&valids, &loctag);
-    jl_verify_edges(targets, &valids);
+    jl_verify_edges(ext_targets, &valids);
     for (i = 0; i < l; i += 2) {
-        jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, i);
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
-        assert(caller->def.method->primary_world == jl_world_counter); // caller should be new
-        jl_array_t *idxs_array = (jl_array_t*)jl_array_ptr_ref(list, i + 1);
+        jl_array_t *idxs_array = (jl_array_t*)jl_array_ptr_ref(edges, i + 1);
         assert(jl_isa((jl_value_t*)idxs_array, jl_array_int32_type));
         int32_t *idxs = (int32_t*)jl_array_data(idxs_array);
         int valid = 1;
@@ -1898,25 +2572,37 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
             // if this callee is still valid, add all the backedges
             for (j = 0; j < jl_array_len(idxs_array); j++) {
                 int32_t idx = idxs[j];
-                jl_value_t *callee = jl_array_ptr_ref(targets, idx * 2);
-                if (jl_is_method_instance(callee)) {
-                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, caller);
+                jl_value_t *callee = jl_array_ptr_ref(ext_targets, idx * 3 + 1);
+                if (callee && jl_is_method_instance(callee)) {
+                    jl_value_t *invokesig = jl_array_ptr_ref(ext_targets, idx * 3);
+                    jl_method_instance_add_backedge((jl_method_instance_t*)callee, invokesig, caller);
                 }
                 else {
-                    jl_methtable_t *mt = jl_method_table_for(callee);
-                    assert((jl_value_t*)mt != jl_nothing);
-                    jl_method_table_add_backedge(mt, callee, (jl_value_t*)caller);
+                    jl_value_t *sig = callee == NULL ? jl_array_ptr_ref(ext_targets, idx * 3) : callee;
+                    jl_methtable_t *mt = jl_method_table_for(sig);
+                    // FIXME: rarely, `callee` has an unexpected `Union` signature,
+                    // see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1030329344
+                    // Fix the issue and turn this back into an `assert((jl_value_t*)mt != jl_nothing)`
+                    // This workaround exposes us to (rare) 265-violations.
+                    if ((jl_value_t*)mt != jl_nothing)
+                        jl_method_table_add_backedge(mt, sig, (jl_value_t*)caller);
                 }
             }
             // then enable it
             jl_code_instance_t *codeinst = caller->cache;
             while (codeinst) {
-                if (codeinst->min_world > 0)
+                if (ptrhash_get(&new_code_instance_validate, codeinst) != HT_NOTFOUND && codeinst->min_world > 0)
                     codeinst->max_world = ~(size_t)0;
+                ptrhash_remove(&new_code_instance_validate, codeinst);  // mark it as handled
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
         }
         else {
+            jl_code_instance_t *codeinst = caller->cache;
+            while (codeinst) {
+                ptrhash_remove(&new_code_instance_validate, codeinst);  // should be left invalid
+                codeinst = jl_atomic_load_relaxed(&codeinst->next);
+            }
             if (_jl_debug_method_invalidation) {
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
                 loctag = jl_cstr_to_string("insert_backedges");
@@ -1927,6 +2613,15 @@ static void jl_insert_backedges(jl_array_t *list, jl_array_t *targets)
     JL_GC_POP();
 }
 
+static void validate_new_code_instances(void)
+{
+    size_t i;
+    for (i = 0; i < new_code_instance_validate.size; i += 2) {
+        if (new_code_instance_validate.table[i+1] != HT_NOTFOUND) {
+            ((jl_code_instance_t*)new_code_instance_validate.table[i])->max_world = ~(size_t)0;
+        }
+    }
+}
 
 static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
 {
@@ -2017,8 +2712,8 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
                 jl_module_t *mod = (jl_module_t*)v;
                 if (mod->parent == mod) // top level modules handled by loader
                     break;
-                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1);
-                jl_declare_constant(b); // this can throw
+                jl_binding_t *b = jl_get_binding_wr(mod->parent, mod->name, 1); // this can throw
+                jl_declare_constant(b); // this can also throw
                 if (b->value != NULL) {
                     if (!jl_is_module(b->value)) {
                         jl_errorf("Invalid redefinition of constant %s.",
@@ -2045,11 +2740,12 @@ static void jl_reinit_item(jl_value_t *v, int how, arraylist_t *tracee_list)
         }
     }
     JL_CATCH {
-        jl_printf(JL_STDERR, "WARNING: error while reinitializing value ");
-        jl_static_show(JL_STDERR, v);
-        jl_printf(JL_STDERR, ":\n");
-        jl_static_show(JL_STDERR, jl_current_exception());
-        jl_printf(JL_STDERR, "\n");
+        jl_printf((JL_STREAM*)STDERR_FILENO, "WARNING: error while reinitializing value ");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, v);
+        jl_printf((JL_STREAM*)STDERR_FILENO, ":\n");
+        jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+        jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+        jlbacktrace(); // written to STDERR_FILENO
     }
 }
 
@@ -2068,8 +2764,6 @@ static jl_array_t *jl_finalize_deserializer(jl_serializer_state *s, arraylist_t 
 
 JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 {
-    if (!init_order)
-        return;
     int i, l = jl_array_len(init_order);
     for (i = 0; i < l; i++) {
         jl_value_t *mod = jl_array_ptr_ref(init_order, i);
@@ -2087,6 +2781,15 @@ JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
+// Register all newly-inferred MethodInstances
+// This gets called as the final step of Base.include_package_for_output
+JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
+{
+    assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
+    newly_inferred = (jl_array_t*) _newly_inferred;
+}
+
+// Serialize the modules in `worklist` to file `fname`
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     JL_TIMING(SAVE_MODULE);
@@ -2097,15 +2800,19 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         return 1;
     }
     JL_GC_PUSH2(&mod_array, &udeps);
-    mod_array = jl_get_loaded_modules();
+    mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    assert(jl_precompile_toplevel_module == NULL);
+    jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
     serializer_worklist = worklist;
     write_header(&f);
-    // write description on contents
+    // write description of contents (name, uuid, buildid)
     write_work_list(&f);
-    // write binary blob from caller
-    int64_t srctextpos = write_dependency_list(&f, &udeps, mod_array);
-    // write description of requirements for loading
+    // Determine unique (module, abspath, mtime) dependencies for the files defining modules in the worklist
+    // (see Base._require_dependencies). These get stored in `udeps` and written to the ji-file header.
+    // Also write Preferences.
+    int64_t srctextpos = write_dependency_list(&f, &udeps);  // srctextpos: position of srctext entry in header index (update later)
+    // write description of requirements for loading (modules that must be pre-loaded if initialization is to succeed)
     // this can return errors during deserialize,
     // best to keep it early (before any actual initialization)
     write_mod_list(&f, mod_array);
@@ -2113,6 +2820,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     arraylist_new(&reinit_list, 0);
     htable_new(&edges_map, 0);
     htable_new(&backref_table, 5000);
+    htable_new(&external_mis, newly_inferred ? jl_array_len(newly_inferred) : 0);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
     backref_table_numel = 1;
     jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
@@ -2124,9 +2832,14 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     }
 
     int en = jl_gc_enable(0); // edges map is not gc-safe
-    jl_array_t *lambdas = jl_alloc_vec_any(0);
-    jl_array_t *edges = jl_alloc_vec_any(0);
-    jl_array_t *targets = jl_alloc_vec_any(0);
+    jl_array_t *extext_methods = jl_alloc_vec_any(0);  // [method1, simplesig1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+    jl_array_t *ext_targets = jl_alloc_vec_any(0);     // [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
+                                                       // ordinary dispatch: invokesig=NULL, callee is MethodInstance
+                                                       // `invoke` dispatch: invokesig is signature, callee is MethodInstance
+                                                       // abstract call: callee is signature
+    jl_array_t *edges = jl_alloc_vec_any(0);           // [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
+
+    int n_ext_mis = queue_external_mis(newly_inferred);
 
     size_t i;
     size_t len = jl_array_len(mod_array);
@@ -2134,30 +2847,37 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
         assert(jl_is_module(m));
         if (m->parent == m) // some toplevel modules (really just Base) aren't actually
-            jl_collect_lambdas_from_mod(lambdas, m);
+            jl_collect_extext_methods_from_mod(extext_methods, m);
     }
-    jl_collect_methtable_from_mod(lambdas, jl_type_type_mt);
+    jl_collect_methtable_from_mod(extext_methods, jl_type_type_mt);
     jl_collect_missing_backedges_to_mod(jl_type_type_mt);
-    jl_collect_methtable_from_mod(lambdas, jl_nonfunction_mt);
+    jl_collect_methtable_from_mod(extext_methods, jl_nonfunction_mt);
     jl_collect_missing_backedges_to_mod(jl_nonfunction_mt);
 
-    jl_collect_backedges(edges, targets);
+    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges_to_mod accumulate data in edges_map.
+    // Process this to extract `edges` and `ext_targets`.
+    jl_collect_backedges(edges, ext_targets);
 
     jl_serializer_state s = {
         &f,
-        jl_get_ptls_states(),
+        jl_current_task->ptls,
         mod_array
     };
-    jl_serialize_value(&s, worklist);
-    jl_serialize_value(&s, lambdas);
+    jl_serialize_value(&s, worklist);   // serialize module-owned items (those accessible from the bindings table)
+    jl_serialize_value(&s, extext_methods);  // serialize new worklist-owned methods for external functions
+    serialize_htable_keys(&s, &external_mis, n_ext_mis);  // serialize external MethodInstances
+
+    // The next two allow us to restore backedges from external "unserialized" (stub-serialized) MethodInstances
+    // to the ones we serialize here
     jl_serialize_value(&s, edges);
-    jl_serialize_value(&s, targets);
+    jl_serialize_value(&s, ext_targets);
     jl_finalize_serializer(&s);
     serializer_worklist = NULL;
 
     jl_gc_enable(en);
     htable_reset(&edges_map, 0);
     htable_reset(&backref_table, 0);
+    htable_reset(&external_mis, 0);
     arraylist_free(&reinit_list);
 
     // Write the source-text for the dependent files
@@ -2207,6 +2927,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     write_int32(&f, 0); // mark the end of the source text
     ios_close(&f);
     JL_GC_POP();
+    jl_precompile_toplevel_module = NULL;
 
     return 0;
 }
@@ -2225,7 +2946,54 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 }
 #endif
 
-static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
+
+static jl_datatype_t *recache_datatype(jl_datatype_t *dt) JL_GC_DISABLED;
+
+static jl_value_t *recache_type(jl_value_t *p) JL_GC_DISABLED
+{
+    if (jl_is_datatype(p)) {
+        jl_datatype_t *pdt = (jl_datatype_t*)p;
+        if (ptrhash_get(&uniquing_table, p) != HT_NOTFOUND) {
+            p = (jl_value_t*)recache_datatype(pdt);
+        }
+        else {
+            jl_svec_t *tt = pdt->parameters;
+            // ensure all type parameters are recached
+            size_t i, l = jl_svec_len(tt);
+            for (i = 0; i < l; i++)
+                jl_svecset(tt, i, recache_type(jl_svecref(tt, i)));
+            ptrhash_put(&uniquing_table, p, p); // ensures this algorithm isn't too exponential
+        }
+    }
+    else if (jl_is_typevar(p)) {
+        jl_tvar_t *ptv = (jl_tvar_t*)p;
+        ptv->lb = recache_type(ptv->lb);
+        ptv->ub = recache_type(ptv->ub);
+    }
+    else if (jl_is_uniontype(p)) {
+        jl_uniontype_t *pu = (jl_uniontype_t*)p;
+        pu->a = recache_type(pu->a);
+        pu->b = recache_type(pu->b);
+    }
+    else if (jl_is_unionall(p)) {
+        jl_unionall_t *pa = (jl_unionall_t*)p;
+        pa->var = (jl_tvar_t*)recache_type((jl_value_t*)pa->var);
+        pa->body = recache_type(pa->body);
+    }
+    else {
+        jl_datatype_t *pt = (jl_datatype_t*)jl_typeof(p);
+        jl_datatype_t *cachep = recache_datatype(pt);
+        if (cachep->instance)
+            p = cachep->instance;
+        else if (pt != cachep)
+            jl_set_typeof(p, cachep);
+    }
+    return p;
+}
+
+// Extract pre-existing datatypes from cache, and insert new types into cache
+// insertions also update uniquing_table
+static jl_datatype_t *recache_datatype(jl_datatype_t *dt) JL_GC_DISABLED
 {
     jl_datatype_t *t; // the type after unique'ing
     assert(verify_type((jl_value_t*)dt));
@@ -2238,27 +3006,8 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
     jl_svec_t *tt = dt->parameters;
     // recache all type parameters
     size_t i, l = jl_svec_len(tt);
-    for (i = 0; i < l; i++) {
-        jl_datatype_t *p = (jl_datatype_t*)jl_svecref(tt, i);
-        if (jl_is_datatype(p)) {
-            jl_datatype_t *cachep = jl_recache_type(p);
-            if (p != cachep)
-                jl_svecset(tt, i, cachep);
-        }
-        // XXX: else if (jl_is_typevar(p))
-        // XXX: else if (jl_is_uniontype(p))
-        // XXX: else if (jl_is_unionall(p))
-        else {
-            p = (jl_datatype_t*)jl_typeof(p);
-            jl_datatype_t *cachep = jl_recache_type(p);
-            if (p != cachep) {
-                if (cachep->instance)
-                    jl_svecset(tt, i, cachep->instance);
-                else
-                    jl_set_typeof(jl_svecref(tt, i), cachep);
-            }
-        }
-    }
+    for (i = 0; i < l; i++)
+        jl_svecset(tt, i, recache_type(jl_svecref(tt, i)));
 
     // then recache the type itself
     if (jl_svec_len(tt) == 0) { // jl_cache_type doesn't work if length(parameters) == 0
@@ -2277,6 +3026,8 @@ static jl_datatype_t *jl_recache_type(jl_datatype_t *dt) JL_GC_DISABLED
     return t;
 }
 
+// Recache everything from flagref_list except methods and method instances
+// Cleans out any handled items so that anything left in flagref_list still needs future processing
 static void jl_recache_types(void) JL_GC_DISABLED
 {
     size_t i;
@@ -2296,7 +3047,7 @@ static void jl_recache_types(void) JL_GC_DISABLED
                 dt = (jl_datatype_t*)jl_typeof(o);
                 v = o;
             }
-            jl_datatype_t *t = jl_recache_type(dt);
+            jl_datatype_t *t = recache_datatype(dt); // get or create cached type (also updates uniquing_table)
             if ((jl_value_t*)dt == o && t != dt) {
                 assert(!type_in_worklist(dt));
                 if (loc)
@@ -2315,8 +3066,8 @@ static void jl_recache_types(void) JL_GC_DISABLED
     }
     // invalidate the old datatypes to help catch errors
     for (i = 0; i < uniquing_table.size; i += 2) {
-        jl_datatype_t *o = (jl_datatype_t*)uniquing_table.table[i];
-        jl_datatype_t *t = (jl_datatype_t*)uniquing_table.table[i + 1];
+        jl_datatype_t *o = (jl_datatype_t*)uniquing_table.table[i];      // deserialized ref
+        jl_datatype_t *t = (jl_datatype_t*)uniquing_table.table[i + 1];  // the real type
         if (o != t) {
             assert(t != NULL && jl_is_datatype(o));
             if (t->instance != o->instance)
@@ -2338,7 +3089,7 @@ static void jl_recache_types(void) JL_GC_DISABLED
             flagref_list.len -= 2;
             if (i >= flagref_list.len)
                 break;
-            flagref_list.items[i + 0] = flagref_list.items[flagref_list.len + 0];
+            flagref_list.items[i + 0] = flagref_list.items[flagref_list.len + 0];  // move end-of-list here (executes a `reverse()`)
             flagref_list.items[i + 1] = flagref_list.items[flagref_list.len + 1];
         }
     }
@@ -2356,12 +3107,13 @@ static jl_method_t *jl_lookup_method(jl_methtable_t *mt, jl_datatype_t *sig, siz
 
 static jl_method_t *jl_recache_method(jl_method_t *m)
 {
+    assert(!m->is_for_opaque_closure);
+    assert(jl_is_method(m));
     jl_datatype_t *sig = (jl_datatype_t*)m->sig;
-    jl_methtable_t *mt = jl_method_table_for((jl_value_t*)m->sig);
+    jl_methtable_t *mt = jl_method_get_table(m);
     assert((jl_value_t*)mt != jl_nothing);
     jl_set_typeof(m, (void*)(intptr_t)0x30); // invalidate the old value to help catch errors
-    jl_method_t *_new = jl_lookup_method(mt, sig, m->module->primary_world);
-    return _new;
+    return jl_lookup_method(mt, sig, m->module->primary_world);
 }
 
 static jl_value_t *jl_recache_other_(jl_value_t *o);
@@ -2420,16 +3172,45 @@ static void jl_recache_other(void)
     flagref_list.len = 0;
 }
 
+// Wait to copy roots until recaching is done
+// This is because recaching requires that all pointers to methods and methodinstances
+// stay at their source location as recorded by flagref_list. Once recaching is complete,
+// they can be safely copied over.
+static void jl_copy_roots(void)
+{
+    size_t i, j, l;
+    for (i = 0; i < queued_method_roots.size; i+=2) {
+        jl_method_t *m = (jl_method_t*)queued_method_roots.table[i];
+        m = (jl_method_t*)ptrhash_get(&uniquing_table, m);
+        jl_svec_t *keyroots = (jl_svec_t*)queued_method_roots.table[i+1];
+        if (keyroots != HT_NOTFOUND) {
+            uint64_t key = (uint64_t)(uintptr_t)jl_svec_ref(keyroots, 0) | ((uint64_t)(uintptr_t)jl_svec_ref(keyroots, 1) << 32);
+            jl_array_t *roots = (jl_array_t*)jl_svec_ref(keyroots, 2);
+            assert(jl_is_array(roots));
+            l = jl_array_len(roots);
+            for (j = 0; j < l; j++) {
+                jl_value_t *r = jl_array_ptr_ref(roots, j);
+                jl_value_t *newr = (jl_value_t*)ptrhash_get(&uniquing_table, r);
+                if (newr != HT_NOTFOUND) {
+                    jl_array_ptr_set(roots, j, newr);
+                }
+            }
+            jl_append_method_roots(m, key, roots);
+        }
+    }
+}
+
 static int trace_method(jl_typemap_entry_t *entry, void *closure)
 {
     jl_call_tracer(jl_newmeth_tracer, (jl_value_t*)entry->func.method);
     return 1;
 }
 
+// Restore module(s) from a cache file f
 static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 {
     JL_TIMING(LOAD_MODULE);
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     if (ios_eof(f) || !jl_read_verify_header(f)) {
         ios_close(f);
         return jl_get_exceptionf(jl_errorexception_type,
@@ -2460,53 +3241,70 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
 
     // prepare to deserialize
     int en = jl_gc_enable(0);
-    jl_gc_enable_finalizers(ptls, 0);
-    ++jl_world_counter; // reserve a world age for the deserialization
+    jl_gc_enable_finalizers(ct, 0);
+    jl_atomic_fetch_add(&jl_world_counter, 1); // reserve a world age for the deserialization
 
     arraylist_new(&backref_list, 4000);
     arraylist_push(&backref_list, jl_main_module);
     arraylist_new(&flagref_list, 0);
+    htable_new(&queued_method_roots, 0);
+    htable_new(&new_code_instance_validate, 0);
     arraylist_new(&ccallable_list, 0);
     htable_new(&uniquing_table, 0);
 
     jl_serializer_state s = {
         f,
-        ptls,
+        ct->ptls,
         mod_array
     };
     jl_array_t *restored = (jl_array_t*)jl_deserialize_value(&s, (jl_value_t**)&restored);
     serializer_worklist = restored;
     assert(jl_isa((jl_value_t*)restored, jl_array_any_type));
 
-    // get list of external generic functions
-    jl_value_t *external_methods = jl_deserialize_value(&s, &external_methods);
-    jl_value_t *external_backedges = jl_deserialize_value(&s, &external_backedges);
-    jl_value_t *external_edges = jl_deserialize_value(&s, &external_edges);
+    // See explanation in jl_save_incremental for variables of the same names
+    jl_value_t *extext_methods = jl_deserialize_value(&s, &extext_methods);
+    int i, n_ext_mis = read_int32(s.s);
+    jl_array_t *mi_list = jl_alloc_vec_any(n_ext_mis);   // reload MIs stored by serialize_htable_keys
+    jl_value_t **midata = (jl_value_t**)jl_array_data(mi_list);
+    for (i = 0; i < n_ext_mis; i++)
+        midata[i] = jl_deserialize_value(&s, &(midata[i]));
+    jl_value_t *edges = jl_deserialize_value(&s, &edges);
+    jl_value_t *ext_targets = jl_deserialize_value(&s, &ext_targets);
 
     arraylist_t *tracee_list = NULL;
-    if (jl_newmeth_tracer)
+    if (jl_newmeth_tracer)  // debugging
         tracee_list = arraylist_new((arraylist_t*)malloc_s(sizeof(arraylist_t)), 0);
 
     // at this point, the AST is fully reconstructed, but still completely disconnected
     // now all of the interconnects will be created
     jl_recache_types(); // make all of the types identities correct
-    htable_reset(&uniquing_table, 0);
-    jl_insert_methods((jl_array_t*)external_methods); // hook up methods of external generic functions (needs to be after recache types)
+    jl_insert_methods((jl_array_t*)extext_methods); // hook up extension methods for external generic functions (needs to be after recache types)
     jl_recache_other(); // make all of the other objects identities correct (needs to be after insert methods)
+    jl_copy_roots();    // copying new roots of external methods (must wait until recaching is complete)
+    // At this point, the novel specializations in mi_list reference the real method, but they haven't been cached in its specializations
+    jl_insert_method_instances(mi_list);   // insert novel specializations
     htable_free(&uniquing_table);
     jl_array_t *init_order = jl_finalize_deserializer(&s, tracee_list); // done with f and s (needs to be after recache)
+    if (init_order == NULL)
+        init_order = (jl_array_t*)jl_an_empty_vec_any;
+    assert(jl_isa((jl_value_t*)init_order, jl_array_any_type));
 
-    JL_GC_PUSH4(&init_order, &restored, &external_backedges, &external_edges);
+    JL_GC_PUSH4(&init_order, &restored, &edges, &ext_targets);
     jl_gc_enable(en); // subtyping can allocate a lot, not valid before recache-other
 
-    jl_insert_backedges((jl_array_t*)external_backedges, (jl_array_t*)external_edges); // restore external backedges (needs to be last)
+    jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets); // restore external backedges (needs to be last)
+
+    // check new CodeInstances and validate any that lack external backedges
+    validate_new_code_instances();
 
     serializer_worklist = NULL;
+    htable_free(&new_code_instance_validate);
     arraylist_free(&flagref_list);
     arraylist_free(&backref_list);
+    htable_free(&queued_method_roots);
     ios_close(f);
 
-    jl_gc_enable_finalizers(ptls, 1); // make sure we don't run any Julia code concurrently before this point
+    jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
     if (tracee_list) {
         jl_methtable_t *mt;
         while ((mt = (jl_methtable_t*)arraylist_pop(tracee_list)) != NULL) {
@@ -2519,7 +3317,9 @@ static jl_value_t *_jl_restore_incremental(ios_t *f, jl_array_t *mod_array)
     for (int i = 0; i < ccallable_list.len; i++) {
         jl_svec_t *item = (jl_svec_t*)ccallable_list.items[i];
         JL_GC_PROMISE_ROOTED(item);
-        jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+        int success = jl_compile_extern_c(NULL, NULL, NULL, jl_svecref(item, 0), jl_svecref(item, 1));
+        if (!success)
+            jl_safe_printf("@ccallable was already defined for this method name\n");
     }
     arraylist_free(&ccallable_list);
     jl_value_t *ret = (jl_value_t*)jl_svec(2, restored, init_order);
@@ -2549,13 +3349,13 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *m
 
 void jl_init_serializer(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     htable_new(&ser_tag, 0);
     htable_new(&common_symbol_tag, 0);
     htable_new(&backref_table, 0);
 
     void *vals[] = { jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
-                     call_sym, invoke_sym, goto_ifnot_sym, return_sym, jl_symbol("tuple"),
+                     jl_call_sym, jl_invoke_sym, jl_invoke_modify_sym, jl_goto_ifnot_sym, jl_return_sym, jl_symbol("tuple"),
                      jl_an_empty_string, jl_an_empty_vec_any,
 
                      // empirical list of very common symbols
@@ -2576,11 +3376,11 @@ void jl_init_serializer(void)
                      jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
                      jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
                      jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
-                     jl_box_int64(21),
 
                      jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
                      jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
-                     jl_pointer_type, jl_vararg_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_pointer_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_vararg_type,
                      jl_densearray_type, jl_function_type, jl_typename_type,
                      jl_builtin_type, jl_task_type, jl_uniontype_type,
                      jl_array_any_type, jl_intrinsic_type,
@@ -2592,8 +3392,9 @@ void jl_init_serializer(void)
                      jl_namedtuple_type, jl_array_int32_type,
                      jl_typedslot_type, jl_uint32_type, jl_uint64_type,
                      jl_type_type_mt, jl_nonfunction_mt,
+                     jl_opaque_closure_type,
 
-                     ptls->root_task,
+                     ct->ptls->root_task,
 
                      NULL };
 
@@ -2649,17 +3450,6 @@ void jl_init_serializer(void)
         i += 1;
     }
     assert(i <= 256);
-
-    arraylist_new(&builtin_typenames, 0);
-    arraylist_push(&builtin_typenames, jl_array_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_ref_type->body)->name);
-    arraylist_push(&builtin_typenames, jl_pointer_typename);
-    arraylist_push(&builtin_typenames, jl_type_typename);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_abstractarray_type))->name);
-    arraylist_push(&builtin_typenames, ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_densearray_type))->name);
-    arraylist_push(&builtin_typenames, jl_tuple_typename);
-    arraylist_push(&builtin_typenames, jl_vararg_typename);
-    arraylist_push(&builtin_typenames, jl_namedtuple_typename);
 }
 
 #ifdef __cplusplus

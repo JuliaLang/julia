@@ -1,0 +1,179 @@
+An updated version of this libosxunwind commit:
+
+Author: Keno Fischer <kfischer@college.harvard.edu>
+Date:   Tue Aug 27 15:01:22 2013 -0400
+
+    Add option to step with DWARF
+
+---
+diff -pur a/libunwind/include/libunwind.h b/libunwind/include/libunwind.h
+--- a/libunwind/include/libunwind.h	2021-06-28 18:23:38.000000000 +0200
++++ b/libunwind/include/libunwind.h	2022-05-04 18:44:24.000000000 +0200
+@@ -108,6 +108,7 @@ extern "C" {
+ 
+ extern int unw_getcontext(unw_context_t *) LIBUNWIND_AVAIL;
+ extern int unw_init_local(unw_cursor_t *, unw_context_t *) LIBUNWIND_AVAIL;
++extern int unw_init_local_dwarf(unw_cursor_t *, unw_context_t *) LIBUNWIND_AVAIL;
+ extern int unw_step(unw_cursor_t *) LIBUNWIND_AVAIL;
+ extern int unw_get_reg(unw_cursor_t *, unw_regnum_t, unw_word_t *) LIBUNWIND_AVAIL;
+ extern int unw_get_fpreg(unw_cursor_t *, unw_regnum_t, unw_fpreg_t *) LIBUNWIND_AVAIL;
+Only in b/libunwind/include: libunwind.h.orig
+diff -pur a/libunwind/src/UnwindCursor.hpp b/libunwind/src/UnwindCursor.hpp
+--- a/libunwind/src/UnwindCursor.hpp	2021-06-28 18:23:38.000000000 +0200
++++ b/libunwind/src/UnwindCursor.hpp	2022-05-04 18:45:11.000000000 +0200
+@@ -437,6 +437,9 @@ public:
+   virtual bool isSignalFrame() {
+     _LIBUNWIND_ABORT("isSignalFrame not implemented");
+   }
++  virtual void setForceDWARF(bool) {
++    _LIBUNWIND_ABORT("setForceDWARF not implemented");
++  }
+   virtual bool getFunctionName(char *, size_t, unw_word_t *) {
+     _LIBUNWIND_ABORT("getFunctionName not implemented");
+   }
+@@ -894,6 +897,7 @@ public:
+   virtual void        getInfo(unw_proc_info_t *);
+   virtual void        jumpto();
+   virtual bool        isSignalFrame();
++  virtual void        setForceDWARF(bool force);
+   virtual bool        getFunctionName(char *buf, size_t len, unw_word_t *off);
+   virtual void        setInfoBasedOnIPRegister(bool isReturnAddress = false);
+   virtual const char *getRegisterName(int num);
+@@ -963,7 +967,7 @@ private:
+                                             const UnwindInfoSections &sects);
+   int stepWithCompactEncoding() {
+   #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+-    if ( compactSaysUseDwarf() )
++    if ( _forceDwarf || compactSaysUseDwarf() )
+       return stepWithDwarfFDE();
+   #endif
+     R dummy;
+@@ -1198,6 +1202,7 @@ private:
+   unw_proc_info_t  _info;
+   bool             _unwindInfoMissing;
+   bool             _isSignalFrame;
++  bool             _forceDwarf;
+ #if defined(_LIBUNWIND_TARGET_LINUX) && defined(_LIBUNWIND_TARGET_AARCH64)
+   bool             _isSigReturn = false;
+ #endif
+@@ -1207,7 +1212,7 @@ private:
+ template <typename A, typename R>
+ UnwindCursor<A, R>::UnwindCursor(unw_context_t *context, A &as)
+     : _addressSpace(as), _registers(context), _unwindInfoMissing(false),
+-      _isSignalFrame(false) {
++      _isSignalFrame(false), _forceDwarf(false) {
+   static_assert((check_fit<UnwindCursor<A, R>, unw_cursor_t>::does_fit),
+                 "UnwindCursor<> does not fit in unw_cursor_t");
+   static_assert((alignof(UnwindCursor<A, R>) <= alignof(unw_cursor_t)),
+@@ -1217,7 +1222,8 @@ UnwindCursor<A, R>::UnwindCursor(unw_con
+ 
+ template <typename A, typename R>
+ UnwindCursor<A, R>::UnwindCursor(A &as, void *)
+-    : _addressSpace(as), _unwindInfoMissing(false), _isSignalFrame(false) {
++    : _addressSpace(as), _unwindInfoMissing(false), _isSignalFrame(false),
++    _forceDwarf(false) {
+   memset(&_info, 0, sizeof(_info));
+   // FIXME
+   // fill in _registers from thread arg
+@@ -1273,6 +1279,10 @@ template <typename A, typename R> bool U
+   return _isSignalFrame;
+ }
+ 
++template <typename A, typename R> void UnwindCursor<A, R>::setForceDWARF(bool force) {
++  _forceDwarf = force;
++}
++
+ #endif // defined(_LIBUNWIND_SUPPORT_SEH_UNWIND)
+ 
+ #if defined(_LIBUNWIND_ARM_EHABI)
+@@ -1941,7 +1951,13 @@ void UnwindCursor<A, R>::setInfoBasedOnI
+         // record that we have no unwind info.
+         if (_info.format == 0)
+           _unwindInfoMissing = true;
++  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
++        if (!(_forceDwarf || compactSaysUseDwarf(&dwarfOffset)))
++          return;
++  #else
+         return;
++  #endif
++
+       }
+     }
+ #endif // defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
+diff -pur a/libunwind/src/libunwind.cpp b/libunwind/src/libunwind.cpp
+--- a/libunwind/src/libunwind.cpp	2021-06-28 18:23:38.000000000 +0200
++++ b/libunwind/src/libunwind.cpp	2022-05-04 18:44:24.000000000 +0200
+@@ -71,6 +71,7 @@ _LIBUNWIND_HIDDEN int __unw_init_local(u
+   new (reinterpret_cast<UnwindCursor<LocalAddressSpace, REGISTER_KIND> *>(cursor))
+       UnwindCursor<LocalAddressSpace, REGISTER_KIND>(
+           context, LocalAddressSpace::sThisAddressSpace);
++  static_assert(sizeof(unw_cursor_t) >= sizeof(UnwindCursor<LocalAddressSpace,REGISTER_KIND>), "libunwind header outdated");
+ #undef REGISTER_KIND
+   AbstractUnwindCursor *co = (AbstractUnwindCursor *)cursor;
+   co->setInfoBasedOnIPRegister();
+@@ -79,6 +80,54 @@ _LIBUNWIND_HIDDEN int __unw_init_local(u
+ }
+ _LIBUNWIND_WEAK_ALIAS(__unw_init_local, unw_init_local)
+ 
++_LIBUNWIND_HIDDEN int __unw_init_local_dwarf(unw_cursor_t *cursor,
++                                       unw_context_t *context) {
++  _LIBUNWIND_TRACE_API("__unw_init_local_dwarf(cursor=%p, context=%p)",
++                       static_cast<void *>(cursor),
++                       static_cast<void *>(context));
++#if defined(__i386__)
++# define REGISTER_KIND Registers_x86
++#elif defined(__x86_64__)
++# define REGISTER_KIND Registers_x86_64
++#elif defined(__powerpc64__)
++# define REGISTER_KIND Registers_ppc64
++#elif defined(__ppc__)
++# define REGISTER_KIND Registers_ppc
++#elif defined(__aarch64__)
++# define REGISTER_KIND Registers_arm64
++#elif defined(__arm__)
++# define REGISTER_KIND Registers_arm
++#elif defined(__or1k__)
++# define REGISTER_KIND Registers_or1k
++#elif defined(__hexagon__)
++# define REGISTER_KIND Registers_hexagon
++#elif defined(__mips__) && defined(_ABIO32) && _MIPS_SIM == _ABIO32
++# define REGISTER_KIND Registers_mips_o32
++#elif defined(__mips64)
++# define REGISTER_KIND Registers_mips_newabi
++#elif defined(__mips__)
++# warning The MIPS architecture is not supported with this ABI and environment!
++#elif defined(__sparc__)
++# define REGISTER_KIND Registers_sparc
++#elif defined(__riscv) && __riscv_xlen == 64
++# define REGISTER_KIND Registers_riscv
++#else
++# error Architecture not supported
++#endif
++  // Use "placement new" to allocate UnwindCursor in the cursor buffer.
++  new (reinterpret_cast<UnwindCursor<LocalAddressSpace, REGISTER_KIND> *>(cursor))
++      UnwindCursor<LocalAddressSpace, REGISTER_KIND>(
++          context, LocalAddressSpace::sThisAddressSpace);
++  static_assert(sizeof(unw_cursor_t) >= sizeof(UnwindCursor<LocalAddressSpace,REGISTER_KIND>), "libunwind header outdated");
++#undef REGISTER_KIND
++  AbstractUnwindCursor *co = (AbstractUnwindCursor *)cursor;
++  co->setForceDWARF(true);
++  co->setInfoBasedOnIPRegister();
++
++  return UNW_ESUCCESS;
++}
++_LIBUNWIND_WEAK_ALIAS(__unw_init_local_dwarf, unw_init_local_dwarf)
++
+ /// Get value of specified register at cursor position in stack frame.
+ _LIBUNWIND_HIDDEN int __unw_get_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
+                                     unw_word_t *value) {
+diff -pur a/libunwind/src/libunwind_ext.h b/libunwind/src/libunwind_ext.h
+--- a/libunwind/src/libunwind_ext.h	2021-06-28 18:23:38.000000000 +0200
++++ b/libunwind/src/libunwind_ext.h	2022-05-04 18:44:24.000000000 +0200
+@@ -25,6 +25,7 @@ extern "C" {
+ 
+ extern int __unw_getcontext(unw_context_t *);
+ extern int __unw_init_local(unw_cursor_t *, unw_context_t *);
++extern int __unw_init_local_dwarf(unw_cursor_t *, unw_context_t *);
+ extern int __unw_step(unw_cursor_t *);
+ extern int __unw_get_reg(unw_cursor_t *, unw_regnum_t, unw_word_t *);
+ extern int __unw_get_fpreg(unw_cursor_t *, unw_regnum_t, unw_fpreg_t *);

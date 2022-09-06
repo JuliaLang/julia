@@ -303,4 +303,5 @@ end
 @generated function f33243()
     :(global x33243 = 2)
 end
-@test_throws ErrorException f33243()
+@test f33243() === 2
+@test x33243 === 2

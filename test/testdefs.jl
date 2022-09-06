@@ -18,28 +18,27 @@ function runtests(name, path, isolate=true; seed=nothing)
         let id = myid()
             wait(@spawnat 1 print_testworker_started(name, id))
         end
-        ex = quote
-            @timed @testset $"$name" begin
-                # Random.seed!(nothing) will fail
-                $seed != nothing && Random.seed!($seed)
-                include($"$path.jl")
-            end
+        res_and_time_data = @timed @testset "$name" begin
+            # Random.seed!(nothing) will fail
+            seed != nothing && Random.seed!(seed)
+            Base.include(m, "$path.jl")
         end
-        res_and_time_data = Core.eval(m, ex)
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset
-        passes,fails,error,broken,c_passes,c_fails,c_errors,c_broken = Test.get_test_counts(res_and_time_data[1])
-        if res_and_time_data[1].anynonpass == false
-            res_and_time_data = (
-                                 (passes+c_passes,broken+c_broken),
-                                 res_and_time_data[2],
-                                 res_and_time_data[3],
-                                 res_and_time_data[4],
-                                 res_and_time_data[5])
-        end
-        vcat(collect(res_and_time_data), rss)
-    finally
+        ts = res_and_time_data[1]
+        passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken = Test.get_test_counts(ts)
+        # simplify our stored data to just contain the counts
+        res_and_time_data = (TestSetException(passes+c_passes, fails+c_fails, errors+c_errors, broken+c_broken, Test.filter_errors(ts)),
+                             res_and_time_data[2],
+                             res_and_time_data[3],
+                             res_and_time_data[4],
+                             res_and_time_data[5],
+                             rss)
+        return res_and_time_data
+    catch ex
         Test.TESTSET_PRINT_ENABLE[] = old_print_setting
+        ex isa TestSetException || rethrow()
+        return Any[ex]
     end
 end
 

@@ -42,7 +42,7 @@ function replace_ref_begin_end_!(ex, withex)
                 n = 1
                 J = lastindex(ex.args)
                 for j = 2:J
-                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S)),:($lastindex($S,$n))))
+                    exj, used = replace_ref_begin_end_!(ex.args[j], (:($firstindex($S,$n)),:($lastindex($S,$n))))
                     used_S |= used
                     ex.args[j] = exj
                     if isa(exj,Expr) && exj.head === :...
@@ -77,10 +77,23 @@ end
 """
     @view A[inds...]
 
-Creates a `SubArray` from an indexing expression. This can only be applied directly to a
-reference expression (e.g. `@view A[1,2:end]`), and should *not* be used as the target of
-an assignment (e.g. `@view(A[1,2:end]) = ...`).  See also [`@views`](@ref)
-to switch an entire block of code to use views for slicing.
+Transform the indexing expression `A[inds...]` into the equivalent [`view`](@ref) call.
+
+This can only be applied directly to a single indexing expression and is particularly
+helpful for expressions that include the special `begin` or `end` indexing syntaxes
+like `A[begin, 2:end-1]` (as those are not supported by the normal [`view`](@ref)
+function).
+
+Note that `@view` cannot be used as the target of a regular assignment (e.g.,
+`@view(A[1, 2:end]) = ...`), nor would the un-decorated
+[indexed assignment](@ref man-indexed-assignment) (`A[1, 2:end] = ...`)
+or broadcasted indexed assignment (`A[1, 2:end] .= ...`) make a copy.  It can be useful,
+however, for _updating_ broadcasted assignments like `@view(A[1, 2:end]) .+= 1`
+because this is a simple syntax for `@view(A[1, 2:end]) .= @view(A[1, 2:end]) + 1`,
+and the indexing expression on the right-hand side would otherwise make a
+copy without the `@view`.
+
+See also [`@views`](@ref) to switch an entire block of code to use views for non-scalar indexing.
 
 !!! compat "Julia 1.5"
     Using `begin` in an indexing expression to refer to the first index requires at least
@@ -115,7 +128,9 @@ macro view(ex)
         if Meta.isexpr(ex, :ref)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
-            @assert Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref)
+            if !(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
+                error("invalid expression")
+            end
             ex.args[2] = Expr(:call, view, ex.args[2].args...)
         end
         Expr(:&&, true, esc(ex))
@@ -200,6 +215,8 @@ Convert every array-slicing operation in the given expression
 to return a view. Scalar indices, non-array types, and
 explicit [`getindex`](@ref) calls (as opposed to `array[...]`) are
 unaffected.
+
+Similarly, `@views` converts string slices into [`SubString`](@ref) views.
 
 !!! note
     The `@views` macro only affects `array[...]` expressions

@@ -8,7 +8,7 @@
 #endif
 #define JL_NONNULL _Nonnull
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 #define JL_PROPAGATES_ROOT __attribute__((annotate("julia_propagates_root")))
 #define JL_NOTSAFEPOINT __attribute__((annotate("julia_not_safepoint")))

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Like Set, but using IdDict
 mutable struct IdSet{T} <: AbstractSet{T}
     dict::IdDict{T,Nothing}
@@ -10,6 +12,7 @@ IdSet{T}(itr) where {T} = union!(IdSet{T}(), itr)
 IdSet() = IdSet{Any}()
 
 copymutable(s::IdSet) = typeof(s)(s)
+emptymutable(s::IdSet{T}, ::Type{U}=T) where {T,U} = IdSet{U}()
 copy(s::IdSet) = typeof(s)(s)
 
 isempty(s::IdSet) = isempty(s.dict)

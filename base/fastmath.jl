@@ -158,7 +158,7 @@ end
 
 # Basic arithmetic
 
-const FloatTypes = Union{Float32,Float64}
+const FloatTypes = Union{Float16,Float32,Float64}
 
 sub_fast(x::FloatTypes) = neg_float_fast(x)
 
@@ -273,37 +273,18 @@ end
 
 
 # Math functions
+exp2_fast(x::Union{Float32,Float64})  = Base.Math.exp2_fast(x)
+exp_fast(x::Union{Float32,Float64})   = Base.Math.exp_fast(x)
+exp10_fast(x::Union{Float32,Float64}) = Base.Math.exp10_fast(x)
 
 # builtins
 
-pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32", llvmcall, Float32, (Float32, Int32), x, y)
-pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64", llvmcall, Float64, (Float64, Int32), x, y)
+pow_fast(x::Float32, y::Integer) = ccall("llvm.powi.f32.i32", llvmcall, Float32, (Float32, Int32), x, y)
+pow_fast(x::Float64, y::Integer) = ccall("llvm.powi.f64.i32", llvmcall, Float64, (Float64, Int32), x, y)
 pow_fast(x::FloatTypes, ::Val{p}) where {p} = pow_fast(x, p) # inlines already via llvm.powi
 @inline pow_fast(x, v::Val) = Base.literal_pow(^, x, v)
 
 sqrt_fast(x::FloatTypes) = sqrt_llvm_fast(x)
-
-# libm
-
-const libm = Base.libm_name
-
-for f in (:acosh, :asinh, :atanh, :cbrt,
-          :cosh, :exp2, :expm1, :log10, :log1p, :log2,
-          :log, :sinh, :tanh)
-    f_fast = fast_op[f]
-    @eval begin
-        $f_fast(x::Float32) =
-            ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        $f_fast(x::Float64) =
-            ccall(($(string(f)),libm), Float64, (Float64,), x)
-    end
-end
-
-pow_fast(x::Float32, y::Float32) =
-    ccall(("powf",libm), Float32, (Float32,Float32), x, y)
-pow_fast(x::Float64, y::Float64) =
-    ccall(("pow",libm), Float64, (Float64,Float64), x, y)
-
 sincos_fast(v::FloatTypes) = sincos(v)
 
 @inline function sincos_fast(v::Float16)

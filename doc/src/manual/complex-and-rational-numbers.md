@@ -8,7 +8,7 @@ behave as expected.
 ## Complex Numbers
 
 The global constant [`im`](@ref) is bound to the complex number *i*, representing the principal
-square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant were rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
+square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant was rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
 
@@ -124,7 +124,7 @@ julia> sqrt(1 + 2im)
 1.272019649514069 + 0.7861513777574233im
 
 julia> cos(1 + 2im)
-2.0327230070196656 - 3.0518977991518im
+2.0327230070196656 - 3.0518977991517997im
 
 julia> exp(1 + 2im)
 -1.1312043837568135 + 2.4717266720048188im
@@ -254,7 +254,7 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the case `a == 0` and `b == 0`:
+of `a` and `b`, with the exception of the two cases `b == 0` and `a == 0 && b < 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;

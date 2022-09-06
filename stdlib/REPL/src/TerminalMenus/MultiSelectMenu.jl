@@ -8,10 +8,10 @@ A menu that allows a user to select a multiple options from a list.
 
 # Sample Output
 
-```julia
+```julia-repl
 julia> request(MultiSelectMenu(options))
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -51,6 +51,9 @@ were selected by the user.
   - `selected=[]`: pre-selected items. `i ∈ selected` means that `options[i]` is preselected.
 
 Any additional keyword arguments will be passed to [`TerminalMenus.MultiSelectConfig`](@ref).
+
+!!! compat "Julia 1.6"
+    The `selected` argument requires Julia 1.6 or later.
 """
 function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=Int[], warn::Bool=true, kwargs...)
     length(options) < 1 && error("MultiSelectMenu must have at least one option")
@@ -59,7 +62,7 @@ function MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=In
     pagesize = pagesize == -1 ? length(options) : pagesize
     # pagesize shouldn't be bigger than options
     pagesize = min(length(options), pagesize)
-    # after other checks, pagesize must be greater than 2
+    # after other checks, pagesize must be at least 1
     pagesize < 1 && error("pagesize must be >= 1")
 
     pageoffset = 0
@@ -83,7 +86,7 @@ end
 # See AbstractMenu.jl
 #######################################
 
-header(m::MultiSelectMenu) = "[press: d=done, a=all, n=none]"
+header(m::MultiSelectMenu) = "[press: Enter=toggle, a=all, n=none, d=done, q=abort]"
 
 options(m::MultiSelectMenu) = m.options
 

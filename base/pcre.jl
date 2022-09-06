@@ -24,68 +24,105 @@ function create_match_context()
     return ctx
 end
 
-const THREAD_MATCH_CONTEXTS = Ptr{Cvoid}[C_NULL]
+THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 
 PCRE_COMPILE_LOCK = nothing
 
-_tid() = Int(ccall(:jl_threadid, Int16, ())+1)
+_tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
 _nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 
 function get_local_match_context()
     tid = _tid()
-    ctx = @inbounds THREAD_MATCH_CONTEXTS[tid]
+    ctxs = THREAD_MATCH_CONTEXTS
+    if length(ctxs) < tid
+        # slow path to allocate it
+        l = PCRE_COMPILE_LOCK::Threads.SpinLock
+        lock(l)
+        try
+            ctxs = THREAD_MATCH_CONTEXTS
+            if length(ctxs) < tid
+                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, _nth()), ctxs)
+            end
+        finally
+            unlock(l)
+        end
+    end
+    ctx = @inbounds ctxs[tid]
     if ctx == C_NULL
-        @inbounds THREAD_MATCH_CONTEXTS[tid] = ctx = create_match_context()
+        # slow path to allocate it
+        ctx = create_match_context()
+        THREAD_MATCH_CONTEXTS[tid] = ctx
     end
     return ctx
 end
 
-function __init__()
-    resize!(THREAD_MATCH_CONTEXTS, _nth())
-    fill!(THREAD_MATCH_CONTEXTS, C_NULL)
-    global PCRE_COMPILE_LOCK = Threads.SpinLock()
-end
-
 # supported options for different use cases
 
+# arguments to pcre2_compile
 const COMPILE_MASK      =
+      ALT_BSUX          |
+      ALT_CIRCUMFLEX    |
+      ALT_VERBNAMES     |
       ANCHORED          |
+      # AUTO_CALLOUT    |
       CASELESS          |
       DOLLAR_ENDONLY    |
       DOTALL            |
+      # DUPNAMES        |
       ENDANCHORED       |
       EXTENDED          |
+      EXTENDED_MORE     |
       FIRSTLINE         |
+      LITERAL           |
+      MATCH_INVALID_UTF |
+      MATCH_UNSET_BACKREF |
       MULTILINE         |
-      NEWLINE_ANY       |
-      NEWLINE_ANYCRLF   |
-      NEWLINE_CR        |
-      NEWLINE_CRLF      |
-      NEWLINE_LF        |
+      NEVER_BACKSLASH_C |
+      NEVER_UCP         |
+      NEVER_UTF         |
       NO_AUTO_CAPTURE   |
+      NO_AUTO_POSSESS   |
+      NO_DOTSTAR_ANCHOR |
       NO_START_OPTIMIZE |
       NO_UTF_CHECK      |
+      UCP               |
       UNGREEDY          |
-      UTF               |
-      UCP
+      USE_OFFSET_LIMIT  |
+      UTF
 
+# arguments to pcre2_set_newline
+const COMPILE_NEWLINE_MASK = (
+      NEWLINE_CR,
+      NEWLINE_LF,
+      NEWLINE_CRLF,
+      NEWLINE_ANY,
+      NEWLINE_ANYCRLF,
+      NEWLINE_NUL)
+
+# arguments to pcre2_set_compile_extra_options
+const COMPILE_EXTRA_MASK            =
+      EXTRA_ALLOW_SURROGATE_ESCAPES |
+      EXTRA_ALT_BSUX                |
+      EXTRA_BAD_ESCAPE_IS_LITERAL   |
+      EXTRA_ESCAPED_CR_IS_LF        |
+      EXTRA_MATCH_LINE              |
+      EXTRA_MATCH_WORD
+
+# arguments to match
 const EXECUTE_MASK      =
-      NEWLINE_ANY       |
-      NEWLINE_ANYCRLF   |
-      NEWLINE_CR        |
-      NEWLINE_CRLF      |
-      NEWLINE_LF        |
+      # ANCHORED        |
+      # COPY_MATCHED_SUBJECT |
+      # ENDANCHORED     |
       NOTBOL            |
       NOTEMPTY          |
       NOTEMPTY_ATSTART  |
       NOTEOL            |
+      # NO_JIT          |
       NO_START_OPTIMIZE |
       NO_UTF_CHECK      |
       PARTIAL_HARD      |
       PARTIAL_SOFT
 
-
-const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
 const UNSET = ~Csize_t(0)  # Indicates that an output vector element is unset
 
@@ -201,7 +238,10 @@ function substring_length_bynumber(match_data, number)
     s = RefValue{Csize_t}()
     rc = ccall((:pcre2_substring_length_bynumber_8, PCRE_LIB), Cint,
                (Ptr{Cvoid}, Cint, Ref{Csize_t}), match_data, number, s)
-    rc < 0 && error("PCRE error: $(err_message(rc))")
+    if rc < 0
+        rc == ERROR_UNSET && return 0
+        error("PCRE error: $(err_message(rc))")
+    end
     return Int(s[])
 end
 

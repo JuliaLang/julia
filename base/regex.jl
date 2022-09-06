@@ -4,7 +4,7 @@
 
 include("pcre.jl")
 
-const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.NO_UTF_CHECK | PCRE.ALT_BSUX | PCRE.UCP
+const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
 
 """
@@ -16,8 +16,11 @@ with [`match`](@ref).
 `Regex` objects can be created using the [`@r_str`](@ref) string macro. The
 `Regex(pattern[, flags])` constructor is usually used if the `pattern` string needs
 to be interpolated. See the documentation of the string macro for details on flags.
+
+!!! note
+    To escape interpolated variables use `\\Q` and `\\E` (e.g. `Regex("\\\\Q\$x\\\\E")`)
 """
-mutable struct Regex
+mutable struct Regex <: AbstractPattern
     pattern::String
     compile_options::UInt32
     match_options::UInt32
@@ -97,7 +100,7 @@ listed after the ending quote, to change its behaviour:
   `\\s`, `\\W`, `\\w`, etc. match based on Unicode character properties. With this option,
   these sequences only match ASCII characters.
 
-See `Regex` if interpolation is needed.
+See [`Regex`](@ref) if interpolation is needed.
 
 # Examples
 ```jldoctest
@@ -112,8 +115,9 @@ function show(io::IO, re::Regex)
     imsxa = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED|PCRE.UCP
     opts = re.compile_options
     if (opts & ~imsxa) == (DEFAULT_COMPILER_OPTS & ~imsxa)
-        print(io, 'r')
-        print_quoted_literal(io, re.pattern)
+        print(io, "r\"")
+        escape_raw_string(io, re.pattern)
+        print(io, "\"")
         if (opts & PCRE.CASELESS ) != 0; print(io, 'i'); end
         if (opts & PCRE.MULTILINE) != 0; print(io, 'm'); end
         if (opts & PCRE.DOTALL   ) != 0; print(io, 's'); end
@@ -128,10 +132,54 @@ function show(io::IO, re::Regex)
     end
 end
 
-# TODO: map offsets into strings in other encodings back to original indices.
-# or maybe it's better to just fail since that would be quite slow
+"""
+`AbstractMatch` objects are used to represent information about matches found
+in a string using an `AbstractPattern`.
+"""
+abstract type AbstractMatch end
 
-struct RegexMatch
+"""
+    RegexMatch
+
+A type representing a single match to a `Regex` found in a string.
+Typically created from the [`match`](@ref) function.
+
+The `match` field stores the substring of the entire matched string.
+The `captures` field stores the substrings for each capture group, indexed by number.
+To index by capture group name, the entire match object should be indexed instead,
+as shown in the examples.
+The location of the start of the match is stored in the `offset` field.
+The `offsets` field stores the locations of the start of each capture group,
+with 0 denoting a group that was not captured.
+
+This type can be used as an iterator over the capture groups of the `Regex`,
+yielding the substrings captured in each group.
+Because of this, the captures of a match can be destructured.
+If a group was not captured, `nothing` will be yielded instead of a substring.
+
+Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
+[`length`](@ref), [`eltype`](@ref), [`keys`](@ref keys(::RegexMatch)), [`haskey`](@ref), and
+[`getindex`](@ref), where keys are the the names or numbers of a capture group.
+See [`keys`](@ref keys(::RegexMatch)) for more information.
+
+# Examples
+```jldoctest
+julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
+RegexMatch("11:30", hour="11", minute="30", 3=nothing)
+
+julia> hr, min, ampm = m;
+
+julia> hr
+"11"
+
+julia> m["minute"]
+"30"
+
+julia> m.match
+"11:30"
+```
+"""
+struct RegexMatch <: AbstractMatch
     match::SubString{String}
     captures::Vector{Union{Nothing,SubString{String}}}
     offset::Int
@@ -139,19 +187,46 @@ struct RegexMatch
     regex::Regex
 end
 
+"""
+    keys(m::RegexMatch) -> Vector
+
+Return a vector of keys for all capture groups of the underlying regex.
+A key is included even if the capture group fails to match.
+That is, `idx` will be in the return value even if `m[idx] == nothing`.
+
+Unnamed capture groups will have integer keys corresponding to their index.
+Named capture groups will have string keys.
+
+!!! compat "Julia 1.6"
+    This method was added in Julia 1.6
+
+# Examples
+```jldoctest
+julia> keys(match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30"))
+3-element Vector{Any}:
+  "hour"
+  "minute"
+ 3
+```
+"""
+function keys(m::RegexMatch)
+    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
+    return map(eachindex(m.captures)) do i
+        # If the capture group is named, return it's name, else return it's index
+        get(idx_to_capture_name, i, i)
+    end
+end
+
 function show(io::IO, m::RegexMatch)
     print(io, "RegexMatch(")
     show(io, m.match)
-    idx_to_capture_name = PCRE.capture_names(m.regex.regex)
-    if !isempty(m.captures)
+    capture_keys = keys(m)
+    if !isempty(capture_keys)
         print(io, ", ")
-        for i = 1:length(m.captures)
-            # If the capture group is named, show the name.
-            # Otherwise show its index.
-            capture_name = get(idx_to_capture_name, i, i)
+        for (i, capture_name) in enumerate(capture_keys)
             print(io, capture_name, "=")
             show(io, m.captures[i])
-            if i < length(m.captures)
+            if i < length(m)
                 print(io, ", ")
             end
         end
@@ -175,12 +250,16 @@ function haskey(m::RegexMatch, name::Symbol)
 end
 haskey(m::RegexMatch, name::AbstractString) = haskey(m, Symbol(name))
 
+iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
+length(m::RegexMatch) = length(m.captures)
+eltype(m::RegexMatch) = eltype(m.captures)
+
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, String(s), offset, r.match_options)
 end
 
-function occursin(r::Regex, s::SubString; offset::Integer=0)
+function occursin(r::Regex, s::SubString{String}; offset::Integer=0)
     compile(r)
     return PCRE.exec_r(r.regex, s, offset, r.match_options)
 end
@@ -199,7 +278,7 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
 !!! compat "Julia 1.2"
-     This method requires at least Julia 1.2.
+    This method requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -212,7 +291,7 @@ function startswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ANCHORED)
 end
 
-function startswith(s::SubString, r::Regex)
+function startswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ANCHORED)
 end
@@ -231,7 +310,7 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
 See also [`occursin`](@ref) and [`startswith`](@ref).
 
 !!! compat "Julia 1.2"
-     This method requires at least Julia 1.2.
+    This method requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -244,15 +323,29 @@ function endswith(s::AbstractString, r::Regex)
     return PCRE.exec_r(r.regex, String(s), 0, r.match_options | PCRE.ENDANCHORED)
 end
 
-function endswith(s::SubString, r::Regex)
+function endswith(s::SubString{String}, r::Regex)
     compile(r)
     return PCRE.exec_r(r.regex, s, 0, r.match_options | PCRE.ENDANCHORED)
 end
 
+function chopprefix(s::AbstractString, prefix::Regex)
+    m = match(prefix, s, firstindex(s), PCRE.ANCHORED)
+    m === nothing && return SubString(s)
+    return SubString(s, ncodeunits(m.match) + 1)
+end
+
+function chopsuffix(s::AbstractString, suffix::Regex)
+    m = match(suffix, s, firstindex(s), PCRE.ENDANCHORED)
+    m === nothing && return SubString(s)
+    isempty(m.match) && return SubString(s)
+    return SubString(s, firstindex(s), prevind(s, m.offset))
+end
+
+
 """
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
-Search for the first match of the regular expression `r` in `s` and return a `RegexMatch`
+Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
 object containing the match, or nothing if the match failed. The matching substring can be
 retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
 `m.captures` The optional `idx` argument specifies an index at which to start the search.
@@ -278,7 +371,8 @@ true
 """
 function match end
 
-function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer, add_opts::UInt32=UInt32(0))
+function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
+               add_opts::UInt32=UInt32(0))
     compile(re)
     opts = re.match_options | add_opts
     matched, data = PCRE.exec_r_data(re.regex, str, idx-1, opts)
@@ -335,53 +429,28 @@ findfirst(r::Regex, s::AbstractString) = findnext(r,s,firstindex(s))
 
 
 """
-    findall(
-        pattern::Union{AbstractString,Regex},
-        string::AbstractString;
-        overlap::Bool = false,
-    )
+    findall(c::AbstractChar, s::AbstractString)
 
-Return a `Vector{UnitRange{Int}}` of all the matches for `pattern` in `string`.
-Each element of the returned vector is a range of indices where the
-matching sequence is found, like the return value of [`findnext`](@ref).
-
-If `overlap=true`, the matching sequences are allowed to overlap indices in the
-original string, otherwise they must be from disjoint character ranges.
+Return a vector `I` of the indices of `s` where `s[i] == c`. If there are no such
+elements in `s`, return an empty array.
 
 # Examples
 ```jldoctest
-julia> findall("a", "apple")
-1-element Vector{UnitRange{Int64}}:
- 1:1
-
-julia> findall("nana", "banana")
-1-element Vector{UnitRange{Int64}}:
- 3:6
-
-julia> findall("a", "banana")
-3-element Vector{UnitRange{Int64}}:
- 2:2
- 4:4
- 6:6
+julia> findall('a', "batman")
+2-element Vector{Int64}:
+ 2
+ 5
 ```
+
+!!! compat "Julia 1.7"
+     This method requires at least Julia 1.7.
 """
-function findall(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Bool=false)
-    found = UnitRange{Int}[]
-    i, e = firstindex(s), lastindex(s)
-    while true
-        r = findnext(t, s, i)
-        isnothing(r) && break
-        push!(found, r)
-        j = overlap || isempty(r) ? first(r) : last(r)
-        j > e && break
-        @inbounds i = nextind(s, j)
-    end
-    return found
-end
+findall(c::AbstractChar, s::AbstractString) = findall(isequal(c),s)
+
 
 """
     count(
-        pattern::Union{AbstractString,Regex},
+        pattern::Union{AbstractChar,AbstractString,AbstractPattern},
         string::AbstractString;
         overlap::Bool = false,
     )
@@ -391,8 +460,14 @@ calling `length(findall(pattern, string))` but more efficient.
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
+
+!!! compat "Julia 1.7"
+      Using a character as the pattern requires at least Julia 1.7.
 """
-function count(t::Union{AbstractString,Regex}, s::AbstractString; overlap::Bool=false)
+function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
     i, e = firstindex(s), lastindex(s)
     while true
@@ -412,18 +487,17 @@ end
 Stores the given string `substr` as a `SubstitutionString`, for use in regular expression
 substitutions. Most commonly constructed using the [`@s_str`](@ref) macro.
 
+# Examples
 ```jldoctest
 julia> SubstitutionString("Hello \\\\g<name>, it's \\\\1")
-s"Hello \\\\g<name>, it's \\\\1"
+s"Hello \\g<name>, it's \\1"
 
 julia> subst = s"Hello \\g<name>, it's \\1"
-s"Hello \\\\g<name>, it's \\\\1"
+s"Hello \\g<name>, it's \\1"
 
 julia> typeof(subst)
 SubstitutionString{String}
-
 ```
-
 """
 struct SubstitutionString{T<:AbstractString} <: AbstractString
     string::T
@@ -436,8 +510,9 @@ isvalid(s::SubstitutionString, i::Integer) = isvalid(s.string, i)::Bool
 iterate(s::SubstitutionString, i::Integer...) = iterate(s.string, i...)::Union{Nothing,Tuple{AbstractChar,Int}}
 
 function show(io::IO, s::SubstitutionString)
-    print(io, "s")
-    show(io, s.string)
+    print(io, "s\"")
+    escape_raw_string(io, s.string)
+    print(io, "\"")
 end
 
 """
@@ -447,6 +522,7 @@ Construct a substitution string, used for regular expression substitutions.  Wit
 string, sequences of the form `\\N` refer to the Nth capture group in the regex, and
 `\\g<groupname>` refers to a named capture group with name `groupname`.
 
+# Examples
 ```jldoctest
 julia> msg = "#Hello# from Julia";
 
@@ -472,13 +548,20 @@ _free_pat_replacer(r::RegexAndMatchData) = PCRE.free_match_data(r.match_data)
 
 replace_err(repl) = error("Bad replacement string: $repl")
 
-function _write_capture(io, re::RegexAndMatchData, group)
+function _write_capture(io::IO, group::Int, str, r, re::RegexAndMatchData)
     len = PCRE.substring_length_bynumber(re.match_data, group)
+    # in the case of an optional group that doesn't match, len == 0
+    len == 0 && return
     ensureroom(io, len+1)
     PCRE.substring_copy_bynumber(re.match_data, group,
         pointer(io.data, io.ptr), len+1)
     io.ptr += len
     io.size = max(io.size, io.ptr - 1)
+    nothing
+end
+function _write_capture(io::IO, group::Int, str, r, re)
+    group == 0 || replace_err("pattern is not a Regex")
+    return print(io, SubString(str, r))
 end
 
 
@@ -486,7 +569,7 @@ const SUB_CHAR = '\\'
 const GROUP_CHAR = 'g'
 const KEEP_ESC = [SUB_CHAR, GROUP_CHAR, '0':'9'...]
 
-function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
+function _replace(io, repl_s::SubstitutionString, str, r, re)
     LBRACKET = '<'
     RBRACKET = '>'
     repl = unescape_string(repl_s.string, KEEP_ESC)
@@ -510,7 +593,7 @@ function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
                         break
                     end
                 end
-                _write_capture(io, re, group)
+                _write_capture(io, group, str, r, re)
             elseif repl[next_i] == GROUP_CHAR
                 i = nextind(repl, next_i)
                 if i > e || repl[i] != LBRACKET
@@ -523,15 +606,16 @@ function _replace(io, repl_s::SubstitutionString, str, r, re::RegexAndMatchData)
                     i = nextind(repl, i)
                     i > e && replace_err(repl)
                 end
-                #  TODO: avoid this allocation
                 groupname = SubString(repl, groupstart, prevind(repl, i))
                 if all(isdigit, groupname)
-                    _write_capture(io, re, parse(Int, groupname))
-                else
+                    group = parse(Int, groupname)
+                elseif re isa RegexAndMatchData
                     group = PCRE.substring_number_from_name(re.re.regex, groupname)
                     group < 0 && replace_err("Group $groupname not found in regex $(re.re)")
-                    _write_capture(io, re, group)
+                else
+                    group = -1
                 end
+                _write_capture(io, group, str, r, re)
                 i = nextind(repl, i)
             else
                 replace_err(repl)
@@ -643,7 +727,7 @@ meaning that the contained characters are devoid of any special meaning
 (they are quoted with "\\Q" and "\\E").
 
 !!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest
@@ -722,7 +806,7 @@ end
 Repeat a regex `n` times.
 
 !!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
+    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest

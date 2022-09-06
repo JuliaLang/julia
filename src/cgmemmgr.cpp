@@ -10,6 +10,7 @@
 #ifdef _OS_LINUX_
 #  include <sys/syscall.h>
 #  include <sys/utsname.h>
+#  include <sys/resource.h>
 #endif
 #ifndef _OS_WINDOWS_
 #  include <sys/mman.h>
@@ -22,6 +23,7 @@
 #endif
 #ifdef _OS_FREEBSD_
 #  include <sys/types.h>
+#  include <sys/resource.h>
 #endif
 #include "julia_assert.h"
 
@@ -62,7 +64,8 @@ static void unmap_page(void *ptr, size_t size)
 enum class Prot : int {
     RW = PAGE_READWRITE,
     RX = PAGE_EXECUTE,
-    RO = PAGE_READONLY
+    RO = PAGE_READONLY,
+    NO = PAGE_NOACCESS
 };
 
 static void protect_page(void *ptr, size_t size, Prot flags)
@@ -79,7 +82,8 @@ static void protect_page(void *ptr, size_t size, Prot flags)
 enum class Prot : int {
     RW = PROT_READ | PROT_WRITE,
     RX = PROT_READ | PROT_EXEC,
-    RO = PROT_READ
+    RO = PROT_READ,
+    NO = PROT_NONE
 };
 
 static void protect_page(void *ptr, size_t size, Prot flags)
@@ -171,7 +175,7 @@ static intptr_t get_anon_hdl(void)
     if (check_fd_or_close(fd))
         return fd;
 #  endif
-    char shm_name[] = "julia-codegen-0123456789-0123456789/tmp///";
+    char shm_name[JL_PATH_MAX] = "julia-codegen-0123456789-0123456789/tmp///";
     pid_t pid = getpid();
     // `shm_open` can't be mapped exec on mac
 #  ifndef _OS_DARWIN_
@@ -193,8 +197,14 @@ static intptr_t get_anon_hdl(void)
             return fd;
         }
     }
-    snprintf(shm_name, sizeof(shm_name),
-             "/tmp/julia-codegen-%d-XXXXXX", (int)pid);
+    size_t len = sizeof(shm_name);
+    if (uv_os_tmpdir(shm_name, &len) != 0) {
+        // Unknown error; default to `/tmp`
+        snprintf(shm_name, sizeof(shm_name), "/tmp");
+        len = 4;
+    }
+    snprintf(shm_name + len, sizeof(shm_name) - len,
+             "/julia-codegen-%d-XXXXXX", (int)pid);
     fd = mkstemp(shm_name);
     if (check_fd_or_close(fd)) {
         unlink(shm_name);
@@ -203,12 +213,26 @@ static intptr_t get_anon_hdl(void)
     return -1;
 }
 
-static size_t map_offset = 0;
+static _Atomic(size_t) map_offset{0};
 // Multiple of 128MB.
 // Hopefully no one will set a ulimit for this to be a problem...
-static constexpr size_t map_size_inc = 128 * 1024 * 1024;
+static constexpr size_t map_size_inc_default = 128 * 1024 * 1024;
 static size_t map_size = 0;
-static jl_mutex_t shared_map_lock;
+static uv_mutex_t shared_map_lock;
+
+static size_t get_map_size_inc()
+{
+    rlimit rl;
+    if (getrlimit(RLIMIT_FSIZE, &rl) != -1) {
+        if (rl.rlim_cur != RLIM_INFINITY) {
+            return std::min<size_t>(map_size_inc_default, rl.rlim_cur);
+        }
+        if (rl.rlim_max != RLIM_INFINITY) {
+            return std::min<size_t>(map_size_inc_default, rl.rlim_max);
+        }
+    }
+    return map_size_inc_default;
+}
 
 static void *create_shared_map(size_t size, size_t id)
 {
@@ -223,8 +247,8 @@ static intptr_t init_shared_map()
     anon_hdl = get_anon_hdl();
     if (anon_hdl == -1)
         return -1;
-    map_offset = 0;
-    map_size = map_size_inc;
+    jl_atomic_store_relaxed(&map_offset, 0);
+    map_size = get_map_size_inc();
     int ret = ftruncate(anon_hdl, map_size);
     if (ret != 0) {
         perror(__func__);
@@ -238,8 +262,9 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
     assert(size % jl_page_size == 0);
     size_t off = jl_atomic_fetch_add(&map_offset, size);
     *id = off;
+    size_t map_size_inc = get_map_size_inc();
     if (__unlikely(off + size > map_size)) {
-        JL_LOCK_NOGC(&shared_map_lock);
+        uv_mutex_lock(&shared_map_lock);
         size_t old_size = map_size;
         while (off + size > map_size)
             map_size += map_size_inc;
@@ -250,7 +275,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
                 abort();
             }
         }
-        JL_UNLOCK_NOGC(&shared_map_lock);
+        uv_mutex_unlock(&shared_map_lock);
     }
     return create_shared_map(size, off);
 }
@@ -288,6 +313,7 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
 // Use `get_self_mem_fd` which has a guard to call this only once.
 static int _init_self_mem()
 {
+    uv_mutex_init(&shared_map_lock);
     struct utsname kernel;
     uname(&kernel);
     int major, minor;
@@ -623,7 +649,7 @@ protected:
                 unmap_page((void*)block.wr_ptr, block.total);
             }
             else {
-                protect_page((void*)block.wr_ptr, block.total, Prot::RO);
+                protect_page((void*)block.wr_ptr, block.total, Prot::NO);
                 block.state = SplitPtrBlock::WRInit;
             }
         }
@@ -738,6 +764,7 @@ class RTDyldMemoryManagerJL : public SectionMemoryManager {
     std::unique_ptr<ROAllocator<false>> ro_alloc;
     std::unique_ptr<ROAllocator<true>> exe_alloc;
     bool code_allocated;
+    size_t total_allocated;
 
 public:
     RTDyldMemoryManagerJL()
@@ -746,7 +773,8 @@ public:
           rw_alloc(),
           ro_alloc(),
           exe_alloc(),
-          code_allocated(false)
+          code_allocated(false),
+          total_allocated(0)
     {
 #ifdef _OS_LINUX_
         if (!ro_alloc && get_self_mem_fd() != -1) {
@@ -762,6 +790,7 @@ public:
     ~RTDyldMemoryManagerJL() override
     {
     }
+    size_t getTotalBytes() { return total_allocated; }
     void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
                           size_t Size) override;
 #if 0
@@ -827,8 +856,12 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
                                                     StringRef SectionName)
 {
     // allocating more than one code section can confuse libunwind.
+#if !defined(_COMPILER_MSAN_ENABLED_)
+    // TODO: Figure out why msan needs this.
     assert(!code_allocated);
     code_allocated = true;
+#endif
+    total_allocated += Size;
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);
     return SectionMemoryManager::allocateCodeSection(Size, Alignment, SectionID,
@@ -841,6 +874,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateDataSection(uintptr_t Size,
                                                     StringRef SectionName,
                                                     bool isReadOnly)
 {
+    total_allocated += Size;
     if (!isReadOnly)
         return (uint8_t*)rw_alloc.alloc(Size, Alignment);
     if (ro_alloc)
@@ -912,4 +946,9 @@ void *lookupWriteAddressFor(RTDyldMemoryManager *memmgr, void *rt_addr)
 RTDyldMemoryManager* createRTDyldMemoryManager()
 {
     return new RTDyldMemoryManagerJL();
+}
+
+size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm)
+{
+    return ((RTDyldMemoryManagerJL*)mm)->getTotalBytes();
 }

@@ -102,7 +102,7 @@ julia> Meta.show_sexpr(ex3)
 
 The `:` character has two syntactic purposes in Julia. The first form creates a [`Symbol`](@ref),
 an [interned string](https://en.wikipedia.org/wiki/String_interning) used as one building-block
-of expressions:
+of expressions, from valid identifiers:
 
 ```jldoctest
 julia> s = :foo
@@ -116,8 +116,11 @@ The [`Symbol`](@ref) constructor takes any number of arguments and creates a new
 their string representations together:
 
 ```jldoctest
-julia> :foo == Symbol("foo")
+julia> :foo === Symbol("foo")
 true
+
+julia> Symbol("1foo") # `:1foo` would not work, as `1foo` is not a valid identifier
+Symbol("1foo")
 
 julia> Symbol("func",10)
 :func10
@@ -125,9 +128,6 @@ julia> Symbol("func",10)
 julia> Symbol(:var,'_',"sym")
 :var_sym
 ```
-
-Note that to use `:` syntax, the symbol's name must be a valid identifier.
-Otherwise the `Symbol(str)` constructor must be used.
 
 In the context of an expression, symbols are used to indicate access to variables; when an expression
 is evaluated, a symbol is replaced with the value bound to that symbol in the appropriate [scope](@ref scope-of-variables).
@@ -149,7 +149,7 @@ julia> :(::)
 The second syntactic purpose of the `:` character is to create expression objects without using
 the explicit [`Expr`](@ref) constructor. This is referred to as *quoting*. The `:` character, followed
 by paired parentheses around a single statement of Julia code, produces an `Expr` object based
-on the enclosed code. Here is example of the short form used to quote an arithmetic expression:
+on the enclosed code. Here is an example of the short form used to quote an arithmetic expression:
 
 ```jldoctest
 julia> ex = :(a+b*c+1)
@@ -466,7 +466,7 @@ julia> eval(ex)
 
 ## [Macros](@id man-macros)
 
-Macros provide a method to include generated code in the final body of a program. A macro maps
+Macros provide a mechanism to include generated code in the final body of a program. A macro maps
 a tuple of arguments to a returned *expression*, and the resulting expression is compiled directly
 rather than requiring a runtime [`eval`](@ref) call. Macro arguments may include expressions,
 literal values, and symbols.
@@ -981,13 +981,13 @@ block:
 end
 ```
 
-## Non-Standard String Literals
+## [Non-Standard String Literals](@id meta-non-standard-string-literals)
 
 Recall from [Strings](@ref non-standard-string-literals) that string literals prefixed by an identifier are called non-standard
 string literals, and can have different semantics than un-prefixed string literals. For example:
 
-  * `r"^\s*(?:#|$)"` produces a regular expression object rather than a string
-  * `b"DATA\xff\u2200"` is a byte array literal for `[68,65,84,65,255,226,136,128]`.
+  * `r"^\s*(?:#|$)"` produces a [regular expression object](@ref man-regex-literals) rather than a string
+  * `b"DATA\xff\u2200"` is a [byte array literal](@ref man-byte-array-literals) for `[68,65,84,65,255,226,136,128]`.
 
 Perhaps surprisingly, these behaviors are not hard-coded into the Julia parser or compiler. Instead,
 they are custom behaviors provided by a general mechanism that anyone can use: prefixed string
@@ -1051,20 +1051,9 @@ constructed on each iteration. In the vast majority of use cases, however, regul
 are not constructed based on run-time data. In this majority of cases, the ability to write regular
 expressions as compile-time values is invaluable.
 
-Like non-standard string literals, non-standard command literals exist using a prefixed variant
-of the command literal syntax. The command literal ```custom`literal` ``` is parsed as `@custom_cmd "literal"`.
-Julia itself does not contain any non-standard command literals, but packages can make use of
-this syntax. Aside from the different syntax and the `_cmd` suffix instead of the `_str` suffix,
-non-standard command literals behave exactly like non-standard string literals.
-
-In the event that two modules provide non-standard string or command literals with the same name,
-it is possible to qualify the string or command literal with a module name. For instance, if both
-`Foo` and `Bar` provide non-standard string literal `@x_str`, then one can write `Foo.x"literal"`
-or `Bar.x"literal"` to disambiguate between the two.
-
 The mechanism for user-defined string literals is deeply, profoundly powerful. Not only are Julia's
-non-standard literals implemented using it, but also the command literal syntax (``` `echo "Hello, $person"` ```)
-is implemented with the following innocuous-looking macro:
+non-standard literals implemented using it, but the command literal syntax (``` `echo "Hello, $person"` ```)
+is also implemented using the following innocuous-looking macro:
 
 ```julia
 macro cmd(str)
@@ -1076,6 +1065,20 @@ Of course, a large amount of complexity is hidden in the functions used in this 
 but they are just functions, written entirely in Julia. You can read their source and see precisely
 what they do -- and all they do is construct expression objects to be inserted into your program's
 syntax tree.
+
+Like string literals, command literals can also be prefixed by an identifier
+to form what are called non-standard command literals. These command literals are parsed
+as calls to specially-named macros. For example, the syntax ```custom`literal` ``` is parsed
+as `@custom_cmd "literal"`.
+Julia itself does not contain any non-standard command literals, but packages can make use of
+this syntax. Aside from the different syntax and the `_cmd` suffix instead of the `_str` suffix,
+non-standard command literals behave exactly like non-standard string literals.
+
+In the event that two modules provide non-standard string or command literals with the same name,
+it is possible to qualify the string or command literal with a module name. For instance, if both
+`Foo` and `Bar` provide non-standard string literal `@x_str`, then one can write `Foo.x"literal"`
+or `Bar.x"literal"` to disambiguate between the two.
+
 
 Another way to define a macro would be like this:
 
@@ -1350,7 +1353,8 @@ Both these implementations, although different, do essentially the same thing: a
 over the dimensions of the array, collecting the offset in each dimension into the final index.
 
 However, all the information we need for the loop is embedded in the type information of the arguments.
-Thus, we can utilize generated functions to move the iteration to compile-time; in compiler parlance,
+This allows the compiler to move the iteration to compile time and eliminate the runtime loops
+altogether. We can utilize generated functions to achieve a simmilar effect; in compiler parlance,
 we use generated functions to manually unroll the loop. The body becomes almost identical, but
 instead of calculating the linear index, we build up an *expression* that calculates the index:
 

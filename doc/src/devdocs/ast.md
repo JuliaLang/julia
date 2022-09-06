@@ -53,8 +53,6 @@ call. Finally, chains of comparisons have their own special expression structure
 | `a&&b`      | `(&& a b)`                |
 | `x += 1`    | `(+= x 1)`                |
 | `a ? 1 : 2` | `(if a 1 2)`              |
-| `a:b`       | `(: a b)`                 |
-| `a:b:c`     | `(: a b c)`               |
 | `a,b`       | `(tuple a b)`             |
 | `a==b`      | `(call == a b)`           |
 | `1<i<=n`    | `(comparison 1 < i <= n)` |
@@ -63,23 +61,25 @@ call. Finally, chains of comparisons have their own special expression structure
 
 ### Bracketed forms
 
-| Input                    | AST                                  |
-|:------------------------ |:------------------------------------ |
-| `a[i]`                   | `(ref a i)`                          |
-| `t[i;j]`                 | `(typed_vcat t i j)`                 |
-| `t[i j]`                 | `(typed_hcat t i j)`                 |
-| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))` |
-| `a{b}`                   | `(curly a b)`                        |
-| `a{b;c}`                 | `(curly a (parameters c) b)`         |
-| `[x]`                    | `(vect x)`                           |
-| `[x,y]`                  | `(vect x y)`                         |
-| `[x;y]`                  | `(vcat x y)`                         |
-| `[x y]`                  | `(hcat x y)`                         |
-| `[x y; z t]`             | `(vcat (row x y) (row z t))`         |
-| `[x for y in z, a in b]` | `(comprehension x (= y z) (= a b))`  |
-| `T[x for y in z]`        | `(typed_comprehension T x (= y z))`  |
-| `(a, b, c)`              | `(tuple a b c)`                      |
-| `(a; b; c)`              | `(block a (block b c))`              |
+| Input                    | AST                                               |
+|:------------------------ |:------------------------------------------------- |
+| `a[i]`                   | `(ref a i)`                                       |
+| `t[i;j]`                 | `(typed_vcat t i j)`                              |
+| `t[i j]`                 | `(typed_hcat t i j)`                              |
+| `t[a b; c d]`            | `(typed_vcat t (row a b) (row c d))`              |
+| `t[a b;;; c d]`          | `(typed_ncat t 3 (row a b) (row c d))`            |
+| `a{b}`                   | `(curly a b)`                                     |
+| `a{b;c}`                 | `(curly a (parameters c) b)`                      |
+| `[x]`                    | `(vect x)`                                        |
+| `[x,y]`                  | `(vect x y)`                                      |
+| `[x;y]`                  | `(vcat x y)`                                      |
+| `[x y]`                  | `(hcat x y)`                                      |
+| `[x y; z t]`             | `(vcat (row x y) (row z t))`                      |
+| `[x;y;; z;t;;;]`         | `(ncat 3 (nrow 2 (nrow 1 x y) (nrow 1 z t)))`     |
+| `[x for y in z, a in b]` | `(comprehension (generator x (= y z) (= a b)))`   |
+| `T[x for y in z]`        | `(typed_comprehension T (generator x (= y z)))`   |
+| `(a, b, c)`              | `(tuple a b c)`                                   |
+| `(a; b; c)`              | `(block a b c)`                                   |
 
 ### Macros
 
@@ -128,11 +128,11 @@ instead of `:import`.
 Julia supports more number types than many scheme implementations, so not all numbers are represented
 directly as scheme numbers in the AST.
 
-| Input                   | AST                                                     |
-|:----------------------- |:------------------------------------------------------- |
-| `11111111111111111111`  | `(macrocall @int128_str (null) "11111111111111111111")` |
-| `0xfffffffffffffffff`   | `(macrocall @uint128_str (null) "0xfffffffffffffffff")` |
-| `1111...many digits...` | `(macrocall @big_str (null) "1111....")`                |
+| Input                   | AST                                                      |
+|:----------------------- |:-------------------------------------------------------- |
+| `11111111111111111111`  | `(macrocall @int128_str nothing "11111111111111111111")` |
+| `0xfffffffffffffffff`   | `(macrocall @uint128_str nothing "0xfffffffffffffffff")` |
+| `1111...many digits...` | `(macrocall @big_str nothing "1111....")`                |
 
 ### Block forms
 
@@ -155,7 +155,7 @@ parses as:
 ```
 (if a (block (line 2) b)
     (elseif (block (line 3) c) (block (line 4) d)
-            (block (line 5 e))))
+            (block (line 6 e))))
 ```
 
 A `while` loop parses as `(while condition body)`.
@@ -254,7 +254,7 @@ types exist in lowered form:
     Identifies arguments and local variables by consecutive numbering. `Slot` is an abstract type
     with subtypes `SlotNumber` and `TypedSlot`. Both types have an integer-valued `id` field giving
     the slot index. Most slots have the same type at all uses, and so are represented with `SlotNumber`.
-    The types of these slots are found in the `slottypes` field of their `MethodInstance` object.
+    The types of these slots are found in the `slottypes` field of their `CodeInfo` object.
     Slots that require per-use type annotations are represented with `TypedSlot`, which has a `typ`
     field.
 
@@ -341,9 +341,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
       * `args[1]`
 
-        A function name, or `false` if unknown. If a symbol, then the expression first
-        behaves like the 1-argument form above. This argument is ignored from then on. When
-        this is `false`, it means a method is being added strictly by type, `(::T)(x) = x`.
+        A function name, or `nothing` if unknown or unneeded. If a symbol, then the expression
+        first behaves like the 1-argument form above. This argument is ignored from then on.
+        It can be `nothing` when methods are added strictly by type, `(::T)(x) = x`,
+        or when a method is being added to an existing function, `MyModule.f(x) = x`.
 
       * `args[2]`
 
@@ -424,7 +425,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `splatnew`
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
-    `Base.splat(new)` if `new` were a first-class function, hence the name.
+    `Base.Splat(new)` if `new` were a first-class function, hence the name.
 
   * `isdefined`
 
@@ -434,6 +435,10 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `the_exception`
 
     Yields the caught exception inside a `catch` block, as returned by `jl_current_exception()`.
+
+  * `undefcheck`
+
+    Temporary node inserted by the compiler and will be processed in `type_lift_pass!`.
 
   * `enter`
 
@@ -504,14 +509,45 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The calling convention for the call.
 
-      * `args[6:length(args[3])]` : arguments
+      * `args[6:5+length(args[3])]` : arguments
 
         The values for all the arguments (with types of each given in args[3]).
 
-      * `args[(length(args[3]) + 1):end]` : gc-roots
+      * `args[6+length(args[3])+1:end]` : gc-roots
 
         The additional objects that may need to be gc-rooted for the duration of the call.
         See [Working with LLVM](@ref Working-with-LLVM) for where these are derived from and how they get handled.
+
+  * `new_opaque_closure`
+
+    Constructs a new opaque closure. The fields are:
+
+      * `args[1]` : signature
+
+        The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
+
+      * `args[2]` : isva
+
+        Indicates whether the closure accepts varargs.
+
+      * `args[3]` : lb
+
+        Lower bound on the output type. (Defaults to `Union{}`)
+
+      * `args[4]` : ub
+
+        Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[5]` : method
+
+        The actual method as an `opaque_closure_method` expression.
+
+      * `args[6:end]` : captures
+
+        The values captured by the opaque closure.
+
+    !!! compat "Julia 1.7"
+        Opaque closures were added in Julia 1.7
 
 
 ### [Method](@id ast-lowered-method)
@@ -556,7 +592,8 @@ A unique'd container describing the shared metadata for a single method.
 
 ### MethodInstance
 
-A unique'd container describing a single callable signature for a Method. See especially [Proper maintenance and care of multi-threading locks](@ref)
+A unique'd container describing a single callable signature for a Method.
+See especially [Proper maintenance and care of multi-threading locks](@ref Proper-maintenance-and-care-of-multi-threading-locks)
 for important details on how to modify these fields safely.
 
   * `specTypes`
@@ -662,11 +699,13 @@ A (usually temporary) container for holding lowered source code.
 
     Statement-level flags for each expression in the function. Many of these are reserved, but not yet implemented:
 
-    * 0 = inbounds
-    * 1,2 = <reserved> inlinehint,always-inline,noinline
-    * 3 = <reserved> strict-ieee (strictfp)
-    * 4-6 = <unused>
-    * 7 = <reserved> has out-of-band info
+    * 0x01 << 0 = statement is marked as `@inbounds`
+    * 0x01 << 1 = statement is marked as `@inline`
+    * 0x01 << 2 = statement is marked as `@noinline`
+    * 0x01 << 3 = statement is within a block that leads to `throw` call
+    * 0x01 << 4 = statement may be removed if its result is unused, in particular it is thus be both pure and effect free
+    * 0x01 << 5-6 = <unused>
+    * 0x01 << 7 = <reserved> has out-of-band info
 
   * `linetable`
 
@@ -696,6 +735,10 @@ Optional Fields:
 
     The `MethodInstance` that "owns" this object (if applicable).
 
+  * `edges`
+
+    Forward edges to method instances that must be invalidated.
+
   * `min_world`/`max_world`
 
     The range of world ages for which this code was valid at the time when it had been inferred.
@@ -720,3 +763,23 @@ Boolean properties:
 
     Whether this is known to be a pure function of its arguments, without respect to the
     state of the method caches or other mutable global state.
+
+
+`UInt8` settings:
+
+  * `constprop`
+
+    * 0 = use heuristic
+    * 1 = aggressive
+    * 2 = none
+
+  * `purity`
+    Constructed from 5 bit flags:
+
+    * 0x01 << 0 = this method is guaranteed to return or terminate consistently (`:consistent`)
+    * 0x01 << 1 = this method is free from externally semantically visible side effects (`:effect_free`)
+    * 0x01 << 2 = this method is guaranteed to not throw an exception (`:nothrow`)
+    * 0x01 << 3 = this method is guaranteed to terminate (`:terminates_globally`)
+    * 0x01 << 4 = the syntactic control flow within this method is guaranteed to terminate (`:terminates_locally`)
+
+    See the documentation of `Base.@assume_effects` for more details.

@@ -2,6 +2,7 @@
 
 using Random
 using Base: Experimental
+using Base: n_avail
 
 @testset "single-threaded Condition usage" begin
     a = Condition()
@@ -255,12 +256,14 @@ using Distributed
 end
 
 @testset "timedwait" begin
-    @test timedwait(() -> true, 0) === :ok
-    @test timedwait(() -> false, 0) === :timed_out
-    @test_throws ArgumentError timedwait(() -> true, 0; pollint=0)
+    alwaystrue() = true
+    alwaysfalse() = false
+    @test timedwait(alwaystrue, 0) === :ok
+    @test timedwait(alwaysfalse, 0) === :timed_out
+    @test_throws ArgumentError timedwait(alwaystrue, 0; pollint=0)
 
     # Allowing a smaller positive `pollint` results in `timewait` hanging
-    @test_throws ArgumentError timedwait(() -> true, 0, pollint=1e-4)
+    @test_throws ArgumentError timedwait(alwaystrue, 0, pollint=1e-4)
 
     # Callback passed in raises an exception
     failure_cb = function (fail_on_call=1)
@@ -272,27 +275,16 @@ end
         end
     end
 
-    try
-        timedwait(failure_cb(1), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(1), 0)
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(2), 0)
 
-    try
-        timedwait(failure_cb(2), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
+    # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
+    # doesn't exceed a maximum duration but that would require guarantees from the OS.
+    duration = @elapsed timedwait(alwaysfalse, 1)  # Using default pollint of 0.1
+    @test duration >= 1
 
-    duration = @elapsed timedwait(() -> false, 1)  # Using default pollint of 0.1
-    @test duration ≈ 1 atol=0.4
-
-    duration = @elapsed timedwait(() -> false, 0; pollint=1)
-    @test duration ≈ 1 atol=0.4
+    duration = @elapsed timedwait(alwaysfalse, 0; pollint=1)
+    @test duration >= 1
 end
 
 @testset "timedwait on multiple channels" begin
@@ -329,7 +321,7 @@ end
     # interpreting the calling function.
     @noinline garbage_finalizer(f) = (finalizer(f, "gar" * "bage"); nothing)
     run = Ref(0)
-    garbage_finalizer(x -> nothing) # warmup
+    garbage_finalizer(Returns(nothing)) # warmup
     @test GC.enable(false)
     # test for finalizers trying to yield leading to failed attempts to context switch
     garbage_finalizer((x) -> (run[] += 1; sleep(1)))
@@ -353,11 +345,9 @@ end
     @test istaskdone(t)
     @test fetch(t)
     @test run[] == 3
-    @test fetch(errstream) == """
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")
-        """
+    output = fetch(errstream)
+    @test 3 == length(findall(
+        """error in running finalizer: ErrorException("task switch not allowed from inside gc finalizer")""", output))
     # test for invalid state in Workqueue during yield
     t = @async nothing
     t._state = 66
@@ -369,7 +359,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n"
 end
 
 @testset "throwto" begin
@@ -390,6 +380,7 @@ end
         t = Timer(0) do t
             tc[] += 1
         end
+        cb = first(t.cond.waitq)
         Libc.systemsleep(0.005)
         @test isopen(t)
         Base.process_events()
@@ -397,29 +388,35 @@ end
         @test tc[] == 0
         yield()
         @test tc[] == 1
+        @test istaskdone(cb)
     end
 
     let tc = Ref(0)
         t = Timer(0) do t
             tc[] += 1
         end
+        cb = first(t.cond.waitq)
         Libc.systemsleep(0.005)
         @test isopen(t)
         close(t)
         @test !isopen(t)
-        sleep(0.1)
+        wait(cb)
         @test tc[] == 0
+        @test t.handle === C_NULL
     end
 
     let tc = Ref(0)
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
+        cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
+        @test isempty(Base.Workqueue)
         Base.process_events() # schedule event
         Sys.iswindows() && Base.process_events() # schedule event (windows?)
+        @test length(Base.Workqueue) == 1
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         @test tc[] == 0
         yield() # consume event
@@ -440,13 +437,16 @@ end
         yield() # consume event & then close
         @test tc[] == 3
         sleep(0.1) # no further events
+        wait(cb)
         @test tc[] == 3
+        @test async.handle === C_NULL
     end
 
     let tc = Ref(0)
         async = Base.AsyncCondition() do async
             tc[] += 1
         end
+        cb = first(async.cond.waitq)
         @test isopen(async)
         ccall(:uv_async_send, Cvoid, (Ptr{Cvoid},), async)
         Base.process_events() # schedule event
@@ -457,8 +457,10 @@ end
         @test tc[] == 0
         yield() # consume event & then close
         @test tc[] == 1
-        sleep(0.1)
+        sleep(0.1) # no further events
+        wait(cb)
         @test tc[] == 1
+        @test async.handle === C_NULL
     end
 end
 
@@ -517,6 +519,13 @@ let a = []
     @test a == [1]
 end
 
+# make sure that we don't accidentally create a one-shot timer
+let
+    t = Timer(Returns(nothing), 10, interval=0.00001)
+    @test ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 1
+    close(t)
+end
+
 # make sure repeating timers work
 @noinline function make_unrooted_timer(a)
     t = Timer(0.0, interval = 0.1)
@@ -556,4 +565,44 @@ let c = Channel(3)
     @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (2 items available)"
     close(c)
     @test repr(MIME("text/plain"), c) == "Channel{Any}(3) (closed)"
+end
+
+# PR #41833: data races in Channel
+@testset "n_avail(::Channel)" begin
+    # Buffered: n_avail() = buffer length + number of waiting tasks
+    let c = Channel(2)
+        @test n_avail(c) == 0;   put!(c, 0)
+        @test n_avail(c) == 1;   put!(c, 0)
+        @test n_avail(c) == 2;   t1 = @task put!(c, 0); yield(t1)
+        @test n_avail(c) == 3;   t2 = @task put!(c, 0); yield(t2)
+        @test n_avail(c) == 4
+        # Test n_avail(c) after interrupting a task waiting on the channel
+                                t3 = @task put!(c, 0)
+                                yield(t3)
+        @test n_avail(c) == 5
+                                @async Base.throwto(t3, ErrorException("Exit put!"))
+                                try wait(t3) catch end
+        @test n_avail(c) == 4
+                                close(c)
+                                try wait(t1) catch end
+                                try wait(t2) catch end
+        @test n_avail(c) == 2    # Already-buffered items remain
+    end
+    # Unbuffered: n_avail() = number of waiting tasks
+    let c = Channel()
+        @test n_avail(c) == 0;   t1 = @task put!(c, 0); yield(t1)
+        @test n_avail(c) == 1;   t2 = @task put!(c, 0); yield(t2)
+        @test n_avail(c) == 2
+        # Test n_avail(c) after interrupting a task waiting on the channel
+                                t3 = @task put!(c, 0)
+                                yield(t3)
+        @test n_avail(c) == 3
+                                @async Base.throwto(t3, ErrorException("Exit put!"))
+                                try wait(t3) catch end
+        @test n_avail(c) == 2
+                                close(c)
+                                try wait(t1) catch end
+                                try wait(t2) catch end
+        @test n_avail(c) == 0
+    end
 end

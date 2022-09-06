@@ -3,17 +3,25 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 """
-    typejoin(T, S)
+    typejoin(T, S, ...)
 
+Return the closest common ancestor of types `T` and `S`, i.e. the narrowest type from which
+they both inherit. Recurses on additional varargs.
 
-Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
-they both inherit.
+# Examples
+```jldoctest
+julia> typejoin(Int, Float64)
+Real
+
+julia> typejoin(Int, Float64, ComplexF32)
+Number
+```
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
-typejoin(@nospecialize(t), ts...) = (@_pure_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), ts...) = (@_total_meta; typejoin(t, typejoin(ts...)))
 function typejoin(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_total_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
@@ -30,11 +38,15 @@ function typejoin(@nospecialize(a), @nospecialize(b))
         return typejoin(typejoin(a.a, a.b), b)
     elseif isa(b, Union)
         return typejoin(a, typejoin(b.a, b.b))
-    elseif a <: Tuple
+    end
+    # a and b are DataTypes
+    # We have to hide Constant info from inference, see #44390
+    a, b = inferencebarrier(a)::DataType, inferencebarrier(b)::DataType
+    if a <: Tuple
         if !(b <: Tuple)
             return Any
         end
-        ap, bp = a.parameters::Core.SimpleVector, b.parameters::Core.SimpleVector
+        ap, bp = a.parameters, b.parameters
         lar = length(ap)
         lbr = length(bp)
         if lar == 0
@@ -78,7 +90,6 @@ function typejoin(@nospecialize(a), @nospecialize(b))
     elseif b <: Tuple
         return Any
     end
-    a, b = a::DataType, b::DataType
     while b !== Any
         if a <: b.name.wrapper
             while a.name !== b.name
@@ -126,7 +137,7 @@ end
 # WARNING: this is wrong for some objects for which subtyping is broken
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
-    @_pure_meta
+    @_foldable_meta
     if a <: b
         return Bottom
     end
@@ -144,6 +155,17 @@ end
 Compute a type that contains both `T` and `S`, which could be
 either a parent of both types, or a `Union` if appropriate.
 Falls back to [`typejoin`](@ref).
+
+See instead [`promote`](@ref), [`promote_type`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.promote_typejoin(Int, Float64)
+Real
+
+julia> Base.promote_type(Int, Float64)
+Float64
+```
 """
 function promote_typejoin(@nospecialize(a), @nospecialize(b))
     c = typejoin(_promote_typesubtract(a), _promote_typesubtract(b))
@@ -151,19 +173,63 @@ function promote_typejoin(@nospecialize(a), @nospecialize(b))
 end
 _promote_typesubtract(@nospecialize(a)) = typesplit(a, Union{Nothing, Missing})
 
+function promote_typejoin_union(::Type{T}) where T
+    if T === Union{}
+        return Union{}
+    elseif T isa UnionAll
+        return Any # TODO: compute more precise bounds
+    elseif T isa Union
+        return promote_typejoin(promote_typejoin_union(T.a), promote_typejoin_union(T.b))
+    elseif T isa DataType
+        T <: Tuple && return typejoin_union_tuple(T)
+        return T
+    else
+        error("unreachable") # not a type??
+    end
+end
+
+function typejoin_union_tuple(T::DataType)
+    @_foldable_meta
+    u = Base.unwrap_unionall(T)
+    p = (u::DataType).parameters
+    lr = length(p)::Int
+    if lr == 0
+        return Tuple{}
+    end
+    c = Vector{Any}(undef, lr)
+    for i = 1:lr
+        pi = p[i]
+        U = Core.Compiler.unwrapva(pi)
+        if U === Union{}
+            ci = Union{}
+        elseif U isa Union
+            ci = typejoin(U.a, U.b)
+        elseif U isa UnionAll
+            return Any # TODO: compute more precise bounds
+        else
+            ci = promote_typejoin_union(U)
+        end
+        if i == lr && Core.Compiler.isvarargtype(pi)
+            c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
+        else
+            c[i] = ci
+        end
+    end
+    return Base.rewrap_unionall(Tuple{c...}, T)
+end
 
 # Returns length, isfixed
-function full_va_len(p)
+function full_va_len(p::Core.SimpleVector)
     isempty(p) && return 0, true
     last = p[end]
     if isvarargtype(last)
-        N = unwrap_unionall(last).parameters[2]
-        if isa(N, Int)
-            return length(p)::Int + N - 1, true
+        if isdefined(last, :N)
+            N = last.N
+            isa(N, Int) && return length(p) + N - 1, true
         end
-        return length(p)::Int, false
+        return length(p), false
     end
-    return length(p)::Int, true
+    return length(p), true
 end
 
 # reduce typejoin over A[i:end]
@@ -181,7 +247,7 @@ end
 ## promotion mechanism ##
 
 """
-    promote_type(type1, type2)
+    promote_type(type1, type2, ...)
 
 Promotion refers to converting values of mixed types to a single common type.
 `promote_type` represents the default promotion behavior in Julia when
@@ -192,6 +258,9 @@ tolerated; for example, `promote_type(Int64, Float64)` returns
 [`Float64`](@ref) even though strictly, not all [`Int64`](@ref) values can be
 represented exactly as `Float64` values.
 
+See also: [`promote`](@ref), [`promote_typejoin`](@ref), [`promote_rule`](@ref).
+
+# Examples
 ```jldoctest
 julia> promote_type(Int64, Float64)
 Float64
@@ -211,12 +280,17 @@ Float16
 julia> promote_type(Int8, UInt16)
 UInt16
 ```
+
+!!! warning "Don't overload this directly"
+    To overload promotion for your own types you should overload [`promote_rule`](@ref).
+    `promote_type` calls `promote_rule` internally to determine the type.
+    Overloading `promote_type` directly can cause ambiguity errors.
 """
 function promote_type end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S, U, V...) = (@_inline_meta; promote_type(T, promote_type(S, U, V...)))
+promote_type(T, S, U, V...) = (@inline; promote_type(T, promote_type(S, U, V...)))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
@@ -224,7 +298,7 @@ promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
 promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @_inline_meta
+    @inline
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
     #   promote_type(T, S) =>
@@ -242,12 +316,12 @@ it for new types as appropriate.
 """
 function promote_rule end
 
-promote_rule(::Type{<:Any}, ::Type{<:Any}) = Bottom
+promote_rule(::Type, ::Type) = Bottom
 
-promote_result(::Type{<:Any},::Type{<:Any},::Type{T},::Type{S}) where {T,S} = (@_inline_meta; promote_type(T,S))
+promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@_inline_meta; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)
@@ -255,28 +329,43 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
 
+See also: [`promote_type`](@ref), [`promote_rule`](@ref).
+
 # Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 (1.0f0, 4.5f0, 4.1f0)
+
+julia> promote_type(Int8, Float16, Float32)
+Float32
+
+julia> reduce(Base.promote_typejoin, (Int8, Float16, Float32))
+Real
+
+julia> promote(1, "x")
+ERROR: promotion of types Int64 and String failed to change any arguments
+[...]
+
+julia> promote_type(Int, String)
+Any
 ```
 """
 function promote end
 
 function _promote(x::T, y::S) where {T,S}
-    @_inline_meta
+    @inline
     R = promote_type(T, S)
     return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@_inline_meta; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x, xs...) = (@inline; promote_type(typeof(x), promote_typeof(xs...)))
 function _promote(x, y, z)
-    @_inline_meta
+    @inline
     R = promote_typeof(x, y, z)
     return (convert(R, x), convert(R, y), convert(R, z))
 end
 function _promote(x, y, zs...)
-    @_inline_meta
+    @inline
     R = promote_typeof(x, y, zs...)
     return (convert(R, x), convert(R, y), convert(Tuple{Vararg{R}}, zs)...)
 end
@@ -288,13 +377,13 @@ promote() = ()
 promote(x) = (x,)
 
 function promote(x, y)
-    @_inline_meta
+    @inline
     px, py = _promote(x, y)
     not_sametype((x,y), (px,py))
     px, py
 end
 function promote(x, y, z)
-    @_inline_meta
+    @inline
     px, py, pz = _promote(x, y, z)
     not_sametype((x,y,z), (px,py,pz))
     px, py, pz
@@ -312,7 +401,7 @@ not_sametype(x::T, y::T) where {T} = sametype_error(x)
 not_sametype(x, y) = nothing
 
 function sametype_error(input)
-    @_noinline_meta
+    @noinline
     error("promotion of types ",
           join(map(x->string(typeof(x)), input), ", ", " and "),
           " failed to change any arguments")
@@ -333,8 +422,10 @@ If `y` is an `Int` literal (e.g. `2` in `x^2` or `-3` in `x^-3`), the Julia code
 enable compile-time specialization on the value of the exponent.
 (As a default fallback we have `Base.literal_pow(^, x, Val(y)) = ^(x,y)`,
 where usually `^ == Base.^` unless `^` has been defined in the calling
-namespace.)
+namespace.) If `y` is a negative integer literal, then `Base.literal_pow`
+transforms the operation to `inv(x)^-y` by default, where `-y` is positive.
 
+# Examples
 ```jldoctest
 julia> 3^5
 243
@@ -407,7 +498,7 @@ xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
 (==)(x::T, y::T) where {T<:Number} = x === y
 (< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
-(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
+(<=)(x::T, y::T) where {T<:Real} = (x == y) | (x < y)
 
 rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
 mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)

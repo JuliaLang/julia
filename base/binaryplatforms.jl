@@ -1,7 +1,9 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 module BinaryPlatforms
 
 export AbstractPlatform, Platform, HostPlatform, platform_dlext, tags, arch, os,
-       os_version, libc, compiler_abi, libgfortran_version, libstdcxx_version,
+       os_version, libc, libgfortran_version, libstdcxx_version,
        cxxstring_abi, parse_dl_name_version, detect_libgfortran_version,
        detect_libstdcxx_version, detect_cxxstring_abi, call_abi, wordsize, triplet,
        select_platform, platforms_match, platform_name
@@ -38,10 +40,10 @@ struct Platform <: AbstractPlatform
     # The "compare strategy" allows selective overriding on how a tag is compared
     compare_strategies::Dict{String,Function}
 
-    function Platform(arch::String, os::String;
+    # Passing `tags` as a `Dict` avoids the need to infer different NamedTuple specializations
+    function Platform(arch::String, os::String, _tags::Dict{String};
                       validate_strict::Bool = false,
-                      compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
-                      kwargs...)
+                      compare_strategies::Dict{String,<:Function} = Dict{String,Function}())
         # A wee bit of normalization
         os = lowercase(os)
         arch = CPUID.normalize_arch(arch)
@@ -50,8 +52,9 @@ struct Platform <: AbstractPlatform
             "arch" => arch,
             "os" => os,
         )
-        for (tag, value) in kwargs
-            tag = lowercase(string(tag))
+        for (tag, value) in _tags
+            value = value::Union{String,VersionNumber,Nothing}
+            tag = lowercase(tag)
             if tag ∈ ("arch", "os")
                 throw(ArgumentError("Cannot double-pass key $(tag)"))
             end
@@ -66,17 +69,14 @@ struct Platform <: AbstractPlatform
             # doesn't parse nicely into a VersionNumber to persist, but if `validate_strict` is
             # set to `true`, it will cause an error later on.
             if tag ∈ ("libgfortran_version", "libstdcxx_version", "os_version")
-                normver(x::VersionNumber) = string(x)
-                function normver(str::AbstractString)
-                    v = tryparse(VersionNumber, str)
-                    if v === nothing
-                        # If this couldn't be parsed as a VersionNumber, return the original.
-                        return str
+                if isa(value, VersionNumber)
+                    value = string(value)
+                elseif isa(value, String)
+                    v = tryparse(VersionNumber, value)
+                    if isa(v, VersionNumber)
+                        value = string(v)
                     end
-                    # Otherwise, return the `string(VersionNumber(str))` version.
-                    return normver(v)
                 end
-                value = normver(value)
             end
 
             # Use `add_tag!()` to add the tag to our collection of tags
@@ -111,6 +111,19 @@ struct Platform <: AbstractPlatform
     end
 end
 
+# Keyword interface (to avoid inference of specialized NamedTuple methods, use the Dict interface for `tags`)
+function Platform(arch::String, os::String;
+                  validate_strict::Bool = false,
+                  compare_strategies::Dict{String,<:Function} = Dict{String,Function}(),
+                  kwargs...)
+    tags = Dict{String,Any}(String(tag)::String=>tagvalue(value) for (tag, value) in kwargs)
+    return Platform(arch, os, tags; validate_strict, compare_strategies)
+end
+
+tagvalue(v::Union{String,VersionNumber,Nothing}) = v
+tagvalue(v::Symbol) = String(v)
+tagvalue(v::AbstractString) = convert(String, v)::String
+
 # Simple tag insertion that performs a little bit of validation
 function add_tag!(tags::Dict{String,String}, tag::String, value::String)
     # I know we said only alphanumeric and dots, but let's be generous so that we can expand
@@ -142,7 +155,7 @@ function Base.setindex!(p::AbstractPlatform, v::String, k::String)
     return p
 end
 
-# Hash definitino to ensure that it's stable
+# Hash definition to ensure that it's stable
 function Base.hash(p::Platform, h::UInt)
     h += 0x506c6174666f726d % UInt
     h = hash(p.tags, h)
@@ -233,27 +246,27 @@ function validate_tags(tags::Dict)
         throw_version_number("libgfortran_version")
     end
 
-    # Validate `libstdcxx_version` is a parsable `VersionNumber`
-    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
-        throw_version_number("libstdcxx_version")
-    end
-
     # Validate `cxxstring_abi` is one of the two valid options:
     if "cxxstring_abi" in keys(tags) && tags["cxxstring_abi"] ∉ ("cxx03", "cxx11")
         throw_invalid_key("cxxstring_abi")
+    end
+
+    # Validate `libstdcxx_version` is a parsable `VersionNumber`
+    if "libstdcxx_version" in keys(tags) && tryparse(VersionNumber, tags["libstdcxx_version"]) === nothing
+        throw_version_number("libstdcxx_version")
     end
 end
 
 function set_compare_strategy!(p::Platform, key::String, f::Function)
     if !haskey(p.tags, key)
-        throw(ArgumentError("Cannot set comparison strategy for nonexistant tag $(key)!"))
+        throw(ArgumentError("Cannot set comparison strategy for nonexistent tag $(key)!"))
     end
     p.compare_strategies[key] = f
 end
 
 function get_compare_strategy(p::Platform, key::String, default = compare_default)
     if !haskey(p.tags, key)
-        throw(ArgumentError("Cannot get comparison strategy for nonexistant tag $(key)!"))
+        throw(ArgumentError("Cannot get comparison strategy for nonexistent tag $(key)!"))
     end
     return get(p.compare_strategies, key, default)
 end
@@ -428,7 +441,7 @@ function VNorNothing(d::Dict, key)
     if v === nothing
         return nothing
     end
-    return VersionNumber(v)
+    return VersionNumber(v)::VersionNumber
 end
 
 """
@@ -509,11 +522,11 @@ function triplet(p::AbstractPlatform)
     if libgfortran_version(p) !== nothing
         str = string(str, "-libgfortran", libgfortran_version(p).major)
     end
-    if libstdcxx_version(p) !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
-    end
     if cxxstring_abi(p) !== nothing
         str = string(str, "-", cxxstring_abi(p))
+    end
+    if libstdcxx_version(p) !== nothing
+        str = string(str, "-libstdcxx", libstdcxx_version(p).patch)
     end
 
     # Tack on all extra tags
@@ -589,7 +602,7 @@ const arch_march_isa_mapping = let
     end
     Dict(
         "i686" => [
-            "i686" => get_set("i686", "i686"),
+            "pentium4" => get_set("i686", "pentium4"),
             "prescott" => get_set("i686", "prescott"),
         ],
         "x86_64" => [
@@ -609,7 +622,8 @@ const arch_march_isa_mapping = let
             "armv8_0" => get_set("aarch64", "armv8.0-a"),
             "armv8_1" => get_set("aarch64", "armv8.1-a"),
             "armv8_2_crypto" => get_set("aarch64", "armv8.2-a+crypto"),
-            "armv8_4_crypto_sve" => get_set("aarch64", "armv8.4-a+crypto+sve"),
+            "a64fx" => get_set("aarch64", "a64fx"),
+            "apple_m1" => get_set("aarch64", "apple_m1"),
         ],
         "powerpc64le" => [
             "power8" => get_set("powerpc64le", "power8"),
@@ -638,14 +652,14 @@ const libgfortran_version_mapping = Dict(
     "libgfortran4" => "(-libgfortran4)|(-gcc7)",
     "libgfortran5" => "(-libgfortran5)|(-gcc8)",
 )
-const libstdcxx_version_mapping = Dict{String,String}(
-    "libstdcxx_nothing" => "",
-    "libstdcxx" => "-libstdcxx\\d+",
-)
 const cxxstring_abi_mapping = Dict(
     "cxxstring_nothing" => "",
     "cxx03" => "-cxx03",
     "cxx11" => "-cxx11",
+)
+const libstdcxx_version_mapping = Dict{String,String}(
+    "libstdcxx_nothing" => "",
+    "libstdcxx" => "-libstdcxx\\d+",
 )
 
 """
@@ -653,7 +667,7 @@ const cxxstring_abi_mapping = Dict(
 
 Parses a string platform triplet back into a `Platform` object.
 """
-function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::Bool = false)
+function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = false)
     # Helper function to collapse dictionary of mappings down into a regex of
     # named capture groups joined by "|" operators
     c(mapping) = string("(",join(["(?<$k>$v)" for (k, v) in mapping], "|"), ")")
@@ -668,8 +682,8 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         c(call_abi_mapping),
         # Next, optional things, like libgfortran/libstdcxx/cxxstring abi
         c(libgfortran_version_mapping),
-        c(libstdcxx_version_mapping),
         c(cxxstring_abi_mapping),
+        c(libstdcxx_version_mapping),
         # Finally, the catch-all for extended tags
         "(?<tags>(?:-[^-]+\\+[^-]+)*)?",
         "\$",
@@ -699,21 +713,22 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         end
 
         # Extract the information we're interested in:
+        tags = Dict{String,Any}()
         arch = get_field(m, arch_mapping)
         os = get_field(m, os_mapping)
-        libc = get_field(m, libc_mapping)
-        call_abi = get_field(m, call_abi_mapping)
-        libgfortran_version = get_field(m, libgfortran_version_mapping)
-        libstdcxx_version = get_field(m, libstdcxx_version_mapping)
-        cxxstring_abi = get_field(m, cxxstring_abi_mapping)
+        tags["libc"] = get_field(m, libc_mapping)
+        tags["call_abi"] = get_field(m, call_abi_mapping)
+        tags["libgfortran_version"] = get_field(m, libgfortran_version_mapping)
+        tags["libstdcxx_version"] = get_field(m, libstdcxx_version_mapping)
+        tags["cxxstring_abi"] = get_field(m, cxxstring_abi_mapping)
         function split_tags(tagstr)
-            tag_fields = filter(!isempty, split(tagstr, "-"))
+            tag_fields = split(tagstr, "-"; keepempty=false)
             if isempty(tag_fields)
                 return Pair{String,String}[]
             end
-            return map(v -> Symbol(v[1]) => v[2], split.(tag_fields, "+"))
+            return map(v -> String(v[1]) => String(v[2]), split.(tag_fields, "+"))
         end
-        tags = split_tags(m["tags"])
+        merge!(tags, Dict(split_tags(m["tags"])))
 
         # Special parsing of os version number, if any exists
         function extract_os_version(os_name, pattern)
@@ -730,21 +745,14 @@ function Base.parse(::Type{Platform}, triplet::AbstractString; validate_strict::
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)")
         end
+        tags["os_version"] = os_version
 
-        return Platform(
-            arch, os;
-            validate_strict,
-            libc,
-            call_abi,
-            libgfortran_version,
-            libstdcxx_version,
-            cxxstring_abi,
-            os_version,
-            tags...,
-        )
+        return Platform(arch, os, tags; validate_strict)
     end
     throw(ArgumentError("Platform `$(triplet)` is not an officially supported platform"))
 end
+Base.parse(::Type{Platform}, triplet::AbstractString; kwargs...) =
+    parse(Platform, convert(String, triplet)::String; kwargs...)
 
 function Base.tryparse(::Type{Platform}, triplet::AbstractString)
     try
@@ -795,7 +803,7 @@ function parse_dl_name_version(path::String, os::String)
         dlregex = r"^(.*?)((?:\.[\d]+)*)\.dylib$"
     else
         # On Linux and FreeBSD, libraries look like `libnettle.so.6.3.0`
-        dlregex = r"^(.*?).so((?:\.[\d]+)*)$"
+        dlregex = r"^(.*?)\.so((?:\.[\d]+)*)$"
     end
 
     m = match(dlregex, basename(path))
@@ -895,7 +903,7 @@ function detect_cxxstring_abi()
     end
 
     function open_libllvm(f::Function)
-        for lib_name in ("libLLVM", "LLVM", "libLLVMSupport")
+        for lib_name in ("libLLVM-14jl", "libLLVM", "LLVM", "libLLVMSupport")
             hdl = Libdl.dlopen_e(lib_name)
             if hdl != C_NULL
                 try
@@ -930,25 +938,33 @@ detect compiler ABI values such as `libgfortran_version`, `libstdcxx_version` an
 we have much of that built.
 """
 function host_triplet()
-    str = Sys.MACHINE
-    libgfortran_version = detect_libgfortran_version()
-    if libgfortran_version !== nothing
-        str = string(str, "-libgfortran", libgfortran_version.major)
+    str = Base.BUILD_TRIPLET
+
+    if !occursin("-libgfortran", str)
+        libgfortran_version = detect_libgfortran_version()
+        if libgfortran_version !== nothing
+            str = string(str, "-libgfortran", libgfortran_version.major)
+        end
     end
 
-    libstdcxx_version = detect_libstdcxx_version()
-    if libstdcxx_version !== nothing
-        str = string(str, "-libstdcxx", libstdcxx_version.patch)
+    if !occursin("-cxx", str)
+        cxxstring_abi = detect_cxxstring_abi()
+        if cxxstring_abi !== nothing
+            str = string(str, "-", cxxstring_abi)
+        end
     end
 
-    cxxstring_abi = detect_cxxstring_abi()
-    if cxxstring_abi !== nothing
-        str = string(str, "-", cxxstring_abi)
+    if !occursin("-libstdcxx", str)
+        libstdcxx_version = detect_libstdcxx_version()
+        if libstdcxx_version !== nothing
+            str = string(str, "-libstdcxx", libstdcxx_version.patch)
+        end
     end
 
     # Add on julia_version extended tag
-    str = string(str, "-julia_version+", VersionNumber(VERSION.major, VERSION.minor, VERSION.patch))
-
+    if !occursin("-julia_version+", str)
+        str = string(str, "-julia_version+", VersionNumber(VERSION.major, VERSION.minor, VERSION.patch))
+    end
     return str
 end
 
@@ -985,7 +1001,7 @@ only available in macOS `v"10.11"` and later, or an artifact can state that it r
 a libstdc++ that is at least `v"3.4.22"`, etc...
 """
 function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
-    for k in union(keys(tags(a)), keys(tags(b)))
+    for k in union(keys(tags(a)::Dict{String,String}), keys(tags(b)::Dict{String,String}))
         ak = get(tags(a), k, nothing)
         bk = get(tags(b), k, nothing)
 
@@ -1011,7 +1027,7 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !comparator(ak, bk, a_comp == comparator, b_comp == comparator)
+        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
             return false
         end
     end
@@ -1059,5 +1075,10 @@ function select_platform(download_info::Dict, platform::AbstractPlatform = HostP
     p = last(sort(ps, by = p -> triplet(p)))
     return download_info[p]
 end
+
+# precompiles to reduce latency (see https://github.com/JuliaLang/julia/pull/43990#issuecomment-1025692379)
+Dict{Platform,String}()[HostPlatform()] = ""
+Platform("x86_64", "linux", Dict{String,Any}(); validate_strict=true)
+Platform("x86_64", "linux", Dict{String,String}(); validate_strict=false)  # called this way from Artifacts.unpack_platform
 
 end # module

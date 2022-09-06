@@ -70,11 +70,12 @@ find_uplo(a) = nothing
 find_uplo(bc::Broadcasted) = mapreduce(find_uplo, merge_uplos, bc.args, init=nothing)
 
 function structured_broadcast_alloc(bc, ::Type{<:Bidiagonal}, ::Type{ElType}, n) where {ElType}
-    uplo = find_uplo(bc)
+    uplo = n > 0 ? find_uplo(bc) : 'U'
+    n1 = max(n - 1, 0)
     if uplo == 'T'
-        return Tridiagonal(Array{ElType}(undef, n-1), Array{ElType}(undef, n), Array{ElType}(undef, n-1))
+        return Tridiagonal(Array{ElType}(undef, n1), Array{ElType}(undef, n), Array{ElType}(undef, n1))
     end
-    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1), uplo)
+    return Bidiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n1), uplo)
 end
 structured_broadcast_alloc(bc, ::Type{<:SymTridiagonal}, ::Type{ElType}, n) where {ElType} =
     SymTridiagonal(Array{ElType}(undef, n),Array{ElType}(undef, n-1))
@@ -104,7 +105,29 @@ function isstructurepreserving(::typeof(Base.literal_pow), ::Ref{typeof(^)}, ::S
 end
 isstructurepreserving(f, args...) = false
 
-fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && iszero(v))
+"""
+    iszerodefined(T::Type)
+
+Return a `Bool` indicating whether `iszero` is well-defined for objects of type
+`T`. By default, this function returns `false` unless `T <: Number`. Note that
+this function may return `true` even if `zero(::T)` is not defined as long as
+`iszero(::T)` has a method that does not requires `zero(::T)`.
+
+This function is used to determine if mapping the elements of an array with
+a specific structure of nonzero elements preserve this structure.
+For instance, it is used to determine whether the output of
+`tuple.(Diagonal([1, 2]))` is `Diagonal([(1,), (2,)])` or
+`[(1,) (0,); (0,) (2,)]`. For this, we need to determine whether `(0,)` is
+considered to be zero. `iszero((0,))` falls back to `(0,) == zero((0,))` which
+fails as `zero(::Tuple{Int})` is not defined. However,
+`iszerodefined(::Tuple{Int})` is `false` hence we falls back to the comparison
+`(0,) == 0` which returns `false` and decides that the correct output is
+`[(1,) (0,); (0,) (2,)]`.
+"""
+iszerodefined(::Type) = false
+iszerodefined(::Type{<:Number}) = true
+
+fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted
 # expression is stable.  We can test the zero-preservability by applying the function
 # in cases where all other arguments are known scalars against a zero from the structured

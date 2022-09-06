@@ -5,10 +5,10 @@
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 
-#define keyhash(k) jl_object_id(k)
+#define keyhash(k) jl_object_id_(jl_typeof(k), k)
 #define h2index(hv, sz) (size_t)(((hv) & ((sz)-1)) * 2)
 
-static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val);
+static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val);
 
 JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
 {
@@ -18,7 +18,7 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     jl_array_t *newa = jl_alloc_vec_any(newsz);
     // keep the original array in the original slot since we need `ol`
     // to be valid in the loop below.
-    JL_GC_PUSH1(&newa);
+    JL_GC_PUSH2(&newa, &a);
     for (i = 0; i < sz; i += 2) {
         if (ol[i + 1] != NULL) {
             jl_table_assign_bp(&newa, ol[i], ol[i + 1]);
@@ -30,9 +30,9 @@ JL_DLLEXPORT jl_array_t *jl_idtable_rehash(jl_array_t *a, size_t newsz)
     return newa;
 }
 
-static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
+static inline int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
 {
-    // pa points to a **rooted** gc frame slot
+    // pa points to a **un**rooted address
     uint_t hv;
     jl_array_t *a = *pa;
     size_t orig, index, iter, empty_slot;
@@ -43,7 +43,7 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         *pa = a;
     }
     size_t maxprobe = max_probe(sz);
-    void **tab = (void **)a->data;
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)a->data;
 
     hv = keyhash(key);
     while (1) {
@@ -54,14 +54,14 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         empty_slot = -1;
 
         do {
-            jl_value_t *k2 = (jl_value_t*)tab[index];
+            jl_value_t *k2 = jl_atomic_load_relaxed(&tab[index]);
             if (k2 == NULL) {
                 if (empty_slot == -1)
                     empty_slot = index;
                 break;
             }
             if (jl_egal(key, k2)) {
-                if (tab[index + 1] != NULL) {
+                if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL) {
                     jl_atomic_store_release(&tab[index + 1], val);
                     jl_gc_wb(a, val);
                     return 0;
@@ -71,8 +71,8 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
                 if (empty_slot == -1)
                     empty_slot = index;
             }
-            if (empty_slot == -1 && tab[index + 1] == NULL) {
-                assert(tab[index] == jl_nothing);
+            if (empty_slot == -1 && jl_atomic_load_relaxed(&tab[index + 1]) == NULL) {
+                assert(jl_atomic_load_relaxed(&tab[index]) == jl_nothing);
                 empty_slot = index;
             }
 
@@ -81,9 +81,9 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         } while (iter <= maxprobe && index != orig);
 
         if (empty_slot != -1) {
-            jl_atomic_store_relaxed(&tab[empty_slot], key);
+            jl_atomic_store_release(&tab[empty_slot], key);
             jl_gc_wb(a, key);
-            jl_atomic_store_relaxed(&tab[empty_slot + 1], val);
+            jl_atomic_store_release(&tab[empty_slot + 1], val);
             jl_gc_wb(a, val);
             return 1;
         }
@@ -102,20 +102,20 @@ static int jl_table_assign_bp(jl_array_t **pa, jl_value_t *key, jl_value_t *val)
         *pa = jl_idtable_rehash(*pa, newsz);
 
         a = *pa;
-        tab = (void **)a->data;
+        tab = (_Atomic(jl_value_t*)*)a->data;
         sz = hash_size(a);
         maxprobe = max_probe(sz);
     }
 }
 
 /* returns bp if key is in hash, otherwise NULL */
-jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
+inline _Atomic(jl_value_t*) *jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 {
     size_t sz = hash_size(a);
     if (sz == 0)
         return NULL;
     size_t maxprobe = max_probe(sz);
-    void **tab = (void **)a->data;
+    _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)a->data;
     uint_t hv = keyhash(key);
     size_t index = h2index(hv, sz);
     sz *= 2;
@@ -123,12 +123,12 @@ jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
     size_t iter = 0;
 
     do {
-        jl_value_t *k2 = (jl_value_t*)jl_atomic_load_relaxed(&tab[index]); // just to ensure the load doesn't get duplicated
+        jl_value_t *k2 = jl_atomic_load_relaxed(&tab[index]); // just to ensure the load doesn't get duplicated
         if (k2 == NULL)
             return NULL;
         if (jl_egal(key, k2)) {
             if (jl_atomic_load_relaxed(&tab[index + 1]) != NULL)
-                return (jl_value_t**)&tab[index + 1];
+                return &tab[index + 1];
             // `nothing` is our sentinel value for deletion, so need to keep searching if it's also our search key
             if (key != jl_nothing)
                 return NULL; // concurrent insertion hasn't completed yet
@@ -144,12 +144,9 @@ jl_value_t **jl_table_peek_bp(jl_array_t *a, jl_value_t *key) JL_NOTSAFEPOINT
 JL_DLLEXPORT
 jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *p_inserted)
 {
-    JL_GC_PUSH1(&h);
-    // &h may be assigned to in jl_idtable_rehash so it need to be rooted
     int inserted = jl_table_assign_bp(&h, key, val);
     if (p_inserted)
         *p_inserted = inserted;
-    JL_GC_POP();
     return h;
 }
 
@@ -158,21 +155,27 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
 {
-    jl_value_t **bp = jl_table_peek_bp(h, key);
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
+}
+
+jl_value_t *jl_eqtable_getkey(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
+{
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
+    return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp - 1);
 }
 
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
 {
-    jl_value_t **bp = jl_table_peek_bp(h, key);
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
     if (found)
         *found = (bp != NULL);
     if (bp == NULL)
         return deflt;
-    jl_value_t *val = *bp;
-    *(bp - 1) = jl_nothing; // clear the key
-    *bp = NULL;
+    jl_value_t *val = jl_atomic_load_relaxed(bp);
+    jl_atomic_store_relaxed(bp - 1, jl_nothing); // clear the key
+    jl_atomic_store_relaxed(bp, NULL); // and the value (briefly corrupting the table)
     return val;
 }
 

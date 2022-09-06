@@ -2,13 +2,15 @@
 
 module TestUniformscaling
 
-using Test, LinearAlgebra, Random, SparseArrays
+using Test, LinearAlgebra, Random
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Quaternions) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Quaternions.jl"))
 using .Main.Quaternions
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
-Random.seed!(123)
+Random.seed!(1234543)
 
 @testset "basic functions" begin
     @test I === I' # transpose
@@ -20,8 +22,6 @@ Random.seed!(123)
     @test one(UniformScaling(rand(ComplexF64))) == one(UniformScaling{ComplexF64})
     @test eltype(one(UniformScaling(rand(ComplexF64)))) == ComplexF64
     @test -one(UniformScaling(2)) == UniformScaling(-1)
-    @test sparse(3I,4,5) == sparse(1:4, 1:4, 3, 4, 5)
-    @test sparse(3I,5,4) == sparse(1:4, 1:4, 3, 5, 4)
     @test opnorm(UniformScaling(1+im)) ≈ sqrt(2)
     @test convert(UniformScaling{Float64}, 2I) === 2.0I
 end
@@ -45,8 +45,19 @@ end
         (2:3, 1:2),
         (2:-1:1, 1:2),
         (1:2:9, 5:2:13),
+        (1, [1,2,5]),
+        (1, [1,10,5,2]),
+        (10, [10]),
+        ([1], 1),
+        ([15,1,5,2], 6),
+        ([2], [2]),
+        ([2,9,8,2,1], [2,8,4,3,1]),
+        ([8,3,5,3], 2:9),
     ]
         @test I[a,b] == J[a,b]
+        ndims(a) == 1 && @test I[OffsetArray(a,-10),b] == J[OffsetArray(a,-10),b]
+        ndims(b) == 1 && @test I[a,OffsetArray(b,-9)] == J[a,OffsetArray(b,-9)]
+        ndims(a) == ndims(b) == 1 && @test I[OffsetArray(a,-7),OffsetArray(b,-8)] == J[OffsetArray(a,-7),OffsetArray(b,-8)]
     end
 end
 
@@ -131,7 +142,7 @@ end
 end
 
 @testset "arithmetic with Number" begin
-    α = randn()
+    α = rand()
     @test α + I == α + 1
     @test I + α == α + 1
     @test α - I == α - 1
@@ -227,97 +238,91 @@ let
         @test B + I == B + Matrix(I, size(B))
         @test I + B == B + Matrix(I, size(B))
         AA = randn(2, 2)
-        for SS in (sprandn(3,3, 0.5), sparse(Int(1)I, 3, 3))
-            for (A, S) in ((AA, SS), (view(AA, 1:2, 1:2), view(SS, 1:3, 1:3)))
-                I22 = Matrix(I, size(A))
-                @test @inferred(A + I) == A + I22
-                @test @inferred(I + A) == A + I22
-                @test @inferred(I - I) === UniformScaling(0)
-                @test @inferred(B - I) == B - I22
-                @test @inferred(I - B) == I22 - B
-                @test @inferred(A - I) == A - I22
-                @test @inferred(I - A) == I22 - A
-                @test @inferred(I*J) === UniformScaling(λ)
-                @test @inferred(B*J) == B*λ
-                @test @inferred(J*B) == B*λ
-                @test @inferred(I*A) !== A # Don't alias
-                @test @inferred(I*S) !== S # Don't alias
-                @test @inferred(A*I) !== A # Don't alias
-                @test @inferred(S*I) !== S # Don't alias
+        for A in (AA, view(AA, 1:2, 1:2))
+            I22 = Matrix(I, size(A))
+            @test @inferred(A + I) == A + I22
+            @test @inferred(I + A) == A + I22
+            @test @inferred(I - I) === UniformScaling(0)
+            @test @inferred(B - I) == B - I22
+            @test @inferred(I - B) == I22 - B
+            @test @inferred(A - I) == A - I22
+            @test @inferred(I - A) == I22 - A
+            @test @inferred(I*J) === UniformScaling(λ)
+            @test @inferred(B*J) == B*λ
+            @test @inferred(J*B) == B*λ
+            @test @inferred(I*A) !== A # Don't alias
+            @test @inferred(A*I) !== A # Don't alias
 
-                @test @inferred(S*J) == S*λ
-                @test @inferred(J*S) == S*λ
-                @test @inferred(A*J) == A*λ
-                @test @inferred(J*A) == A*λ
-                @test @inferred(J*fill(1, 3)) == fill(λ, 3)
-                @test @inferred(λ*J) === UniformScaling(λ*J.λ)
-                @test @inferred(J*λ) === UniformScaling(λ*J.λ)
-                @test @inferred(J/I) === J
-                @test @inferred(I/A) == inv(A)
-                @test @inferred(A/I) == A
-                @test @inferred(I/λ) === UniformScaling(1/λ)
-                @test @inferred(I\J) === J
+            @test @inferred(A*J) == A*λ
+            @test @inferred(J*A) == A*λ
+            @test @inferred(J*fill(1, 3)) == fill(λ, 3)
+            @test @inferred(λ*J) === UniformScaling(λ*J.λ)
+            @test @inferred(J*λ) === UniformScaling(λ*J.λ)
+            @test @inferred(J/I) === J
+            @test @inferred(I/A) == inv(A)
+            @test @inferred(A/I) == A
+            @test @inferred(I/λ) === UniformScaling(1/λ)
+            @test @inferred(I\J) === J
 
-                if isa(A, Array)
-                    T = LowerTriangular(randn(3,3))
-                else
-                    T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
-                end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
-                @test @inferred(T\I) == inv(T)
-
-                if isa(A, Array)
-                    T = LinearAlgebra.UnitLowerTriangular(randn(3,3))
-                else
-                    T = LinearAlgebra.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
-                end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
-                @test @inferred(T\I) == inv(T)
-
-                if isa(A, Array)
-                    T = UpperTriangular(randn(3,3))
-                else
-                    T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
-                end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
-                @test @inferred(T\I) == inv(T)
-
-                if isa(A, Array)
-                    T = LinearAlgebra.UnitUpperTriangular(randn(3,3))
-                else
-                    T = LinearAlgebra.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
-                end
-                @test @inferred(T + J) == Array(T) + J
-                @test @inferred(J + T) == J + Array(T)
-                @test @inferred(T - J) == Array(T) - J
-                @test @inferred(J - T) == J - Array(T)
-                @test @inferred(T\I) == inv(T)
-
-                for elty in (Float64, ComplexF64)
-                    if isa(A, Array)
-                        T = Hermitian(randn(elty, 3,3))
-                    else
-                        T = Hermitian(view(randn(elty, 3,3), 1:3, 1:3))
-                    end
-                    @test @inferred(T + J) == Array(T) + J
-                    @test @inferred(J + T) == J + Array(T)
-                    @test @inferred(T - J) == Array(T) - J
-                    @test @inferred(J - T) == J - Array(T)
-                end
-
-                @test @inferred(I\A) == A
-                @test @inferred(A\I) == inv(A)
-                @test @inferred(λ\I) === UniformScaling(1/λ)
+            if isa(A, Array)
+                T = LowerTriangular(randn(3,3))
+            else
+                T = LowerTriangular(view(randn(3,3), 1:3, 1:3))
             end
+            @test @inferred(T + J) == Array(T) + J
+            @test @inferred(J + T) == J + Array(T)
+            @test @inferred(T - J) == Array(T) - J
+            @test @inferred(J - T) == J - Array(T)
+            @test @inferred(T\I) == inv(T)
+
+            if isa(A, Array)
+                T = LinearAlgebra.UnitLowerTriangular(randn(3,3))
+            else
+                T = LinearAlgebra.UnitLowerTriangular(view(randn(3,3), 1:3, 1:3))
+            end
+            @test @inferred(T + J) == Array(T) + J
+            @test @inferred(J + T) == J + Array(T)
+            @test @inferred(T - J) == Array(T) - J
+            @test @inferred(J - T) == J - Array(T)
+            @test @inferred(T\I) == inv(T)
+
+            if isa(A, Array)
+                T = UpperTriangular(randn(3,3))
+            else
+                T = UpperTriangular(view(randn(3,3), 1:3, 1:3))
+            end
+            @test @inferred(T + J) == Array(T) + J
+            @test @inferred(J + T) == J + Array(T)
+            @test @inferred(T - J) == Array(T) - J
+            @test @inferred(J - T) == J - Array(T)
+            @test @inferred(T\I) == inv(T)
+
+            if isa(A, Array)
+                T = LinearAlgebra.UnitUpperTriangular(randn(3,3))
+            else
+                T = LinearAlgebra.UnitUpperTriangular(view(randn(3,3), 1:3, 1:3))
+            end
+            @test @inferred(T + J) == Array(T) + J
+            @test @inferred(J + T) == J + Array(T)
+            @test @inferred(T - J) == Array(T) - J
+            @test @inferred(J - T) == J - Array(T)
+            @test @inferred(T\I) == inv(T)
+
+            for elty in (Float64, ComplexF64)
+                if isa(A, Array)
+                    T = Hermitian(randn(elty, 3,3))
+                else
+                    T = Hermitian(view(randn(elty, 3,3), 1:3, 1:3))
+                end
+                @test @inferred(T + J) == Array(T) + J
+                @test @inferred(J + T) == J + Array(T)
+                @test @inferred(T - J) == Array(T) - J
+                @test @inferred(J - T) == J - Array(T)
+            end
+
+            @test @inferred(I\A) == A
+            @test @inferred(A\I) == inv(A)
+            @test @inferred(λ\I) === UniformScaling(1/λ)
         end
     end
 end
@@ -328,30 +333,41 @@ end
     @test_throws ArgumentError vcat(I)
     @test_throws ArgumentError [I; I]
     @test_throws ArgumentError [I I; I]
-    for T in (Matrix, SparseMatrixCSC)
-        A = T(rand(3,4))
-        B = T(rand(3,3))
-        C = T(rand(0,3))
-        D = T(rand(2,0))
-        @test (hcat(A, 2I))::T == hcat(A, Matrix(2I, 3, 3))
-        @test (vcat(A, 2I))::T == vcat(A, Matrix(2I, 4, 4))
-        @test (hcat(C, 2I))::T == C
-        @test (vcat(D, 2I))::T == D
-        @test (hcat(I, 3I, A, 2I))::T == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
-        @test (vcat(I, 3I, A, 2I))::T == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
-        @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::T ==
-            hvcat((2,1,2), B, Matrix(2I, 3, 3), Matrix(I, 6, 6), Matrix(3I, 3, 3), Matrix(4I, 3, 3))
-        @test hvcat((3,1), C, C, I, 3I)::T == hvcat((2,1), C, C, Matrix(3I, 6,6))
-        @test hvcat((2,2,2), I, 2I, 3I, 4I, C, C)::T ==
-            hvcat((2,2,2), Matrix(I, 3, 3), Matrix(2I, 3,3 ), Matrix(3I, 3,3), Matrix(4I, 3,3), C, C)
-        @test hvcat((2,2,4), C, C, I, 2I, 3I, 4I, 5I, D)::T ==
-            hvcat((2,2,4), C, C, Matrix(I, 3, 3), Matrix(2I,3,3),
-                Matrix(3I, 2, 2), Matrix(4I, 2, 2), Matrix(5I,2,2), D)
-        @test (hvcat((2,3,2), B, 2I, C, C, I, 3I, 4I))::T ==
-            hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
-        @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::T ==
-            hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
-    end
+
+    A = rand(3,4)
+    B = rand(3,3)
+    C = rand(0,3)
+    D = rand(2,0)
+    E = rand(1,3)
+    F = rand(3,1)
+    α = rand()
+    @test (hcat(A, 2I))::Matrix == hcat(A, Matrix(2I, 3, 3))
+    @test (hcat(E, α))::Matrix == hcat(E, [α])
+    @test (hcat(E, α, 2I))::Matrix == hcat(E, [α], fill(2, 1, 1))
+    @test (vcat(A, 2I))::Matrix == vcat(A, Matrix(2I, 4, 4))
+    @test (vcat(F, α))::Matrix == vcat(F, [α])
+    @test (vcat(F, α, 2I))::Matrix == vcat(F, [α], fill(2, 1, 1))
+    @test (hcat(C, 2I))::Matrix == C
+    @test_throws DimensionMismatch hcat(C, α)
+    @test (vcat(D, 2I))::Matrix == D
+    @test_throws DimensionMismatch vcat(D, α)
+    @test (hcat(I, 3I, A, 2I))::Matrix == hcat(Matrix(I, 3, 3), Matrix(3I, 3, 3), A, Matrix(2I, 3, 3))
+    @test (vcat(I, 3I, A, 2I))::Matrix == vcat(Matrix(I, 4, 4), Matrix(3I, 4, 4), A, Matrix(2I, 4, 4))
+    @test (hvcat((2,1,2), B, 2I, I, 3I, 4I))::Matrix ==
+        hvcat((2,1,2), B, Matrix(2I, 3, 3), Matrix(I, 6, 6), Matrix(3I, 3, 3), Matrix(4I, 3, 3))
+    @test hvcat((3,1), C, C, I, 3I)::Matrix == hvcat((2,1), C, C, Matrix(3I, 6,6))
+    @test hvcat((2,2,2), I, 2I, 3I, 4I, C, C)::Matrix ==
+        hvcat((2,2,2), Matrix(I, 3, 3), Matrix(2I, 3,3 ), Matrix(3I, 3,3), Matrix(4I, 3,3), C, C)
+    @test hvcat((2,2,4), C, C, I, 2I, 3I, 4I, 5I, D)::Matrix ==
+        hvcat((2,2,4), C, C, Matrix(I, 3, 3), Matrix(2I,3,3),
+            Matrix(3I, 2, 2), Matrix(4I, 2, 2), Matrix(5I,2,2), D)
+    @test (hvcat((2,3,2), B, 2I, C, C, I, 3I, 4I))::Matrix ==
+        hvcat((2,2,2), B, Matrix(2I, 3, 3), C, C, Matrix(3I, 3, 3), Matrix(4I, 3, 3))
+    @test hvcat((3,2,1), C, C, I, B ,3I, 2I)::Matrix ==
+        hvcat((2,2,1), C, C, B, Matrix(3I,3,3), Matrix(2I,6,6))
+    @test (hvcat((1,2), A, E, α))::Matrix == hvcat((1,2), A, E, [α]) == hvcat((1,2), A, E, α*I)
+    @test (hvcat((2,2), α, E, F, 3I))::Matrix == hvcat((2,2), [α], E, F, Matrix(3I, 3, 3))
+    @test (hvcat((2,2), 3I, F, E, α))::Matrix == hvcat((2,2), Matrix(3I, 3, 3), F, E, [α])
 end
 
 @testset "Matrix/Array construction from UniformScaling" begin
@@ -400,6 +416,13 @@ end
     @test 0denseI != 2I != 0denseI # test generic path / inequality on diag
     @test alltwos != 2I != alltwos # test generic path / inequality off diag
     @test rdenseI !=  I != rdenseI # test square matrix check
+
+    # isequal
+    @test !isequal(I, I(3))
+    @test !isequal(I(1), I)
+    @test !isequal([1], I)
+    @test isequal(I, 1I)
+    @test !isequal(2I, 3I)
 end
 
 @testset "operations involving I should preserve eltype" begin
@@ -445,12 +468,37 @@ end
     target = J * A * alpha + C * beta
     @test mul!(copy(C), J, A, alpha, beta) ≈ target
     @test mul!(copy(C), A, J, alpha, beta) ≈ target
+
+    a = randn()
+    C = randn(3, 3)
+    target_5mul = a*alpha*J + beta*C
+    @test mul!(copy(C), a, J, alpha, beta) ≈ target_5mul
+    @test mul!(copy(C), J, a, alpha, beta) ≈ target_5mul
+    target_5mul = beta*C # alpha = 0
+    @test mul!(copy(C), a, J, 0, beta) ≈ target_5mul
+    target_5mul = a*alpha*Matrix(J, 3, 3) # beta = 0
+    @test mul!(copy(C), a, J, alpha, 0) ≈ target_5mul
+
 end
 
 @testset "Construct Diagonal from UniformScaling" begin
     @test size(I(3)) === (3,3)
     @test I(3) isa Diagonal
     @test I(3) == [1 0 0; 0 1 0; 0 0 1]
+end
+
+@testset "dot" begin
+    A = randn(3, 3)
+    λ = randn()
+    J = UniformScaling(λ)
+    @test dot(A, J) ≈ dot(J, A)
+    @test dot(A, J) ≈ tr(A' * J)
+
+    A = rand(ComplexF64, 3, 3)
+    λ = randn() + im * randn()
+    J = UniformScaling(λ)
+    @test dot(A, J) ≈ conj(dot(J, A))
+    @test dot(A, J) ≈ tr(A' * J)
 end
 
 @testset "generalized dot" begin
@@ -466,7 +514,7 @@ end
 
 @testset "Factorization solutions" begin
     J = complex(randn(),randn()) * I
-    qrp = A -> qr(A, Val(true))
+    qrp = A -> qr(A, ColumnNorm())
 
     # thin matrices
     X = randn(3,2)
@@ -495,6 +543,22 @@ end
         @test @inferred(F \ I) ≈ Z
         @test @inferred(F \ J) ≈ Z * J
     end
+end
+
+@testset "offset arrays" begin
+    A = OffsetArray(zeros(4,4), -1:2, 0:3)
+    @test sum(I + A) ≈ 3.0
+    @test sum(A + I) ≈ 3.0
+    @test sum(I - A) ≈ 3.0
+    @test sum(A - I) ≈ -3.0
+end
+
+@testset "type promotion when dividing UniformScaling by matrix" begin
+    A = randn(5,5)
+    cA = complex(A)
+    J = (5+2im)*I
+    @test J/A ≈ J/cA
+    @test A\J ≈ cA\J
 end
 
 end # module TestUniformscaling

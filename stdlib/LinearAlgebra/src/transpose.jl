@@ -163,7 +163,7 @@ julia> A = [1 2im; -3im 4]
  0-3im  4+0im
 
 julia> T = transpose(A)
-2×2 Transpose{Complex{Int64}, Matrix{Complex{Int64}}}:
+2×2 transpose(::Matrix{Complex{Int64}}) with eltype Complex{Int64}:
  1+0im  0-3im
  0+2im  4+0im
 
@@ -181,11 +181,11 @@ Base.copy(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint!(similar(A.parent, rever
 function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                          A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
     if length(ir_dest) != length(jr_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(jr_src)," and ",length(ir_dest),")")))
     end
     if length(jr_dest) != length(ir_src)
-        throw(ArgumentError(string("source and destination must have same size (got ",
+        throw(ArgumentError(LazyString("source and destination must have same size (got ",
                                    length(ir_src)," and ",length(jr_dest),")")))
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
