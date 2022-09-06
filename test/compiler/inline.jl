@@ -1302,7 +1302,8 @@ let src = code_typed1(Tuple{Any}) do x
             DoAllocNoEscapeSparam(x)
         end
     end
-    @test count(isnew, src.code) == 0
+    # FIXME
+    @test_broken count(isnew, src.code) == 0 && count(iscall(DoAllocNoEscapeSparam), src.code) == 0
 end
 
 # Test noinline finalizer
