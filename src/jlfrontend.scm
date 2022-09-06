@@ -48,6 +48,13 @@
                                    (julia-parse inp parse-atom))))))
        (cons expr (io.pos inp))))))
 
+;; parse sig in a string
+(define (jl-parse-sig str filename (lineno 1))
+  (let ((io (open-input-string str)))
+    (io.set-lineno! io lineno)
+    (with-bindings ((current-filename (symbol filename)))
+     (error-wrap (lambda () (julia-parse io parse-decls))))))
+
 (define (parse-all- io filename)
   (unwind-protect
    (with-bindings ((current-filename (symbol filename)))

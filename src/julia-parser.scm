@@ -788,6 +788,16 @@
           (error (string "extra token \"" t "\" after end of expression"))))
     ex)))
 
+(define (parse-decls s)
+(with-underscore-context #t ; no underscore could cross top-level stmts
+  (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-decl))
+                        '(#\;) 'toplevel (lambda (x) (eqv? x #\newline)) #f)))
+    ;; check for unparsed junk after an expression
+    (let ((t (peek-token s)))
+      (if (not (or (eof-object? t) (eqv? t #\newline) (eq? t #f)))
+          (error (string "extra token \"" t "\" after end of expression"))))
+    ex)))
+
 (define (parse-eq s) (with-underscore-context 'stmt (parse-assignment s parse-comma)))
 
 ;; symbol tokens that do not simply parse to themselves when appearing alone as
@@ -931,8 +941,10 @@
                   (else (error "internal: pop current error" (info old ex)))))
         ex)))
 
-(define (parse-assignment s down (lvalue '()))
-(with-underscore-lvalue lvalue
+(define (parse-assignment-value s down)
+  (with-underscore-lvalue #f (parse-assignment s down)))
+
+(define (parse-assignment s down)
   (let* ((ex (down s))
          (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
@@ -951,9 +963,9 @@
                  (let* ((ex (revert-current-underscore! ex))
                         (lno (input-port-line (ts:port s))))
                    (short-form-function-loc
-                    (list t ex (parse-assignment s down #f)) lno)))
+                    (list t ex (parse-assignment-value s down)) lno)))
                 (else
-                 (list t ex (parse-assignment s down)))))))))
+                 (list t ex (parse-assignment s down))))))))
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
@@ -1296,7 +1308,8 @@
 (define (parse-factor-after s) (parse-RtoL s parse-juxtapose is-prec-power? #f parse-factor-after))
 
 (define (parse-decl s)
-  (parse-decl-with-initial-ex s (parse-call s)))
+  (with-underscore-lvalue #t
+    (parse-decl-with-initial-ex s (parse-call s))))
 
 (define (parse-decl-with-initial-ex s ex)
   (let loop ((ex ex))

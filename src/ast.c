@@ -99,6 +99,7 @@ JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
 JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 JL_DLLEXPORT jl_sym_t *jl_statement_sym;
+JL_DLLEXPORT jl_sym_t *jl_signature_sym;
 JL_DLLEXPORT jl_sym_t *jl_all_sym;
 JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
@@ -366,6 +367,7 @@ void jl_init_common_symbols(void)
     jl_block_sym = jl_symbol("block");
     jl_atom_sym = jl_symbol("atom");
     jl_statement_sym = jl_symbol("statement");
+    jl_signature_sym = jl_symbol("signature");
     jl_all_sym = jl_symbol("all");
     jl_atomic_sym = jl_symbol("atomic");
     jl_not_atomic_sym = jl_symbol("not_atomic");
@@ -792,8 +794,11 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
         jl_bounds_error(textstr, jl_box_long(offset+1));
     }
     jl_sym_t *rule = (jl_sym_t*)options;
-    if (rule != jl_atom_sym && rule != jl_statement_sym && rule != jl_all_sym) {
+    if (rule != jl_atom_sym && rule != jl_statement_sym && rule != jl_signature_sym && rule != jl_all_sym) {
         jl_error("jl_fl_parse: unrecognized parse options");
+    }
+    if (offset != 0 && rule == jl_signature_sym) {
+        jl_error("Parse `signature`: offset not supported");
     }
     if (offset != 0 && rule == jl_all_sym) {
         jl_error("Parse `all`: offset not supported");
@@ -813,6 +818,12 @@ JL_DLLEXPORT jl_value_t *jl_fl_parse(const char *text, size_t text_len,
                               fl_text, fl_filename, fixnum(lineno));
         fl_expr = e;
         offset1 = e == fl_ctx->FL_EOF ? text_len : 0;
+    }
+    else if (rule == jl_signature_sym) {
+        value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-parse-sig")),
+                              fl_text, fl_filename, fixnum(lineno));
+        fl_expr = e;
+        offset1 = e != fl_ctx->FL_EOF ? text_len : 0;
     }
     else {
         value_t greedy = rule == jl_statement_sym ? fl_ctx->T : fl_ctx->F;

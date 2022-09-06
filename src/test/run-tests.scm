@@ -86,6 +86,7 @@
                ))))
 (define-macro (parse-expect-underscore-function s production expected expected2)
   `(and (parse-expect ,s ,production ,expected)
+        (parse-expect ,s parse-decls ,expected2)
         (parse-expect ,(string "function " s " end") parse-stmts '(function ,,expected2 (block (line 1 none) (line 1 none))))
         (parse-expect ,(string s " = 1") parse-stmts '(= ,,expected2 (block (line 1 none) 1)))))
 

@@ -1543,6 +1543,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_optlevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_thismodule_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_atom_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_statement_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_signature_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_all_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_compile_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_force_compile_sym;
