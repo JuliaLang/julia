@@ -1186,13 +1186,16 @@ end
 # For primitives, we do that right here. For proper calls, we will
 # discover this when we consult the caches.
 function check_effect_free!(ir::IRCode, idx::Int, @nospecialize(stmt), @nospecialize(rt))
-    (total, nothrow) = stmt_effect_flags(stmt, rt, ir)
-    if total
+    (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(OptimizerLattice(), stmt, rt, ir)
+    if consistent
+        ir.stmts[idx][:flag] |= IR_FLAG_CONSISTENT
+    end
+    if effect_free_and_nothrow
         ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
     elseif nothrow
         ir.stmts[idx][:flag] |= IR_FLAG_NOTHROW
     end
-    return total
+    return effect_free_and_nothrow
 end
 
 # Handles all analysis and inlining of intrinsics and builtins. In particular,
@@ -1657,7 +1660,7 @@ function early_inline_special_case(
         elseif ispuretopfunction(f) || contains_is(_PURE_BUILTINS, f)
             return SomeCase(quoted(val))
         elseif contains_is(_EFFECT_FREE_BUILTINS, f)
-            if _builtin_nothrow(f, argtypes[2:end], type, OptimizerLattice())
+            if _builtin_nothrow(OptimizerLattice(), f, argtypes[2:end], type)
                 return SomeCase(quoted(val))
             end
         elseif f === Core.get_binding_type
@@ -1703,7 +1706,7 @@ function late_inline_special_case!(
     elseif length(argtypes) == 3 && istopfunction(f, :(>:))
         # special-case inliner for issupertype
         # that works, even though inference generally avoids inferring the `>:` Method
-        if isa(type, Const) && _builtin_nothrow(<:, Any[argtypes[3], argtypes[2]], type, OptimizerLattice())
+        if isa(type, Const) && _builtin_nothrow(OptimizerLattice(), <:, Any[argtypes[3], argtypes[2]], type)
             return SomeCase(quoted(type.val))
         end
         subtype_call = Expr(:call, GlobalRef(Core, :(<:)), stmt.args[3], stmt.args[2])

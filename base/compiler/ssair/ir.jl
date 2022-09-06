@@ -509,7 +509,10 @@ function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::
     node[:line] = something(inst.line, ir.stmts[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
-        (effect_free_and_nothrow, nothrow) = stmt_effect_flags(inst.stmt, inst.type, ir)
+        (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, ir)
+        if consistent
+            flag |= IR_FLAG_CONSISTENT
+        end
         if effect_free_and_nothrow
             flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         elseif nothrow
@@ -831,7 +834,10 @@ function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, re
     end
     flag = inst.flag
     if !inst.effect_free_computed
-        (effect_free_and_nothrow, nothrow) = stmt_effect_flags(inst.stmt, inst.type, compact)
+        (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, compact)
+        if consistent
+            flag |= IR_FLAG_CONSISTENT
+        end
         if effect_free_and_nothrow
             flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         elseif nothrow
@@ -1138,9 +1144,14 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:inst] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
-        result[result_idx][:inst] = stmt
-        result[result_idx][:type] = argextype(stmt, compact)
-        result_idx += 1
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
+        if (result[result_idx][:flag] & total_flags) == total_flags
+            ssa_rename[idx] = stmt
+        else
+            result[result_idx][:inst] = stmt
+            result[result_idx][:type] = argextype(stmt, compact)
+            result_idx += 1
+        end
     elseif isa(stmt, GotoNode)
         result[result_idx][:inst] = stmt
         result_idx += 1

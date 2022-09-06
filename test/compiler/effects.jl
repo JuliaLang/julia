@@ -348,7 +348,7 @@ end |> !Core.Compiler.is_foldable
     entry_to_be_invalidated('a')
 end
 
-@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+@test !Core.Compiler.builtin_nothrow(Core.Compiler.fallback_lattice, Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
 
 # Nothrow for assignment to globals
 global glob_assign_int::Int = 0
@@ -654,4 +654,4 @@ end # @testset "effects analysis on array construction" begin
 end # @testset "effects analysis on array ops" begin
 
 # Test that builtin_effects handles vararg correctly
-@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.isdefined, Any[String, Vararg{Any}], Bool))
+@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined, Any[String, Vararg{Any}], Bool))
