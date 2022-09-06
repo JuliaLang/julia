@@ -1133,7 +1133,9 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
     elseif isa(stmt, GotoNode) && cfg_transforms_enabled
-        result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
+        label = compact.bb_rename_succ[stmt.label]
+        @assert label > 0
+        result[result_idx][:inst] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
         result[result_idx][:inst] = stmt
@@ -1158,19 +1160,25 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
-                result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.dest])
+                label = compact.bb_rename_succ[stmt.dest]
+                @assert label > 0
+                result[result_idx][:inst] = GotoNode(label)
                 kill_edge!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
             end
         else
             @label bail
-            result[result_idx][:inst] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
+            label = compact.bb_rename_succ[stmt.dest]
+            @assert label > 0
+            result[result_idx][:inst] = GotoIfNot(cond, label)
             result_idx += 1
         end
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa)::Expr
         if cfg_transforms_enabled && isexpr(stmt, :enter)
-            stmt.args[1] = compact.bb_rename_succ[stmt.args[1]::Int]
+            label = compact.bb_rename_succ[stmt.args[1]::Int]
+            @assert label > 0
+            stmt.args[1] = label
         end
         result[result_idx][:inst] = stmt
         result_idx += 1

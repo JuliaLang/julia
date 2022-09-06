@@ -1742,6 +1742,12 @@ function cfg_simplify!(ir::IRCode)
         end
         return idx
     end
+    function ascend_eliminated_preds(pred)
+        while pred != 1 && length(bbs[pred].preds) == 1 && length(bbs[pred].succs) == 1
+            pred = bbs[pred].preds[1]
+        end
+        return pred
+    end
 
     # Walk the CFG from the entry block and aggressively combine blocks
     for (idx, bb) in enumerate(bbs)
@@ -1758,12 +1764,14 @@ function cfg_simplify!(ir::IRCode)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
                 found_interference = false
+                preds = Int[ascend_eliminated_preds(pred) for pred in bb.preds]
                 for idx in bbs[succ].stmts
                     stmt = ir[SSAValue(idx)][:inst]
                     stmt === nothing && continue
                     isa(stmt, PhiNode) || break
                     for edge in stmt.edges
-                        for pred in bb.preds
+                        edge = ascend_eliminated_preds(edge)
+                        for pred in preds
                             if pred == edge
                                 found_interference = true
                                 @goto done
@@ -1779,46 +1787,61 @@ function cfg_simplify!(ir::IRCode)
         end
     end
 
-    # Assign new BB numbers
+    # Assign new BB numbers in DFS order, dropping unreachable blocks
     max_bb_num = 1
-    bb_rename_succ = zeros(Int, length(bbs))
-    for i = 1:length(bbs)
+    bb_rename_succ = fill(0, length(bbs))
+    worklist = BitSetBoundedMinPrioritySet(length(bbs))
+    push!(worklist, 1)
+    while !isempty(worklist)
+        i = popfirst!(worklist)
         # Drop blocks that will be merged away
         if merge_into[i] != 0
             bb_rename_succ[i] = -1
         end
-        # Drop blocks with no predecessors
-        if i != 1 && length(ir.cfg.blocks[i].preds) == 0
-            bb_rename_succ[i] = -1
-        end
         # Mark dropped blocks for fixup
         if !isempty(searchsorted(dropped_bbs, i))
-            bb_rename_succ[i] = -bbs[i].succs[1]
+            succ = bbs[i].succs[1]
+            push!(worklist, succ)
+            bb_rename_succ[i] = -succ
         end
 
-        bb_rename_succ[i] != 0 && continue
-
-        curr = i
-        while true
-            bb_rename_succ[curr] = max_bb_num
-            max_bb_num += 1
-            # Now walk the chain of blocks we merged.
-            # If we end in something that may fall through,
-            # we have to schedule that block next
-            curr = follow_merged_succ(curr)
-            terminator = ir.stmts[ir.cfg.blocks[curr].stmts[end]][:inst]
-            if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
-                break
+        if bb_rename_succ[i] == 0
+            curr = i
+            while true
+                @assert bb_rename_succ[curr] == 0
+                bb_rename_succ[curr] = max_bb_num
+                max_bb_num += 1
+                # Now walk the chain of blocks we merged.
+                # If we end in something that may fall through,
+                # we have to schedule that block next
+                while merged_succ[curr] != 0
+                    if bb_rename_succ[curr] == 0
+                        bb_rename_succ[curr] = -1
+                    end
+                    curr = merged_succ[curr]
+                end
+                terminator = ir.stmts[ir.cfg.blocks[curr].stmts[end]][:inst]
+                if isa(terminator, GotoNode) || isa(terminator, ReturnNode)
+                    break
+                elseif isa(terminator, GotoIfNot)
+                    if bb_rename_succ[terminator.dest] == 0
+                        push!(worklist, terminator.dest)
+                    end
+                end
+                ncurr = curr + 1
+                if !isempty(searchsorted(dropped_bbs, ncurr))
+                    break
+                end
+                curr = ncurr
             end
-            curr += 1
-            if !isempty(searchsorted(dropped_bbs, curr))
-                break
+
+            for succ in bbs[curr].succs
+                if bb_rename_succ[succ] == 0
+                    push!(worklist, succ)
+                end
             end
         end
     end
-
-    # Compute map from new to old blocks
-    result_bbs = Int[findfirst(j->i==j, bb_rename_succ) for i = 1:max_bb_num-1]
 
     # Fixup dropped BBs
     resolved_all = false
@@ -1838,8 +1861,24 @@ function cfg_simplify!(ir::IRCode)
         end
     end
 
-    # Figure out how predecessors should be renamed
+    # Drop remaining unvisited bbs
     bb_rename_pred = zeros(Int, length(bbs))
+    for i = 1:length(bbs)
+        if bb_rename_succ[i] == 0
+            bb_rename_succ[i] = -1
+            bb_rename_pred[i] = -2
+        end
+    end
+
+    # Compute map from new to old blocks
+    result_bbs = zeros(Int, max_bb_num-1)
+    for (o, bb) in enumerate(bb_rename_succ)
+        bb > 0 || continue
+        isempty(searchsorted(dropped_bbs, o)) || continue
+        result_bbs[bb] = o
+    end
+
+    # Figure out how predecessors should be renamed
     for i = 1:length(bbs)
         if merged_succ[i] != 0
             # Block `i` should no longer be a predecessor (before renaming)
@@ -1848,11 +1887,32 @@ function cfg_simplify!(ir::IRCode)
             continue
         end
         pred = i
+        is_unreachable = false
+        is_multi = false
         while pred !== 1 && !isempty(searchsorted(dropped_bbs, pred))
-            pred = bbs[pred].preds[1]
+            preds = bbs[pred].preds
+            if length(preds) == 0
+                is_unreachable = true
+                break
+            elseif length(preds) > 1
+                # This block has multiple predecessors - the only way this is
+                # legal is if we proved above that our successors don't have
+                # any phi nodes that would interfere with the renaming. Mark
+                # this specially.
+                is_multi = true
+                break
+            end
+            @assert length(preds) == 1
+            pred = preds[1]
         end
-        bbnum = follow_merge_into(pred)
-        bb_rename_pred[i] = bb_rename_succ[bbnum]
+        if is_unreachable
+            @assert bb_rename_pred[i] == -2
+        elseif is_multi
+            bb_rename_pred[i] = -3
+        else
+            bbnum = follow_merge_into(pred)
+            bb_rename_pred[i] = bb_rename_succ[bbnum]
+        end
     end
 
     # Compute new block lengths
@@ -1886,7 +1946,20 @@ function cfg_simplify!(ir::IRCode)
         function compute_preds(i)
             orig_bb = result_bbs[i]
             preds = bbs[orig_bb].preds
-            return Int[bb_rename_pred[pred] for pred in preds]
+            res = Int[]
+            function scan_preds!(preds)
+                for pred in preds
+                    r = bb_rename_pred[pred]
+                    r == -2 && continue
+                    if r == -3
+                        scan_preds!(bbs[pred].preds)
+                    else
+                        push!(res, r)
+                    end
+                end
+            end
+            scan_preds!(preds)
+            return res
         end
 
         BasicBlock[
@@ -1903,8 +1976,10 @@ function cfg_simplify!(ir::IRCode)
         @assert length(new_bb.succs) <= 2
         length(new_bb.succs) <= 1 && continue
         if new_bb.succs[1] == new_bb.succs[2]
-            terminator = ir[SSAValue(last(bbs[old_bb].stmts))]
+            old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
+            terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
             @assert isa(terminator[:inst], GotoIfNot)
+            # N.B.: The dest will be renamed in process_node! below
             terminator[:inst] = GotoNode(terminator[:inst].dest)
             pop!(new_bb.succs)
             new_succ = cresult_bbs[new_bb.succs[1]]
@@ -1945,6 +2020,7 @@ function cfg_simplify!(ir::IRCode)
             ms = merged_succ[ms]
         end
     end
+    compact.idx = length(ir.stmts)
     compact.active_result_bb = length(bb_starts)
     return finish(compact)
 end
