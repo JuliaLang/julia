@@ -393,11 +393,6 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function collect_limitations!(@nospecialize(typ), ::IRCode)
-    @assert !isa(typ, LimitedAccuracy) "semi-concrete eval on recursive call graph"
-    return typ
-end
-
 function from_interconditional(ipo_lattice::AbstractLattice, @nospecialize(typ),
         sv::InferenceState, (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
     lattice = widenlattice(ipo_lattice)
@@ -755,7 +750,7 @@ function pure_eval_eligible(interp::AbstractInterpreter,
     return f !== nothing &&
            length(applicable) == 1 &&
            is_method_pure(applicable[1]::MethodMatch) &&
-           is_all_const_arg(arginfo)
+           is_all_const_arg(arginfo, #=start=#2)
 end
 
 function is_method_pure(method::Method, @nospecialize(sig), sparams::SimpleVector)
@@ -777,7 +772,7 @@ function pure_eval_call(interp::AbstractInterpreter,
     return _pure_eval_call(f, arginfo)
 end
 function _pure_eval_call(@nospecialize(f), arginfo::ArgInfo)
-    args = collect_const_args(arginfo)
+    args = collect_const_args(arginfo, #=start=#2)
     value = try
         Core._apply_pure(f, args)
     catch
@@ -795,50 +790,34 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
     # method since currently there is no direct way to execute overlayed methods
     isoverlayed(method_table(interp)) && !is_nonoverlayed(result.effects) && return nothing
     if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-        if is_all_const_arg(arginfo)
+        if is_all_const_arg(arginfo, #=start=#2)
             return true
         else
-            # TODO: is_nothrow is not an actual requirement here, this is just a hack
-            # to avoid entering semi concrete eval while it doesn't properly propagate no_throw
+            # TODO: `is_nothrow` is not an actual requirement here, this is just a hack
+            # to avoid entering semi concrete eval while it doesn't properly override effects
             return is_nothrow(result.effects) ? false : nothing
         end
-    else
-        return nothing
     end
-    # if f !== nothing && result.edge !== nothing && is_foldable(result.effects)
-    #   return is_all_const_arg(arginfo)
-    # else
-    #   return nothing
-    # end
+    return nothing
 end
 
-is_all_const_arg((; argtypes)::ArgInfo) = is_all_const_arg(argtypes)
-function is_all_const_arg(argtypes::Vector{Any})
-    for i = 2:length(argtypes)
+is_all_const_arg(arginfo::ArgInfo, start::Int) = is_all_const_arg(arginfo.argtypes, start::Int)
+function is_all_const_arg(argtypes::Vector{Any}, start::Int)
+    for i = start:length(argtypes)
         a = widenconditional(argtypes[i])
         isa(a, Const) || isconstType(a) || issingletontype(a) || return false
     end
     return true
 end
 
-collect_const_args(arginfo::ArgInfo, start::Int=2) = collect_const_args(arginfo.argtypes, start)
-function collect_const_args(argtypes::Vector{Any}, start::Int=2)
+collect_const_args(arginfo::ArgInfo, start::Int) = collect_const_args(arginfo.argtypes, start)
+function collect_const_args(argtypes::Vector{Any}, start::Int)
     return Any[ let a = widenconditional(argtypes[i])
                     isa(a, Const) ? a.val :
                     isconstType(a) ? (a::DataType).parameters[1] :
                     (a::DataType).instance
-                end for i = 2:length(argtypes) ]
+                end for i = start:length(argtypes) ]
 end
-
-function collect_semi_const_args(argtypes::Vector{Any}, start::Int=2)
-    return Any[ let a = widenconditional(argtypes[i])
-                    isa(a, Const) ? a.val :
-                    isconstType(a) ? (a::DataType).parameters[1] :
-                    isdefined(a, :instance) ? (a::DataType).instance :
-                    nothing
-                end for i in start:length(argtypes) ]
-end
-
 
 function invoke_signature(invokesig::Vector{Any})
     ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
@@ -850,7 +829,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
     eligible = concrete_eval_eligible(interp, f, result, arginfo, sv)
     eligible === nothing && return false
     if eligible
-        args = collect_const_args(arginfo)
+        args = collect_const_args(arginfo, #=start=#2)
         world = get_world_counter(interp)
         value = try
             Core._call_in_world_total(world, f, args...)
@@ -1842,7 +1821,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 2 && istopfunction(f, :typename)
         return CallMeta(typename_static(argtypes[2]), EFFECTS_TOTAL, MethodResultPure())
     elseif la == 3 && istopfunction(f, :typejoin)
-        if is_all_const_arg(arginfo)
+        if is_all_const_arg(arginfo, #=start=#2)
             val = _pure_eval_call(f, arginfo)
             return CallMeta(val === nothing ? Type : val, EFFECTS_TOTAL, MethodResultPure())
         end
