@@ -326,16 +326,16 @@ end
 ```
 
 If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref):
-```julia
+```jldoctest
 julia> arithmetic = Module(:arithmetic, false, false)
 Main.arithmetic
 
 julia> @eval arithmetic add(x, y) = $(+)(x, y)
 add (generic function with 1 method)
 
-julia> @doc """
+julia> """
            add(x, y)
-           
+
        This sums up `x` and `y` and returns the result.
        """
        arithmetic.add
