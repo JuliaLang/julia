@@ -190,8 +190,10 @@
 (define where-enabled #t)
 ; context for underscore anonymous function
 (define underscore-context #t)
-; context for underscore anonymous function
+; control underscore generate single expression or a block
 (define underscore-gen-block #t)
+; disable underscore inside lvalue context
+(define underscore-lvalue #f)
 
 (define current-filename 'none)
 
@@ -222,17 +224,19 @@
                   ,@body))
 
 ;; ops should be #f, #t, 'paren, 'comma
-;; #f means no _ allowed in context, would parsed as is
-;; #t means no _ allowed in context, but could create a new context
-;; 'stmt means no _ allowed in context, should be created in subcontext
+;; #f (to: #t) means no _ allowed in context, would parsed as is
+;; #t (to: any) means no _ allowed in context, but could create a new context
+;; 'stmt (not-from: #f, to: any) means no _ allowed in context, should be created in subcontext
 ;;   the difference between #t and 'stmt is that #t could changes #f, while 'stmt leave #f as is
 ;; 'paren means _ could not cross this scope, mostly in explicit (_+1) or (_, 1)
 ;; 'comma means _ would unwind if it is the only token in context like in f(_, 1)
 ;; note (f(_),1) would unwind to (x->f(x),1)
 (define (make-ctx_ ops s)
-  (and s (if (or (boolean? ops) (eqv? ops 'stmt))
-             ops
-             (vector '() ops s))))
+  (cond ((eqv? ops #t) ops)
+        ((eqv? s #f) s)
+        ((or (boolean? ops) (memq ops '(stmt decl))) ops)
+        ; ((boolean? s) (info "invalid internal underscore context status" (vector '() ops s)))
+        (else (vector '() ops s))))
 (define (ctx_:parent s) (and (vector? s) (aref s 2)))
 (define (ctx_:ops s) (and (vector? s) (aref s 1)))
 (define (ctx_:get s) (and (vector? s) (aref s 0)))
@@ -254,6 +258,13 @@
               (ctx_:add! current ex)
               (ctx_:add! parent ex)))))
 
+(define-macro (with-underscore-lvalue ops . body)
+  `(if (or (null? ,ops) (eqv? ,ops underscore-lvalue))
+      (begin ,@body)
+      (with-bindings ((underscore-lvalue ,ops))
+        (if ,ops
+            (with-underscore-context 'stmt ,@body)
+            (with-underscore-context 'paren ,@body)))))
 (define-macro (with-underscore-context ops . body)
   `(with-bindings ((underscore-context (make-ctx_ ,ops underscore-context)))
                   (let* ((line-node (line-number-node s))
@@ -920,7 +931,8 @@
                   (else (error "internal: pop current error" (info old ex)))))
         ex)))
 
-(define (parse-assignment s down)
+(define (parse-assignment s down (lvalue '()))
+(with-underscore-lvalue lvalue
   (let* ((ex (down s))
          (t  (peek-token s)))
     (if (not (is-prec-assignment? t))
@@ -939,9 +951,9 @@
                  (let* ((ex (revert-current-underscore! ex))
                         (lno (input-port-line (ts:port s))))
                    (short-form-function-loc
-                    (list t ex (parse-assignment s down)) lno)))
+                    (list t ex (parse-assignment s down #f)) lno)))
                 (else
-                 (list t ex (parse-assignment s down))))))))
+                 (list t ex (parse-assignment s down)))))))))
 
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s)
@@ -1324,6 +1336,7 @@
         (parse-atom s))))
 
 (define (parse-def s is-func anon)
+(with-underscore-lvalue #t
   (let* ((ex  (parse-unary-prefix s))
          (sig (if (or (and is-func (reserved-word? ex)) (initial-reserved-word? ex))
                   (error (string "invalid name \"" ex "\""))
@@ -1335,7 +1348,7 @@
               sig)))
     (if (eq? (peek-token s) 'where)
         (parse-where-chain s decl-sig)
-        decl-sig)))
+        decl-sig))))
 
 (define (disallowed-space-error lno ex t)
   (error (string "space before \"" t "\" not allowed in \""
@@ -1647,7 +1660,7 @@
         (let* ((loc   (line-number-node s))
                (paren (eqv? (require-token s) #\())
                ; TODO: design context to remove revert
-               (sig   (revert-underscore (with-underscore-context #t (parse-def s (eq? word 'function) paren)))))
+               (sig   (parse-def s (eq? word 'function) paren)))
           (if (and (not paren) (symbol-or-interpolate? sig))
               (begin (if (not (eq? (require-token s) 'end))
                          (error (string "expected \"end\" in definition of " word " \"" sig "\"")))
@@ -2699,7 +2712,7 @@
            (take-token s)
            (cond ((and (eqv? (peek-token s) #\") (not (ts:space? s)))
                   t) ; str macro _"a" parsed to @__str "a"
-                 ((vector? underscore-context)
+                 ((and (vector? underscore-context) (not underscore-lvalue))
                   (let ((ex (named-gensy '_)))
                        (ctx_:add! underscore-context ex)
                        ex))  ; switched off in some place like lvalue

@@ -50,6 +50,7 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/refvalue.jl \
 		base/tuple.jl)
 COMPILER_SRCS += $(shell find $(JULIAHOME)/base/compiler -name \*.jl)
+PARSER_SRCS := $(shell find $(JULIAHOME)/src -name \*.scm)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
                     $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
@@ -57,7 +58,7 @@ STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(shell find $(build_datarootdir)/jul
                     $(build_prefix)/manifest/Pkg
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 
-$(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS)
+$(build_private_libdir)/corecompiler.ji: $(COMPILER_SRCS) $(PARSER_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" --output-ji $(call cygpath_w,$@).tmp \
 		--startup-file=no --warn-overwrite=yes -g$(BOOTSTRAP_DEBUG_LEVEL) -O0 compiler/compiler.jl)
