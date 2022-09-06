@@ -157,9 +157,10 @@ function should_print_ssa_type(@nospecialize node)
            !isa(node, QuoteNode)
 end
 
-function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
-    printstyled(io, "::", typ, color=(used ? :cyan : :light_black))
-    nothing
+function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
+    show_type || return nothing
+    printstyled(io, "::", type, color=(used ? :cyan : :light_black))
+    return nothing
 end
 
 normalize_method_name(m::Method) = m.name
@@ -497,14 +498,18 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     return emit_lineinfo_update
 end
 
-# line_info_preprinter(io::IO, indent::String, idx::Int) may print relevant info
-#   at the beginning of the line, and should at least print `indent`. It returns a
-#   string that will be printed after the final basic-block annotation.
-# line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
-#   of the statement
-# should_print_stmt(idx::Int) -> Bool: whether the statement at index `idx` should be
-#   printed as part of the IR or not
-# bb_color: color used for printing the basic block brackets on the left
+"""
+    IRShowConfig
+
+- `line_info_preprinter(io::IO, indent::String, idx::Int)`` may print relevant info
+  at the beginning of the line, and should at least print `indent`. It returns a
+  string that will be printed after the final basic-block annotation.
+- `line_info_postprinter(io::IO; type, used::Bool, show_type::Bool, idx::Int)` prints
+  relevant information like type-annotation at the end of the statement
+- `should_print_stmt(idx::Int) -> Bool`: whether the statement at index `idx` should be
+  printed as part of the IR or not
+- `bb_color`: color used for printing the basic block brackets on the left
+"""
 struct IRShowConfig
     line_info_preprinter
     line_info_postprinter
@@ -647,8 +652,8 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 
         if new_node_type === UNDEF # try to be robust against errors
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => node_idx), new_node_type, node_idx in used)
+        else
+            line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
         end
         println(io)
         i += 1
@@ -662,8 +667,8 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
         if type === UNDEF
             # This is an error, but can happen if passes don't update their type information
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => idx), type, idx in used)
+        else
+            line_info_postprinter(io; type, used = idx in used, show_type, idx)
         end
     end
     println(io)
