@@ -21,6 +21,44 @@ function parseall(str)
         return Expr(:block, exs...)
     end
 end
+function is_equal_expr(ex, expected; params1=[], params2=[])
+    if Meta.isexpr(ex, :block)
+        ex = ex.args[2:end]
+    end
+    if Meta.isexpr(expected, :block)
+        expected = expected.args[2:end]
+    end
+    if ex isa Symbol && expected isa Symbol
+        if ex in params1 && expected in params2
+            return findfirst(x->x==ex, params1) == findfirst(x->x==expected, params2)
+        end
+        return ex == expected
+    end
+    if ex isa AbstractArray && expected isa AbstractArray
+        if length(ex) != length(expected)
+            return false
+        end
+        for (e1, e2) in zip(ex, expected)
+            if !is_equal_expr(e1, e2; params1=params1, params2=params2)
+                return false
+            end
+        end
+        return true
+    end
+    if Meta.isexpr(expected, :->) && Meta.isexpr(ex, :->)
+        args1, args2 = ex.args[1], expected.args[1]
+        args1 = Meta.isexpr(args1, :tuple) ? args1[2:end] : [args1]
+        args2 = Meta.isexpr(args2, :tuple) ? args2[2:end] : [args2]
+        if length(args1) != length(args2)
+            return false
+        end
+        return is_equal_expr(ex.args[2], expected.args[2]; params1=args1, params2=args2)
+    end
+    if ex isa Expr && expected isa Expr
+        return ex.head == expected.head && is_equal_expr(ex.args, expected.args; params1=params1, params2=params2)
+    end
+    return ex == expected
+end
 
 # issue #9684
 let
@@ -1197,8 +1235,10 @@ end
 @test_throws ParseError Meta.parse("1e3.")
 @test Meta.parse("2e_1") == Expr(:call, :*, 2, :e_1)
 # issue #17705
-@test Meta.parse("2e3_") == Expr(:call, :*, 2e3, :_)
-@test Meta.parse("2e-3_") == Expr(:call, :*, 2e-3, :_)
+@test is_equal_expr(Meta.parse("2e3_"), Expr(:->, :x, Expr(:block, :line, Expr(:call, :*, 2e3, :x))))
+@test is_equal_expr(Meta.parse("2e-3_"), Expr(:->, :x, Expr(:block, :line, Expr(:call, :*, 2e-3, :x))))
+@test Meta.parse("2e3_1") == Expr(:call, :*, 2e3, :_1)
+@test Meta.parse("2e-3_1") == Expr(:call, :*, 2e-3, :_1)
 @test Meta.parse("2e3_\"x\"") == Expr(:call, :*, 2e3, Expr(:macrocall, Symbol("@__str"), LineNumberNode(1, :none), "x"))
 
 # misplaced top-level expressions
