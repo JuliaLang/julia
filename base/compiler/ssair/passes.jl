@@ -1103,7 +1103,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
     return true
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir.stmts[pc][:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW) ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = (ir.stmts[pc][:flag] & IR_FLAG_NOTHROW) ≠ 0
 
 function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse, inlining::InliningState, info::Union{FinalizerInfo, Nothing})
     # For now: Require that all uses and defs are in the same basic block,

@@ -1148,11 +1148,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result_idx += 1
     elseif isa(stmt, GlobalRef)
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
-        if (result[result_idx][:flag] & total_flags) == total_flags
+        flag = result[result_idx][:flag]
+        if (flag & total_flags) == total_flags
             ssa_rename[idx] = stmt
         else
             result[result_idx][:inst] = stmt
             result[result_idx][:type] = argextype(stmt, compact)
+            result[result_idx][:flag] = flag
             result_idx += 1
         end
     elseif isa(stmt, GotoNode)
