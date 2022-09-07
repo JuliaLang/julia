@@ -871,6 +871,7 @@ const _kind_names =
         "curly"
         "inert"          # QuoteNode; not quasiquote
         "string"         # A string interior node (possibly containing interpolations)
+        "cmdstring"      # A cmd string node (containing delimiters plus string)
         "macrocall"
         "kw"             # the = in f(a=1)
         "parameters"     # the list after ; in f(; a=1)
