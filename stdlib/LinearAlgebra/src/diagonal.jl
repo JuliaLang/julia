@@ -604,12 +604,14 @@ function kron(A::Diagonal, B::SymTridiagonal)
     kev = kron(diag(A), _pushzero(_evview(B)))
     SymTridiagonal(kdv, kev)
 end
-function kron(A::Diagonal, B::Tridiagonal)
+# We can only handle Vector representations, otherwise _droplast! might not be defined
+function kron(A::Diagonal{<:Any,<:Vector}, B::Tridiagonal{<:Any,<:Vector})
     kd = kron(diag(A), B.d)
     kdl = _droplast!(kron(diag(A), _pushzero(B.dl)))
     kdu = _droplast!(kron(diag(A), _pushzero(B.du)))
     Tridiagonal(kdl, kd, kdu)
 end
+kron(A::Diagonal, B::Tridiagonal) = kron(Diagonal(_makevec(A.diag)), Tridiagonal(_makevec(B.dl), _makevec(B.d), _makevec(B.du)))
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     require_one_based_indexing(B)
