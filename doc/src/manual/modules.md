@@ -333,18 +333,11 @@ Main.arithmetic
 julia> @eval arithmetic add(x, y) = $(+)(x, y)
 add (generic function with 1 method)
 
-julia> """
-           add(x, y)
-
-       This sums up `x` and `y` and returns the result.
-       """
-       arithmetic.add
+julia> @doc "`add(x,y)` adds `x` and `y` together." arithmetic.add
 Main.arithmetic.add
 
 help?> arithmetic.add
-  add(x, y)
-
-  This sums up x and y and returns the result.
+  add(x,y) adds x and y together.
 
 julia> arithmetic.add(12, 13)
 25
