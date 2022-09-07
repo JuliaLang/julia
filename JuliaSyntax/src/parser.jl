@@ -468,28 +468,28 @@ function parse_docstring(ps::ParseState, down=parse_eq)
     mark = position(ps)
     atdoc_mark = bump_invisible(ps, K"TOMBSTONE")
     down(ps)
-    if peek_behind(ps).kind in KSet"String string"
+    if peek_behind(ps).kind == K"string"
         is_doc = true
         k = peek(ps)
         if is_closing_token(ps, k)
-            # "notdoc" ] ==> "notdoc"
+            # "notdoc" ] ==> (string "notdoc")
             is_doc = false
         elseif k == K"NewlineWs"
             k2 = peek(ps, 2)
             if is_closing_token(ps, k2) || k2 == K"NewlineWs"
-                # "notdoc" \n]      ==> "notdoc"
-                # "notdoc" \n\n foo ==> "notdoc"
+                # "notdoc" \n]      ==> (string "notdoc")
+                # "notdoc" \n\n foo ==> (string "notdoc")
                 is_doc = false
             else
                 # Allow a single newline
-                # "doc" \n foo ==> (macrocall core_@doc "doc" foo)
+                # "doc" \n foo ==> (macrocall core_@doc (string "doc") foo)
                 bump(ps, TRIVIA_FLAG) # NewlineWs
             end
         else
-            # "doc" foo    ==> (macrocall core_@doc "doc" foo)
+            # "doc" foo    ==> (macrocall core_@doc (string "doc") foo)
             # "doc $x" foo ==> (macrocall core_@doc (string "doc " x) foo)
             # Allow docstrings with embedded trailing whitespace trivia
-            # """\n doc\n """ foo ==> (macrocall core_@doc "doc\n" foo)
+            # """\n doc\n """ foo ==> (macrocall core_@doc (string-s "doc\n") foo)
         end
         if is_doc
             reset_node!(ps, atdoc_mark, kind=K"core_@doc")
@@ -1048,11 +1048,12 @@ function parse_juxtapose(ps::ParseState)
         if n_terms == 1
             bump_invisible(ps, K"*")
         end
-        if prev_kind == K"String" || is_string_delim(t)
+        if prev_kind == K"string" || is_string_delim(t)
             # issue #20575
             #
-            # "a""b"  ==>  (call-i "a" * (error) "b")
-            # "a"x    ==>  (call-i "a" * (error) x)
+            # "a""b"  ==>  (call-i (string "a") * (error-t) (string "b"))
+            # "a"x    ==>  (call-i (string "a") * (error-t) x)
+            # "$y"x   ==>  (call-i (string (string y)) * (error-t) x)
             bump_invisible(ps, K"error", TRIVIA_FLAG,
                            error="cannot juxtapose string literal")
         end
@@ -1389,7 +1390,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # @foo (x)    ==> (macrocall @foo x)
             # @foo (x,y)  ==> (macrocall @foo (tuple x y))
             # a().@x y    ==> (macrocall (error (. (call a) (quote x))) y)
-            # [@foo "x"]  ==> (vect (macrocall @foo "x"))
+            # [@foo x]    ==> (vect (macrocall @foo x))
             finish_macroname(ps, mark, valid_macroname, macro_name_position)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
@@ -1420,7 +1421,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         elseif (ps.space_sensitive && preceding_whitespace(t) &&
                 k in KSet"( [ { \ Char \" \"\"\" ` ```")
             # [f (x)]  ==>  (hcat f x)
-            # [f "x"]  ==>  (hcat f "x")
+            # [f x]    ==>  (hcat f x)
             break
         elseif k == K"("
             if is_macrocall
@@ -1597,12 +1598,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
         elseif k in KSet" \" \"\"\" ` ``` " &&
                 !preceding_whitespace(t) && valid_macroname
             # Custom string and command literals
-            # x"str" ==> (macrocall @x_str "str")
-            # x`str` ==> (macrocall @x_cmd "str")
-            # x""    ==> (macrocall @x_str "")
-            # x``    ==> (macrocall @x_cmd "")
+            # x"str" ==> (macrocall @x_str (string-r "str"))
+            # x`str` ==> (macrocall @x_cmd (cmdstring-r "str"))
+            # x""    ==> (macrocall @x_str (string-r ""))
+            # x``    ==> (macrocall @x_cmd (cmdstring-r ""))
             # Triple quoted procesing for custom strings
-            # r"""\nx""" ==> (macrocall @r_str "x")
+            # r"""\nx"""          ==> (macrocall @r_str (string-sr "x"))
             # r"""\n x\n y"""     ==> (macrocall @r_str (string-sr "x\n" "y"))
             # r"""\n x\\n y"""    ==> (macrocall @r_str (string-sr "x\\\n" "y"))
             #
@@ -1615,11 +1616,11 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             k = kind(t)
             if !preceding_whitespace(t) && (k == K"Identifier" || is_keyword(k) || is_word_operator(k) || is_number(k))
                 # Macro sufficies can include keywords and numbers
-                # x"s"y    ==> (macrocall @x_str "s" "y")
-                # x"s"end  ==> (macrocall @x_str "s" "end")
-                # x"s"in   ==> (macrocall @x_str "s" "in")
-                # x"s"2    ==> (macrocall @x_str "s" 2)
-                # x"s"10.0 ==> (macrocall @x_str "s" 10.0)
+                # x"s"y    ==> (macrocall @x_str (string-r "s") "y")
+                # x"s"end  ==> (macrocall @x_str (string-r "s") "end")
+                # x"s"in   ==> (macrocall @x_str (string-r "s") "in")
+                # x"s"2    ==> (macrocall @x_str (string-r "s") 2)
+                # x"s"10.0 ==> (macrocall @x_str (string-r "s") 10.0)
                 suffix_kind = (k == K"Identifier" || is_keyword(k) ||
                                is_word_operator(k)) ? K"String" : k
                 bump(ps, remap_kind=suffix_kind)
@@ -1813,7 +1814,7 @@ function parse_resword(ps::ParseState)
             parse_unary_prefix(ps)
         end
         # module A \n a \n b \n end  ==>  (module true A (block a b))
-        # module A \n "x"\na \n end  ==>  (module true A (block (core_@doc "x" a)))
+        # module A \n "x"\na \n end  ==>  (module true A (block (core_@doc (string "x") a)))
         parse_block(ps, parse_docstring)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"module")
@@ -3032,8 +3033,7 @@ function parse_string(ps::ParseState, raw::Bool)
     indent_ref_len = typemax(Int)
     indent_chunks = acquire_positions(ps.stream)
     buf = textbuf(ps)
-    str_flags = (triplestr ? TRIPLE_STRING_FLAG : EMPTY_FLAGS) |
-                (raw       ? RAW_STRING_FLAG : EMPTY_FLAGS)
+    chunk_flags = raw ? RAW_STRING_FLAG : EMPTY_FLAGS
     bump(ps, TRIVIA_FLAG)
     first_chunk = true
     n_valid_chunks = 0
@@ -3048,18 +3048,9 @@ function parse_string(ps::ParseState, raw::Bool)
             bump(ps, TRIVIA_FLAG)
             k = peek(ps)
             if k == K"("
-                # "a $(x + y) b"  ==> (string "a " (call-i x + y) " b")
-                m = position(ps)
+                # "a $(x + y) b"  ==>  (string "a " (call-i x + y) " b")
+                # "hi$("ho")"     ==>  (string "hi" (string "ho"))
                 parse_atom(ps)
-                # https://github.com/JuliaLang/julia/pull/38692
-                prev = peek_behind(ps)
-                if prev.kind == string_chunk_kind
-                    # Wrap interpolated literal strings in (string) so we can
-                    # distinguish them from the surrounding text (issue #38501)
-                    # "hi$("ho")"      ==>  (string "hi" (string "ho"))
-                    # "hi$("""ho""")"  ==>  (string "hi" (string-s "ho"))
-                    emit(ps, m, K"string", prev.flags)
-                end
             elseif k == K"var"
                 # var identifiers disabled in strings
                 # "$var"  ==>  (string var)
@@ -3087,7 +3078,7 @@ function parse_string(ps::ParseState, raw::Bool)
                         (s == 2 && (buf[first_byte(t)] == UInt8('\r') && b == UInt8('\n')))
                     end
                 # First line of triple string is a newline only: mark as trivia.
-                # """\nx"""    ==> "x"
+                # """\nx"""    ==> (string-s "x")
                 # """\n\nx"""  ==> (string-s "\n" "x")
                 bump(ps, TRIVIA_FLAG)
                 first_chunk = false
@@ -3097,6 +3088,7 @@ function parse_string(ps::ParseState, raw::Bool)
                     # Triple-quoted dedenting:
                     # Various newlines (\n \r \r\n) and whitespace (' ' \t)
                     # """\n x\n y"""      ==> (string-s "x\n" "y")
+                    # ```\n x\n y```      ==> (macrocall :(Core.var"@cmd") (cmdstring-sr "x\n" "y"))
                     # """\r x\r y"""      ==> (string-s "x\n" "y")
                     # """\r\n x\r\n y"""  ==> (string-s "x\n" "y")
                     # Spaces or tabs or mixtures acceptable
@@ -3158,7 +3150,7 @@ function parse_string(ps::ParseState, raw::Bool)
                     b = buf[last_byte(t)]
                     prev_chunk_newline = b == UInt8('\n') || b == UInt8('\r')
                 end
-                bump(ps, str_flags)
+                bump(ps, chunk_flags)
                 first_chunk = false
                 n_valid_chunks += 1
             end
@@ -3187,36 +3179,37 @@ function parse_string(ps::ParseState, raw::Bool)
     if had_end_delim
         if n_valid_chunks == 0
             # Empty strings, or empty after triple quoted processing
-            # "" ==> ""
-            # """\n  """ ==> ""
-            bump_invisible(ps, string_chunk_kind, str_flags)
+            # "" ==> (string "")
+            # """\n  """ ==> (string-s "")
+            bump_invisible(ps, string_chunk_kind, chunk_flags)
         end
         bump(ps, TRIVIA_FLAG)
     else
         # Missing delimiter recovery
-        # "str   ==> "str" (error)
+        # "str   ==> (string "str" (error-t))
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="Unterminated string literal")
     end
-    if n_valid_chunks > 1 || had_interpolation
-        # String interpolations
-        # "$x$y$z"  ==> (string x y z)
-        # "$(x)"    ==> (string x)
-        # "$x"      ==> (string x)
-        # """$x"""  ==> (string-s x)
-        #
-        # Strings with embedded whitespace trivia
-        # "a\\\nb"      ==> (string "a" "b")
-        # "a\\\rb"      ==> (string "a" "b")
-        # "a\\\r\nb"    ==> (string "a" "b")
-        # "a\\\n \tb"   ==> (string "a" "b")
-        emit(ps, mark, K"string", str_flags)
-    else
-        # Strings with only a single valid string chunk
-        # "str" ==> "str"
-        # "a\\\n"   ==> "a"
-        # "a\\\r"   ==> "a"
-        # "a\\\r\n" ==> "a"
-    end
+    # String interpolations
+    # "$x$y$z"  ==> (string x y z)
+    # "$(x)"    ==> (string x)
+    # "$x"      ==> (string x)
+    # """$x"""  ==> (string-s x)
+    #
+    # Strings with embedded whitespace trivia
+    # "a\\\nb"      ==> (string "a" "b")
+    # "a\\\rb"      ==> (string "a" "b")
+    # "a\\\r\nb"    ==> (string "a" "b")
+    # "a\\\n \tb"   ==> (string "a" "b")
+    #
+    # Strings with only a single valid string chunk
+    # "str"     ==> (string "str")
+    # "a\\\n"   ==> (string "a")
+    # "a\\\r"   ==> (string "a")
+    # "a\\\r\n" ==> (string "a")
+    string_kind = delim_k in KSet"\" \"\"\"" ? K"string" : K"cmdstring"
+    str_flags = (triplestr ? TRIPLE_STRING_FLAG : EMPTY_FLAGS) |
+                (raw       ? RAW_STRING_FLAG : EMPTY_FLAGS)
+    emit(ps, mark, string_kind, str_flags)
 end
 
 function emit_braces(ps, mark, ckind, cflags)
@@ -3264,7 +3257,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             # Heuristic recovery
             bump(ps)
         else
-            # Being inside quote makes keywords into identifiers at at the
+            # Being inside quote makes keywords into identifiers at the
             # first level of nesting
             # :end ==> (quote end)
             # :(end) ==> (quote (error (end)))
@@ -3366,9 +3359,9 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif is_string_delim(leading_kind)
         parse_string(ps, false)
     elseif leading_kind in KSet"` ```"
-        # ``          ==>  (macrocall core_@cmd "")
-        # `cmd`       ==>  (macrocall core_@cmd "cmd")
-        # ```cmd```   ==>  (macrocall core_@cmd "cmd"-s)
+        # ``          ==>  (macrocall core_@cmd (cmdstring-r ""))
+        # `cmd`       ==>  (macrocall core_@cmd (cmdstring-r "cmd"))
+        # ```cmd```   ==>  (macrocall core_@cmd (cmdstring-sr "cmd"))
         bump_invisible(ps, K"core_@cmd")
         parse_string(ps, true)
         emit(ps, mark, K"macrocall")

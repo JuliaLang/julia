@@ -450,6 +450,17 @@ The syntax `a ? b : c` is the same as `if a b else c` in `Expr` so macros can't
 distinguish these cases. Instead, we use a distinct expression head `K"?"` and
 lower to `Expr(:if)` during `Expr` conversion.
 
+### String nodes always wrapped in `K"string"` or `K"cmdstring"`
+
+All strings are surrounded by a node of kind `K"string"`, even non-interpolated
+literals, so `"x"` parses as `(string "x")`. This makes string handling simpler
+and more systematic because interpolations and triple strings with embedded
+trivia don't need to be treated differently. It also gives a container in which
+to attach the delimiting quotes.
+
+The same goes for command strings which are always wrapped in `K"cmdstring"`
+regardless of whether they have multiple pieces (due to triple-quoted
+dedenting) or otherwise.
 
 ## More about syntax kinds
 

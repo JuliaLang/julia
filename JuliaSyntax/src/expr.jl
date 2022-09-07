@@ -6,6 +6,11 @@ function is_eventually_call(ex)
                                       is_eventually_call(ex.args[1]))
 end
 
+function is_stringchunk(node)
+    k = kind(node)
+    return k == K"String" || k == K"CmdString"
+end
+
 function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
     if !haschildren(node)
         val = node.val
@@ -32,6 +37,54 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
             error("Can't untokenize head of kind $(kind(node))")
     end
     node_args = children(node)
+    if headsym == :string || headsym == :cmdstring
+        # Julia string literals may be interspersed with trivia in two situations:
+        # 1. Triple quoted string indentation is trivia
+        # 2. An \ before newline removes the newline and any following indentation
+        #
+        # Such trivia is eagerly removed by the reference parser, so here we
+        # concatenate adjacent string chunks together for compatibility.
+        args = Vector{Any}()
+        i = 1
+        while i <= length(node_args)
+            if is_stringchunk(node_args[i])
+                if i < length(node_args) && is_stringchunk(node_args[i+1])
+                    buf = IOBuffer()
+                    while i <= length(node_args) && is_stringchunk(node_args[i])
+                        write(buf, node_args[i].val)
+                        i += 1
+                    end
+                    push!(args, String(take!(buf)))
+                else
+                    push!(args, node_args[i].val)
+                    i += 1
+                end
+            else
+                e = _to_expr(node_args[i])
+                if e isa String && headsym == :string
+                    # Wrap interpolated literal strings in (string) so we can
+                    # distinguish them from the surrounding text (issue #38501)
+                    # Ie, "$("str")"  vs  "str"
+                    # https://github.com/JuliaLang/julia/pull/38692
+                    e = Expr(:string, e)
+                end
+                push!(args, e)
+                i += 1
+            end
+        end
+        if length(args) == 1 && args[1] isa String
+            # If there's a single string remaining after joining, we unwrap
+            # to give a string literal.
+            #   """\n  a\n  b""" ==>  "a\nb"
+            # headsym === :cmdstring follows this branch
+            return only(args)
+        else
+            @check headsym === :string
+            return Expr(headsym, args...)
+        end
+    end
+
+    # Convert children
     insert_linenums = (headsym == :block || headsym == :toplevel) && need_linenodes
     args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
     if headsym == :for && length(node_args) == 2
@@ -125,38 +178,6 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
         pushfirst!(args, numeric_flags(flags(node)))
     elseif headsym == :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
-    elseif headsym == :string && length(args) > 1
-        # Julia string literals may be interspersed with trivia in two situations:
-        # 1. Triple quoted string indentation is trivia
-        # 2. An \ before newline removes the newline and any following indentation
-        #
-        # Such trivia is eagerly removed by the reference parser, so here we
-        # concatenate adjacent string chunks together for compatibility.
-        #
-        # TODO: Manage the non-interpolation cases with String and CmdString
-        # kinds instead?
-        args2 = Vector{Any}()
-        i = 1
-        while i <= length(args)
-            if args[i] isa String && i < length(args) && args[i+1] isa String
-                buf = IOBuffer()
-                while i <= length(args) && args[i] isa String
-                    write(buf, args[i])
-                    i += 1
-                end
-                push!(args2, String(take!(buf)))
-            else
-                push!(args2, args[i])
-                i += 1
-            end
-        end
-        args = args2
-        if length(args2) == 1 && args2[1] isa String
-            # If there's a single string remaining after joining we unwrap to
-            # give a string literal.
-            # """\n  a\n  b""" ==>  "a\nb"
-            return args2[1]
-        end
     # elseif headsym == :string && length(args) == 1 && version <= (1,5)
     #   Strip string from interpolations in 1.5 and lower to preserve
     #   "hi$("ho")" ==>  (string "hi" "ho")
