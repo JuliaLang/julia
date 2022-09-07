@@ -190,6 +190,7 @@ end
 evalpoly(x, p::AbstractVector) = _evalpoly(x, p)
 
 function _evalpoly(x, p)
+    Base.require_one_based_indexing(p)
     N = length(p)
     ex = p[end]
     for i in N-1:-1:1
@@ -229,6 +230,7 @@ evalpoly(z::Complex, p::Tuple{<:Any}) = p[1]
 evalpoly(z::Complex, p::AbstractVector) = _evalpoly(z, p)
 
 function _evalpoly(z::Complex, p)
+    Base.require_one_based_indexing(p)
     length(p) == 1 && return p[1]
     N = length(p)
     a = p[end]
@@ -293,10 +295,10 @@ end
 
 # polynomial evaluation using compensated summation.
 # much more accurate, especially when lo can be combined with other rounding errors
-@inline function exthorner(x, p::Tuple)
+Base.@assume_effects :terminates_locally @inline function exthorner(x, p::Tuple)
     hi, lo = p[end], zero(x)
     for i in length(p)-1:-1:1
-        pi = p[i]
+        pi = getfield(p, i) # needed to prove consistency
         prod, err = two_mul(hi,x)
         hi = pi+prod
         lo = fma(lo, x, prod - (hi - pi) + err)
@@ -1098,14 +1100,18 @@ end
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
 @constprop :aggressive function ^(x::Float64, y::Float64)
-    yint = unsafe_trunc(Int, y) # Note, this is actually safe since julia freezes the result
-    y == yint && return x^yint
-    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
-    y >= 2*inv(eps()) && return x^(typemax(Int64)-1)
     xu = reinterpret(UInt64, x)
-    x<0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
-    x === 1.0 && return 1.0
-    x==0 && return abs(y)*Inf*(!(y>0))
+    xu == reinterpret(UInt64, 1.0) && return 1.0
+    # Exponents greater than this will always overflow or underflow.
+    # Note that NaN can pass through this, but that will end up fine.
+    if !(abs(y)<0x1.8p62)
+        isnan(y) && return y
+        y = sign(y)*0x1.8p62
+    end
+    yint = unsafe_trunc(Int64, y) # This is actually safe since julia freezes the result
+    y == yint && return @noinline x^yint
+    2*xu==0 && return abs(y)*Inf*(!(y>0)) # if x==0
+    x<0 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
     !isfinite(x) && return x*(y>0 || isnan(x))           # x is inf or NaN
     if xu < (UInt64(1)<<52) # x is subnormal
         xu = reinterpret(UInt64, x * 0x1p52) # normalize x
@@ -1124,18 +1130,23 @@ end
 end
 
 @constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
-    yint = unsafe_trunc(Int64, y) # Note, this is actually safe since julia freezes the result
+    x == 1 && return one(T)
+    # Exponents greater than this will always overflow or underflow.
+    # Note that NaN can pass through this, but that will end up fine.
+    max_exp = T == Float16 ? T(3<<14) : T(0x1.Ap30)
+    if !(abs(y)<max_exp)
+        isnan(y) && return y
+        y = sign(y)*max_exp
+    end
+    yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
     y == yint && return x^yint
-    #numbers greater than 2*inv(eps(T)) must be even, and the pow will overflow
-    y >= 2*inv(eps(T)) && return x^(typemax(Int64)-1)
-    x < 0 && y > -4e18 && throw_exp_domainerror(x) # |y| is small enough that y isn't an integer
+    x < 0 && throw_exp_domainerror(x)
+    !isfinite(x) && return x*(y>0 || isnan(x))
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
     return pow_body(x, y)
 end
 
 @inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
-    x == 1 && return one(T)
-    !isfinite(x) && return x*(y>0 || isnan(x))
-    x==0 && return abs(y)*T(Inf)*(!(y>0))
     return T(exp2(log2(abs(widen(x))) * y))
 end
 
@@ -1151,7 +1162,7 @@ end
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
-        n==-2 && return rx*rx #keep compatability with literal_pow
+        n==-2 && return rx*rx #keep compatibility with literal_pow
         isfinite(x) && (xnlo = -fma(x, rx, -1.) * rx)
         x = rx
         n = -n
@@ -1167,8 +1178,8 @@ end
         xnlo += err
         n >>>= 1
     end
-    !isfinite(x) && return x*y
-    return muladd(x, y, muladd(y, xnlo, x*ynlo))
+    err = muladd(y, xnlo, x*ynlo)
+    return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
 end
 
 function ^(x::Float32, n::Integer)
@@ -1239,6 +1250,8 @@ julia> rem2pi(7pi/4, RoundDown)
 """
 function rem2pi end
 function rem2pi(x::Float64, ::RoundingMode{:Nearest})
+    isfinite(x) || return NaN
+
     abs(x) < pi && return x
 
     n,y = rem_pio2_kernel(x)
@@ -1262,6 +1275,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Nearest})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:ToZero})
+    isfinite(x) || return NaN
+
     ax = abs(x)
     ax <= 2*Float64(pi,RoundDown) && return x
 
@@ -1287,6 +1302,8 @@ function rem2pi(x::Float64, ::RoundingMode{:ToZero})
     copysign(z,x)
 end
 function rem2pi(x::Float64, ::RoundingMode{:Down})
+    isfinite(x) || return NaN
+
     if x < pi4o2_h
         if x >= 0
             return x
@@ -1316,6 +1333,8 @@ function rem2pi(x::Float64, ::RoundingMode{:Down})
     end
 end
 function rem2pi(x::Float64, ::RoundingMode{:Up})
+    isfinite(x) || return NaN
+
     if x > -pi4o2_h
         if x <= 0
             return x

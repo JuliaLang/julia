@@ -888,7 +888,8 @@ end
     @test (x >> 64) % UInt64 == xs[end-6]
     @test x % UInt64 == xs[end-7]
     x = rand(m, UInt64)
-    @test x == xs[end-8] # should not be == xs[end-7]
+    @test x == xs[end-8]
+    @test x != xs[end-7]
 
     s = Set{UInt64}()
     n = 0

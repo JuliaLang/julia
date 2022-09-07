@@ -36,9 +36,18 @@ julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
 
-Calls to `@deprecate` without explicit type-annotations will define deprecated methods
-accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
-the arguments of `old`. For example,
+Calls to `@deprecate` without explicit type-annotations will define
+deprecated methods accepting any number of positional and keyword
+arguments of type `Any`.
+
+!!! compat "Julia 1.9"
+    Keyword arguments are forwarded when there is no explicit type
+    annotation as of Julia 1.9. For older versions, you can manually
+    forward positional and keyword arguments by doing `@deprecate
+    old(args...; kwargs...) new(args...; kwargs...)`.
+
+To restrict deprecation to a specific signature, annotate the
+arguments of `old`. For example,
 ```jldoctest; filter = r"@ .*"
 julia> new(x::Int) = x;
 
@@ -101,10 +110,10 @@ macro deprecate(old, new, export_old=true)
         end
         Expr(:toplevel,
             export_old ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...)
+            :(function $(esc(old))(args...; kwargs...)
                   $meta
                   depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
-                  $(esc(new))(args...)
+                  $(esc(new))(args...; kwargs...)
               end))
     end
 end
@@ -159,7 +168,7 @@ function firstcaller(bt::Vector, funcsyms)
                 li = lkup.linfo
                 if li isa Core.MethodInstance
                     ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
-                    if isa(ft, DataType) && ft.name === Type.body.name
+                    if isType(ft)
                         ft = unwrap_unionall(ft.parameters[1])
                         found = (isa(ft, DataType) && ft.name.name in funcsyms)
                     end
@@ -281,7 +290,7 @@ cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not re
 @deprecate unsafe_indices(A) axes(A) false
 @deprecate unsafe_length(r) length(r) false
 
-# these were internal type aliases, but some pacakges seem to be relying on them
+# these were internal type aliases, but some packages seem to be relying on them
 const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
 const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
@@ -313,5 +322,18 @@ const var"@_noinline_meta" = var"@noinline"
 # BEGIN 1.9 deprecations
 
 @deprecate splat(x) Splat(x) false
+
+# We'd generally like to avoid direct external access to internal fields
+# Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
+# but we need to keep these around for compat
+function getproperty(ci::CodeInfo, s::Symbol)
+    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    return getfield(ci, s)
+end
+
+function setproperty!(ci::CodeInfo, s::Symbol, v)
+    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
 
 # END 1.9 deprecations

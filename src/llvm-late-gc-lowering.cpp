@@ -1288,7 +1288,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     //   value of -1 or -2 in the refinement map), or may be externally rooted by refinement to other
     //   values. Thus a value is not externally rooted if it either:
     //   either:
-    //     - Has no refinements (all obiviously externally rooted values are annotated by -1/-2 in the
+    //     - Has no refinements (all obviously externally rooted values are annotated by -1/-2 in the
     //       refinement map).
     //     - Recursively reaches a not-externally rooted value through its refinements
     //

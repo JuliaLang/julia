@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "llvm/IR/Mangler.h"
+#include <llvm/ADT/Statistic.h>
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
@@ -52,7 +53,74 @@ using namespace llvm;
 # include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #endif
 
-#define DEBUG_TYPE "jitlayers"
+#define DEBUG_TYPE "julia_jitlayers"
+
+STATISTIC(LinkedGlobals, "Number of globals linked");
+STATISTIC(CompiledCodeinsts, "Number of codeinsts compiled directly");
+STATISTIC(MaxWorkqueueSize, "Maximum number of elements in the workqueue");
+STATISTIC(IndirectCodeinsts, "Number of dependent codeinsts compiled");
+STATISTIC(SpecFPtrCount, "Number of specialized function pointers compiled");
+STATISTIC(UnspecFPtrCount, "Number of specialized function pointers compiled");
+STATISTIC(ModulesAdded, "Number of modules added to the JIT");
+STATISTIC(ModulesOptimized, "Number of modules optimized by the JIT");
+STATISTIC(OptO0, "Number of modules optimized at level -O0");
+STATISTIC(OptO1, "Number of modules optimized at level -O1");
+STATISTIC(OptO2, "Number of modules optimized at level -O2");
+STATISTIC(OptO3, "Number of modules optimized at level -O3");
+STATISTIC(ModulesMerged, "Number of modules merged");
+STATISTIC(InternedGlobals, "Number of global constants interned in the string pool");
+
+#ifdef _COMPILER_MSAN_ENABLED_
+// TODO: This should not be necessary on ELF x86_64, but LLVM's implementation
+// of the TLS relocations is currently broken, so enable this unconditionally.
+#define MSAN_EMUTLS_WORKAROUND 1
+
+// See https://github.com/google/sanitizers/wiki/MemorySanitizerJIT
+namespace msan_workaround {
+
+extern "C" {
+    extern __thread unsigned long long __msan_param_tls[];
+    extern __thread unsigned int __msan_param_origin_tls[];
+    extern __thread unsigned long long __msan_retval_tls[];
+    extern __thread unsigned int __msan_retval_origin_tls;
+    extern __thread unsigned long long __msan_va_arg_tls[];
+    extern __thread unsigned int __msan_va_arg_origin_tls[];
+    extern __thread unsigned long long __msan_va_arg_overflow_size_tls;
+    extern __thread unsigned int __msan_origin_tls;
+}
+
+enum class MSanTLS
+{
+	param = 1,             // __msan_param_tls
+	param_origin,          //__msan_param_origin_tls
+	retval,                // __msan_retval_tls
+	retval_origin,         //__msan_retval_origin_tls
+	va_arg,                // __msan_va_arg_tls
+	va_arg_origin,         // __msan_va_arg_origin_tls
+	va_arg_overflow_size,  // __msan_va_arg_overflow_size_tls
+	origin,                //__msan_origin_tls
+};
+
+static void *getTLSAddress(void *control)
+{
+	auto tlsIndex = static_cast<MSanTLS>(reinterpret_cast<uintptr_t>(control));
+	switch(tlsIndex)
+	{
+	case MSanTLS::param: return reinterpret_cast<void *>(&__msan_param_tls);
+	case MSanTLS::param_origin: return reinterpret_cast<void *>(&__msan_param_origin_tls);
+	case MSanTLS::retval: return reinterpret_cast<void *>(&__msan_retval_tls);
+	case MSanTLS::retval_origin: return reinterpret_cast<void *>(&__msan_retval_origin_tls);
+	case MSanTLS::va_arg: return reinterpret_cast<void *>(&__msan_va_arg_tls);
+	case MSanTLS::va_arg_origin: return reinterpret_cast<void *>(&__msan_va_arg_origin_tls);
+	case MSanTLS::va_arg_overflow_size: return reinterpret_cast<void *>(&__msan_va_arg_overflow_size_tls);
+	case MSanTLS::origin: return reinterpret_cast<void *>(&__msan_origin_tls);
+	default:
+		assert(false && "BAD MSAN TLS INDEX");
+		return nullptr;
+	}
+}
+}
+#endif
 
 // Snooping on which functions are being compiled, and how long it takes
 extern "C" JL_DLLEXPORT
@@ -72,6 +140,7 @@ static uint64_t getAddressForFunction(StringRef fname);
 
 void jl_link_global(GlobalVariable *GV, void *addr)
 {
+    ++LinkedGlobals;
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
     if (jl_options.image_codegen) {
@@ -162,6 +231,9 @@ static jl_callptr_t _jl_compile_codeinst(
             orc::ThreadSafeModule &M = std::get<0>(def.second);
             jl_add_to_ee(M, NewExports);
         }
+        ++CompiledCodeinsts;
+        MaxWorkqueueSize.updateMax(emitted.size());
+        IndirectCodeinsts += emitted.size() - 1;
     }
     JL_TIMING(LLVM_MODULE_FINISH);
 
@@ -326,7 +398,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     jl_value_t *ci = jl_rettype_inferred(mi, world, world);
     jl_code_instance_t *codeinst = (ci == jl_nothing ? NULL : (jl_code_instance_t*)ci);
     if (codeinst) {
-        src = (jl_code_info_t*)codeinst->inferred;
+        src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         if ((jl_value_t*)src == jl_nothing)
             src = NULL;
         else if (jl_is_method(mi->def.method))
@@ -352,9 +424,12 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else if (src && jl_is_code_info(src)) {
         if (!codeinst) {
             codeinst = jl_get_method_inferred(mi, src->rettype, src->min_world, src->max_world);
-            if (src->inferred && !codeinst->inferred)
-                codeinst->inferred = jl_nothing;
+            if (src->inferred) {
+                jl_value_t *null = nullptr;
+                jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
+            }
         }
+        ++SpecFPtrCount;
         _jl_compile_codeinst(codeinst, src, world, context);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
@@ -405,6 +480,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
             src = (jl_code_info_t*)unspec->def->uninferred;
         }
         assert(src && jl_is_code_info(src));
+        ++UnspecFPtrCount;
         _jl_compile_codeinst(unspec, src, unspec->min_world, context);
         if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
@@ -497,6 +573,7 @@ static auto countBasicBlocks(const Function &F)
 }
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
+    ++ModulesOptimized;
     size_t optlevel = SIZE_MAX;
     TSM.withModuleDo([&](Module &M) {
         if (jl_generating_output()) {
@@ -540,6 +617,7 @@ struct JITObjectInfo {
 };
 
 class JLDebuginfoPlugin : public ObjectLinkingLayer::Plugin {
+    std::mutex PluginMutex;
     std::map<MaterializationResponsibility *, std::unique_ptr<JITObjectInfo>> PendingObjs;
     // Resources from distinct MaterializationResponsibilitys can get merged
     // after emission, so we can have multiple debug objects per resource key.
@@ -560,33 +638,40 @@ public:
         auto NewObj =
             cantFail(object::ObjectFile::createObjectFile(NewBuffer->getMemBufferRef()));
 
-        assert(PendingObjs.count(&MR) == 0);
-        PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(
-            new JITObjectInfo{std::move(NewBuffer), std::move(NewObj), {}});
+        {
+            std::lock_guard<std::mutex> lock(PluginMutex);
+            assert(PendingObjs.count(&MR) == 0);
+            PendingObjs[&MR] = std::unique_ptr<JITObjectInfo>(
+                new JITObjectInfo{std::move(NewBuffer), std::move(NewObj), {}});
+        }
     }
 
     Error notifyEmitted(MaterializationResponsibility &MR) override
     {
-        auto It = PendingObjs.find(&MR);
-        if (It == PendingObjs.end())
-            return Error::success();
+        {
+            std::lock_guard<std::mutex> lock(PluginMutex);
+            auto It = PendingObjs.find(&MR);
+            if (It == PendingObjs.end())
+                return Error::success();
 
-        auto NewInfo = PendingObjs[&MR].get();
-        auto getLoadAddress = [NewInfo](const StringRef &Name) -> uint64_t {
-            auto result = NewInfo->SectionLoadAddresses.find(Name);
-            if (result == NewInfo->SectionLoadAddresses.end()) {
-                LLVM_DEBUG({
-                    dbgs() << "JLDebuginfoPlugin: No load address found for section '"
-                           << Name << "'\n";
-                });
-                return 0;
-            }
-            return result->second;
-        };
+            auto NewInfo = PendingObjs[&MR].get();
+            auto getLoadAddress = [NewInfo](const StringRef &Name) -> uint64_t {
+                auto result = NewInfo->SectionLoadAddresses.find(Name);
+                if (result == NewInfo->SectionLoadAddresses.end()) {
+                    LLVM_DEBUG({
+                        dbgs() << "JLDebuginfoPlugin: No load address found for section '"
+                            << Name << "'\n";
+                    });
+                    return 0;
+                }
+                return result->second;
+            };
 
-        jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+            jl_register_jit_object(*NewInfo->Object, getLoadAddress, nullptr);
+        }
 
         cantFail(MR.withResourceKeyDo([&](ResourceKey K) {
+            std::lock_guard<std::mutex> lock(PluginMutex);
             RegisteredObjs[K].push_back(std::move(PendingObjs[&MR]));
             PendingObjs.erase(&MR);
         }));
@@ -596,12 +681,14 @@ public:
 
     Error notifyFailed(MaterializationResponsibility &MR) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         PendingObjs.erase(&MR);
         return Error::success();
     }
 
     Error notifyRemovingResources(ResourceKey K) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         RegisteredObjs.erase(K);
         // TODO: If we ever unload code, need to notify debuginfo registry.
         return Error::success();
@@ -609,6 +696,7 @@ public:
 
     void notifyTransferringResources(ResourceKey DstKey, ResourceKey SrcKey) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         auto SrcIt = RegisteredObjs.find(SrcKey);
         if (SrcIt != RegisteredObjs.end()) {
             for (std::unique_ptr<JITObjectInfo> &Info : SrcIt->second)
@@ -620,13 +708,16 @@ public:
     void modifyPassConfig(MaterializationResponsibility &MR, jitlink::LinkGraph &,
                           jitlink::PassConfiguration &PassConfig) override
     {
+        std::lock_guard<std::mutex> lock(PluginMutex);
         auto It = PendingObjs.find(&MR);
         if (It == PendingObjs.end())
             return;
 
         JITObjectInfo &Info = *It->second;
-        PassConfig.PostAllocationPasses.push_back([&Info](jitlink::LinkGraph &G) -> Error {
+        PassConfig.PostAllocationPasses.push_back([&Info, this](jitlink::LinkGraph &G) -> Error {
+            std::lock_guard<std::mutex> lock(PluginMutex);
             for (const jitlink::Section &Sec : G.sections()) {
+#ifdef _OS_DARWIN_
                 // Canonical JITLink section names have the segment name included, e.g.
                 // "__TEXT,__text" or "__DWARF,__debug_str". There are some special internal
                 // sections without a comma separator, which we can just ignore.
@@ -639,6 +730,9 @@ public:
                     continue;
                 }
                 auto SecName = Sec.getName().substr(SepPos + 1);
+#else
+                auto SecName = Sec.getName();
+#endif
                 // https://github.com/llvm/llvm-project/commit/118e953b18ff07d00b8f822dfbf2991e41d6d791
 #if JL_LLVM_VERSION >= 140000
                Info.SectionLoadAddresses[SecName] = jitlink::SectionRange(Sec).getStart().getValue();
@@ -804,6 +898,11 @@ namespace {
         // LLVM defaults to tls stack guard, which causes issues with Julia's tls implementation
         options.StackProtectorGuard = StackProtectorGuards::Global;
 #endif
+#if defined(MSAN_EMUTLS_WORKAROUND)
+        options.EmulatedTLS = true;
+        options.ExplicitEmulatedTLS = true;
+#endif
+
         Triple TheTriple(sys::getProcessTriple());
 #if defined(FORCE_ELF)
         TheTriple.setObjectFormat(Triple::ELF);
@@ -874,7 +973,11 @@ namespace {
 
 namespace {
 
+#ifndef JL_USE_NEW_PM
     typedef legacy::PassManager PassManager;
+#else
+    typedef NewPM PassManager;
+#endif
 
     orc::JITTargetMachineBuilder createJTMBFromTM(TargetMachine &TM, int optlevel) {
         return orc::JITTargetMachineBuilder(TM.getTargetTriple())
@@ -896,6 +999,7 @@ namespace {
         }
     };
 
+#ifndef JL_USE_NEW_PM
     struct PMCreator {
         std::unique_ptr<TargetMachine> TM;
         int optlevel;
@@ -911,7 +1015,7 @@ namespace {
             swap(*this, other);
             return *this;
         }
-        std::unique_ptr<PassManager> operator()() {
+        auto operator()() {
             auto PM = std::make_unique<legacy::PassManager>();
             addTargetPasses(PM.get(), TM->getTargetTriple(), TM->getTargetIRAnalysis());
             addOptimizationPasses(PM.get(), optlevel);
@@ -919,6 +1023,17 @@ namespace {
             return PM;
         }
     };
+#else
+    struct PMCreator {
+        orc::JITTargetMachineBuilder JTMB;
+        OptimizationLevel O;
+        PMCreator(TargetMachine &TM, int optlevel) : JTMB(createJTMBFromTM(TM, optlevel)), O(getOptLevel(optlevel)) {}
+
+        auto operator()() {
+            return std::make_unique<NewPM>(cantFail(JTMB.createTargetMachine()), O);
+        }
+    };
+#endif
 
     struct OptimizerT {
         OptimizerT(TargetMachine &TM, int optlevel) : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
@@ -975,6 +1090,22 @@ namespace {
                     }
                 }
             });
+            switch (optlevel) {
+                case 0:
+                    ++OptO0;
+                    break;
+                case 1:
+                    ++OptO1;
+                    break;
+                case 2:
+                    ++OptO2;
+                    break;
+                case 3:
+                    ++OptO3;
+                    break;
+                default:
+                    llvm_unreachable("optlevel is between 0 and 3!");
+            }
             return Expected<orc::ThreadSafeModule>{std::move(TSM)};
         }
     private:
@@ -1051,7 +1182,7 @@ JuliaOJIT::JuliaOJIT()
     OptSelLayer(Pipelines)
 {
 #ifdef JL_USE_JITLINK
-# if defined(_OS_DARWIN_) && defined(LLVM_SHLIB)
+# if defined(LLVM_SHLIB)
     // When dynamically linking against LLVM, use our custom EH frame registration code
     // also used with RTDyld to inform both our and the libc copy of libunwind.
     auto ehRegistrar = std::make_unique<JLEHFrameRegistrar>();
@@ -1116,6 +1247,28 @@ JuliaOJIT::JuliaOJIT()
         { mangle("__truncdfhf2"),   { mangle("julia__truncdfhf2"),   JITSymbolFlags::Exported } }
     };
     cantFail(GlobalJD.define(orc::symbolAliases(jl_crt)));
+
+#ifdef MSAN_EMUTLS_WORKAROUND
+    orc::SymbolMap msan_crt;
+    msan_crt[mangle("__emutls_get_address")] = JITEvaluatedSymbol::fromPointer(msan_workaround::getTLSAddress, JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_param_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::param)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_param_origin_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::param_origin)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_retval_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::retval)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_retval_origin_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::retval_origin)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_va_arg_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_va_arg_origin_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg_origin)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_va_arg_overflow_size_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::va_arg_overflow_size)), JITSymbolFlags::Exported);
+    msan_crt[mangle("__emutls_v.__msan_origin_tls")] = JITEvaluatedSymbol::fromPointer(
+        reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin)), JITSymbolFlags::Exported);
+    cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
+#endif
 }
 
 orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
@@ -1132,6 +1285,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_MODULE_FINISH);
+    ++ModulesAdded;
     std::vector<std::string> NewExports;
     TSM.withModuleDo([&](Module &M) {
         jl_decorate_module(M);
@@ -1310,6 +1464,7 @@ JuliaOJIT *jl_ExecutionEngine;
 // Comdat is also removed, since the JIT doesn't need it
 void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTSM)
 {
+    ++ModulesMerged;
     destTSM.withModuleDo([&](Module &dest) {
         srcTSM.withModuleDo([&](Module &src) {
             assert(&dest != &src && "Cannot merge module with itself!");
@@ -1423,6 +1578,7 @@ void jl_merge_module(orc::ThreadSafeModule &destTSM, orc::ThreadSafeModule srcTS
 // making a copy per object file of output.
 void JuliaOJIT::shareStrings(Module &M)
 {
+    ++InternedGlobals;
     std::vector<GlobalVariable*> erase;
     for (auto &GV : M.globals()) {
         if (!GV.hasInitializer() || !GV.isConstant())

@@ -314,7 +314,7 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 if (ma == (jl_value_t*)jl_pure_sym)
                     li->pure = 1;
                 else if (ma == (jl_value_t*)jl_inline_sym)
-                    li->inlineable = 1;
+                    li->inlining_cost = 0x10; // This corresponds to MIN_INLINE_COST
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
@@ -322,13 +322,14 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
                 else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
-                    if (jl_expr_nargs(ma) == 6) {
+                    if (jl_expr_nargs(ma) == 7) {
                         li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
                         li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
                         li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
                         li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
                         li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
                         li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
+                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
                     }
                 }
                 else
@@ -376,7 +377,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
-
+        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
+            li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint8_set(li->ssaflags, j, 0);
         else {
@@ -467,9 +470,10 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlineable = 0;
+    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
+    src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
     src->purity.bits = 0;
@@ -783,6 +787,49 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     return m;
 }
 
+// backedges ------------------------------------------------------------------
+
+// Use this in a `while` loop to iterate over the backedges in a MethodInstance.
+// `*invokesig` will be NULL if the call was made by ordinary dispatch, otherwise
+// it will be the signature supplied in an `invoke` call.
+// If you don't need `invokesig`, you can set it to NULL on input.
+// Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
+{
+    jl_value_t *item = jl_array_ptr_ref(list, i);
+    if (jl_is_method_instance(item)) {
+        // Not an `invoke` call, it's just the MethodInstance
+        if (invokesig != NULL)
+            *invokesig = NULL;
+        *caller = (jl_method_instance_t*)item;
+        return i + 1;
+    }
+    assert(jl_is_type(item));
+    // An `invoke` call, it's a (sig, MethodInstance) pair
+    if (invokesig != NULL)
+        *invokesig = item;
+    *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i + 1);
+    if (*caller)
+        assert(jl_is_method_instance(*caller));
+    return i + 2;
+}
+
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, invokesig);
+    jl_array_ptr_set(list, i++, caller);
+    return i;
+}
+
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_1d_push(list, invokesig);
+    jl_array_ptr_1d_push(list, (jl_value_t*)caller);
+    return;
+}
+
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
@@ -910,12 +957,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     size_t i, na = jl_svec_len(atypes);
 
     argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
-    for (i = jl_svec_len(tvars); i > 0; i--) {
-        jl_value_t *tv = jl_svecref(tvars, i - 1);
-        if (!jl_is_typevar(tv))
-            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
-    }
 
     jl_methtable_t *external_mt = mt;
     if (!mt)
@@ -924,6 +965,12 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
         jl_error("Method dispatch is unimplemented currently for this method signature");
     if (mt->frozen)
         jl_error("cannot add methods to a builtin function");
+
+    assert(jl_is_linenode(functionloc));
+    jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
+    if (!jl_is_symbol(file))
+        file = jl_empty_sym;
+    int32_t line = jl_linenode_line(functionloc);
 
     // TODO: derive our debug name from the syntax instead of the type
     name = mt->name;
@@ -941,6 +988,29 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
             }
         }
     }
+
+    for (i = jl_svec_len(tvars); i > 0; i--) {
+        jl_value_t *tv = jl_svecref(tvars, i - 1);
+        if (!jl_is_typevar(tv))
+            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
+        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
+            jl_printf(JL_STDERR,
+                      "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line,
+                      jl_symbol_name(((jl_tvar_t*)tv)->name));
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    }
+    if (jl_has_free_typevars(argtype)) {
+        jl_exceptionf(jl_argumenterror_type,
+                      "method definition for %s at %s:%d has free type variables",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line);
+    }
+
+
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
@@ -955,19 +1025,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->name = name;
     m->isva = isva;
     m->nargs = nargs;
-    assert(jl_is_linenode(functionloc));
-    jl_value_t *file = jl_linenode_file(functionloc);
-    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
-    m->line = jl_linenode_line(functionloc);
+    m->file = file;
+    m->line = line;
     jl_method_set_source(m, f);
-
-    if (jl_has_free_typevars(argtype)) {
-        jl_exceptionf(jl_argumenterror_type,
-                      "method definition for %s at %s:%d has free type variables",
-                      jl_symbol_name(name),
-                      jl_symbol_name(m->file),
-                      m->line);
-    }
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
@@ -978,22 +1038,22 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                               "invalid type for argument number %d in method definition for %s at %s:%d",
                               i,
                               jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
+                              jl_symbol_name(file),
+                              line);
             else
                 jl_exceptionf(jl_argumenterror_type,
                               "invalid type for argument %s in method definition for %s at %s:%d",
                               jl_symbol_name(argname),
                               jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
+                              jl_symbol_name(file),
+                              line);
         }
         if (jl_is_vararg(elt) && i < na-1)
             jl_exceptionf(jl_argumenterror_type,
                           "Vararg on non-final argument in method definition for %s at %s:%d",
                           jl_symbol_name(name),
-                          jl_symbol_name(m->file),
-                          m->line);
+                          jl_symbol_name(file),
+                          line);
     }
 
 #ifdef RECORD_METHOD_ORDER

@@ -40,6 +40,21 @@ function compute_ir_rettype(ir::IRCode)
     return Core.Compiler.widenconst(rt)
 end
 
+function compute_oc_argtypes(ir, nargs, isva)
+    argtypes = ir.argtypes[2:end]
+    @assert nargs == length(argtypes)
+    argtypes = Core.Compiler.anymap(Core.Compiler.widenconst, argtypes)
+    if isva
+        lastarg = pop!(argtypes)
+        if lastarg <: Tuple
+            append!(argtypes, lastarg.parameters)
+        else
+            push!(argtypes, Vararg{Any})
+        end
+    end
+    Tuple{argtypes...}
+end
+
 function Core.OpaqueClosure(ir::IRCode, env...;
         nargs::Int = length(ir.argtypes)-1,
         isva::Bool = false,
@@ -57,7 +72,7 @@ function Core.OpaqueClosure(ir::IRCode, env...;
     # NOTE: we need ir.argtypes[1] == typeof(env)
 
     ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
-          Tuple{ir.argtypes[2:end]...}, Union{}, rt, @__MODULE__, src, 0, nothing, nargs, isva, env)
+        compute_oc_argtypes(ir, nargs, isva), Union{}, rt, @__MODULE__, src, 0, nothing, nargs, isva, env)
 end
 
 function Core.OpaqueClosure(src::CodeInfo, env...)

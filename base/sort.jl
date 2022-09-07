@@ -14,7 +14,7 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
     midpoint, @boundscheck, checkbounds
 
-using .Base: >>>, !==
+using .Base: >>>, !==, !=
 
 import .Base:
     sort,
@@ -172,18 +172,20 @@ partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
 # index of the first value of vector a that is greater than or equal to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
+    hi = hi + T(1)
+    len = hi - lo
+    @inbounds while len != 0
+        half_len = len >>> 0x01
+        m = lo + half_len
         if lt(o, v[m], x)
-            lo = m
+            lo = m + 1
+            len -= half_len + 1
         else
             hi = m
+            len = half_len
         end
     end
-    return hi
+    return lo
 end
 
 # index of the last value of vector a that is less than or equal to x;
@@ -330,6 +332,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
+
+`insert!`ing `x` at this index will maintain sorted order.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -517,7 +521,7 @@ function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, 
         x = v[i]
         while j > lo
             y = v[j-1]
-            if !lt(o, x, y)
+            if !(lt(o, x, y)::Bool)
                 break
             end
             v[j] = y
@@ -863,14 +867,15 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
         u[i] -= u_min
     end
 
+    len = lenm1 + 1
     if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned buffer
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, t))
         uint_unmap!(v, u2, lo, hi, o, u_min)
-    elseif t !== nothing && (applicable(resize!, t) || length(t) >= hi-lo+1) # Viable buffer
-        length(t) >= hi-lo+1 || resize!(t, hi-lo+1)
+    elseif t !== nothing && (applicable(resize!, t, len) || length(t) >= len) # Viable buffer
+        length(t) >= len || resize!(t, len)
         t1 = axes(t, 1) isa OneTo ? t : view(t, firstindex(t):lastindex(t))
-        u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, reinterpret(U, t1))
-        uint_unmap!(view(v, lo:hi), u2, 1, hi-lo+1, o, u_min)
+        u2 = radix_sort!(view(u, lo:hi), 1, len, bits, reinterpret(U, t1))
+        uint_unmap!(view(v, lo:hi), u2, 1, len, o, u_min)
     else # No viable buffer
         u2 = radix_sort!(u, lo, hi, bits, similar(u))
         uint_unmap!(v, u2, lo, hi, o, u_min)
@@ -1461,10 +1466,15 @@ import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-const Floats = Union{Float32,Float64}
-const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+# IEEEFloat is not available in Core.Compiler
+const Floats = Union{Float16, Float32, Float64}
+# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
+# This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
+const FPSortable = Union{
+    AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
     AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float16},
     AbstractVector{Float32},
     AbstractVector{Float64},
     AbstractVector{Missing}}
@@ -1480,6 +1490,12 @@ right(o::Perm) = Perm(right(o.order), o.data)
 
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+
+uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
+uint_map(x::Float16, ::Right) = reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Right) = reinterpret(Float16, u)
+UIntMappable(::Type{Float16}, ::Union{Left, Right}) = UInt16
 
 uint_map(x::Float32, ::Left) = ~reinterpret(UInt32, x)
 uint_unmap(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, ~u)

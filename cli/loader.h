@@ -22,8 +22,6 @@
 #define realloc loader_realloc
 #endif
 
-#include <stdint.h>
-
 #ifdef _OS_WINDOWS_
 
 #define WIN32_LEAN_AND_MEAN
@@ -48,6 +46,8 @@
 #include <dlfcn.h>
 
 #endif
+
+#include <stdint.h>
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
