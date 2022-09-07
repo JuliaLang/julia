@@ -1502,14 +1502,15 @@ function handle_finalizer_call!(
     is_finalizer_inlineable(info.effects) || return nothing
 
     info = info.info
+    if isa(info, ConstCallInfo)
+        # NOTE currently mutable objects are not represented as `Const`
+        # but `finalizer` function can be
+        info = info.call
+    end
     if isa(info, MethodMatchInfo)
         infos = MethodMatchInfo[info]
     elseif isa(info, UnionSplitInfo)
         infos = info.matches
-    # elseif isa(info, ConstCallInfo)
-    #     # NOTE currently this code path isn't active as constant propagation won't happen
-    #     # for `Core.finalizer` call because inference currently isn't able to fold a mutable
-    #     # object as a constant
     else
         return nothing
     end

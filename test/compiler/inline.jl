@@ -1346,6 +1346,37 @@ let src = code_typed1() do
     @test !any(isinvoke(:finalizer), src.code)
 end
 
+const FINALIZATION_COUNT = Ref(0)
+init_finalization_count!() = FINALIZATION_COUNT[] = 0
+get_finalization_count() = FINALIZATION_COUNT[]
+@noinline add_finalization_count!(x) = FINALIZATION_COUNT[] += x
+@noinline Base.@assume_effects :nothrow safeprint(io::IO, x...) = (@nospecialize; print(io, x...))
+@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
+
+mutable struct DoAllocWithField
+    x::Int
+    function DoAllocWithField(x::Int)
+        finalizer(new(x)) do this
+            add_finalization_count!(x)
+        end
+    end
+end
+
+function const_finalization(io)
+    for i = 1:1000
+        o = DoAllocWithField(1)
+        safeprint(io, o.x)
+    end
+end
+let src = code_typed1(const_finalization, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    const_finalization(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
