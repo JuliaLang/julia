@@ -378,15 +378,31 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 
 ### reductions
-# faster to sum the Array than to work through the wrapper
-Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Transpose, dims::Colon) =
+# faster to sum the Array than to work through the wrapper (but only in commutative reduction ops)
+const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(-),typeof(min),typeof(max),typeof(|),typeof(&)}
+Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::Transpose, dims::Colon) =
     transpose(Base._mapreduce_dim(_sandwich(transpose, f), _sandwich(transpose, op), init, parent(A), dims))
-Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
+Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::Adjoint, dims::Colon) =
     adjoint(Base._mapreduce_dim(_sandwich(adjoint, f), _sandwich(adjoint, op), init, parent(A), dims))
+Base._mapreduce_dim(f, op::Union{typeof(*),typeof(Base.mul_prod)}, init::Base._InitialValue, A::Transpose{<:Union{Real,Complex}}, dims::Colon) =
+    transpose(Base._mapreduce_dim(_sandwich(transpose, f), _sandwich(transpose, op), init, parent(A), dims))
+Base._mapreduce_dim(f, op::Union{typeof(*),typeof(Base.mul_prod)}, init::Base._InitialValue, A::Adjoint{<:Union{Real,Complex}}, dims::Colon) =
+    adjoint(Base._mapreduce_dim(_sandwich(adjoint, f), _sandwich(adjoint, op), init, parent(A), dims))
+# count allows for optimization only if the parent array has Bool eltype
+Base._count(::typeof(identity), A::Transpose{Bool}, ::Colon, init) = Base._count(identity, parent(A), :, init)
+Base._count(::typeof(identity), A::Adjoint{Bool}, ::Colon, init) = Base._count(identity, parent(A), :, init)
+Base._any(f, A::Transpose, ::Colon) = Base._any(f∘transpose, parent(A), :)
+Base._any(f, A::Adjoint, ::Colon) = Base._any(f∘adjoint, parent(A), :)
+Base._all(f, A::Transpose, ::Colon) = Base._all(f∘transpose, parent(A), :)
+Base._all(f, A::Adjoint, ::Colon) = Base._all(f∘adjoint, parent(A), :)
 # sum(A'; dims)
-Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
+Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray, A::TransposeAbsMat) =
     transpose(Base.mapreducedim!(_sandwich(transpose, f), _sandwich(transpose, op), transpose(B), parent(A)))
-Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
+Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray, A::AdjointAbsMat) =
+    adjoint(Base.mapreducedim!(_sandwich(adjoint, f), _sandwich(adjoint, op), adjoint(B), parent(A)))
+Base.mapreducedim!(f, op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::TransposeAbsMat{<:Union{Real,Complex}}) =
+    transpose(Base.mapreducedim!(_sandwich(transpose, f), _sandwich(transpose, op), transpose(B), parent(A)))
+Base.mapreducedim!(f, op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::AdjointAbsMat{<:Union{Real,Complex}}) =
     adjoint(Base.mapreducedim!(_sandwich(adjoint, f), _sandwich(adjoint, op), adjoint(B), parent(A)))
 
 _sandwich(adj::Function, fun) = (xs...,) -> adj(fun(map(adj, xs)...))
@@ -452,15 +468,3 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)
 conj(A::Adjoint) = transpose(A.parent)
-
-## reductions
-for (ttype, transform) in ((:Adjoint, adjoint), (:Transpose, transpose))
-    @eval _mapreduce(f, op, ::IndexStyle, A::$ttype) =
-        _mapreduce(f∘$transform, op, IndexStyle(parent(A)), parent(A))
-    @eval _mapreduce_dim(f, op, ::Base._InitialValue, A::$ttype, ::Colon) =
-        _mapreduce(f∘$transform, op, IndexStyle(parent(A)), parent(A))
-    @eval Base._count(f, A::$ttype, ::Colon, init) =
-        Base._count(f∘$transform, parent(A), :, init)
-    @eval Base._any(f, A::$ttype, ::Colon) = Base._any(f∘$transform, parent(A), :)
-    @eval Base._all(f, A::$ttype, ::Colon) = Base._all(f∘$transform, parent(A), :)
-end
