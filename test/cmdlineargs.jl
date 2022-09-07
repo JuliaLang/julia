@@ -145,9 +145,19 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     end
 
     # handling of @projectname in --project and JULIA_PROJECT
-    let expanded = abspath(Base.load_path_expand("@foo"))
-        @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
-        @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
+    mktempdir() do tmpdir
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            pushfirst!(DEPOT_PATH, tmpdir)
+            withenv("JULIA_DEPOT_PATH"=>tmpdir) do
+                let expanded = abspath(Base.load_path_expand("@foo"))
+                    @test expanded == readchomp(`$exename --project='@foo' -e 'println(Base.active_project())'`)
+                    @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
+                end
+            end
+        finally
+            copy!(DEPOT_PATH, old_depot_path)
+        end
     end
 
     # --quiet, --banner
