@@ -524,7 +524,7 @@ let s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.t
     @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
 end
 
-# Test that string escaption is handled correct
+# Test that string escaping is handled correct
 let s = """CompletionFoo.test4("\\"","""
     c, r, res = test_complete(s)
     @test !res
