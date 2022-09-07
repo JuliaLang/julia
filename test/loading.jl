@@ -986,7 +986,7 @@ end
             @test Base.locate_package(pkg, env) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
-            copy!(DEPOT_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
         end
     end
 end
