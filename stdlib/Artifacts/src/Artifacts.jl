@@ -329,7 +329,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 
         for name in keys(artifact_dict)
             # Skip names that we're not overriding
-            if !haskey(pkg_overrides, name)
+            if !(haskey(pkg_overrides, name)::Bool)
                 continue
             end
 
