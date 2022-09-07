@@ -3382,24 +3382,37 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //static jl_mutex_t typeinf_lock;
 #define typeinf_lock jl_codegen_lock
 
+static jl_mutex_t inference_timing_mutex;
 static uint64_t inference_start_time = 0;
 static uint8_t inference_is_measuring_compile_time = 0;
 
-JL_DLLEXPORT void jl_typeinf_begin(void)
+JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
-    JL_LOCK(&typeinf_lock);
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
-        inference_start_time = jl_hrtime();
-        inference_is_measuring_compile_time = 1;
+        JL_LOCK_NOGC(&inference_timing_mutex);
+        if (inference_is_measuring_compile_time++ == 0) {
+            inference_start_time = jl_hrtime();
+        }
+        JL_UNLOCK_NOGC(&inference_timing_mutex);
     }
 }
 
-JL_DLLEXPORT void jl_typeinf_end(void)
+JL_DLLEXPORT void jl_typeinf_timing_end(void)
 {
-    if (typeinf_lock.count == 1 && inference_is_measuring_compile_time) {
+    JL_LOCK_NOGC(&inference_timing_mutex);
+    if (--inference_is_measuring_compile_time == 0) {
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - inference_start_time));
-        inference_is_measuring_compile_time = 0;
     }
+    JL_UNLOCK_NOGC(&inference_timing_mutex);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_begin(void)
+{
+    JL_LOCK(&typeinf_lock);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_end(void)
+{
     JL_UNLOCK(&typeinf_lock);
 }
 
