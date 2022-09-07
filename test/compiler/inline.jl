@@ -1184,7 +1184,8 @@ end
 
 # Test that we can inline a finalizer for a struct that does not otherwise escape
 @noinline nothrow_side_effect(x) =
-    @Base.assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
+    Base.@assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
+@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
 
 mutable struct DoAllocNoEscape
     function DoAllocNoEscape()

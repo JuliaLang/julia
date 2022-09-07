@@ -1259,7 +1259,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
     end
 
     if sig.f !== Core.invoke && sig.f !== Core.finalizer && is_builtin(sig)
-        # No inlining for builtins (other invoke/apply/typeassert)
+        # No inlining for builtins (other invoke/apply/typeassert/finalizer)
         return nothing
     end
 
@@ -1499,7 +1499,7 @@ function handle_finalizer_call!(
     ir::IRCode, stmt::Expr, info::FinalizerInfo, state::InliningState)
     # Only inline finalizers that are known nothrow and notls.
     # This avoids having to set up state for finalizer isolation
-    (is_nothrow(info.effects) && is_notaskstate(info.effects)) || return nothing
+    is_finalizer_inlineable(info.effects) || return nothing
 
     info = info.info
     if isa(info, MethodMatchInfo)
