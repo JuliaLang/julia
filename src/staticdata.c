@@ -1960,7 +1960,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
     if (const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
         jl_printf(
             JL_STDERR,
-            "ERROR: system image too large: sysimg.size is %jd but the limit is %" PRIxPTR "\n",
+            "ERROR: system image too large: const_data.size is %jd but the limit is %" PRIxPTR "\n",
             (intmax_t)const_data.size,
             ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)
         );
