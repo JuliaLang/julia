@@ -188,11 +188,6 @@ static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 
-static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
-{
-    ios_write(s, (char*)&i, 8);
-}
-
 static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
 {
     write_uint64(s, *((uint64_t*)&x));
@@ -1049,7 +1044,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         else {
             write_uint8(s->s, TAG_INT64);
-            write_int64(s->s, *(int64_t*)data);
+            write_uint64(s->s, *(int64_t*)data);
         }
     }
     else if (jl_typeis(v, jl_int32_type)) {
@@ -1626,7 +1621,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
         ios_seek(s, initial_pos);
         write_uint64(s, pos - initial_pos);
         ios_seek(s, pos);
-        write_int64(s, 0);
+        write_uint64(s, 0);
     }
     return pos;
 }
@@ -2939,7 +2934,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         // Go back and update the source-text position to point to the current position
         int64_t posfile = ios_pos(&f);
         ios_seek(&f, srctextpos);
-        write_int64(&f, posfile);
+        write_uint64(&f, posfile);
         ios_seek_end(&f);
         // Each source-text file is written as
         //   int32: length of abspath
