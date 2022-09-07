@@ -10,6 +10,7 @@
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallSet.h>
 #include "llvm/Analysis/CFG.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -749,9 +750,15 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     }
     if (!isa<PointerType>(Phi->getType()))
         S.AllCompositeNumbering[Phi] = Numbers;
+    SmallSet<BasicBlock*, 4> SeenBBs;
     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
         Value *Incoming = Phi->getIncomingValue(i);
         BasicBlock *IncomingBB = Phi->getIncomingBlock(i);
+        if (SeenBBs.contains(IncomingBB)) {
+            //We've inserted this edge already
+            continue;
+        }
+        SeenBBs.insert(IncomingBB);
         Instruction *Terminator = IncomingBB->getTerminator();
         Value *Base = MaybeExtractScalar(S, FindBaseValue(S, Incoming, false), Terminator);
         std::vector<Value*> IncomingBases;
