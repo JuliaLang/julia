@@ -750,15 +750,10 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     }
     if (!isa<PointerType>(Phi->getType()))
         S.AllCompositeNumbering[Phi] = Numbers;
-    SmallSet<BasicBlock*, 4> SeenBBs;
+    SmallVector<DenseMap<Value*, Value*>, 4> CastedRoots(NumRoots);
     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
         Value *Incoming = Phi->getIncomingValue(i);
         BasicBlock *IncomingBB = Phi->getIncomingBlock(i);
-        if (SeenBBs.contains(IncomingBB)) {
-            //We've inserted this edge already
-            continue;
-        }
-        SeenBBs.insert(IncomingBB);
         Instruction *Terminator = IncomingBB->getTerminator();
         Value *Base = MaybeExtractScalar(S, FindBaseValue(S, Incoming, false), Terminator);
         std::vector<Value*> IncomingBases;
@@ -773,8 +768,24 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
                 BaseElem = Base;
             else
                 BaseElem = IncomingBases[i];
-            if (BaseElem->getType() != T_prjlvalue)
-                BaseElem = new BitCastInst(BaseElem, T_prjlvalue, "", Terminator);
+            if (BaseElem->getType() != T_prjlvalue) {
+                auto &remap = CastedRoots[i][BaseElem];
+                if (!remap) {
+                    if (auto constant = dyn_cast<Constant>(BaseElem)) {
+                        remap = ConstantExpr::getBitCast(constant, T_prjlvalue, "");
+                    } else {
+                        Instruction *InsertBefore;
+                        if (auto arg = dyn_cast<Argument>(BaseElem)) {
+                            InsertBefore = &*arg->getParent()->getEntryBlock().getFirstInsertionPt();
+                        } else {
+                            assert(isa<Instruction>(BaseElem) && "Unknown value type detected!");
+                            InsertBefore = cast<Instruction>(BaseElem)->getNextNonDebugInstruction();
+                        }
+                        remap = new BitCastInst(BaseElem, T_prjlvalue, "", InsertBefore);
+                    }
+                }
+                BaseElem = remap;
+            }
             lift->addIncoming(BaseElem, IncomingBB);
         }
     }
@@ -2726,7 +2737,10 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
         return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     };
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
-    return lateLowerGCFrame.runOnFunction(F);
+    bool modified = lateLowerGCFrame.runOnFunction(F);
+    // errs() << *F.getParent() << "\n";
+    assert(!verifyFunction(F, &errs()));
+    return modified;
 }
 
 PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
