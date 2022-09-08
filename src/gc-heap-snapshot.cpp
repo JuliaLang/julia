@@ -5,27 +5,26 @@
 #include "julia_internal.h"
 #include "gc.h"
 
+#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/DenseMap.h"
+
 #include <vector>
 #include <string>
 #include <sstream>
-#include <unordered_map>
-#include <unordered_set>
-#include <iostream>
-#include <utility>
 
 using std::vector;
 using std::string;
 using std::ostringstream;
 using std::pair;
-using std::unordered_map;
-using std::unordered_set;
-
-int gc_heap_snapshot_enabled = 0;
+using std::make_pair;
+using llvm::StringMap;
+using llvm::DenseMap;
+using llvm::StringRef;
 
 // https://stackoverflow.com/a/33799784/751061
-void print_str_escape_json(ios_t *stream, const std::string &s) {
+void print_str_escape_json(ios_t *stream, StringRef s) {
     ios_printf(stream, "\"");
-    for (auto c = s.cbegin(); c != s.cend(); c++) {
+    for (auto c = s.begin(); c != s.end(); c++) {
         switch (*c) {
         case '"': ios_printf(stream, "\\\""); break;
         case '\\': ios_printf(stream, "\\\\"); break;
@@ -37,7 +36,8 @@ void print_str_escape_json(ios_t *stream, const std::string &s) {
         default:
             if ('\x00' <= *c && *c <= '\x1f') {
                 ios_printf(stream, "\\u%04x", (int)*c);
-            } else {
+            }
+            else {
                 ios_printf(stream, "%c", *c);
             }
         }
@@ -55,8 +55,6 @@ struct Edge {
     size_t type; // These *must* match the Enums on the JS side; control interpretation of name_or_index.
     size_t name_or_index; // name of the field (for objects/modules) or index of array
     size_t to_node;
-
-    // Book-keeping fields (not used for serialization)
 };
 
 // Nodes
@@ -66,40 +64,28 @@ struct Edge {
 
 const int k_node_number_of_fields = 7;
 struct Node {
-    size_t type; // index into snapshot->node_types 
-    string name;
+    size_t type; // index into snapshot->node_types
+    size_t name;
     size_t id; // This should be a globally-unique counter, but we use the memory address
     size_t self_size;
     size_t trace_node_id;  // This is ALWAYS 0 in Javascript heap-snapshots.
     // whether the from_node is attached or dettached from the main application state
-    // TODO: .... meaning not yet understood.
     // https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/include/v8-profiler.h#L739-L745
     int detachedness;  // 0 - unknown, 1 - attached, 2 - detached
+    vector<Edge> edges;
 
-    // Book-keeping fields (not used for serialization)
-    vector<Edge> edges; // For asserting that we built the edges in the right order
+    ~Node() JL_NOTSAFEPOINT = default;
 };
 
 struct StringTable {
-    typedef unordered_map<string, size_t> MapType;
+    StringMap<size_t> map;
+    vector<StringRef> strings;
 
-    MapType map;
-    vector<string> strings;
-
-    StringTable() {}
-    StringTable(std::initializer_list<string> strs) : strings(strs) {
-        for (const auto& str : strs) {
-            map.insert({str, map.size()});
-        }
-    }
-
-    size_t find_or_create_string_id(string key) {
-        auto val = map.find(key);
-        if (val == map.end()) {
-            val = map.insert(val, {key, map.size()});
-            strings.push_back(key);
-        }
-        return val->second;
+    size_t find_or_create_string_id(StringRef key) JL_NOTSAFEPOINT {
+        auto val = map.insert(make_pair(key, map.size()));
+        if (val.second)
+            strings.push_back(val.first->first());
+        return val.first->second;
     }
 
     void print_json_array(ios_t *stream, bool newlines) {
@@ -108,7 +94,8 @@ struct StringTable {
         for (const auto &str : strings) {
             if (first) {
                 first = false;
-            } else {
+            }
+            else {
                 ios_printf(stream, newlines ? ",\n" : ",");
             }
             print_str_escape_json(stream, str);
@@ -118,44 +105,39 @@ struct StringTable {
 };
 
 struct HeapSnapshot {
-public:
-
-// private:
     vector<Node> nodes;
     // edges are stored on each from_node
 
     StringTable names;
     StringTable node_types;
     StringTable edge_types;
-    unordered_map<void*, size_t> node_ptr_to_index_map;
+    DenseMap<void*, size_t> node_ptr_to_index_map;
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
 };
 
 // global heap snapshot, mutated by garbage collector
 // when snapshotting is on.
+int gc_heap_snapshot_enabled = 0;
 HeapSnapshot *g_snapshot = nullptr;
+extern jl_mutex_t heapsnapshot_lock;
 
-
-void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot);
+void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_index);
-void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx);
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
+void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
 void _add_internal_root(HeapSnapshot *snapshot);
 
 
-JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
-    // Enable snapshotting
+JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream, char all_one) {
     HeapSnapshot snapshot;
-    g_snapshot = &snapshot;
-    gc_heap_snapshot_enabled = true;
-
     _add_internal_root(&snapshot);
 
-    // Initialize the GC's heuristics, so that JL_GC_FULL will work correctly. :)
-    while (gc_num.pause < 2) {
-        jl_gc_collect(JL_GC_AUTO);
-    }
+    jl_mutex_lock(&heapsnapshot_lock);
+
+    // Enable snapshotting
+    g_snapshot = &snapshot;
+    gc_heap_snapshot_enabled = true;
 
     // Do a full GC mark (and incremental sweep), which will invoke our callbacks on `g_snapshot`
     jl_gc_collect(JL_GC_FULL);
@@ -164,9 +146,11 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
     gc_heap_snapshot_enabled = false;
     g_snapshot = nullptr;
 
+    jl_mutex_unlock(&heapsnapshot_lock);
+
     // When we return, the snapshot is full
     // Dump the snapshot
-    serialize_heap_snapshot((ios_t*)stream, snapshot);
+    serialize_heap_snapshot((ios_t*)stream, snapshot, all_one);
 }
 
 // adds a node at id 0 which is the "uber root":
@@ -174,15 +158,12 @@ JL_DLLEXPORT void jl_gc_take_heap_snapshot(ios_t *stream) {
 void _add_internal_root(HeapSnapshot *snapshot) {
     Node internal_root{
         snapshot->node_types.find_or_create_string_id("synthetic"),
-        "(internal root)", // name
+        snapshot->names.find_or_create_string_id(""), // name
         0, // id
         1, // size
-
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
-
-        // outgoing edges
-        vector<Edge>(),
+        vector<Edge>() // outgoing edges
     };
     snapshot->nodes.push_back(internal_root);
 }
@@ -190,151 +171,128 @@ void _add_internal_root(HeapSnapshot *snapshot) {
 // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L597-L597
 // returns the index of the new node
 size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
-    auto val = g_snapshot->node_ptr_to_index_map.find((void*)a);
-    if (val != g_snapshot->node_ptr_to_index_map.end()) {
-        return val->second;
+    auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(a, g_snapshot->nodes.size()));
+    if (!val.second) {
+
+        return val.first->second;
     }
+
+    ios_t str_;
+    bool ios_need_close = 0;
 
     // Insert a new Node
     size_t self_size = 0;
-    string name = "<missing>";
-    string node_type = "object";
+    StringRef name = "<missing>";
+    StringRef node_type = "object";
 
-    if (a == (jl_value_t*)jl_malloc_tag) {
-        name = "<malloc>";
-    } else {
-        jl_datatype_t* type = (jl_datatype_t*)jl_typeof(a);
+    jl_datatype_t* type = (jl_datatype_t*)jl_typeof(a);
 
-        if ((uintptr_t)type < 4096U) {
-            name = "<corrupt>";
-        } else if (type == (jl_datatype_t*)jl_buff_tag) {
-            name = "<buffer>";
-        } else if (type == (jl_datatype_t*)jl_malloc_tag) {
-            name = "<malloc>";
-        } else if (jl_is_string(a)) {
-            node_type = "string";
-            name = jl_string_data(a);
-            self_size = jl_string_len(a);
-        } else if (jl_is_symbol(a)) {
-            node_type = "symbol";
-            name = jl_symbol_name((jl_sym_t*)a);
-            self_size = name.length();
-        } else if (jl_is_datatype(type)) {
-            self_size = jl_is_array_type(type)
-                ? jl_array_nbytes((jl_array_t*)a)
-                : (size_t)jl_datatype_size(type);
+    if (type == (jl_datatype_t*)jl_buff_tag) {
+        name = "<buffer>";
+    }
+    else if (jl_is_string(a)) {
+        node_type = "string";
+        name = jl_string_data(a);
+        self_size = jl_string_len(a);
+    }
+    else if (jl_is_symbol(a)) {
+        node_type = "symbol";
+        name = jl_symbol_name((jl_sym_t*)a);
+        self_size = name.size();
+    }
+    else if (jl_is_simplevector(a)) {
+        node_type = "array";
+        name = "SimpleVector";
+        self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
+    }
+    else if (jl_is_module(a)) {
+        name = "Module";
+        self_size = sizeof(jl_module_t);
+    }
+    else if (jl_is_task(a)) {
+        name = "Task";
+        self_size = sizeof(jl_task_t);
+    }
+    else {
+        self_size = jl_is_array_type(type)
+            ? sizeof(jl_array_t)
+            : (size_t)jl_datatype_size(type);
 
-            // print full type
-            // TODO(PR): Is it possible to use a variable size string here, instead??
-            ios_t str_;
-            ios_mem(&str_, 1048576);  // 1 MiB
-            JL_STREAM* str = (JL_STREAM*)&str_;
+        // print full type into ios buffer and get StringRef to it.
+        // The ios is cleaned up below.
+        ios_need_close = 1;
+        ios_mem(&str_, 0);
+        JL_STREAM* str = (JL_STREAM*)&str_;
+        jl_static_show(str, (jl_value_t*)type);
 
-            jl_static_show(str, (jl_value_t*)type);
-
-            name = string((const char*)str_.buf, str_.size);
-            ios_close(&str_);
-        }
+        name = StringRef((const char*)str_.buf, str_.size);
     }
 
-    auto node_idx = g_snapshot->nodes.size();
-    g_snapshot->node_ptr_to_index_map.insert(val, {a, node_idx});
-
-    Node from_node{
-        // We pick a default type here, which will be set for the _targets_ of edges.
-        // TODO:  What's a good default?
+    g_snapshot->nodes.push_back(Node{
         g_snapshot->node_types.find_or_create_string_id(node_type), // size_t type;
-        name, // string name;
-        (size_t)a, // size_t id;
+        g_snapshot->names.find_or_create_string_id(name), // size_t name;
+        (size_t)a,     // size_t id;
         // We add 1 to self-size for the type tag that all heap-allocated objects have.
         // Also because the Chrome Snapshot viewer ignores size-0 leaves!
-        self_size + 1, // size_t self_size;
+        sizeof(void*) + self_size, // size_t self_size;
+        0,             // size_t trace_node_id (unused)
+        0,             // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        vector<Edge>() // outgoing edges
+    });
 
-        0, // size_t trace_node_id (unused)
-        0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+    if (ios_need_close)
+        ios_close(&str_);
 
-        // outgoing edges
-        vector<Edge>(),
-    };
-    g_snapshot->nodes.push_back(from_node);
-
-    return node_idx;
+    return val.first->second;
 }
 
-typedef pair<jl_datatype_t*, string> inlineallocd_field_type_t;
-
-// TODO: remove this
-static bool debug_log = false;
-
-bool _fieldpath_for_slot_helper(
-    vector<inlineallocd_field_type_t>& out, jl_datatype_t *objtype,
-    void *obj, void *slot)
-{
-    int nf = (int)jl_datatype_nfields(objtype);
-    jl_svec_t *field_names = jl_field_names(objtype);
-    if (debug_log) {
-        jl_((jl_value_t*)objtype);
-        jl_printf(JL_STDERR, "obj: %p, slot: %p, nf: %d\n", obj, (void*)slot, nf);
+static size_t record_pointer_to_gc_snapshot(void *a, size_t bytes, StringRef name) JL_NOTSAFEPOINT {
+    auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(a, g_snapshot->nodes.size()));
+    if (!val.second) {
+        return val.first->second;
     }
-    for (int i = 0; i < nf; i++) {
-        jl_datatype_t *field_type = (jl_datatype_t*)jl_field_type(objtype, i);
-        void *fieldaddr = (char*)obj + jl_field_offset(objtype, i);
-        ostringstream ss; // NOTE: must have same scope as field_name, below.
-        string field_name;
-        // TODO: NamedTuples should maybe have field names? Maybe another way to get them?
+
+    g_snapshot->nodes.push_back(Node{
+        g_snapshot->node_types.find_or_create_string_id( "object"), // size_t type;
+        g_snapshot->names.find_or_create_string_id(name), // size_t name;
+        (size_t)a,     // size_t id;
+        bytes,         // size_t self_size;
+        0,             // size_t trace_node_id (unused)
+        0,             // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        vector<Edge>() // outgoing edges
+    });
+
+    return val.first->second;
+}
+
+static string _fieldpath_for_slot(void *obj, void *slot) JL_NOTSAFEPOINT {
+    string res;
+    jl_datatype_t *objtype = (jl_datatype_t*)jl_typeof(obj);
+
+    while (1) {
+        int i = gc_slot_to_fieldidx(obj, slot, objtype);
+
         if (jl_is_tuple_type(objtype) || jl_is_namedtuple_type(objtype)) {
+            ostringstream ss;
             ss << "[" << i << "]";
-            field_name = ss.str().c_str();  // See scope comment, above.
-        } else {
+            res += ss.str();
+        }
+        else {
+            jl_svec_t *field_names = jl_field_names(objtype);
             jl_sym_t *name = (jl_sym_t*)jl_svecref(field_names, i);
-            field_name = jl_symbol_name(name);
+            res += jl_symbol_name(name);
         }
-        if (debug_log) {
-            jl_printf(JL_STDERR, "%d - field_name: %s fieldaddr: %p\n", i, field_name.c_str(), fieldaddr);
+
+        if (!jl_field_isptr(objtype, i)) {
+            // Tail recurse
+            res += ".";
+            obj = (void*)((char*)obj + jl_field_offset(objtype, i));
+            objtype = (jl_datatype_t*)jl_field_type_concrete(objtype, i);
         }
-        if (fieldaddr >= slot) {
-            out.push_back(inlineallocd_field_type_t(objtype, field_name));
-            return true;
-        }
-        // If the field is an inline-allocated struct
-        if (jl_stored_inline((jl_value_t*)field_type)) {
-            bool found = _fieldpath_for_slot_helper(out, field_type, fieldaddr, slot);
-            if (found) {
-                out.push_back(inlineallocd_field_type_t(field_type, field_name));
-                return true;
-            }
+        else {
+            return res;
         }
     }
-    return false;
-}
-
-vector<inlineallocd_field_type_t> _fieldpath_for_slot(jl_value_t *obj, void *slot) {
-    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
-    // TODO(PR): Remove this debugging code
-    if (vt->name->module == jl_main_module) {
-        // debug_log = true;
-    }
-
-    vector<inlineallocd_field_type_t> result;
-    bool found = _fieldpath_for_slot_helper(result, vt, obj, slot);
-
-    debug_log = false;
-
-    // TODO: maybe don't need the return value here actually...?
-    if (!found) {
-        // TODO: Debug these failures. Some of them seem really wrong, like with the slot
-        // being _kilobytes_ past the start of the object for an object with 1 pointer and 1
-        // field...
-        jl_printf(JL_STDERR, "WARNING: No fieldpath found for obj: %p slot: %p ", (void*)obj, (void*)slot);
-        jl_datatype_t* type = (jl_datatype_t*)jl_typeof(obj);
-        if (jl_is_datatype(type)) {
-            jl_printf(JL_STDERR, "typeof: ");
-            jl_static_show(JL_STDERR, (jl_value_t*)type);
-        }
-        jl_printf(JL_STDERR, "\n");
-    }
-    // NOTE THE RETURNED VECTOR IS REVERSED
-    return result;
 }
 
 
@@ -352,47 +310,38 @@ void _gc_heap_snapshot_record_root(jl_value_t *root, char *name) JL_NOTSAFEPOINT
 // Each task points at a stack frame, which points at the stack frame of
 // the function it's currently calling, forming a linked list.
 // Stack frame nodes point at the objects they have as local variables.
-size_t _record_stack_frame_node(HeapSnapshot *snapshot, jl_gcframe_t *frame) {
-    auto val = g_snapshot->node_ptr_to_index_map.find((void*)frame);
-    if (val != g_snapshot->node_ptr_to_index_map.end()) {
-        return val->second;
+size_t _record_stack_frame_node(HeapSnapshot *snapshot, void *frame) JL_NOTSAFEPOINT {
+    auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(frame, g_snapshot->nodes.size()));
+    if (!val.second) {
+        return val.first->second;
     }
 
-    Node frame_node{
+    snapshot->nodes.push_back(Node{
         snapshot->node_types.find_or_create_string_id("synthetic"),
-        "(stack frame)", // name
+        snapshot->names.find_or_create_string_id("(stack frame)"), // name
         (size_t)frame, // id
         1, // size
-
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
+        vector<Edge>() // outgoing edges
+    });
 
-        // outgoing edges
-        vector<Edge>(),
-    };
-    
-    auto node_idx = snapshot->nodes.size();
-    snapshot->node_ptr_to_index_map.insert(val, {frame, node_idx});
-    snapshot->nodes.push_back(frame_node);
-
-    return node_idx;
+    return val.first->second;
 }
 
-void _gc_heap_snapshot_record_frame_to_object_edge(jl_gcframe_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
-    auto from_node_idx = _record_stack_frame_node(g_snapshot, from);
-    Node &from_node = g_snapshot->nodes[from_node_idx];
+void _gc_heap_snapshot_record_frame_to_object_edge(void *from, jl_value_t *to) JL_NOTSAFEPOINT {
+    auto from_node_idx = _record_stack_frame_node(g_snapshot, (jl_gcframe_t*)from);
     auto to_idx = record_node_to_gc_snapshot(to);
+    Node &from_node = g_snapshot->nodes[from_node_idx];
 
-    // TODO: would be cool to get the name of the local var
     auto name_idx = g_snapshot->names.find_or_create_string_id("local var");
     _record_gc_just_edge("internal", from_node, to_idx, name_idx);
 }
 
-void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT {
+void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, void *to) JL_NOTSAFEPOINT {
     auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)from);
+    auto to_node_idx = _record_stack_frame_node(g_snapshot, to);
     Node &from_node = g_snapshot->nodes[from_node_idx];
-    _record_stack_frame_node(g_snapshot, to);
-    auto to_node_idx = g_snapshot->node_ptr_to_index_map[to];
 
     auto name_idx = g_snapshot->names.find_or_create_string_id("stack");
     _record_gc_just_edge("internal", from_node, to_node_idx, name_idx);
@@ -400,60 +349,62 @@ void _gc_heap_snapshot_record_task_to_frame_edge(jl_task_t *from, jl_gcframe_t *
 
 void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe_t *to) JL_NOTSAFEPOINT {
     auto from_node_idx = _record_stack_frame_node(g_snapshot, from);
-    Node &from_node = g_snapshot->nodes[from_node_idx];
     auto to_node_idx = _record_stack_frame_node(g_snapshot, to);
+    Node &from_node = g_snapshot->nodes[from_node_idx];
 
     auto name_idx = g_snapshot->names.find_or_create_string_id("next frame");
     _record_gc_just_edge("internal", from_node, to_node_idx, name_idx);
 }
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT {
-    if (!g_snapshot) {
-        return;
-    }
     _record_gc_edge("array", "element", from, to, index);
 }
 
 void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_NOTSAFEPOINT {
-    //jl_printf(JL_STDERR, "module: %p  binding:%p  name:%s\n", from, to, name);
     _record_gc_edge("object", "property", (jl_value_t *)from, to,
                     g_snapshot->names.find_or_create_string_id(name));
 }
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT {
-    jl_datatype_t *type = (jl_datatype_t*)jl_typeof(from);
-
-    auto field_paths = _fieldpath_for_slot(from, slot);
-    // Build the new field name by joining the strings, and/or use the struct + field names
-    // to create a bunch of edges + nodes
-    // (iterate the vector in reverse - the last element is the first path)
-    // TODO: Prefer to create intermediate edges and nodes instead of a combined string path.
-    string path;
-    for (auto it = field_paths.rbegin(); it != field_paths.rend(); ++it) {
-        // ...
-        path += it->second;
-        if ( it + 1 != field_paths.rend() ) {
-            path += ".";
-        }
-    }
-
+    string path = _fieldpath_for_slot(from, slot);
     _record_gc_edge("object", "property", from, to,
                     g_snapshot->names.find_or_create_string_id(path));
 }
 
-void _gc_heap_snapshot_record_internal_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
-    // TODO: probably need to inline this here and make some changes
+void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_t* binding) JL_NOTSAFEPOINT {
+    
+
+    auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
+    auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(binding->name));
+    auto value_idx = (binding->value) ? record_node_to_gc_snapshot(binding->value) : 0;
+    auto ty_idx = (binding->ty) ? record_node_to_gc_snapshot(binding->ty) : 0;
+    auto globalref_idx = (binding->globalref) ? record_node_to_gc_snapshot(binding->globalref) : 0;
+
+    auto &from_node = g_snapshot->nodes[from_node_idx];
+    auto &to_node = g_snapshot->nodes[to_node_idx];
+    from_node.type = g_snapshot->node_types.find_or_create_string_id("object");
+
+    _record_gc_just_edge("property", from_node, to_node_idx, g_snapshot->names.find_or_create_string_id("<native>"));
+    if (value_idx)     _record_gc_just_edge("internal", to_node, value_idx, g_snapshot->names.find_or_create_string_id("value"));
+    if (ty_idx)        _record_gc_just_edge("internal", to_node, ty_idx, g_snapshot->names.find_or_create_string_id("ty"));
+    if (globalref_idx) _record_gc_just_edge("internal", to_node, globalref_idx, g_snapshot->names.find_or_create_string_id("globalref"));
+}
+
+void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT {
     _record_gc_edge("object", "internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, size_t bytes) JL_NOTSAFEPOINT {
-    // TODO: probably need to inline this here and make some changes
-    _record_gc_edge("native", "hidden", from, (jl_value_t *)jl_malloc_tag,
-                    g_snapshot->names.find_or_create_string_id("<native>"));
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT {
+    size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
-    // Add the size to the "unknown malloc" tag
-    g_snapshot->nodes[g_snapshot->node_ptr_to_index_map[(jl_value_t*)jl_malloc_tag]].self_size += bytes;
+    auto from_node_idx = record_node_to_gc_snapshot(from);
+    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, "<malloc>");
+    
+    auto &from_node = g_snapshot->nodes[from_node_idx];
+    from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
+
+    _record_gc_just_edge("hidden", from_node, to_node_idx, name_or_idx);
 }
 
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
@@ -468,17 +419,17 @@ static inline void _record_gc_edge(const char *node_type, const char *edge_type,
     _record_gc_just_edge(edge_type, from_node, to_node_idx, name_or_idx);
 }
 
-void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) {
+void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT {
     from_node.edges.push_back(Edge{
         g_snapshot->edge_types.find_or_create_string_id(edge_type),
         name_or_idx, // edge label
-        to_idx, // to
+        to_idx // to
     });
 
     g_snapshot->num_edges += 1;
 }
 
-void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot) {
+void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one) {
     // mimicking https://github.com/nodejs/node/blob/5fd7a72e1c4fbaf37d3723c4c81dce35c149dc84/deps/v8/src/profiler/heap-snapshot-generator.cc#L2567-L2567
     ios_printf(stream, "{\"snapshot\":{");
     ios_printf(stream, "\"meta\":{");
@@ -502,14 +453,15 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot) {
     for (const auto &from_node : snapshot.nodes) {
         if (first_node) {
             first_node = false;
-        } else {
+        }
+        else {
             ios_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
         ios_printf(stream, "%zu", from_node.type);
-        ios_printf(stream, ",%zu", snapshot.names.find_or_create_string_id(from_node.name));
+        ios_printf(stream, ",%zu", from_node.name);
         ios_printf(stream, ",%zu", from_node.id);
-        ios_printf(stream, ",%zu", from_node.self_size);
+        ios_printf(stream, ",%zu", all_one ? (size_t)1 : from_node.self_size);
         ios_printf(stream, ",%zu", from_node.edges.size());
         ios_printf(stream, ",%zu", from_node.trace_node_id);
         ios_printf(stream, ",%d", from_node.detachedness);
@@ -523,7 +475,8 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot) {
         for (const auto &edge : from_node.edges) {
             if (first_edge) {
                 first_edge = false;
-            } else {
+            }
+            else {
                 ios_printf(stream, ",");
             }
             ios_printf(stream, "%zu", edge.type);
