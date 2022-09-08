@@ -104,7 +104,7 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=Int(typemax(Int32)))
     if isconcretetype(sig)
         # as for concrete types, we cache result at on the next level
         return findall(sig, table.table; limit)

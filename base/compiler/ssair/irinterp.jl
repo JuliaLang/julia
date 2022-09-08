@@ -1,4 +1,3 @@
-
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
     src = code.inferred
     mi = code.def
@@ -16,6 +15,11 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, @nospecialize(atype),
                                   sv::IRCode, max_methods::Int)
     return CallMeta(Any, Effects(), false)
+end
+
+function collect_limitations!(@nospecialize(typ), ::IRCode)
+    @assert !isa(typ, LimitedAccuracy) "semi-concrete eval on recursive call graph"
+    return typ
 end
 
 mutable struct TwoPhaseVectorView <: AbstractVector{Int}
@@ -105,36 +109,33 @@ function getindex(tpdum::TwoPhaseDefUseMap, idx::Int)
 end
 
 function concrete_eval_invoke(interp::AbstractInterpreter, ir::IRCode, mi_cache,
-    sv::InferenceState, inst::Expr, mi::MethodInstance)
+    inst::Expr, mi::MethodInstance)
     code = get(mi_cache, mi, nothing)
     code === nothing && return nothing
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, ir)
     effects = decode_effects(code.ipo_purity_bits)
-    if is_foldable(effects) && is_all_const_arg(argtypes)
-        args = collect_semi_const_args(argtypes, 1)
+    if is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1)
+        args = collect_const_args(argtypes, #=start=#1)
         world = get_world_counter(interp)
         value = try
             Core._call_in_world_total(world, args...)
         catch
             return Union{}
         end
-        if is_inlineable_constant(value) || call_result_unused(sv)
-            # If the constant is not inlineable, still do the const-prop, since the
-            # code that led to the creation of the Const may be inlineable in the same
-            # circumstance and may be optimizable.
+        if is_inlineable_constant(value)
             return Const(value)
         end
     else
         ir′ = codeinst_to_ir(interp, code)
         if ir′ !== nothing
-            return ir_abstract_constant_propagation(interp, mi_cache, sv, mi, ir′, argtypes)
+            return _ir_abstract_constant_propagation(interp, mi_cache, mi, ir′, argtypes)
         end
     end
     return nothing
 end
 
 function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::MethodInstance,
-                                mi_cache, sv::InferenceState,
+                                mi_cache,
                                 tpdum::TwoPhaseDefUseMap, idx::Int, bb::Union{Int, Nothing},
                                 @nospecialize(inst), @nospecialize(typ),
                                 phi_revisit::BitSet)
@@ -185,19 +186,23 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
                     (;rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, mi)
                     # All other effects already guaranteed effect free by construction
                     if is_nothrow(effects)
-                        ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+                        if isa(rt, Const) && is_inlineable_constant(rt.val)
+                            ir.stmts[idx][:inst] = quoted(rt.val)
+                        else
+                            ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
+                        end
                     end
                 end
-                if !(typ ⊑ rt)
+                if !⊑(typeinf_lattice(interp), typ, rt)
                     ir.stmts[idx][:type] = rt
                     return true
                 end
             elseif inst.head === :invoke
                 mi′ = inst.args[1]::MethodInstance
                 if mi′ !== mi # prevent infinite loop
-                    rr = concrete_eval_invoke(interp, ir, mi_cache, sv, inst, mi′)
+                    rr = concrete_eval_invoke(interp, ir, mi_cache, inst, mi′)
                     if rr !== nothing
-                        if !(typ ⊑ rr)
+                        if !⊑(typeinf_lattice(interp), typ, rr)
                             ir.stmts[idx][:type] = rr
                             return true
                         end
@@ -212,7 +217,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
             return false
         elseif isa(inst, PiNode)
             rr = tmeet(argextype(inst.val, ir), inst.typ)
-            if !(typ ⊑ rr)
+            if !⊑(typeinf_lattice(interp), typ, rr)
                 ir.stmts[idx][:type] = rr
                 return true
             end
@@ -225,9 +230,9 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
 end
 
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache,
-    frame::InferenceState, mi::MethodInstance, ir::IRCode, argtypes::Vector{Any})
+        mi::MethodInstance, ir::IRCode, argtypes::Vector{Any}; extra_reprocess = nothing)
     argtypes = va_process_argtypes(argtypes, mi)
-    argtypes_refined = Bool[!(ir.argtypes[i] ⊑ argtypes[i]) for i = 1:length(argtypes)]
+    argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
     empty!(ir.argtypes)
     append!(ir.argtypes, argtypes)
     ssa_refined = BitSet()
@@ -283,7 +288,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
         for idx = stmts
             inst = ir.stmts[idx][:inst]
             typ = ir.stmts[idx][:type]
-            any_refined = false
+            any_refined = extra_reprocess === nothing ? false : (idx in extra_reprocess)
             for ur in userefs(inst)
                 val = ur[]
                 if isa(val, Argument)
@@ -298,7 +303,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
                 delete!(ssa_refined, idx)
             end
             if any_refined && reprocess_instruction!(interp, ir, mi, mi_cache,
-                    frame, tpdum, idx, bb, inst, typ, ssa_refined)
+                    tpdum, idx, bb, inst, typ, ssa_refined)
                 push!(ssa_refined, idx)
             end
             if idx == lstmt && process_terminator!(ip, bb, idx)
@@ -364,7 +369,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
         idx = popfirst!(stmt_ip)
         inst = ir.stmts[idx][:inst]
         typ = ir.stmts[idx][:type]
-        if reprocess_instruction!(interp, ir, mi, mi_cache, frame,
+        if reprocess_instruction!(interp, ir, mi, mi_cache,
                 tpdum, idx, nothing, inst, typ, ssa_refined)
             append!(stmt_ip, tpdum[idx])
         end
@@ -380,8 +385,9 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
         end
         inst = ir.stmts[idx][:inst]::ReturnNode
         rt = argextype(inst.val, ir)
-        ultimate_rt = tmerge(ultimate_rt, rt)
+        ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
     end
+
     return ultimate_rt
 end
 
@@ -390,12 +396,12 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache,
     if __measure_typeinf__[]
         inf_frame = Timings.InferenceFrameInfo(mi, frame.world, Any[], Any[], length(ir.argtypes))
         Timings.enter_new_timer(inf_frame)
-        v = _ir_abstract_constant_propagation(interp, mi_cache, frame, mi, ir, argtypes)
+        v = _ir_abstract_constant_propagation(interp, mi_cache, mi, ir, argtypes)
         append!(inf_frame.slottypes, ir.argtypes)
         Timings.exit_current_timer(inf_frame)
         return v
     else
-        T = _ir_abstract_constant_propagation(interp, mi_cache, frame, mi, ir, argtypes)
+        T = _ir_abstract_constant_propagation(interp, mi_cache, mi, ir, argtypes)
         return T
     end
 end

@@ -259,14 +259,14 @@ end
 
 function set_compare_strategy!(p::Platform, key::String, f::Function)
     if !haskey(p.tags, key)
-        throw(ArgumentError("Cannot set comparison strategy for nonexistant tag $(key)!"))
+        throw(ArgumentError("Cannot set comparison strategy for nonexistent tag $(key)!"))
     end
     p.compare_strategies[key] = f
 end
 
 function get_compare_strategy(p::Platform, key::String, default = compare_default)
     if !haskey(p.tags, key)
-        throw(ArgumentError("Cannot get comparison strategy for nonexistant tag $(key)!"))
+        throw(ArgumentError("Cannot get comparison strategy for nonexistent tag $(key)!"))
     end
     return get(p.compare_strategies, key, default)
 end
