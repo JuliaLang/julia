@@ -111,6 +111,23 @@ Control whether garbage collection is enabled using a boolean argument (`true` f
 enable(on::Bool) = ccall(:jl_gc_enable, Int32, (Int32,), on) != 0
 
 """
+    GC.take_heap_snapshot(io::IOStream)
+    GC.take_heap_snapshot(filepath::String)
+
+Write a snapshot of the heap, in the JSON format expected by the Chrome
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to the given
+IO stream.
+"""
+function take_heap_snapshot(io)
+    ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid},), (io::IOStream).handle::Ptr{Cvoid})
+end
+function take_heap_snapshot(filepath::String)
+    open(filepath, "w") do io
+        take_heap_snapshot(io)
+    end
+end
+
+"""
     GC.enable_finalizers(on::Bool)
 
 Increment or decrement the counter that controls the running of finalizers on

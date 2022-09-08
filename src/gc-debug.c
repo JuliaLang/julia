@@ -1227,10 +1227,10 @@ void gc_count_pool(void)
     jl_safe_printf("************************\n");
 }
 
-int gc_slot_to_fieldidx(void *obj, void *slot)
+int gc_slot_to_fieldidx(void *obj, void *slot) JL_NOTSAFEPOINT
 {
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
-    int nf = (int)jl_datatype_nfields(vt);
+    int nf = (int)jl_datatype_nfields(vt); // what happens if you're inlined? lol
     for (int i = 0; i < nf; i++) {
         void *fieldaddr = (char*)obj + jl_field_offset(vt, i);
         if (fieldaddr >= slot) {
@@ -1240,7 +1240,7 @@ int gc_slot_to_fieldidx(void *obj, void *slot)
     return -1;
 }
 
-int gc_slot_to_arrayidx(void *obj, void *_slot)
+int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
 {
     char *slot = (char*)_slot;
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
