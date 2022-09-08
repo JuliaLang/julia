@@ -2299,6 +2299,8 @@ end
     @eval f1(var"a.b") = 3
     @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
 
+    @test sprint(_show, Method[]) == "0-element Vector{Method}"
+
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 
     @eval f2(; var"123") = 5
