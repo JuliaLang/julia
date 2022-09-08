@@ -43,6 +43,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // nthreads_per_pool
                         0,    // nprocs
                         NULL, // machine_file
+                        0,    // parallel_marking
                         NULL, // project
                         0,    // isinteractive
                         0,    // color
@@ -127,7 +128,8 @@ static const char opts[]  =
     "                           configured, and sets M to 1.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
-    " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
+    " --machine-file <file>     Run processes on hosts listed in <file>\n"
+    " --pmark                   Run GC marking algorithm with multiple threads\n\n"
 
     // interactive options
     " -i                         Interactive mode; REPL runs and `isinteractive()` is true\n"
@@ -240,6 +242,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_sysimage_native_code,
            opt_compiled_modules,
            opt_machine_file,
+           opt_parallel_marking,
            opt_project,
            opt_bug_report,
            opt_image_codegen,
@@ -270,6 +273,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "procs",           required_argument, 0, 'p' },
         { "threads",         required_argument, 0, 't' },
         { "machine-file",    required_argument, 0, opt_machine_file },
+        { "pmark",           optional_argument, 0, opt_parallel_marking },
         { "project",         optional_argument, 0, opt_project },
         { "color",           required_argument, 0, opt_color },
         { "history-file",    required_argument, 0, opt_history_file },
@@ -505,6 +509,9 @@ restart_switch:
             jl_options.machine_file = strdup(optarg);
             if (!jl_options.machine_file)
                 jl_error("julia: failed to allocate memory");
+            break;
+        case opt_parallel_marking:
+            jl_options.parallel_marking = 1;
             break;
         case opt_project:
             jl_options.project = optarg ? strdup(optarg) : "@.";

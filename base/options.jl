@@ -14,6 +14,7 @@ struct JLOptions
     nthreads_per_pool::Ptr{Int16}
     nprocs::Int32
     machine_file::Ptr{UInt8}
+    parallel_marking::UInt8;
     project::Ptr{UInt8}
     isinteractive::Int8
     color::Int8

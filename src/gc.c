@@ -1682,7 +1682,7 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
 }
 
 // Push gc work item `v` into `mq`
-static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
     // Queue overflow
@@ -1701,21 +1701,22 @@ static void gc_markqueue_push(jl_gc_markqueue_t *mq, void *v) JL_NOTSAFEPOINT
 }
 
 // Pop gc work item from `mq`
-static void *gc_markqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+STATIC_INLINE void *gc_markqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
     return ws_queue_pop(&mq->q);
 #else
-    if (mq->current == mq->start)
-        return NULL;
-    mq->current--;
-    jl_value_t *obj = *mq->current;
+    jl_value_t *obj = NULL;
+    if (mq->current != mq->start) {
+        mq->current--;
+        obj = *mq->current;
+    }
     return obj;
 #endif
 }
 
 // Steal gc work item enqueued in `mq`
-static void *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+STATIC_INLINE void *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
     return ws_queue_steal_from(&mq->q);
@@ -1729,7 +1730,7 @@ static void *gc_markqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 // at expense of debuggability
 
 // Push chunk `*c` into `mq`
-static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
     idemp_ws_queue_t *cq = &mq->cq;
@@ -1747,7 +1748,7 @@ static void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSA
 }
 
 // Pop chunk from `mq`
-static jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_gc_chunk_t c = {.cid = empty_chunk};
 #ifndef GC_VERIFY
@@ -1765,7 +1766,7 @@ static jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 }
 
 // Steal chunk enqueued in `mq`
-static jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
+STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_gc_chunk_t c = {.cid = empty_chunk};
 #ifndef GC_VERIFY
@@ -1785,7 +1786,7 @@ static jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEP
 }
 
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
-static void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
+STATIC_INLINE void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
                                   uintptr_t *nptr) JL_NOTSAFEPOINT
 {
     if (!_obj)
@@ -1799,7 +1800,7 @@ static void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
 }
 
 // Mark object with 8bit field descriptors
-static jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_t *obj8_begin,
+STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_t *obj8_begin,
                          uint8_t *obj8_end, uintptr_t nptr) JL_NOTSAFEPOINT
 {
     (void)jl_assume(obj8_begin < obj8_end);
@@ -1827,7 +1828,7 @@ static jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_t *obj8
 }
 
 // Mark object with 16bit field descriptors
-static jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint16_t *obj16_begin,
+STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint16_t *obj16_begin,
                           uint16_t *obj16_end, uintptr_t nptr) JL_NOTSAFEPOINT
 {
     (void)jl_assume(obj16_begin < obj16_end);
@@ -1855,7 +1856,7 @@ static jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint16_t *o
 }
 
 // Mark object with 32bit field descriptors
-static jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint32_t *obj32_begin,
+STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint32_t *obj32_begin,
                           uint32_t *obj32_end, uintptr_t nptr) JL_NOTSAFEPOINT
 {
     (void)jl_assume(obj32_begin < obj32_end);
@@ -1883,7 +1884,7 @@ static jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint32_t *o
 }
 
 // Mark object array
-static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
+STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
                              jl_value_t **obj_end, uint32_t step,
                              uintptr_t nptr) JL_NOTSAFEPOINT
 {
@@ -1911,7 +1912,7 @@ static void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t 
 }
 
 // Mark array with 8bit field descriptors
-static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t **ary8_begin,
+STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t **ary8_begin,
                            jl_value_t **ary8_end, uint8_t *elem_begin, uint8_t *elem_end,
                            uintptr_t nptr) JL_NOTSAFEPOINT
 {
@@ -1942,7 +1943,7 @@ static void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t *
 }
 
 // Mark array with 16bit field descriptors
-static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
+STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
                             jl_value_t **ary16_begin, jl_value_t **ary16_end,
                             uint16_t *elem_begin, uint16_t *elem_end,
                             uintptr_t nptr) JL_NOTSAFEPOINT
@@ -1974,7 +1975,7 @@ static void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
 }
 
 // Mark chunk of large array
-void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
     switch (c.cid) {
@@ -2013,7 +2014,7 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
         case finlist_chunk: {
             jl_value_t **fl_begin = c.begin;
             jl_value_t **fl_end = c.end;
-            _gc_mark_finlist(mq, fl_begin, fl_end);
+            gc_mark_finlist_(mq, fl_begin, fl_end);
             break;
         }
         default: {
@@ -2026,7 +2027,7 @@ void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NO
 }
 
 // Mark gc frame
-static void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots,
+STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots,
                           uintptr_t offset, uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
@@ -2060,7 +2061,7 @@ static void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots,
 }
 
 // Mark exception stack
-static void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack,
+STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack,
                              size_t itr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
@@ -2089,7 +2090,7 @@ static void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack,
 }
 
 // Mark module binding
-static void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent,
+STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent,
                                    jl_binding_t **mb_begin, jl_binding_t **mb_end,
                                    uintptr_t nptr, uint8_t bits) JL_NOTSAFEPOINT
 {
@@ -2134,7 +2135,7 @@ static void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent,
     }
 }
 
-void _gc_mark_finlist(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
 #ifndef GC_VERIFY
@@ -2168,7 +2169,7 @@ void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
         return;
     jl_value_t **fl_begin = (jl_value_t **)list->items + start;
     jl_value_t **fl_end = (jl_value_t **)list->items + len;
-    _gc_mark_finlist(mq, fl_begin, fl_end);
+    gc_mark_finlist_(mq, fl_begin, fl_end);
 }
 
 JL_DLLEXPORT int jl_gc_mark_queue_obj(jl_ptls_t ptls, jl_value_t *obj)
@@ -2189,7 +2190,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // Enqueue and mark all outgoing references from `new_obj` which have not been marked
 // yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
 // objects which have been enqueued into the `remset`
-NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj,
+STATIC_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj,
                               int meta_updated) JL_NOTSAFEPOINT
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
@@ -2458,16 +2459,18 @@ NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_
 
 
 // Wake-up workers to partake in parallel marking
-static void gc_wake_workers(jl_ptls_t ptls)
+STATIC_INLINE void gc_wake_workers(jl_ptls_t ptls)
 {
-    jl_fence();
-    if (jl_n_threads > 1) {
-        jl_wake_libuv();
-        uv_cond_broadcast(&safepoint_cond);
-    }
-    for (int i = 0; i < jl_n_threads; i++) {
-        if (i != ptls->tid)
-            uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
+    if (jl_options.parallel_marking) {
+        jl_fence();
+        if (jl_n_threads > 1) {
+            jl_wake_libuv();
+            uv_cond_broadcast(&safepoint_cond);
+        }
+        for (int i = 0; i < jl_n_threads; i++) {
+            if (i != ptls->tid)
+                uv_cond_signal(&jl_all_tls_states[i]->wake_signal);
+        }
     }
 }
 
@@ -2540,32 +2543,46 @@ void gc_drain_all_queues(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
     }
 }
 
+int8_t gc_mark_entry_seq(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    uint8_t state0 = jl_atomic_load_relaxed(&ptls->gc_state);
+    if (jl_options.parallel_marking) {
+        jl_atomic_fetch_add(&nworkers_marking, 1);
+        state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
+    }
+    return state0;
+}
+
+void gc_mark_exit_seq(jl_ptls_t ptls, int8_t state0) JL_NOTSAFEPOINT
+{
+    if (jl_options.parallel_marking) {
+        jl_atomic_store_release(&ptls->gc_state, state0);
+        jl_atomic_fetch_add(&nworkers_marking, -1);
+    }
+}
+
 // Main mark loop. Single stack (allocated on the heap) of `jl_value_t *`
 // is used to keep track of processed items. Maintaning this stack (instead of
 // native one) avoids stack overflow when marking deep objects and
 // makes it easier to implement parallel marking via work-stealing
 void gc_mark_loop(jl_ptls_t ptls)
 {
-    jl_atomic_fetch_add(&nworkers_marking, 1);
-    uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
+    int8_t state0 = gc_mark_entry_seq(ptls);
     gc_mark_loop_(ptls, &ptls->mark_queue);
     gc_drain_own_chunkqueue(ptls, &ptls->mark_queue);
     gc_drain_all_queues(ptls, &ptls->mark_queue);
-    jl_atomic_store_release(&ptls->gc_state, state0);
-    jl_atomic_fetch_add(&nworkers_marking, -1);
+    gc_mark_exit_seq(ptls, state0);
 }
 
 // Mark-loop wrapper. Call workers for parallel marking and mark
 STATIC_INLINE void gc_mark_loop_master(jl_ptls_t ptls)
 {
-    jl_atomic_fetch_add(&nworkers_marking, 1);
-    uint8_t state0 = jl_atomic_exchange(&ptls->gc_state, JL_GC_STATE_PARALLEL);
+    int8_t state0 = gc_mark_entry_seq(ptls);
     gc_wake_workers(ptls);
     gc_mark_loop_(ptls, &ptls->mark_queue);
     gc_drain_own_chunkqueue(ptls, &ptls->mark_queue);
     gc_drain_all_queues(ptls, &ptls->mark_queue);
-    jl_atomic_store_release(&ptls->gc_state, state0);
-    jl_atomic_fetch_add(&nworkers_marking, -1);
+    gc_mark_exit_seq(ptls, state0);
 }
 
 static void gc_premark(jl_ptls_t ptls2)

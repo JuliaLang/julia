@@ -18,6 +18,7 @@ typedef struct {
     const int16_t *nthreads_per_pool;
     int32_t nprocs;
     const char *machine_file;
+    int8_t parallel_marking;
     const char *project;
     int8_t isinteractive;
     int8_t color;

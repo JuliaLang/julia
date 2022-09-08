@@ -6,6 +6,7 @@
 #include <string.h>
 #include <inttypes.h>
 
+#include "gc.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"

@@ -11,7 +11,7 @@ extern "C" {
 
 typedef struct {
     void **buffer;
-    size_t capacity;
+    int64_t capacity;
 } ws_array_t;
 
 ws_array_t *create_ws_array(size_t capacity, size_t eltsz) JL_NOTSAFEPOINT;
@@ -44,8 +44,8 @@ void *ws_queue_steal_from(ws_queue_t *dq) JL_NOTSAFEPOINT;
 // =======
 
 typedef struct {
-    uint16_t tail;
-    uint16_t tag;
+    int32_t tail;
+    int32_t tag;
 } ws_anchor_t;
 
 typedef struct {

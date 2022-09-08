@@ -46,7 +46,7 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 uv_mutex_t safepoint_lock;
 uv_cond_t safepoint_cond;
 
-jl_mutex_t safepoint_master_lock;
+jl_mutex_t spinmaster_lock;
 const uint64_t timeout_ns = 1e5;
 
 extern _Atomic(int32_t) nworkers_marking;
@@ -181,7 +181,7 @@ int64_t jl_spinmaster_count_work(jl_ptls_t ptls) JL_NOTSAFEPOINT
     	int64_t t2 = jl_atomic_load_relaxed(&q2->top);
         int64_t b2 = jl_atomic_load_relaxed(&q2->bottom);
         work += b2 - t2;
-	}
+    }
     return work;
 }
 
@@ -190,7 +190,8 @@ void jl_spinmaster_notify_all(jl_ptls_t ptls) JL_NOTSAFEPOINT
     for (int i = 0; i < jl_n_threads; i++) {
         if (i == ptls->tid)
             continue;
-        uv_cond_signal(&jl_all_tls_states[i]->gc_wake_signal);
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        uv_cond_signal(&ptls2->gc_wake_signal);
     }
 }
 
@@ -201,7 +202,7 @@ void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers) JL_NOTSAFEPO
             continue;
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
-            uv_cond_signal(&ptls->gc_wake_signal);
+            uv_cond_signal(&ptls2->gc_wake_signal);
             nworkers--;
         }
     }
@@ -215,13 +216,13 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
         return 1;
     }
 #ifndef GC_VERIFY
-    if (jl_mutex_trylock_nogc(&safepoint_master_lock)) {
+    if (jl_mutex_trylock_nogc(&spinmaster_lock)) {
         spin : {
             if (!jl_spinmaster_all_workers_done(ptls)) {
                 int64_t work = jl_spinmaster_count_work(ptls);
                 if (work > 1) {
                     jl_spinmaster_recruit_workers(ptls, work - 1);
-                    jl_mutex_unlock_nogc(&safepoint_master_lock);
+                    jl_mutex_unlock_nogc(&spinmaster_lock);
                     gc_mark_loop(ptls);
                     return 0;
                 }
@@ -230,7 +231,7 @@ int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
             }
         }
         jl_spinmaster_notify_all(ptls);
-        jl_mutex_unlock_nogc(&safepoint_master_lock);
+        jl_mutex_unlock_nogc(&spinmaster_lock);
         return 1;
     }
 #endif
@@ -242,13 +243,11 @@ void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
     jl_ptls_t ptls = jl_current_task->ptls;
     while(!jl_spinmaster_end_marking(ptls)) {
         uv_mutex_lock(&ptls->gc_sleep_lock);
-        if (!uv_cond_timedwait(&ptls->gc_wake_signal,
-                               &ptls->gc_sleep_lock, timeout_ns)) {
-            // Stopped waiting because we got a notification
-            // from spin-master: try to get recruited
-            gc_mark_loop(ptls);
-        }
+        int ret = uv_cond_timedwait(&ptls->gc_wake_signal,
+                                    &ptls->gc_sleep_lock, timeout_ns);
         uv_mutex_unlock(&ptls->gc_sleep_lock);
+        if (ret == 0)
+            gc_mark_loop(ptls);
     }
 }
 
