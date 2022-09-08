@@ -115,7 +115,7 @@ namespace {
             // TODO: Consider add more passes like in
             // addGeneralOptsForMemorySanitizer. EarlyCSEPass makes visible
             // difference on size. It's not clear if the rest is still
-            // usefull. InstCombinePass breakes
+            // useful. InstCombinePass breaks
             // compiler-rt/test/msan/select_origin.cpp.
             }
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));

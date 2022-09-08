@@ -333,6 +333,8 @@ Return the index of the first value in `a` greater than or equal to `x`, accordi
 specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
 
+`insert!`ing `x` at this index will maintain sorted order.
+
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples

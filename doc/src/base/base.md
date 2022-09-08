@@ -88,6 +88,7 @@ outer
 const
 struct
 mutable struct
+@kwdef
 abstract type
 primitive type
 where

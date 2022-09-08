@@ -2321,6 +2321,44 @@ void remove_code_instance_from_validation(jl_code_instance_t *codeinst)
     ptrhash_remove(&new_code_instance_validate, codeinst);
 }
 
+static int do_selective_invoke_backedge_invalidation(jl_methtable_t *mt, jl_value_t *mworld, jl_method_instance_t *mi, size_t world)
+{
+    jl_value_t *invokeTypes;
+    jl_method_instance_t *caller;
+    size_t jins = 0, j0, j = 0, nbe = jl_array_len(mi->backedges);
+    while (j < nbe) {
+        j0 = j;
+        j = get_next_edge(mi->backedges, j, &invokeTypes, &caller);
+        if (invokeTypes) {
+            struct jl_typemap_assoc search = {invokeTypes, world, NULL, 0, ~(size_t)0};
+            jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
+            if (entry) {
+                jl_value_t *imworld = entry->func.value;
+                if (jl_is_method(imworld) && mi->def.method == (jl_method_t*)imworld) {
+                    // this one is OK
+                    // in case we deleted some earlier ones, move this earlier
+                    for (; j0 < j; jins++, j0++) {
+                        jl_array_ptr_set(mi->backedges, jins, jl_array_ptr_ref(mi->backedges, j0));
+                    }
+                    continue;
+                }
+            }
+        }
+        invalidate_backedges(&remove_code_instance_from_validation, caller, world, "jl_insert_method_instance caller");
+        // The codeinst of this mi haven't yet been removed
+        jl_code_instance_t *codeinst = caller->cache;
+        while (codeinst) {
+            remove_code_instance_from_validation(codeinst);
+            codeinst = codeinst->next;
+        }
+    }
+    jl_array_del_end(mi->backedges, j - jins);
+    if (jins == 0) {
+        return 0;
+    }
+    return 1;
+}
+
 static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
 {
     size_t i, l = jl_array_len(list);
@@ -2345,41 +2383,15 @@ static void jl_insert_method_instances(jl_array_t *list) JL_GC_DISABLED
                 if (entry) {
                     jl_value_t *mworld = entry->func.value;
                     if (jl_is_method(mworld) && mi->def.method != (jl_method_t*)mworld && jl_type_morespecific(((jl_method_t*)mworld)->sig, mi->def.method->sig)) {
-                        // There's still a chance this is valid, if any caller made this via `invoke` and the invoke-signature is still valid
-                        assert(mi->backedges);   // should not be NULL if it's on `list`
-                        jl_value_t *invokeTypes;
-                        jl_method_instance_t *caller;
-                        size_t jins = 0, j0, j = 0, nbe = jl_array_len(mi->backedges);
-                        while (j < nbe) {
-                            j0 = j;
-                            j = get_next_edge(mi->backedges, j, &invokeTypes, &caller);
-                            if (invokeTypes) {
-                                struct jl_typemap_assoc search = {invokeTypes, world, NULL, 0, ~(size_t)0};
-                                entry = jl_typemap_assoc_by_type(mt->defs, &search, /*offs*/0, /*subtype*/0);
-                                if (entry) {
-                                    jl_value_t *imworld = entry->func.value;
-                                    if (jl_is_method(imworld) && mi->def.method == (jl_method_t*)imworld) {
-                                        // this one is OK
-                                        // in case we deleted some earlier ones, move this earlier
-                                        for (; j0 < j; jins++, j0++) {
-                                            jl_array_ptr_set(mi->backedges, jins, jl_array_ptr_ref(mi->backedges, j0));
-                                        }
-                                        continue;
-                                    }
-                                }
-                            }
-                            invalidate_backedges(&remove_code_instance_from_validation, caller, world, "jl_insert_method_instance");
-                            // The codeinst of this mi haven't yet been removed
-                            jl_code_instance_t *codeinst = caller->cache;
-                            while (codeinst) {
-                                remove_code_instance_from_validation(codeinst);
-                                codeinst = codeinst->next;
-                            }
-                        }
-                        jl_array_del_end(mi->backedges, j - jins);
-                        if (jins == 0) {
-                            m = (jl_method_t*)mworld;
+                        if (!mi->backedges) {
                             valid = 0;
+                        } else {
+                            // There's still a chance this is valid, if any caller made this via `invoke` and the invoke-signature is still valid.
+                            // Selectively go through all the backedges, invalidating those not made via `invoke` and validating those that are.
+                            if (!do_selective_invoke_backedge_invalidation(mt, mworld, mi, world)) {
+                                m = (jl_method_t*)mworld;
+                                valid = 0;
+                            }
                         }
                     }
                 }

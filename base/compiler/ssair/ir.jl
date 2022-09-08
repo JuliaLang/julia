@@ -509,7 +509,10 @@ function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::
     node[:line] = something(inst.line, ir.stmts[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
-        (effect_free_and_nothrow, nothrow) = stmt_effect_flags(inst.stmt, inst.type, ir)
+        (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, ir)
+        if consistent
+            flag |= IR_FLAG_CONSISTENT
+        end
         if effect_free_and_nothrow
             flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         elseif nothrow
@@ -831,7 +834,10 @@ function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, re
     end
     flag = inst.flag
     if !inst.effect_free_computed
-        (effect_free_and_nothrow, nothrow) = stmt_effect_flags(inst.stmt, inst.type, compact)
+        (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, compact)
+        if consistent
+            flag |= IR_FLAG_CONSISTENT
+        end
         if effect_free_and_nothrow
             flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         elseif nothrow
@@ -1050,15 +1056,22 @@ function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Ve
 end
 
 # Used in inlining before we start compacting - Only works at the CFG level
-function kill_edge!(bbs::Vector{BasicBlock}, from::Int, to::Int)
+function kill_edge!(bbs::Vector{BasicBlock}, from::Int, to::Int, callback=nothing)
     preds, succs = bbs[to].preds, bbs[from].succs
     deleteat!(preds, findfirst(x->x === from, preds)::Int)
     deleteat!(succs, findfirst(x->x === to, succs)::Int)
     if length(preds) == 0
         for succ in copy(bbs[to].succs)
-            kill_edge!(bbs, to, succ)
+            kill_edge!(bbs, to, succ, callback)
         end
     end
+    if callback !== nothing
+        callback(from, to)
+    end
+end
+
+function kill_edge!(ir::IRCode, from::Int, to::Int, callback=nothing)
+    kill_edge!(ir.cfg.blocks, from, to, callback)
 end
 
 # N.B.: from and to are non-renamed indices
@@ -1126,12 +1139,19 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
     elseif isa(stmt, GotoNode) && cfg_transforms_enabled
-        result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.label])
+        label = compact.bb_rename_succ[stmt.label]
+        @assert label > 0
+        result[result_idx][:inst] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
-        result[result_idx][:inst] = stmt
-        result[result_idx][:type] = argextype(stmt, compact)
-        result_idx += 1
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
+        if (result[result_idx][:flag] & total_flags) == total_flags
+            ssa_rename[idx] = stmt
+        else
+            result[result_idx][:inst] = stmt
+            result[result_idx][:type] = argextype(stmt, compact)
+            result_idx += 1
+        end
     elseif isa(stmt, GotoNode)
         result[result_idx][:inst] = stmt
         result_idx += 1
@@ -1151,19 +1171,25 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
                 kill_edge!(compact, active_bb, active_bb, stmt.dest)
                 # Don't increment result_idx => Drop this statement
             else
-                result[result_idx][:inst] = GotoNode(compact.bb_rename_succ[stmt.dest])
+                label = compact.bb_rename_succ[stmt.dest]
+                @assert label > 0
+                result[result_idx][:inst] = GotoNode(label)
                 kill_edge!(compact, active_bb, active_bb, active_bb+1)
                 result_idx += 1
             end
         else
             @label bail
-            result[result_idx][:inst] = GotoIfNot(cond, compact.bb_rename_succ[stmt.dest])
+            label = compact.bb_rename_succ[stmt.dest]
+            @assert label > 0
+            result[result_idx][:inst] = GotoIfNot(cond, label)
             result_idx += 1
         end
     elseif isa(stmt, Expr)
         stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa)::Expr
         if cfg_transforms_enabled && isexpr(stmt, :enter)
-            stmt.args[1] = compact.bb_rename_succ[stmt.args[1]::Int]
+            label = compact.bb_rename_succ[stmt.args[1]::Int]
+            @assert label > 0
+            stmt.args[1] = label
         end
         result[result_idx][:inst] = stmt
         result_idx += 1

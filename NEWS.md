@@ -9,6 +9,7 @@ New language features
   handled via `Base.split_rest`. ([#42902])
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
+* Nested combinations of tuples and named tuples of symbols are now allowed as type parameters ([#46300]).
 
 Language changes
 ----------------
@@ -87,6 +88,7 @@ Library changes
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* `@kwdef` is now exported and added to the public API ([#46273])
 
 Standard library changes
 ------------------------

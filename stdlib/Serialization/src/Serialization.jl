@@ -364,7 +364,8 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     p = parentmodule(m)
     if p === m || m === Base
         key = Base.root_module_key(m)
-        serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
+        uuid = key.uuid
+        serialize(s, uuid === nothing ? nothing : uuid.value)
         serialize(s, Symbol(key.name))
     else
         serialize_mod_names(s, p)
