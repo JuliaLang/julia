@@ -61,8 +61,24 @@ This operator follows IEEE semantics for floating-point numbers: `0.0 == -0.0` a
 The result is of type `Bool`, except when one of the operands is [`missing`](@ref),
 in which case `missing` is returned
 ([three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic)).
-For collections, `missing` is returned if at least one of the operands contains
-a `missing` value and all non-missing values are equal.
+
+For collections, `missing` is returned if at least one of the operands contains a
+`missing` value and `==` performed element-wise on the operands does not contain
+`false` in the returned value. Otherwise, `false` is returned:
+```jldoctests
+julia> (missing, 1, 10) .== (21, 1, 10)
+(missing, true, true)
+
+julia> (missing, 1, 10) == (21, 1, 10)
+missing
+
+julia> (missing, 1, 10) .== (10, 1, 44)
+(missing, true, false)
+
+julia> (missing, 1, 10) == (10, 1, 44)
+false
+```
+
 Use [`isequal`](@ref) or [`===`](@ref) to always get a `Bool` result.
 
 # Implementation
