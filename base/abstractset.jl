@@ -366,7 +366,7 @@ function ⊋ end
 
 Determines if `a` is a subset of, but not equal to, `b`.
 
-See also [`issubset`](@ref) (`⊆`), [`⊈`](@ref).
+See also [`issubset`](@ref), [`⊆`](@ref), [`⊈`](@ref).
 
 # Examples
 ```jldoctest
