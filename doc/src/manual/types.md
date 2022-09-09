@@ -110,7 +110,7 @@ x::Int8 = 10   # as the left-hand side of an assignment
 
 and applies to the whole current scope, even before the declaration.
 
-As of Julia 1.8 and later versions, type declarations can now be used in global scope i.e.
+As of Julia 1.8, type declarations can now be used in global scope i.e.
 type annotations can be added to global variables to make accessing them type stable.
 ```julia
 julia> x::Int = 10
