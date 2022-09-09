@@ -122,7 +122,6 @@ Core.atdoc!(CoreDocs.docm)
 
 # sorting
 function sort! end
-function issorted end
 include("ordering.jl")
 using .Order
 include("sort.jl")
