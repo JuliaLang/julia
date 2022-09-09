@@ -540,7 +540,7 @@ function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
     parse_assignment_with_initial_ex(ps, mark, down, equals_is_kw)
 end
 
-function parse_assignment_with_initial_ex(ps::ParseState, mark, down, equals_is_kw::Bool)
+function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T, equals_is_kw::Bool) where {T} # where => specialize on `down`
     t = peek_token(ps)
     k = kind(t)
     if !is_prec_assignment(k)
@@ -1169,19 +1169,18 @@ function parse_unary_call(ps::ParseState)
         mark_before_paren = position(ps)
         bump(ps, TRIVIA_FLAG) # (
         initial_semi = peek(ps) == K";"
-        is_call = Ref(false)
-        is_block = Ref(false)
-        parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_call[] = had_commas || had_splat || initial_semi
-            is_block[] = !is_call[] && num_semis > 0
-            return (needs_parameters=is_call[],
-                    eq_is_kw_before_semi=is_call[],
-                    eq_is_kw_after_semi=is_call[])
+        opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+            is_call = had_commas || had_splat || initial_semi
+            return (needs_parameters=is_call,
+                    eq_is_kw_before_semi=is_call,
+                    eq_is_kw_after_semi=is_call,
+                    is_call=is_call,
+                    is_block=!is_call && num_semis > 0)
         end
 
         # The precedence between unary + and any following infix ^ depends on
         # whether the parens are a function call or not
-        if is_call[]
+        if opts.is_call
             if preceding_whitespace(t2)
                 # Whitespace not allowed before prefix function call bracket
                 # + (a,b)   ==> (call + (error) a b)
@@ -1203,7 +1202,7 @@ function parse_unary_call(ps::ParseState)
             parse_factor_with_initial_ex(ps, mark)
         else
             # Unary function calls with brackets as grouping, not an arglist
-            if is_block[]
+            if opts.is_block
                 # +(a;b)   ==>  (call + (block a b))
                 emit(ps, mark_before_paren, K"block")
             end
@@ -1995,14 +1994,14 @@ function parse_function(ps::ParseState)
             # distinguish the cases here.
             bump(ps, TRIVIA_FLAG)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
-            _is_anon_func = Ref(is_anon_func)
-            parse_brackets(ps, K")") do _, _, _, _
-                _is_anon_func[] = peek(ps, 2) != K"("
-                return (needs_parameters     = _is_anon_func[],
-                        eq_is_kw_before_semi = _is_anon_func[],
-                        eq_is_kw_after_semi  = _is_anon_func[])
+            opts = parse_brackets(ps, K")") do _, _, _, _
+                _is_anon_func = peek(ps, 2) != K"("
+                return (needs_parameters     = _is_anon_func,
+                        eq_is_kw_before_semi = _is_anon_func,
+                        eq_is_kw_after_semi  = _is_anon_func,
+                        is_anon_func=_is_anon_func)
             end
-            is_anon_func = _is_anon_func[]
+            is_anon_func = opts.is_anon_func
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
                 # function (x,y) end    ==>  (function (tuple x y) (block))
@@ -2859,17 +2858,16 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         # Deal with all other cases of tuple or block syntax via the generic
         # parse_brackets
         initial_semi = peek(ps) == K";"
-        is_tuple = Ref(false)
-        is_block = Ref(false)
-        parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_tuple[] = had_commas || (had_splat && num_semis >= 1) ||
+        opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
+            is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0))
-            is_block[] = num_semis > 0
-            return (needs_parameters=is_tuple[],
+            return (needs_parameters=is_tuple,
                     eq_is_kw_before_semi=false,
-                    eq_is_kw_after_semi=is_tuple[])
+                    eq_is_kw_after_semi=is_tuple,
+                    is_tuple=is_tuple,
+                    is_block=num_semis > 0)
         end
-        if is_tuple[]
+        if opts.is_tuple
             # Tuple syntax with commas
             # (x,)        ==>  (tuple x)
             # (x,y)       ==>  (tuple x y)
@@ -2886,7 +2884,7 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             # (a; b; c,d)     ==> (tuple a (parameters b (parameters c d)))
             # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (kw c 3)))
             emit(ps, mark, K"tuple")
-        elseif is_block[]
+        elseif opts.is_block
             # Blocks
             # (;;)        ==>  (block)
             # (a=1;)      ==>  (block (= a 1))
@@ -3016,6 +3014,7 @@ function parse_brackets(after_parse::Function,
     release_positions(ps.stream, params_marks)
     release_positions(ps.stream, eq_positions)
     bump_closing_token(ps, closing_kind)
+    return actions
 end
 
 is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))
