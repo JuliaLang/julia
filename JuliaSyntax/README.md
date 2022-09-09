@@ -821,7 +821,7 @@ Here's a few links to relevant Julia issues.
 #### Lowering
 
 * A partial implementation of lowering in Julia https://github.com/JuliaLang/julia/pull/32201 —
-  some of this should be ported.
+  some of this should be ported. (Last commit at https://github.com/JuliaLang/julia/tree/df61138fcf97d03dcbbba10e962571af9700db56/ )
 * The closure capture problem https://github.com/JuliaLang/julia/issues/15276 —
   would be interesting to see whether we can tackle some of the harder cases in
   a new implementation.
