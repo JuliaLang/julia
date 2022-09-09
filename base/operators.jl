@@ -1306,7 +1306,7 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
-To determine whether an item is not in a given collection, see [`:∉`](@ref).
+To determine whether an item is not in a given collection, see [`∉`](@ref).
 You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
