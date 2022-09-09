@@ -325,7 +325,7 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
-        CartesianIndices(convert(R, inds.indices))
+        CartesianIndices(convert(R, inds.indices))::CartesianIndices{N,R}
 
     # equality
     Base.:(==)(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =

@@ -148,7 +148,7 @@ convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tu
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))
+    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
 end
 
 if nameof(@__MODULE__) === :Base

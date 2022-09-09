@@ -14,8 +14,8 @@ See also: [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), 
 AbstractArray
 
 convert(::Type{T}, a::T) where {T<:AbstractArray} = a
-convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
-convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
+convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)::AbstractArray{T}
+convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)::AbstractArray{T,N}
 
 """
     size(A::AbstractArray, [dim])
