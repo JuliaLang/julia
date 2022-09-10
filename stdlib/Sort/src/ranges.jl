@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 issorted(r::AbstractUnitRange) = true
 issorted(r::AbstractRange) = length(r) <= 1 || step(r) >= zero(step(r))
 
