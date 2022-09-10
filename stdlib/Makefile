@@ -44,7 +44,7 @@ $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 STDLIBS = Artifacts Base64 CRC32c Dates Distributed FileWatching \
           Future InteractiveUtils LazyArtifacts Libdl LibGit2 LinearAlgebra Logging \
           Markdown Mmap Printf Profile Random REPL Serialization SHA \
-          SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
+          SharedArrays Sockets Sort SparseArrays SuiteSparse Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
 STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
