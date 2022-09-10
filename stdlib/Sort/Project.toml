@@ -1,0 +1,12 @@
+name = "Sort"
+uuid = "7744cb9a-8a56-1d63-a5da-e2fdf8a12fa2"
+
+[deps]
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+OffsetArrays = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
+
+[targets]
+test = ["Test", "OffsetArrays"]

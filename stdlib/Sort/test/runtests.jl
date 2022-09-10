@@ -5,9 +5,7 @@ module SortingTests
 using Base.Order
 using Random
 using Test
-
-isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
-using .Main.OffsetArrays
+using OffsetArrays
 
 @testset "Order" begin
     @test Forward == ForwardOrdering()

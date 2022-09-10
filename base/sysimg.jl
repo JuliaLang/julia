@@ -49,14 +49,15 @@ let
         :Distributed,
         :Future,
         :InteractiveUtils,
-        :LibGit2,
         :Profile,
-        :SparseArrays,
+        :Sort,
         :UUIDs,
 
         # 3-depth packages
+        :LibGit2,
         :REPL,
         :SharedArrays,
+        :SparseArrays,
         :TOML,
         :Test,
 

@@ -2,10 +2,8 @@
 
 module Sort
 
-import ..@__MODULE__, ..parentmodule
-const Base = parentmodule(@__MODULE__)
-using .Base.Order
-using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
+using Base.Order
+using Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     eachindex, axes, first, last, similar, zip, OrdinalRange, firstindex, lastindex,
     AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
@@ -14,14 +12,7 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
     midpoint, @boundscheck, checkbounds
 
-using .Base: >>>, !==, !=
-
-import .Base:
-    sort,
-    sort!,
-    issorted,
-    sortperm,
-    to_indices
+using Base: >>>, !==, !=
 
 export # also exported by Base
     # order-only:
@@ -43,15 +34,13 @@ export # also exported by Base
     InsertionSort,
     QuickSort,
     MergeSort,
-    PartialQuickSort
-
-export # not exported by Base
+    PartialQuickSort,
+    # not exported by Base
     Algorithm,
     DEFAULT_UNSTABLE,
     DEFAULT_STABLE,
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
-
 
 ## functions requiring only ordering ##
 
@@ -93,6 +82,8 @@ true
 issorted(itr;
     lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
     issorted(itr, ord(lt,by,rev,order))
+
+issorted(::BitSet) = true
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
     sort!(v, firstindex(v), lastindex(v), PartialQuickSort(k), o)
@@ -1461,12 +1452,10 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
-
+using Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
-
 # IEEEFloat is not available in Core.Compiler
 const Floats = Union{Float16, Float32, Float64}
 # fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
@@ -1589,7 +1578,6 @@ specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ReverseOrder
 issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
-
 function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
         t::Union{AbstractVector{T}, Nothing}=nothing) where T
     # fpsort!'s optimizations speed up comparisons, of which there are O(nlogn).
@@ -1609,7 +1597,6 @@ function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
     return v
 end
 
-
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, firstindex(v), lastindex(v), a, o)
 
@@ -1623,5 +1610,11 @@ function sort!(v::AbstractVector{T}, a::Algorithm, o::Perm{<:DirectOrdering,<:FP
 end
 
 end # module Sort.Float
+
+include("ranges.jl")
+
+for sym in Base.unsorted_names(Sort)
+    @eval Base const $sym = $(eval(sym))
+end
 
 end # module Sort

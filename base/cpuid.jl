@@ -95,7 +95,7 @@ let
     arch = normalize_arch(String(Sys.ARCH))
     if arch in keys(ISAs_by_family)
         for isa in ISAs_by_family[arch]
-            unique!(append!(FEATURES, last(isa).features))
+            Base._unique!(append!(FEATURES, last(isa).features))
         end
     end
 

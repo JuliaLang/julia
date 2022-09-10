@@ -1375,19 +1375,6 @@ function _reverse(r::StepRangeLen, ::Colon)
 end
 _reverse(r::LinRange{T}, ::Colon) where {T} = typeof(r)(r.stop, r.start, length(r))
 
-## sorting ##
-
-issorted(r::AbstractUnitRange) = true
-issorted(r::AbstractRange) = length(r) <= 1 || step(r) >= zero(step(r))
-
-sort(r::AbstractUnitRange) = r
-sort!(r::AbstractUnitRange) = r
-
-sort(r::AbstractRange) = issorted(r) ? r : reverse(r)
-
-sortperm(r::AbstractUnitRange) = 1:length(r)
-sortperm(r::AbstractRange) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
-
 function sum(r::AbstractRange{<:Real})
     l = length(r)
     # note that a little care is required to avoid overflow in l*(l-1)/2

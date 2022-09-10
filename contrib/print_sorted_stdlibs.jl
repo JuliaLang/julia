@@ -27,8 +27,8 @@ end
 
 project_deps = Dict{String,Set{String}}()
 for project_dir in readdir(STDLIB_DIR, join=true)
-    files = readdir(project_dir)
-    if "Project.toml" in files
+    project_file = joinpath(project_dir, "Project.toml")
+    if isfile(project_file)
         project = TOML.parsefile(joinpath(project_dir, "Project.toml"))
 
         if !haskey(project, "name")

@@ -534,34 +534,6 @@ end
 insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), inst, attach_after)
 
-# For bootstrapping
-function my_sort!(v::Vector; by::Function)
-    isempty(v) && return v # This branch is hit 95% of the time
-
-    if length(v) > 30 # Comb pass avoids quadratic runtime
-        interval = (3 * length(v)) >> 2
-        while interval > 1
-            @inbounds for j in 1:length(v)-interval
-                a, b = v[j], v[j+interval]
-                v[j], v[j+interval] = by(b) < by(a) ? (b, a) : (a, b)
-            end
-            interval = (3 * interval) >> 2
-        end
-    end
-
-    @inbounds for i in 2:length(v) # Insertion sort
-        x = v[i]
-        y = by(x)
-        while i > 1 && y < by(v[i-1])
-            v[i] = v[i-1]
-            i -= 1
-        end
-        v[i] = x
-    end
-
-    v
-end
-
 mutable struct IncrementalCompact
     ir::IRCode
     result::InstructionStream
@@ -592,7 +564,7 @@ mutable struct IncrementalCompact
     function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes after regular ones
         info = code.new_nodes.info
-        perm = my_sort!(collect(eachindex(info)); by=i->(2info[i].pos+info[i].attach_after, i))
+        perm = sort!(collect(eachindex(info)); by=i->(2info[i].pos+info[i].attach_after, i))
         new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
         used_ssas = fill(0, new_len)
@@ -646,7 +618,7 @@ mutable struct IncrementalCompact
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
         info = code.new_nodes.info
-        perm = my_sort!(collect(eachindex(info)); by=i->(info[i].pos, i))
+        perm = sort!(collect(eachindex(info)); by=i->(info[i].pos, i))
         new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()

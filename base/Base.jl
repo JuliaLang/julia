@@ -346,10 +346,8 @@ include("ordering.jl")
 using .Order
 
 # Combinatorics
-include("sort.jl")
-using .Sort
 
-# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+# BinaryPlatforms, used by Artifacts.
 include("binaryplatforms.jl")
 
 # Fast math
@@ -465,8 +463,6 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
     Dict("abc" => Set())["abc"]
     pushfirst!([], sum)
     get(Base.pkgorigins, Base.PkgId(Base), nothing)
-    sort!([1,2,3])
-    unique!([1,2,3])
     cumsum([1,2,3])
     append!(Int[], BitSet())
     isempty(BitSet())
@@ -477,7 +473,7 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
     any(t->t[1].line > 1, [(LineNumberNode(2,:none), :(1+1))])
 
     # Code loading uses this
-    sortperm(mtime.(readdir(".")), rev=true)
+    mtime.(readdir(".", sort=false))
     # JLLWrappers uses these
     Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
     get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))

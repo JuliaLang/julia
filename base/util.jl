@@ -48,10 +48,9 @@ const disable_text_style = Dict{Symbol,String}(
 # of colors.
 let color_syms = collect(Iterators.filter(x -> !isa(x, Integer), keys(text_colors))),
     formatting_syms = [:normal, :bold, :default]
-    global const available_text_colors = cat(
-        sort!(intersect(color_syms, formatting_syms), rev=true),
-        sort!(setdiff(  color_syms, formatting_syms));
-        dims=1)
+    global const available_text_colors = vcat(
+        Core.Compiler.sort!(intersect(color_syms, formatting_syms); < = >), #reverse
+        Core.Compiler.sort!(  setdiff(color_syms, formatting_syms); <))
 end
 
 const available_text_colors_docstring =
