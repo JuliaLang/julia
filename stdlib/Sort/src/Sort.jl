@@ -1399,10 +1399,7 @@ uint_map(x::Signed, ::ForwardOrdering) =
 uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
-# unsigned(Int) is not available during bootstrapping.
-for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
-    @eval UIntMappable(::Union{Type{$U}, Type{$S}}, ::ForwardOrdering) = $U
-end
+UIntMappable(T::Base.BitIntegerType, ::ForwardOrdering) = unsigned(T)
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
 # uint mappings for floats are defined in Float, where the Left and Right orderings
