@@ -3,16 +3,8 @@
 module Sort
 
 using Base.Order
-using Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
-    eachindex, axes, first, last, similar, zip, OrdinalRange, firstindex, lastindex,
-    AbstractVector, @inbounds, AbstractRange, @eval, @inline, Vector, @noinline,
-    AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
-    extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
-    length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
-    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
-    midpoint, @boundscheck, checkbounds
-
-using Base: >>>, !==, !=
+using Base: copymutable, OneTo, sub_with_overflow, add_with_overflow,
+    require_one_based_indexing, BitSigned, midpoint
 
 export # also exported by Base
     # order-only:
@@ -1452,7 +1444,6 @@ end
 module Float
 using ..Sort
 using ...Order
-using Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
