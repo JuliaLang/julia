@@ -34,6 +34,7 @@ export # also exported by Base
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
+
 ## functions requiring only ordering ##
 
 function issorted(itr, order::Ordering)
@@ -1442,9 +1443,11 @@ module Float
 using ..Sort
 using ...Order
 using Base: IEEEFloat
+
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
+
 # fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
 # This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
 const FPSortable = Union{
@@ -1583,6 +1586,7 @@ function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
     sort!(v, i,  hi, a, right(o), t)
     return v
 end
+
 
 fpsort!(v::AbstractVector, a::Sort.PartialQuickSort, o::Ordering) =
     sort!(v, firstindex(v), lastindex(v), a, o)
