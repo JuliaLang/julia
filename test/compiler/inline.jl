@@ -1496,3 +1496,7 @@ call_twice_sitofp(x::Int) = twice_sitofp(x, 2)
 let src = code_typed1(call_twice_sitofp, (Int,))
     @test count(iscall((src, Base.sitofp)), src.code) == 1
 end
+
+# Test getfield modeling of Type{Ref{_A}} where _A
+@test Core.Compiler.getfield_tfunc(Type, Core.Compiler.Const(:parameters)) !== Union{}
+@test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
