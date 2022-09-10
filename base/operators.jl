@@ -1301,9 +1301,9 @@ matching the behavior of [`any`](@ref) and [`==`](@ref)).
 
 Some collections follow a slightly different definition. For example,
 [`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
-[`Dict`](@ref)s look for `key=>value` pairs, and the key is compared using
-[`isequal`](@ref). To test for the presence of a key in a dictionary,
-use [`haskey`](@ref) or `k in keys(dict)`.
+[`Dict`](@ref)s look for `key=>value` pairs, and the `key` (not the `value`)
+is compared using [`isequal`](@ref). To test for the presence of a key in
+a dictionary, use [`haskey`](@ref) or `k in keys(dict)`.
 
 For [`Set`](@ref)s, the result is always a `Bool`. As for [`Dict`](@ref)s,
 the result is always a `Bool` if `value` in `(key=>value) in Dict` is not
