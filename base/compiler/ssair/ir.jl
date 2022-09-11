@@ -307,6 +307,9 @@ effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
 non_effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag & ~IR_FLAG_EFFECT_FREE, true)
+with_flags(inst::NewInstruction, flags::UInt8) =
+    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | flags, true)
+
 
 struct IRCode
     stmts::InstructionStream
