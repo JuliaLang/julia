@@ -664,7 +664,7 @@ end
 
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
-has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
+has_free_typevars(@nospecialize t) = ccall(:jl_has_free_typevars, Cint, (Any,), t) != 0
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
@@ -1963,7 +1963,7 @@ Behaves like `Core.Typeof`, except that a type with a free typevar does not get
 turned into `Type` and is thus valid in a signature without further UnionAll
 rewrapping.
 """
-TypeofValid(@nospecialize(x)) = isa(x, Type) && !has_free_typevars(x) ? Type{x} : typeof(x)
+TypeofValid(@nospecialize(x)) = x isa Type && x isa Type{x} ? Type{x} : typeof(x)
 
 """
     @invoke f(arg::T, ...; kwargs...)
