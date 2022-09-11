@@ -870,11 +870,14 @@ end
 """
     findmax(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Returns a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
+
+Indices are of the same type as those returned by [`keys(domain)`](@ref)
+and [`pairs(domain)`](@ref).
 
 Values are compared with `isless`.
 
@@ -908,6 +911,9 @@ Return the maximal element of the collection `itr` and its index or key.
 If there are multiple maximal elements, then the first one will be returned.
 Values are compared with `isless`.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
 # Examples
@@ -929,11 +935,14 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Returns a pair of a value in the codomain (outputs of `f`) and the index or key of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
 `domain` must be a non-empty iterable.
+
+Indices are of the same type as those returned by [`keys(domain)`](@ref)
+and [`pairs(domain)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
@@ -968,6 +977,9 @@ Return the minimal element of the collection `itr` and its index or key.
 If there are multiple minimal elements, then the first one will be returned.
 `NaN` is treated as less than all other values except `missing`.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
 # Examples
@@ -989,7 +1001,7 @@ _findmin(a, ::Colon) = findmin(identity, a)
 """
     argmax(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+Return a value `x` in `domain` for which `f(x)` is maximised.
 If there are multiple maximal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1020,6 +1032,9 @@ If there are multiple maximal elements, then the first one will be returned.
 
 The collection must not be empty.
 
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
+
 Values are compared with `isless`.
 
 See also: [`argmin`](@ref), [`findmax`](@ref).
@@ -1041,7 +1056,7 @@ argmax(itr) = findmax(itr)[2]
 """
     argmin(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+Return a value `x` in `domain` for which `f(x)` is minimised.
 If there are multiple minimal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1074,6 +1089,9 @@ Return the index or key of the minimal element in a collection.
 If there are multiple minimal elements, then the first one will be returned.
 
 The collection must not be empty.
+
+Indices are of the same type as those returned by [`keys(itr)`](@ref)
+and [`pairs(itr)`](@ref).
 
 `NaN` is treated as less than all other values except `missing`.
 
