@@ -1287,23 +1287,22 @@ end
 
 # Test finalizers with static parameters
 mutable struct DoAllocNoEscapeSparam{T}
-    x::T
+    x
     function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
         nothrow_side_effect(nothing)
         nothrow_side_effect(T)
     end
-    function DoAllocNoEscapeSparam{T}(x::T) where {T}
+    @inline function DoAllocNoEscapeSparam(x::T) where {T}
         finalizer(finalizer_sparam, new{T}(x))
     end
 end
-DoAllocNoEscapeSparam(x::T) where {T} = DoAllocNoEscapeSparam{T}(x)
 let src = code_typed1(Tuple{Any}) do x
         for i = 1:1000
             DoAllocNoEscapeSparam(x)
         end
     end
     # FIXME
-    @test_broken count(isnew, src.code) == 0 && count(iscall(DoAllocNoEscapeSparam), src.code) == 0
+    @test_broken count(isnew, src.code) == 0 && count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
 end
 
 # Test noinline finalizer
@@ -1375,6 +1374,19 @@ let
     init_finalization_count!()
     const_finalization(IOBuffer())
     @test get_finalization_count() == 1000
+end
+
+# Test that finalizers that don't do anything are just erased from the IR
+function useless_finalizer()
+    x = Ref(1)
+    finalizer(x) do x
+        nothing
+    end
+    return x
+end
+let src = code_typed1(useless_finalizer, ())
+    @test count(iscall((src, Core.finalizer)), src.code) == 0
+    @test length(src.code) == 2
 end
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`

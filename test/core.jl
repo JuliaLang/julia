@@ -674,14 +674,14 @@ end
 f21900_cnt = 0
 function f21900()
     for i = 1:1
-        x = 0
+        x_global_undefined_error = 0
     end
     global f21900_cnt += 1
-    x # should be global
+    x_global_undefined_error # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError(:x) f21900()
+@test_throws UndefVarError(:x_global_undefined_error) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
