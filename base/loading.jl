@@ -2806,7 +2806,7 @@ end
 Compile the given function `f` for the argument tuple (of types) `argtypes`, but do not execute it.
 """
 function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple))
-    precompile(Tuple{Core.Typeof(f), argtypes...})
+    precompile(Tuple{TypeofValid(f), argtypes...})
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
@@ -2830,7 +2830,7 @@ a different method than the one that would ordinarily be chosen by dispatch, thu
 mimicking `invoke`.
 """
 function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
-    precompile(Tuple{Core.Typeof(f), argtypes...}, m)
+    precompile(Tuple{TypeofValid(f), argtypes...}, m)
 end
 
 function precompile(@nospecialize(argt::Type), m::Method)

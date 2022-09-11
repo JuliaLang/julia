@@ -1018,7 +1018,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.pure = true
                 set_inlineable!(tree, true)
                 tree.parent = mi
-                tree.rettype = Core.Typeof(rettype_const)
+                tree.rettype = TypeofValid(rettype_const)
                 tree.min_world = code.min_world
                 tree.max_world = code.max_world
                 return tree
@@ -1101,12 +1101,12 @@ end
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = ccall(:jl_get_tls_world_age, UInt, ())
-    args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
+    args = Any[_return_type, NativeInterpreter(world), Tuple{TypeofValid(f), t.parameters...}]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Ptr{Cvoid}}, Cint), args, length(args))
 end
 
 function return_type(@nospecialize(f), t::DataType, world::UInt)
-    return return_type(Tuple{Core.Typeof(f), t.parameters...}, world)
+    return return_type(Tuple{TypeofValid(f), t.parameters...}, world)
 end
 
 function return_type(t::DataType)
