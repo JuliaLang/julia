@@ -361,9 +361,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     if extra_coverage_line != 0
         insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
+    sp_ssa = nothing
     if !validate_sparams(sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
-        sparam_vals = insert_node_here!(compact,
+        sp_ssa = insert_node_here!(compact,
             effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
     if def.isva
@@ -398,7 +399,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, inline_compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck, inline_compact)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 return_value = SSAValue(idx′)
@@ -425,7 +426,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, inline_compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck, inline_compact)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -903,7 +904,6 @@ end
 
 function can_inline_typevars(method::Method, argtypes::Vector{Any})
     may_have_fcalls(method) && return false
-    any(@nospecialize(x) -> x isa UnionAll, argtypes[2:end]) && return false
     return true
 end
 can_inline_typevars(m::MethodMatch, argtypes::Vector{Any}) = can_inline_typevars(m.method, argtypes)
@@ -1724,15 +1724,30 @@ function late_inline_special_case!(
 end
 
 function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
-                         @nospecialize(spsig), spvals::Union{SimpleVector, SSAValue},
+                         @nospecialize(spsig), spvals::SimpleVector,
+                         spvals_ssa::Union{Nothing, SSAValue},
                          linetable_offset::Int32, boundscheck::Symbol, compact::IncrementalCompact)
     compact.result[idx][:flag] &= ~IR_FLAG_INBOUNDS
     compact.result[idx][:line] += linetable_offset
-    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck, compact, idx)
+    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck, compact, idx)
+end
+
+function insert_spval!(compact::IncrementalCompact, idx::Int, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
+    ret = insert_node!(compact, SSAValue(idx),
+        effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
+    tcheck_not = nothing
+    if do_isdefined
+        tcheck = insert_node!(compact, SSAValue(idx),
+            effect_free(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+        tcheck_not = insert_node!(compact, SSAValue(idx),
+            effect_free(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
+    end
+    return (ret, tcheck_not)
 end
 
 function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
-                            @nospecialize(spsig), spvals::Union{SimpleVector, SSAValue},
+                            @nospecialize(spsig), spvals::SimpleVector,
+                            spvals_ssa::Union{Nothing, SSAValue},
                             boundscheck::Symbol, compact::IncrementalCompact, idx::Int)
     if isa(val, Argument)
         return arg_replacements[val.n]
@@ -1741,20 +1756,36 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
         e = val::Expr
         head = e.head
         if head === :static_parameter
-            if isa(spvals, SimpleVector)
-                return quoted(spvals[e.args[1]::Int])
+            spidx = e.args[1]::Int
+            val = spvals[spidx]
+            if !isa(val, TypeVar) && val !== Vararg
+                return quoted(val)
             else
-                ret = insert_node!(compact, SSAValue(idx),
-                    effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals, e.args[1]), Any)))
+                flag = compact[SSAValue(idx)][:flag]
+                maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
+                (ret, tcheck_not) = insert_spval!(compact, idx, spvals_ssa, spidx, maybe_undef)
+                if maybe_undef
+                    insert_node!(compact, SSAValue(idx),
+                        non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
+                end
                 return ret
             end
-        elseif head === :cfunction && isa(spvals, SimpleVector)
+        elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
+            spidx = (e.args[1]::Expr).args[1]::Int
+            val = spvals[spidx]
+            if !isa(val, TypeVar)
+                return true
+            else
+                (_, tcheck_not) = insert_spval!(compact, idx, spvals_ssa, spidx, true)
+                return tcheck_not
+            end
+        elseif head === :cfunction && spvals_ssa === nothing
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
             e.args[4] = svec(Any[
                 ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
                 for argt in e.args[4]::SimpleVector ]...)
-        elseif head === :foreigncall && isa(spvals, SimpleVector)
+        elseif head === :foreigncall && spvals_ssa === nothing
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
@@ -1778,7 +1809,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck, compact, idx)
+        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck, compact, idx)
     end
     return urs[]
 end
