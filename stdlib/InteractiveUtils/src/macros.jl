@@ -24,7 +24,8 @@ function recursive_dotcalls!(ex, args, i=1)
         end
     end
     (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    for j in start:length(branches)
+    length_branches = length(branches)::Integer
+    for j in start:length_branches
         branch, i = recursive_dotcalls!(branches[j], args, i)
         branches[j] = branch
     end
