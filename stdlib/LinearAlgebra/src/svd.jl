@@ -26,10 +26,10 @@ julia> F = svd(A)
 SVD{Float64, Float64, Matrix{Float64}, Vector{Float64}}
 U factor:
 4×4 Matrix{Float64}:
- 0.0  1.0  0.0   0.0
- 1.0  0.0  0.0   0.0
- 0.0  0.0  0.0  -1.0
- 0.0  0.0  1.0   0.0
+ 0.0  1.0   0.0  0.0
+ 1.0  0.0   0.0  0.0
+ 0.0  0.0   0.0  1.0
+ 0.0  0.0  -1.0  0.0
 singular values:
 4-element Vector{Float64}:
  3.0
@@ -38,10 +38,10 @@ singular values:
  0.0
 Vt factor:
 4×5 Matrix{Float64}:
- -0.0       0.0  1.0  -0.0  0.0
-  0.447214  0.0  0.0   0.0  0.894427
- -0.0       1.0  0.0  -0.0  0.0
-  0.0       0.0  0.0   1.0  0.0
+ -0.0        0.0  1.0  -0.0  0.0
+  0.447214   0.0  0.0   0.0  0.894427
+  0.0       -1.0  0.0   0.0  0.0
+  0.0        0.0  0.0   1.0  0.0
 
 julia> F.U * Diagonal(F.S) * F.Vt
 4×5 Matrix{Float64}:
