@@ -241,9 +241,6 @@ Method `merge!(combine::Union{Function,Type}, args...)` as an alias of
 `mergewith!(combine, args...)` is still available for backward
 compatibility.
 
-!!! compat "Julia 1.5"
-    `mergewith!` requires Julia 1.5 or later.
-
 # Examples
 ```jldoctest
 julia> d1 = Dict(1 => 2, 3 => 4);
@@ -366,9 +363,6 @@ combiner function.  The curried form `mergewith(combine)` returns the function
 
 Method `merge(combine::Union{Function,Type}, args...)` as an alias of
 `mergewith(combine, args...)` is still available for backward compatibility.
-
-!!! compat "Julia 1.5"
-    `mergewith` requires Julia 1.5 or later.
 
 # Examples
 ```jldoctest
@@ -596,9 +590,6 @@ end
 Modifies `dict` by transforming each value from `val` to `f(val)`.
 Note that the type of `dict` cannot be changed: if `f(val)` is not an instance of the value type
 of `dict` then it will be converted to the value type if possible and otherwise raise an error.
-
-!!! compat "Julia 1.2"
-    `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest

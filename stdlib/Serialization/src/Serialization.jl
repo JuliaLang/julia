@@ -782,9 +782,6 @@ end
     serialize(filename::AbstractString, value)
 
 Open a file and serialize the given value to it.
-
-!!! compat "Julia 1.1"
-    This method is available as of Julia 1.1.
 """
 serialize(filename::AbstractString, x) = open(io->serialize(io, x), filename, "w")
 
@@ -805,9 +802,6 @@ deserialize(s::IO) = deserialize(Serializer(s))
     deserialize(filename::AbstractString)
 
 Open a file and deserialize its contents.
-
-!!! compat "Julia 1.1"
-    This method is available as of Julia 1.1.
 """
 deserialize(filename::AbstractString) = open(deserialize, filename)
 

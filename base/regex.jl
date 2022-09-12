@@ -197,9 +197,6 @@ That is, `idx` will be in the return value even if `m[idx] == nothing`.
 Unnamed capture groups will have integer keys corresponding to their index.
 Named capture groups will have string keys.
 
-!!! compat "Julia 1.6"
-    This method was added in Julia 1.6
-
 # Examples
 ```jldoctest
 julia> keys(match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30"))
@@ -277,9 +274,6 @@ Return `true` if `s` starts with the regex pattern, `prefix`.
 
 See also [`occursin`](@ref) and [`endswith`](@ref).
 
-!!! compat "Julia 1.2"
-    This method requires at least Julia 1.2.
-
 # Examples
 ```jldoctest
 julia> startswith("JuliaLang", r"Julia|Romeo")
@@ -308,9 +302,6 @@ Return `true` if `s` ends with the regex pattern, `suffix`.
     `occursin(r"...\$", s)` is faster than `endswith(s, r"...")`.
 
 See also [`occursin`](@ref) and [`startswith`](@ref).
-
-!!! compat "Julia 1.2"
-    This method requires at least Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -460,9 +451,6 @@ calling `length(findall(pattern, string))` but more efficient.
 
 If `overlap=true`, the matching sequences are allowed to overlap indices in the
 original string, otherwise they must be from disjoint character ranges.
-
-!!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
 
 !!! compat "Julia 1.7"
       Using a character as the pattern requires at least Julia 1.7.
@@ -726,9 +714,6 @@ String and character arguments must be matched exactly in the resulting regex,
 meaning that the contained characters are devoid of any special meaning
 (they are quoted with "\\Q" and "\\E").
 
-!!! compat "Julia 1.3"
-    This method requires at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> match(r"Hello|Good bye" * ' ' * "world", "Hello world")
@@ -804,9 +789,6 @@ end
     ^(s::Regex, n::Integer)
 
 Repeat a regex `n` times.
-
-!!! compat "Julia 1.3"
-    This method requires at least Julia 1.3.
 
 # Examples
 ```jldoctest

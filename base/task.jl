@@ -244,9 +244,6 @@ julia> yield();
 julia> istaskfailed(b)
 true
 ```
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
@@ -498,9 +495,6 @@ isolating the asynchronous code from changes to the variable's value in the curr
     threads in the current implementation of Julia.  Thus, seemingly innocent use of
     `@async` in a library function can have a large impact on the performance of very
     different parts of user applications.
-
-!!! compat "Julia 1.4"
-    Interpolating values via `\$` is available as of Julia 1.4.
 """
 macro async(expr)
     do_async_macro(expr)

@@ -141,10 +141,6 @@ addprocs([
    may hang with Windows workers that use older (pre-ConPTY) Julia or Windows versions,
    in which case `cmdline_cookie=true` offers a work-around.
 
-!!! compat "Julia 1.6"
-    The keyword arguments `ssh`, `shell`, `env` and `cmdline_cookie`
-    were added in Julia 1.6.
-
 Environment variables:
 
 If the master process fails to establish a connection with a newly launched worker within

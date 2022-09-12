@@ -87,9 +87,6 @@ dimensions having size 1.
 
 See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
 
-!!! compat "Julia 1.1"
-     This function requires at least Julia 1.1.
-
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
 
@@ -133,9 +130,6 @@ Row slices are returned as `AbstractVector` views of `A`.
 
 See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 
-!!! compat "Julia 1.1"
-     This function requires at least Julia 1.1.
-
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.
 
@@ -168,9 +162,6 @@ Create a [`ColumnSlices`](@ref) object that is a vector of columns of matrix or 
 Column slices are returned as `AbstractVector` views of `A`.
 
 See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
-
-!!! compat "Julia 1.1"
-     This function requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
      Prior to Julia 1.9, this returned an iterator.

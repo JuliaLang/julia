@@ -142,12 +142,6 @@ Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-nat
 command line arguments that are not at their default values.
 
 Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notably not propagated currently.
-
-!!! compat "Julia 1.1"
-    Only the `--cpu-target`, `--sysimage`, `--depwarn`, `--compile` and `--check-bounds` flags were propagated before Julia 1.1.
-
-!!! compat "Julia 1.5"
-    The flags `--color` and `--startup-file` were added in Julia 1.5.
 """
 function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     opts = JLOptions()
@@ -502,10 +496,6 @@ a required keyword argument in the resulting type constructor.
 Inner constructors can still be defined, but at least one should accept arguments in the
 same form as the default inner constructor (i.e. one positional argument per field) in
 order to function correctly with the keyword outer constructor.
-
-!!! compat "Julia 1.1"
-    `Base.@kwdef` for parametric structs, and structs with supertypes
-    requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
     This macro is exported as of Julia 1.9.

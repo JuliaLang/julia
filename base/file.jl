@@ -644,10 +644,6 @@ function does not create any file or directory at the returned location, so
 there is nothing to cleanup unless you create a file or directory there. If
 you do and `clean` is `true` it will be deleted upon process termination.
 
-!!! compat "Julia 1.4"
-    The `parent` and `cleanup` arguments were added in 1.4. Prior to Julia 1.4
-    the path `tempname` would never be cleaned up at process termination.
-
 !!! warning
 
     This can lead to security holes if another process obtains the same
@@ -663,11 +659,6 @@ tempname()
 Return `(path, io)`, where `path` is the path of a new temporary file in `parent`
 and `io` is an open file object for this path. The `cleanup` option controls whether
 the temporary file is automatically deleted when the process exits.
-
-!!! compat "Julia 1.3"
-    The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
-    Julia will remove the temporary paths created by `mktemp` when the Julia process exits,
-    unless `cleanup` is explicitly set to `false`.
 """
 mktemp(parent)
 
@@ -679,14 +670,6 @@ constructed from the given prefix and a random suffix, and return its path.
 Additionally, any trailing `X` characters may be replaced with random characters.
 If `parent` does not exist, throw an error. The `cleanup` option controls whether
 the temporary directory is automatically deleted when the process exits.
-
-!!! compat "Julia 1.2"
-    The `prefix` keyword argument was added in Julia 1.2.
-
-!!! compat "Julia 1.3"
-    The `cleanup` keyword argument was added in Julia 1.3. Relatedly, starting from 1.3,
-    Julia will remove the temporary paths created by `mktempdir` when the Julia process
-    exits, unless `cleanup` is explicitly set to `false`.
 
 See also: [`mktemp`](@ref), [`mkdir`](@ref).
 """
@@ -749,9 +732,6 @@ Apply the function `f` to the result of [`mktempdir(parent; prefix)`](@ref) and 
 temporary directory all of its contents upon completion.
 
 See also: [`mktemp`](@ref), [`mkdir`](@ref).
-
-!!! compat "Julia 1.2"
-    The `prefix` keyword argument was added in Julia 1.2.
 """
 function mktempdir(fn::Function, parent::AbstractString=tempdir();
     prefix::AbstractString=temp_prefix)
@@ -794,9 +774,6 @@ sorting the names and get them in the order that the file system lists them,
 you can use `readdir(dir, sort=false)` to opt out of sorting.
 
 See also: [`walkdir`](@ref).
-
-!!! compat "Julia 1.4"
-    The `join` and `sort` keyword arguments require at least Julia 1.4.
 
 # Examples
 ```julia-repl
@@ -1059,11 +1036,6 @@ See also: [`hardlink`](@ref).
 !!! note
     This function raises an error under operating systems that do not support
     soft symbolic links, such as Windows XP.
-
-!!! compat "Julia 1.6"
-    The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
-    symlinks to nonexistent paths on windows would always be file symlinks, and
-    relative symlinks to directories were not supported.
 """
 function symlink(target::AbstractString, link::AbstractString;
                  dir_target::Bool = false)

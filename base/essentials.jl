@@ -944,9 +944,6 @@ julia> position(b)
 julia> peek(b, Char)
 'j': ASCII/Unicode U+006A (category Ll: Letter, lowercase)
 ```
-
-!!! compat "Julia 1.5"
-    The method which accepts a type requires Julia 1.5 or later.
 """
 function peek end
 

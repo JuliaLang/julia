@@ -303,9 +303,6 @@ but saves space by overwriting the input `A`, instead of creating a copy.
 An [`InexactError`](@ref) exception is thrown if the factorization produces a number not
 representable by the element type of `A`, e.g. for integer types.
 
-!!! compat "Julia 1.4"
-    The `blocksize` keyword argument requires Julia 1.4 or later.
-
 # Examples
 ```jldoctest
 julia> a = [1. 2.; 3. 4.]
@@ -388,9 +385,6 @@ orthogonal matrix.
 The block size for QR decomposition can be specified by keyword argument
 `blocksize :: Integer` when `pivot == NoPivot()` and `A isa StridedMatrix{<:BlasFloat}`.
 It is ignored when `blocksize > minimum(size(A))`.  See [`QRCompactWY`](@ref).
-
-!!! compat "Julia 1.4"
-    The `blocksize` keyword argument requires Julia 1.4 or later.
 
 # Examples
 ```jldoctest

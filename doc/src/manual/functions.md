@@ -446,9 +446,6 @@ julia> b
 3
 ```
 
-!!! compat "Julia 1.6"
-    `...` with assignment requires Julia 1.6
-
 If the last symbol in the assignment list is suffixed by `...` (known as _slurping_), then
 it will be assigned a collection or lazy iterator of the remaining elements of the
 right-hand side iterator:

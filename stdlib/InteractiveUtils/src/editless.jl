@@ -84,9 +84,6 @@ The following defines the usage of terminal-based `emacs`:
         r"\\bemacs\\b.*\\s(-nw|--no-window-system)\\b", wait=true) do cmd, path, line
         `\$cmd +\$line \$path`
     end
-
-!!! compat "Julia 1.4"
-    `define_editor` was introduced in Julia 1.4.
 """
 function define_editor(fn::Function, pattern; wait::Bool=false)
     callback = function (cmd::Cmd, path::AbstractString, line::Integer, column::Integer)
@@ -240,9 +237,6 @@ end
 Edit the definition of a function, optionally specifying a tuple of types to indicate which
 method to edit. For modules, open the main source file. The module needs to be loaded with
 `using` or `import` first.
-
-!!! compat "Julia 1.1"
-    `edit` on modules requires at least Julia 1.1.
 
 To ensure that the file can be opened at the given line, you may need to call
 `define_editor` first.

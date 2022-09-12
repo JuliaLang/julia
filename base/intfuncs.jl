@@ -8,9 +8,6 @@
 Greatest common (positive) divisor (or zero if all arguments are zero).
 The arguments may be integer and rational numbers.
 
-!!! compat "Julia 1.4"
-    Rational arguments require Julia 1.4 or later.
-
 # Examples
 ```jldoctest
 julia> gcd(6, 9)
@@ -84,9 +81,6 @@ end
 Least common (positive) multiple (or zero if any argument is zero).
 The arguments may be integer and rational numbers.
 
-!!! compat "Julia 1.4"
-    Rational arguments require Julia 1.4 or later.
-
 # Examples
 ```jldoctest
 julia> lcm(2, 3)
@@ -159,9 +153,6 @@ coefficients, i.e. the integer coefficients `u` and `v` that satisfy
 ``ua+vb = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
 
 The arguments may be integer and rational numbers.
-
-!!! compat "Julia 1.4"
-    Rational arguments require Julia 1.4 or later.
 
 # Examples
 ```jldoctest
@@ -420,9 +411,6 @@ true
 julia> ispow2(1//8)
 true
 ```
-
-!!! compat "Julia 1.6"
-    Support for non-`Integer` arguments was added in Julia 1.6.
 """
 ispow2(x::Number) = isreal(x) && ispow2(real(x))
 

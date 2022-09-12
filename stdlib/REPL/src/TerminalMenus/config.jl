@@ -38,9 +38,6 @@ Configure behavior for selection menus via keyword arguments:
 
 Subtypes of `ConfiguredMenu` will print `cursor`, `up_arrow`, and `down_arrow` automatically
 as needed, your `writeline` method should not print them.
-
-!!! compat "Julia 1.6"
-    `Config` is available as of Julia 1.6. On older releases use the global `CONFIG`.
 """
 function Config(;
                 charset::Symbol = :ascii,
@@ -80,9 +77,6 @@ Configure behavior for a multiple-selection menu via keyword arguments:
 All other keyword arguments are as described for [`TerminalMenus.Config`](@ref).
 `checked` and `unchecked` are not printed automatically, and should be printed by
 your `writeline` method.
-
-!!! compat "Julia 1.6"
-    `MultiSelectConfig` is available as of Julia 1.6. On older releases use the global `CONFIG`.
 """
 function MultiSelectConfig(;
                            charset::Symbol = :ascii,
@@ -108,9 +102,6 @@ end
     CONFIG
 
 Global menu configuration parameters
-
-!!! compat "Julia 1.6"
-    `CONFIG` is deprecated, instead configure menus via their constructors.
 """
 const CONFIG = Dict{Symbol,Union{Char,String,Bool}}()
 
@@ -129,9 +120,6 @@ Keyword-only function to configure global menu parameters
  - `scroll::Symbol=:nowrap`: If `:wrap` wrap cursor around top and bottom, if :`nowrap` do not wrap cursor
  - `supress_output::Bool=false`: Ignored legacy argument, pass `suppress_output` as a keyword argument to `request` instead.
  - `ctrl_c_interrupt::Bool=true`: If `false`, return empty on ^C, if `true` throw InterruptException() on ^C
-
-!!! compat "Julia 1.6"
-    As of Julia 1.6, `config` is deprecated. Use `Config` or `MultiSelectConfig` instead.
 """
 function config(;charset::Symbol = :na,
                 scroll::Symbol = :na,

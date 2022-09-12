@@ -539,9 +539,6 @@ end
 It returns the value of `x` with its bits rotated left `k` times.
 A negative value of `k` will rotate to the right instead.
 
-!!! compat "Julia 1.5"
-    This function requires Julia 1.5 or later.
-
 See also: [`<<`](@ref), [`circshift`](@ref), [`BitArray`](@ref).
 
 ```jldoctest
@@ -1029,9 +1026,6 @@ const _mask4_uint128 = (UInt128(0x0f0f0f0f0f0f0f0f) << 64) | UInt128(0x0f0f0f0f0
 
 Reverse the order of bits in integer `x`. `x` must have a fixed bit width,
 e.g. be an `Int16` or `Int32`.
-
-!!! compat "Julia 1.5"
-    This function requires Julia 1.5 or later.
 
 # Examples
 ```jldoctest

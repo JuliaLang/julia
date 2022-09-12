@@ -43,9 +43,6 @@ end
 Create a lazy mapping.  This is another syntax for writing
 `(f(args...) for args in zip(iterators...))`.
 
-!!! compat "Julia 1.6"
-    This function requires at least Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> collect(Iterators.map(x -> x^2, 1:3))
@@ -539,9 +536,6 @@ next element of `itr`.
 
 This is effectively a lazy version of [`Base.accumulate`](@ref).
 
-!!! compat "Julia 1.5"
-    Keyword argument `init` is added in Julia 1.5.
-
 # Examples
 ```jldoctest
 julia> a = Iterators.accumulate(+, [1,2,3,4]);
@@ -823,9 +817,6 @@ end
 An iterator that generates element from `iter` as long as predicate `pred` is true,
 afterwards, drops every element.
 
-!!! compat "Julia 1.4"
-    This function requires at least Julia 1.4.
-
 # Examples
 
 ```jldoctest
@@ -869,9 +860,6 @@ end
 
 An iterator that drops element from `iter` as long as predicate `pred` is true,
 afterwards, returns every element.
-
-!!! compat "Julia 1.4"
-    This function requires at least Julia 1.4.
 
 # Examples
 
@@ -1483,9 +1471,6 @@ Return the one and only element of collection `x`, or throw an [`ArgumentError`]
 collection has zero or multiple elements.
 
 See also [`first`](@ref), [`last`](@ref).
-
-!!! compat "Julia 1.4"
-    This method requires at least Julia 1.4.
 
 # Examples
 ```jldoctest

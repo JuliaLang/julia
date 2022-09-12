@@ -285,9 +285,6 @@ Setting the optional `addr_type` parameter to `IPv4` or `IPv6` causes only addre
 
 The `loopback` keyword argument dictates whether loopback addresses (e.g. `ip"127.0.0.1"`, `ip"::1"`) are included.
 
-!!! compat "Julia 1.2"
-    This function is available as of Julia 1.2.
-
 # Examples
 ```julia-repl
 julia> getipaddrs()

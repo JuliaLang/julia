@@ -95,10 +95,6 @@ copy without the `@view`.
 
 See also [`@views`](@ref) to switch an entire block of code to use views for non-scalar indexing.
 
-!!! compat "Julia 1.5"
-    Using `begin` in an indexing expression to refer to the first index requires at least
-    Julia 1.5.
-
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -222,10 +218,6 @@ Similarly, `@views` converts string slices into [`SubString`](@ref) views.
     The `@views` macro only affects `array[...]` expressions
     that appear explicitly in the given `expression`, not array slicing that
     occurs in functions called by that code.
-
-!!! compat "Julia 1.5"
-    Using `begin` in an indexing expression to refer to the first index requires at least
-    Julia 1.5.
 
 # Examples
 ```jldoctest

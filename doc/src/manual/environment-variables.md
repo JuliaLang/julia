@@ -184,15 +184,9 @@ The default directory used by [`Pkg.develop`](https://pkgdocs.julialang.org/v1/a
 
 If set to `1`, this will ignore incorrect hashes in artifacts. This should be used carefully, as it disables verification of downloads, but can resolve issues when moving files across different types of file systems. See [Pkg.jl issue #2317](https://github.com/JuliaLang/Pkg.jl/issues/2317) for more details.
 
-!!! compat "Julia 1.6"
-    This is only supported in Julia 1.6 and above.
-
 ### `JULIA_PKG_OFFLINE`
 
 If set to `true`, this will enable offline mode: see [`Pkg.offline`](https://pkgdocs.julialang.org/v1/api/#Pkg.offline).
-
-!!! compat "Julia 1.5"
-    Pkg's offline mode requires Julia 1.5 or later.
 
 ### `JULIA_PKG_PRECOMPILE_AUTO`
 
@@ -296,10 +290,6 @@ to the number of CPU threads.
 !!! note
     `JULIA_NUM_THREADS` must be defined before starting julia; defining it in
     `startup.jl` is too late in the startup process.
-
-!!! compat "Julia 1.5"
-    In Julia 1.5 and above the number of threads can also be specified on startup
-    using the `-t`/`--threads` command line argument.
 
 !!! compat "Julia 1.7"
     The `auto` value for `$JULIA_NUM_THREADS` requires Julia 1.7 or above.

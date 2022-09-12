@@ -103,9 +103,6 @@ true
 julia> contains("abba", r"a.a")
 false
 ```
-
-!!! compat "Julia 1.5"
-    The `contains` function requires at least Julia 1.5.
 """
 contains(haystack::AbstractString, needle) = occursin(needle, haystack)
 
@@ -117,9 +114,6 @@ a function equivalent to `y -> endswith(y, suffix)`.
 
 The returned function is of type `Base.Fix2{typeof(endswith)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.5"
-    The single argument `endswith(suffix)` requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -140,9 +134,6 @@ a function equivalent to `y -> startswith(y, prefix)`.
 
 The returned function is of type `Base.Fix2{typeof(startswith)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.5"
-    The single argument `startswith(prefix)` requires at least Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -398,9 +389,6 @@ The optional `chars` argument specifies which characters to remove: it can be a 
 character, vector or set of characters.
 
 See also [`lstrip`](@ref) and [`rstrip`](@ref).
-
-!!! compat "Julia 1.2"
-    The method which accepts a predicate function requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest

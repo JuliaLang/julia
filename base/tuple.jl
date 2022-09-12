@@ -110,9 +110,6 @@ if `collection` is an `AbstractString`, and an arbitrary iterator, falling back 
 Can be overloaded for user-defined collection types to customize the behavior of [slurping
 in assignments](@ref destructuring-assignment) in final position, like `a, b... = collection`.
 
-!!! compat "Julia 1.6"
-    `Base.rest` requires at least Julia 1.6.
-
 See also: [`first`](@ref first), [`Iterators.rest`](@ref), [`Base.split_rest`](@ref).
 
 # Examples

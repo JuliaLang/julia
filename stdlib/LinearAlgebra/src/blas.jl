@@ -135,9 +135,6 @@ end
     get_num_threads()
 
 Get the number of threads the BLAS library is using.
-
-!!! compat "Julia 1.6"
-    `get_num_threads` requires at least Julia 1.6.
 """
 get_num_threads()::Int = lbt_get_num_threads()
 
@@ -212,9 +209,6 @@ end
 
 Overwrite `X` with `c*X + s*Y` and `Y` with `-conj(s)*X + c*Y` for the first `n` elements of array `X` with stride `incx` and
 first `n` elements of array `Y` with stride `incy`. Returns `X` and `Y`.
-
-!!! compat "Julia 1.5"
-    `rot!` requires at least Julia 1.5.
 """
 function rot! end
 
@@ -988,10 +982,7 @@ The scalar inputs `α` and `β` must be complex or real numbers.
 
 The array inputs `x`, `y` and `AP` must all be of `ComplexF32` or `ComplexF64` type.
 
-Return the updated `y`.
-
-!!! compat "Julia 1.5"
-    `hpmv!` requires at least Julia 1.5.
+Return the updated `y`..
 """
 hpmv!
 
@@ -1149,9 +1140,6 @@ The scalar inputs `α` and `β` must be real.
 The array inputs `x`, `y` and `AP` must all be of `Float32` or `Float64` type.
 
 Return the updated `y`.
-
-!!! compat "Julia 1.5"
-    `spmv!` requires at least Julia 1.5.
 """
 spmv!
 

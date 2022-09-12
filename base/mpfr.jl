@@ -156,10 +156,6 @@ See also:
 - [`rounding`](@ref) and [`setrounding`](@ref)
 - [`precision`](@ref) and [`setprecision`](@ref)
 
-!!! compat "Julia 1.1"
-    `precision` as a keyword argument requires at least Julia 1.1.
-    In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
-
 # Examples
 ```jldoctest
 julia> BigFloat(2.1) # 2.1 here is a Float64

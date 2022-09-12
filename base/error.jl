@@ -275,9 +275,6 @@ Return an anonymous function that calls function `f`.  If an exception arises,
 number of seconds specified in `delays`.  `check` should input `delays`'s
 current state and the `Exception`.
 
-!!! compat "Julia 1.2"
-    Before Julia 1.2 this signature was restricted to `f::Function`.
-
 # Examples
 ```julia
 retry(f, delays=fill(5.0, 3))

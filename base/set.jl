@@ -293,9 +293,6 @@ end
 Selects one value from `A` for each unique value produced by `f` applied to
 elements of `A`, then return the modified A.
 
-!!! compat "Julia 1.1"
-    This method is available as of Julia 1.1.
-
 # Examples
 ```jldoctest
 julia> unique!(x -> x^2, [1, -1, 3, -3, 4])

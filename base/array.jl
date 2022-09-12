@@ -1073,9 +1073,6 @@ end
 For an ordered container `collection`, add the elements of each `collections`
 to the end of it.
 
-!!! compat "Julia 1.6"
-    Specifying multiple collections to be appended requires at least Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> append!([1], [2, 3])
@@ -1140,9 +1137,6 @@ Insert the elements of each `collections` to the beginning of `a`.
 
 When `collections` specifies multiple collections, order is maintained:
 elements of `collections[1]` will appear leftmost in `a`, and so on.
-
-!!! compat "Julia 1.6"
-    Specifying multiple collections to be prepended requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -1328,9 +1322,6 @@ When `i` is not a valid index for `a`, return `default`, or throw an error if
 `default` is not specified.
 
 See also: [`pop!`](@ref), [`popfirst!`](@ref), [`deleteat!`](@ref), [`splice!`](@ref).
-
-!!! compat "Julia 1.5"
-    This function is available as of Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -1698,9 +1689,6 @@ place of the removed items; in this case, `indices` must be a `AbstractUnitRange
 
 To insert `replacement` before an index `n` without removing any items, use
 `splice!(collection, n:n-1, replacement)`.
-
-!!! compat "Julia 1.5"
-    Prior to Julia 1.5, `indices` must always be a `UnitRange`.
 
 !!! compat "Julia 1.8"
     Prior to Julia 1.8, `indices` must be a `UnitRange` if splicing in replacement values.
@@ -2551,9 +2539,6 @@ end
 
 Return a copy of collection `a`, removing elements for which `f` is `false`.
 The function `f` is passed one argument.
-
-!!! compat "Julia 1.4"
-    Support for `a` as a tuple requires at least Julia 1.4.
 
 See also: [`filter!`](@ref), [`Iterators.filter`](@ref).
 

@@ -343,10 +343,7 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on FreeBSD but also on
-    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
+    other BSD-based systems. `Sys.isfreebsd()` refers only to FreeBSD."""
 isfreebsd(os::Symbol) = (os === :FreeBSD)
 
 """
@@ -357,10 +354,7 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on OpenBSD but also on
-    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
+    other BSD-based systems. `Sys.isopenbsd()` refers only to OpenBSD."""
 isopenbsd(os::Symbol) = (os === :OpenBSD)
 
 """
@@ -371,10 +365,7 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on NetBSD but also on
-    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
+    other BSD-based systems. `Sys.isnetbsd()` refers only to NetBSD."""
 isnetbsd(os::Symbol) = (os === :NetBSD)
 
 """
@@ -385,10 +376,7 @@ See documentation in [Handling Operating System Variation](@ref).
 
 !!! note
     Not to be confused with `Sys.isbsd()`, which is `true` on DragonFly but also on
-    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly.
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-"""
+    other BSD-based systems. `Sys.isdragonfly()` refers only to DragonFly."""
 isdragonfly(os::Symbol) = (os === :DragonFly)
 
 """
@@ -412,9 +400,6 @@ isapple(os::Symbol) = (os === :Apple || os === :Darwin)
 
 Predicate for testing if Julia is running in a JavaScript VM (JSVM),
 including e.g. a WebAssembly JavaScript embedding in a web browser.
-
-!!! compat "Julia 1.2"
-    This function requires at least Julia 1.2.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 

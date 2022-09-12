@@ -283,8 +283,6 @@ Closest candidates are:
     ...
 ```
 
-!!! compat "Julia 1.5"
-    Custom error hints are available as of Julia 1.5.
 !!! warning
     This interface is experimental and subject to change or removal without notice.
     To insulate yourself against changes, consider putting any registrations inside an
@@ -305,8 +303,6 @@ Invoke all handlers from [`Experimental.register_error_hint`](@ref) for the part
 exception type `typeof(ex)`. `args` must contain any other arguments expected by
 the handler for that type.
 
-!!! compat "Julia 1.5"
-    Custom error hints are available as of Julia 1.5.
 !!! warning
     This interface is experimental and subject to change or removal without notice.
 """

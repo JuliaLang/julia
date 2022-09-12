@@ -68,9 +68,6 @@ are promoted to a common type.
 
 See also [`clamp!`](@ref), [`min`](@ref), [`max`](@ref).
 
-!!! compat "Julia 1.3"
-    `missing` as the first argument requires at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> clamp.([pi, 1.0, big(10)], 2.0, 9.0)
@@ -120,9 +117,6 @@ clamp(x, ::Type{T}) where {T<:Integer} = clamp(x, typemin(T), typemax(T)) % T
 Restrict values in `array` to the specified range, in-place.
 See also [`clamp`](@ref).
 
-!!! compat "Julia 1.3"
-    `missing` entries in `array` require at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> row = collect(-4:4)';
@@ -147,9 +141,6 @@ end
     clamp(x::Integer, r::AbstractUnitRange)
 
 Clamp `x` to lie within range `r`.
-
-!!! compat "Julia 1.6"
-     This method requires at least Julia 1.6.
 """
 clamp(x::Integer, r::AbstractUnitRange{<:Integer}) = clamp(x, first(r), last(r))
 
@@ -164,9 +155,6 @@ This function generates efficient code using Horner's method if `x` is real, or 
 a Goertzel-like [^DK62] algorithm if `x` is complex.
 
 [^DK62]: Donald Knuth, Art of Computer Programming, Volume 2: Seminumerical Algorithms, Sec. 4.6.4.
-
-!!! compat "Julia 1.4"
-    This function requires Julia 1.4 or later.
 
 # Example
 ```jldoctest

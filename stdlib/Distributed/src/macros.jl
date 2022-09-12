@@ -35,9 +35,6 @@ Future(3, 1, 7, nothing)
 julia> fetch(f)
 3
 ```
-
-!!! compat "Julia 1.3"
-    As of Julia 1.3 this macro is deprecated. Use `@spawnat :any` instead.
 """
 macro spawn(expr)
     thunk = esc(:(()->($expr)))
@@ -75,9 +72,6 @@ Future(3, 1, 7, nothing)
 julia> fetch(f)
 3
 ```
-
-!!! compat "Julia 1.3"
-    The `:any` argument is available as of Julia 1.3.
 """
 macro spawnat(p, expr)
     thunk = esc(:(()->($expr)))

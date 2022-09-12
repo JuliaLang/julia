@@ -9,9 +9,6 @@
 Construct an `UpperHessenberg` view of the matrix `A`.
 Entries of `A` below the first subdiagonal are ignored.
 
-!!! compat "Julia 1.3"
-    This type was added in Julia 1.3.
-
 Efficient algorithms are implemented for `H \\ b`, `det(H)`, and similar.
 
 See also the [`hessenberg`](@ref) function to factor any matrix into a similar

@@ -220,9 +220,6 @@ end
 
 Given an artifact (identified by SHA1 git tree hash), return its installation path.  If
 the artifact does not exist, returns the location it would be installed to.
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 function artifact_path(hash::SHA1; honor_overrides::Bool=true)
     # Get all possible paths (rooted in all depots)
@@ -245,9 +242,6 @@ end
 Returns whether or not the given artifact (identified by its sha1 git tree hash) exists
 on-disk.  Note that it is possible that the given artifact exists in multiple locations
 (e.g. within multiple depots).
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 function artifact_exists(hash::SHA1; honor_overrides::Bool=true)
     return any(isdir, artifact_paths(hash; honor_overrides=honor_overrides))
@@ -359,9 +353,6 @@ process_overrides(artifact_dict::Dict, pkg_uuid::Nothing) = nothing
 Get metadata about a given artifact (identified by name) stored within the given
 `(Julia)Artifacts.toml` file.  If the artifact is platform-specific, use `platform` to choose the
 most appropriate mapping.  If none is found, return `nothing`.
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 function artifact_meta(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
@@ -412,9 +403,6 @@ end
 
 Thin wrapper around `artifact_meta()` to return the hash of the specified, platform-
 collapsed artifact.  Returns `nothing` if no mapping can be found.
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 function artifact_hash(name::String, artifacts_toml::String;
                        platform::AbstractPlatform = HostPlatform(),
@@ -477,9 +465,6 @@ end
 Given the path to a `.jl` file, (such as the one returned by `__source__.file` in a macro
 context), find the `(Julia)Artifacts.toml` that is contained within the containing project (if it
 exists), otherwise return `nothing`.
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 function find_artifacts_toml(path::String)
     if !isdir(path)
@@ -645,12 +630,6 @@ be taken to be path names indexing into the artifact, allowing for an easy one-l
 access a single file/directory within an artifact.  Example:
 
     ffmpeg_path = @artifact"FFMPEG/bin/ffmpeg"
-
-!!! compat "Julia 1.3"
-    This macro requires at least Julia 1.3.
-
-!!! compat "Julia 1.6"
-    Slash-indexing requires at least Julia 1.6.
 """
 macro artifact_str(name, platform=nothing)
     # Find Artifacts.toml file we're going to load from

@@ -280,9 +280,6 @@ it inherits the current environment at time of `addenv()` call if `inherit` is `
 Keys with value `nothing` are deleted from the env.
 
 See also [`Cmd`](@ref), [`setenv`](@ref), [`ENV`](@ref).
-
-!!! compat "Julia 1.6"
-    This function requires Julia 1.6 or later.
 """
 function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
     new_env = Dict{String,String}()

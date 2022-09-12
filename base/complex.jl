@@ -596,9 +596,6 @@ julia> cispi(10000)
 julia> cispi(0.25 + 1im)
 0.030556854645954562 + 0.030556854645954562im
 ```
-
-!!! compat "Julia 1.6"
-    This function requires Julia 1.6 or later.
 """
 function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)

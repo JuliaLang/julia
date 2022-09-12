@@ -273,10 +273,6 @@ for example, in `x - y ≈ 0`, `atol=1e-9` is an absurdly small tolerance if `x`
 but an absurdly large tolerance if `x` is the
 [radius of a Hydrogen atom](https://en.wikipedia.org/wiki/Bohr_radius) in meters.
 
-!!! compat "Julia 1.6"
-    Passing the `norm` keyword argument when comparing numeric (non-array) arguments
-    requires Julia 1.6 or later.
-
 # Examples
 ```jldoctest
 julia> isapprox(0.1, 0.15; atol=0.05)
@@ -313,9 +309,6 @@ end
 Create a function that compares its argument to `x` using `≈`, i.e. a function equivalent to `y -> y ≈ x`.
 
 The keyword arguments supported here are the same as those in the 2-argument `isapprox`.
-
-!!! compat "Julia 1.5"
-    This method requires Julia 1.5 or later.
 """
 isapprox(y; kwargs...) = x -> isapprox(x, y; kwargs...)
 

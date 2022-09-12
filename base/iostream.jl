@@ -268,9 +268,6 @@ Returns a stream for accessing the opened file.
 
 The `lock` keyword argument controls whether operations will be locked for
 safe multi-threaded access.
-
-!!! compat "Julia 1.5"
-    The `lock` argument is available as of Julia 1.5.
 """
 function open(fname::String; lock = true,
     read     :: Union{Bool,Nothing} = nothing,
@@ -348,9 +345,6 @@ julia> close(io)
 
 julia> rm("myfile.txt")
 ```
-
-!!! compat "Julia 1.5"
-    The `lock` argument is available as of Julia 1.5.
 """
 function open(fname::AbstractString, mode::AbstractString; lock = true)
     mode == "r"  ? open(fname, lock = lock, read = true)                  :

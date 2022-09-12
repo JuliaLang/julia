@@ -152,9 +152,6 @@ number of singular values.
 If `alg = DivideAndConquer()` a divide-and-conquer algorithm is used to calculate the SVD.
 Another (typically slower but more accurate) option is `alg = QRIteration()`.
 
-!!! compat "Julia 1.3"
-    The `alg` keyword argument requires Julia 1.3 or later.
-
 # Examples
 ```jldoctest
 julia> A = rand(4,3);

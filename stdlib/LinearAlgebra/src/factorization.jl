@@ -24,10 +24,7 @@ checknonsingular(info) = checknonsingular(info, RowMaximum())
 """
     issuccess(F::Factorization)
 
-Test that a factorization of a matrix succeeded.
-
-!!! compat "Julia 1.6"
-    `issuccess(::CholeskyPivoted)` requires Julia 1.6 or later.
+Test that a factorization of a matrix succeeded..
 
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);

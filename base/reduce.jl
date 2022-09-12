@@ -285,9 +285,6 @@ In general, it will be necessary to provide `init` to work with empty collection
 intermediate collection needs to be created. See documentation for [`reduce`](@ref) and
 [`map`](@ref).
 
-!!! compat "Julia 1.2"
-    `mapreduce` with multiple iterators requires Julia 1.2 or later.
-
 # Examples
 ```jldoctest
 julia> mapreduce(x->x^2, +, [1:3;]) # == 1 + 4 + 9
@@ -501,9 +498,6 @@ The value returned for empty `itr` can be specified by `init`. It must be
 the additive identity (i.e. zero) as it is unspecified whether `init` is used
 for non-empty collections.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
-
 # Examples
 ```jldoctest
 julia> sum(abs2, [2; 3; 4])
@@ -540,9 +534,6 @@ The value returned for empty `itr` can be specified by `init`. It must be
 the additive identity (i.e. zero) as it is unspecified whether `init` is used
 for non-empty collections.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
-
 See also: [`reduce`](@ref), [`mapreduce`](@ref), [`count`](@ref), [`union`](@ref).
 
 # Examples
@@ -572,9 +563,6 @@ The value returned for empty `itr` can be specified by `init`. It must be the
 multiplicative identity (i.e. one) as it is unspecified whether `init` is used
 for non-empty collections.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
-
 # Examples
 ```jldoctest
 julia> prod(abs2, [2; 3; 4])
@@ -595,9 +583,6 @@ arguments, a common return type is found to which all arguments are promoted.
 The value returned for empty `itr` can be specified by `init`. It must be the
 multiplicative identity (i.e. one) as it is unspecified whether `init` is used
 for non-empty collections.
-
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
 
 See also: [`reduce`](@ref), [`cumprod`](@ref), [`any`](@ref).
 
@@ -680,9 +665,6 @@ a neutral element for `max` (i.e. which is less than or equal to any
 other element) as it is unspecified whether `init` is used
 for non-empty collections.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
-
 # Examples
 ```jldoctest
 julia> maximum(length, ["Julion", "Julia", "Jule"])
@@ -707,9 +689,6 @@ a neutral element for `min` (i.e. which is greater than or equal to any
 other element) as it is unspecified whether `init` is used
 for non-empty collections.
 
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
-
 # Examples
 ```jldoctest
 julia> minimum(length, ["Julion", "Julia", "Jule"])
@@ -733,9 +712,6 @@ The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
 other element) as it is unspecified whether `init` is used
 for non-empty collections.
-
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
@@ -765,9 +741,6 @@ The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
 other element) as it is unspecified whether `init` is used
 for non-empty collections.
-
-!!! compat "Julia 1.6"
-    Keyword argument `init` requires Julia 1.6 or later.
 
 # Examples
 ```jldoctest
@@ -829,9 +802,6 @@ first and second elements are neutral elements for `min` and `max` respectively
 collections. Note: it implies that, for empty `itr`, the returned value `(mn, mx)` satisfies
 `mn ≥ mx` even though for non-empty `itr` it  satisfies `mn ≤ mx`.  This is a "paradoxical"
 but yet expected result.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
 
 !!! compat "Julia 1.8"
     Keyword argument `init` requires Julia 1.8 or later.
@@ -1324,9 +1294,6 @@ Count the number of elements in `itr` for which the function `f` returns `true`.
 If `f` is omitted, count the number of `true` elements in `itr` (which
 should be a collection of boolean values). `init` optionally specifies the value
 to start counting from and therefore also determines the output type.
-
-!!! compat "Julia 1.6"
-    `init` keyword was added in Julia 1.6.
 
 See also: [`any`](@ref), [`sum`](@ref).
 

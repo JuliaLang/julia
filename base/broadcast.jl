@@ -1340,9 +1340,6 @@ julia> map(.*, a, b)
 julia> Base.BroadcastFunction(+)(a, b) == a .+ b
 true
 ```
-
-!!! compat "Julia 1.6"
-    `BroadcastFunction` and the standalone `.op` syntax are available as of Julia 1.6.
 """
 struct BroadcastFunction{F} <: Function
     f::F

@@ -77,9 +77,6 @@ julia> (; t.x)
 (x = 0,)
 ```
 
-!!! compat "Julia 1.5"
-    Implicit names from identifiers and dot expressions are available as of Julia 1.5.
-
 !!! compat "Julia 1.7"
     Use of `getindex` methods with multiple `Symbol`s is available as of Julia 1.7.
 """
@@ -246,9 +243,6 @@ contains that field. Fields present in only the rightmost named tuple of a pair 
 A fallback is implemented for when only a single named tuple is supplied,
 with signature `merge(a::NamedTuple)`.
 
-!!! compat "Julia 1.1"
-    Merging 3 or more `NamedTuple` requires at least Julia 1.1.
-
 # Examples
 ```jldoctest
 julia> merge((a=1, b=2, c=3), (b=4, d=5))
@@ -402,9 +396,6 @@ julia> @NamedTuple begin
        end
 NamedTuple{(:a, :b), Tuple{Float64, String}}
 ```
-
-!!! compat "Julia 1.5"
-    This macro is available as of Julia 1.5.
 """
 macro NamedTuple(ex)
     Meta.isexpr(ex, :braces) || Meta.isexpr(ex, :block) ||

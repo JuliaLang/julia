@@ -138,9 +138,3 @@ The following is a complete list of command-line switches available when launchi
 |`--output-incremental={yes\|no*}`      |Generate an incremental output file (rather than complete)|
 |`--trace-compile={stderr,name}`        |Print precompile statements for methods compiled during execution or save to a path|
 |`--image-codegen`                      |Force generate code in imaging mode|
-
-
-!!! compat "Julia 1.1"
-    In Julia 1.0, the default `--project=@.` option did not search up from the root
-    directory of a Git repository for the `Project.toml` file. From Julia 1.1 forward, it
-    does.

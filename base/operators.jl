@@ -944,12 +944,6 @@ Function composition also works in prefix form: `∘(f, g)` is the same as `f �
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
 
-!!! compat "Julia 1.4"
-    Multiple function composition requires at least Julia 1.4.
-
-!!! compat "Julia 1.5"
-    Composition of one function ∘(f) requires at least Julia 1.5.
-
 !!! compat "Julia 1.7"
     Using keyword arguments requires at least Julia 1.7.
 
@@ -1001,8 +995,6 @@ true
 julia> composition.inner === cos
 true
 ```
-!!! compat "Julia 1.6"
-    ComposedFunction requires at least Julia 1.6. In earlier versions `∘` returns an anonymous function instead.
 
 See also [`∘`](@ref).
 """
@@ -1138,9 +1130,6 @@ Create a function that compares its argument to `x` using [`!=`](@ref), i.e.
 a function equivalent to `y -> y != x`.
 The returned function is of type `Base.Fix2{typeof(!=)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
 """
 !=(x) = Fix2(!=, x)
 
@@ -1151,9 +1140,6 @@ Create a function that compares its argument to `x` using [`>=`](@ref), i.e.
 a function equivalent to `y -> y >= x`.
 The returned function is of type `Base.Fix2{typeof(>=)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
 """
 >=(x) = Fix2(>=, x)
 
@@ -1164,9 +1150,6 @@ Create a function that compares its argument to `x` using [`<=`](@ref), i.e.
 a function equivalent to `y -> y <= x`.
 The returned function is of type `Base.Fix2{typeof(<=)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
 """
 <=(x) = Fix2(<=, x)
 
@@ -1177,9 +1160,6 @@ Create a function that compares its argument to `x` using [`>`](@ref), i.e.
 a function equivalent to `y -> y > x`.
 The returned function is of type `Base.Fix2{typeof(>)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
 """
 >(x) = Fix2(>, x)
 
@@ -1190,9 +1170,6 @@ Create a function that compares its argument to `x` using [`<`](@ref), i.e.
 a function equivalent to `y -> y < x`.
 The returned function is of type `Base.Fix2{typeof(<)}`, which can be
 used to implement specialized methods.
-
-!!! compat "Julia 1.2"
-    This functionality requires at least Julia 1.2.
 """
 <(x) = Fix2(<, x)
 
@@ -1207,9 +1184,6 @@ i.e. given a function returns a new function that takes one argument and splats
 its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
 passes a tuple as that single argument. Additionally has pretty printing.
-
-!!! compat "Julia 1.9"
-    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
 
 # Example usage:
 ```jldoctest
@@ -1279,9 +1253,6 @@ Avoid adding methods to this function; define `in` instead.
 
 Create a function that checks whether its argument contains the given `item`, i.e.
 a function equivalent to `y -> item in y`.
-
-!!! compat "Julia 1.6"
-    This method requires Julia 1.6 or later.
 """
 ∋(x) = Fix2(∋, x)
 

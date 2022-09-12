@@ -1406,9 +1406,6 @@ hygiene or otherwise contains variable names which can't be parsed normally.
 Note that this syntax requires parser support so it is expanded directly by the
 parser rather than being implemented as a normal string macro `@var_str`.
 
-!!! compat "Julia 1.3"
-    This syntax requires at least Julia 1.3.
-
 """
 kw"var\"name\"", kw"@var_str"
 
@@ -2819,9 +2816,6 @@ NamedTuple{names}(nt::NamedTuple)
 
 Construct a named tuple from an iterator of key-value pairs (where the keys must be
 `Symbol`s). Equivalent to `(; itr...)`.
-
-!!! compat "Julia 1.6"
-    This method requires at least Julia 1.6.
 """
 NamedTuple(itr)
 

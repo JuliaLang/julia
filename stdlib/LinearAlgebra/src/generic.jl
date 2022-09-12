@@ -157,10 +157,6 @@ respects the semantics of the multiplication [`*`](@ref) between an
 element of `A` and `b`.  In particular, this also applies to
 multiplication involving non-finite numbers such as `NaN` and `±Inf`.
 
-!!! compat "Julia 1.1"
-    Prior to Julia 1.1, `NaN` and `±Inf` entries in `A` were treated
-    inconsistently.
-
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -194,10 +190,6 @@ Scale an array `B` by a scalar `a` overwriting `B` in-place.  Use
 respects the semantics of the multiplication [`*`](@ref) between `a`
 and an element of `B`.  In particular, this also applies to
 multiplication involving non-finite numbers such as `NaN` and `±Inf`.
-
-!!! compat "Julia 1.1"
-    Prior to Julia 1.1, `NaN` and `±Inf` entries in `B` were treated
-    inconsistently.
 
 # Examples
 ```jldoctest
@@ -898,9 +890,6 @@ without storing the intermediate result of `A*y`. As for the two-argument
 [`dot(_,_)`](@ref), this acts recursively. Moreover, for complex vectors, the
 first vector is conjugated.
 
-!!! compat "Julia 1.4"
-    Three-argument `dot` requires at least Julia 1.4.
-
 # Examples
 ```jldoctest
 julia> dot([1; 1], [1 2; 3 4], [2; 3])
@@ -948,11 +937,6 @@ values of `A` have magnitude greater than `max(atol, rtol*σ₁)` where `σ₁` 
 tolerances, respectively. The default relative tolerance is `n*ϵ`, where `n`
 is the size of the smallest dimension of `A`, and `ϵ` is the [`eps`](@ref) of
 the element type of `A`.
-
-!!! compat "Julia 1.1"
-    The `atol` and `rtol` keyword arguments requires at least Julia 1.1.
-    In Julia 1.0 `rtol` is available as a positional argument, but this
-    will be deprecated in Julia 2.0.
 
 # Examples
 ```jldoctest
@@ -1515,9 +1499,6 @@ end
 
 Overwrite `x` with `c*x + s*y` and `y` with `-conj(s)*x + c*y`.
 Returns `x` and `y`.
-
-!!! compat "Julia 1.5"
-    `rotate!` requires at least Julia 1.5.
 """
 function rotate!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)
@@ -1538,9 +1519,6 @@ end
 
 Overwrite `x` with `c*x + s*y` and `y` with `conj(s)*x - c*y`.
 Returns `x` and `y`.
-
-!!! compat "Julia 1.5"
-    `reflect!` requires at least Julia 1.5.
 """
 function reflect!(x::AbstractVector, y::AbstractVector, c, s)
     require_one_based_indexing(x, y)

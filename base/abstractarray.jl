@@ -120,9 +120,6 @@ has_offset_axes(::Colon) = false
 
 Throw an `ArgumentError` if the indices of any argument start with something other than `1` along any axis.
 See also [`has_offset_axes`](@ref).
-
-!!! compat "Julia 1.2"
-     This function requires at least Julia 1.2.
 """
 require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
 
@@ -165,9 +162,6 @@ true
 julia> keytype([1 2; 3 4])
 CartesianIndex{2}
 ```
-
-!!! compat "Julia 1.2"
-     For arrays, this function requires at least Julia 1.2.
 """
 keytype(a::AbstractArray) = keytype(typeof(a))
 
@@ -188,9 +182,6 @@ provided mainly for compatibility with the dictionary interface.
 julia> valtype(["one", "two", "three"])
 String
 ```
-
-!!! compat "Julia 1.2"
-     For arrays, this function requires at least Julia 1.2.
 """
 valtype(A::Type{<:AbstractArray}) = eltype(A)
 
@@ -455,9 +446,6 @@ long enough.
 
 See also: [`startswith`](@ref), [`Iterators.take`](@ref).
 
-!!! compat "Julia 1.6"
-    This method requires at least Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> first(["foo", "bar", "qux"], 2)
@@ -504,9 +492,6 @@ last(a) = a[end]
 
 Get the last `n` elements of the iterable collection `itr`, or fewer elements if `itr` is not
 long enough.
-
-!!! compat "Julia 1.6"
-    This method requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -894,10 +879,6 @@ the call. If `dst` and `src` are multidimensional arrays, they must have
 equal [`axes`](@ref).
 
 See also [`copyto!`](@ref).
-
-!!! compat "Julia 1.1"
-    This method requires at least Julia 1.1. In Julia 1.0 this method
-    is available from the `Future` standard library as `Future.copy!`.
 """
 function copy!(dst::AbstractVector, src::AbstractVector)
     firstindex(dst) == firstindex(src) || throw(ArgumentError(

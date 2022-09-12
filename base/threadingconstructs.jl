@@ -173,9 +173,6 @@ For example, the above conditions imply that:
 Without the scheduler argument, the exact scheduling is unspecified and varies across Julia
 releases. Currently, `:dynamic` is used when the scheduler is not specified.
 
-!!! compat "Julia 1.5"
-    The `schedule` argument is available as of Julia 1.5.
-
 ### `:dynamic` (default)
 
 `:dynamic` scheduler executes iterations dynamically to available worker threads. Current
@@ -285,12 +282,6 @@ the variable's value in the current task.
 !!! note
     See the manual chapter on [multi-threading](@ref man-multithreading)
     for important caveats. See also the chapter on [threadpools](@ref man-threadpools).
-
-!!! compat "Julia 1.3"
-    This macro is available as of Julia 1.3.
-
-!!! compat "Julia 1.4"
-    Interpolating values via `\$` is available as of Julia 1.4.
 
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.

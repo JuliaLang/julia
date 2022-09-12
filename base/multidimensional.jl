@@ -183,10 +183,6 @@ module IteratorsMD
     As a convenience, constructing a `CartesianIndices` from an array makes a
     range of its indices.
 
-    !!! compat "Julia 1.6"
-        The step range method `CartesianIndices((istart:istep:istop, jstart:[jstep:]jstop, ...))`
-        requires at least Julia 1.6.
-
     # Examples
     ```jldoctest
     julia> foreach(println, CartesianIndices((2, 2, 2)))
@@ -225,9 +221,6 @@ module IteratorsMD
     ## Broadcasting
 
     `CartesianIndices` support broadcasting arithmetic (+ and -) with a `CartesianIndex`.
-
-    !!! compat "Julia 1.1"
-        Broadcasting of CartesianIndices requires at least Julia 1.1.
 
     ```jldoctest
     julia> CIs = CartesianIndices((2:3, 5:6))
@@ -276,12 +269,6 @@ module IteratorsMD
         (:)(start::CartesianIndex, [step::CartesianIndex], stop::CartesianIndex)
 
     Construct [`CartesianIndices`](@ref) from two `CartesianIndex` and an optional step.
-
-    !!! compat "Julia 1.1"
-        This method requires at least Julia 1.1.
-
-    !!! compat "Julia 1.6"
-        The step range method start:step:stop requires at least Julia 1.6.
 
     # Examples
     ```jldoctest
@@ -957,9 +944,6 @@ diff(a::AbstractVector) = diff(a, dims=1)
 Finite difference operator on a vector or a multidimensional array `A`. In the
 latter case the dimension to operate on needs to be specified with the `dims`
 keyword argument.
-
-!!! compat "Julia 1.1"
-    `diff` for arrays with dimension higher than 2 requires at least Julia 1.1.
 
 # Examples
 ```jldoctest

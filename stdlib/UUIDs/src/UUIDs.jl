@@ -48,9 +48,6 @@ an argument should be expected to return a unique identifier. Importantly, the o
 `uuid1` uses `Random.RandomDevice` as the default rng. However, this is an implementation
 detail that may change in the future.
 
-!!! compat "Julia 1.6"
-    The output of `uuid1` does not depend on `GLOBAL_RNG` as of Julia 1.6.
-
 # Examples
 ```jldoctest; filter = r"[a-z0-9]{8}-([a-z0-9]{4}-){3}[a-z0-9]{12}"
 julia> rng = MersenneTwister(1234);
@@ -94,9 +91,6 @@ an argument should be expected to return a unique identifier. Importantly, the o
 `uuid4` uses `Random.RandomDevice` as the default rng. However, this is an implementation
 detail that may change in the future.
 
-!!! compat "Julia 1.6"
-    The output of `uuid4` does not depend on `GLOBAL_RNG` as of Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> rng = MersenneTwister(1234);
@@ -117,9 +111,6 @@ end
 
 Generates a version 5 (namespace and domain-based) universally unique identifier (UUID),
 as specified by RFC 4122.
-
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
 
 # Examples
 ```jldoctest

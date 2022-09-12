@@ -14,9 +14,6 @@ of the form `"R±Iim"` as a `Complex(R,I)` of the requested type; `"i"` or `"j"`
 used instead of `"im"`, and `"R"` or `"Iim"` are also permitted.
 If the string does not contain a valid number, an error is raised.
 
-!!! compat "Julia 1.1"
-    `parse(Bool, str)` requires at least Julia 1.1.
-
 # Examples
 ```jldoctest
 julia> parse(Int, "1234")

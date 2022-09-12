@@ -865,9 +865,6 @@ end
 Simultaneously compute [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) (the sine and cosine of `π*x`,
 where `x` is in radians), returning a tuple `(sine, cosine)`.
 
-!!! compat "Julia 1.6"
-    This function requires Julia 1.6 or later.
-
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
 function sincospi(x::T) where T<:AbstractFloat
@@ -1250,9 +1247,6 @@ tand(x::Real) = sind(x) / cosd(x)
     sincosd(x)
 
 Simultaneously compute the sine and cosine of `x`, where `x` is in degrees.
-
-!!! compat "Julia 1.3"
-    This function requires at least Julia 1.3.
 """
 sincosd(x) = (sind(x), cosd(x))
 # It turns out that calling these functions separately yields better

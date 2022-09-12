@@ -359,9 +359,6 @@ _kronsize(A::AbstractVector, B::AbstractMatrix) = (length(A)*size(B, 1), size(B,
 
 Computes the Kronecker product of `A` and `B` and stores the result in `C`,
 overwriting the existing content of `C`. This is the in-place version of [`kron`](@ref).
-
-!!! compat "Julia 1.6"
-    This function requires Julia 1.6 or later.
 """
 function kron!(C::AbstractVecOrMat, A::AbstractVecOrMat, B::AbstractVecOrMat)
     size(C) == _kronsize(A, B) || throw(DimensionMismatch("kron!"))
@@ -623,10 +620,6 @@ exp_maybe_inplace(A) = exp(A)
     ^(b::Number, A::AbstractMatrix)
 
 Matrix exponential, equivalent to ``\\exp(\\log(b)A)``.
-
-!!! compat "Julia 1.1"
-    Support for raising `Irrational` numbers (like `ℯ`)
-    to a matrix was added in Julia 1.1.
 
 # Examples
 ```jldoctest

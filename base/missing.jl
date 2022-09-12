@@ -32,9 +32,6 @@ Int64
 julia> nonmissingtype(Any)
 Any
 ```
-
-!!! compat "Julia 1.3"
-    This function is exported as of Julia 1.3.
 """
 nonmissingtype(::Type{T}) where {T} = typesplit(T, Missing)
 
@@ -374,9 +371,6 @@ end
 
 Return a vector similar to the array wrapped by the given `SkipMissing` iterator
 but with all missing elements and those for which `f` returns `false` removed.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
 
 # Examples
 ```jldoctest

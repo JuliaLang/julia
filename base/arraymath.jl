@@ -52,9 +52,6 @@ julia> reverse(b)
  4  3
  2  1
 ```
-
-!!! compat "Julia 1.6"
-    Prior to Julia 1.6, only single-integer `dims` are supported in `reverse`.
 """
 reverse(A::AbstractArray; dims=:) = _reverse(A, dims)
 _reverse(A, dims) = reverse!(copymutable(A); dims)
@@ -63,9 +60,6 @@ _reverse(A, dims) = reverse!(copymutable(A); dims)
     reverse!(A; dims=:)
 
 Like [`reverse`](@ref), but operates in-place in `A`.
-
-!!! compat "Julia 1.6"
-    Multidimensional `reverse!` requires Julia 1.6.
 """
 reverse!(A::AbstractArray; dims=:) = _reverse!(A, dims)
 _reverse!(A::AbstractArray{<:Any,N}, ::Colon) where {N} = _reverse!(A, ntuple(identity, Val{N}()))

@@ -333,9 +333,6 @@ reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
 Evaluates to the same as `reduce(op, map(f, A...); dims=dims, init=init)`, but is generally
 faster because the intermediate array is avoided.
 
-!!! compat "Julia 1.2"
-    `mapreduce` with multiple iterators requires Julia 1.2 or later.
-
 # Examples
 ```jldoctest
 julia> a = reshape(Vector(1:16), (4,4))
@@ -413,12 +410,6 @@ reduce(op, A::AbstractArray; kw...) = mapreduce(identity, op, A; kw...)
 Count the number of elements in `A` for which `f` returns `true` over the given
 dimensions.
 
-!!! compat "Julia 1.5"
-    `dims` keyword was added in Julia 1.5.
-
-!!! compat "Julia 1.6"
-    `init` keyword was added in Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -447,9 +438,6 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
-
-!!! compat "Julia 1.5"
-    inplace `count!` was added in Julia 1.5.
 
 # Examples
 ```jldoctest
@@ -807,9 +795,6 @@ extrema(A::AbstractArray; dims)
 
 Compute the minimum and maximum of `f` applied to each element in the given dimensions
 of `A`.
-
-!!! compat "Julia 1.2"
-    This method requires Julia 1.2 or later.
 """
 extrema(f, A::AbstractArray; dims)
 

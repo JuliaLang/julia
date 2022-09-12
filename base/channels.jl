@@ -25,9 +25,6 @@ Other constructors:
 * `Channel()`: default constructor, equivalent to `Channel{Any}(0)`
 * `Channel(Inf)`: equivalent to `Channel{Any}(typemax(Int))`
 * `Channel(sz)`: equivalent to `Channel{Any}(sz)`
-
-!!! compat "Julia 1.3"
-    The default constructor `Channel()` and default `size=0` were added in Julia 1.3.
 """
 mutable struct Channel{T} <: AbstractChannel{T}
     cond_take::Threads.Condition                 # waiting for data to become available
@@ -110,14 +107,7 @@ Hello
 
 julia> istaskdone(taskref[])
 true
-```
 
-!!! compat "Julia 1.3"
-    The `spawn=` parameter was added in Julia 1.3. This constructor was added in Julia 1.3.
-    In earlier versions of Julia, Channel used keyword arguments to set `size` and `T`, but
-    those constructors are deprecated.
-
-```jldoctest
 julia> chnl = Channel{Char}(1, spawn=true) do ch
            for c in "hello world"
                put!(ch, c)
@@ -311,9 +301,6 @@ Append an item `v` to the channel `c`. Blocks if the channel is full.
 
 For unbuffered channels, blocks until a [`take!`](@ref) is performed by a different
 task.
-
-!!! compat "Julia 1.1"
-    `v` now gets converted to the channel's type with [`convert`](@ref) as `put!` is called.
 """
 function put!(c::Channel{T}, v) where T
     check_channel_state(c)

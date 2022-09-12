@@ -11,9 +11,6 @@ the identity operator, `λ*I`. Although without an explicit `size`, it
 acts similarly to a matrix in many cases and includes support for some
 indexing. See also [`I`](@ref).
 
-!!! compat "Julia 1.6"
-     Indexing using ranges is available as of Julia 1.6.
-
 # Examples
 ```jldoctest
 julia> J = UniformScaling(2.)
@@ -62,9 +59,6 @@ const I = UniformScaling(true)
     (I::UniformScaling)(n::Integer)
 
 Construct a `Diagonal` matrix from a `UniformScaling`.
-
-!!! compat "Julia 1.2"
-     This method is available as of Julia 1.2.
 
 # Examples
 ```jldoctest
@@ -366,10 +360,6 @@ isapprox(A::AbstractMatrix, J::UniformScaling; kwargs...) = isapprox(J, A; kwarg
     copyto!(dest::AbstractMatrix, src::UniformScaling)
 
 Copies a [`UniformScaling`](@ref) onto a matrix.
-
-!!! compat "Julia 1.1"
-    In Julia 1.0 this method only supported a square destination matrix. Julia 1.1. added
-    support for a rectangular matrix.
 """
 function copyto!(A::AbstractMatrix, J::UniformScaling)
     require_one_based_indexing(A)

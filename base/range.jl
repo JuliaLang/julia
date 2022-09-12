@@ -108,9 +108,6 @@ julia> range(1, 3.5, step=2)
 Special care is taken to ensure intermediate values are computed rationally.
 To avoid this induced overhead, see the [`LinRange`](@ref) constructor.
 
-!!! compat "Julia 1.1"
-    `stop` as a positional argument requires at least Julia 1.1.
-
 !!! compat "Julia 1.7"
     The versions without keyword arguments and `start` as a keyword argument
     require at least Julia 1.7.
@@ -1475,9 +1472,6 @@ julia> mod(0, Base.OneTo(3))  # mod1(0, 3)
 julia> mod(3, 0:2)  # mod(3, 3)
 0
 ```
-
-!!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
 """
 mod(i::Integer, r::OneTo) = mod1(i, last(r))
 mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + first(r)

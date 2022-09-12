@@ -248,9 +248,6 @@ julia> inv(1 + 2im) * (1 + 2im)
 julia> inv(2//3)
 3//2
 ```
-
-!!! compat "Julia 1.2"
-    `inv(::Missing)` requires at least Julia 1.2.
 """
 inv(x::Number) = one(x)/x
 

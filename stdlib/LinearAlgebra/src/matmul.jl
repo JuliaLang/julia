@@ -191,9 +191,6 @@ end
 Combined multiply-add, `A*y .+ z`, for matrix-matrix or matrix-vector multiplication.
 The result is always the same size as `A*y`, but `z` may be smaller, or a scalar.
 
-!!! compat "Julia 1.6"
-     These methods require Julia 1.6 or later.
-
 # Examples
 ```jldoctest
 julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; z=[0, 100];
@@ -282,9 +279,6 @@ end
 Combined inplace matrix-matrix or matrix-vector multiply-add ``A B α + C β``.
 The result is stored in `C` by overwriting it.  Note that `C` must not be
 aliased with either `A` or `B`.
-
-!!! compat "Julia 1.3"
-    Five-argument `mul!` requires at least Julia 1.3.
 
 # Examples
 ```jldoctest

@@ -120,9 +120,6 @@ Cumulative sum of an iterator.
 
 See also [`accumulate`](@ref) to apply functions other than `+`.
 
-!!! compat "Julia 1.5"
-    `cumsum` on a non-array iterator requires at least Julia 1.5.
-
 # Examples
 ```jldoctest
 julia> cumsum(1:3)
@@ -195,9 +192,6 @@ Cumulative product of an iterator.
 
 See also [`cumprod!`](@ref), [`accumulate`](@ref), [`cumsum`](@ref).
 
-!!! compat "Julia 1.5"
-    `cumprod` on a non-array iterator requires at least Julia 1.5.
-
 # Examples
 ```jldoctest
 julia> cumprod(fill(1//2, 3))
@@ -233,9 +227,6 @@ to control the precision of the output (e.g. to avoid overflow).
 For common operations there are specialized variants of `accumulate`,
 see [`cumsum`](@ref), [`cumprod`](@ref). For a lazy version, see
 [`Iterators.accumulate`](@ref).
-
-!!! compat "Julia 1.5"
-    `accumulate` on a non-array iterator requires at least Julia 1.5.
 
 # Examples
 ```jldoctest

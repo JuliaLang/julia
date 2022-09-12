@@ -339,9 +339,6 @@ Return the default global random number generator (RNG).
     What the default RNG is is an implementation detail.  Across different versions of
     Julia, you should not expect the default RNG to be always the same, nor that it will
     return the same stream of random numbers for a given seed.
-
-!!! compat "Julia 1.3"
-    This function was introduced in Julia 1.3.
 """
 @inline default_rng() = TaskLocalRNG()
 @inline default_rng(tid::Int) = TaskLocalRNG()

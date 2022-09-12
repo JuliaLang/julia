@@ -409,9 +409,6 @@ false
 julia> insorted(0, [1, 2, 4, 5, 5, 7]) # no match
 false
 ```
-
-!!! compat "Julia 1.6"
-     `insorted` was added in Julia 1.6.
 """
 function insorted end
 insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
@@ -1318,9 +1315,6 @@ Sort the multidimensional array `A` along dimension `dims`.
 See [`sort!`](@ref) for a description of possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
-
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
 
 # Examples
 ```jldoctest

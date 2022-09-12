@@ -605,9 +605,6 @@ kill(ps::ProcessChain, signum::Integer=SIGTERM) = kill(ps.processes, signum)
     getpid(process) -> Int32
 
 Get the child process ID, if it still exists.
-
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
 """
 function Libc.getpid(p::Process)
     # TODO: due to threading, this method is only weakly synchronized with the user application

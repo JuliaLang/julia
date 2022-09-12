@@ -4,9 +4,6 @@
 An abstract type representing any sort of pattern matching expression
 (typically a regular expression). `AbstractPattern` objects can be used to
 match strings with [`match`](@ref).
-
-!!! compat "Julia 1.6"
-    This type is available in Julia 1.6 and later.
 """
 abstract type AbstractPattern end
 
@@ -125,9 +122,6 @@ findfirst(pattern::AbstractString, string::AbstractString) =
 
 Find the first occurrence of character `ch` in `string`.
 
-!!! compat "Julia 1.3"
-    This method requires at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> findfirst('a', "happy")
@@ -144,9 +138,6 @@ findfirst(ch::AbstractChar, string::AbstractString) = findfirst(==(ch), string)
               A::AbstractVector{<:Union{Int8,UInt8}})
 
 Find the first occurrence of sequence `pattern` in vector `A`.
-
-!!! compat "Julia 1.6"
-    This method requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -323,9 +314,6 @@ findnext(t::AbstractString, s::AbstractString, start::Integer) = _search(s, t, I
 
 Find the next occurrence of character `ch` in `string` starting at position `start`.
 
-!!! compat "Julia 1.3"
-    This method requires at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> findnext('z', "Hello to the world", 1) === nothing
@@ -344,9 +332,6 @@ findnext(ch::AbstractChar, string::AbstractString, start::Integer) =
              start::Integer)
 
 Find the next occurrence of the sequence `pattern` in vector `A` starting at position `start`.
-
-!!! compat "Julia 1.6"
-    This method requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -402,9 +387,6 @@ findlast(pattern::AbstractVector{<:Union{Int8,UInt8}},
 
 Find the last occurrence of character `ch` in `string`.
 
-!!! compat "Julia 1.3"
-    This method requires at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> findlast('p', "happy")
@@ -456,9 +438,6 @@ julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
  1:2
  4:5
 ```
-
-!!! compat "Julia 1.3"
-     This method requires at least Julia 1.3.
 """
 
 function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
@@ -638,9 +617,6 @@ findprev(t::AbstractString, s::AbstractString, i::Integer) = _rsearch(s, t, Int(
 
 Find the previous occurrence of character `ch` in `string` starting at position `start`.
 
-!!! compat "Julia 1.3"
-    This method requires at least Julia 1.3.
-
 # Examples
 ```jldoctest
 julia> findprev('z', "Hello to the world", 18) === nothing
@@ -659,9 +635,6 @@ findprev(ch::AbstractChar, string::AbstractString, start::Integer) =
              start::Integer)
 
 Find the previous occurrence of the sequence `pattern` in vector `A` starting at position `start`.
-
-!!! compat "Julia 1.6"
-    This method requires at least Julia 1.6.
 
 # Examples
 ```jldoctest
@@ -706,9 +679,6 @@ Create a function that checks whether its argument occurs in `haystack`, i.e.
 a function equivalent to `needle -> occursin(needle, haystack)`.
 
 The returned function is of type `Base.Fix2{typeof(occursin)}`.
-
-!!! compat "Julia 1.6"
-    This method requires Julia 1.6 or later.
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 

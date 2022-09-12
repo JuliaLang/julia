@@ -196,9 +196,6 @@ Return a boolean indicating whether `T` has `name` as one of its own fields.
 
 See also [`fieldnames`](@ref), [`fieldcount`](@ref), [`hasproperty`](@ref).
 
-!!! compat "Julia 1.2"
-     This function requires at least Julia 1.2.
-
 # Examples
 ```jldoctest
 julia> struct Foo
@@ -293,9 +290,6 @@ end
 
 Construct a dictionary of the names (as symbols) and values of all local
 variables defined as of the call site.
-
-!!! compat "Julia 1.1"
-    This macro requires at least Julia 1.1.
 
 # Examples
 ```jldoctest
@@ -506,9 +500,6 @@ false
 julia> ismutable([1,2])
 true
 ```
-
-!!! compat "Julia 1.5"
-    This function requires at least Julia 1.5.
 """
 ismutable(@nospecialize(x)) = (@_total_meta; typeof(x).name.flags & 0x2 == 0x2)
 
@@ -818,9 +809,6 @@ end
 
 The declared types of all fields in a composite DataType `T` as a tuple.
 
-!!! compat "Julia 1.1"
-    This function requires at least Julia 1.1.
-
 # Examples
 ```jldoctest
 julia> struct Foo
@@ -976,9 +964,6 @@ Return the method table for `f`.
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array.
-
-!!! compat "Julia 1.4"
-    At least Julia 1.4 is required for specifying a module.
 
 See also: [`which`](@ref) and `@which`.
 """
@@ -1581,9 +1566,6 @@ the provided names must be a subset of the method's keyword arguments.
 
 See also [`applicable`](@ref).
 
-!!! compat "Julia 1.2"
-    Providing keyword argument names requires Julia 1.2 or later.
-
 # Examples
 ```jldoctest
 julia> hasmethod(length, Tuple{Array})
@@ -1846,9 +1828,6 @@ propertynames(x, private::Bool) = propertynames(x) # ignore private flag by defa
     hasproperty(x, s::Symbol)
 
 Return a boolean indicating whether the object `x` has `s` as one of its own properties.
-
-!!! compat "Julia 1.2"
-     This function requires at least Julia 1.2.
 
 See also: [`propertynames`](@ref), [`hasfield`](@ref).
 """

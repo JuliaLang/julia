@@ -309,9 +309,6 @@ end
         unlock(c)
     end
     ```
-
-    !!! compat "Julia 1.2"
-        This functionality requires at least Julia 1.2.
     """
     const Condition = Base.GenericCondition{Base.ReentrantLock}
 
@@ -427,9 +424,6 @@ If `autoreset` is true, at most one task will be released from `wait` for
 each call to `notify`.
 
 This provides an acquire & release memory ordering on notify/wait.
-
-!!! compat "Julia 1.1"
-    This functionality requires at least Julia 1.1.
 
 !!! compat "Julia 1.8"
     The `autoreset` functionality and memory ordering guarantee requires at least Julia 1.8.
