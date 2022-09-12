@@ -944,8 +944,9 @@ Function composition also works in prefix form: `∘(f, g)` is the same as `f �
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
 
-When splatting an iterable collection of functions, `∘(fs...)`, functions are called in
-descending order, i.e. `for func in fs[end:-1:begin]`, till the last function is called.
+When splatting an iterable collection of functions, `∘(fs...)`, notice that
+`fs[end]` is executed first, followed by the next function behind it i.e.
+`fs[end-1]`; this order is followed, till the last function, `fs[begin]`, is called.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
