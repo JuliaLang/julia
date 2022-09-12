@@ -74,15 +74,16 @@ end
 function sort!(v::Vector; by::Function=identity, (<)::Function=<)
     isempty(v) && return v # This branch is hit 95% of the time
 
-    if length(v) > 30 # Comb pass avoids quadratic runtime
-        interval = (3 * length(v)) >> 2
-        while interval > 1
-            @inbounds for j in 1:length(v)-interval
-                a, b = v[j], v[j+interval]
-                v[j], v[j+interval] = by(b) < by(a) ? (b, a) : (a, b)
-            end
-            interval = (3 * interval) >> 2
-        end
+    # Of the remaining 5%, this branch is hit less than 1% of the time
+    if length(v) > 200 # Heap sort prevents quadratic runtime
+        o = ord(<, by, true)
+        heapify!(v, o)
+        for i in lastindex(v):-1:2
+            y = v[i]
+            v[i] = v[1]
+            percolate_down!(v, 1, y, o, i-1)
+         end
+        return v
     end
 
     @inbounds for i in 2:length(v) # Insertion sort
