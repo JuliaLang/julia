@@ -892,6 +892,7 @@ precompile_test_harness("invoke") do dir
           """
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
+              export f44320, g44320
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
@@ -910,6 +911,11 @@ precompile_test_harness("invoke") do dir
               # q will have some callers invalidated
               q(x::Integer) = 0
               qnc(x::Integer) = rand()-1
+              # Issue #44320
+              f44320(::Int) = 1
+              f44320(::Any) = 2
+              g44320() = invoke(f44320, Tuple{Any}, 0)
+              g44320()
           end
           """)
           write(joinpath(dir, "$CallerModule.jl"),
@@ -933,6 +939,9 @@ precompile_test_harness("invoke") do dir
               internal(x::Int) = x < 5 ? 1 : invoke(internal, Tuple{Real}, x)
               internalnc(x::Real) = rand()-1
               internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
+
+              # Issue #44320
+              f44320(::Real) = 3
 
               # force precompilation
               begin
@@ -1009,6 +1018,9 @@ precompile_test_harness("invoke") do dir
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
+
+    m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1

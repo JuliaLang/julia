@@ -876,13 +876,13 @@ end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
                                               @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
-                                              sv::InferenceState)
+                                              sv::InferenceState, invoketypes=nothing)
     if !const_prop_enabled(interp, sv, match)
         return nothing
     end
     res = concrete_eval_call(interp, f, result, arginfo, sv)
     if isa(res, ConstCallResults)
-        add_backedge!(res.const_result.mi, sv)
+        add_backedge!(res.const_result.mi, sv, invoketypes)
         return res
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
@@ -1694,7 +1694,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
     const_call_result = abstract_call_method_with_const_args(interp, result,
-        overlayed ? nothing : singleton_type(ft′), arginfo, match, sv)
+        overlayed ? nothing : singleton_type(ft′), arginfo, match, sv, types)
     const_result = nothing
     if const_call_result !== nothing
         if ⊑(typeinf_lattice(interp), const_call_result.rt, rt)
