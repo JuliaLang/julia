@@ -11,7 +11,7 @@ function strip_gensym(sym)
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[unwrapva(min(i, end))]
+    t = unwrapva(sig.parameters[min(i, end)])
     if i == nargs && isva
         va = sig.parameters[end]
         if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
