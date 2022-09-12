@@ -28,7 +28,7 @@ end
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
-(potentiall wrapped in some UnionAll), then we are guaranteed that this statement
+(potentially wrapped in some UnionAll), then we are guaranteed that this statement
 will be a DataType at runtime (and not e.g. a Union or UnionAll typeequal to it).
 """
 function isTypeDataType(@nospecialize t)
@@ -39,7 +39,7 @@ function isTypeDataType(@nospecialize t)
     if t.name === Tuple.name
         # If we have a Union parameter, could have been redistributed at runtime,
         # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
-        # `Union{Tuple{Inr, Int}, Tuple{Float64, Int}}` is typeequal to it and
+        # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
         # is not.
         return _all(isTypeDataType, t.parameters)
     end
