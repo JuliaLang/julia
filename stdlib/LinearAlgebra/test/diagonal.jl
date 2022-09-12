@@ -462,13 +462,36 @@ end
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
-@testset "kron (issue #46456)" begin
-    A = Diagonal(randn(10))
-    BL = Bidiagonal(randn(10), randn(9), :L)
-    BU = Bidiagonal(randn(10), randn(9), :U)
-    C = SymTridiagonal(randn(10), randn(9))
-    Cl = SymTridiagonal(randn(10), randn(10))
-    D = Tridiagonal(randn(9), randn(10), randn(9))
+# Define a vector type that does not support `deleteat!`, to ensure that `kron` handles this
+struct SimpleVector{T} <: AbstractVector{T}
+    vec::Vector{T}
+end
+SimpleVector(x::SimpleVector) = SimpleVector(Vector(x.vec))
+SimpleVector{T}(::UndefInitializer, n::Integer) where {T} = SimpleVector(Vector{T}(undef, n))
+Base.:(==)(x::SimpleVector, y::SimpleVector) = x == y
+Base.axes(x::SimpleVector) = axes(x.vec)
+Base.convert(::Type{Vector{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x.vec)
+Base.convert(::Type{Vector}, x::SimpleVector{T}) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array}, x::SimpleVector) = convert(Vector, x)
+Base.copyto!(x::SimpleVector, y::SimpleVector) = (copyto!(x.vec, y.vec); x)
+Base.eltype(::Type{SimpleVector{T}}) where {T} = T
+Base.getindex(x::SimpleVector, ind...) = getindex(x.vec, ind...)
+Base.kron(x::SimpleVector, y::SimpleVector) = SimpleVector(kron(x.vec, y.vec))
+Base.promote_rule(::Type{<:AbstractVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = Vector{promote_type(T, U)}
+Base.promote_rule(::Type{SimpleVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = SimpleVector{promote_type(T, U)}
+Base.setindex!(x::SimpleVector, val, ind...) = (setindex!(x.vec, val, ind...), x)
+Base.similar(x::SimpleVector, ::Type{T}) where {T} = SimpleVector(similar(x.vec, T))
+Base.similar(x::SimpleVector, ::Type{T}, dims::Dims{1}) where {T} = SimpleVector(similar(x.vec, T, dims))
+Base.size(x::SimpleVector) = size(x.vec)
+
+@testset "kron (issue #46456)" for repr in Any[identity, SimpleVector]
+    A = Diagonal(repr(randn(10)))
+    BL = Bidiagonal(repr(randn(10)), repr(randn(9)), :L)
+    BU = Bidiagonal(repr(randn(10)), repr(randn(9)), :U)
+    C = SymTridiagonal(repr(randn(10)), repr(randn(9)))
+    Cl = SymTridiagonal(repr(randn(10)), repr(randn(10)))
+    D = Tridiagonal(repr(randn(9)), repr(randn(10)), repr(randn(9)))
     @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
     @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
     @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
