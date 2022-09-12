@@ -7,7 +7,7 @@ pushfirst!(DEPOT_PATH, joinpath(@__DIR__, "deps"))
 using Pkg
 Pkg.instantiate()
 
-using Documenter
+using Documenter, tectonic_jll
 
 baremodule GenStdLib end
 
@@ -275,7 +275,7 @@ end
 
 const format = if render_pdf
     Documenter.LaTeX(
-        platform = "texplatform=docker" in ARGS ? "docker" : "native"
+        platform = "tectonic", tectonic=tectonic()
     )
 else
     Documenter.HTML(
@@ -293,6 +293,7 @@ else
 end
 
 const output_path = joinpath(buildroot, "doc", "_build", (render_pdf ? "pdf" : "html"), "en")
+
 makedocs(
     build     = output_path,
     modules   = [Main, Base, Core, [Base.root_module(Base, stdlib.stdlib) for stdlib in STDLIB_DOCS]...],

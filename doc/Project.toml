@@ -1,2 +1,3 @@
 [deps]
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+tectonic_jll = "d7dd28d6-a5e6-559c-9131-7eb760cdacc5"
