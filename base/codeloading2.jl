@@ -305,7 +305,19 @@ struct EnvironmentStack
     envs::Vector{Union{ImplicitEnv, ExplicitEnv}}
 end
 
-function EnvironmentStack(environments = load_path())
+
+# Caching
+
+const CACHED_ENV_STACK = Ref{Union{EnvironmentStack, Nothing}}(nothing)
+
+function EnvironmentStack(environments = nothing)
+    if CACHED_ENV_STACK[] !== nothing
+        return CACHED_ENV_STACK[]
+    end
+    # Avoid looking up `load_path` until it is really needed.
+    if environments === nothing
+        environments = load_path()
+    end
     envs = Union{ImplicitEnv, ExplicitEnv}[]
     for env in environments
         if isfile(env)

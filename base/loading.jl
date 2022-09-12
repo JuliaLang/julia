@@ -159,7 +159,6 @@ end
 const ns_dummy_uuid = UUID("fe0723d6-3a44-4c41-8065-ee0f42c8ceab")
 
 function dummy_uuid(project_file::String)
-    @lock require_lock begin
     project_path = try
         realpath(project_file)
     catch ex
@@ -168,7 +167,6 @@ function dummy_uuid(project_file::String)
     end
     uuid = uuid5(ns_dummy_uuid, project_path)
     return uuid
-    end
 end
 
 ## package path slugs: turning UUID + SHA1 into a pair of 4-byte "slugs" ##
@@ -256,6 +254,11 @@ function parsed_toml(project_file::AbstractString, toml_cache::TOMLCache, toml_l
             toml_cache.d[project_file] = d
             return d.d
         else
+            # We are in a require call and have already parsed this TOML file
+            # assume that it is unchanged to avoid hitting disk
+            if CACHED_ENV_STACK[] !== nothing
+                return d.d
+            end
             d = toml_cache.d[project_file]
             return get_updated_dict(toml_cache.p, d)
         end
@@ -803,6 +806,9 @@ For more details regarding code loading, see the manual sections on [modules](@r
 """
 function require(into::Module, mod::Symbol)
     @lock require_lock begin
+    no_initial_cache = CACHED_ENV_STACK[] === nothing
+    try
+    no_initial_cache && (CACHED_ENV_STACK[] = EnvironmentStack())
     uuidkey = identify_package(into, String(mod))
     # Core.println("require($(PkgId(into)), $mod) -> $uuidkey from env \"$env\"")
     if uuidkey === nothing
@@ -838,6 +844,9 @@ function require(into::Module, mod::Symbol)
         push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
     end
     return _require_prelocked(uuidkey)
+    finally
+        no_initial_cache && (CACHED_ENV_STACK[] = nothing)
+    end # try
     end # @lock
 end
 
@@ -1238,6 +1247,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
+const ENV_SERIALIZATION_FILE = Ref{Union{Nothing,String}}(nothing)
 function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
@@ -1272,6 +1282,22 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
+    serialization_pkgid = PkgId(UUID("9e88b42a-f829-5b0c-bbe9-9e923198166b"), "Serialization")
+    if haskey(loaded_modules, serialization_pkgid)
+        local ftmp
+        if ENV_SERIALIZATION_FILE[] === nothing || !isfile(ENV_SERIALIZATION_FILE[])
+            Serialization = loaded_modules[serialization_pkgid]
+            ftmp, iotmp = mktemp()
+            Serialization.serialize(iotmp, EnvironmentStack())
+            close(iotmp)
+        else
+            ftmp = ENV_SERIALIZATION_FILE[]
+        end
+        write(io.in, """
+            Base.ENV_SERIALIZATION_FILE[] = $(repr(ftmp))
+            Base.CACHED_ENV_STACK[] = (Base.loaded_modules[Base.PkgId(Base.UUID("9e88b42a-f829-5b0c-bbe9-9e923198166b"), "Serialization")].deserialize(IOBuffer(read($(repr(ftmp))))))
+        """)
+    end
     write(io.in, """
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
