@@ -819,17 +819,24 @@ function collect_const_args(argtypes::Vector{Any}, start::Int)
                 end for i = start:length(argtypes) ]
 end
 
-function invoke_signature(invokesig::Vector{Any})
-    ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
-    return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
+struct InvokeCall
+    types     # ::Type
+    lookupsig # ::Type
+    InvokeCall(@nospecialize(types), @nospecialize(lookupsig)) = new(types, lookupsig)
 end
 
 function concrete_eval_call(interp::AbstractInterpreter,
-    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState)
+    @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, sv::InferenceState,
+    invokecall::Union{Nothing,InvokeCall}=nothing)
     eligible = concrete_eval_eligible(interp, f, result, arginfo, sv)
     eligible === nothing && return false
     if eligible
         args = collect_const_args(arginfo, #=start=#2)
+        if invokecall !== nothing
+            # this call should be `invoke`d, rewrite `args` back now
+            pushfirst!(args, f, invokecall.types)
+            f = invoke
+        end
         world = get_world_counter(interp)
         value = try
             Core._call_in_world_total(world, f, args...)
@@ -874,15 +881,15 @@ struct ConstCallResults
         new(rt, const_result, effects)
 end
 
-function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
-                                              @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
-                                              sv::InferenceState, @nospecialize(invoketypes=nothing))
+function abstract_call_method_with_const_args(interp::AbstractInterpreter,
+    result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
+    sv::InferenceState, invokecall::Union{Nothing,InvokeCall}=nothing)
     if !const_prop_enabled(interp, sv, match)
         return nothing
     end
-    res = concrete_eval_call(interp, f, result, arginfo, sv)
+    res = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
     if isa(res, ConstCallResults)
-        add_backedge!(res.const_result.mi, sv, invoketypes)
+        add_backedge!(res.const_result.mi, sv, invokecall === nothing ? nothing : invokecall.lookupsig)
         return res
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
@@ -1674,10 +1681,10 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     nargtype isa DataType || return CallMeta(Any, Effects(), false) # other cases are not implemented below
     isdispatchelem(ft) || return CallMeta(Any, Effects(), false) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
-    types = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
+    lookupsig = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
-    match, valid_worlds, overlayed = findsup(types, method_table(interp))
+    match, valid_worlds, overlayed = findsup(lookupsig, method_table(interp))
     match === nothing && return CallMeta(Any, Effects(), false)
     update_valid_age!(sv, valid_worlds)
     method = match.method
@@ -1685,7 +1692,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, sv)
     (; rt, edge, effects) = result
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv, types)
+    edge !== nothing && add_backedge!(edge::MethodInstance, sv, lookupsig)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
@@ -1697,8 +1704,10 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     #     t, a = ti.parameters[i], argtypes′[i]
     #     argtypes′[i] = t ⊑ a ? t : a
     # end
-    const_call_result = abstract_call_method_with_const_args(interp, result,
-        overlayed ? nothing : singleton_type(ft′), arginfo, match, sv, types)
+    f = overlayed ? nothing : singleton_type(ft′)
+    invokecall = InvokeCall(types, lookupsig)
+    const_call_result = abstract_call_method_with_const_args(interp,
+        result, f, arginfo, match, sv, invokecall)
     const_result = nothing
     if const_call_result !== nothing
         if ⊑(typeinf_lattice(interp), const_call_result.rt, rt)
