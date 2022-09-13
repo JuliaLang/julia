@@ -182,6 +182,38 @@ The optional second argument restricts the search to a particular module or func
 
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
+
+```jldoctest
+julia> methodswith(Integer)
+...
+[721] Pkg.Types.UpgradeLevel(x::Integer) in Pkg.Types at Enums.jl:197
+```
+
+As can be seen above, the results were truncated. Oftentimes the array
+of methods is too long and would be hard to fully inspect in the REPL.
+
+There are two recommended ways to effectively solve this:
+- assign the array of methods to a variable and manually go through it:
+```jldoctest
+julia> x = methodswith(Integer);
+
+julia> x[7:8]
+1] rem(y::Integer, x::Rational) in Base at rational.jl:327
+[2] rem(x::Integer, ::Type{BigInt}) in Base.GMP at gmp.jl:345
+
+julia> x[13:14]
+[1] rem(x::Integer, T::Type{<:Integer}) in Base at int.jl:584
+[2] &(::Missing, ::Integer) in Base at missing.jl:169
+
+- read each method line by line using a `for` loop and the `readline` function.
+  You go to the next function with the "ENTER" key and exit out of the loop with "CTRL-D":
+``jldoctest
+julia> for i in methodswith(Int)
+           print(i)
+           readline()
+       end
+AbstractFloat(x::Int64) in Base at float.jl:243
+Float16(x::Int64) in Base at float.jl:146
 """
 function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
