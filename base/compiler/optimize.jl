@@ -208,9 +208,10 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 """
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact})
+    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
+        (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
 
-Returns a tuple of (consistent,  effect_free_and_nothrow, nothrow) for a given statement.
+Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
 """
 function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.

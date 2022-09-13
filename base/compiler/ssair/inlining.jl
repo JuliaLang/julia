@@ -590,10 +590,9 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         if isa(case, InliningTodo)
             val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
         elseif isa(case, InvokeCase)
-            effect_free = is_removable_if_unused(case.effects)
-            val = insert_node_here!(compact,
-                NewInstruction(Expr(:invoke, case.invoke, argexprs′...), typ, nothing,
-                    line, effect_free ? IR_FLAG_EFFECT_FREE : IR_FLAG_NULL, effect_free))
+            inst = Expr(:invoke, case.invoke, argexprs′...)
+            flag = flags_for_effects(case.effects)
+            val = insert_node_here!(compact, NewInstruction(inst, typ, nothing, line, flag, true))
         else
             case = case::ConstantCase
             val = case.val
