@@ -1513,3 +1513,12 @@ end
 @test Core.Compiler.getfield_tfunc(Type, Core.Compiler.Const(:parameters)) !== Union{}
 @test !isa(Core.Compiler.getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Compiler.Const(:name)), Core.Compiler.Const)
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
+
+# TODO: Remove compute sparams for vararg_retrival
+fvarargN_inline(x::Tuple{Vararg{Int, N}}) where {N} = N
+fvarargN_inline(args...) = fvarargN_inline(args)
+let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))
+    @test_broken count(iscall((src, Core._compute_sparams)), src.code) == 0 &&
+                 count(iscall((src, Core._svec_ref)), src.code) == 0 &&
+                 count(iscall((src, Core.nfields)), src.code) == 1
+end

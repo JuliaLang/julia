@@ -7831,3 +7831,9 @@ end
 # Correct isdefined error for isdefined of Module of Int fld
 f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
 @test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
+
+# Unspecialized retrieval of vararg length
+fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
+fvarargN(args...) = fvarargN(args)
+finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
+@test finvokevarargN() == 3
