@@ -183,7 +183,7 @@ The optional second argument restricts the search to a particular module or func
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 
-```jldoctest
+```julia
 julia> methodswith(Integer)
 ...
 [721] Pkg.Types.UpgradeLevel(x::Integer) in Pkg.Types at Enums.jl:197
@@ -194,7 +194,7 @@ of methods is too long and would be hard to fully inspect in the REPL.
 
 There are two recommended ways to effectively solve this:
 - assign the array of methods to a variable and manually go through it:
-```jldoctest
+```julia
 julia> x = methodswith(Integer);
 
 julia> x[7:8]
@@ -207,7 +207,7 @@ julia> x[13:14]
 
 - read each method line by line using a `for` loop and the `readline` function.
   You go to the next function with the "ENTER" key and exit out of the loop with "CTRL-D":
-``jldoctest
+``julia
 julia> for i in methodswith(Int)
            print(i)
            readline()
