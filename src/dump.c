@@ -2537,9 +2537,25 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         }
         jl_array_uint8_set(valids, i, valid);
         if (!valid && _jl_debug_method_invalidation) {
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)callee);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, callee ? (jl_value_t*)callee : sig);
             loctag = jl_cstr_to_string("insert_backedges_callee");
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            loctag = jl_box_int32((int32_t)i);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            if (matches != jl_false) {
+                // setdiff!(matches, expected)
+                size_t j, k, ins = 0;
+                for (j = 0; j < jl_array_len(matches); j++) {
+                    int found = 0;
+                    jl_method_t *match = ((jl_method_match_t*)jl_array_ptr_ref(matches, j))->method;
+                    for (k = 0; !found && k < jl_array_len(expected); k++)
+                        found |= jl_egal((jl_value_t*)match, jl_array_ptr_ref(expected, k));
+                    if (!found)
+                        jl_array_ptr_set(matches, ins++, match);
+                }
+                jl_array_del_end((jl_array_t*)matches, jl_array_len(matches) - ins);
+            }
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, matches);
         }
     }
     JL_GC_POP();
@@ -2552,9 +2568,10 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
 {
     // foreach(enable, ((edges[2i-1] => ext_targets[edges[2i] .* 3]) for i in 1:length(edges)÷2 if all(valids[edges[2i]])))
     size_t i, l = jl_array_len(edges);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_array_t *valids = NULL;
-    jl_value_t *loctag = NULL;
-    JL_GC_PUSH2(&valids, &loctag);
+    jl_value_t *targetidx = NULL;
+    JL_GC_PUSH2(&valids, &targetidx);
     jl_verify_edges(ext_targets, &valids);
     for (i = 0; i < l; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, i);
@@ -2563,10 +2580,12 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
         assert(jl_isa((jl_value_t*)idxs_array, jl_array_int32_type));
         int32_t *idxs = (int32_t*)jl_array_data(idxs_array);
         int valid = 1;
-        size_t j;
+        size_t j, idxbad = -1;
         for (j = 0; valid && j < jl_array_len(idxs_array); j++) {
             int32_t idx = idxs[j];
             valid = jl_array_uint8_ref(valids, idx);
+            if (!valid)
+                idxbad = idx;
         }
         if (valid) {
             // if this callee is still valid, add all the backedges
@@ -2603,10 +2622,10 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
                 ptrhash_remove(&new_code_instance_validate, codeinst);  // should be left invalid
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
+            invalidate_backedges(&remove_code_instance_from_validation, caller, world, "insert_backedges");
             if (_jl_debug_method_invalidation) {
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
-                loctag = jl_cstr_to_string("insert_backedges");
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+                targetidx = jl_box_int32((int32_t)idxbad);
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, targetidx);
             }
         }
     }
