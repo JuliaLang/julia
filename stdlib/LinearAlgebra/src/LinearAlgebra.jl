@@ -20,6 +20,7 @@ using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     Splat
 using Base.Broadcast: Broadcasted, broadcasted
+using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
 using libblastrampoline_jll
 import Libdl
