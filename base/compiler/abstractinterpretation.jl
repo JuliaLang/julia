@@ -1538,6 +1538,10 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     tty_lb = tty_ub # TODO: this would be wrong if !isexact_tty, but instanceof_tfunc doesn't preserve this info
                     if !has_free_typevars(tty_lb) && !has_free_typevars(tty_ub)
                         ifty = typeintersect(aty, tty_ub)
+                        if iskindtype(tty_ub) && ifty !== Bottom
+                            # `typeintersect` may be unable narrow down `Type`-type
+                            ifty = tty_ub
+                        end
                         valid_as_lattice(ifty) || (ifty = Union{})
                         elty = typesubtract(aty, tty_lb, InferenceParams(interp).MAX_UNION_SPLITTING)
                         return Conditional(a, ifty, elty)
@@ -2678,14 +2682,22 @@ end
 function conditional_change(state::VarTable, @nospecialize(typ), slot::Int)
     vtype = state[slot]
     oldtyp = vtype.typ
-    # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
-    # since we probably formed these types with `typesubstract`, the comparison is likely simple
-    if ignorelimited(typ) ⊑ ignorelimited(oldtyp)
-        # typ is better unlimited, but we may still need to compute the tmeet with the limit "causes" since we ignored those in the comparison
-        oldtyp isa LimitedAccuracy && (typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes)))
-        return StateUpdate(SlotNumber(slot), VarState(typ, vtype.undef), state, true)
+    if iskindtype(typ)
+        # this code path corresponds to the special handling for `isa(x, iskindtype)` check
+        # implemented within `abstract_call_builtin`
+    elseif ignorelimited(typ) ⊑ ignorelimited(oldtyp)
+        # approximate test for `typ ∩ oldtyp` being better than `oldtyp`
+        # since we probably formed these types with `typesubstract`,
+        # the comparison is likely simple
+    else
+        return nothing
     end
-    return nothing
+    if oldtyp isa LimitedAccuracy
+        # typ is better unlimited, but we may still need to compute the tmeet with the limit
+        # "causes" since we ignored those in the comparison
+        typ = tmerge(typ, LimitedAccuracy(Bottom, oldtyp.causes))
+    end
+    return StateUpdate(SlotNumber(slot), VarState(typ, vtype.undef), state, true)
 end
 
 function bool_rt_to_conditional(@nospecialize(rt), slottypes::Vector{Any}, state::VarTable, slot_id::Int)
