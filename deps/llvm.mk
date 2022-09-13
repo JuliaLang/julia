@@ -1,4 +1,5 @@
 ## LLVM ##
+include $(SRCDIR)/llvm.version
 include $(SRCDIR)/llvm-ver.make
 include $(SRCDIR)/llvm-options.mk
 
@@ -78,6 +79,9 @@ LLVM_CMAKE += -DLLVM_EXTERNAL_RV_SOURCE_DIR=$(LLVM_MONOSRC_DIR)/rv
 LLVM_CMAKE += -DLLVM_CXX_STD=c++14
 endif
 
+# Otherwise LLVM will translate \\ to / on mingw
+LLVM_CMAKE += -DLLVM_WINDOWS_PREFER_FORWARD_SLASH=False
+
 # Allow adding LLVM specific flags
 LLVM_CFLAGS += $(CFLAGS)
 LLVM_CXXFLAGS += $(CXXFLAGS)
@@ -143,7 +147,7 @@ endif
 ifeq ($(LLVM_SANITIZE),1)
 ifeq ($(SANITIZE_MEMORY),1)
 LLVM_CFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
-LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
+LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins -rpath $(build_shlibdir)
 LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
 LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
 endif
@@ -194,23 +198,14 @@ ifeq ($(BUILD_LLDB),0)
 LLVM_CMAKE += -DLLVM_TOOL_LLDB_BUILD=OFF
 endif
 
-# LLDB still relies on plenty of python 2.x infrastructure, without checking
-llvm_python_location=$(shell /usr/bin/env python2 -c 'import sys; print(sys.executable)')
-llvm_python_workaround=$(SRCCACHE)/python2_path
-$(llvm_python_workaround):
-	mkdir -p $@
-	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
-	/usr/bin/env python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	ln -sf $(llvm_python_location) "$@/python" && \
-	ln -sf $(llvm_python_location)-config "$@/python-config"
-
 LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 	-DCMAKE_SHARED_LINKER_FLAGS="$(LLVM_LDFLAGS)"
 
 # change the SONAME of Julia's private LLVM
-# i.e. libLLVM-6.0jl.so
+# i.e. libLLVM-14jl.so
 # see #32462
 LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
+LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 
 # Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
@@ -232,48 +227,42 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
-# NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
-
-# Add a JL prefix to the version map. DO NOT REMOVE
-ifneq ($(LLVM_VER), svn)
-$(eval $(call LLVM_PATCH,llvm7-symver-jlprefix))
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
 
-# declare that all patches must be applied before running ./configure
-$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV) $(build_prefix)/manifest/zlib
+# NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
-$(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted | $(llvm_python_workaround)
+# declare that all patches must be applied before running ./configure
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
+
+$(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(CMAKE) $(SRCCACHE)/$(LLVM_SRC_DIR)/llvm $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) $(LLVM_CMAKE) \
 		|| { echo '*** To install a newer version of cmake, run contrib/download_cmake.sh ***' && false; }
 	echo 1 > $@
 
-$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-compiled: $(LLVM_BUILDDIR_withtype)/build-configured
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		$(if $(filter $(CMAKE_GENERATOR),make), \
 		  $(MAKE), \
 		  $(CMAKE) --build .)
 	echo 1 > $@
 
-$(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled | $(llvm_python_workaround)
+$(LLVM_BUILDDIR_withtype)/build-checked: $(LLVM_BUILDDIR_withtype)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
 	cd $(LLVM_BUILDDIR_withtype) && \
-		export PATH=$(llvm_python_workaround):"$$PATH" && \
 		  $(CMAKE) --build . --target check
 endif
 	echo 1 > $@
 
-$(build_prefix)/manifest/llvm: | $(llvm_python_workaround)
-
 LLVM_INSTALL = \
 	cd $1 && mkdir -p $2$$(build_depsbindir) && \
-    cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit $2$$(build_depsbindir)/ && \
-    $$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
+	cp -r $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm/utils/lit $2$$(build_depsbindir)/ && \
+	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P cmake_install.cmake
 ifeq ($(OS), WINNT)
-LLVM_INSTALL += && cp $2$$(build_shlibdir)/libLLVM.dll $2$$(build_depsbindir)
+LLVM_INSTALL += && cp $2$$(build_shlibdir)/$(LLVM_SHARED_LIB_NAME).dll $2$$(build_depsbindir)
 endif
 ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
@@ -285,7 +274,7 @@ $(eval $(call staged-install, \
 	LLVM_INSTALL,,,))
 
 clean-llvm:
-	-rm $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
+	-rm -f $(LLVM_BUILDDIR_withtype)/build-configured $(LLVM_BUILDDIR_withtype)/build-compiled
 	-$(MAKE) -C $(LLVM_BUILDDIR_withtype) clean
 
 get-llvm: $(LLVM_SRC_FILE)
@@ -300,16 +289,26 @@ else # USE_BINARYBUILDER_LLVM
 
 # We provide a way to subversively swap out which LLVM JLL we pull artifacts from
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
-LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
-LLVM_TOOLS_JLL_DOWNLOAD_NAME := LLVM_assert
-LLVM_TOOLS_JLL_VER := $(LLVM_TOOLS_ASSERT_JLL_VER)
+# LLVM_JLL_DOWNLOAD_NAME := libLLVM_assert
+# LLVM_JLL_VER := $(LLVM_ASSERT_JLL_VER)
+# LLVM_TOOLS_JLL_DOWNLOAD_NAME := LLVM_assert
+# LLVM_TOOLS_JLL_VER := $(LLVM_TOOLS_ASSERT_JLL_VER)
+LLVM_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+CLANG_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+LLD_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+LLVM_TOOLS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ).asserts
+else
+LLVM_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+CLANG_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+LLD_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
+LLVM_TOOLS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
 endif
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
+$(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
-install-clang install-llvm-tools: install-llvm
+install-lld install-clang install-llvm-tools: install-llvm
 
 endif # USE_BINARYBUILDER_LLVM

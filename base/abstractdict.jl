@@ -189,7 +189,10 @@ empty(a::AbstractDict) = empty(a, keytype(a), valtype(a))
 empty(a::AbstractDict, ::Type{V}) where {V} = empty(a, keytype(a), V) # Note: this is the form which makes sense for `Vector`.
 
 copy(a::AbstractDict) = merge!(empty(a), a)
-copy!(dst::AbstractDict, src::AbstractDict) = merge!(empty!(dst), src)
+function copy!(dst::AbstractDict, src::AbstractDict)
+    dst === src && return dst
+    merge!(empty!(dst), src)
+end
 
 """
     merge!(d::AbstractDict, others::AbstractDict...)
@@ -214,6 +217,9 @@ Dict{Int64, Int64} with 3 entries:
 """
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
+        if haslength(d) && haslength(other)
+            sizehint!(d, length(d) + length(other))
+        end
         for (k,v) in other
             d[k] = v
         end
@@ -518,6 +524,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     return anymissing ? missing : true
 end
 
+# Fallback implementation
+sizehint!(d::AbstractDict, n) = d
+
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)
     hv = hasha_seed
@@ -556,7 +565,7 @@ push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), 
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
 
 function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
-    h = T(x)
+    h = T(x)::T
     if length(h) != length(x)
         error("key collision during dictionary conversion")
     end
@@ -564,7 +573,7 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<((sizeof(T)<<3)-leading_zeros(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 

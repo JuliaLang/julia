@@ -21,13 +21,21 @@ enum AddressSpace {
     LastSpecial = Loaded,
 };
 
+static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
+    if (sizeof(size_t) > sizeof(uint32_t)) {
+        return llvm::Type::getInt64Ty(ctxt);
+    } else {
+        return llvm::Type::getInt32Ty(ctxt);
+    }
+}
+
 namespace JuliaType {
     static inline llvm::StructType* get_jlvalue_ty(llvm::LLVMContext &C) {
         return llvm::StructType::get(C);
     }
 
-    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), 0);
+    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C, unsigned addressSpace=0) {
+        return llvm::PointerType::get(get_jlvalue_ty(C), addressSpace);
     }
 
     static inline llvm::PointerType* get_prjlvalue_ty(llvm::LLVMContext &C) {
@@ -45,32 +53,45 @@ namespace JuliaType {
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
-        std::vector<llvm::Type*> ftargs(0);
-        ftargs.push_back(T_prjlvalue);  // function
-        ftargs.push_back(T_pprjlvalue); // args[]
-        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
-        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C)}, // nargs
+            false);
+    }
+
+    static inline auto get_jlfunc2_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C),
+                T_prjlvalue,  // linfo
+                }, // nargs
+            false);
     }
 
     static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
-        std::vector<llvm::Type*> ftargs(0);
-        ftargs.push_back(T_prjlvalue);  // function
-        ftargs.push_back(T_pprjlvalue); // args[]
-        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
-        ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
-        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C),
+                T_pprjlvalue,  // linfo->sparam_vals
+                }, // nargs
+            false);
+    }
+
+    static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {
+        return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false);
     }
 
     static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
-        return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false)->getPointerTo();
+        return get_voidfunc_ty(C)->getPointerTo();
     }
 }
-
-// JLCALL with API arguments ([extra], arg0, arg1, arg2, ...) has the following ABI calling conventions defined:
-#define JLCALL_F_CC (CallingConv::ID)37     // (jl_value_t *arg0, jl_value_t **argv, uint32_t nargv)
-#define JLCALL_F2_CC (CallingConv::ID)38    // (jl_value_t *arg0, jl_value_t **argv, uint32_t nargv, jl_value_t *extra)
 
 // return how many Tracked pointers are in T (count > 0),
 // and if there is anything else in T (all == false)
@@ -81,7 +102,7 @@ struct CountTrackedPointers {
     CountTrackedPointers(llvm::Type *T);
 };
 
-unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::IRBuilder<> &irbuilder);
+unsigned TrackWithShadow(llvm::Value *Src, llvm::Type *T, bool isptr, llvm::Value *Dst, llvm::Type *DTy, llvm::IRBuilder<> &irbuilder);
 std::vector<llvm::Value*> ExtractTrackedValues(llvm::Value *Src, llvm::Type *STy, bool isptr, llvm::IRBuilder<> &irbuilder, llvm::ArrayRef<unsigned> perm_offsets={});
 
 static inline void llvm_dump(llvm::Value *v)
@@ -147,9 +168,7 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
     if (isa<PointerType>(jl_value) &&
         v->getType()->getPointerAddressSpace() != jl_value->getPointerAddressSpace()) {
         // Cast to the proper address space
-        Type *jl_value_addr =
-                PointerType::get(cast<PointerType>(jl_value)->getElementType(),
-                                 v->getType()->getPointerAddressSpace());
+        Type *jl_value_addr = PointerType::getWithSamePointeeType(cast<PointerType>(jl_value), v->getType()->getPointerAddressSpace());
         return builder.CreateBitCast(v, jl_value_addr);
     }
     else {
@@ -297,6 +316,15 @@ inline bool hasAttributesAtIndex(const AttributeList &L, unsigned Index)
     return L.hasAttributesAtIndex(Index);
 #else
     return L.hasAttributes(Index);
+#endif
+}
+
+inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Attribute::AttrKind Kind)
+{
+#if JL_LLVM_VERSION >= 140000
+    return L.getAttributeAtIndex(Index, Kind);
+#else
+    return L.getAttribute(Index, Kind);
 #endif
 }
 

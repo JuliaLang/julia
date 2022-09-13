@@ -1,5 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+if Threads.nthreads() != 1
+    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.nthreads()
+end
+
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
 Sys.__init_build()
 # Prevent this from being put into the Main namespace
@@ -7,7 +11,7 @@ Sys.__init_build()
 if !isdefined(Base, :uv_eventloop)
     Base.reinit_stdio()
 end
-Base.include(@__MODULE__, joinpath(Sys.BINDIR::String, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
 import .FakePTYs: open_fake_pty
 using Base.Meta
 
@@ -102,7 +106,7 @@ precompile_script = """
 # end
 """
 
-julia_exepath() = joinpath(Sys.BINDIR::String, Base.julia_exename())
+julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())
 
 have_repl =  haskey(Base.loaded_modules,
                     Base.PkgId(Base.UUID("3fa0cd96-eef1-5676-8a61-b3b8758bbffb"), "REPL"))
@@ -221,6 +225,7 @@ Profile = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
           nothing)
 if Profile !== nothing
+    repl_script *= Profile.precompile_script
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
@@ -229,6 +234,11 @@ if Profile !== nothing
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Vector{Int}, Vector{UInt}})
     """
 end
+
+const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
 
 function generate_precompile_statements()
     start_time = time_ns()
@@ -288,9 +298,7 @@ function generate_precompile_statements()
                     "JULIA_PKG_PRECOMPILE_AUTO" => "0",
                     "TERM" => "") do
             run(```$(julia_exepath()) -O0 --trace-compile=$precompile_file --sysimage $sysimg
-                   --cpu-target=native --startup-file=no --color=yes
-                   -e 'import REPL; REPL.Terminals.is_precompiling[] = true'
-                   -i $cmdargs```,
+                   --cpu-target=native --startup-file=no -i $cmdargs```,
                    pts, pts, pts; wait=false)
         end
         Base.close_stdio(pts)
@@ -312,7 +320,7 @@ function generate_precompile_statements()
             close(ptm)
         end
         # wait for the definitive prompt before start writing to the TTY
-        readuntil(output_copy, "julia>")
+        readuntil(output_copy, JULIA_PROMPT)
         sleep(0.1)
         readavailable(output_copy)
         # Input our script
@@ -330,9 +338,16 @@ function generate_precompile_statements()
                 write(ptm, l, "\n")
                 readuntil(output_copy, "\n")
                 # wait for the next prompt-like to appear
-                # NOTE: this is rather inaccurate because the Pkg REPL mode is a special flower
                 readuntil(output_copy, "\n")
-                readuntil(output_copy, "> ")
+                strbuf = ""
+                while true
+                    strbuf *= String(readavailable(output_copy))
+                    occursin(JULIA_PROMPT, strbuf) && break
+                    occursin(PKG_PROMPT, strbuf) && break
+                    occursin(SHELL_PROMPT, strbuf) && break
+                    occursin(HELP_PROMPT, strbuf) && break
+                    sleep(0.1)
+                end
             end
             println()
         end
@@ -406,13 +421,14 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
-    tot_time = time_ns() - start_time
     include_time *= 1e9
-    gen_time = tot_time - include_time
+    gen_time = (time_ns() - start_time) - include_time
+    tot_time = time_ns() - start_time
+
     println("Precompilation complete. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time); println()
-    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
+    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100);     println("%")
     print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
+    print("Total ─────── "); Base.time_print(tot_time);     println()
 
     return
 end
@@ -431,4 +447,13 @@ empty!(Base.ARGS)
 empty!(Core.ARGS)
 
 end # @eval
+end # if
+
+println("Outputting sysimage file...")
+let pre_output_time = time_ns()
+    # Print report after sysimage has been saved so all time spent can be captured
+    Base.postoutput() do
+        output_time = time_ns() - pre_output_time
+        print("Output ────── "); Base.time_print(output_time); println()
+    end
 end

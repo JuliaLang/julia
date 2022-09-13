@@ -50,8 +50,8 @@ Bidiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 
-_lucopy(A::Bidiagonal, T)     = copy_oftype(Tridiagonal(A), T)
-_lucopy(A::Diagonal, T)       = copy_oftype(Tridiagonal(A), T)
+_lucopy(A::Bidiagonal, T)     = copymutable_oftype(Tridiagonal(A), T)
+_lucopy(A::Diagonal, T)       = copymutable_oftype(Tridiagonal(A), T)
 function _lucopy(A::SymTridiagonal, T)
     du = copy_similar(_evview(A), T)
     dl = copy.(transpose.(du))
@@ -62,27 +62,27 @@ end
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
 const PossibleTriangularMatrix = Union{Diagonal, Bidiagonal, AbstractTriangular}
 
-convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m :
-    isdiag(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as Diagonal"))
-convert(T::Type{<:SymTridiagonal}, m::ConvertibleSpecialMatrix) = m isa T ? m :
-    issymmetric(m) && isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-convert(T::Type{<:Tridiagonal},    m::ConvertibleSpecialMatrix) = m isa T ? m :
-    isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
+convert(::Type{T}, m::ConvertibleSpecialMatrix) where {T<:Diagonal}       = m isa T ? m :
+    isdiag(m) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as Diagonal"))
+convert(::Type{T}, m::ConvertibleSpecialMatrix) where {T<:SymTridiagonal} = m isa T ? m :
+    issymmetric(m) && isbanded(m, -1, 1) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
+convert(::Type{T}, m::ConvertibleSpecialMatrix) where {T<:Tridiagonal}    = m isa T ? m :
+    isbanded(m, -1, 1) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
 
-convert(T::Type{<:LowerTriangular}, m::Union{LowerTriangular,UnitLowerTriangular}) = m isa T ? m : T(m)
-convert(T::Type{<:UpperTriangular}, m::Union{UpperTriangular,UnitUpperTriangular}) = m isa T ? m : T(m)
+convert(::Type{T}, m::Union{LowerTriangular,UnitLowerTriangular}) where {T<:LowerTriangular} = m isa T ? m : T(m)::T
+convert(::Type{T}, m::Union{UpperTriangular,UnitUpperTriangular}) where {T<:UpperTriangular} = m isa T ? m : T(m)::T
 
-convert(T::Type{<:LowerTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
-    istril(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
-convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
-    istriu(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
+convert(::Type{T}, m::PossibleTriangularMatrix) where {T<:LowerTriangular} = m isa T ? m :
+    istril(m) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
+convert(::Type{T}, m::PossibleTriangularMatrix) where {T<:UpperTriangular} = m isa T ? m :
+    istriu(m) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
 
 # Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining
 #     f(x::S, y::T) where {S,T} = x+y
 #     f(y::T, x::S) where {S,T} = f(x, y)
 macro commutative(myexpr)
-    @assert myexpr.head===:(=) || myexpr.head===:function # Make sure it is a function definition
+    @assert Base.is_function_def(myexpr) # Make sure it is a function definition
     y = copy(myexpr.args[1].args[2:end])
     reverse!(y)
     reversed_call = Expr(:(=), Expr(:call,myexpr.args[1].args[1],y...), myexpr.args[1])
@@ -292,16 +292,65 @@ function (-)(A::UniformScaling, B::Diagonal{<:Number})
     Diagonal(A.λ .- B.diag)
 end
 
-rmul!(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    rmul!(full!(A), adjB)
-*(A::AbstractTriangular, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
-    *(copyto!(similar(parent(A)), A), adjB)
-*(A::BiTriSym, adjB::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}) =
-    rmul!(copyto!(Array{promote_type(eltype(A), eltype(adjB))}(undef, size(A)...), A), adjB)
-*(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::Diagonal) =
-    lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
-*(adjA::Adjoint{<:Any,<:Union{QRCompactWYQ, QRPackedQ}}, B::BiTriSym) =
-    lmul!(adjA, copyto!(Array{promote_type(eltype(adjA), eltype(B))}(undef, size(B)...), B))
+lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
+lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
+lmul!(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = lmul!(Q, full!(B))
+lmul!(Q::Adjoint{<:Any,<:QRPackedQ}, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
+
+function _qlmul(Q::AbstractQ, B)
+    TQB = promote_type(eltype(Q), eltype(B))
+    if size(Q.factors, 1) == size(B, 1)
+        Bnew = Matrix{TQB}(B)
+    elseif size(Q.factors, 2) == size(B, 1)
+        Bnew = [Matrix{TQB}(B); zeros(TQB, size(Q.factors, 1) - size(B,1), size(B, 2))]
+    else
+        throw(DimensionMismatch("first dimension of matrix must have size either $(size(Q.factors, 1)) or $(size(Q.factors, 2))"))
+    end
+    lmul!(convert(AbstractMatrix{TQB}, Q), Bnew)
+end
+function _qlmul(adjQ::Adjoint{<:Any,<:AbstractQ}, B)
+    TQB = promote_type(eltype(adjQ), eltype(B))
+    lmul!(adjoint(convert(AbstractMatrix{TQB}, parent(adjQ))), Matrix{TQB}(B))
+end
+
+*(Q::AbstractQ, B::AbstractTriangular) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = _qlmul(Q, B)
+*(Q::AbstractQ, B::BiTriSym) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::BiTriSym) = _qlmul(Q, B)
+*(Q::AbstractQ, B::Diagonal) = _qlmul(Q, B)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::Diagonal) = _qlmul(Q, B)
+
+rmul!(A::AbstractTriangular, Q::AbstractQ) = rmul!(full!(A), Q)
+rmul!(A::AbstractTriangular, Q::Adjoint{<:Any,<:AbstractQ}) = rmul!(full!(A), Q)
+
+function _qrmul(A, Q::AbstractQ)
+    TAQ = promote_type(eltype(A), eltype(Q))
+    return rmul!(Matrix{TAQ}(A), convert(AbstractMatrix{TAQ}, Q))
+end
+function _qrmul(A, adjQ::Adjoint{<:Any,<:AbstractQ})
+    Q = adjQ.parent
+    TAQ = promote_type(eltype(A), eltype(Q))
+    if size(A,2) == size(Q.factors, 1)
+        Anew = Matrix{TAQ}(A)
+    elseif size(A,2) == size(Q.factors,2)
+        Anew = [Matrix{TAQ}(A) zeros(TAQ, size(A, 1), size(Q.factors, 1) - size(Q.factors, 2))]
+    else
+        throw(DimensionMismatch("matrix A has dimensions $(size(A)) but matrix B has dimensions $(size(Q))"))
+    end
+    return rmul!(Anew, adjoint(convert(AbstractMatrix{TAQ}, Q)))
+end
+
+*(A::AbstractTriangular, Q::AbstractQ) = _qrmul(A, Q)
+*(A::AbstractTriangular, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
+*(A::BiTriSym, Q::AbstractQ) = _qrmul(A, Q)
+*(A::BiTriSym, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
+*(A::Diagonal, Q::AbstractQ) = _qrmul(A, Q)
+*(A::Diagonal, Q::Adjoint{<:Any,<:AbstractQ}) = _qrmul(A, Q)
+
+*(Q::AbstractQ, B::AbstractQ) = Q * (B * I)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractQ) = Q * (B * I)
+*(Q::AbstractQ, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
+*(Q::Adjoint{<:Any,<:AbstractQ}, B::Adjoint{<:Any,<:AbstractQ}) = Q * (B * I)
 
 # fill[stored]! methods
 fillstored!(A::Diagonal, x) = (fill!(A.diag, x); A)
@@ -365,14 +414,21 @@ const _TypedDenseConcatGroup{T} = Union{Vector{T}, Adjoint{T,Vector{T}}, Transpo
 
 promote_to_array_type(::Tuple{Vararg{Union{_DenseConcatGroup,UniformScaling}}}) = Matrix
 
-Base._cat(dims, xs::_DenseConcatGroup...) = Base.cat_t(promote_eltype(xs...), xs...; dims=dims)
+Base._cat(dims, xs::_DenseConcatGroup...) = Base._cat_t(dims, promote_eltype(xs...), xs...)
 vcat(A::Vector...) = Base.typed_vcat(promote_eltype(A...), A...)
 vcat(A::_DenseConcatGroup...) = Base.typed_vcat(promote_eltype(A...), A...)
 hcat(A::Vector...) = Base.typed_hcat(promote_eltype(A...), A...)
 hcat(A::_DenseConcatGroup...) = Base.typed_hcat(promote_eltype(A...), A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_DenseConcatGroup...) = Base.typed_hvcat(promote_eltype(xs...), rows, xs...)
 # For performance, specially handle the case where the matrices/vectors have homogeneous eltype
-Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.cat_t(T, xs...; dims=dims)
+Base._cat(dims, xs::_TypedDenseConcatGroup{T}...) where {T} = Base._cat_t(dims, T, xs...)
 vcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_vcat(T, A...)
 hcat(A::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hcat(T, A...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::_TypedDenseConcatGroup{T}...) where {T} = Base.typed_hvcat(T, rows, xs...)
+
+# factorizations
+function cholesky(S::RealHermSymComplexHerm{<:Real,<:SymTridiagonal}, ::NoPivot = NoPivot(); check::Bool = true)
+    T = choltype(eltype(S))
+    B = Bidiagonal{T}(diag(S, 0), diag(S, S.uplo == 'U' ? 1 : -1), sym_uplo(S.uplo))
+    cholesky!(Hermitian(B, sym_uplo(S.uplo)), NoPivot(); check = check)
+end

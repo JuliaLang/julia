@@ -42,7 +42,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
     foo_file = joinpath(subdir, "new_dir", "foo")
-    nedlink = joinpath(subdir, "non_existant_dirlink")
+    nedlink = joinpath(subdir, "nonexistent_dirlink")
     symlink("new_dir", nedlink; dir_target=true)
     try
         readdir(nedlink)
@@ -193,7 +193,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == i 
+            @test length(TEMP_CLEANUP) == i
             @test TEMP_CLEANUP_MAX[] == n
             # delete 1/3 of the temp paths
             i % 3 == 0 && rm(t, recursive=true, force=true)
@@ -604,7 +604,8 @@ close(s)
         false
     catch e
         isa(e, SystemError) || rethrow()
-        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        @test e.errnum == 2
+        @test startswith(sprint(showerror, e), "SystemError: opening file \"this file is not expected to exist\"")
         true
     end
 end
@@ -1452,7 +1453,7 @@ rm(dir)
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
-    name2 = joinpath(dir, "bannanas")
+    name2 = joinpath(dir, "bananas")
     @test !ispath(name1)
     @test touch(name1) == name1
     @test isfile(name1)
@@ -1650,7 +1651,7 @@ end
 
 if Sys.iswindows()
 @testset "mkdir/rm permissions" begin
-    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # test delete permission in system folders (i.e. implicitly test chmod permissions)
     # issue #38433
     @test withenv("TMP" => "C:\\") do
         mktempdir() do dir end

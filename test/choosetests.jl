@@ -140,9 +140,13 @@ function choosetests(choices = [])
                    "strings/io", "strings/types"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
-    filtertests!(tests, "compiler", ["compiler/inference", "compiler/validation",
-        "compiler/ssair", "compiler/irpasses", "compiler/codegen",
-        "compiler/inline", "compiler/contextual"])
+    filtertests!(tests, "compiler", ["compiler/inference", "compiler/effects",
+        "compiler/validation", "compiler/heap", "compiler/ssair", "compiler/irpasses",
+        "compiler/codegen", "compiler/inline", "compiler/contextual",
+        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/local",
+        "compiler/EscapeAnalysis/interprocedural"])
+    filtertests!(tests, "compiler/EscapeAnalysis", [
+        "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "stdlib", STDLIBS)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")

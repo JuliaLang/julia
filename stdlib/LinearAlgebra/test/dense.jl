@@ -132,8 +132,20 @@ bimg  = randn(n,2)/2
         @testset "Lyapunov/Sylvester" begin
             x = lyap(a, a2)
             @test -a2 ≈ a*x + x*a'
+            y = lyap(a', a2')
+            @test y ≈ lyap(Array(a'), Array(a2'))
+            @test -a2' ≈ a'y + y*a
+            z = lyap(Tridiagonal(a)', Diagonal(a2))
+            @test z ≈ lyap(Array(Tridiagonal(a)'), Array(Diagonal(a2)))
+            @test -Diagonal(a2) ≈ Tridiagonal(a)'*z + z*Tridiagonal(a)
             x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
             @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+            y2 = sylvester(a[1:3, 1:3]', a[4:n, 4:n]', a2[4:n,1:3]')
+            @test y2 ≈ sylvester(Array(a[1:3, 1:3]'), Array(a[4:n, 4:n]'), Array(a2[4:n,1:3]'))
+            @test -a2[4:n, 1:3]' ≈ a[1:3, 1:3]'*y2 + y2*a[4:n, 4:n]'
+            z2 = sylvester(Tridiagonal(a[1:3, 1:3]), Diagonal(a[4:n, 4:n]), a2[1:3,4:n])
+            @test z2 ≈ sylvester(Array(Tridiagonal(a[1:3, 1:3])), Array(Diagonal(a[4:n, 4:n])), Array(a2[1:3,4:n]))
+            @test -a2[1:3, 4:n] ≈ Tridiagonal(a[1:3, 1:3])*z2 + z2*Diagonal(a[4:n, 4:n])
         end
 
         @testset "Matrix square root" begin
@@ -1108,12 +1120,12 @@ end
 end
 
 function test_rdiv_pinv_consistency(a, b)
-    @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+    @test a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
+    @test typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
 end
 function test_ldiv_pinv_consistency(a, b)
-    @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+    @test (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
+    @test typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
 end
 function test_div_pinv_consistency(a, b)
     test_rdiv_pinv_consistency(a, b)

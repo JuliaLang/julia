@@ -130,7 +130,7 @@ function show(io::IO, cmd::Cmd)
     print(io, '`')
     if print_cpus
         print(io, ", ")
-        show(io, collect(Int, cmd.cpus))
+        show(io, collect(Int, something(cmd.cpus)))
         print(io, ")")
     end
     print_env && (print(io, ","); show(io, cmd.env))
@@ -262,6 +262,15 @@ setenv(cmd::Cmd, env::Pair{<:AbstractString}...; dir=cmd.dir) =
     setenv(cmd, env; dir=dir)
 setenv(cmd::Cmd; dir=cmd.dir) = Cmd(cmd; dir=dir)
 
+# split environment entry string into before and after first `=` (key and value)
+function splitenv(e::String)
+    i = findnext('=', e, 2)
+    if i === nothing
+        throw(ArgumentError("malformed environment entry"))
+    end
+    e[1:prevind(e, i)], e[nextind(e, i):end]
+end
+
 """
     addenv(command::Cmd, env...; inherit::Bool = true)
 
@@ -282,7 +291,7 @@ function addenv(cmd::Cmd, env::Dict; inherit::Bool = true)
             merge!(new_env, ENV)
         end
     else
-        for (k, v) in eachsplit.(cmd.env, "=")
+        for (k, v) in splitenv.(cmd.env)
             new_env[string(k)::String] = string(v)::String
         end
     end
@@ -301,7 +310,7 @@ function addenv(cmd::Cmd, pairs::Pair{<:AbstractString}...; inherit::Bool = true
 end
 
 function addenv(cmd::Cmd, env::Vector{<:AbstractString}; inherit::Bool = true)
-    return addenv(cmd, Dict(k => v for (k, v) in eachsplit.(env, "=")); inherit)
+    return addenv(cmd, Dict(k => v for (k, v) in splitenv.(env)); inherit)
 end
 
 """

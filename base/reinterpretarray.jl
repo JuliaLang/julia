@@ -19,9 +19,9 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         @noinline
         throw(ArgumentError("cannot reinterpret a zero-dimensional `$(S)` array to `$(T)` which is of a $msg size"))
     end
-    function throwsingleton(S::Type, T::Type, kind)
+    function throwsingleton(S::Type, T::Type)
         @noinline
-        throw(ArgumentError("cannot reinterpret $kind `$(S)` array to `$(T)` which is a singleton type"))
+        throw(ArgumentError("cannot reinterpret a `$(S)` array to `$(T)` which is a singleton type"))
     end
 
     global reinterpret
@@ -44,7 +44,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
             ax1 = axes(a)[1]
             dim = length(ax1)
             if issingletontype(T)
-                dim == 0 || throwsingleton(S, T, "a non-empty")
+                issingletontype(S) || throwsingleton(S, T)
             else
                 rem(dim*sizeof(S),sizeof(T)) == 0 || thrownonint(S, T, dim)
             end
@@ -75,7 +75,7 @@ struct ReinterpretArray{T,N,S,A<:AbstractArray{S},IsReshaped} <: AbstractArray{T
         if sizeof(S) == sizeof(T)
             N = ndims(a)
         elseif sizeof(S) > sizeof(T)
-            issingletontype(T) && throwsingleton(S, T, "with reshape a")
+            issingletontype(T) && throwsingleton(S, T)
             rem(sizeof(S), sizeof(T)) == 0 || throwintmult(S, T)
             N = ndims(a) + 1
         else
@@ -149,24 +149,18 @@ StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
+stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
+    k ≤ ndims(A) ? strides(A)[k] : length(A)
 
-function strides(a::ReshapedReinterpretArray)
-    ap = parent(a)
-    els, elp = elsize(a), elsize(ap)
-    stp = strides(ap)
-    els == elp && return stp
-    els < elp && return (1, _checked_strides(stp, els, elp)...)
+function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
+    _checkcontiguous(Bool, a) && return size_to_strides(1, size(a)...)
+    stp = strides(parent(a))
+    els, elp = sizeof(T), sizeof(S)
+    els == elp && return stp # 0dim parent is also handled here.
+    IsReshaped && els < elp && return (1, _checked_strides(stp, els, elp)...)
     stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return _checked_strides(tail(stp), els, elp)
-end
-
-function strides(a::NonReshapedReinterpretArray)
-    ap = parent(a)
-    els, elp = elsize(a), elsize(ap)
-    stp = strides(ap)
-    els == elp && return stp
-    stp[1] == 1 || throw(ArgumentError("Parent must be contiguous in the 1st dimension!"))
-    return (1, _checked_strides(tail(stp), els, elp)...)
+    st′ = _checked_strides(tail(stp), els, elp)
+    return IsReshaped ? st′ : (1, st′...)
 end
 
 @inline function _checked_strides(stp::Tuple, els::Integer, elp::Integer)
@@ -331,6 +325,8 @@ function axes(a::ReshapedReinterpretArray{T,N,S} where {N}) where {T,S}
 end
 axes(a::NonReshapedReinterpretArray{T,0}) where {T} = ()
 
+has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
+
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
@@ -362,15 +358,11 @@ end
 
 @inline @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
     check_readable(a)
-    n = sizeof(S) ÷ sizeof(T)
-    t = Ref{NTuple{n,T}}()
     s = Ref{S}(a.parent[ind.j])
-    GC.@preserve t s begin
-        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-        _memcpy!(tptr, sptr, sizeof(S))
+    GC.@preserve s begin
+        tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+        return unsafe_load(tptr, ind.i)
     end
-    return t[][ind.i]
 end
 
 @inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
@@ -386,29 +378,37 @@ end
     else
         @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
-        t = Ref{T}()
-        s = Ref{S}()
-        GC.@preserve t s begin
-            tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-            sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-            # Optimizations that avoid branches
-            if sizeof(T) % sizeof(S) == 0
-                # T is bigger than S and contains an integer number of them
-                n = sizeof(T) ÷ sizeof(S)
+        # Optimizations that avoid branches
+        if sizeof(T) % sizeof(S) == 0
+            # T is bigger than S and contains an integer number of them
+            n = sizeof(T) ÷ sizeof(S)
+            t = Ref{T}()
+            GC.@preserve t begin
+                sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
                 for i = 1:n
-                    s[] = a.parent[ind_start + i, tailinds...]
-                    _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                     s = a.parent[ind_start + i, tailinds...]
+                     unsafe_store!(sptr, s, i)
                 end
-            elseif sizeof(S) % sizeof(T) == 0
-                # S is bigger than T and contains an integer number of them
-                s[] = a.parent[ind_start + 1, tailinds...]
-                _memcpy!(tptr, sptr + sidx, sizeof(T))
-            else
-                i = 1
-                nbytes_copied = 0
-                # This is a bit complicated to deal with partial elements
-                # at both the start and the end. LLVM will fold as appropriate,
-                # once it knows the data layout
+            end
+            return t[]
+        elseif sizeof(S) % sizeof(T) == 0
+            # S is bigger than T and contains an integer number of them
+            s = Ref{S}(a.parent[ind_start + 1, tailinds...])
+            GC.@preserve s begin
+                tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+                return unsafe_load(tptr + sidx)
+            end
+        else
+            i = 1
+            nbytes_copied = 0
+            # This is a bit complicated to deal with partial elements
+            # at both the start and the end. LLVM will fold as appropriate,
+            # once it knows the data layout
+            s = Ref{S}()
+            t = Ref{T}()
+            GC.@preserve s t begin
+                sptr = Ptr{S}(unsafe_convert(Ref{S}, s))
+                tptr = Ptr{T}(unsafe_convert(Ref{T}, t))
                 while nbytes_copied < sizeof(T)
                     s[] = a.parent[ind_start + i, tailinds...]
                     nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
@@ -418,8 +418,8 @@ end
                     i += 1
                 end
             end
+            return t[]
         end
-        return t[]
     end
 end
 
@@ -435,44 +435,39 @@ end
     @boundscheck checkbounds(a, i1, tailinds...)
     if sizeof(T) >= sizeof(S)
         t = Ref{T}()
-        s = Ref{S}()
-        GC.@preserve t s begin
-            tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-            sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+        GC.@preserve t begin
+            sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
             if sizeof(T) > sizeof(S)
                 # Extra dimension in the parent array
                 n = sizeof(T) ÷ sizeof(S)
                 if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
                     offset = n * (i1 - firstindex(a))
                     for i = 1:n
-                        s[] = a.parent[i + offset]
-                        _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                        s = a.parent[i + offset]
+                        unsafe_store!(sptr, s, i)
                     end
                 else
                     for i = 1:n
-                        s[] = a.parent[i, i1, tailinds...]
-                        _memcpy!(tptr + (i-1)*sizeof(S), sptr, sizeof(S))
+                        s = a.parent[i, i1, tailinds...]
+                        unsafe_store!(sptr, s, i)
                     end
                 end
             else
                 # No extra dimension
-                s[] = a.parent[i1, tailinds...]
-                _memcpy!(tptr, sptr, sizeof(S))
+                s = a.parent[i1, tailinds...]
+                unsafe_store!(sptr, s)
             end
         end
         return t[]
     end
     # S is bigger than T and contains an integer number of them
-    n = sizeof(S) ÷ sizeof(T)
-    t = Ref{NTuple{n,T}}()
+    # n = sizeof(S) ÷ sizeof(T)
     s = Ref{S}()
-    GC.@preserve t s begin
-        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
+    GC.@preserve s begin
+        tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
         s[] = a.parent[tailinds...]
-        _memcpy!(tptr, sptr, sizeof(S))
+        return unsafe_load(tptr, i1)
     end
-    return t[][i1]
 end
 
 @inline @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
@@ -502,12 +497,10 @@ end
 @inline @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}
     check_writable(a)
     v = convert(T, v)::T
-    t = Ref{T}(v)
     s = Ref{S}(a.parent[ind.j])
-    GC.@preserve t s begin
-        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-        _memcpy!(sptr + (ind.i-1)*sizeof(T), tptr, sizeof(T))
+    GC.@preserve s begin
+        tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+        unsafe_store!(tptr, v, ind.i)
     end
     a.parent[ind.j] = s[]
     return a
@@ -526,25 +519,32 @@ end
     else
         @boundscheck checkbounds(a, i1, tailinds...)
         ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
-        t = Ref{T}(v)
-        s = Ref{S}()
-        GC.@preserve t s begin
-            tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-            sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-            # Optimizations that avoid branches
-            if sizeof(T) % sizeof(S) == 0
-                # T is bigger than S and contains an integer number of them
+        # Optimizations that avoid branches
+        if sizeof(T) % sizeof(S) == 0
+            # T is bigger than S and contains an integer number of them
+            t = Ref{T}(v)
+            GC.@preserve t begin
+                sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
                 n = sizeof(T) ÷ sizeof(S)
-                for i = 0:n-1
-                    _memcpy!(sptr, tptr + i*sizeof(S), sizeof(S))
-                    a.parent[ind_start + i + 1, tailinds...] = s[]
+                for i = 1:n
+                    s = unsafe_load(sptr, i)
+                    a.parent[ind_start + i, tailinds...] = s
                 end
-            elseif sizeof(S) % sizeof(T) == 0
-                # S is bigger than T and contains an integer number of them
-                s[] = a.parent[ind_start + 1, tailinds...]
-                _memcpy!(sptr + sidx, tptr, sizeof(T))
+            end
+        elseif sizeof(S) % sizeof(T) == 0
+            # S is bigger than T and contains an integer number of them
+            s = Ref{S}(a.parent[ind_start + 1, tailinds...])
+            GC.@preserve s begin
+                tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+                unsafe_store!(tptr + sidx, v)
                 a.parent[ind_start + 1, tailinds...] = s[]
-            else
+            end
+        else
+            t = Ref{T}(v)
+            s = Ref{S}()
+            GC.@preserve t s begin
+                tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
+                sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
                 nbytes_copied = 0
                 i = 1
                 # Deal with any partial elements at the start. We'll have to copy in the
@@ -591,36 +591,38 @@ end
         end
     end
     @boundscheck checkbounds(a, i1, tailinds...)
-    t = Ref{T}(v)
-    s = Ref{S}()
-    GC.@preserve t s begin
-        tptr = Ptr{UInt8}(unsafe_convert(Ref{T}, t))
-        sptr = Ptr{UInt8}(unsafe_convert(Ref{S}, s))
-        if sizeof(T) >= sizeof(S)
+    if sizeof(T) >= sizeof(S)
+        t = Ref{T}(v)
+        GC.@preserve t begin
+            sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
             if sizeof(T) > sizeof(S)
                 # Extra dimension in the parent array
                 n = sizeof(T) ÷ sizeof(S)
                 if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
                     offset = n * (i1 - firstindex(a))
                     for i = 1:n
-                        _memcpy!(sptr, tptr + (i-1)*sizeof(S), sizeof(S))
-                        a.parent[i + offset] = s[]
+                        s = unsafe_load(sptr, i)
+                        a.parent[i + offset] = s
                     end
                 else
                     for i = 1:n
-                        _memcpy!(sptr, tptr + (i-1)*sizeof(S), sizeof(S))
-                        a.parent[i, i1, tailinds...] = s[]
+                        s = unsafe_load(sptr, i)
+                        a.parent[i, i1, tailinds...] = s
                     end
                 end
-            else
+            else # sizeof(T) == sizeof(S)
                 # No extra dimension
-                _memcpy!(sptr, tptr, sizeof(S))
-                a.parent[i1, tailinds...] = s[]
+                s = unsafe_load(sptr)
+                a.parent[i1, tailinds...] = s
             end
-        else
-            # S is bigger than T and contains an integer number of them
+        end
+    else
+        # S is bigger than T and contains an integer number of them
+        s = Ref{S}()
+        GC.@preserve s begin
+            tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
             s[] = a.parent[tailinds...]
-            _memcpy!(sptr + (i1-1)*sizeof(T), tptr, sizeof(T))
+            unsafe_store!(tptr, v, i1)
             a.parent[tailinds...] = s[]
         end
     end
@@ -699,7 +701,7 @@ function CyclePadding(T::DataType)
 end
 
 using .Iterators: Stateful
-@pure function array_subpadding(S, T)
+@assume_effects :total function array_subpadding(S, T)
     checked_size = 0
     lcm_size = lcm(sizeof(S), sizeof(T))
     s, t = Stateful{<:Any, Any}(CyclePadding(S)),

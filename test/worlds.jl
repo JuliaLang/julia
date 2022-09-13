@@ -154,7 +154,7 @@ f265(::Int) = 1
 h265() = true
 file = @__FILE__
 Base.stacktrace_contract_userdir() && (file = Base.contractuser(file))
-loc_h265 = "$file:$(@__LINE__() - 3)"
+loc_h265 = "@ $(@__MODULE__) $file:$(@__LINE__() - 3)"
 @test h265()
 @test_throws TaskFailedException(t265) put_n_take!(h265, ())
 @test_throws TaskFailedException(t265) fetch(t265)
@@ -170,7 +170,7 @@ let ex = t265.exception
         MethodError: no method matching h265()
         The applicable method may be too new: running in world age $wc265, while current world is $wc."""
     @test startswith(str, cmps)
-    cmps = "\n  h265() at $loc_h265 (method too new to be called from this world context.)"
+    cmps = "\n  h265() (method too new to be called from this world context.)\n   $loc_h265"
     @test occursin(cmps, str)
 end
 
@@ -191,7 +191,7 @@ f_gen265(x::Type{Int}) = 3
 # intermediate worlds by later additions to the method table that
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
-g26506(x) = f26506(x[1])
+g26506(x) = Base.inferencebarrier(f26506)(x[1])
 z = Any["ABC"]
 f26506(x::Int) = 2
 g26506(z) # Places an entry for f26506(::String) in mt.name.cache

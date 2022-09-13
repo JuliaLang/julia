@@ -27,6 +27,9 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -56,12 +59,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char *dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
@@ -240,231 +237,6 @@ JL_DLLEXPORT unsigned long jl_geteuid(void)
 #else
     return geteuid();
 #endif
-}
-
-JL_DLLEXPORT int jl_os_get_passwd(uv_passwd_t *pwd, unsigned long uid)
-{
-#ifdef _OS_WINDOWS_
-  return UV_ENOTSUP;
-#else
-  // taken directly from libuv
-  struct passwd pw;
-  struct passwd* result;
-  char* buf;
-  size_t bufsize;
-  size_t name_size;
-  size_t homedir_size;
-  size_t shell_size;
-  size_t gecos_size;
-  long initsize;
-  int r;
-
-  if (pwd == NULL)
-    return UV_EINVAL;
-
-  initsize = sysconf(_SC_GETPW_R_SIZE_MAX);
-
-  if (initsize <= 0)
-    bufsize = 4096;
-  else
-    bufsize = (size_t) initsize;
-
-  buf = NULL;
-
-  for (;;) {
-    free(buf);
-    buf = (char*)malloc(bufsize);
-
-    if (buf == NULL)
-      return UV_ENOMEM;
-
-    r = getpwuid_r(uid, &pw, buf, bufsize, &result);
-
-    if (r != ERANGE)
-      break;
-
-    bufsize *= 2;
-  }
-
-  if (r != 0) {
-    free(buf);
-    return -r;
-  }
-
-  if (result == NULL) {
-    free(buf);
-    return UV_ENOENT;
-  }
-
-  /* Allocate memory for the username, gecos, shell, and home directory. */
-  name_size = strlen(pw.pw_name) + 1;
-  homedir_size = strlen(pw.pw_dir) + 1;
-  shell_size = strlen(pw.pw_shell) + 1;
-
-#ifdef __MVS__
-  gecos_size = 0; /* pw_gecos does not exist on zOS. */
-#else
-  if (pw.pw_gecos != NULL)
-    gecos_size = strlen(pw.pw_gecos) + 1;
-  else
-    gecos_size = 0;
-#endif
-
-  pwd->username = (char*)malloc(name_size +
-                         homedir_size +
-                         shell_size +
-                         gecos_size);
-
-  if (pwd->username == NULL) {
-    free(buf);
-    return UV_ENOMEM;
-  }
-
-  /* Copy the username */
-  memcpy(pwd->username, pw.pw_name, name_size);
-
-  /* Copy the home directory */
-  pwd->homedir = pwd->username + name_size;
-  memcpy(pwd->homedir, pw.pw_dir, homedir_size);
-
-  /* Copy the shell */
-  pwd->shell = pwd->homedir + homedir_size;
-  memcpy(pwd->shell, pw.pw_shell, shell_size);
-
-  /* Copy the gecos field */
-#ifdef __MVS__
-  pwd->gecos = NULL;  /* pw_gecos does not exist on zOS. */
-#else
-  if (pw.pw_gecos == NULL) {
-    pwd->gecos = NULL;
-  } else {
-    pwd->gecos = pwd->shell + shell_size;
-    memcpy(pwd->gecos, pw.pw_gecos, gecos_size);
-  }
-#endif
-
-  /* Copy the uid and gid */
-  pwd->uid = pw.pw_uid;
-  pwd->gid = pw.pw_gid;
-
-  free(buf);
-
-  return 0;
-#endif
-}
-
-typedef struct jl_group_s {
-    char* groupname;
-    unsigned long gid;
-    char** members;
-} jl_group_t;
-
-JL_DLLEXPORT int jl_os_get_group(jl_group_t *grp, unsigned long gid)
-{
-#ifdef _OS_WINDOWS_
-  return UV_ENOTSUP;
-#else
-  // modified directly from uv_os_get_password
-  struct group gp;
-  struct group* result;
-  char* buf;
-  char* gr_mem;
-  size_t bufsize;
-  size_t name_size;
-  long members;
-  size_t mem_size;
-  long initsize;
-  int r;
-
-  if (grp == NULL)
-    return UV_EINVAL;
-
-  initsize = sysconf(_SC_GETGR_R_SIZE_MAX);
-
-  if (initsize <= 0)
-    bufsize = 4096;
-  else
-    bufsize = (size_t) initsize;
-
-  buf = NULL;
-
-  for (;;) {
-    free(buf);
-    buf = (char*)malloc(bufsize);
-
-    if (buf == NULL)
-      return UV_ENOMEM;
-
-    r = getgrgid_r(gid, &gp, buf, bufsize, &result);
-
-    if (r != ERANGE)
-      break;
-
-    bufsize *= 2;
-  }
-
-  if (r != 0) {
-    free(buf);
-    return -r;
-  }
-
-  if (result == NULL) {
-    free(buf);
-    return UV_ENOENT;
-  }
-
-  /* Allocate memory for the groupname and members. */
-  name_size = strlen(gp.gr_name) + 1;
-  members = 0;
-  mem_size = sizeof(char*);
-  for (r = 0; gp.gr_mem[r] != NULL; r++) {
-    mem_size += strlen(gp.gr_mem[r]) + 1 + sizeof(char*);
-    members++;
-  }
-
-  gr_mem = (char*)malloc(name_size + mem_size);
-  if (gr_mem == NULL) {
-    free(buf);
-    return UV_ENOMEM;
-  }
-
-  /* Copy the members */
-  grp->members = (char**) gr_mem;
-  grp->members[members] = NULL;
-  gr_mem = (char*) ((char**) gr_mem + members + 1);
-  for (r = 0; r < members; r++) {
-    grp->members[r] = gr_mem;
-    gr_mem = stpcpy(gr_mem, gp.gr_mem[r]) + 1;
-  }
-  assert(gr_mem == (char*)grp->members + mem_size);
-
-  /* Copy the groupname */
-  grp->groupname = gr_mem;
-  memcpy(grp->groupname, gp.gr_name, name_size);
-  gr_mem += name_size;
-
-  /* Copy the gid */
-  grp->gid = gp.gr_gid;
-
-  free(buf);
-
-  return 0;
-#endif
-}
-
-JL_DLLEXPORT void jl_os_free_group(jl_group_t *grp)
-{
-  if (grp == NULL)
-    return;
-
-  /*
-    The memory for is allocated in a single uv__malloc() call. The base of the
-    pointer is stored in grp->members, so that is the only field that needs
-    to be freed.
-  */
-  free(grp->members);
-  grp->members = NULL;
-  grp->groupname = NULL;
 }
 
 // --- buffer manipulation ---
@@ -661,6 +433,29 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #endif
 }
 
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
+{
+    int cpu = jl_cpu_threads();
+    int masksize = uv_cpumask_size();
+    if (masksize < 0 || jl_running_under_rr(0))
+        return cpu;
+    uv_thread_t tid = uv_thread_self();
+    char *cpumask = (char *)calloc(masksize, sizeof(char));
+    int err = uv_thread_getaffinity(&tid, cpumask, masksize);
+    if (err) {
+        free(cpumask);
+        jl_safe_printf("WARNING: failed to get thread affinity (%s %d)\n", uv_err_name(err),
+                       err);
+        return cpu;
+    }
+    int n = 0;
+    for (size_t i = 0; i < masksize; i++) {
+        n += cpumask[i];
+    }
+    free(cpumask);
+    return n < cpu ? n : cpu;
+}
+
 
 // -- high resolution timers --
 // Returns time in nanosec
@@ -721,6 +516,14 @@ JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+
+JL_DLLEXPORT int jl_termios_size(void) {
+#if defined(_OS_WINDOWS_)
+    return 0;
+#else
+    return sizeof(struct termios);
+#endif
+}
 
 // -- processor native alignment information --
 
@@ -921,6 +724,40 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #else
     return (size_t)0;
 #endif
+}
+
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t max = UINT64_MAX;
+    uint64_t unbias = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, unbias, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
+}
+
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
+
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
 }
 
 #ifdef __cplusplus

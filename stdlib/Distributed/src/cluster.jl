@@ -22,7 +22,7 @@ Some are used by the cluster manager to add workers to an already-initialized ho
   * `count` -- the number of workers to be launched on the host
   * `exename` -- the path to the Julia executable on the host, defaults to `"\$(Sys.BINDIR)/julia"` or
     `"\$(Sys.BINDIR)/julia-debug"`
-  * `exeflags` -- flags to use when lauching Julia remotely
+  * `exeflags` -- flags to use when launching Julia remotely
 
 The `userdata` field is used to store information for each worker by external managers.
 
@@ -232,7 +232,10 @@ start_worker(cookie::AbstractString=readline(stdin); kwargs...) = start_worker(s
 function start_worker(out::IO, cookie::AbstractString=readline(stdin); close_stdin::Bool=true, stderr_to_stdout::Bool=true)
     init_multi()
 
-    close_stdin && close(stdin) # workers will not use it
+    if close_stdin # workers will not use it
+        redirect_stdin(devnull)
+        close(stdin)
+    end
     stderr_to_stdout && redirect_stderr(stdout)
 
     init_worker(cookie)
@@ -531,8 +534,9 @@ default_addprocs_params(::ClusterManager) = default_addprocs_params()
 default_addprocs_params() = Dict{Symbol,Any}(
     :topology => :all_to_all,
     :dir      => pwd(),
-    :exename  => joinpath(Sys.BINDIR::String, julia_exename()),
+    :exename  => joinpath(Sys.BINDIR, julia_exename()),
     :exeflags => ``,
+    :env      => [],
     :enable_threaded_blas => false,
     :lazy => true)
 

@@ -25,15 +25,160 @@ static volatile size_t bt_size_cur = 0;
 static volatile uint64_t nsecprof = 0;
 static volatile int running = 0;
 static const    uint64_t GIGA = 1000000000ULL;
-static uint64_t profile_cong_rng_seed = 0;
-static uint64_t profile_cong_rng_unbias = 0;
-static volatile uint64_t *profile_round_robin_thread_order = NULL;
 // Timers to take samples at intervals
 JL_DLLEXPORT void jl_profile_stop_timer(void);
 JL_DLLEXPORT int jl_profile_start_timer(void);
-void jl_lock_profile(void);
-void jl_unlock_profile(void);
-void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64_t *seed);
+
+///////////////////////
+// Utility functions //
+///////////////////////
+JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
+{
+    bt_size_max = maxsize;
+    nsecprof = delay_nsec;
+    if (bt_data_prof != NULL)
+        free((void*)bt_data_prof);
+    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
+    if (bt_data_prof == NULL && maxsize > 0)
+        return -1;
+    bt_size_cur = 0;
+    return 0;
+}
+
+JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
+{
+    return (uint8_t*) bt_data_prof;
+}
+
+JL_DLLEXPORT size_t jl_profile_len_data(void)
+{
+    return bt_size_cur;
+}
+
+JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
+{
+    return bt_size_max;
+}
+
+JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
+{
+    return nsecprof;
+}
+
+JL_DLLEXPORT void jl_profile_clear_data(void)
+{
+    bt_size_cur = 0;
+}
+
+JL_DLLEXPORT int jl_profile_is_running(void)
+{
+    return running;
+}
+
+// Any function that acquires this lock must be either a unmanaged thread
+// or in the GC safe region and must NOT allocate anything through the GC
+// while holding this lock.
+// Certain functions in this file might be called from an unmanaged thread
+// and cannot have any interaction with the julia runtime
+// They also may be re-entrant, and operating while threads are paused, so we
+// separately manage the re-entrant count behavior for safety across platforms
+// Note that we cannot safely upgrade read->write
+uv_rwlock_t debuginfo_asyncsafe;
+#ifndef _OS_WINDOWS_
+pthread_key_t debuginfo_asyncsafe_held;
+#else
+DWORD debuginfo_asyncsafe_held;
+#endif
+
+void jl_init_profile_lock(void)
+{
+    uv_rwlock_init(&debuginfo_asyncsafe);
+#ifndef _OS_WINDOWS_
+    pthread_key_create(&debuginfo_asyncsafe_held, NULL);
+#else
+    debuginfo_asyncsafe_held = TlsAlloc();
+#endif
+}
+
+uintptr_t jl_lock_profile_rd_held(void)
+{
+#ifndef _OS_WINDOWS_
+    return (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
+#else
+    return (uintptr_t)TlsGetValue(debuginfo_asyncsafe_held);
+#endif
+}
+
+void jl_lock_profile(void)
+{
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held++ == 0)
+        uv_rwlock_rdlock(&debuginfo_asyncsafe);
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
+}
+
+JL_DLLEXPORT void jl_unlock_profile(void)
+{
+    uintptr_t held = jl_lock_profile_rd_held();
+    assert(held);
+    if (--held == 0)
+        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
+}
+
+void jl_lock_profile_wr(void)
+{
+    uv_rwlock_wrlock(&debuginfo_asyncsafe);
+}
+
+void jl_unlock_profile_wr(void)
+{
+    uv_rwlock_wrunlock(&debuginfo_asyncsafe);
+}
+
+
+#ifndef _OS_WINDOWS_
+static uint64_t profile_cong_rng_seed = 0;
+static int *profile_round_robin_thread_order = NULL;
+static int profile_round_robin_thread_order_size = 0;
+
+static void jl_shuffle_int_array_inplace(int *carray, int size, uint64_t *seed)
+{
+    // The "modern Fisher–Yates shuffle" - O(n) algorithm
+    // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
+    for (int i = size; i-- > 1; ) {
+        uint64_t unbias = UINT64_MAX; // slightly biased, but i is very small
+        size_t j = cong(i, unbias, seed);
+        uint64_t tmp = carray[j];
+        carray[j] = carray[i];
+        carray[i] = tmp;
+    }
+}
+
+
+static int *profile_get_randperm(int size)
+{
+    if (profile_round_robin_thread_order_size < size) {
+        free(profile_round_robin_thread_order);
+        profile_round_robin_thread_order = (int*)malloc_s(size * sizeof(int));
+        for (int i = 0; i < size; i++)
+            profile_round_robin_thread_order[i] = i;
+        profile_round_robin_thread_order_size = size;
+        profile_cong_rng_seed = jl_rand();
+    }
+    jl_shuffle_int_array_inplace(profile_round_robin_thread_order, size, &profile_cong_rng_seed);
+    return profile_round_robin_thread_order;
+}
+#endif
+
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
@@ -114,6 +259,9 @@ JL_DLLEXPORT void jl_exit_on_sigint(int on)
 
 static uintptr_t jl_get_pc_from_ctx(const void *_ctx);
 void jl_show_sigill(void *_ctx);
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_) \
+    || (defined(_OS_LINUX_) && defined(_CPU_AARCH64_)) \
+    || (defined(_OS_LINUX_) && defined(_CPU_ARM_))
 static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
 {
     jl_jmp_buf *old_buf = jl_get_safe_restore();
@@ -127,6 +275,37 @@ static size_t jl_safe_read_mem(const volatile char *ptr, char *out, size_t len)
     }
     jl_set_safe_restore(old_buf);
     return i;
+}
+#endif
+
+static double profile_autostop_time = -1.0;
+static double profile_peek_duration = 1.0; // seconds
+
+double jl_get_profile_peek_duration(void)
+{
+    return profile_peek_duration;
+}
+void jl_set_profile_peek_duration(double t)
+{
+    profile_peek_duration = t;
+}
+
+uintptr_t profile_show_peek_cond_loc;
+JL_DLLEXPORT void jl_set_peek_cond(uintptr_t cond)
+{
+    profile_show_peek_cond_loc = cond;
+}
+
+static void jl_check_profile_autostop(void)
+{
+    if ((profile_autostop_time != -1.0) && (jl_hrtime() > profile_autostop_time)) {
+        profile_autostop_time = -1.0;
+        jl_profile_stop_timer();
+        jl_safe_printf("\n==============================================================\n");
+        jl_safe_printf("Profile collected. A report will print at the next yield point\n");
+        jl_safe_printf("==============================================================\n\n");
+        uv_async_send((uv_async_t*)profile_show_peek_cond_loc);
+    }
 }
 
 #if defined(_WIN32)
@@ -278,7 +457,7 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
-        jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+        jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {
@@ -291,74 +470,6 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
     }
     jl_gc_debug_print_status();
     jl_gc_debug_critical_error();
-}
-
-///////////////////////
-// Utility functions //
-///////////////////////
-JL_DLLEXPORT int jl_profile_init(size_t maxsize, uint64_t delay_nsec)
-{
-    bt_size_max = maxsize;
-    nsecprof = delay_nsec;
-    if (bt_data_prof != NULL)
-        free((void*)bt_data_prof);
-    if (profile_round_robin_thread_order == NULL) {
-        // NOTE: We currently only allocate this once, since jl_n_threads cannot change
-        // during execution of a julia process. If/when this invariant changes in the
-        // future, this will have to be adjusted.
-        profile_round_robin_thread_order = (uint64_t*) calloc(jl_n_threads, sizeof(uint64_t));
-        for (int i = 0; i < jl_n_threads; i++) {
-            profile_round_robin_thread_order[i] = i;
-        }
-    }
-    seed_cong(&profile_cong_rng_seed);
-    unbias_cong(jl_n_threads, &profile_cong_rng_unbias);
-    bt_data_prof = (jl_bt_element_t*) calloc(maxsize, sizeof(jl_bt_element_t));
-    if (bt_data_prof == NULL && maxsize > 0)
-        return -1;
-    bt_size_cur = 0;
-    return 0;
-}
-
-void jl_shuffle_int_array_inplace(volatile uint64_t *carray, size_t size, uint64_t *seed) {
-    // The "modern Fisher–Yates shuffle" - O(n) algorithm
-    // https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle#The_modern_algorithm
-    for (size_t i = size - 1; i >= 1; --i) {
-        size_t j = cong(i, profile_cong_rng_unbias, seed);
-        uint64_t tmp = carray[j];
-        carray[j] = carray[i];
-        carray[i] = tmp;
-    }
-}
-
-JL_DLLEXPORT uint8_t *jl_profile_get_data(void)
-{
-    return (uint8_t*) bt_data_prof;
-}
-
-JL_DLLEXPORT size_t jl_profile_len_data(void)
-{
-    return bt_size_cur;
-}
-
-JL_DLLEXPORT size_t jl_profile_maxlen_data(void)
-{
-    return bt_size_max;
-}
-
-JL_DLLEXPORT uint64_t jl_profile_delay_nsec(void)
-{
-    return nsecprof;
-}
-
-JL_DLLEXPORT void jl_profile_clear_data(void)
-{
-    bt_size_cur = 0;
-}
-
-JL_DLLEXPORT int jl_profile_is_running(void)
-{
-    return running;
 }
 
 #ifdef __cplusplus

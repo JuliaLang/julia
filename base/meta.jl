@@ -74,8 +74,7 @@ julia> Meta.isexpr(ex, :call, 2)
 true
 ```
 """
-isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
-isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+isexpr
 
 """
     replace_sourceloc!(location, expr)
@@ -97,7 +96,7 @@ rather than line 2 where `@test` is used as an implementation detail.
 """
 function replace_sourceloc!(sourceloc, @nospecialize(ex))
     if ex isa Expr
-        if ex.head == :macrocall
+        if ex.head === :macrocall
             ex.args[2] = sourceloc
         end
         map!(e -> replace_sourceloc!(sourceloc, e), ex.args, ex.args)
@@ -393,7 +392,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 elseif i == 4
                     @assert isa(x.args[4], Int)
                 elseif i == 5
-                    @assert isa((x.args[5]::QuoteNode).value, Symbol)
+                    @assert isa((x.args[5]::QuoteNode).value, Union{Symbol, Tuple{Symbol, UInt8}})
                 else
                     x.args[i] = _partially_inline!(x.args[i], slot_replacements,
                                                    type_signature, static_param_values,

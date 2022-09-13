@@ -14,6 +14,7 @@
 
 #include "codegen_shared.h"
 #include "julia.h"
+#include "passes.h"
 
 #define DEBUG_TYPE "remove_addrspaces"
 
@@ -43,10 +44,17 @@ public:
             return DstTy;
 
         DstTy = SrcTy;
-        if (auto Ty = dyn_cast<PointerType>(SrcTy))
-            DstTy = PointerType::get(
-                    remapType(Ty->getElementType()),
-                    ASRemapper(Ty->getAddressSpace()));
+        if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
+            if (Ty->isOpaque()) {
+                DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
+            }
+            else {
+                //Remove once opaque pointer transition is complete
+                DstTy = PointerType::get(
+                        remapType(Ty->getPointerElementType()),
+                        ASRemapper(Ty->getAddressSpace()));
+            }
+        }
         else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
             SmallVector<Type *, 4> Params;
             for (unsigned Index = 0; Index < Ty->getNumParams(); ++Index)
@@ -105,10 +113,9 @@ public:
     }
 
 private:
-    static DenseMap<Type *, Type *> MappedTypes;
+    DenseMap<Type *, Type *> MappedTypes;
 };
 
-DenseMap<Type *, Type *> AddrspaceRemoveTypeRemapper::MappedTypes;
 
 class AddrspaceRemoveValueMaterializer : public ValueMaterializer {
     ValueToValueMapTy &VM;
@@ -151,10 +158,12 @@ public:
                     // GEP const exprs need to know the type of the source.
                     // asserts remapType(typeof arg0) == typeof mapValue(arg0).
                     Constant *Src = CE->getOperand(0);
-                    Type *SrcTy = remapType(
-                            cast<PointerType>(Src->getType()->getScalarType())
-                                    ->getElementType());
-                    DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
+                    auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
+                    //Remove once opaque pointer transition is complete
+                    if (!ptrty->isOpaque()) {
+                        Type *SrcTy = remapType(ptrty->getPointerElementType());
+                        DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
+                    }
                 }
                 else
                     DstV = CE->getWithOperands(Ops, Ty);
@@ -231,18 +240,7 @@ unsigned removeAllAddrspaces(unsigned AS)
     return AddressSpace::Generic;
 }
 
-struct RemoveAddrspacesPass : public ModulePass {
-    static char ID;
-    AddrspaceRemapFunction ASRemapper;
-    RemoveAddrspacesPass(
-            AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
-        : ModulePass(ID), ASRemapper(ASRemapper){};
-
-public:
-    bool runOnModule(Module &M) override;
-};
-
-bool RemoveAddrspacesPass::runOnModule(Module &M)
+bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 {
     ValueToValueMapTy VMap;
     AddrspaceRemoveTypeRemapper TypeRemapper(ASRemapper);
@@ -457,8 +455,22 @@ bool RemoveAddrspacesPass::runOnModule(Module &M)
     return true;
 }
 
-char RemoveAddrspacesPass::ID = 0;
-static RegisterPass<RemoveAddrspacesPass>
+
+struct RemoveAddrspacesPassLegacy : public ModulePass {
+    static char ID;
+    AddrspaceRemapFunction ASRemapper;
+    RemoveAddrspacesPassLegacy(
+            AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
+        : ModulePass(ID), ASRemapper(ASRemapper){};
+
+public:
+    bool runOnModule(Module &M) override {
+        return removeAddrspaces(M, ASRemapper);
+    }
+};
+
+char RemoveAddrspacesPassLegacy::ID = 0;
+static RegisterPass<RemoveAddrspacesPassLegacy>
         X("RemoveAddrspaces",
           "Remove IR address space information.",
           false,
@@ -467,7 +479,17 @@ static RegisterPass<RemoveAddrspacesPass>
 Pass *createRemoveAddrspacesPass(
         AddrspaceRemapFunction ASRemapper = removeAllAddrspaces)
 {
-    return new RemoveAddrspacesPass(ASRemapper);
+    return new RemoveAddrspacesPassLegacy(ASRemapper);
+}
+
+RemoveAddrspacesPass::RemoveAddrspacesPass() : RemoveAddrspacesPass(removeAllAddrspaces) {}
+
+PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
+    if (removeAddrspaces(M, ASRemapper)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    } else {
+        return PreservedAnalyses::all();
+    }
 }
 
 
@@ -483,16 +505,16 @@ unsigned removeJuliaAddrspaces(unsigned AS)
         return AS;
 }
 
-struct RemoveJuliaAddrspacesPass : public ModulePass {
+struct RemoveJuliaAddrspacesPassLegacy : public ModulePass {
     static char ID;
-    RemoveAddrspacesPass Pass;
-    RemoveJuliaAddrspacesPass() : ModulePass(ID), Pass(removeJuliaAddrspaces){};
+    RemoveAddrspacesPassLegacy Pass;
+    RemoveJuliaAddrspacesPassLegacy() : ModulePass(ID), Pass(removeJuliaAddrspaces){};
 
-    bool runOnModule(Module &M) { return Pass.runOnModule(M); }
+    bool runOnModule(Module &M) override { return Pass.runOnModule(M); }
 };
 
-char RemoveJuliaAddrspacesPass::ID = 0;
-static RegisterPass<RemoveJuliaAddrspacesPass>
+char RemoveJuliaAddrspacesPassLegacy::ID = 0;
+static RegisterPass<RemoveJuliaAddrspacesPassLegacy>
         Y("RemoveJuliaAddrspaces",
           "Remove IR address space information.",
           false,
@@ -500,7 +522,11 @@ static RegisterPass<RemoveJuliaAddrspacesPass>
 
 Pass *createRemoveJuliaAddrspacesPass()
 {
-    return new RemoveJuliaAddrspacesPass();
+    return new RemoveJuliaAddrspacesPassLegacy();
+}
+
+PreservedAnalyses RemoveJuliaAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
+    return RemoveAddrspacesPass(removeJuliaAddrspaces).run(M, AM);
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveJuliaAddrspacesPass_impl(LLVMPassManagerRef PM)

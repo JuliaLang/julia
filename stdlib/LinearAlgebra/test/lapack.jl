@@ -196,7 +196,8 @@ end
 
 @testset "gebal/gebak" begin
     @testset for elty in (Float32, Float64, ComplexF32, ComplexF64)
-        A = rand(elty,10,10) * Diagonal(exp10.(range(-10, stop=10, length=10)))
+        typescale = log10(eps(real(elty))) / 3 * 2
+        A = rand(elty,10,10) * Diagonal(exp10.(range(typescale, stop=-typescale, length=10)))
         B = copy(A)
         ilo, ihi, scale = LAPACK.gebal!('S',B)
         Bvs = eigvecs(B)
@@ -701,9 +702,6 @@ end
 let A = [NaN NaN; NaN NaN]
     @test_throws ArgumentError eigen(A)
 end
-
-# # https://github.com/JuliaLang/julia/pull/39845
-@test LinearAlgebra.LAPACK.liblapack == "libblastrampoline"
 
 # Issue #42762 https://github.com/JuliaLang/julia/issues/42762
 # Tests geqrf! and gerqf! with null column dimensions

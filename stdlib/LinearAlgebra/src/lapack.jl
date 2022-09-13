@@ -5,16 +5,9 @@ module LAPACK
 Interfaces to LAPACK subroutines.
 """ LAPACK
 
-const libblastrampoline = "libblastrampoline"
-
-# Legacy binding maintained for backwards-compatibility but new packages
-# should not look at this, instead preferring to parse the output
-# of BLAS.get_config()
-const liblapack = libblastrampoline
-
 using ..LinearAlgebra.BLAS: @blasfunc, chkuplo
 
-using ..LinearAlgebra: BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
+using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, DimensionMismatch,
     SingularException, PosDefException, chkstride1, checksquare,triu, tril, dot
 
 using Base: iszero, require_one_based_indexing
@@ -5462,7 +5455,7 @@ for (bdsdc, elty) in
             elseif compq == 'P'
                 @warn "COMPQ='P' is not tested"
                 #TODO turn this into an actual LAPACK call
-                #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
+                #smlsiz=ilaenv(9, $elty === :Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
                 smlsiz=100 #For now, completely overkill
                 ldq = n*(11+2*smlsiz+8*round(Int,log((n/(smlsiz+1)))/log(2)))
                 ldiq = n*(3+3*round(Int,log(n/(smlsiz+1))/log(2)))

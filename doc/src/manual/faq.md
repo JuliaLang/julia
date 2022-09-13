@@ -103,43 +103,25 @@ which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
 `InterruptException` in the [`try`](@ref) block.
+Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
-Passing options to `julia` in so-called shebang by, e.g.,
-`#!/usr/bin/env julia --startup-file=no` may not work in some
-platforms such as Linux.  This is because argument parsing in shebang
-is platform-dependent and not well-specified.  In a Unix-like
-environment, a reliable way to pass options to `julia` in an
-executable script would be to start the script as a `bash` script and
-use `exec` to replace the process to `julia`:
+Passing options to `julia` in a so-called shebang line, as in
+`#!/usr/bin/env julia --startup-file=no`, will not work on many
+platforms (BSD, macOS, Linux) where the kernel, unlike the shell, does
+not split arguments at space characters. The option `env -S`, which
+splits a single argument string into multiple arguments at spaces,
+similar to a shell, offers a simple workaround:
 
 ```julia
-#!/bin/bash
-#=
-exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
-=#
-
+#!/usr/bin/env -S julia --color=yes --startup-file=no
 @show ARGS  # put any Julia code here
 ```
 
-In the example above, the code between `#=` and `=#` is run as a `bash`
-script.  Julia ignores this part since it is a multi-line comment for
-Julia.  The Julia code after `=#` is ignored by `bash` since it stops
-parsing the file once it reaches to the `exec` statement.
-
 !!! note
-    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
-    ```julia
-    #!/bin/bash
-    #=
-    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-        "${BASH_SOURCE[0]}" "$@"
-    =#
-
-    @show ARGS  # put any Julia code here
-    ```
-    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+    Option `env -S` appeared in FreeBSD 6.0 (2005), macOS Sierra (2016)
+    and GNU/Linux coreutils 8.30 (2018).
 
 ### Why doesn't `run` support `*` or pipes for scripting external programs?
 
@@ -443,7 +425,7 @@ julia> sqrt(-2.0+0im)
 ### How can I constrain or compute type parameters?
 
 The parameters of a [parametric type](@ref Parametric-Types) can hold either
-types or bits values, and the type itself chooses how it makes use of these parameters.
+types or bits values, and the type itself chooses how it makes use of these parameters.
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
 element type and the integer value `2` to express its number of dimensions.  When
 defining your own parametric type, you can use subtype constraints to declare that a
@@ -802,8 +784,13 @@ foo (generic function with 1 method)
 
 julia> foo([1])
 ERROR: MethodError: no method matching foo(::Vector{Int64})
+
 Closest candidates are:
-  foo(!Matched::Vector{Real}) at none:1
+  foo(!Matched::Vector{Real})
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
@@ -1066,8 +1053,8 @@ Unlike the LTS version the a Stable version will not normally receive bugfixes a
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
-The current LTS version of Julia is versioned according to SemVer as v1.0.x;
-this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+The current LTS version of Julia is versioned according to SemVer as v1.6.x;
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
 In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).

@@ -528,7 +528,7 @@ module M1 var"#foo#"() = 2 end
 module var"#43932#" end
 @test endswith(sprint(show, var"#43932#"), ".var\"#43932#\"")
 
-# issue #12477
+# issue #12477
 @test sprint(show,  Union{Int64, Int32, Int16, Int8, Float64}) == "Union{Float64, Int16, Int32, Int64, Int8}"
 
 # Function and array reference precedence
@@ -603,7 +603,7 @@ let q1 = Meta.parse(repr(:("$(a)b"))),
     @test q1.args[1].args == [:a, "b"]
 
     @test isa(q2, Expr)
-    @test q2.args[1].head == :string
+    @test q2.args[1].head === :string
     @test q2.args[1].args == [:ab,]
 end
 
@@ -769,10 +769,23 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+# Just check it doesn't error
+f46594(::Vararg{T, 2}) where T = 1
+let repr = sprint(show, "text/html", first(methods(f46594)))
+    @test occursin("f46594(::Vararg{T, 2}) where T", replace(repr, r"</?[A-Za-z]>"=>""))
+end
+
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
 end
 let repr = sprint(show, "text/plain", methods(triangular_methodshow))
     @test occursin("where {T2<:Integer, T1<:T2}", repr)
+end
+
+struct S45879{P} end
+let ms = methods(S45879)
+    @test ms isa Base.MethodList
+    @test length(ms) == 0
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -843,7 +856,7 @@ end
             end
             lower = length("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if length(str) + 2 ≤ limit
+            if length(str) + 2 ≤ limit
                 @test eval(Meta.parse(out)) == str
             else
                 @test limit-!isascii(str) <= length(out) <= limit
@@ -1338,6 +1351,8 @@ test_repr("(:).a")
 @test repr(NTuple{7,Int64}) == "NTuple{7, Int64}"
 @test repr(Tuple{Float64, Float64, Float64, Float64}) == "NTuple{4, Float64}"
 @test repr(Tuple{Float32, Float32, Float32}) == "Tuple{Float32, Float32, Float32}"
+@test repr(Tuple{String, Int64, Int64, Int64}) == "Tuple{String, Int64, Int64, Int64}"
+@test repr(Tuple{String, Int64, Int64, Int64, Int64}) == "Tuple{String, Vararg{Int64, 4}}"
 
 @testset "issue #42931" begin
     @test repr(NTuple{4, :A}) == "NTuple{4, :A}"
@@ -1429,7 +1444,7 @@ struct var"#X#" end
 var"#f#"() = 2
 struct var"%X%" end  # Invalid name without '#'
 
-# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# (Just to make this test more sustainable,) we don't necessarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
 @test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
 @test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
@@ -1452,6 +1467,9 @@ struct var"%X%" end  # Invalid name without '#'
         @test v == eval(Meta.parse(static_shown(v)))
     end
 end
+
+# Test that static show prints something reasonable for `<:Function` types
+@test static_shown(:) == "Base.Colon()"
 
 # Test @show
 let fname = tempname()
@@ -1886,16 +1904,16 @@ function _methodsstr(@nospecialize f)
 end
 
 @testset "show function methods" begin
-    @test occursin("methods for generic function \"sin\":\n", _methodsstr(sin))
+    @test occursin("methods for generic function \"sin\" from Base:\n", _methodsstr(sin))
 end
 @testset "show macro methods" begin
-    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":\n")
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\" from Base:\n")
 end
 @testset "show constructor methods" begin
     @test occursin(" methods for type constructor:\n", _methodsstr(Vector))
 end
 @testset "show builtin methods" begin
-    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\":\n")
+    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\" from Core:\n")
 end
 @testset "show callable object methods" begin
     @test occursin("methods for callable object:\n", _methodsstr(:))
@@ -2287,6 +2305,8 @@ end
     @eval f1(var"a.b") = 3
     @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
 
+    @test sprint(_show, Method[]) == "0-element Vector{Method}"
+
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 
     @eval f2(; var"123") = 5
@@ -2354,4 +2374,47 @@ end
     @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
     @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
           """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
+end
+
+# Test that alignment takes into account unicode and computes alignment without
+# color/formatting.
+
+struct ColoredLetter; end
+Base.show(io::IO, ces::ColoredLetter) = Base.printstyled(io, 'A'; color=:red)
+
+struct ⛵; end
+Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
+
+@test Base.alignment(stdout, ⛵()) == (0, 2)
+@test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
+@test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
+
+# `show` implementations for `Method`
+let buf = IOBuffer()
+
+    # single line printing by default
+    show(buf, only(methods(sin, (Float64,))))
+    @test !occursin('\n', String(take!(buf)))
+
+    # two-line printing for rich display
+    show(buf, MIME("text/plain"), only(methods(sin, (Float64,))))
+    @test occursin('\n', String(take!(buf)))
+end
+
+@testset "basic `show_ir` functionality tests" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            let io = IOBuffer()
+                for i = 1:10
+                    # make sure we don't error on printing IRs at any optimization level
+                    ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
+                    @test try; show(io, ir); true; catch; false; end
+                    compact = Core.Compiler.IncrementalCompact(ir)
+                    @test try; show(io, compact); true; catch; false; end
+                end
+            end
+        end
+        close(io)
+        @test isempty(read(f, String)) # make sure we don't unnecessarily lean anything into `stdout`
+    end
 end

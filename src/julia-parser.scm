@@ -1355,11 +1355,19 @@
       (list 'where (rewrap-where x (cadr w)) (caddr w))
       x))
 
+(define (parse-struct-field s)
+  (let ((tok (peek-token s)))
+    ;; allow `const x` only as a struct field
+    (if (eq? tok 'const)
+        (begin (take-token s)
+               `(const ,(parse-eq s)))
+        (parse-eq s))))
+
 (define (parse-struct-def s mut? word)
   (if (reserved-word? (peek-token s))
       (error (string "invalid type name \"" (take-token s) "\"")))
   (let ((sig (parse-subtype-spec s)))
-    (begin0 (list 'struct (if mut? '(true) '(false)) sig (parse-block s))
+    (begin0 (list 'struct (if mut? '(true) '(false)) sig (parse-block s parse-struct-field))
             (expect-end s word))))
 
 ;; consume any number of line endings from a token stream
@@ -1456,7 +1464,13 @@
               `(const ,expr)
               expr)))
        ((const)
-        `(const ,(parse-eq s)))
+        (let ((assgn (parse-eq s)))
+          (if (not (and (pair? assgn)
+                        (or (eq? (car assgn) '=)
+                            (eq? (car assgn) 'global)
+                            (eq? (car assgn) 'local))))
+              (error "expected assignment after \"const\"")
+              `(const ,assgn))))
 
        ((function macro)
         (let* ((loc   (line-number-node s))
@@ -2481,13 +2495,12 @@
                                       (write-char (not-eof-1 (read-char (ts:port s)))
                                                   b))
                                   (loop (read-char (ts:port s))))))
-                     (let ((str (unescape-string (io.tostring! b))))
-                       (let ((len (string-length str)))
-                         (if (= len 1)
-                             (string.char str 0)
-                             (if (= len 0)
-                                 (error "invalid empty character literal")
-                                 (error "character literal contains multiple characters")))))))))
+                     (let* ((str (unescape-string (io.tostring! b)))
+                            (c   (string.only-julia-char str)))
+                       (or c
+                           (if (= (string-length str) 0)
+                               (error "invalid empty character literal")
+                               (error "character literal contains multiple characters"))))))))
 
           ;; symbol/expression quote
           ((eq? t ':)

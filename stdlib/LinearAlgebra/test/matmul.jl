@@ -226,34 +226,50 @@ end
     end
 end
 
-@testset "Complex matrix x real MatOrVec etc (issue #29224)" for T1 in (Float32, Float64)
-    for T2 in (Float32, Float64)
-        for arg1_real in (true, false)
-            @testset "Combination $T1 $T2 $arg1_real $arg2_real" for arg2_real in (true, false)
-                A0 = reshape(Vector{T1}(1:25), 5, 5) .+
-                     (arg1_real ? 0 : 1im * reshape(Vector{T1}(-3:21), 5, 5))
-                A = view(A0, 1:2, 1:2)
-                B = Matrix{T2}([1.0 3.0; -1.0 2.0]) .+
-                    (arg2_real ? 0 : 1im * Matrix{T2}([3.0 4; -1 10]))
-                AB_correct = copy(A) * B
-                AB = A * B  # view times matrix
-                @test AB ≈ AB_correct
-                A1 = view(A0, :, 1:2)  # rectangular view times matrix
-                @test A1 * B ≈ copy(A1) * B
-                B1 = view(B, 1:2, 1:2)
-                AB1 = A * B1 # view times view
-                @test AB1 ≈ AB_correct
-                x = Vector{T2}([1.0; 10.0]) .+ (arg2_real ? 0 : 1im * Vector{T2}([3; -1]))
-                Ax_exact = copy(A) * x
-                Ax = A * x  # view times vector
-                @test Ax ≈ Ax_exact
-                x1 = view(x, 1:2)
-                Ax1 = A * x1  # view times viewed vector
-                @test Ax1 ≈ Ax_exact
-                @test copy(A) * x1 ≈ Ax_exact # matrix times viewed vector
-                # View times transposed matrix
-                Bt = transpose(B)
-                @test A * Bt ≈ A * copy(Bt)
+@testset "dot product of stride-vector like input" begin
+    for T in (Float32, Float64, ComplexF32, ComplexF64)
+        a = randn(T, 10)
+        b = view(a, 1:10)
+        c = reshape(b, 5, 2)
+        d = view(c, :, 1:2)
+        r = sum(abs2, a)
+        for x in (a,b,c,d), y in (a,b,c,d)
+            @test dot(x, y) ≈ r
+        end
+    end
+end
+
+@testset "Complex matrix x real MatOrVec etc (issue #29224)" for T in (Float32, Float64)
+    A0 = randn(complex(T), 10, 10)
+    B0 = randn(T, 10, 10)
+    @testset "Combination Mat{$(complex(T))} Mat{$T}" for Bax1 in (1:5, 2:2:10), Bax2 in (1:5, 2:2:10)
+        B = view(A0, Bax1, Bax2)
+        tB = transpose(B)
+        Bd, tBd = copy(B), copy(tB)
+        for Aax1 in (1:5, 2:2:10, (:)), Aax2 in (1:5, 2:2:10)
+            A = view(A0, Aax1, Aax2)
+            AB_correct = copy(A) * Bd
+            AtB_correct = copy(A) * tBd
+            @test A*Bd ≈ AB_correct # view times matrix
+            @test A*B ≈ AB_correct # view times view
+            @test A*tBd ≈ AtB_correct # view times transposed matrix
+            @test A*tB ≈ AtB_correct # view times transposed view
+        end
+    end
+    x = randn(T, 10)
+    y0 = similar(A0, 20)
+    @testset "Combination Mat{$(complex(T))} Vec{$T}" for Aax1 in (1:5, 2:2:10, (:)), Aax2 in (1:5, 2:2:10)
+        A = view(A0, Aax1, Aax2)
+        Ad = copy(A)
+        for indx in (1:5, 1:2:10, 6:-1:2)
+            vx = view(x, indx)
+            dx = x[indx]
+            Ax_correct = Ad*dx
+            @test A*vx ≈ A*dx ≈ Ad*vx ≈ Ax_correct # view/matrix times view/vector
+            for indy in (1:2:2size(A,1), size(A,1):-1:1)
+                y = view(y0, indy)
+                @test mul!(y, A, vx) ≈ mul!(y, A, dx) ≈ mul!(y, Ad, vx) ≈
+                    mul!(y, Ad, dx) ≈ Ax_correct   # test for uncontiguous dest
             end
         end
     end
@@ -291,6 +307,15 @@ end
                 testmatmul(_M2, v_view_noncont)
             end
         end
+    end
+end
+
+@testset "matrix x vector with negative lda or 0 stride" for T in (Float32, Float64)
+    for TA in (T, complex(T)), TB in (T, complex(T))
+        A = view(randn(TA, 10, 10), 1:10, 10:-1:1) # negative lda
+        v = view([randn(TB)], 1 .+ 0(1:10)) # 0 stride
+        Ad, vd = copy(A), copy(v)
+        @test Ad * vd ≈ A * vd ≈ Ad * v ≈ A * v
     end
 end
 
@@ -465,7 +490,7 @@ end
     X = convert(Matrix{elty}, [1.0 2.0; 3.0 4.0])
     Y = convert(Matrix{elty}, [1.5 2.5; 3.5 4.5])
     @test dot(X, Y) == convert(elty, 35.0)
-    Z = convert(Vector{Matrix{elty}}, [reshape(1:4, 2, 2), fill(1, 2, 2)])
+    Z = Matrix{elty}[reshape(1:4, 2, 2), fill(1, 2, 2)]
     @test dot(Z, Z) == convert(elty, 34.0)
 end
 

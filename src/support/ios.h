@@ -4,6 +4,7 @@
 #define JL_IOS_H
 
 #include <stdarg.h>
+#include <sys/types.h>
 #include "analyzer_annotations.h"
 
 #ifdef __cplusplus

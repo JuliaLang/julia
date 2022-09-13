@@ -66,7 +66,15 @@ function repl_cmd(cmd, out)
             end
             cmd = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        try
+            run(ignorestatus(cmd))
+        catch
+            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
     end
     nothing
 end
@@ -124,14 +132,14 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             if lasterr !== nothing
                 lasterr = scrub_repl_backtrace(lasterr)
-                istrivialerror(lasterr) || ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+                istrivialerror(lasterr) || setglobal!(Main, :err, lasterr)
                 invokelatest(display_error, errio, lasterr)
                 errcount = 0
                 lasterr = nothing
             else
                 ast = Meta.lower(Main, ast)
                 value = Core.eval(Main, ast)
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(Main, :ans, value)
                 if !(value === nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -151,7 +159,7 @@ function eval_user_input(errio, @nospecialize(ast), show_value::Bool)
             end
             errcount += 1
             lasterr = scrub_repl_backtrace(current_exceptions())
-            ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :err, lasterr)
+            setglobal!(Main, :err, lasterr)
             if errcount > 2
                 @error "It is likely that something important is broken, and Julia will not be able to continue normally" errcount
                 break
@@ -207,10 +215,6 @@ function incomplete_tag(ex::Expr)
 end
 
 function exec_options(opts)
-    if !isempty(ARGS)
-        idxs = findall(x -> x == "--", ARGS)
-        length(idxs) > 0 && deleteat!(ARGS, idxs[1])
-    end
     quiet                 = (opts.quiet != 0)
     startup               = (opts.startupfile != 2)
     history_file          = (opts.historyfile != 0)
@@ -323,8 +327,8 @@ end
 function _global_julia_startup_file()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a startup.jl file
     # If it is not found, then continue on to the relative path based on Sys.BINDIR
-    BINDIR = Sys.BINDIR::String
-    SYSCONFDIR = Base.SYSCONFDIR::String
+    BINDIR = Sys.BINDIR
+    SYSCONFDIR = Base.SYSCONFDIR
     if !isempty(SYSCONFDIR)
         p1 = abspath(BINDIR, SYSCONFDIR, "julia", "startup.jl")
         isfile(p1) && return p1
@@ -374,30 +378,27 @@ function __atreplinit(repl)
 end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
-# The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
-
-function load_InteractiveUtils()
+function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
-    if !isdefined(Main, :InteractiveUtils)
+    if !isdefined(mod, :InteractiveUtils)
         try
             let InteractiveUtils = require(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(Main, :(const InteractiveUtils = $InteractiveUtils))
-                Core.eval(Main, :(using .InteractiveUtils))
+                Core.eval(mod, :(const InteractiveUtils = $InteractiveUtils))
+                Core.eval(mod, :(using .InteractiveUtils))
                 return InteractiveUtils
             end
         catch ex
-            @warn "Failed to import InteractiveUtils into module Main" exception=(ex, catch_backtrace())
+            @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
         end
         return nothing
     end
-    return getfield(Main, :InteractiveUtils)
+    return getfield(mod, :InteractiveUtils)
 end
+
+global active_repl
 
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
-
     load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
@@ -406,17 +407,18 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             banner && Base.banner(term)
             if term.term_type == "dumb"
-                active_repl = REPL.BasicREPL(term)
+                repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
-                active_repl.history_file = history_file
+                repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+                repl.history_file = history_file
             end
+            global active_repl = repl
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
             # REPLDisplay
-            pushdisplay(REPL.REPLDisplay(active_repl))
-            _atreplinit(active_repl)
-            REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+            pushdisplay(REPL.REPLDisplay(repl))
+            _atreplinit(repl)
+            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
         end
     else
         # otherwise provide a simple fallback
@@ -514,10 +516,8 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-        # clear old invalid pointers
-        PCRE.__init__()
-    end
+    # clear any postoutput hooks that were saved in the sysimage
+    empty!(Base.postoutput_hooks)
     try
         exec_options(JLOptions())
     catch

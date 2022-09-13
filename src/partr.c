@@ -34,13 +34,18 @@ static const int16_t sleeping = 1;
 // information: These observations require sequentially-consistent fences to be inserted between each of those operational phases.
 // [^store_buffering_1]: These fences are used to avoid the cycle 2b -> 1a -> 1b -> 2a -> 2b where
 // * Dequeuer:
-//   * 1a: `jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping)`
-//   * 1b: `multiq_check_empty` returns true
+//   * 1: `jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping)`
 // * Enqueuer:
-//   * 2a: `multiq_insert`
-//   * 2b: `jl_atomic_load_relaxed(&ptls->sleep_check_state)` in `jl_wakeup_thread` returns `not_sleeping`
+//   * 2: `jl_atomic_load_relaxed(&ptls->sleep_check_state)` in `jl_wakeup_thread` returns `not_sleeping`
 // i.e., the dequeuer misses the enqueue and enqueuer misses the sleep state transition.
-
+// [^store_buffering_2]: and also
+// * Enqueuer:
+//   * 1a: `jl_atomic_store_relaxed(jl_uv_n_waiters, 1)` in `JL_UV_LOCK`
+//   * 1b: "cheap read" of `handle->pending` in `uv_async_send` (via `JL_UV_LOCK`) loads `0`
+// * Dequeuer:
+//   * 2a: store `2` to `handle->pending` in `uv_async_send` (via `JL_UV_LOCK` in `jl_task_get_next`)
+//   * 2b: `jl_atomic_load_relaxed(jl_uv_n_waiters)` in `jl_task_get_next` returns `0`
+// i.e., the dequeuer misses the `n_waiters` is set and enqueuer misses the `uv_stop` flag (in `signal_async`) transition to cleared
 
 JULIA_DEBUG_SLEEPWAKE(
 uint64_t wakeup_enter;
@@ -49,10 +54,7 @@ uint64_t io_wakeup_enter;
 uint64_t io_wakeup_leave;
 );
 
-uv_mutex_t *sleep_locks;
-uv_cond_t *wake_signals;
-
-JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int16_t tid) JL_NOTSAFEPOINT
 {
     // Try to acquire the lock on this task.
     int16_t was = jl_atomic_load_relaxed(&task->tid);
@@ -63,192 +65,33 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
     return 0;
 }
 
+JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSAFEPOINT
+{
+    if (tpid < 0 || tpid >= jl_n_threadpools)
+        return 0;
+    task->threadpoolid = tpid;
+    return 1;
+}
+
 // GC functions used
 extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
                                          jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
 
-// multiq
-// ---
-
-/* a task heap */
-typedef struct taskheap_tag {
-    uv_mutex_t lock;
-    jl_task_t **tasks;
-    _Atomic(int32_t) ntasks;
-    _Atomic(int16_t) prio;
-} taskheap_t;
-
-/* multiqueue parameters */
-static const int32_t heap_d = 8;
-static const int heap_c = 2;
-
-/* size of each heap */
-static const int tasks_per_heap = 65536; // TODO: this should be smaller by default, but growable!
-
-/* the multiqueue's heaps */
-static taskheap_t *heaps;
-static int32_t heap_p;
-
-/* unbias state for the RNG */
-static uint64_t cong_unbias;
-
-
-static inline void multiq_init(void)
-{
-    heap_p = heap_c * jl_n_threads;
-    heaps = (taskheap_t *)calloc(heap_p, sizeof(taskheap_t));
-    for (int32_t i = 0; i < heap_p; ++i) {
-        uv_mutex_init(&heaps[i].lock);
-        heaps[i].tasks = (jl_task_t **)calloc(tasks_per_heap, sizeof(jl_task_t*));
-        jl_atomic_store_relaxed(&heaps[i].ntasks, 0);
-        jl_atomic_store_relaxed(&heaps[i].prio, INT16_MAX);
-    }
-    unbias_cong(heap_p, &cong_unbias);
-}
-
-
-static inline void sift_up(taskheap_t *heap, int32_t idx)
-{
-    if (idx > 0) {
-        int32_t parent = (idx-1)/heap_d;
-        if (heap->tasks[idx]->prio < heap->tasks[parent]->prio) {
-            jl_task_t *t = heap->tasks[parent];
-            heap->tasks[parent] = heap->tasks[idx];
-            heap->tasks[idx] = t;
-            sift_up(heap, parent);
-        }
-    }
-}
-
-
-static inline void sift_down(taskheap_t *heap, int32_t idx)
-{
-    if (idx < jl_atomic_load_relaxed(&heap->ntasks)) {
-        for (int32_t child = heap_d*idx + 1;
-                child < tasks_per_heap && child <= heap_d*idx + heap_d;
-                ++child) {
-            if (heap->tasks[child]
-                    && heap->tasks[child]->prio < heap->tasks[idx]->prio) {
-                jl_task_t *t = heap->tasks[idx];
-                heap->tasks[idx] = heap->tasks[child];
-                heap->tasks[child] = t;
-                sift_down(heap, child);
-            }
-        }
-    }
-}
-
-
-static inline int multiq_insert(jl_task_t *task, int16_t priority)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    uint64_t rn;
-
-    task->prio = priority;
-    do {
-        rn = cong(heap_p, cong_unbias, &ptls->rngseed);
-    } while (uv_mutex_trylock(&heaps[rn].lock) != 0);
-
-    if (jl_atomic_load_relaxed(&heaps[rn].ntasks) >= tasks_per_heap) {
-        uv_mutex_unlock(&heaps[rn].lock);
-        // multiq insertion failed, increase #tasks per heap
-        return -1;
-    }
-
-    int32_t ntasks = jl_atomic_load_relaxed(&heaps[rn].ntasks);
-    jl_atomic_store_relaxed(&heaps[rn].ntasks, ntasks + 1);
-    heaps[rn].tasks[ntasks] = task;
-    sift_up(&heaps[rn], ntasks);
-    int16_t prio = jl_atomic_load_relaxed(&heaps[rn].prio);
-    if (task->prio < prio)
-        jl_atomic_store_relaxed(&heaps[rn].prio, task->prio);
-    uv_mutex_unlock(&heaps[rn].lock);
-
-    return 0;
-}
-
-
-static inline jl_task_t *multiq_deletemin(void)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    uint64_t rn1 = 0, rn2;
-    int32_t i;
-    int16_t prio1, prio2;
-    jl_task_t *task;
- retry:
-    jl_gc_safepoint();
-    for (i = 0; i < heap_p; ++i) {
-        rn1 = cong(heap_p, cong_unbias, &ptls->rngseed);
-        rn2 = cong(heap_p, cong_unbias, &ptls->rngseed);
-        prio1 = jl_atomic_load_relaxed(&heaps[rn1].prio);
-        prio2 = jl_atomic_load_relaxed(&heaps[rn2].prio);
-        if (prio1 > prio2) {
-            prio1 = prio2;
-            rn1 = rn2;
-        }
-        else if (prio1 == prio2 && prio1 == INT16_MAX)
-            continue;
-        if (uv_mutex_trylock(&heaps[rn1].lock) == 0) {
-            if (prio1 == jl_atomic_load_relaxed(&heaps[rn1].prio))
-                break;
-            uv_mutex_unlock(&heaps[rn1].lock);
-        }
-    }
-    if (i == heap_p)
-        return NULL;
-
-    task = heaps[rn1].tasks[0];
-    if (!jl_set_task_tid(task, ptls->tid)) {
-        uv_mutex_unlock(&heaps[rn1].lock);
-        goto retry;
-    }
-    int32_t ntasks = jl_atomic_load_relaxed(&heaps[rn1].ntasks) - 1;
-    jl_atomic_store_relaxed(&heaps[rn1].ntasks, ntasks);
-    heaps[rn1].tasks[0] = heaps[rn1].tasks[ntasks];
-    heaps[rn1].tasks[ntasks] = NULL;
-    prio1 = INT16_MAX;
-    if (ntasks > 0) {
-        sift_down(&heaps[rn1], 0);
-        prio1 = heaps[rn1].tasks[0]->prio;
-    }
-    jl_atomic_store_relaxed(&heaps[rn1].prio, prio1);
-    uv_mutex_unlock(&heaps[rn1].lock);
-
-    return task;
-}
-
-
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
-{
-    int32_t i, j;
-    for (i = 0; i < heap_p; ++i)
-        for (j = 0; j < jl_atomic_load_relaxed(&heaps[i].ntasks); ++j)
-            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
-}
-
-
-static int multiq_check_empty(void)
-{
-    int32_t i;
-    for (i = 0; i < heap_p; ++i) {
-        if (jl_atomic_load_relaxed(&heaps[i].ntasks) != 0)
-            return 0;
-    }
-    return 1;
-}
-
-
-
 // parallel task runtime
 // ---
 
+JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    // one-extend unbias back to 64-bits
+    return cong(max, -(uint64_t)-unbias, &ptls->rngseed);
+}
+
 // initialize the threading infrastructure
-// (used only by the main thread)
+// (called only by the main thread)
 void jl_init_threadinginfra(void)
 {
-    /* initialize the synchronization trees pool and the multiqueue */
-    multiq_init();
-
+    /* initialize the synchronization trees pool */
     sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
     char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
     if (cp) {
@@ -256,17 +99,6 @@ void jl_init_threadinginfra(void)
             sleep_threshold = UINT64_MAX;
         else
             sleep_threshold = (uint64_t)strtol(cp, NULL, 10);
-    }
-
-    jl_ptls_t ptls = jl_current_task->ptls;
-    jl_install_thread_signal_handler(ptls);
-
-    int16_t tid;
-    sleep_locks = (uv_mutex_t*)calloc(jl_n_threads, sizeof(uv_mutex_t));
-    wake_signals = (uv_cond_t*)calloc(jl_n_threads, sizeof(uv_cond_t));
-    for (tid = 0; tid < jl_n_threads; tid++) {
-        uv_mutex_init(&sleep_locks[tid]);
-        uv_cond_init(&wake_signals[tid]);
     }
 }
 
@@ -285,7 +117,6 @@ void jl_threadfun(void *arg)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
-    jl_install_thread_signal_handler(ptls);
 
     // wait for all threads
     jl_gc_state_set(ptls, JL_GC_STATE_SAFE, 0);
@@ -296,18 +127,6 @@ void jl_threadfun(void *arg)
 
     (void)jl_gc_unsafe_enter(ptls);
     jl_finish_task(ct); // noreturn
-}
-
-
-// enqueue the specified task for execution
-JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
-{
-    char failed;
-    if (multiq_insert(task, task->prio) == -1)
-        failed = 1;
-    failed = 0;
-    JL_PROBE_RT_TASKQ_INSERT(jl_current_task->ptls, task);
-    return failed;
 }
 
 
@@ -369,9 +188,9 @@ static int wake_thread(int16_t tid)
     if (jl_atomic_load_relaxed(&other->sleep_check_state) == sleeping) {
         if (jl_atomic_cmpswap_relaxed(&other->sleep_check_state, &state, not_sleeping)) {
             JL_PROBE_RT_SLEEP_CHECK_WAKE(other, state);
-            uv_mutex_lock(&sleep_locks[tid]);
-            uv_cond_signal(&wake_signals[tid]);
-            uv_mutex_unlock(&sleep_locks[tid]);
+            uv_mutex_lock(&other->sleep_lock);
+            uv_cond_signal(&other->wake_signal);
+            uv_mutex_unlock(&other->sleep_lock);
             return 1;
         }
     }
@@ -410,7 +229,8 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         if (wake_thread(tid)) {
             // check if we need to notify uv_run too
             jl_fence();
-            jl_task_t *tid_task = jl_atomic_load_relaxed(&jl_all_tls_states[tid]->current_task);
+            jl_ptls_t other = jl_all_tls_states[tid];
+            jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
             // now that we have changed the thread to not-sleeping, ensure that
             // either it has not yet acquired the libuv lock, or that it will
             // observe the change of state to not_sleeping
@@ -439,21 +259,22 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 }
 
 
-// get the next runnable task from the multiq
+// get the next runnable task
 static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
     jl_gc_safepoint();
-    jl_value_t *args[2] = { trypoptask, q };
-    jl_task_t *task = (jl_task_t*)jl_apply(args, 2);
+    jl_task_t *task = (jl_task_t*)jl_apply_generic(trypoptask, &q, 1);
     if (jl_typeis(task, jl_task_type)) {
         int self = jl_atomic_load_relaxed(&jl_current_task->tid);
         jl_set_task_tid(task, self);
         return task;
     }
-    task = multiq_deletemin();
-    if (task)
-        JL_PROBE_RT_TASKQ_GET(jl_current_task->ptls, task);
-    return task;
+    return NULL;
+}
+
+static int check_empty(jl_value_t *checkempty)
+{
+    return jl_apply_generic(checkempty, NULL, 0) == jl_true;
 }
 
 static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
@@ -462,13 +283,13 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
     // by the thread itself. As a result, if this returns false, it will
     // continue returning false. If it returns true, we know the total
     // modification order of the fences.
-    jl_fence(); // [^store_buffering_1]
+    jl_fence(); // [^store_buffering_1] [^store_buffering_2]
     return jl_atomic_load_relaxed(&ptls->sleep_check_state) == sleeping;
 }
 
 extern _Atomic(unsigned) _threadedregion;
 
-JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
+JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty)
 {
     jl_task_t *ct = jl_current_task;
     uint64_t start_cycles = 0;
@@ -480,7 +301,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
 
         // quick, race-y check to see if there seems to be any stuff in there
         jl_cpu_pause();
-        if (!multiq_check_empty()) {
+        if (!check_empty(checkempty)) {
             start_cycles = 0;
             continue;
         }
@@ -492,7 +313,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]
             JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
-            if (!multiq_check_empty()) { // uses relaxed loads
+            if (!check_empty(checkempty)) { // uses relaxed loads
                 if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
                     jl_atomic_store_relaxed(&ptls->sleep_check_state, not_sleeping); // let other threads know they don't need to wake us
                     JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
@@ -582,13 +403,13 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q)
             // the other threads will just wait for an individual wake signal to resume
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
             int8_t gc_state = jl_gc_safe_enter(ptls);
-            uv_mutex_lock(&sleep_locks[ptls->tid]);
+            uv_mutex_lock(&ptls->sleep_lock);
             while (may_sleep(ptls)) {
-                uv_cond_wait(&wake_signals[ptls->tid], &sleep_locks[ptls->tid]);
+                uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 // TODO: help with gc work here, if applicable
             }
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
-            uv_mutex_unlock(&sleep_locks[ptls->tid]);
+            uv_mutex_unlock(&ptls->sleep_lock);
             JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
             jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
             start_cycles = 0;
