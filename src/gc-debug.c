@@ -535,7 +535,7 @@ void gc_scrub_record_task(jl_task_t *t)
     arraylist_push(&jl_gc_debug_tasks, t);
 }
 
-static void gc_scrub_range(char *low, char *high)
+JL_NO_ASAN static void gc_scrub_range(char *low, char *high)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_jmp_buf *old_buf = jl_get_safe_restore();

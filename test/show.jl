@@ -603,7 +603,7 @@ let q1 = Meta.parse(repr(:("$(a)b"))),
     @test q1.args[1].args == [:a, "b"]
 
     @test isa(q2, Expr)
-    @test q2.args[1].head == :string
+    @test q2.args[1].head === :string
     @test q2.args[1].args == [:ab,]
 end
 
@@ -769,10 +769,23 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+# Just check it doesn't error
+f46594(::Vararg{T, 2}) where T = 1
+let repr = sprint(show, "text/html", first(methods(f46594)))
+    @test occursin("f46594(::Vararg{T, 2}) where T", replace(repr, r"</?[A-Za-z]>"=>""))
+end
+
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
 end
 let repr = sprint(show, "text/plain", methods(triangular_methodshow))
     @test occursin("where {T2<:Integer, T1<:T2}", repr)
+end
+
+struct S45879{P} end
+let ms = methods(S45879)
+    @test ms isa Base.MethodList
+    @test length(ms) == 0
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -1431,7 +1444,7 @@ struct var"#X#" end
 var"#f#"() = 2
 struct var"%X%" end  # Invalid name without '#'
 
-# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# (Just to make this test more sustainable,) we don't necessarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
 @test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
 @test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
@@ -2292,6 +2305,8 @@ end
     @eval f1(var"a.b") = 3
     @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
 
+    @test sprint(_show, Method[]) == "0-element Vector{Method}"
+
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 
     @eval f2(; var"123") = 5
@@ -2373,3 +2388,33 @@ Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
 @test Base.alignment(stdout, ⛵()) == (0, 2)
 @test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
 @test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
+
+# `show` implementations for `Method`
+let buf = IOBuffer()
+
+    # single line printing by default
+    show(buf, only(methods(sin, (Float64,))))
+    @test !occursin('\n', String(take!(buf)))
+
+    # two-line printing for rich display
+    show(buf, MIME("text/plain"), only(methods(sin, (Float64,))))
+    @test occursin('\n', String(take!(buf)))
+end
+
+@testset "basic `show_ir` functionality tests" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            let io = IOBuffer()
+                for i = 1:10
+                    # make sure we don't error on printing IRs at any optimization level
+                    ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
+                    @test try; show(io, ir); true; catch; false; end
+                    compact = Core.Compiler.IncrementalCompact(ir)
+                    @test try; show(io, compact); true; catch; false; end
+                end
+            end
+        end
+        close(io)
+        @test isempty(read(f, String)) # make sure we don't unnecessarily lean anything into `stdout`
+    end
+end

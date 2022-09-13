@@ -36,6 +36,11 @@ module DeprecationTests # to test @deprecate
     # test that @deprecate_moved can be overridden by an import
     Base.@deprecate_moved foo1234 "Foo"
     Base.@deprecate_moved bar "Bar" false
+
+    # test that positional and keyword arguments are forwarded when
+    # there is no explicit type annotation
+    new_return_args(args...; kwargs...) = args, NamedTuple(kwargs)
+    @deprecate old_return_args new_return_args
 end # module
 module Foo1234
     export foo1234
@@ -108,6 +113,11 @@ begin # @deprecate
         T21972()
     end
     @test_deprecated "something" f21972()
+
+    # test that positional and keyword arguments are forwarded when
+    # there is no explicit type annotation
+    @test DeprecationTests.old_return_args(1, 2, 3) == ((1, 2, 3),(;))
+    @test DeprecationTests.old_return_args(1, 2, 3; a = 4, b = 5) == ((1, 2, 3), (a = 4, b = 5))
 end
 
 f24658() = depwarn24658()
@@ -132,7 +142,7 @@ f25130()
 testlogs = testlogger.logs
 @test length(testlogs) == 2
 @test testlogs[1].id != testlogs[2].id
-@test testlogs[1].kwargs[:caller].func == Symbol("top-level scope")
+@test testlogs[1].kwargs[:caller].func === Symbol("top-level scope")
 @test all(l.message == "f25130 message" for l in testlogs)
 global_logger(prev_logger)
 
@@ -157,7 +167,7 @@ begin # tuple indexed by float deprecation
     @test_throws Exception @test_warn r"`getindex(t::Tuple, i::Real)` is deprecated" getindex((1,2), -1.0)
 end
 
-@testset "@deprecated error message" begin
+begin #@deprecated error message
     @test_throws(
         "if the third `export_old` argument is not specified or `true`,",
         @eval @deprecate M.f() g()
@@ -171,7 +181,7 @@ end
     # `Old{T}(args...) where {...} = new(args...)` or
     # `(Old{T} where {...})(args...) = new(args...)`.
     # Since nobody has requested this feature yet, make sure that it throws, until we
-    # conciously define
+    # consciously define
     @test_throws(
         "invalid usage of @deprecate",
         @eval @deprecate Foo{T} where {T <: Int} g true

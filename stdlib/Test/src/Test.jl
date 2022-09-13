@@ -118,17 +118,23 @@ struct Fail <: Result
     orig_expr::String
     data::Union{Nothing, String}
     value::String
+    context::Union{Nothing, String}
     source::LineNumberNode
     message_only::Bool
-    function Fail(test_type::Symbol, orig_expr, data, value, source::LineNumberNode, message_only::Bool=false)
+    function Fail(test_type::Symbol, orig_expr, data, value, context, source::LineNumberNode, message_only::Bool)
         return new(test_type,
             string(orig_expr),
             data === nothing ? nothing : string(data),
             string(isa(data, Type) ? typeof(value) : value),
+            context,
             source,
             message_only)
     end
 end
+
+# Deprecated fallback constructor without `context` argument (added in Julia 1.9). Remove in Julia 2.0.
+Fail(test_type::Symbol, orig_expr, data, value, source::LineNumberNode, message_only::Bool=false) =
+    Fail(test_type, orig_expr, data, value, nothing, source, message_only)
 
 function Base.show(io::IO, t::Fail)
     printstyled(io, "Test Failed"; bold=true, color=Base.error_color())
@@ -149,10 +155,15 @@ function Base.show(io::IO, t::Fail)
         # An exception was expected, but no exception was thrown
         print(io, "\n    Expected: ", data)
         print(io, "\n  No exception thrown")
-    elseif t.test_type === :test && data !== nothing
-        # The test was an expression, so display the term-by-term
-        # evaluated version as well
-        print(io, "\n   Evaluated: ", data)
+    elseif t.test_type === :test
+        if data !== nothing
+            # The test was an expression, so display the term-by-term
+            # evaluated version as well
+            print(io, "\n   Evaluated: ", data)
+        end
+        if t.context !== nothing
+            print(io, "\n     Context: ", t.context)
+        end
     end
 end
 
@@ -643,7 +654,7 @@ function do_test(result::ExecutionResult, orig_expr)
         testres = if isa(value, Bool)
             # a true value Passes
             value ? Pass(:test, orig_expr, result.data, value, result.source) :
-                    Fail(:test, orig_expr, result.data, value, result.source)
+                    Fail(:test, orig_expr, result.data, value, nothing, result.source, false)
         else
             # If the result is non-Boolean, this counts as an Error
             Error(:test_nonbool, orig_expr, value, nothing, result.source)
@@ -681,6 +692,9 @@ a string, regular expression, or list of strings occurring in the displayed erro
 a matching function,
 or a value (which will be tested for equality by comparing fields).
 Note that `@test_throws` does not support a trailing keyword form.
+
+!!! compat "Julia 1.8"
+    The ability to specify anything other than a type or a value as `exception` requires Julia v1.8 or later.
 
 # Examples
 ```jldoctest
@@ -770,10 +784,10 @@ function do_test_throws(result::ExecutionResult, orig_expr, extype)
         if success
             testres = Pass(:test_throws, orig_expr, extype, exc, result.source, message_only)
         else
-            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, result.source, message_only)
+            testres = Fail(:test_throws_wrong, orig_expr, extype, exc, nothing, result.source, message_only)
         end
     else
-        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, result.source)
+        testres = Fail(:test_throws_nothing, orig_expr, extype, nothing, nothing, result.source, false)
     end
     record(get_testset(), testres)
 end
@@ -946,6 +960,33 @@ function record(ts::FallbackTestSet, t::Union{Fail, Error})
 end
 # We don't need to do anything as we don't record anything
 finish(ts::FallbackTestSet) = ts
+
+#-----------------------------------------------------------------------
+
+"""
+    ContextTestSet
+
+Passes test failures through to the parent test set, while adding information
+about a context object that is being tested.
+"""
+struct ContextTestSet <: AbstractTestSet
+    parent_ts::AbstractTestSet
+    context_name::Union{Symbol, Expr}
+    context::Any
+end
+
+function ContextTestSet(name::Union{Symbol, Expr}, @nospecialize(context))
+    if (name isa Expr) && (name.head != :tuple)
+        error("Invalid syntax: $(name)")
+    end
+    return ContextTestSet(get_testset(), name, context)
+end
+record(c::ContextTestSet, t) = record(c.parent_ts, t)
+function record(c::ContextTestSet, t::Fail)
+    context = string(c.context_name, " = ", c.context)
+    context = t.context === nothing ? context : string(t.context, "\n              ", context)
+    record(c.parent_ts, Fail(t.test_type, t.orig_expr, t.data, t.value, context, t.source, t.message_only))
+end
 
 #-----------------------------------------------------------------------
 
@@ -1268,8 +1309,12 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset let v = (...) ... end
 
-Starts a new test set, or multiple test sets if a `for` loop is provided.
+# With begin/end or function call
+
+When @testset is used, with begin/end or a single function call, the macro
+starts a new test set in which to evaluate the given expression.
 
 If no custom testset type is given it defaults to creating a `DefaultTestSet`.
 `DefaultTestSet` records all the results and, if there are any `Fail`s or
@@ -1309,7 +1354,7 @@ reproducibility in case of failure, and to allow seamless
 re-arrangements of `@testset`s regardless of their side-effect on the
 global RNG state.
 
-# Examples
+## Examples
 ```jldoctest; filter = r"trigonometric identities |    4      4  [0-9\\.]+s"
 julia> @testset "trigonometric identities" begin
            θ = 2/3*π
@@ -1321,6 +1366,37 @@ julia> @testset "trigonometric identities" begin
 Test Summary:            | Pass  Total  Time
 trigonometric identities |    4      4  0.2s
 ```
+
+# `@testset for`
+
+When `@testset for` is used, the macro starts a new test for each iteration of
+the provided loop. The semantics of each test set are otherwise identical to that
+of that `begin/end` case (as if used for each loop iteration).
+
+# `@testset let`
+
+When `@testset let` is used, the macro starts a *transparent* test set with
+the given object added as a context object to any failing test contained
+therein. This is useful when performing a set of related tests on one larger
+object and it is desirable to print this larger object when any of the
+individual tests fail. Transparent test sets do not introduce additional levels
+of nesting in the test set hierarchy and are passed through directly to the
+parent test set (with the context object appended to any failing tests.)
+
+    !!! compat "Julia 1.9"
+    `@testset let` requires at least Julia 1.9.
+
+## Examples
+```jldoctest
+julia> @testset let logi = log(im)
+           @test imag(logi) == π/2
+           @test !iszero(real(logi))
+       end
+Test Failed at none:3
+  Expression: !(iszero(real(logi)))
+     Context: logi = 0.0 + 1.5707963267948966im
+ERROR: There was an error during testing
+```
 """
 macro testset(args...)
     isempty(args) && error("No arguments to @testset")
@@ -1328,7 +1404,7 @@ macro testset(args...)
     tests = args[end]
 
     # Determine if a single block or for-loop style
-    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head != :call)
+    if !isa(tests,Expr) || (tests.head !== :for && tests.head !== :block && tests.head !== :call && tests.head !== :let)
 
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
@@ -1337,6 +1413,8 @@ macro testset(args...)
 
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
+    elseif tests.head === :let
+        return testset_context(args, tests, __source__)
     else
         return testset_beginend_call(args, tests, __source__)
     end
@@ -1344,6 +1422,35 @@ end
 
 trigger_test_failure_break(@nospecialize(err)) =
     ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
+
+"""
+Generate the code for an `@testset` with a `let` argument.
+"""
+function testset_context(args, tests, source)
+    desc, testsettype, options = parse_testset_args(args[1:end-1])
+    if desc !== nothing || testsettype !== nothing
+        # Reserve this syntax if we ever want to allow this, but for now,
+        # just do the transparent context test set.
+        error("@testset with a `let` argument cannot be customized")
+    end
+
+    assgn = tests.args[1]
+    if !isa(assgn, Expr) || assgn.head !== :(=)
+        error("`@testset let` must have exactly one assignment")
+    end
+    assignee = assgn.args[1]
+
+    tests.args[2] = quote
+        $push_testset($(ContextTestSet)($(QuoteNode(assignee)), $assignee; $options...))
+        try
+            $(tests.args[2])
+        finally
+            $pop_testset()
+        end
+    end
+
+    return esc(tests)
+end
 
 """
 Generate the code for a `@testset` with a function call or `begin`/`end` argument
@@ -1411,7 +1518,7 @@ end
 
 function failfast_print()
     printstyled("\nFail-fast enabled:"; color = Base.error_color(), bold=true)
-    printstyled(" Fail or Error occured\n\n"; color = Base.error_color())
+    printstyled(" Fail or Error occurred\n\n"; color = Base.error_color())
 end
 
 """
@@ -1611,8 +1718,7 @@ Int64
 
 julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
-  from f(a)
-     @ Main none:1
+  from f(a) @ Main none:1
 Arguments
   #self#::Core.Const(f)
   a::Int64
@@ -1731,11 +1837,11 @@ function detect_ambiguities(mods::Module...;
     ambs = Set{Tuple{Method,Method}}()
     mods = collect(mods)::Vector{Module}
     function sortdefs(m1::Method, m2::Method)
-        ord12 = m1.file < m2.file
-        if !ord12 && (m1.file == m2.file)
-            ord12 = m1.line < m2.line
+        ord12 = cmp(m1.file, m2.file)
+        if ord12 == 0
+            ord12 = cmp(m1.line, m2.line)
         end
-        return ord12 ? (m1, m2) : (m2, m1)
+        return ord12 <= 0 ? (m1, m2) : (m2, m1)
     end
     function examine(mt::Core.MethodTable)
         for m in Base.MethodList(mt)

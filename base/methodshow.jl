@@ -11,7 +11,7 @@ function strip_gensym(sym)
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[unwrapva(min(i, end))]
+    t = unwrapva(sig.parameters[min(i, end)])
     if i == nargs && isva
         va = sig.parameters[end]
         if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
@@ -205,7 +205,12 @@ function sym_to_string(sym)
     end
 end
 
-function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width = -1)
+# default compact view
+show(io::IO, m::Method; kwargs...) = show_method(IOContext(io, :compact=>true), m; kwargs...)
+
+show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwargs...)
+
+function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 1)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -242,8 +247,12 @@ function show(io::IO, m::Method; modulecolor = :light_black, digit_align_width =
     end
 
     # module & file, re-using function from errorshow.jl
-    println(io)
-    print_module_path_file(io, m.module, string(file), line, modulecolor, digit_align_width+4)
+    if get(io, :compact, false) # single-line mode
+        print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width)
+    else
+        println(io)
+        print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width=digit_align_width+4)
+    end
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -259,7 +268,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && last(ms).sig === Tuple ?
+               : mt.module === Core && mt.defs isa Core.TypeMapEntry && (mt.defs.func::Method).sig === Tuple ?
                     "builtin function"
                : # else
                     "generic function")
@@ -292,7 +301,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
-    modul = if mt === _TYPE_NAME.mt # type constructor
+    modul = if mt === _TYPE_NAME.mt && length(ms) > 0 # type constructor
             which(ms.ms[1].module, ms.ms[1].name)
         else
             mt.module
@@ -313,7 +322,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
                 m = parentmodule_before_main(meth.module)
                 get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             end
-            show(io, meth; modulecolor)
+            show_method(io, meth; modulecolor)
 
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
@@ -327,7 +336,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     if rest > 0
         println(io)
         if rest == 1
-            show(io, last)
+            show_method(io, last)
         else
             print(io, "... $rest methods not shown")
             if hasname
@@ -374,7 +383,7 @@ function url(m::Method)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
                 LibGit2.with(LibGit2.GitConfig(repo)) do cfg
                     u = LibGit2.get(cfg, "remote.origin.url", "")
-                    u = match(LibGit2.GITHUB_REGEX,u).captures[1]
+                    u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
                     commit = string(LibGit2.head_oid(repo))
                     root = LibGit2.path(repo)
                     if startswith(file, root) || startswith(realpath(file), root)
@@ -463,6 +472,8 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
             push!(last_shown_line_infos, (string(file), line))
         end
     end
+    first && summary(io, mt)
+    nothing
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
@@ -475,4 +486,5 @@ function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
         end
         print(io, "</ul>")
     end
+    nothing
 end

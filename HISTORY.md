@@ -115,7 +115,8 @@ Standard library changes
 
 #### InteractiveUtils
 
-* New macro `@time_imports` for reporting any time spent importing packages and their dependencies ([#41612]).
+* New macro `@time_imports` for reporting any time spent importing packages and their dependencies, highlighting
+  compilation and recompilation time as percentages per import ([#41612],[#45064]).
 
 #### LinearAlgebra
 
@@ -200,6 +201,11 @@ Standard library changes
   definitions, including to other function calls, while recording all intermediate test results ([#42518]).
 * `TestLogger` and `LogRecord` are now exported from the Test stdlib ([#44080]).
 
+#### Distributed
+
+* SSHManager now supports workers with csh/tcsh login shell, via `addprocs()` option `shell=:csh` ([#41485]).
+
+
 Deprecated or removed
 ---------------------
 
@@ -231,6 +237,7 @@ Tooling Improvements
 [#41312]: https://github.com/JuliaLang/julia/issues/41312
 [#41328]: https://github.com/JuliaLang/julia/issues/41328
 [#41449]: https://github.com/JuliaLang/julia/issues/41449
+[#41485]: https://github.com/JuliaLang/julia/issues/41485
 [#41551]: https://github.com/JuliaLang/julia/issues/41551
 [#41576]: https://github.com/JuliaLang/julia/issues/41576
 [#41612]: https://github.com/JuliaLang/julia/issues/41612

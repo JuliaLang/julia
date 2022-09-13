@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Core.Compiler: has_typevar
+
 function show(io::IO, ::MIME"text/plain", u::UndefInitializer)
     show(io, u)
     get(io, :compact, false) && return
@@ -48,54 +50,61 @@ show(io::IO, ::MIME"text/plain", c::ComposedFunction) = show(io, c)
 show(io::IO, ::MIME"text/plain", c::Returns) = show(io, c)
 show(io::IO, ::MIME"text/plain", s::Splat) = show(io, s)
 
-const ansi_regex = r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])"
-# An iterator similar to `pairs` but skips over "tokens" corresponding to
-# ansi sequences
-struct IgnoreAnsiIterator
-    captures::Base.RegexMatchIterator
-end
-IgnoreAnsiIterator(s::AbstractString) =
-    IgnoreAnsiIterator(eachmatch(ansi_regex, s))
+const ansi_regex = r"(?s)(?:\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]))|."
 
-Base.IteratorSize(::Type{IgnoreAnsiIterator}) = Base.SizeUnknown()
-function iterate(I::IgnoreAnsiIterator, (i, m_st)=(1, iterate(I.captures)))
-    # Advance until the next non ansi sequence
-    if m_st !== nothing
-        m, j = m_st
-        if m.offset == i
-            i += sizeof(m.match)
-            return iterate(I, (i, iterate(I.captures, j)))
-        end
-    end
-    ci = iterate(I.captures.string, i)
-    ci === nothing && return nothing
-    i_prev = i
-    (c, i) = ci
-    return (i_prev => c), (i, m_st)
+# Pseudo-character representing an ANSI delimiter
+struct ANSIDelimiter
+    del::SubString{String}
 end
+ncodeunits(c::ANSIDelimiter) = ncodeunits(c.del)
+textwidth(::ANSIDelimiter) = 0
 
-function _truncate_at_width_or_chars(ignore_ansi::Bool, str, width, chars="", truncmark="…")
+# An iterator similar to `pairs(::String)` but whose values are Char or ANSIDelimiter
+struct ANSIIterator
+    captures::RegexMatchIterator
+end
+ANSIIterator(s::AbstractString) = ANSIIterator(eachmatch(ansi_regex, s))
+
+IteratorSize(::Type{ANSIIterator}) = SizeUnknown()
+eltype(::Type{ANSIIterator}) = Pair{Int, Union{Char,ANSIDelimiter}}
+function iterate(I::ANSIIterator, (i, m_st)=(1, iterate(I.captures)))
+    m_st === nothing && return nothing
+    m, (j, new_m_st) = m_st
+    c = lastindex(m.match) == 1 ? only(m.match) : ANSIDelimiter(m.match)
+    return (i => c, (j, iterate(I.captures, (j, new_m_st))))
+end
+textwidth(I::ANSIIterator) = mapreduce(textwidth∘last, +, I; init=0)
+
+function _truncate_at_width_or_chars(ignore_ANSI::Bool, str, width, rpad=false, chars="\r\n", truncmark="…")
     truncwidth = textwidth(truncmark)
     (width <= 0 || width < truncwidth) && return ""
     wid = truncidx = lastidx = 0
-    ignore_ansi &= match(ansi_regex, str) !== nothing
-    I = ignore_ansi ? IgnoreAnsiIterator(str) : pairs(str)
-    for (_lastidx, c) in I
-        lastidx = _lastidx
-        wid += textwidth(c)
-        if wid >= (width - truncwidth) && truncidx == 0
-            truncidx = lastidx
+    # if str needs to be truncated, truncidx is the index of truncation.
+    stop = false # once set, only ANSI delimiters will be kept as new characters.
+    needANSIend = false # set if the last ANSI delimiter before truncidx is not "\033[0m".
+    I = ignore_ANSI ? ANSIIterator(str) : pairs(str)
+    for (i, c) in I
+        if c isa ANSIDelimiter
+            truncidx == 0 && (needANSIend = c != "\033[0m")
+            lastidx = i + ncodeunits(c) - 1
+        else
+            stop && break
+            wid += textwidth(c)
+            truncidx == 0 && wid > (width - truncwidth) && (truncidx = lastidx)
+            lastidx = i
+            c in chars && break
+            stop = wid >= width
         end
-        (wid >= width || c in chars) && break
     end
-    if lastidx != 0 && str[lastidx] in chars
-        lastidx = prevind(str, lastidx)
-    end
+    lastidx == 0 && return rpad ? ' '^width : ""
+    str[lastidx] in chars && (lastidx = prevind(str, lastidx))
+    ANSIend = needANSIend ? "\033[0m" : ""
+    pad = rpad ? repeat(' ', max(0, width-wid)) : ""
     truncidx == 0 && (truncidx = lastidx)
     if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
+        return string(SubString(str, 1, truncidx), ANSIend, truncmark, pad)
     else
-        return String(str)
+        return string(str, ANSIend, pad)
     end
 end
 
@@ -122,7 +131,7 @@ function show(io::IO, ::MIME"text/plain", iter::Union{KeySet,ValueIterator})
 
         if limit
             str = sprint(show, v, context=io, sizehint=0)
-            str = _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n")
+            str = _truncate_at_width_or_chars(get(io, :color, false), str, cols)
             print(io, str)
         else
             show(io, v)
@@ -154,19 +163,20 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
+        hascolor = get(recur_io, :color, false)
         ks = Vector{String}(undef, min(rows, length(t)))
         vs = Vector{String}(undef, min(rows, length(t)))
-        keylen = 0
-        vallen = 0
+        keywidth = 0
+        valwidth = 0
         for (i, (k, v)) in enumerate(t)
             i > rows && break
             ks[i] = sprint(show, k, context=recur_io_k, sizehint=0)
             vs[i] = sprint(show, v, context=recur_io_v, sizehint=0)
-            keylen = clamp(length(ks[i]), keylen, cols)
-            vallen = clamp(length(vs[i]), vallen, cols)
+            keywidth = clamp(hascolor ? textwidth(ANSIIterator(ks[i])) : textwidth(ks[i]), keywidth, cols)
+            valwidth = clamp(hascolor ? textwidth(ANSIIterator(vs[i])) : textwidth(vs[i]), valwidth, cols)
         end
-        if keylen > max(div(cols, 2), cols - vallen)
-            keylen = max(cld(cols, 3), cols - vallen)
+        if keywidth > max(div(cols, 2), cols - valwidth)
+            keywidth = max(cld(cols, 3), cols - valwidth)
         end
     else
         rows = cols = typemax(Int)
@@ -175,12 +185,12 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
     for (i, (k, v)) in enumerate(t)
         print(io, "\n  ")
         if i == rows < length(t)
-            print(io, rpad("⋮", keylen), " => ⋮")
+            print(io, rpad("⋮", keywidth), " => ⋮")
             break
         end
 
         if limit
-            key = rpad(_truncate_at_width_or_chars(get(recur_io, :color, false), ks[i], keylen, "\r\n"), keylen)
+            key = _truncate_at_width_or_chars(hascolor, ks[i], keywidth, true)
         else
             key = sprint(show, k, context=recur_io_k, sizehint=0)
         end
@@ -188,7 +198,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         print(io, " => ")
 
         if limit
-            val = _truncate_at_width_or_chars(get(recur_io, :color, false), vs[i], cols - keylen, "\r\n")
+            val = _truncate_at_width_or_chars(hascolor, vs[i], cols - keywidth)
             print(io, val)
         else
             show(recur_io_v, v)
@@ -232,7 +242,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractSet{T}) where T
 
         if limit
             str = sprint(show, v, context=recur_io, sizehint=0)
-            print(io, _truncate_at_width_or_chars(get(io, :color, false), str, cols, "\r\n"))
+            print(io, _truncate_at_width_or_chars(get(io, :color, false), str, cols))
         else
             show(recur_io, v)
         end
@@ -293,7 +303,7 @@ function IOContext(io::IO, dict::ImmutableDict)
     IOContext{typeof(io0)}(io0, dict)
 end
 
-convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)
+convert(::Type{IOContext}, io::IO) = IOContext(unwrapcontext(io)...)::IOContext
 
 IOContext(io::IO) = convert(IOContext, io)
 
@@ -482,9 +492,11 @@ function _show_default(io::IO, @nospecialize(x))
     print(io,')')
 end
 
-active_module()::Module = isdefined(Base, :active_repl) && isdefined(Base.active_repl, :mistate) && Base.active_repl.mistate !== nothing ?
-                      Base.active_repl.mistate.active_module :
-                      Main
+function active_module()
+    isassigned(REPL_MODULE_REF) || return Main
+    REPL = REPL_MODULE_REF[]
+    return REPL.active_module()::Module
+end
 
 # Check if a particular symbol is exported from a standard library module
 function is_exported_from_stdlib(name::Symbol, mod::Module)
@@ -542,8 +554,6 @@ function print_without_params(@nospecialize(x))
     b = unwrap_unionall(x)
     return isa(b, DataType) && b.name.wrapper === x
 end
-
-has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v)!=0
 
 function io_has_tvar_name(io::IOContext, name::Symbol, @nospecialize(x))
     for (key, val) in io.dict
@@ -605,7 +615,7 @@ function make_typealias(@nospecialize(x::Type))
                         env = env::SimpleVector
                         # TODO: In some cases (such as the following), the `env` is over-approximated.
                         #       We'd like to disable `fix_inferred_var_bound` since we'll already do that fix-up here.
-                        #       (or detect and reverse the compution of it here).
+                        #       (or detect and reverse the computation of it here).
                         #   T = Array{Array{T,1}, 1} where T
                         #   (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), T, Vector)
                         #   env[1].ub.var == T.var
@@ -1190,12 +1200,12 @@ function print_fullname(io::IO, m::Module)
     end
 end
 
-function sourceinfo_slotnames(src::CodeInfo)
-    slotnames = src.slotnames
+sourceinfo_slotnames(src::CodeInfo) = sourceinfo_slotnames(src.slotnames)
+function sourceinfo_slotnames(slotnames::Vector{Symbol})
     names = Dict{String,Int}()
     printnames = Vector{String}(undef, length(slotnames))
     for i in eachindex(slotnames)
-        if slotnames[i] == :var"#unused#"
+        if slotnames[i] === :var"#unused#"
             printnames[i] = "_"
             continue
         end
@@ -1560,8 +1570,6 @@ unquoted(ex::Expr)       = ex.args[1]
 function printstyled end
 function with_output_color end
 
-is_expected_union(u::Union) = u.a == Nothing || u.b == Nothing || u.a == Missing || u.b == Missing
-
 emphasize(io, str::AbstractString, col = Base.error_color()) = get(io, :color, false) ?
     printstyled(io, str; color=col, bold=true) :
     print(io, uppercase(str))
@@ -1686,7 +1694,14 @@ end
 
 ## AST printing ##
 
-show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)      = print(io, "%", val.id)
+function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
+    if get(io, :maxssaid, typemax(Int))::Int < val.id
+        # invalid SSAValue, print this in red for better recognition
+        printstyled(io, "%", val.id; color=:red)
+    else
+        print(io, "%", val.id)
+    end
+end
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
@@ -2019,7 +2034,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
     # other call-like expressions ("A[1,2]", "T{X,Y}", "f.(X,Y)")
     elseif haskey(expr_calls, head) && nargs >= 1  # :ref/:curly/:calldecl/:(.)
         funcargslike = head === :(.) ? (args[2]::Expr).args : args[2:end]
-        show_call(head == :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
+        show_call(head === :ref ? IOContext(io, beginsym=>true) : io, head, args[1], funcargslike, indent, quote_level, head !== :curly)
 
     # comprehensions
     elseif head === :typed_comprehension && nargs == 2
@@ -2392,8 +2407,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)
-    elseif isa(ft, DataType) && ft.name === Type.body.name &&
-        (f = ft.parameters[1]; !isa(f, TypeVar))
+    elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
@@ -2566,8 +2580,8 @@ module IRShow
     using Core.IR
     import ..Base
     import .Compiler: IRCode, ReturnNode, GotoIfNot, CFG, scan_ssa_use!, Argument,
-        isexpr, compute_basic_blocks, block_for_inst,
-        TriState, Effects, ALWAYS_TRUE, ALWAYS_FALSE, TRISTATE_UNKNOWN
+        isexpr, compute_basic_blocks, block_for_inst, IncrementalCompact,
+        Effects, ALWAYS_TRUE, ALWAYS_FALSE
     Base.getindex(r::Compiler.StmtRange, ind::Integer) = Compiler.getindex(r, ind)
     Base.size(r::Compiler.StmtRange) = Compiler.size(r)
     Base.first(r::Compiler.StmtRange) = Compiler.first(r)

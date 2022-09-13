@@ -322,9 +322,8 @@ end
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
-    if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
-        throw(BoundsError())
-    end
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
     return dest
 end
@@ -359,7 +358,7 @@ Create a shallow copy of `x`: the outer structure is copied, but not all interna
 For example, copying an array produces a new array with identically-same elements as the
 original.
 
-See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref).
+See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
@@ -611,8 +610,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
-convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
+convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -1488,7 +1486,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also: [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -1852,6 +1850,11 @@ function reverseind(a::AbstractVector, i::Integer)
     first(li) + last(li) - i
 end
 
+# This implementation of `midpoint` is performance-optimized but safe
+# only if `lo <= hi`.
+midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
+midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
+
 """
     reverse!(v [, start=firstindex(v) [, stop=lastindex(v) ]]) -> v
 
@@ -1880,17 +1883,18 @@ julia> A
 """
 function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
     s, n = Int(start), Int(stop)
-    liv = LinearIndices(v)
-    if n <= s  # empty case; ok
-    elseif !(first(liv) ≤ s ≤ last(liv))
-        throw(BoundsError(v, s))
-    elseif !(first(liv) ≤ n ≤ last(liv))
-        throw(BoundsError(v, n))
-    end
-    r = n
-    @inbounds for i in s:div(s+n-1, 2)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
+    if n > s # non-empty and non-trivial
+        liv = LinearIndices(v)
+        if !(first(liv) ≤ s ≤ last(liv))
+            throw(BoundsError(v, s))
+        elseif !(first(liv) ≤ n ≤ last(liv))
+            throw(BoundsError(v, n))
+        end
+        r = n
+        @inbounds for i in s:midpoint(s, n-1)
+            v[i], v[r] = v[r], v[i]
+            r -= 1
+        end
     end
     return v
 end
@@ -2321,7 +2325,7 @@ findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
 
 """
     findall(A)

@@ -352,6 +352,9 @@ end
                 C = zeros(eltya,n,n)
                 @test Hermitian(aherm) * a ≈ aherm * a
                 @test a * Hermitian(aherm) ≈ a * aherm
+                # rectangular multiplication
+                @test [a; a] * Hermitian(aherm) ≈ [a; a] * aherm
+                @test Hermitian(aherm) * [a a] ≈ aherm * [a a]
                 @test Hermitian(aherm) * Hermitian(aherm) ≈ aherm*aherm
                 @test_throws DimensionMismatch Hermitian(aherm) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Hermitian(aherm))
@@ -360,6 +363,9 @@ end
                 @test Symmetric(asym) * Symmetric(asym) ≈ asym*asym
                 @test Symmetric(asym) * a ≈ asym * a
                 @test a * Symmetric(asym) ≈ a * asym
+                # rectangular multiplication
+                @test Symmetric(asym) * [a a] ≈ asym * [a a]
+                @test [a; a] * Symmetric(asym) ≈ [a; a] * asym
                 @test_throws DimensionMismatch Symmetric(asym) * Vector{eltya}(undef, n+1)
                 LinearAlgebra.mul!(C,a,Symmetric(asym))
                 @test C ≈ a*asym
@@ -574,13 +580,13 @@ end
         # Hermitian
         A = Hermitian(fill(1.0+0im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+0im 2] : [2 1.0+0im; 2 2])
         @test_throws ArgumentError fill!(A, 2+im)
 
         # Symmetric
         A = Symmetric(fill(1.0+im, 2, 2), uplo)
         @test fill!(A, 2) == fill(2, 2, 2)
-        @test A.data == (uplo == :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
+        @test A.data == (uplo === :U ? [2 2; 1.0+im 2] : [2 1.0+im; 2 2])
     end
 end
 

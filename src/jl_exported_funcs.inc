@@ -97,6 +97,7 @@
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
+    XX(jl_compile_method_instance) \
     XX(jl_compress_argnames) \
     XX(jl_compress_ir) \
     XX(jl_compute_fieldtypes) \
@@ -199,7 +200,6 @@
     XX(jl_generic_function_def) \
     XX(jl_gensym) \
     XX(jl_getallocationgranularity) \
-    XX(jl_getch) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
     XX(jl_get_ARCH) \
@@ -276,7 +276,7 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
-    XX(jl_ir_flag_inlineable) \
+    XX(jl_ir_inlining_cost) \
     XX(jl_ir_flag_pure) \
     XX(jl_ir_nslots) \
     XX(jl_ir_slotflag) \
@@ -288,6 +288,7 @@
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
     XX(jl_is_debugbuild) \
+    XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
     XX(jl_is_imported) \
     XX(jl_is_initialized) \
@@ -413,6 +414,7 @@
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
     XX(jl_set_errno) \
+    XX(jl_set_global) \
     XX(jl_set_istopmod) \
     XX(jl_set_module_compile) \
     XX(jl_set_module_infer) \
@@ -462,6 +464,7 @@
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
     XX(jl_task_stack_buffer) \
+    XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
     XX(jl_threadpoolid) \
@@ -476,8 +479,10 @@
     XX(jl_tty_set_mode) \
     XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
-    XX(jl_typeinf_begin) \
-    XX(jl_typeinf_end) \
+    XX(jl_typeinf_lock_begin) \
+    XX(jl_typeinf_lock_end) \
+    XX(jl_typeinf_timing_begin) \
+    XX(jl_typeinf_timing_end) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
