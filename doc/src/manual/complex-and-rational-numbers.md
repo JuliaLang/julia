@@ -18,33 +18,18 @@ julia> 1+2im
 ```
 
 !!! note
-    Using [juxtaposition with identifiers as coefficients](@ref man-numeric-literal-coefficients)
-    to construct complex numbers works for all numeric literals in Julia **EXCEPT** for
-    [unsigned integers numeric literals](https://docs.julialang.org/en/v1/manual/integers-and-floating-point-numbers/#Integers).
-    To solve this, use the `*` operator between the numeric literal and `im`.
+    Using [juxtaposition](@ref man-numeric-literal-coefficients) to construct complex numbers
+    works for all numeric literals **EXCEPT**
+    [unsigned integers literals](https://docs.julialang.org/en/v1/manual/integers-and-floating-point-numbers/#Integers).
+    To solve this, use the `*` operator between the numeric literal and `im`:
+    ```jldoctest
+    julia> 0x1 + 0x2im
+    ERROR: syntax: invalid numeric constant "0x2i"
+    [...]
 
-```jldoctest
-julia> 0x1 + 0x2im
-ERROR: syntax: invalid numeric constant "0x2i"
-[...]
-
-julia> 0x1 + 0x2*im
-0x01 + 0x02im
-
-julia> 0b10 + 0b11im
-ERROR: syntax: invalid numeric constant "0b11i"
-[...]
-
-julia> 0b10 + 0b11*im
-0x02 + 0x03im
-
-julia> 0o010 + 0o011im
-ERROR: syntax: invalid numeric constant "0o011i"
-[...]
-
-julia> 0o010 + 0o011*im
-0x08 + 0x09im
-```
+    julia> 0x1 + 0x2*im
+    0x01 + 0x02im
+    ```
 
 You can perform all the standard arithmetic operations with complex numbers:
 
