@@ -107,29 +107,29 @@ can be specified via the `lt` keyword.
 ## Sorting Functions
 
 ```@docs
-Base.sort!
-Base.sort
-Base.sortperm
-Base.InsertionSort
-Base.MergeSort
-Base.QuickSort
-Base.PartialQuickSort
-Base.Sort.sortperm!
-Base.Sort.sortslices
+sort!
+sort
+sortperm
+Base.Sort.InsertionSort
+Base.Sort.MergeSort
+Base.Sort.QuickSort
+Base.Sort.PartialQuickSort
+sortperm!
+sortslices
 ```
 
 ## Order-Related Functions
 
 ```@docs
-Base.issorted
-Base.Sort.searchsorted
-Base.Sort.searchsortedfirst
-Base.Sort.searchsortedlast
-Base.Sort.insorted
-Base.Sort.partialsort!
-Base.Sort.partialsort
-Base.Sort.partialsortperm
-Base.Sort.partialsortperm!
+issorted
+searchsorted
+searchsortedfirst
+searchsortedlast
+insorted
+partialsort!
+partialsort
+partialsortperm
+partialsortperm!
 ```
 
 ## Sorting Algorithms

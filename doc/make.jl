@@ -116,7 +116,6 @@ BaseDocs = [
     "base/file.md",
     "base/io-network.md",
     "base/punctuation.md",
-    "base/sort.md",
     "base/iterators.md",
     "base/c.md",
     "base/libc.md",
