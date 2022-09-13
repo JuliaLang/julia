@@ -31,6 +31,16 @@ function format_filename(s)
     return r
 end
 
+# Returns true if the given command errors, but doesn't signal
+function errors_not_signals(cmd::Cmd)
+    p = run(pipeline(ignorestatus(cmd); stdout=devnull, stderr=devnull))
+    return errors_not_signals(p)
+end
+function errors_not_signals(p::Base.Process)
+    wait(p)
+    return process_exited(p) && !Base.process_signaled(p) && !success(p)
+end
+
 let
     fn = format_filename("a%d %p %i %L %l %u z")
     hd = withenv("HOME" => nothing) do
@@ -57,8 +67,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                     "JULIA_LOAD_PATH" => "",
                     "JULIA_DEPOT_PATH" => "",
                     "HOME" => homedir()))
-        @test v[1] == "false\nREPL: InteractiveUtilstrue\n"
-        @test v[2]
+        @test v == ("false\nREPL: InteractiveUtilstrue\n", true)
     end
     let v = writereadpipeline("println(\"REPL: \", InteractiveUtils)",
                 setenv(`$exename -i -e 'const InteractiveUtils = 3'`,
@@ -66,10 +75,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
                     "JULIA_DEPOT_PATH" => ";;;:::",
                     "HOME" => homedir()))
         # TODO: ideally, `@which`, etc. would still work, but Julia can't handle `using $InterativeUtils`
-        @test v[1] == "REPL: 3\n"
-        @test v[2]
+        @test v == ("REPL: 3\n", true)
     end
-    let v = readchomperrors(`$exename -i -e '
+    @testset let v = readchomperrors(`$exename -i -e '
             empty!(LOAD_PATH)
             @eval Sys STDLIB=mktempdir()
             Base.unreference_module(Base.PkgId(Base.UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
@@ -83,32 +91,32 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     real_threads = string(ccall(:jl_cpu_threads, Int32, ()))
     for nc in ("0", "-2", "x", "2x", " ", "")
         v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
-        @test v[1]
-        @test v[2] == real_threads
-        @test v[3] == "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads."
+        @test v == (true, real_threads,
+            "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $real_threads.")
     end
     for nc in ("1", " 1 ", " +1 ", " 0x1 ")
-        v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
-        @test v[1]
-        @test v[2] == "1"
-        @test isempty(v[3])
+        @testset let v = readchomperrors(setenv(`$exename -i -E 'Sys.CPU_THREADS'`, "JULIA_CPU_THREADS" => nc, "HOME" => homedir()))
+            @test v[1]
+            @test v[2] == "1"
+            @test isempty(v[3])
+        end
     end
 
-    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
+    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options", "HOME" => homedir()))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 4")
         @test contains(v[2], r"enable-tail-merge + = 2")
         @test isempty(v[3])
     end
-    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
+    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -combiner-store-merge-dependence-limit=6", "HOME" => homedir()))
         @test v[1]
         @test contains(v[2], r"print-options + = 1")
         @test contains(v[2], r"combiner-store-merge-dependence-limit + = 6")
         @test contains(v[2], r"enable-tail-merge + = 1")
         @test isempty(v[3])
     end
-    let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
+    @testset let v = readchomperrors(setenv(`$exename -e 0`, "JULIA_LLVM_ARGS" => "-print-options -enable-tail-merge=1 -enable-tail-merge=1", "HOME" => homedir()))
         @test !v[1]
         @test isempty(v[2])
         @test v[3] == "julia: for the --enable-tail-merge option: may only occur zero or one times!"
@@ -161,22 +169,22 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --eval
     @test  success(`$exename -e "exit(0)"`)
-    @test !success(`$exename -e "exit(1)"`)
+    @test errors_not_signals(`$exename -e "exit(1)"`)
     @test  success(`$exename --eval="exit(0)"`)
-    @test !success(`$exename --eval="exit(1)"`)
-    @test !success(`$exename -e`)
-    @test !success(`$exename --eval`)
+    @test errors_not_signals(`$exename --eval="exit(1)"`)
+    @test errors_not_signals(`$exename -e`)
+    @test errors_not_signals(`$exename --eval`)
     # --eval --interactive (replaced --post-boot)
     @test  success(`$exename -i -e "exit(0)"`)
-    @test !success(`$exename -i -e "exit(1)"`)
+    @test errors_not_signals(`$exename -i -e "exit(1)"`)
     # issue #34924
     @test  success(`$exename -e 'const LOAD_PATH=1'`)
 
     # --print
     @test read(`$exename -E "1+1"`, String) == "2\n"
     @test read(`$exename --print="1+1"`, String) == "2\n"
-    @test !success(`$exename -E`)
-    @test !success(`$exename --print`)
+    @test errors_not_signals(`$exename -E`)
+    @test errors_not_signals(`$exename --print`)
 
     # --load
     let testfile = tempname()
@@ -209,12 +217,13 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         end
     end
     # -L, --load requires an argument
-    @test !success(`$exename -L`)
-    @test !success(`$exename --load`)
+    @test errors_not_signals(`$exename -L`)
+    @test errors_not_signals(`$exename --load`)
 
     # --cpu-target (requires LLVM enabled)
-    @test !success(`$exename -C invalidtarget`)
-    @test !success(`$exename --cpu-target=invalidtarget`)
+    # Strictly test for failed error, not a segfault, since we had a false positive with just `success()` before.
+    @test errors_not_signals(`$exename -C invalidtarget`)
+    @test errors_not_signals(`$exename --cpu-target=invalidtarget`)
 
     # -t, --threads
     code = "print(Threads.nthreads())"
@@ -240,8 +249,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
         @test read(`$exename -e $code`, String) == string(cpu_threads)
     end
-    @test !success(`$exename -t 0`)
-    @test !success(`$exename -t -1`)
+    @test errors_not_signals(`$exename -t 0`)
+    @test errors_not_signals(`$exename -t -1`)
 
     # Combining --threads and --procs: --threads does propagate
     withenv("JULIA_NUM_THREADS" => nothing) do
@@ -249,9 +258,12 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test read(`$exename -p2 -t2 -e $code`, String) == "6"
     end
 
+    # Combining --threads and invalid -C should yield a decent error
+    @test errors_not_signals(`$exename -t 2 -C invalidtarget`)
+
     # --procs
     @test readchomp(`$exename -q -p 2 -e "println(nworkers())"`) == "2"
-    @test !success(`$exename -p 0`)
+    @test errors_not_signals(`$exename -p 0`)
     let p = run(`$exename --procs=1.0`, wait=false)
         wait(p)
         @test p.exitcode == 1 && p.termsignal == 0
@@ -278,14 +290,14 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     # --color
     @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
     @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
-    @test !success(`$exename --color=false`)
+    @test errors_not_signals(`$exename --color=false`)
 
     # --history-file
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
         --history-file=yes`) == "true"
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
         --history-file=no`) == "false"
-    @test !success(`$exename --history-file=false`)
+    @test errors_not_signals(`$exename --history-file=false`)
 
     # --code-coverage
     mktempdir() do dir
@@ -449,16 +461,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             --check-bounds=no`)) == JL_OPTIONS_CHECK_BOUNDS_OFF
     end
     # check-bounds takes yes/no as argument
-    @test !success(`$exename -E "exit(0)" --check-bounds=false`)
+    @test errors_not_signals(`$exename -E "exit(0)" --check-bounds=false`)
 
     # --depwarn
     @test readchomp(`$exename --depwarn=no  -E "Base.JLOptions().depwarn"`) == "0"
     @test readchomp(`$exename --depwarn=yes -E "Base.JLOptions().depwarn"`) == "1"
-    @test !success(`$exename --depwarn=false`)
+    @test errors_not_signals(`$exename --depwarn=false`)
     # test deprecated syntax
-    @test !success(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
+    @test errors_not_signals(`$exename -e "foo (x::Int) = x * x" --depwarn=error`)
     # test deprecated method
-    @test !success(`$exename -e "
+    @test errors_not_signals(`$exename -e "
         foo() = :foo; bar() = :bar
         @deprecate foo() bar()
         foo()
@@ -476,7 +488,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         Foo.Deprecated
         """
 
-        @test !success(`$exename -E "$code" --depwarn=error`)
+        @test errors_not_signals(`$exename -E "$code" --depwarn=error`)
 
         @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
             (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
@@ -490,14 +502,14 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename --inline=yes -E "Bool(Base.JLOptions().can_inline)"`) == "true"
     @test readchomp(`$exename --inline=no -E "Bool(Base.JLOptions().can_inline)"`) == "false"
     # --inline takes yes/no as argument
-    @test !success(`$exename --inline=false`)
+    @test errors_not_signals(`$exename --inline=false`)
 
     # --polly
     @test readchomp(`$exename -E "Bool(Base.JLOptions().polly)"`) == "true"
     @test readchomp(`$exename --polly=yes -E "Bool(Base.JLOptions().polly)"`) == "true"
     @test readchomp(`$exename --polly=no -E "Bool(Base.JLOptions().polly)"`) == "false"
     # --polly takes yes/no as argument
-    @test !success(`$exename --polly=false`)
+    @test errors_not_signals(`$exename --polly=false`)
 
     # --fast-math
     let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
@@ -515,7 +527,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
-    @test !success(`$exename --worker=true`)
+    @test errors_not_signals(`$exename --worker=true`)
 
     # test passing arguments
     mktempdir() do dir
@@ -551,7 +563,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test readchomp(`$exename -L $testfile $testfile`) == output
             @test readchomp(`$exename --startup-file=yes $testfile`) == output
 
-            @test !success(`$exename --foo $testfile`)
+            @test errors_not_signals(`$exename --foo $testfile`)
         end
     end
 
@@ -620,7 +632,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         "Bool(Base.JLOptions().use_compiled_modules)"`) == "true"
     @test readchomp(`$exename --compiled-modules=no -E
         "Bool(Base.JLOptions().use_compiled_modules)"`) == "false"
-    @test !success(`$exename --compiled-modules=foo -e "exit(0)"`)
+    @test errors_not_signals(`$exename --compiled-modules=foo -e "exit(0)"`)
 
     # issue #12671, starting from a non-directory
     # rm(dir) fails on windows with Permission denied
@@ -666,8 +678,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
                 @test !occursin("Segmentation fault", s)
                 @test !occursin("EXCEPTION_ACCESS_VIOLATION", s)
             end
-            @test !success(p)
-            @test !Base.process_signaled(p)
+            @test errors_not_signals(p)
             @test p.exitcode == 1
         end
     end
@@ -677,8 +688,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
         let s = read(err, String)
             @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
         end
-        @test !success(p)
-        @test !Base.process_signaled(p)
+        @test errors_not_signals(p)
         @test p.exitcode == 1
     end
 end
@@ -696,7 +706,7 @@ let exename = Base.julia_cmd()
         @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile"
             --startup-file=no`)) == JL_OPTIONS_STARTUPFILE_OFF
     end
-    @test !success(`$exename --startup-file=false`)
+    @test errors_not_signals(`$exename --startup-file=false`)
 end
 
 # Make sure `julia --lisp` doesn't break

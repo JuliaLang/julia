@@ -2,6 +2,8 @@
 
 using Test
 
+include("compiler/irutils.jl")
+
 # code_native / code_llvm (issue #8239)
 # It's hard to really test these, but just running them should be
 # sufficient to catch segfault bugs.
@@ -66,6 +68,7 @@ end # module ReflectionTest
 @test isbits((1,2))
 @test !isbits([1])
 @test isbits(nothing)
+@test fully_eliminated(isbits, (Int,))
 
 # issue #16670
 @test isconcretetype(Int)
@@ -147,7 +150,7 @@ module TestModSub9475
     let
         @test Base.binding_module(@__MODULE__, :a9475) == @__MODULE__
         @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
-        @test Base.nameof(@__MODULE__) == :TestModSub9475
+        @test Base.nameof(@__MODULE__) === :TestModSub9475
         @test Base.fullname(@__MODULE__) == (curmod_name..., :TestMod7648, :TestModSub9475)
         @test Base.parentmodule(@__MODULE__) == TestMod7648
     end
@@ -158,7 +161,7 @@ using .TestModSub9475
 let
     @test Base.binding_module(@__MODULE__, :d7648) == @__MODULE__
     @test Base.binding_module(@__MODULE__, :a9475) == TestModSub9475
-    @test Base.nameof(@__MODULE__) == :TestMod7648
+    @test Base.nameof(@__MODULE__) === :TestMod7648
     @test Base.parentmodule(@__MODULE__) == curmod
 end
 end # module TestMod7648
@@ -183,14 +186,14 @@ let
     using .TestMod7648
     @test Base.binding_module(@__MODULE__, :a9475) == TestMod7648.TestModSub9475
     @test Base.binding_module(@__MODULE__, :c7648) == TestMod7648
-    @test nameof(foo7648) == :foo7648
+    @test nameof(foo7648) === :foo7648
     @test parentmodule(foo7648, (Any,)) == TestMod7648
     @test parentmodule(foo7648) == TestMod7648
     @test parentmodule(foo7648_nomethods) == TestMod7648
     @test parentmodule(foo9475, (Any,)) == TestMod7648.TestModSub9475
     @test parentmodule(foo9475) == TestMod7648.TestModSub9475
     @test parentmodule(Foo7648) == TestMod7648
-    @test nameof(Foo7648) == :Foo7648
+    @test nameof(Foo7648) === :Foo7648
     @test basename(functionloc(foo7648, (Any,))[1]) == "reflection.jl"
     @test first(methods(TestMod7648.TestModSub9475.foo7648)) == which(foo7648, (Int,))
     @test TestMod7648 == which(@__MODULE__, :foo7648)
@@ -199,7 +202,7 @@ end
 
 @test which(===, Tuple{Int, Int}) isa Method
 @test length(code_typed(===, Tuple{Int, Int})) === 1
-@test only(Base.return_types(===, Tuple{Int, Int})) === Any
+@test only(Base.return_types(===, Tuple{Int, Int})) === Bool
 
 module TestingExported
 using Test
@@ -224,7 +227,7 @@ let ex = :(a + b)
 end
 foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} = nothing
 @test startswith(string(first(methods(foo13825))),
-                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N} in")
+                 "foo13825(::Array{T, N}, ::Array, ::Vector) where {T, N}")
 
 mutable struct TLayout
     x::Int8
@@ -425,9 +428,9 @@ let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
     mmime = repr("text/plain", li.def)
 
     @test lrepr == lmime == "MethodInstance for fieldtype(...)"
-    @test mrepr == mmime == "fieldtype(...) in Core"
+    @test mrepr == "fieldtype(...) @ Core none:0"       # simple print
+    @test mmime == "fieldtype(...)\n     @ Core none:0" # verbose print
 end
-
 
 # Linfo Tracing test
 function tracefoo end
@@ -724,7 +727,7 @@ Base.delete_method(m)
 # Methods with keyword arguments
 fookw(x; direction=:up) = direction
 fookw(y::Int) = 2
-@test fookw("string") == :up
+@test fookw("string") === :up
 @test fookw(1) == 2
 m = collect(methods(fookw))[2]
 Base.delete_method(m)
@@ -977,8 +980,12 @@ end
 maybe_effectful(x::Int) = 42
 maybe_effectful(x::Any) = unknown_operation()
 function f_no_methods end
+ambig_effects_test(a::Int, b) = 1
+ambig_effects_test(a, b::Int) = 1
+ambig_effects_test(a, b) = 1
 
 @testset "infer_effects" begin
+    # generic functions
     @test Base.infer_effects(issue41694, (Int,)) |> Core.Compiler.is_terminates
     @test Base.infer_effects((Int,)) do x
         issue41694(x)
@@ -991,8 +998,17 @@ function f_no_methods end
         @test !Core.Compiler.is_terminates(effects)
         @test !Core.Compiler.is_nonoverlayed(effects)
     end
-    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_nothrow
+    # should account for MethodError
+    @test Base.infer_effects(issue41694, (Float64,)) |> !Core.Compiler.is_nothrow # definitive dispatch error
+    @test Base.infer_effects(issue41694, (Integer,)) |> !Core.Compiler.is_nothrow # possible dispatch error
+    @test Base.infer_effects(f_no_methods) |> !Core.Compiler.is_nothrow # no possible matching methods
+    @test Base.infer_effects(ambig_effects_test, (Int,Int)) |> !Core.Compiler.is_nothrow # ambiguity error
+    @test Base.infer_effects(ambig_effects_test, (Int,Any)) |> !Core.Compiler.is_nothrow # ambiguity error
     # builtins
     @test Base.infer_effects(typeof, (Any,)) |> Core.Compiler.is_total
     @test Base.infer_effects(===, (Any,Any)) |> Core.Compiler.is_total
+    @test (Base.infer_effects(setfield!, ()); true) # `builtin_effects` shouldn't throw on empty `argtypes`
+    @test (Base.infer_effects(Core.Intrinsics.arraylen, ()); true) # `intrinsic_effects` shouldn't throw on empty `argtypes`
 end
+
+@test Base._methods_by_ftype(Tuple{}, -1, Base.get_world_counter()) == Any[]

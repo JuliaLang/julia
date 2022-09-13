@@ -126,12 +126,12 @@ Random.seed!(1)
         @testset "Constructor and basic properties" begin
             @test size(T, 1) == size(T, 2) == n
             @test size(T) == (n, n)
-            @test Array(T) == diagm(0 => dv, (uplo == :U ? 1 : -1) => ev)
+            @test Array(T) == diagm(0 => dv, (uplo === :U ? 1 : -1) => ev)
             @test Bidiagonal(Array(T), uplo) == T
             @test big.(T) == T
-            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
-            @test Array(real(T)) == real(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
-            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo == :U ? 1 : -1) => ev))
+            @test Array(abs.(T)) == abs.(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
+            @test Array(real(T)) == real(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
+            @test Array(imag(T)) == imag(diagm(0 => dv, (uplo === :U ? 1 : -1) => ev))
         end
 
         @testset for func in (conj, transpose, adjoint)
@@ -315,7 +315,7 @@ Random.seed!(1)
                         typediv=T.uplo == 'U' ? UpperTriangular : Matrix,
                         typediv2=T.uplo == 'U' ? UpperTriangular : Matrix)
                     TM = Matrix(T)
-                    @test (T*x)::typemul ≈ TM*x #broken=eltype(x) <: Furlong
+                    @test (T*x)::typemul ≈  TM*x #broken=eltype(x) <: Furlong
                     @test (x*T)::typemul ≈ x*TM #broken=eltype(x) <: Furlong
                     @test (x\T)::typediv ≈ x\TM #broken=eltype(T) <: Furlong
                     @test (T/x)::typediv ≈ TM/x #broken=eltype(T) <: Furlong
@@ -325,24 +325,20 @@ Random.seed!(1)
                     end
                     return nothing
                 end
-                if relty <: Integer
-                    A = convert(Matrix{elty}, rand(1:10, n, n))
-                    if (elty <: Complex)
-                        A += im*convert(Matrix{elty}, rand(1:10, n, n))
-                    end
-                else
-                    A = rand(elty, n, n)
-                end
-                for t in (T, #=Furlong.(T)=#), (A, dv, ev) in ((A, dv, ev), #=(Furlong.(A), Furlong.(dv), Furlong.(ev))=#)
+                A = randn(n,n)
+                d = randn(n)
+                dl = randn(n-1)
+                t = T
+                for t in (T, #=Furlong.(T)=#), (A, d, dl) in ((A, d, dl), #=(Furlong.(A), Furlong.(d), Furlong.(dl))=#)
                     _bidiagdivmultest(t, 5, Bidiagonal, Bidiagonal)
                     _bidiagdivmultest(t, 5I, Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
-                    _bidiagdivmultest(t, Diagonal(dv), Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
+                    _bidiagdivmultest(t, Diagonal(d), Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
                     _bidiagdivmultest(t, UpperTriangular(A))
                     _bidiagdivmultest(t, UnitUpperTriangular(A))
                     _bidiagdivmultest(t, LowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
                     _bidiagdivmultest(t, UnitLowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
-                    _bidiagdivmultest(t, Bidiagonal(dv, ev, :U), Matrix, Matrix, Matrix)
-                    _bidiagdivmultest(t, Bidiagonal(dv, ev, :L), Matrix, Matrix, Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(d, dl, :U), Matrix, Matrix, Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(d, dl, :L), Matrix, Matrix, Matrix)
                 end
             end
         end
@@ -356,7 +352,7 @@ Random.seed!(1)
 
         @testset "diag" begin
             @test (@inferred diag(T))::typeof(dv) == dv
-            @test (@inferred diag(T, uplo == :U ? 1 : -1))::typeof(dv) == ev
+            @test (@inferred diag(T, uplo === :U ? 1 : -1))::typeof(dv) == ev
             @test (@inferred diag(T,2))::typeof(dv) == zeros(elty, n-2)
             @test_throws ArgumentError diag(T, -n - 1)
             @test_throws ArgumentError diag(T,  n + 1)
@@ -364,7 +360,7 @@ Random.seed!(1)
             gdv, gev = GenericArray(dv), GenericArray(ev)
             G = Bidiagonal(gdv, gev, uplo)
             @test (@inferred diag(G))::typeof(gdv) == gdv
-            @test (@inferred diag(G, uplo == :U ? 1 : -1))::typeof(gdv) == gev
+            @test (@inferred diag(G, uplo === :U ? 1 : -1))::typeof(gdv) == gev
             @test (@inferred diag(G,2))::typeof(gdv) == GenericArray(zeros(elty, n-2))
         end
 
@@ -372,9 +368,9 @@ Random.seed!(1)
             if relty <: AbstractFloat
                 d1, v1 = eigen(T)
                 d2, v2 = eigen(map(elty<:Complex ? ComplexF64 : Float64,Tfull), sortby=nothing)
-                @test (uplo == :U ? d1 : reverse(d1)) ≈ d2
+                @test (uplo === :U ? d1 : reverse(d1)) ≈ d2
                 if elty <: Real
-                    test_approx_eq_modphase(v1, uplo == :U ? v2 : v2[:,n:-1:1])
+                    test_approx_eq_modphase(v1, uplo === :U ? v2 : v2[:,n:-1:1])
                 end
             end
         end
@@ -627,14 +623,14 @@ end
 end
 
 @testset "generalized dot" begin
-    for elty in (Float64, ComplexF64)
-        dv = randn(elty, 5)
-        ev = randn(elty, 4)
-        x = randn(elty, 5)
-        y = randn(elty, 5)
+    for elty in (Float64, ComplexF64), n in (5, 1)
+        dv = randn(elty, n)
+        ev = randn(elty, n-1)
+        x = randn(elty, n)
+        y = randn(elty, n)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, Matrix(B), y)
+            @test dot(x, B, y) ≈ dot(B'x, y) ≈ dot(x, B*y) ≈ dot(x, Matrix(B), y)
         end
         dv = Vector{elty}(undef, 0)
         ev = Vector{elty}(undef, 0)
@@ -642,7 +638,7 @@ end
         y = Vector{elty}(undef, 0)
         for uplo in (:U, :L)
             B = Bidiagonal(dv, ev, uplo)
-            @test dot(x, B, y) ≈ dot(zero(elty), zero(elty), zero(elty))
+            @test dot(x, B, y) === zero(elty)
         end
     end
 end

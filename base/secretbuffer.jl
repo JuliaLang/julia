@@ -79,8 +79,17 @@ function SecretBuffer!(d::Vector{UInt8})
     s
 end
 
-unsafe_SecretBuffer!(s::Cstring) = unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), Int(ccall(:strlen, Csize_t, (Cstring,), s)))
+function unsafe_SecretBuffer!(s::Cstring)
+    if s == C_NULL
+        throw(ArgumentError("cannot convert NULL to SecretBuffer"))
+    end
+    len = Int(ccall(:strlen, Csize_t, (Cstring,), s))
+    unsafe_SecretBuffer!(convert(Ptr{UInt8}, s), len)
+end
 function unsafe_SecretBuffer!(p::Ptr{UInt8}, len=1)
+    if p == C_NULL
+        throw(ArgumentError("cannot convert NULL to SecretBuffer"))
+    end
     s = SecretBuffer(sizehint=len)
     for i in 1:len
         write(s, unsafe_load(p, i))

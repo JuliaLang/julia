@@ -21,7 +21,44 @@ function runtests(name, path, isolate=true; seed=nothing)
         res_and_time_data = @timed @testset "$name" begin
             # Random.seed!(nothing) will fail
             seed != nothing && Random.seed!(seed)
+
+            original_depot_path = copy(Base.DEPOT_PATH)
+            original_load_path = copy(Base.LOAD_PATH)
+            original_env = copy(ENV)
+
             Base.include(m, "$path.jl")
+
+            if Base.DEPOT_PATH != original_depot_path
+                msg = "The `$(name)` test set mutated Base.DEPOT_PATH and did not restore the original values"
+                @error(
+                    msg,
+                    original_depot_path,
+                    Base.DEPOT_PATH,
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
+            end
+            if Base.LOAD_PATH != original_load_path
+                msg = "The `$(name)` test set mutated Base.LOAD_PATH and did not restore the original values"
+                @error(
+                    msg,
+                    original_load_path,
+                    Base.LOAD_PATH,
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
+            end
+            if copy(ENV) != original_env
+                msg = "The `$(name)` test set mutated ENV and did not restore the original values"
+                @error(
+                    msg,
+                    testset_name = name,
+                    testset_path = path,
+                )
+                error(msg)
+            end
         end
         rss = Sys.maxrss()
         #res_and_time_data[1] is the testset

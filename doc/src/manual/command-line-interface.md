@@ -79,7 +79,7 @@ end
 ```
 
 
-## [Command-line switches for Julia](@id command-line-options)
+## [Command-line switches for Julia](@id command-line-interface)
 
 There are various ways to run Julia code and provide options, similar to those available for the
 `perl` and `ruby` programs:

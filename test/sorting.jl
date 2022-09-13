@@ -47,9 +47,25 @@ end
         @test r == [3,1,2]
         @test r === s
     end
-    @test_throws ArgumentError sortperm!(view([1,2,3,4], 1:4), [2,3,1])
-    @test sortperm(OffsetVector([8.0,-2.0,0.5], -4)) == OffsetVector([-2, -1, -3], -4)
-    @test sortperm!(Int32[1,2], [2.0, 1.0]) == Int32[2, 1]
+    @test_throws ArgumentError sortperm!(view([1, 2, 3, 4], 1:4), [2, 3, 1])
+    @test sortperm(OffsetVector([8.0, -2.0, 0.5], -4)) == OffsetVector([-2, -1, -3], -4)
+    @test sortperm!(Int32[1, 2], [2.0, 1.0]) == Int32[2, 1]
+    @test_throws ArgumentError sortperm!(Int32[1, 2], [2.0, 1.0]; dims=1)
+    let A = rand(4, 4, 4)
+        for dims = 1:3
+            perm = sortperm(A; dims)
+            sorted = sort(A; dims)
+            @test A[perm] == sorted
+
+            perm_idx = similar(Array{Int}, axes(A))
+            sortperm!(perm_idx, A; dims)
+            @test perm_idx == perm
+        end
+    end
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3);)
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 3), rand(3, 3); dims=3)
+    @test_throws ArgumentError sortperm!(zeros(Int, 3, 4), rand(4, 4); dims=1)
+    @test_throws ArgumentError sortperm!(OffsetArray(zeros(Int, 4, 4), -4:-1, 1:4), rand(4, 4); dims=1)
 end
 
 @testset "misc sorting" begin
@@ -59,6 +75,7 @@ end
     @test sum(randperm(6)) == 21
     @test length(reverse(0x1:0x2)) == 2
     @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
+    @test sort(Union{}[]) == Union{}[] # issue #45280
 end
 
 @testset "partialsort" begin
@@ -513,6 +530,16 @@ end
     @test issorted(a)
 end
 
+@testset "sort!(::OffsetVector)" begin
+    for length in vcat(0:5, [10, 300, 500, 1000])
+        for offset in [-100000, -10, -1, 0, 1, 17, 1729]
+            x = OffsetVector(rand(length), offset)
+            sort!(x)
+            @test issorted(x)
+        end
+    end
+end
+
 @testset "sort!(::OffsetMatrix; dims)" begin
     x = OffsetMatrix(rand(5,5), 5, -5)
     sort!(x; dims=1)
@@ -625,8 +652,7 @@ end
         T = eltype(x)
         U = UIntN(Val(sizeof(T)))
         for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
-            if order isa Base.Order.By || T === Float16 ||
-                ((T <: AbstractFloat) == (order isa DirectOrdering))
+            if order isa Base.Order.By || ((T <: AbstractFloat) == (order isa DirectOrdering))
                 @test Base.Sort.UIntMappable(T, order) === nothing
                 continue
             end
@@ -652,8 +678,41 @@ end
             end
         end
     end
+
+    @test Base.Sort.UIntMappable(Union{Int, UInt}, Base.Forward) === nothing # issue #45280
 end
 
+@testset "sort(x; buffer)" begin
+    for n in [1,10,100,1000]
+        v = rand(n)
+        buffer = [0.0]
+        @test sort(v) == sort(v; buffer)
+        @test sort!(copy(v)) == sort!(copy(v); buffer)
+        @test sortperm(v) == sortperm(v; buffer=[4])
+        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; buffer=[4])
+
+        n > 100 && continue
+        M = rand(n, n)
+        @test sort(M; dims=2) == sort(M; dims=2, buffer)
+        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
+    end
+end
+
+@testset "sorting preserves identity" begin
+    a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
+    sort!(a)
+    @test length(IdDict(a .=> a)) == 6
+
+    for v in [BigInt.(rand(1:5, 40)), BigInt.(rand(Int, 70)), BigFloat.(rand(52))]
+        hashes = Set(hash.(v))
+        ids = Set(objectid.(v))
+        sort!(v)
+        @test hashes == Set(hash.(v))
+        @test ids == Set(objectid.(v))
+    end
+end
+
+# This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
                 UInt8, UInt16, UInt32, UInt64, UInt128,
@@ -814,5 +873,6 @@ end
         end
     end
 end
+# The "searchsorted" testset is at the end of the file because it is slow.
 
 end

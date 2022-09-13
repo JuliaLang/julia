@@ -36,10 +36,19 @@ julia> @deprecate old(x) new(x) false
 old (generic function with 1 method)
 ```
 
-Calls to `@deprecate` without explicit type-annotations will define deprecated methods
-accepting arguments of type `Any`. To restrict deprecation to a specific signature, annotate
-the arguments of `old`. For example,
-```jldoctest; filter = r"in Main at.*"
+Calls to `@deprecate` without explicit type-annotations will define
+deprecated methods accepting any number of positional and keyword
+arguments of type `Any`.
+
+!!! compat "Julia 1.9"
+    Keyword arguments are forwarded when there is no explicit type
+    annotation as of Julia 1.9. For older versions, you can manually
+    forward positional and keyword arguments by doing `@deprecate
+    old(args...; kwargs...) new(args...; kwargs...)`.
+
+To restrict deprecation to a specific signature, annotate the
+arguments of `old`. For example,
+```jldoctest; filter = r"@ .*"
 julia> new(x::Int) = x;
 
 julia> new(x::Float64) = 2x;
@@ -47,50 +56,65 @@ julia> new(x::Float64) = 2x;
 julia> @deprecate old(x::Int) new(x);
 
 julia> methods(old)
-# 1 method for generic function "old":
-[1] old(x::Int64) in Main at deprecated.jl:70
+# 1 method for generic function "old" from Main:
+ [1] old(x::Int64)
+     @ deprecated.jl:94
 ```
 will define and deprecate a method `old(x::Int)` that mirrors `new(x::Int)` but will not
 define nor deprecate the method `old(x::Float64)`.
 """
 macro deprecate(old, new, export_old=true)
+    function cannot_export_nonsymbol()
+        error(
+            "if the third `export_old` argument is not specified or `true`, the first",
+            " argument must be of form",
+            " (1) `f(...)` where `f` is a symbol,",
+            " (2) `T{...}(...)` where `T` is a symbol, or",
+            " (3) a symbol.",
+        )
+    end
     meta = Expr(:meta, :noinline)
-    if isa(old, Symbol)
-        oldname = Expr(:quote, old)
-        newname = Expr(:quote, new)
-        Expr(:toplevel,
-            export_old ? Expr(:export, esc(old)) : nothing,
-            :(function $(esc(old))(args...)
-                  $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
-                  $(esc(new))(args...)
-              end))
-    elseif isa(old, Expr) && (old.head === :call || old.head === :where)
+    if isa(old, Expr) && (old.head === :call || old.head === :where)
         remove_linenums!(new)
         oldcall = sprint(show_unquoted, old)
         newcall = sprint(show_unquoted, new)
         # if old.head is a :where, step down one level to the :call to avoid code duplication below
         callexpr = old.head === :call ? old : old.args[1]
         if callexpr.head === :call
-            if isa(callexpr.args[1], Symbol)
-                oldsym = callexpr.args[1]::Symbol
-            elseif isa(callexpr.args[1], Expr) && callexpr.args[1].head === :curly
-                oldsym = callexpr.args[1].args[1]::Symbol
+            fnexpr = callexpr.args[1]
+            if fnexpr isa Expr && fnexpr.head === :curly
+                fnexpr = fnexpr.args[1]
+            end
+            if export_old
+                if fnexpr isa Symbol
+                    maybe_export = Expr(:export, esc(fnexpr))
+                else
+                    cannot_export_nonsymbol()
+                end
             else
-                error("invalid usage of @deprecate")
+                maybe_export = nothing
             end
         else
             error("invalid usage of @deprecate")
         end
         Expr(:toplevel,
-        export_old ? Expr(:export, esc(oldsym)) : nothing,
+            maybe_export,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(oldsym))).name.mt.name)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
                   $(esc(new))
               end))
     else
-        error("invalid usage of @deprecate")
+        if export_old && !(old isa Symbol)
+            cannot_export_nonsymbol()
+        end
+        Expr(:toplevel,
+            export_old ? Expr(:export, esc(old)) : nothing,
+            :(function $(esc(old))(args...; kwargs...)
+                  $meta
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
+                  $(esc(new))(args...; kwargs...)
+              end))
     end
 end
 
@@ -144,7 +168,7 @@ function firstcaller(bt::Vector, funcsyms)
                 li = lkup.linfo
                 if li isa Core.MethodInstance
                     ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
-                    if isa(ft, DataType) && ft.name === Type.body.name
+                    if isType(ft)
                         ft = unwrap_unionall(ft.parameters[1])
                         found = (isa(ft, DataType) && ft.name.name in funcsyms)
                     end
@@ -251,11 +275,11 @@ getindex(match::Core.MethodMatch, field::Int) =
 tuple_type_head(T::Type) = fieldtype(T, 1)
 tuple_type_cons(::Type, ::Type{Union{}}) = Union{}
 function tuple_type_cons(::Type{S}, ::Type{T}) where T<:Tuple where S
-    @_total_may_throw_meta
+    @_foldable_meta
     Tuple{S, T.parameters...}
 end
 function parameter_upper_bound(t::UnionAll, idx)
-    @_total_may_throw_meta
+    @_foldable_meta
     return rewrap_unionall((unwrap_unionall(t)::DataType).parameters[idx], t)
 end
 
@@ -266,7 +290,7 @@ cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not re
 @deprecate unsafe_indices(A) axes(A) false
 @deprecate unsafe_length(r) length(r) false
 
-# these were internal type aliases, but some pacakges seem to be relying on them
+# these were internal type aliases, but some packages seem to be relying on them
 const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
 const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
@@ -298,5 +322,18 @@ const var"@_noinline_meta" = var"@noinline"
 # BEGIN 1.9 deprecations
 
 @deprecate splat(x) Splat(x) false
+
+# We'd generally like to avoid direct external access to internal fields
+# Core.Compiler.is_inlineable and Core.Compiler.set_inlineable! move towards this direction,
+# but we need to keep these around for compat
+function getproperty(ci::CodeInfo, s::Symbol)
+    s === :inlineable && return Core.Compiler.is_inlineable(ci)
+    return getfield(ci, s)
+end
+
+function setproperty!(ci::CodeInfo, s::Symbol, v)
+    s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
+    return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
 
 # END 1.9 deprecations

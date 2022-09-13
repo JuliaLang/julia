@@ -1,8 +1,4 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-
-#define DEBUG_TYPE "lower_ptls"
-#undef DEBUG
-
 // LLVM pass to lower TLS access and remove references to julia intrinsics
 
 #include "llvm-version.h"
@@ -28,6 +24,9 @@
 #include "julia_internal.h"
 #include "codegen_shared.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "lower_ptls"
+#undef DEBUG
 
 using namespace llvm;
 

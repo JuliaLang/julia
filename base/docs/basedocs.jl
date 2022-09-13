@@ -106,10 +106,10 @@ kw"module"
 """
     __init__
 
-`__init__()` function in your module would executes immediately *after* the module is loaded at
-runtime for the first time (i.e., it is only called once and only after all statements in the
-module have been executed). Because it is called *after* fully importing the module, `__init__`
-functions of submodules will be executed *first*. Two typical uses of `__init__` are calling
+The `__init__()` function in a module executes immediately *after* the module is loaded at
+runtime for the first time. It is called once, after all other statements in the module
+have been executed. Because it is called after fully importing the module, `__init__`
+functions of submodules will be executed first. Two typical uses of `__init__` are calling
 runtime initialization functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.
 See the [manual section about modules](@ref modules) for more details.
@@ -189,6 +189,8 @@ variable number of arguments (varargs), but do not accept keyword arguments.
 Every macro also implicitly gets passed the arguments `__source__`, which contains the line number
 and file name the macro is called from, and `__module__`, which is the module the macro is expanded
 in.
+
+See the manual section on [Metaprogramming](@ref) for more information about how to write a macro.
 
 # Examples
 ```jldoctest
@@ -683,6 +685,33 @@ Expr
 Expr
 
 """
+    (:)(expr)
+
+`:expr` quotes the expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+The AST may be of type `Expr`, `Symbol`, or a literal value.
+Which of these three types are returned for any given expression is an
+implementation detail.
+
+See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
+
+# Examples
+```jldoctest
+julia> expr = :(a = b + 2*x)
+:(a = b + 2x)
+
+julia> sym = :some_identifier
+:some_identifier
+
+julia> value = :0xff
+0xff
+
+julia> typeof((expr, sym, value))
+Tuple{Expr, Symbol, UInt8}
+```
+"""
+(:)
+
+"""
     \$
 
 Interpolation operator for interpolating into e.g. [strings](@ref string-interpolation)
@@ -766,7 +795,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -2855,7 +2884,7 @@ Base.getproperty
 
 The syntax `a.b = c` calls `setproperty!(a, :b, c)`.
 The syntax `@atomic order a.b = c` calls `setproperty!(a, :b, c, :order)`
-and the syntax `@atomic a.b = c` calls `getproperty(a, :b, :sequentially_consistent)`.
+and the syntax `@atomic a.b = c` calls `setproperty!(a, :b, c, :sequentially_consistent)`.
 
 !!! compat "Julia 1.8"
     `setproperty!` on modules requires at least Julia 1.8.
@@ -3032,7 +3061,7 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
-    donotdelete(args...)
+    Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
@@ -3049,16 +3078,17 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
-**Note**: `donotdelete` does not affect constant folding. For example, in
-          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
-          the code is semantically equivalent to `donotdelete(2).`
+!!! note
+    `donotdelete` does not affect constant folding. For example, in
+    `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+    the code is semantically equivalent to `donotdelete(2).`
 
 # Examples
 
 ```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)
@@ -3067,5 +3097,82 @@ end
 ```
 """
 Base.donotdelete
+
+"""
+    Base.compilerbarrier(setting::Symbol, val)
+
+This function puts a barrier at a specified compilation phase.
+It is supposed to only influence the compilation behavior according to `setting`,
+and its runtime semantics is just to return the second argument `val` (except that
+this function will perform additional checks on `setting` in a case when `setting`
+isn't known precisely at compile-time.)
+
+Currently either of the following `setting`s is allowed:
+- Barriers on abstract interpretation:
+  * `:type`: the return type of this function call will be inferred as `Any` always
+    (the strongest barrier on abstract interpretation)
+  * `:const`: the return type of this function call will be inferred with widening
+    constant information on `val`
+  * `:conditional`: the return type of this function call will be inferred with widening
+    conditional information on `val` (see the example below)
+- Any barriers on optimization aren't implemented yet
+
+!!! note
+    This function is supposed to be used _with `setting` known precisely at compile-time_.
+    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
+    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+
+# Examples
+
+```julia
+julia> Base.return_types((Int,)) do a
+           x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+           return x
+       end |> only
+Any
+
+julia> Base.return_types() do
+           x = compilerbarrier(:const, 42)
+           if x == 42 # no constant information here, so inference also accounts for the else branch
+               return x # but `x` is still inferred as `x::Int` at least here
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+
+julia> Base.return_types((Union{Int,Nothing},)) do a
+           if compilerbarrier(:conditional, isa(a, Int))
+               # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+               return a
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+```
+"""
+Base.compilerbarrier
+
+"""
+    Core.finalizer(f, o)
+
+This builtin is an implementation detail of [`Base.finalizer`](@ref) and end-users
+should use the latter instead.
+
+# Differences from `Base.finalizer`
+
+The interface of `Core.finalizer` is essentially the same as `Base.finalizer`,
+but there are a number of small differences. They are documented here for
+completeness only and (unlike `Base.finalizer`) have no stability guarantees.
+
+The current differences are:
+- `Core.finalizer` does not check for mutability of `o`. Attempting to register
+  a finalizer for an immutable object is undefined behavior.
+- The value `f` must be a Julia object. `Core.finalizer` does not support a
+  raw C function pointer.
+- `Core.finalizer` returns `nothing` rather than `o`.
+"""
+Core.finalizer
 
 end

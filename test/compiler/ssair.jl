@@ -205,7 +205,7 @@ let ci = make_ci([
     # come after it.
     for i in 1:length(ir.stmts)
         s = ir.stmts[i]
-        if isa(s, Expr) && s.head == :call && s.args[1] == :something
+        if Meta.isexpr(s, :call) && s.args[1] === :something
             if isa(s.args[2], SSAValue)
                 @test s.args[2].id <= i
             end
@@ -333,6 +333,23 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
     stderr = IOBuffer()
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+end
+
+@testset "code_ircode" begin
+    @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
+          Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
+          Compiler.IRCode
+
+    function demo(f)
+        f()
+        f()
+        f()
+    end
+    @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
 end
 
 let

@@ -874,7 +874,6 @@ end
 @testset "Inexact errors on 32 bit architectures. #22613" begin
     @test first(range(log(0.2), stop=log(10.0), length=10)) == log(0.2)
     @test last(range(log(0.2), stop=log(10.0), length=10)) == log(10.0)
-    @test length(Base.floatrange(-3e9, 1.0, 1, 1.0)) == 1
 end
 
 @testset "ranges with very small endpoints for type $T" for T = (Float32, Float64)
@@ -2032,8 +2031,17 @@ end
 end
 
 @testset "length(StepRange()) type stability" begin
-    typeof(length(StepRange(1,Int128(1),1))) == typeof(length(StepRange(1,Int128(1),0)))
-    typeof(checked_length(StepRange(1,Int128(1),1))) == typeof(checked_length(StepRange(1,Int128(1),0)))
+    for SR in (StepRange{Int,Int128}, StepRange{Int8,Int128})
+        r1, r2 = SR(1, 1, 1), SR(1, 1, 0)
+        @test typeof(length(r1)) == typeof(checked_length(r1)) ==
+              typeof(length(r2)) == typeof(checked_length(r2))
+    end
+    SR = StepRange{Union{Int64,Int128},Int}
+    test_length(r, l) = length(r) === checked_length(r) === l
+    @test test_length(SR(Int64(1), 1, Int128(1)), Int128(1))
+    @test test_length(SR(Int64(1), 1, Int128(0)), Int128(0))
+    @test test_length(SR(Int64(1), 1, Int64(1)), Int64(1))
+    @test test_length(SR(Int64(1), 1, Int64(0)), Int64(0))
 end
 
 @testset "LinRange eltype for element types that wrap integers" begin
@@ -2347,3 +2355,13 @@ end
 @test isempty(range(typemax(Int), length=0, step=UInt(2)))
 
 @test length(range(1, length=typemax(Int128))) === typemax(Int128)
+
+@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
+    test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
+    for T in Base.BitInteger_types, S in Base.BitInteger_types
+        @test test_firstindex(StepRange{T,S}(1, 1, 1))
+        @test test_firstindex(StepRange{T,S}(1, 1, 0))
+    end
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(1)))
+    @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
+end

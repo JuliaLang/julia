@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
 TAGGED_RELEASE_BANNER := ""

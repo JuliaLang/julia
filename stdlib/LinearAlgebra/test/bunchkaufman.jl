@@ -70,10 +70,10 @@ bimg  = randn(n,2)/2
                 @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ asym[bc1.p, bc1.p]
                 @test getproperty(bc1, uplo)*bc1.D*transpose(getproperty(bc1, uplo)) ≈ bc1.P*asym*transpose(bc1.P)
                 @test_throws ErrorException bc1.Z
-                @test_throws ArgumentError uplo == :L ? bc1.U : bc1.L
+                @test_throws ArgumentError uplo === :L ? bc1.U : bc1.L
             end
             # test Base.iterate
-            ref_objs = (bc1.D, uplo == :L ? bc1.L : bc1.U, bc1.p)
+            ref_objs = (bc1.D, uplo === :L ? bc1.L : bc1.U, bc1.p)
             for (bki, bkobj) in enumerate(bc1)
                 @test bkobj == ref_objs[bki]
             end
@@ -162,7 +162,7 @@ end
         @test B.D == Tridiagonal([], [], [])
         @test B.P == ones(0, 0)
         @test B.p == []
-        if ul == :U
+        if ul === :U
             @test B.U == UnitUpperTriangular(ones(0, 0))
             @test_throws ArgumentError B.L
         else

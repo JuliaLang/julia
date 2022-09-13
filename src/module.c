@@ -670,6 +670,12 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
     return b->value;
 }
 
+JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
+{
+    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
+    jl_checked_assignment(bp, val);
+}
+
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
     jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
@@ -830,7 +836,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
                        jl_symbol_name(b->name));
     }
-    jl_atomic_store_relaxed(&b->value, rhs);
+    jl_atomic_store_release(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);
 }
 

@@ -1,5 +1,7 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
+# import LLVM_SHARED_LIB_NAME
+include $(JULIAHOME)/deps/llvm-ver.make
 
 VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
@@ -22,12 +24,12 @@ configure-y: | $(BUILDDIRMAKE)
 configure:
 ifeq ("$(origin O)", "command line")
 	@if [ "$$(ls '$(BUILDROOT)' 2> /dev/null)" ]; then \
-		echo 'WARNING: configure called on non-empty directory $(BUILDROOT)'; \
+		printf $(WARNCOLOR)'WARNING: configure called on non-empty directory'$(ENDCOLOR)' %s\n' '$(BUILDROOT)'; \
 		read -p "Proceed [y/n]? " answer; \
 	else \
 		answer=y;\
 	fi; \
-	[ $$answer = 'y' ] && $(MAKE) configure-$$answer
+	[ "y$$answer" = yy ] && $(MAKE) configure-$$answer
 else
 	$(error "cannot rerun configure from within a build directory")
 endif
@@ -101,7 +103,7 @@ check-whitespace:
 ifneq ($(NO_GIT), 1)
 	@# Append the directory containing the julia we just built to the end of `PATH`,
 	@# to give us the best chance of being able to run this check.
-	@PATH=$(PATH):$(dirname $(JULIA_EXECUTABLE)) $(JULIAHOME)/contrib/check-whitespace.jl
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -162,14 +164,17 @@ julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir
 		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
+ifeq ($(JULIA_BUILD_MODE),release)
 JL_TARGETS := julia
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-JL_TARGETS += julia-debug
+else ifeq ($(JULIA_BUILD_MODE),debug)
+JL_TARGETS := julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal libjulia-codegen
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest
+ifeq ($(JULIA_BUILD_MODE),release)
+JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
+else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
 ifeq ($(USE_GPL_LIBS), 1)
@@ -192,7 +197,7 @@ else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-13jl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
 
@@ -230,38 +235,32 @@ endef
 
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	@$(MAKE) $(QUIET_MAKE) all
-else
-	@$(MAKE) $(QUIET_MAKE) release
-endif
+	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
-	$(INSTALL_M) $(build_bindir)/julia $(DESTDIR)$(bindir)/
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(INSTALL_M) $(build_bindir)/julia-debug $(DESTDIR)$(bindir)/
-endif
+	$(INSTALL_M) $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE)) $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
-	-$(INSTALL_M) $(filter-out $(build_bindir)/libjulia-debug.dll,$(wildcard $(build_bindir)/*.dll)) $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(wildcard $(build_bindir)/*.dll) $(DESTDIR)$(bindir)/
+ifeq ($(JULIA_BUILD_MODE),release)
 	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
+else ifeq ($(JULIA_BUILD_MODE),debug)
+	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
+endif
 
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	-$(INSTALL_M) $(build_bindir)/libjulia-debug.dll $(DESTDIR)$(bindir)/
-	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
-endif
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
 ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(OS),Darwin)
+ifeq ($(JULIA_BUILD_MODE),release)
 	-cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
 	-cp -a $(build_private_libdir)/sys.dylib.dSYM $(DESTDIR)$(private_libdir)
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	-cp -a $(build_libdir)/libjulia-debug.*.dSYM $(DESTDIR)$(libdir)
 	-cp -a $(build_private_libdir)/sys-debug.dylib.dSYM $(DESTDIR)$(private_libdir)
 endif
@@ -276,10 +275,11 @@ endif
 	done
 else
 	# libjulia in Darwin framework has special location and name
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM $(DESTDIR)$(prefix)/$(framework_dylib)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM $(build_private_libdir)/sys.dylib
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM $(build_private_libdir)/sys-debug.dylib
@@ -307,8 +307,9 @@ endif
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
 
@@ -358,33 +359,37 @@ endif
 		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
 		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
 	fi; \
-	$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
-	if [ "$(BUNDLE_DEBUG_LIBS)" = "1" ]; then \
+	if [ "$(JULIA_BUILD_MODE)" = "release" ]; then \
+		$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
+	elif [ "$(JULIA_BUILD_MODE)" = "debug" ]; then \
 		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
 
 	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
 ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
 endif
 endif
 
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
-ifeq ($(OS),Darwin)
-	# Codesign the libjulia we just modified
-	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)"
-endif
-
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
+endif
 ifeq ($(OS),Darwin)
 	# Codesign the libjulia we just modified
+ifeq ($(JULIA_BUILD_MODE),release)
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)"
 endif
 endif

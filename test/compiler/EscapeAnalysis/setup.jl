@@ -1,3 +1,4 @@
+include(normpath(@__DIR__, "..", "irutils.jl"))
 include(normpath(@__DIR__, "EAUtils.jl"))
 using Test, Core.Compiler.EscapeAnalysis, .EAUtils
 import Core: Argument, SSAValue, ReturnNode
@@ -7,7 +8,6 @@ import .EA: ignore_argescape
 isT(T) = (@nospecialize x) -> x === T
 isreturn(@nospecialize x) = isa(x, Core.ReturnNode) && isdefined(x, :val)
 isthrow(@nospecialize x) = Meta.isexpr(x, :call) && Core.Compiler.is_throw_call(x)
-isnew(@nospecialize x) = Meta.isexpr(x, :new)
 isϕ(@nospecialize x) = isa(x, Core.PhiNode)
 function with_normalized_name(@nospecialize(f), @nospecialize(x))
     if Meta.isexpr(x, :foreigncall)
@@ -20,19 +20,6 @@ end
 isarrayalloc(@nospecialize x) = with_normalized_name(nn->!isnothing(Core.Compiler.alloc_array_ndims(nn)), x)
 isarrayresize(@nospecialize x) = with_normalized_name(nn->!isnothing(EA.array_resize_info(nn)), x)
 isarraycopy(@nospecialize x) = with_normalized_name(nn->EA.is_array_copy(nn), x)
-import Core.Compiler: argextype, singleton_type
-iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((ir, f), @nospecialize(x))
-    return iscall(x) do @nospecialize x
-        singleton_type(Core.Compiler.argextype(x, ir, Any[])) === f
-    end
-end
-iscall(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
-isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
 
 """
     is_load_forwardable(x::EscapeInfo) -> Bool

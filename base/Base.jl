@@ -87,7 +87,7 @@ if false
 end
 
 """
-    time_ns()
+    time_ns() -> UInt64
 
 Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 """
@@ -107,9 +107,6 @@ include("options.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
-Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
-#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
-#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
@@ -124,8 +121,21 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 include("refpointer.jl")
+
+# now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
+delete_method(which(Pair{Any,Any}, (Any, Any)))
+@eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
+    @inline
+    return $(Expr(:new, :P, :(convert(A, a)), :(convert(B, b))))
+end
+
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 include("checked.jl")
 using .Checked
+function cld end
+function fld end
 
 # Lazy strings
 include("strings/lazy.jl")
@@ -423,6 +433,7 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)

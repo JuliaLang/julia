@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file is not loaded into `Core.Compiler` but rather loaded into the context of
+# `Base.IRShow` and thus does not participate in bootstrapping.
+
 @nospecialize
 
 if Pair != Base.Pair
@@ -10,7 +13,7 @@ length(s::String) = Base.length(s)
 end
 
 import Base: show_unquoted
-using Base: printstyled, with_output_color, prec_decl
+using Base: printstyled, with_output_color, prec_decl, @invoke
 
 function Base.show(io::IO, cfg::CFG)
     for (idx, block) in enumerate(cfg.blocks)
@@ -154,9 +157,10 @@ function should_print_ssa_type(@nospecialize node)
            !isa(node, QuoteNode)
 end
 
-function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
-    printstyled(io, "::", typ, color=(used ? :cyan : :light_black))
-    nothing
+function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
+    show_type || return nothing
+    printstyled(io, "::", type, color=(used ? :cyan : :light_black))
+    return nothing
 end
 
 normalize_method_name(m::Method) = m.name
@@ -329,8 +333,7 @@ function compute_ir_line_annotations(code::IRCode)
     return (loc_annotations, loc_methods, loc_lineno)
 end
 
-Base.show(io::IO, code::IRCode) = show_ir(io, code)
-
+Base.show(io::IO, code::Union{IRCode, IncrementalCompact}) = show_ir(io, code)
 
 lineinfo_disabled(io::IO, linestart::String, idx::Int) = ""
 
@@ -495,14 +498,18 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     return emit_lineinfo_update
 end
 
-# line_info_preprinter(io::IO, indent::String, idx::Int) may print relevant info
-#   at the beginning of the line, and should at least print `indent`. It returns a
-#   string that will be printed after the final basic-block annotation.
-# line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
-#   of the statement
-# should_print_stmt(idx::Int) -> Bool: whether the statement at index `idx` should be
-#   printed as part of the IR or not
-# bb_color: color used for printing the basic block brackets on the left
+"""
+    IRShowConfig
+
+- `line_info_preprinter(io::IO, indent::String, idx::Int)`` may print relevant info
+  at the beginning of the line, and should at least print `indent`. It returns a
+  string that will be printed after the final basic-block annotation.
+- `line_info_postprinter(io::IO; type, used::Bool, show_type::Bool, idx::Int)` prints
+  relevant information like type-annotation at the end of the statement
+- `should_print_stmt(idx::Int) -> Bool`: whether the statement at index `idx` should be
+  printed as part of the IR or not
+- `bb_color`: color used for printing the basic block brackets on the left
+"""
 struct IRShowConfig
     line_info_preprinter
     line_info_postprinter
@@ -522,6 +529,10 @@ function _stmt(code::IRCode, idx::Int)
     stmts = code.stmts
     return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
 end
+function _stmt(compact::IncrementalCompact, idx::Int)
+    stmts = compact.result
+    return isassigned(stmts.inst, idx) ? stmts[idx][:inst] : UNDEF
+end
 function _stmt(code::CodeInfo, idx::Int)
     code = code.code
     return isassigned(code, idx) ? code[idx] : UNDEF
@@ -529,6 +540,10 @@ end
 
 function _type(code::IRCode, idx::Int)
     stmts = code.stmts
+    return isassigned(stmts.type, idx) ? stmts[idx][:type] : UNDEF
+end
+function _type(compact::IncrementalCompact, idx::Int)
+    stmts = compact.result
     return isassigned(stmts.type, idx) ? stmts[idx][:type] : UNDEF
 end
 function _type(code::CodeInfo, idx::Int)
@@ -559,13 +574,13 @@ end
 # pop_new_node!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
 #   node at the current index `idx`, which is printed before the statement at index
 #   `idx`. This function is repeatedly called until it returns `nothing`
-function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, config::IRShowConfig,
+function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
                         used, cfg, bb_idx; pop_new_node!, config.bb_color)
 end
 
-function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info_preprinter, line_info_postprinter,
+function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), bb_color=:light_black)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
@@ -637,8 +652,8 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
 
         if new_node_type === UNDEF # try to be robust against errors
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => node_idx), new_node_type, node_idx in used)
+        else
+            line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
         end
         println(io)
         i += 1
@@ -652,23 +667,20 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo}, idx::Int, line_info
         if type === UNDEF
             # This is an error, but can happen if passes don't update their type information
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => idx), type, idx in used)
+        else
+            line_info_postprinter(io; type, used = idx in used, show_type, idx)
         end
     end
     println(io)
     return bb_idx
 end
 
-function ircode_new_nodes_iter(code::IRCode)
-    stmts = code.stmts
-    new_nodes = code.new_nodes.stmts
-    new_nodes_info = code.new_nodes.info
+function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
     new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
     perm_idx = Ref(1)
 
-    function (idx::Int)
+    return function (idx::Int)
         perm_idx[] <= length(new_nodes_perm) || return nothing
         node_idx = new_nodes_perm[perm_idx[]]
         if new_nodes_info[node_idx].pos != idx
@@ -681,6 +693,20 @@ function ircode_new_nodes_iter(code::IRCode)
         node_idx += length(stmts)
         return node_idx, new_node_inst, new_node_type
     end
+end
+
+function new_nodes_iter(ir::IRCode)
+    stmts = ir.stmts
+    new_nodes = ir.new_nodes.stmts
+    new_nodes_info = ir.new_nodes.info
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+end
+
+function new_nodes_iter(compact::IncrementalCompact)
+    stmts = compact.result
+    new_nodes = compact.new_new_nodes.stmts
+    new_nodes_info = compact.new_new_nodes.info
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
@@ -770,38 +796,118 @@ function default_config(code::IRCode; verbose_linetable=false)
 end
 default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
 
-function show_ir(io::IO, code::Union{IRCode, CodeInfo}, config::IRShowConfig=default_config(code);
-                 pop_new_node! = code isa IRCode ? ircode_new_nodes_iter(code) : Returns(nothing))
-    stmts = code isa IRCode ? code.stmts : code.code
-    used = stmts_used(io, code)
-    cfg = code isa IRCode ? code.cfg : compute_basic_blocks(stmts)
-    bb_idx = 1
-
-    for idx in 1:length(stmts)
-        if config.should_print_stmt(code, idx, used)
-            bb_idx = show_ir_stmt(io, code, idx, config, used, cfg, bb_idx; pop_new_node!)
+function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
+                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+    for idx in inds
+        if config.should_print_stmt(ir, idx, used)
+            bb_idx = show_ir_stmt(io, ir, idx, config, used, cfg, bb_idx; pop_new_node!)
         elseif bb_idx <= length(cfg.blocks) && idx == cfg.blocks[bb_idx].stmts.stop
             bb_idx += 1
         end
     end
-
-    max_bb_idx_size = length(string(length(cfg.blocks)))
-    config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
-    nothing
+    return bb_idx
 end
 
-tristate_letter(t::TriState) = t === ALWAYS_TRUE ? '+' : t === ALWAYS_FALSE ? '!' : '?'
-tristate_color(t::TriState) = t === ALWAYS_TRUE ? :green : t === ALWAYS_FALSE ? :red : :orange
+function finish_show_ir(io::IO, cfg, config::IRShowConfig)
+    max_bb_idx_size = length(string(length(cfg.blocks)))
+    config.line_info_preprinter(io, " "^(max_bb_idx_size + 2), 0)
+    return nothing
+end
 
-function Base.show(io::IO, e::Core.Compiler.Effects)
+function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
+                 pop_new_node! = new_nodes_iter(ir))
+    used = stmts_used(io, ir)
+    cfg = ir.cfg
+    let io = IOContext(io, :maxssaid=>length(ir.stmts))
+        show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
+    end
+    finish_show_ir(io, cfg, config)
+end
+
+function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
+                 pop_new_node! = Returns(nothing))
+    used = stmts_used(io, ci)
+    cfg = compute_basic_blocks(ci.code)
+    let io = IOContext(io, :maxssaid=>length(ci.code))
+        show_ir_stmts(io, ci, 1:length(ci.code), config, used, cfg, 1; pop_new_node!)
+    end
+    finish_show_ir(io, cfg, config)
+end
+
+function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+    compact_cfg = CFG(compact.result_bbs, Int[first(compact.result_bbs[i].stmts) for i in 2:length(compact.result_bbs)])
+    cfg = compact.ir.cfg
+    (_, width) = displaysize(io)
+
+    # First print everything that has already been compacted
+
+    # merge uses in uncompacted region into compacted uses
+    used_compacted = BitSet(i for (i, x) in pairs(compact.used_ssas) if x != 0)
+    used_uncompacted = stmts_used(io, compact.ir)
+    for (i, ssa) = enumerate(compact.ssa_rename)
+        if isa(ssa, SSAValue) && ssa.id in used_uncompacted
+            push!(used_compacted, i)
+        end
+    end
+    pop_new_node! = new_nodes_iter(compact)
+    bb_idx = let io = IOContext(io, :maxssaid=>length(compact.result))
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
+    end
+
+    # Print uncompacted nodes from the original IR
+    stmts = compact.ir.stmts
+    pop_new_node! = new_nodes_iter(compact.ir)
+    if compact.idx < length(stmts)
+        indent = length(string(length(stmts)))
+        # config.line_info_preprinter(io, "", compact.idx)
+        printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+    end
+    let io = IOContext(io, :maxssaid=>length(compact.ir.stmts))
+        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
+    end
+
+    finish_show_ir(io, cfg, config)
+end
+
+function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)
+    ft = fieldtype(Effects, name)
+    if ft === UInt8
+        prefix = getfield(effects, name) === ALWAYS_TRUE ? '+' :
+                 getfield(effects, name) === ALWAYS_FALSE ? '!' : '?'
+    elseif ft === Bool
+        prefix = getfield(effects, name) ? '+' : '!'
+    else
+        error("unsupported effectbits type given")
+    end
+    return string(prefix, suffix)
+end
+
+function effectbits_color(effects::Effects, name::Symbol)
+    ft = fieldtype(Effects, name)
+    if ft === UInt8
+        color = getfield(effects, name) === ALWAYS_TRUE ? :green :
+                getfield(effects, name) === ALWAYS_FALSE ? :red : :yellow
+    elseif ft === Bool
+        color = getfield(effects, name) ? :green : :red
+    else
+        error("unsupported effectbits type given")
+    end
+    return color
+end
+
+function Base.show(io::IO, e::Effects)
     print(io, "(")
-    printstyled(io, string(tristate_letter(e.consistent), 'c'); color=tristate_color(e.consistent))
+    printstyled(io, effectbits_letter(e, :consistent,  'c'); color=effectbits_color(e, :consistent))
     print(io, ',')
-    printstyled(io, string(tristate_letter(e.effect_free), 'e'); color=tristate_color(e.effect_free))
+    printstyled(io, effectbits_letter(e, :effect_free, 'e'); color=effectbits_color(e, :effect_free))
     print(io, ',')
-    printstyled(io, string(tristate_letter(e.nothrow), 'n'); color=tristate_color(e.nothrow))
+    printstyled(io, effectbits_letter(e, :nothrow,     'n'); color=effectbits_color(e, :nothrow))
     print(io, ',')
-    printstyled(io, string(tristate_letter(e.terminates), 't'); color=tristate_color(e.terminates))
+    printstyled(io, effectbits_letter(e, :terminates,  't'); color=effectbits_color(e, :terminates))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :notaskstate, 's'); color=effectbits_color(e, :notaskstate))
+    print(io, ',')
+    printstyled(io, effectbits_letter(e, :inaccessiblememonly, 'm'); color=effectbits_color(e, :inaccessiblememonly))
     print(io, ')')
     e.nonoverlayed || printstyled(io, '′'; color=:red)
 end
