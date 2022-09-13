@@ -976,7 +976,8 @@ i = CartesianIndex(3, 2)
 !!! note
 
     In contrast with `for i = 1:length(A)`, iterating with [`eachindex`](@ref) provides an efficient way to
-    iterate over any array type.
+    iterate over any array type. Besides, this also supports generic arrays with custom indexing such as
+    [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl).
 
 ## Array traits
 
