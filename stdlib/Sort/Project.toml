@@ -1,5 +1,5 @@
 name = "Sort"
-uuid = "7744cb9a-8a56-1d63-a5da-e2fdf8a12fa2"
+uuid = "a93dcad4-a5b3-87f1-1599-dc5d35b4bf41"
 
 [deps]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
