@@ -355,6 +355,9 @@ function _is_immutable_type(@nospecialize ty)
     if isa(ty, Union)
         return _is_immutable_type(ty.a) && _is_immutable_type(ty.b)
     end
+    if isType(ty) || ty === DataType
+        return true
+    end
     return !isabstracttype(ty) && !ismutabletype(ty)
 end
 

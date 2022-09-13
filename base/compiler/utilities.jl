@@ -78,7 +78,7 @@ function quoted(@nospecialize(x))
 end
 
 function count_const_size(@nospecialize(x), count_self::Bool = true)
-    (x isa Type || x isa Symbol) && return 0
+    (x isa Type || x isa Core.TypeName || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
     isbits(x) && return Core.sizeof(x)
     dt = typeof(x)
