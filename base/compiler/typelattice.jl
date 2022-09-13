@@ -148,10 +148,18 @@ function assert_nested_slotwrapper(@nospecialize t)
     return t
 end
 
-widenslotwrapper(@nospecialize typ) = typ
-widenslotwrapper(typ::AnyConditional) = widenconditional(typ)
-widenwrappedslotwrapper(@nospecialize typ) = widenslotwrapper(typ)
-widenwrappedslotwrapper(typ::LimitedAccuracy) = LimitedAccuracy(widenslotwrapper(typ.typ), typ.causes)
+function widenslotwrapper(@nospecialize typ)
+    if isa(typ, AnyConditional)
+        return widenconditional(typ)
+    end
+    return typ
+end
+function widenwrappedslotwrapper(@nospecialize typ)
+    if isa(typ, LimitedAccuracy)
+        return LimitedAccuracy(widenslotwrapper(typ.typ), typ.causes)
+    end
+    return widenslotwrapper(typ)
+end
 
 # Conditional
 # ===========
@@ -162,15 +170,19 @@ function widenconditional(@nospecialize typ)
             return Const(false)
         elseif typ.elsetype === Union{}
             return Const(true)
-        else
-            return Bool
         end
+        return Bool
+    elseif isa(typ, LimitedAccuracy)
+        error("unhandled LimitedAccuracy")
     end
     return typ
 end
-widenconditional(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
-widenwrappedconditional(@nospecialize typ) = widenconditional(typ)
-widenwrappedconditional(typ::LimitedAccuracy) = LimitedAccuracy(widenconditional(typ.typ), typ.causes)
+function widenwrappedconditional(@nospecialize typ)
+    if isa(typ, LimitedAccuracy)
+        return LimitedAccuracy(widenconditional(typ.typ), typ.causes)
+    end
+    return widenconditional(typ)
+end
 
 # `Conditional` and `InterConditional` are valid in opposite contexts
 # (i.e. local inference and inter-procedural call), as such they will never be compared
@@ -200,8 +212,12 @@ maybe_extract_const_bool(@nospecialize c) = nothing
 # LimitedAccuracy
 # ===============
 
-ignorelimited(@nospecialize typ) = typ
-ignorelimited(typ::LimitedAccuracy) = typ.typ
+function ignorelimited(@nospecialize typ)
+    if isa(typ, LimitedAccuracy)
+        return typ.typ
+    end
+    return typ
+end
 
 # lattice order
 # =============
