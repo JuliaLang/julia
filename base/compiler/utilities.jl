@@ -173,6 +173,8 @@ function subst_trivial_bounds(@nospecialize(atype))
     return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
+
 # If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
@@ -223,6 +225,61 @@ Check if `method` is declared as `Base.@constprop :none`.
 """
 is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 
+#############
+# backedges #
+#############
+
+"""
+    BackedgeIterator(backedges::Vector{Any})
+
+Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
+which will be one of the following:
+
+- `(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `(specsig, mt::MethodTable)`: an abstract call
+
+# Examples
+
+```julia
+julia> callme(x) = x+1
+callme (generic function with 1 method)
+
+julia> callyou(x) = callme(x)
+callyou (generic function with 1 method)
+
+julia> callyou(2.0)
+3.0
+
+julia> mi = first(which(callme, (Any,)).specializations)
+MethodInstance for callme(::Float64)
+
+julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi.backedges)
+           println(sig)
+           println(caller)
+       end
+nothing
+callyou(Float64) from callyou(Any)
+```
+"""
+struct BackedgeIterator
+    backedges::Vector{Any}
+end
+
+const empty_backedge_iter = BackedgeIterator(Any[])
+
+const MethodInstanceOrTable = Union{MethodInstance, Core.MethodTable}
+const BackedgePair = Pair{Union{Type, Nothing, MethodInstanceOrTable}, MethodInstanceOrTable}
+
+function iterate(iter::BackedgeIterator, i::Int=1)
+    backedges = iter.backedges
+    i > length(backedges) && return nothing
+    item = backedges[i]
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
+    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+end
+
 #########
 # types #
 #########
@@ -236,6 +293,17 @@ function singleton_type(@nospecialize(ft))
         return ft.instance
     end
     return nothing
+end
+
+function maybe_singleton_const(@nospecialize(t))
+    if isa(t, DataType)
+        if isdefined(t, :instance)
+            return Const(t.instance)
+        elseif isconstType(t)
+            return Const(t.parameters[1])
+        end
+    end
+    return t
 end
 
 ###################

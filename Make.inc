@@ -689,7 +689,7 @@ SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-fra
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
 endif
 ifeq ($(SANITIZE_ADDRESS),1)
-SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
 endif
 ifeq ($(SANITIZE_THREAD),1)
@@ -705,7 +705,7 @@ JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
-TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
+TAR_TEST := $(shell $(TAR) --help 2>&1  | grep -E 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
@@ -1223,6 +1223,9 @@ else
   NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
 endif
 
+# Initialize these once, then add to them in OS-specific blocks
+JLIBLDFLAGS :=
+
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -latomic -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
@@ -1236,14 +1239,14 @@ ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
 endif
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
-JLIBLDFLAGS := -Wl,-Bsymbolic-functions
-else
-JLIBLDFLAGS :=
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
 endif
+ifeq (--enable-new-dtags, $(shell $(LD) --help | grep -o -e "--enable-new-dtags"))
+JLIBLDFLAGS += -Wl,--enable-new-dtags
+endif
+
 # Linker doesn't detect automatically that Julia doesn't need executable stack
 JLIBLDFLAGS += -Wl,-z,noexecstack
-else ifneq ($(OS), Darwin)
-JLIBLDFLAGS :=
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -1266,7 +1269,7 @@ OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
-JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
 
 ifeq ($(OS), WINNT)

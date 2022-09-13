@@ -1361,7 +1361,7 @@ julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not supported
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
 ```julia-repl

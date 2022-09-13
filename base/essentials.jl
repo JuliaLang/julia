@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, arrayref
+import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
 
 const Callable = Union{Function,Type}
 
@@ -686,13 +686,7 @@ end
 
 # SimpleVector
 
-function getindex(v::SimpleVector, i::Int)
-    @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
-    end
-    return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
-end
-
+@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
     return ccall(:jl_svec_len, Int, (Any,), v)
 end
@@ -768,6 +762,7 @@ see [`:`](@ref).
 struct Colon <: Function
 end
 const (:) = Colon()
+
 
 """
     Val(c)
@@ -846,8 +841,7 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
 end
 
-# TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
+inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
     isempty(collection) -> Bool

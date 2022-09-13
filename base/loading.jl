@@ -42,7 +42,7 @@ elseif Sys.isapple()
     #    char filename[max_filename_length];
     # };
     # Buffer buf;
-    # getattrlist(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
+    # getattrpath(path, &attr_list, &buf, sizeof(buf), FSOPT_NOFOLLOW);
     function isfile_casesensitive(path)
         isaccessiblefile(path) || return false
         path_basename = String(basename(path))
@@ -298,10 +298,40 @@ end
 
 # Used by Pkg but not used in loading itself
 function find_package(arg)
-    pkg = identify_package(arg)
-    pkg === nothing && return nothing
-    return locate_package(pkg)
+    pkgenv = identify_package_env(arg)
+    pkgenv === nothing && return nothing
+    pkg, env = pkgenv
+    return locate_package(pkg, env)
 end
+
+"""
+    Base.identify_package_env(name::String)::Union{Tuple{PkgId, String}, Nothing}
+    Base.identify_package_env(where::Union{Module,PkgId}, name::String)::Union{Tuple{PkgId, String} Nothing}
+
+Same as [`Base.identify_package`](@ref) except that the path to the environment where the package is identified
+is also returned.
+"""
+identify_package_env(where::Module, name::String) = identify_package_env(PkgId(where), name)
+function identify_package_env(where::PkgId, name::String)
+    where.name === name && return where, nothing
+    where.uuid === nothing && return identify_package_env(name) # ignore `where`
+    for env in load_path()
+        pkgid = manifest_deps_get(env, where, name)
+        pkgid === nothing && continue # not found--keep looking
+        pkgid.uuid === nothing || return pkgid, env # found in explicit environment--use it
+        return nothing # found in implicit environment--return "not found"
+    end
+    return nothing
+end
+function identify_package_env(name::String)
+    for env in load_path()
+        uuid = project_deps_get(env, name)
+        uuid === nothing || return uuid, env # found--return it
+    end
+    return nothing
+end
+
+_nothing_or_first(x) = x === nothing ? nothing : first(x)
 
 """
     Base.identify_package(name::String)::Union{PkgId, Nothing}
@@ -317,7 +347,7 @@ There `where` argument provides the context from where to search for the
 package: in this case it first checks if the name matches the context itself,
 otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
-identifies the depdencency with with the corresponding name.
+identifies the dependency with with the corresponding name.
 
 ```julia-repl
 julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
@@ -329,25 +359,10 @@ julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of 
 
 ````
 """
-identify_package(where::Module, name::String) = identify_package(PkgId(where), name)
-function identify_package(where::PkgId, name::String)::Union{Nothing,PkgId}
-    where.name === name && return where
-    where.uuid === nothing && return identify_package(name) # ignore `where`
-    for env in load_path()
-        pkgid = manifest_deps_get(env, where, name)
-        pkgid === nothing && continue # not found--keep looking
-        pkgid.uuid === nothing || return pkgid # found in explicit environment--use it
-        return nothing # found in implicit environment--return "not found"
-    end
-    return nothing
-end
-function identify_package(name::String)::Union{Nothing,PkgId}
-    for env in load_path()
-        uuid = project_deps_get(env, name)
-        uuid === nothing || return uuid # found--return it
-    end
-    return nothing
-end
+identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
+identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
+identify_package(name::String)                = _nothing_or_first(identify_package_env(name))
+
 
 """
     Base.locate_package(pkg::PkgId)::Union{String, Nothing}
@@ -363,7 +378,7 @@ julia> Base.locate_package(pkg)
 "/path/to/julia/stdlib/v$(VERSION.major).$(VERSION.minor)/Pkg/src/Pkg.jl"
 ```
 """
-function locate_package(pkg::PkgId)::Union{Nothing,String}
+function locate_package(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,String}
     if pkg.uuid === nothing
         for env in load_path()
             # look for the toplevel pkg `pkg.name` in this entry
@@ -377,16 +392,20 @@ function locate_package(pkg::PkgId)::Union{Nothing,String}
                     return implicit_manifest_uuid_path(env, pkg)
                 end
             end
+            stopenv == env && return nothing
         end
     else
         for env in load_path()
             path = manifest_uuid_path(env, pkg)
+            # missing is used as a sentinel to stop looking further down in envs
+            path === missing && return nothing
             path === nothing || return entry_path(path, pkg.name)
+            stopenv == env && break
         end
         # Allow loading of stdlibs if the name/uuid are given
         # e.g. if they have been explicitly added to the project/manifest
         path = manifest_uuid_path(Sys.STDLIB, pkg)
-        path === nothing || return entry_path(path, pkg.name)
+        path isa String && return entry_path(path, pkg.name)
     end
     return nothing
 end
@@ -483,7 +502,7 @@ function locate_project_file(env::String)
 end
 
 # classify the LOAD_PATH entry to be one of:
-#  - `false`: nonexistant / nothing to see here
+#  - `false`: nonexistent / nothing to see here
 #  - `true`: `env` is an implicit environment
 #  - `path`: the path of an explicit project file
 function env_project_file(env::String)::Union{Bool,String}
@@ -539,7 +558,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
     return nothing
 end
 
-function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String}
+function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missing}
     project_file = env_project_file(env)
     if project_file isa String
         proj = project_file_name_uuid(project_file, pkg.name)
@@ -730,7 +749,7 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
 end
 
 # find `uuid` stanza, return the corresponding path
-function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{Nothing,String}
+function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{Nothing,String,Missing}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # no manifest, skip env
 
@@ -765,7 +784,8 @@ function explicit_manifest_entry_path(manifest_file::String, pkg::PkgId, entry::
             ispath(path) && return abspath(path)
         end
     end
-    return nothing
+    # no depot contains the package, return missing to stop looking
+    return missing
 end
 
 ## implicit project & manifest API ##
@@ -813,7 +833,7 @@ end
 
 function find_source_file(path::AbstractString)
     (isabspath(path) || isfile(path)) && return path
-    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "src", "base", path)
+    base_path = joinpath(Sys.BINDIR, DATAROOTDIR, "julia", "base", path)
     return isfile(base_path) ? normpath(base_path) : nothing
 end
 
@@ -1204,9 +1224,9 @@ function require(into::Module, mod::Symbol)
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
-        uuidkey = identify_package(into, String(mod))
-        # Core.println("require($(PkgId(into)), $mod) -> $uuidkey")
-        if uuidkey === nothing
+        uuidkey_env = identify_package_env(into, String(mod))
+        # Core.println("require($(PkgId(into)), $mod) -> $uuidkey from env \"$env\"")
+        if uuidkey_env === nothing
             where = PkgId(into)
             if where.uuid === nothing
                 hint, dots = begin
@@ -1234,10 +1254,11 @@ function require(into::Module, mod::Symbol)
                 - Otherwise you may need to report an issue with $(where.name)"""))
             end
         end
+        uuidkey, env = uuidkey_env
         if _track_dependencies[]
             push!(_require_dependencies, (into, binpack(uuidkey), 0.0))
         end
-        return _require_prelocked(uuidkey)
+        return _require_prelocked(uuidkey, env)
     finally
         LOADING_CACHE[] = nothing
     end
@@ -1254,10 +1275,10 @@ const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
-function _require_prelocked(uuidkey::PkgId)
+function _require_prelocked(uuidkey::PkgId, env=nothing)
     assert_havelock(require_lock)
     if !root_module_exists(uuidkey)
-        newm = _require(uuidkey)
+        newm = _require(uuidkey, env)
         if newm === nothing
             error("package `$(uuidkey.name)` did not define the expected \
                   module `$(uuidkey.name)`, check for typos in package module name")
@@ -1349,7 +1370,7 @@ function set_pkgorigin_version_path(pkg::PkgId, path::Union{String,Nothing})
 end
 
 # Returns `nothing` or the new(ish) module
-function _require(pkg::PkgId)
+function _require(pkg::PkgId, env=nothing)
     assert_havelock(require_lock)
     # handle recursive calls to require
     loading = get(package_locks, pkg, false)
@@ -1364,7 +1385,7 @@ function _require(pkg::PkgId)
     try
         toplevel_load[] = false
         # perform the search operation to select the module file require intends to load
-        path = locate_package(pkg)
+        path = locate_package(pkg, env)
         if path === nothing
             throw(ArgumentError("""
                 Package $pkg is required but does not seem to be installed:
@@ -2262,12 +2283,12 @@ macro __DIR__()
 end
 
 """
-    precompile(f, args::Tuple{Vararg{Any}})
+    precompile(f, argtypes::Tuple{Vararg{Any}})
 
-Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it.
+Compile the given function `f` for the argument tuple (of types) `argtypes`, but do not execute it.
 """
-function precompile(@nospecialize(f), @nospecialize(args::Tuple))
-    precompile(Tuple{Core.Typeof(f), args...})
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    precompile(Tuple{Core.Typeof(f), argtypes...})
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
@@ -2277,6 +2298,27 @@ function precompile(@nospecialize(argt::Type))
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
     return ret
+end
+
+# Variants that work for `invoke`d calls for which the signature may not be sufficient
+precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
+    (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+
+"""
+    precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)
+
+Precompile a specific method for the given argument types. This may be used to precompile
+a different method than the one that would ordinarily be chosen by dispatch, thus
+mimicking `invoke`.
+"""
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple), m::Method)
+    precompile(Tuple{Core.Typeof(f), argtypes...}, m)
+end
+
+function precompile(@nospecialize(argt::Type), m::Method)
+    atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
+    mi = Core.Compiler.specialize_method(m, atype, sparams)
+    return precompile(mi)
 end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))

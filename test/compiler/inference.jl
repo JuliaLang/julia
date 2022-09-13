@@ -163,7 +163,7 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
-@test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+@test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -379,7 +379,7 @@ struct A15259
     x
     y
 end
-# check that allocation was ellided
+# check that allocation was elided
 @eval f15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); (a.x, a.y, getfield(a,1), getfield(a, 2)))
 @test isempty(filter(x -> isa(x,Expr) && x.head === :(=) &&
                           isa(x.args[2], Expr) && x.args[2].head === :new,
@@ -1160,6 +1160,9 @@ struct UnionIsdefinedB; x; end
 @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
 @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
 @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+# https://github.com/aviatesk/JET.jl/issues/379
+fJET379(x::Union{Complex{T}, T}) where T = isdefined(x, :im)
+@test only(Base.return_types(fJET379)) === Bool
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1585,6 +1588,7 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test g23024((UInt8,)) === 2
 
 @test !Core.Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
+@test !isa(Core.Compiler.getfield_tfunc(Type{Core.TypeofBottom}, Core.Compiler.Const(:name)), Core.Compiler.Const)
 @test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
 
 # issue #23685
@@ -3324,7 +3328,8 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test Core.Compiler.sizeof_tfunc(UnionAll) === Int
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
-@test Base.return_types(Expr) == Any[Expr]
+@test only(Base.return_types(Core._expr)) === Expr
+@test only(Base.return_types(Core.svec, (Any,))) === Core.SimpleVector
 
 # Use a global constant to rely less on unrelated constant propagation
 const const_int32_typename = Int32.name
@@ -4093,7 +4098,7 @@ end == Rational
 # vararg-tuple comparison within `PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
-    @test Core.Compiler.issimplertype(t, t)
+    @test Core.Compiler.issimplertype(Core.Compiler.fallback_lattice, t, t)
 end
 
 # check the inference convergence with an empty vartable:
@@ -4111,3 +4116,98 @@ struct Issue45780
 end
 f45780() = Val{Issue45780(@Base.Experimental.opaque ()->1).oc()}()
 @test (@inferred f45780()) == Val{1}()
+
+# issue #45600
+@test only(code_typed() do
+    while true
+        x = try finally end
+    end
+end)[2] == Union{}
+@test only(code_typed() do
+    while true
+        @time 1
+    end
+end)[2] == Union{}
+
+# compilerbarrier builtin
+import Core: compilerbarrier
+# runtime semantics
+for setting = (:type, :const, :conditional)
+    @test compilerbarrier(setting, 42) == 42
+    @test compilerbarrier(setting, :sym) == :sym
+end
+@test_throws ErrorException compilerbarrier(:nonexisting, 42)
+@test_throws TypeError compilerbarrier("badtype", 42)
+@test_throws ArgumentError compilerbarrier(:nonexisting, 42, nothing)
+# barrier on abstract interpretation
+@test Base.return_types((Int,)) do a
+    x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+    return x
+end |> only === Any
+@test Base.return_types() do
+    x = compilerbarrier(:const, 42)
+    if x == 42 # no constant information here, so inference also accounts for the else branch (leading to less accurate return type inference)
+        return x # but `x` is still inferred as `x::Int` at least here
+    else
+        return nothing
+    end
+end |> only === Union{Int,Nothing}
+@test Base.return_types((Union{Int,Nothing},)) do a
+    if compilerbarrier(:conditional, isa(a, Int))
+        # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+        return a
+    else
+        return nothing
+    end
+end |> only === Union{Int,Nothing}
+@test Base.return_types((Symbol,Int)) do setting, val
+    compilerbarrier(setting, val)
+end |> only === Any # XXX we may want to have "compile-time" error for this instead
+for setting = (:type, :const, :conditional)
+    # a successful barrier on abstract interpretation should be eliminated at the optimization
+    @test @eval fully_eliminated((Int,)) do a
+        compilerbarrier($(QuoteNode(setting)), 42)
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/46426
+@noinline Base.@assume_effects :nothrow typebarrier() = Base.inferencebarrier(0.0)
+@noinline Base.@assume_effects :nothrow constbarrier() = Base.compilerbarrier(:const, 0.0)
+let src = code_typed1() do
+        typebarrier()
+    end
+    @test any(isinvoke(:typebarrier), src.code)
+    @test Base.return_types() do
+        typebarrier()
+    end |> only === Any
+end
+let src = code_typed1() do
+        constbarrier()
+    end
+    @test any(isinvoke(:constbarrier), src.code)
+    @test Base.return_types() do
+        constbarrier()
+    end |> only === Float64
+end
+
+# Test that Const ⊑ PartialStruct respects vararg
+@test Const((1,2)) ⊑ PartialStruct(Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+
+# Test that semi-concrete interpretation doesn't break on functions with while loops in them.
+@Base.assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
+    for i = 1:2
+        x += y
+    end
+    return y
+end
+call_pure_annotated_loop(x) = Val{pure_annotated_loop(x, 1)}()
+@test only(Base.return_types(call_pure_annotated_loop, Tuple{Int})) === Val{1}
+
+function isa_kindtype(T::Type{<:AbstractVector})
+    if isa(T, DataType)
+        # `T` here should be inferred as `DataType` rather than `Type{<:AbstractVector}`
+        return T.name.name # should be inferred as ::Symbol
+    end
+    return nothing
+end
+@test only(Base.return_types(isa_kindtype)) === Union{Nothing,Symbol}
