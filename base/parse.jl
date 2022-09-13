@@ -17,16 +17,11 @@ If the string does not contain a valid number, an error is raised.
 !!! compat "Julia 1.1"
     `parse(Bool, str)` requires at least Julia 1.1.
 
-!!! warning
-
+!!! note
     `str` can be a string of any numeric literals Julia supports EXCEPT the `f` literal used
-    to construct Float32 types. This is because the `f` syntax is Julia specific, so using this
-    throws an `ArgumentError`. When not sure of the literal being used, then interpolate the
-    string with the `$` operator.
-    ```jldoctest    
-    julia> parse(Float16, "0x1p2")
-    Float16(4.0)
-
+    to construct Float32 types - because the `f` syntax is Julia specific. When not sure of
+    the literal being used, then interpolate the string with the `$` operator.
+    ```jldoctest
     julia> parse(Float32, "24.9f-3")
     ERROR: ArgumentError: cannot parse "24.9f-3" as Float32
     [...]
