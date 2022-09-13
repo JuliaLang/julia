@@ -31,7 +31,10 @@ $(2)_JLL_DOWNLOAD_NAME ?= $$($(2)_JLL_NAME)
 $(2)_JLL_TAGS ?=
 
 ifeq ($(SANITIZE_MEMORY),1)
-$(2)_JLL_SANITIZER_TAGS = -sanitize+memory
+	$(2)_JLL_SANITIZER_TAGS = -sanitize+memory
+	ifneq ($1, csl)
+	TRIPLET_VAR := BB_TRIPLET
+	endif
 endif
 
 $(2)_BB_TRIPLET := $$($$(TRIPLET_VAR))
