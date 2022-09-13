@@ -82,7 +82,7 @@ function sort!(v::Vector; by::Function=identity, (<)::Function=<)
             y = v[i]
             v[i] = v[1]
             percolate_down!(v, 1, y, o, i-1)
-         end
+        end
         return v
     end
 
