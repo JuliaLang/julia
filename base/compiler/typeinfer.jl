@@ -567,13 +567,13 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    for (typ, to) in BackedgeIterator(edges)
-        if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+function store_backedges(frame::MethodInstance, edges::Vector{Any})
+    for (; sig, caller) in BackedgeIterator(edges)
+        if isa(caller, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         else
-            typeassert(to, Core.MethodTable)
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            typeassert(caller, Core.MethodTable)
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         end
     end
 end
