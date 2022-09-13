@@ -1511,4 +1511,5 @@ end
 
 # Test getfield modeling of Type{Ref{_A}} where _A
 @test Core.Compiler.getfield_tfunc(Type, Core.Compiler.Const(:parameters)) !== Union{}
+@test !isa(Core.Compiler.getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Compiler.Const(:name)), Core.Compiler.Const)
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
