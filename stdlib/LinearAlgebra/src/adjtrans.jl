@@ -401,9 +401,9 @@ Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray, A::TransposeAbsMat) 
     (Base.mapreducedim!(f∘transpose, op, switch_dim12(B), parent(A)); B)
 Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray, A::AdjointAbsMat) =
     (Base.mapreducedim!(f∘adjoint, op, switch_dim12(B), parent(A)); B)
-Base.mapreducedim!(f, op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::TransposeAbsMat{<:Union{Real,Complex}}) =
+Base.mapreducedim!(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::TransposeAbsMat{<:Union{Real,Complex}}) =
     (Base.mapreducedim!(f∘transpose, op, switch_dim12(B), parent(A)); B)
-Base.mapreducedim!(f, op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::AdjointAbsMat{<:Union{Real,Complex}}) =
+Base.mapreducedim!(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::AdjointAbsMat{<:Union{Real,Complex}}) =
     (Base.mapreducedim!(f∘adjoint, op, switch_dim12(B), parent(A)); B)
 
 switch_dim12(B::AbstractVector) = permutedims(B)
