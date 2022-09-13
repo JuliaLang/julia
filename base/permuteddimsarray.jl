@@ -284,12 +284,12 @@ function Base._mapreduce_dim(f::typeof(identity), op::Union{typeof(Base.mul_prod
     Base._mapreduce_dim(f, op, init, parent(A), dims)
 end
 
-function Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray{T,N}, A::PermutedDimsArray{T,N,perm,iperm}) where {T,N,perm,iperm}
+function Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray{T,N}, A::PermutedDimsArray{S,N,perm,iperm}) where {T,S,N,perm,iperm}
     C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
     Base.mapreducedim!(f, op, C, parent(A))
     B
 end
-function Base.mapreducedim!(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, B::AbstractArray{T,N}, A::PermutedDimsArray{<:Union{Real,Complex},N,perm,iperm}) where {N,perm,iperm}
+function Base.mapreducedim!(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, B::AbstractArray{T,N}, A::PermutedDimsArray{<:Union{Real,Complex},N,perm,iperm}) where {T,N,perm,iperm}
     C = PermutedDimsArray{T,N,iperm,perm,typeof(B)}(B) # make the inverse permutation for the output
     Base.mapreducedim!(f, op, C, parent(A))
     B
