@@ -483,15 +483,15 @@ function add_call_backedges!(interp::AbstractInterpreter,
         end
     end
     for edge in edges
-        add_backedge!(edge, sv)
+        add_backedge!(sv, edge)
     end
     # also need an edge to the method table in case something gets
     # added that did not intersect with any existing method
     if isa(matches, MethodMatches)
-        matches.fullmatch || add_mt_backedge!(matches.mt, atype, sv)
+        matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
     else
         for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
-            thisfullmatch || add_mt_backedge!(mt, atype, sv)
+            thisfullmatch || add_mt_backedge!(sv, mt, atype)
         end
     end
 end
@@ -889,7 +889,11 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     res = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
     if isa(res, ConstCallResults)
-        add_backedge!(res.const_result.mi, sv, invokecall === nothing ? nothing : invokecall.lookupsig)
+        if invokecall === nothing
+            add_backedge!(sv, res.const_result.mi)
+        else
+            add_invoke_backedge!(sv, invokecall.lookupsig, res.const_result.mi)
+        end
         return res
     end
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
@@ -936,7 +940,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     result = inf_result.result
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return nothing
-    add_backedge!(mi, sv)
+    add_backedge!(sv, mi)
     return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects)
 end
 
@@ -1692,7 +1696,7 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, sv)
     (; rt, edge, effects) = result
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv, lookupsig)
+    edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge::MethodInstance)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
@@ -1848,7 +1852,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     sig = argtypes_to_type(arginfo.argtypes)
     result = abstract_call_method(interp, closure.source, sig, Core.svec(), false, sv)
     (; rt, edge, effects) = result
-    edge !== nothing && add_backedge!(edge, sv)
+    edge !== nothing && add_backedge!(sv, edge)
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))

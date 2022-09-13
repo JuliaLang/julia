@@ -806,7 +806,7 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     # of recursion.
     merge_effects!(interp, parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
-        add_cycle_backedge!(child, parent, parent.currpc)
+        add_cycle_backedge!(parent, child, parent.currpc)
         union_caller_cycle!(ancestor, child)
         merge_effects!(interp, child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
