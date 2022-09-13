@@ -3113,9 +3113,9 @@ julia> B = mapslices(f, A, dims=(1,2))
 [:, :, 3] =
  21  21  21  21
 
-julia> f(x::AbstractMatrix) = fill(x[1,1], 1,4);
+julia> f2(x::AbstractMatrix) = fill(x[1,1], 1,4);
 
-julia> B == stack(f, eachslice(A, dims=3))
+julia> B == stack(f2, eachslice(A, dims=3))
 true
 
 julia> g(x) = x[begin] // x[end-1];  # returns a number

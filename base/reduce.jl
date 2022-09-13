@@ -459,8 +459,10 @@ For empty collections, providing `init` will be necessary, except for some speci
 neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
-should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
- `any(itr)`, `all(itr)`.
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
+There are efficient methods for concatenating certain arrays of arrays
+by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
