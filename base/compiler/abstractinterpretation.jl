@@ -876,7 +876,7 @@ end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter, result::MethodCallResult,
                                               @nospecialize(f), arginfo::ArgInfo, match::MethodMatch,
-                                              sv::InferenceState, invoketypes=nothing)
+                                              sv::InferenceState, @nospecialize(invoketypes=nothing))
     if !const_prop_enabled(interp, sv, match)
         return nothing
     end
