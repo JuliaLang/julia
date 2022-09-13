@@ -344,7 +344,8 @@ Note:
     - `OPENLIBM_SHA1 = new-sha1-hash`
 2. Update Version number in `stdlib/OpenLibm_jll/Project.toml`
     - `version = "0.X.Y+0"`
-3. Update checksum in `deps/checksums/openlibm`
+3. Update checksums in `deps/checksums/openlibm`
+    - `make -f contrib/refresh_checksums.mk openlibm`
 4. Check if the patch files `deps/patches/openlibm-*.patch` exist
     - if patches don't exist, skip.
     - if patches exist, check if they have been merged into the new version and need to be removed.  
