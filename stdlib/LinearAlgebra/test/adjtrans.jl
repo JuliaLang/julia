@@ -588,7 +588,7 @@ end
     @test transpose(Int[]) * Int[] == 0
 end
 
-@testset "reductions: $adjtrans" for adjtrans in [transpose, adjoint]
+@testset "reductions: $adjtrans" for adjtrans in (transpose, adjoint)
     for (reduction, reduction!, op) in ((sum, sum!, +), (prod, prod!, *), (minimum, minimum!, min), (maximum, maximum!, max))
         T = op in (max, min) ? Float64 : ComplexF64
         mat = rand(T, 3,5)
@@ -628,8 +628,12 @@ end
         @test reduction(imag, adjtrans(mat), dims=1) ≈ reduction(imag, copy(adjtrans(mat)), dims=1)
         @test reduction(x -> x[1,2], adjtrans(mat), dims=1) ≈ reduction(x -> x[1,2], copy(adjtrans(mat)), dims=1)
     end
+    # see #46605
     Ac = [1 2; 3 4]'
     @test mapreduce(identity, (x, y) -> 10x+y, copy(Ac)) == mapreduce(identity, (x, y) -> 10x+y, Ac) == 1234
+    @test extrema([3,7,4]') == (3, 7)
+    @test mapreduce(x -> [x;;;], +, [1, 2, 3]') == sum(x -> [x;;;], [1, 2, 3]') == [6;;;]
+    @test mapreduce(string, *, [1 2; 3 4]') == mapreduce(string, *, copy([1 2; 3 4]')) == "1234"
 end
 
 end # module TestAdjointTranspose
