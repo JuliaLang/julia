@@ -2084,6 +2084,10 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
             entry->min_world = 1;
             entry->max_world = 0;
         }
+    } else if (dt == jl_globalref_type) {
+        jl_globalref_t *r = (jl_globalref_t*)v;
+        jl_binding_t *b = jl_get_binding_if_bound(r->mod, r->name);
+        r->bnd_cache = b && b->value ? b : NULL;
     }
 }
 

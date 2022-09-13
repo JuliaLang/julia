@@ -1838,9 +1838,10 @@ function allow_macroname(ex)
     end
 end
 
-function is_core_macro(arg, macro_name::AbstractString)
-    arg === GlobalRef(Core, Symbol(macro_name))
+function is_core_macro(arg::GlobalRef, macro_name::AbstractString)
+    arg == GlobalRef(Core, Symbol(macro_name))
 end
+is_core_macro(@nospecialize(arg), macro_name::AbstractString) = false
 
 # symbol for IOContext flag signaling whether "begin" is treated
 # as an ordinary symbol, which is true in indexing expressions.

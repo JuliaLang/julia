@@ -1986,7 +1986,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
             return sv.argtypes[e.n]
         end
     elseif isa(e, GlobalRef)
-        return abstract_eval_global(interp, e.mod, e.name, sv)
+        return abstract_eval_globalref(interp, e, sv)
     end
 
     return Const(e)
@@ -2260,17 +2260,24 @@ function abstract_eval_statement(interp::AbstractInterpreter, @nospecialize(e), 
     return rt
 end
 
-function abstract_eval_global(M::Module, s::Symbol)
-    if isdefined(M, s) && isconst(M, s)
-        return Const(getglobal(M, s))
+function isdefined_globalref(g::GlobalRef)
+    g.binding != C_NULL && return ccall(:jl_binding_boundp, Cint, (Ptr{Cvoid},), g.binding) != 0
+    return isdefined(g.mod, g.name)
+end
+
+function abstract_eval_globalref(g::GlobalRef)
+    if isdefined_globalref(g) && isconst(g)
+        g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
+        return Const(getglobal(g.mod, g.name))
     end
-    ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+    ty = ccall(:jl_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any
     return ty
 end
+abstract_eval_global(M::Module, s::Symbol) = abstract_eval_globalref(GlobalRef(M, s))
 
-function abstract_eval_global(interp::AbstractInterpreter, M::Module, s::Symbol, frame::Union{InferenceState, IRCode})
-    rt = abstract_eval_global(M, s)
+function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, frame::Union{InferenceState, IRCode})
+    rt = abstract_eval_globalref(g)
     consistent = inaccessiblememonly = ALWAYS_FALSE
     nothrow = false
     if isa(rt, Const)
@@ -2281,7 +2288,7 @@ function abstract_eval_global(interp::AbstractInterpreter, M::Module, s::Symbol,
         else
             nothrow = true
         end
-    elseif isdefined(M,s)
+    elseif isdefined_globalref(g)
         nothrow = true
     end
     merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
