@@ -6,7 +6,7 @@
 using JuliaSyntax, Logging
 
 # like Meta.parseall, but throws
-function parseall(str)
+function parseall_throws(str)
     pos = firstindex(str)
     exs = []
     while pos <= lastindex(str)
@@ -68,7 +68,7 @@ Logging.with_logger(logger) do
                     push!(exceptions, ex)
                     meta_parse = "success"
                     try
-                        parseall(file)
+                        parseall_throws(file)
                     catch err2
                         meta_parse = "fail"
                         ex_count -= 1
