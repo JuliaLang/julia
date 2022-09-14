@@ -391,7 +391,7 @@ Go ahead and create that file within the `test` directory and add the following 
 using Example
 using Test
 
-@testset "Example tests" begin 
+@testset "Example tests" begin
 
 	@testset "Math tests" begin
 		include("math_tests.jl")
@@ -408,7 +408,7 @@ We will need to create those two included files, `math_tests.jl` and `greeting_t
 > **Note:** Notice how we did not have to specify add `Example` into the `test` environment's `Project.toml`.
 > This is a benefit of Julia's testing system that you could [read about more here](https://pkgdocs.julialang.org/dev/creating-packages/).
 
-#### Writing Tests for `math_tests.jl` 
+#### Writing Tests for `math_tests.jl`
 
 Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
 
