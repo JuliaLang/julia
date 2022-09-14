@@ -637,11 +637,26 @@ function parse_cond(ps::ParseState)
         # a ? b c  ==>  (? a b (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="`:` expected in `?` expression")
     end
-    t = peek_token(ps)
+    t = peek_token(ps; skip_newlines = true)
     if !preceding_whitespace(t)
         # a ? b :c  ==>  (? a b (error-t) c)
         bump_invisible(ps, K"error", TRIVIA_FLAG,
                        error="space required after `:` in `?` expression")
+    end
+
+    # FIXME: This is a very specific case. Error recovery should be handled more
+    # generally elsewhere.
+    if is_block_continuation_keyword(kind(t))
+        # a "continuaton keyword" is likely to belong to the surrounding code, so
+        # we abort early
+
+        # if true; x ? true elseif true end  ==> (if true (block (if x true (error-t) (error-t))) (elseif true (block)))
+        # if true; x ? true end  ==> (if true (block (if x true (error-t) (error-t))))
+        # if true; x ? true\n end  ==> (if true (block (if x true (error-t) (error-t))))
+        # if true; x ? true : elseif true end  ==> (if true (block (if x true (error-t))) (elseif true (block)))
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="unexpected `$(kind(t))`")
+        emit(ps, mark, K"if")
+        return
     end
     parse_eq_star(ps)
     emit(ps, mark, K"?")

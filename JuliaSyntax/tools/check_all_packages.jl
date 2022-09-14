@@ -5,6 +5,23 @@
 
 using JuliaSyntax, Logging
 
+# like Meta.parseall, but throws
+function parseall_throws(str)
+    pos = firstindex(str)
+    exs = []
+    while pos <= lastindex(str)
+        ex, pos = Meta.parse(str, pos)
+        push!(exs, ex)
+    end
+    if length(exs) == 0
+        throw(Meta.ParseError("end of input"))
+    elseif length(exs) == 1
+        return exs[1]
+    else
+        return Expr(:toplevel, exs...)
+    end
+end
+
 logio = open(joinpath(@__DIR__, "logs.txt"), "w")
 logger = Logging.ConsoleLogger(logio)
 
@@ -35,18 +52,44 @@ Logging.with_logger(logger) do
     t = time()
     i = 0
     iob = IOBuffer()
+    ex_count = 0
     for (r, _, files) in walkdir(pkgspath)
         for f in files
             endswith(f, ".jl") || continue
             fpath = joinpath(r, f)
-            try
-                JuliaSyntax.parse(Expr, read(fpath, String))
-            catch err
-                err isa InterruptException && rethrow()
-                ex = (err, catch_backtrace())
-                push!(exceptions, ex)
-                @error "parsing failed for $(fpath)" ex
-                flush(logio)
+            if isfile(fpath)
+                file = read(fpath, String)
+                try
+                    e1 = JuliaSyntax.parse(Expr, file)
+                catch err
+                    err isa InterruptException && rethrow()
+                    ex_count += 1
+                    ex = (err, catch_backtrace())
+                    push!(exceptions, ex)
+                    meta_parse = "success"
+                    try
+                        parseall_throws(file)
+                    catch err2
+                        meta_parse = "fail"
+                        ex_count -= 1
+                    end
+                    parse_to_syntax = "success"
+                    try
+                        JuliaSyntax.parse(JuliaSyntax.SyntaxNode, file)
+                    catch err2
+                        parse_to_syntax = "fail"
+                    end
+                    severity = parse_to_syntax == "fail" ? "error" :
+                        meta_parse == "fail" ? "warn" : "error"
+                    println(logio, """
+                    [$(severity)] $(fpath)
+                      parse-to-expr: fail
+                      parse-to-syntaxtree: $(parse_to_syntax)
+                      reference: $(meta_parse)
+                    """)
+                    @error "" exception = ex
+                    flush(logio)
+                end
             end
             i += 1
             if i % 100 == 0
@@ -54,8 +97,9 @@ Logging.with_logger(logger) do
                 avg = round(runtime/i*1000, digits = 2)
                 print(iob, "\e[2J\e[0;0H")
                 println(iob, "$i files parsed")
-                println(iob, "  $(length(exceptions)) failures")
-                println(iob, "  $(avg)ms per file, $(round(Int, runtime))s in total")
+                println(iob, "> $(ex_count) failures compared to Meta.parse")
+                println(iob, "> $(length(exceptions)) errors in total")
+                println(iob, "> $(avg)ms per file, $(round(Int, runtime))s in total")
                 println(stderr, String(take!(iob)))
             end
         end
