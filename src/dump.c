@@ -2492,8 +2492,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     size_t i, l = jl_array_len(targets) / 3;
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
-    jl_value_t *loctag = NULL;
-    JL_GC_PUSH1(&loctag);
+    jl_value_t *loctag = NULL, *matches = NULL;
+    JL_GC_PUSH2(&loctag, &matches);
     *pvalids = valids;
     for (i = 0; i < l; i++) {
         jl_value_t *invokesig = jl_array_ptr_ref(targets, i * 3);
@@ -2513,7 +2513,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         size_t max_valid = ~(size_t)0;
         int ambig = 0;
         // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
-        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
+        matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
         if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }
