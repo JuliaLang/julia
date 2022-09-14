@@ -325,7 +325,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
     # override for this UUID, and inserting new overrides for those hashes.
     overrides = load_overrides()
     if haskey(overrides[:UUID], pkg_uuid)
-        pkg_overrides = overrides[:UUID][pkg_uuid]
+        pkg_overrides = overrides[:UUID][pkg_uuid]::Dict{String, <:Any}
 
         for name in keys(artifact_dict)
             # Skip names that we're not overriding
