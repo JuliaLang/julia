@@ -1162,6 +1162,11 @@ function inline_invoke!(
     return nothing
 end
 
+function invoke_signature(invokesig::Vector{Any})
+    ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
+    return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
+end
+
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
         lbt = argextype(stmt.args[2], ir)

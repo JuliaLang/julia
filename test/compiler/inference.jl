@@ -4211,3 +4211,24 @@ function isa_kindtype(T::Type{<:AbstractVector})
     return nothing
 end
 @test only(Base.return_types(isa_kindtype)) === Union{Nothing,Symbol}
+
+invoke_concretized1(a::Int) = a > 0 ? :int : nothing
+invoke_concretized1(a::Integer) = a > 0 ? "integer" : nothing
+# check if `invoke(invoke_concretized1, Tuple{Integer}, ::Int)` is foldable
+@test Base.infer_effects((Int,)) do a
+    @invoke invoke_concretized1(a::Integer)
+end |> Core.Compiler.is_foldable
+@test Base.return_types() do
+    @invoke invoke_concretized1(42::Integer)
+end |> only === String
+
+invoke_concretized2(a::Int) = a > 0 ? :int : nothing
+invoke_concretized2(a::Integer) = a > 0 ? :integer : nothing
+# check if `invoke(invoke_concretized2, Tuple{Integer}, ::Int)` is foldable
+@test Base.infer_effects((Int,)) do a
+    @invoke invoke_concretized2(a::Integer)
+end |> Core.Compiler.is_foldable
+@test let
+    Base.Experimental.@force_compile
+    @invoke invoke_concretized2(42::Integer)
+end === :integer
