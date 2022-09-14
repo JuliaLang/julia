@@ -652,13 +652,18 @@ access a single file/directory within an artifact.  Example:
 !!! compat "Julia 1.6"
     Slash-indexing requires at least Julia 1.6.
 """
-macro artifact_str(name, platform=nothing)
+macro artifact_str(name, platform=nothing, artifact_path=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
     if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
-    local artifacts_toml = find_artifacts_toml(srcfile)
+    # Sometimes we know the exact path to the Artifacts.toml file, so we can save some lookups
+    local artifacts_toml = if artifact_path === nothing
+        find_artifacts_toml(srcfile)
+    else
+        artifact_path
+    end
     if artifacts_toml === nothing
         error(string(
             "Cannot locate '(Julia)Artifacts.toml' file when attempting to use artifact '",
