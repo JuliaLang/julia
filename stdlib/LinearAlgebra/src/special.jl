@@ -62,20 +62,20 @@ end
 const ConvertibleSpecialMatrix = Union{Diagonal,Bidiagonal,SymTridiagonal,Tridiagonal,AbstractTriangular}
 const PossibleTriangularMatrix = Union{Diagonal, Bidiagonal, AbstractTriangular}
 
-convert(T::Type{<:Diagonal},       m::ConvertibleSpecialMatrix) = m isa T ? m :
-    isdiag(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as Diagonal"))
-convert(T::Type{<:SymTridiagonal}, m::ConvertibleSpecialMatrix) = m isa T ? m :
-    issymmetric(m) && isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
-convert(T::Type{<:Tridiagonal},    m::ConvertibleSpecialMatrix) = m isa T ? m :
-    isbanded(m, -1, 1) ? T(m) : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
+convert(::Type{T}, m::ConvertibleSpecialMatrix) where {T<:Diagonal}       = m isa T ? m :
+    isdiag(m) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as Diagonal"))
+convert(::Type{T}, m::ConvertibleSpecialMatrix) where {T<:SymTridiagonal} = m isa T ? m :
+    issymmetric(m) && isbanded(m, -1, 1) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as SymTridiagonal"))
+convert(::Type{T}, m::ConvertibleSpecialMatrix) where {T<:Tridiagonal}    = m isa T ? m :
+    isbanded(m, -1, 1) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as Tridiagonal"))
 
-convert(T::Type{<:LowerTriangular}, m::Union{LowerTriangular,UnitLowerTriangular}) = m isa T ? m : T(m)
-convert(T::Type{<:UpperTriangular}, m::Union{UpperTriangular,UnitUpperTriangular}) = m isa T ? m : T(m)
+convert(::Type{T}, m::Union{LowerTriangular,UnitLowerTriangular}) where {T<:LowerTriangular} = m isa T ? m : T(m)::T
+convert(::Type{T}, m::Union{UpperTriangular,UnitUpperTriangular}) where {T<:UpperTriangular} = m isa T ? m : T(m)::T
 
-convert(T::Type{<:LowerTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
-    istril(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
-convert(T::Type{<:UpperTriangular}, m::PossibleTriangularMatrix) = m isa T ? m :
-    istriu(m) ? T(m) : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
+convert(::Type{T}, m::PossibleTriangularMatrix) where {T<:LowerTriangular} = m isa T ? m :
+    istril(m) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as LowerTriangular"))
+convert(::Type{T}, m::PossibleTriangularMatrix) where {T<:UpperTriangular} = m isa T ? m :
+    istriu(m) ? T(m)::T : throw(ArgumentError("matrix cannot be represented as UpperTriangular"))
 
 # Constructs two method definitions taking into account (assumed) commutativity
 # e.g. @commutative f(x::S, y::T) where {S,T} = x+y is the same is defining

@@ -111,7 +111,8 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
         types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
-        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length(names))...}
+        length_names = length(names)::Integer
+        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
         NamedTuple{names, types}(map(Fix1(getfield, nt), names))
     end
 end
@@ -148,7 +149,7 @@ convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tu
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))
+    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
 end
 
 if nameof(@__MODULE__) === :Base

@@ -1258,20 +1258,28 @@ JL_CALLABLE(jl_f_set_binding_type)
 
 // apply_type -----------------------------------------------------------------
 
-int jl_valid_type_param(jl_value_t *v)
+static int is_nestable_type_param(jl_value_t *t)
 {
-    if (jl_is_tuple(v)) {
+    if (jl_is_namedtuple_type(t))
+        t = jl_tparam1(t);
+    if (jl_is_tuple_type(t)) {
         // NOTE: tuples of symbols are not currently bits types, but have been
         // allowed as type parameters. this is a bit ugly.
-        jl_value_t *tt = jl_typeof(v);
-        size_t i, l = jl_nparams(tt);
-        for(i=0; i < l; i++) {
-            jl_value_t *pi = jl_tparam(tt,i);
-            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi)))
+        size_t i, l = jl_nparams(t);
+        for (i = 0; i < l; i++) {
+            jl_value_t *pi = jl_tparam(t, i);
+            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi)))
                 return 0;
         }
         return 1;
     }
+    return 0;
+}
+
+int jl_valid_type_param(jl_value_t *v)
+{
+    if (jl_is_tuple(v) || jl_is_namedtuple(v))
+        return is_nestable_type_param(jl_typeof(v));
     if (jl_is_vararg(v))
         return 0;
     // TODO: maybe more things

@@ -610,7 +610,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -2325,7 +2325,7 @@ findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
 
 """
     findall(A)

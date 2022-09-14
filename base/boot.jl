@@ -838,8 +838,10 @@ struct Pair{A, B}
     # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
     # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
     Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
-    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
-    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+        @inline
+        return new(a::A, b::B)
+    end
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

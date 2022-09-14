@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test, Distributed, Random
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -890,6 +892,7 @@ precompile_test_harness("invoke") do dir
           """
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
+              export f44320, g44320
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
@@ -908,6 +911,11 @@ precompile_test_harness("invoke") do dir
               # q will have some callers invalidated
               q(x::Integer) = 0
               qnc(x::Integer) = rand()-1
+              # Issue #44320
+              f44320(::Int) = 1
+              f44320(::Any) = 2
+              g44320() = invoke(f44320, Tuple{Any}, 0)
+              g44320()
           end
           """)
           write(joinpath(dir, "$CallerModule.jl"),
@@ -931,6 +939,9 @@ precompile_test_harness("invoke") do dir
               internal(x::Int) = x < 5 ? 1 : invoke(internal, Tuple{Real}, x)
               internalnc(x::Real) = rand()-1
               internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
+
+              # Issue #44320
+              f44320(::Real) = 3
 
               # force precompilation
               begin
@@ -1007,6 +1018,9 @@ precompile_test_harness("invoke") do dir
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
+
+    m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1
@@ -1449,3 +1463,30 @@ precompile_test_harness("__init__ cachepath") do load_path
           """)
     @test isa((@eval (using InitCachePath; InitCachePath)), Module)
 end
+
+# Test that precompilation can handle invalidated methods created from `precompile`,
+# not via backedges.
+precompile_test_harness("Issue #46558") do load_path
+    write(joinpath(load_path, "Foo46558.jl"),
+        """
+        module Foo46558
+        foo(x::Real) = 1
+        end
+        """)
+    write(joinpath(load_path, "Bar46558.jl"),
+        """
+        module Bar46558
+        using Foo46558
+        precompile(Foo46558.foo, (Int,))
+        end
+        """)
+    Base.compilecache(Base.PkgId("Foo46558"))
+    Base.compilecache(Base.PkgId("Bar46558"))
+    Foo = (@eval (using Foo46558; Foo46558))
+    @eval ($Foo.foo)(x::Int) = 2
+    Bar = (@eval (using Bar46558; Bar46558))
+    @test (@eval $Foo.foo(1)) == 2
+end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)
