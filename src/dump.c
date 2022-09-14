@@ -2542,6 +2542,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
             loctag = jl_box_int32((int32_t)i);
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            loctag = jl_box_uint64(jl_worklist_key(serializer_worklist));
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
             if (matches != jl_false) {
                 // setdiff!(matches, expected)
                 size_t j, k, ins = 0;
@@ -2625,6 +2627,8 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
             invalidate_backedges(&remove_code_instance_from_validation, caller, world, "insert_backedges");
             if (_jl_debug_method_invalidation) {
                 targetidx = jl_box_int32((int32_t)idxbad);
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, targetidx);
+                targetidx = jl_box_uint64(jl_worklist_key(serializer_worklist));
                 jl_array_ptr_1d_push(_jl_debug_method_invalidation, targetidx);
             }
         }

@@ -908,7 +908,10 @@ precompile_test_harness("code caching") do dir
     @test invalidations[idx-1].specTypes.parameters[end] === Integer
 
     tagbad = invalidations[idx+1]
+    buildid = invalidations[idx+2]
+    @test isa(buildid, UInt64)
     j = findfirst(==(tagbad), invalidations)
+    @test invalidations[j+1] == buildid
     @test isa(invalidations[j-2], Type)
     @test invalidations[j-1] == "insert_backedges_callee"
 
