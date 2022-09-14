@@ -1075,31 +1075,25 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
     # Ok, we're committed to inlining the finalizer
     et !== nothing && push!(et, mi)
 
-    linetable_offset, extra_coverage_line = ir_inline_linetable!(ir.linetable, src, mi.def, ir[SSAValue(idx)][:line])
-    if extra_coverage_line != 0
-        insert_node!(ir, idx, NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
-    end
+    # TOOD: Should there be a special line number node for inlined finalizers?
+    inlined_at = ir[SSAValue(idx)][:line]
+    ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
+        ir.linetable, src, mi.sparam_vals, mi.def, inlined_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     spvals = mi.sparam_vals
     ssa_rename = Vector{Any}(undef, length(src.stmts))
     for idx′ = 1:length(src.stmts)
-        urs = userefs(src[SSAValue(idx′)][:inst])
-        for ur in urs
-            if isa(ur[], SSAValue)
-                ur[] = ssa_rename[ur[].id]
-            elseif isa(ur[], Argument)
-                ur[] = argexprs[ur[].n]
-            elseif isexpr(ur[], :static_parameter)
-                ur[] = spvals[ur[].args[1]]
-            end
-        end
-        # TODO: Scan newly added statement into the sroa defuse struct
-        stmt = urs[]
-        isa(stmt, ReturnNode) && continue
         inst = src[SSAValue(idx′)]
-        ssa_rename[idx′] = insert_node!(ir, idx, NewInstruction(stmt, inst; line = inst[:line] + linetable_offset), true)
+        stmt′ = inst[:inst]
+        isa(stmt′, ReturnNode) && continue
+        stmt′ = ssamap(stmt′) do ssa::SSAValue
+            ssa_rename[ssa.id]
+        end
+        stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, argexprs, mi.specTypes, mi.sparam_vals, sp_ssa, :default)
+        ssa_rename[idx′] = insert_node!(ir, idx, NewInstruction(stmt′, inst; line = inst[:line] + linetable_offset), true)
     end
+
     return true
 end
 
