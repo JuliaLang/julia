@@ -54,12 +54,12 @@ end
 #####################
 
 struct EdgeTracker
-    edges::Vector{Any}
+    edges::IdSet{Any}
     valid_worlds::RefValue{WorldRange}
-    EdgeTracker(edges::Vector{Any}, range::WorldRange) =
+    EdgeTracker(edges::IdSet{Any}, range::WorldRange) =
         new(edges, RefValue{WorldRange}(range))
 end
-EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
+EdgeTracker() = EdgeTracker(IdSet{Any}(), 0:typemax(UInt))
 
 intersect!(et::EdgeTracker, range::WorldRange) =
     et.valid_worlds[] = intersect(et.valid_worlds[], range)
@@ -69,7 +69,7 @@ function add_backedge!(et::EdgeTracker, mi::MethodInstance)
     return nothing
 end
 function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    push!(et.edges, invokesig, mi)
+    push!(et.edges, InvokeEdge(invokesig, mi))
     return nothing
 end
 
@@ -121,9 +121,8 @@ mutable struct OptimizationState
     cfg::Union{Nothing,CFG}
     function OptimizationState(frame::InferenceState, params::OptimizationParams,
                                interp::AbstractInterpreter, recompute_cfg::Bool=true)
-        s_edges = frame.stmt_edges[1]::Vector{Any}
         inlining = InliningState(params,
-            EdgeTracker(s_edges, frame.valid_worlds),
+            EdgeTracker(frame.backedges, frame.valid_worlds),
             WorldView(code_cache(interp), frame.world),
             interp)
         cfg = recompute_cfg ? nothing : frame.cfg

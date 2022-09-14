@@ -247,9 +247,9 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
         caller.inferred = true
     end
     # collect results for the new expanded frame
-    results = Tuple{InferenceResult, Vector{Any}, Bool}[
+    results = Tuple{InferenceResult, IdSet{Any}, Bool}[
             ( frames[i].result,
-              frames[i].stmt_edges[1]::Vector{Any},
+              frames[i].backedges,
               frames[i].cached )
         for i in 1:length(frames) ]
     empty!(frames)
@@ -494,22 +494,10 @@ function adjust_effects(sv::InferenceState)
     return ipo_effects
 end
 
-# inference completed on `me`
-# update the MethodInstance
+# inference completed on `me`, now prepare to run optimization passes on fulltree
 function finish(me::InferenceState, interp::AbstractInterpreter)
-    # prepare to run optimization passes on fulltree
-    s_edges = me.stmt_edges[1]
-    if s_edges === nothing
-        s_edges = me.stmt_edges[1] = []
-    end
-    for edges in me.stmt_edges
-        edges === nothing && continue
-        edges === s_edges && continue
-        append!(s_edges, edges)
-        empty!(edges)
-    end
     if me.src.edges !== nothing
-        append!(s_edges, me.src.edges::Vector)
+        union!(me.backedges, me.src.edges::Vector)
         me.src.edges = nothing
     end
     # inspect whether our inference had a limited result accuracy,
@@ -559,7 +547,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
 end
 
 # record the backedges
-function store_backedges(frame::InferenceResult, edges::Vector{Any})
+function store_backedges(frame::InferenceResult, edges::IdSet{Any})
     toplevel = !isa(frame.linfo.def, Method)
     if !toplevel
         store_backedges(frame.linfo, edges)
@@ -567,7 +555,7 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(frame::MethodInstance, edges::Vector{Any})
+function store_backedges(frame::MethodInstance, edges::IdSet{Any})
     for (; sig, caller) in BackedgeIterator(edges)
         if isa(caller, MethodInstance)
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)

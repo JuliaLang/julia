@@ -229,6 +229,18 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 # backedges #
 #############
 
+struct MTEdge
+    sig # ::Type
+    mt::Core.MethodTable
+    MTEdge(@nospecialize(sig), mt::Core.MethodTable) = new(sig, mt)
+end
+
+struct InvokeEdge
+    invokesig # ::Type
+    mi::MethodInstance
+    InvokeEdge(@nospecialize(invokesig), mi::MethodInstance) = new(invokesig, mi)
+end
+
 """
     BackedgeIterator(backedges::Vector{Any})
 
@@ -265,6 +277,7 @@ callyou(Float64) from callyou(Any)
 struct BackedgeIterator
     backedges::Vector{Any}
 end
+BackedgeIterator(backedges::IdSet{Any}) = BackedgeIterator(collect(backedges))
 
 const empty_backedge_iter = BackedgeIterator(Any[])
 
@@ -278,9 +291,9 @@ function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
     i > length(backedges) && return nothing
     item = backedges[i]
-    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
-    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
-    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+    isa(item, MTEdge) && return BackedgePair(item.sig, item.mt), i+1            # abstract dispatch
+    isa(item, InvokeEdge) && return BackedgePair(item.invokesig, item.mi), i+1  # `invoke` calls
+    return BackedgePair(nothing, item::MethodInstance), i+1                     # regular dispatch
 end
 
 #########

@@ -105,7 +105,7 @@ mutable struct InferenceState
     # TODO: Could keep this sparsely by doing structural liveness analysis ahead of time.
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
-    stmt_edges::Vector{Union{Nothing,Vector{Any}}}
+    backedges::IdSet{Any}
     stmt_info::Vector{Any}
 
     #= intermediate states for interprocedural abstract interpretation =#
@@ -151,7 +151,7 @@ mutable struct InferenceState
         nssavalues = src.ssavaluetypes::Int
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
-        stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
+        backedges = IdSet{Any}()
         stmt_info = Any[ nothing for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
@@ -195,7 +195,7 @@ mutable struct InferenceState
 
         frame = new(
             linfo, world, mod, sptypes, slottypes, src, cfg,
-            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, stmt_edges, stmt_info,
+            currbb, currpc, ip, handler_at, ssavalue_uses, bb_vartables, ssavaluetypes, backedges, stmt_info,
             pclimitations, limitations, cycle_backedges, callers_in_cycle, dont_work_on_me, parent, inferred,
             result, valid_worlds, bestguess, ipo_effects,
             params, restrict_abstract_call_sites, cached,
@@ -488,44 +488,18 @@ end
 
 # temporarily accumulate our edges to later add as backedges in the callee
 function add_backedge!(caller::InferenceState, li::MethodInstance)
-    edges = get_stmt_edges!(caller)
-    if edges !== nothing
-        push!(edges, li)
-    end
+    push!(caller.backedges, li)
     return nothing
 end
 
 function add_invoke_backedge!(caller::InferenceState, @nospecialize(invokesig::Type), li::MethodInstance)
-    edges = get_stmt_edges!(caller)
-    if edges !== nothing
-        push!(edges, invokesig, li)
-    end
+    push!(caller.backedges, InvokeEdge(invokesig, li))
     return nothing
 end
 
 # used to temporarily accumulate our no method errors to later add as backedges in the callee method table
 function add_mt_backedge!(caller::InferenceState, mt::Core.MethodTable, @nospecialize(typ))
-    edges = get_stmt_edges!(caller)
-    if edges !== nothing
-        push!(edges, mt, typ)
-    end
-    return nothing
-end
-
-function get_stmt_edges!(caller::InferenceState)
-    if !isa(caller.linfo.def, Method)
-        return nothing # don't add backedges to toplevel exprs
-    end
-    edges = caller.stmt_edges[caller.currpc]
-    if edges === nothing
-        edges = caller.stmt_edges[caller.currpc] = []
-    end
-    return edges
-end
-
-function empty_backedges!(frame::InferenceState, currpc::Int = frame.currpc)
-    edges = frame.stmt_edges[currpc]
-    edges === nothing || empty!(edges)
+    push!(caller.backedges, MTEdge(typ, mt))
     return nothing
 end
 
