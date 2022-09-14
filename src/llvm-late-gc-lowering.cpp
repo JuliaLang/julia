@@ -2738,7 +2738,6 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
     };
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
     bool modified = lateLowerGCFrame.runOnFunction(F);
-    // errs() << *F.getParent() << "\n";
     assert(!verifyFunction(F, &errs()));
     return modified;
 }
