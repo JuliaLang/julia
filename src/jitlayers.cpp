@@ -385,8 +385,6 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    auto ctx = jl_ExecutionEngine->getContext();
-    auto &context = *ctx;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
@@ -430,7 +428,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             }
         }
         ++SpecFPtrCount;
-        _jl_compile_codeinst(codeinst, src, world, context);
+        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
     }
@@ -455,8 +453,6 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto ctx = jl_ExecutionEngine->getContext();
-    auto &context = *ctx;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -481,7 +477,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
-        _jl_compile_codeinst(unspec, src, unspec->min_world, context);
+        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext());
         if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
             jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
@@ -511,8 +507,6 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            auto ctx = jl_ExecutionEngine->getContext();
-            auto &context = *ctx;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -534,7 +528,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, context);
+                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }

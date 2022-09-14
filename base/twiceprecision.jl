@@ -268,10 +268,10 @@ TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
-    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
+    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))::TwicePrecision{T}
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)::T
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)::TwicePrecision{T}
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))

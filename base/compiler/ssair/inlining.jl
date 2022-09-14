@@ -361,6 +361,12 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     if extra_coverage_line != 0
         insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
+    sp_ssa = nothing
+    if !validate_sparams(sparam_vals)
+        # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
+        sp_ssa = insert_node_here!(compact,
+            effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
+    end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
         if nargs_def > 0
@@ -378,21 +384,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             boundscheck = :off
         end
     end
-    if !validate_sparams(sparam_vals)
-        if def.isva
-            nonva_args = argexprs[1:end-1]
-            va_arg = argexprs[end]
-            tuple_call = Expr(:call, TOP_TUPLE, def, nonva_args...)
-            tuple_type = tuple_tfunc(OptimizerLattice(), Any[argextype(arg, compact) for arg in nonva_args])
-            tupl = insert_node_here!(compact, NewInstruction(tuple_call, tuple_type, topline))
-            apply_iter_expr = Expr(:call, Core._apply_iterate, iterate, Core._compute_sparams, tupl, va_arg)
-            sparam_vals = insert_node_here!(compact,
-                effect_free(NewInstruction(apply_iter_expr, SimpleVector, topline)))
-        else
-            sparam_vals = insert_node_here!(compact,
-                effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
-        end
-    end
     # If the iterator already moved on to the next basic block,
     # temporarily re-open in again.
     local return_value
@@ -408,7 +399,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, inline_compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck, inline_compact)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 return_value = SSAValue(idx′)
@@ -435,7 +426,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, linetable_offset, boundscheck, inline_compact)
+            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck, inline_compact)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -600,10 +591,9 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         if isa(case, InliningTodo)
             val = ir_inline_item!(compact, idx, argexprs′, linetable, case, boundscheck, todo_bbs)
         elseif isa(case, InvokeCase)
-            effect_free = is_removable_if_unused(case.effects)
-            val = insert_node_here!(compact,
-                NewInstruction(Expr(:invoke, case.invoke, argexprs′...), typ, nothing,
-                    line, effect_free ? IR_FLAG_EFFECT_FREE : IR_FLAG_NULL, effect_free))
+            inst = Expr(:invoke, case.invoke, argexprs′...)
+            flag = flags_for_effects(case.effects)
+            val = insert_node_here!(compact, NewInstruction(inst, typ, nothing, line, flag, true))
         else
             case = case::ConstantCase
             val = case.val
@@ -911,11 +901,11 @@ function may_have_fcalls(m::Method)
     return may_have_fcall
 end
 
-function can_inline_typevars(m::MethodMatch, argtypes::Vector{Any})
-    may_have_fcalls(m.method) && return false
-    any(@nospecialize(x) -> x isa UnionAll, argtypes[2:end]) && return false
+function can_inline_typevars(method::Method, argtypes::Vector{Any})
+    may_have_fcalls(method) && return false
     return true
 end
+can_inline_typevars(m::MethodMatch, argtypes::Vector{Any}) = can_inline_typevars(m.method, argtypes)
 
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any}, invokesig,
                          flag::UInt8, state::InliningState, allow_typevars::Bool = false)
@@ -969,6 +959,19 @@ end
 retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo) = inflate_ir(src, mi)
 retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode) = copy(ir)
 
+function flags_for_effects(effects::Effects)
+    flags::UInt8 = 0
+    if is_consistent(effects)
+        flags |= IR_FLAG_CONSISTENT
+    end
+    if is_removable_if_unused(effects)
+        flags |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif is_nothrow(effects)
+        flags |= IR_FLAG_NOTHROW
+    end
+    return flags
+end
+
 function handle_single_case!(
     ir::IRCode, idx::Int, stmt::Expr,
     @nospecialize(case), todo::Vector{Pair{Int, Any}}, params::OptimizationParams, isinvoke::Bool = false)
@@ -979,11 +982,7 @@ function handle_single_case!(
         isinvoke && rewrite_invoke_exprargs!(stmt)
         stmt.head = :invoke
         pushfirst!(stmt.args, case.invoke)
-        if is_removable_if_unused(case.effects)
-            ir[SSAValue(idx)][:flag] |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-        elseif is_nothrow(case.effects)
-            ir[SSAValue(idx)][:flag] |= IR_FLAG_NOTHROW
-        end
+        ir[SSAValue(idx)][:flag] |= flags_for_effects(case.effects)
     elseif case === nothing
         # Do, well, nothing
     else
@@ -1163,6 +1162,11 @@ function inline_invoke!(
     return nothing
 end
 
+function invoke_signature(invokesig::Vector{Any})
+    ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
+    return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
+end
+
 function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info), state::InliningState)
     if isa(info, OpaqueClosureCreateInfo)
         lbt = argextype(stmt.args[2], ir)
@@ -1274,16 +1278,39 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
     return stmt, sig
 end
 
-# TODO inline non-`isdispatchtuple`, union-split callsites?
-function compute_inlining_cases(infos::Vector{MethodMatchInfo},
+function handle_any_const_result!(cases::Vector{InliningCase}, @nospecialize(result), match::MethodMatch, argtypes::Vector{Any}, flag::UInt8, state::InliningState, allow_typevars::Bool=false)
+    if isa(result, ConcreteResult)
+        case = concrete_result_item(result, state)
+        push!(cases, InliningCase(result.mi.specTypes, case))
+        return true
+    elseif isa(result, ConstPropResult)
+        return handle_const_prop_result!(result, argtypes, flag, state, cases, #=allow_abstract=#true, allow_typevars)
+    elseif isa(result, SemiConcreteResult)
+        return handle_semi_concrete_result!(result, cases, #=allow_abstract=#true)
+    else
+        @assert result === nothing
+        return handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, allow_typevars)
+    end
+end
+
+function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInfo}},
     flag::UInt8, sig::Signature, state::InliningState)
     argtypes = sig.argtypes
+    if isa(info, ConstCallInfo)
+        (; call, results) = info
+        infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
+    else
+        results = nothing
+        infos = info
+    end
     cases = InliningCase[]
+    local any_fully_covered = false
+    local handled_all_cases::Bool = true
+    local revisit_idx = nothing
     local only_method = nothing
     local meth::MethodLookupResult
-    local revisit_idx = nothing
-    local any_fully_covered = false
-    local handled_all_cases = true
+    local all_result_count = 0
+
     for i in 1:length(infos)
         meth = infos[i].results
         if meth.ambig
@@ -1306,6 +1333,8 @@ function compute_inlining_cases(infos::Vector{MethodMatchInfo},
             end
         end
         for (j, match) in enumerate(meth)
+            all_result_count += 1
+            result = results === nothing ? nothing : results[all_result_count]
             any_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
@@ -1313,13 +1342,13 @@ function compute_inlining_cases(infos::Vector{MethodMatchInfo},
                     continue
                 end
                 if revisit_idx === nothing
-                    revisit_idx = (i, j)
+                    revisit_idx = (i, j, all_result_count)
                 else
                     handled_all_cases = false
                     revisit_idx = nothing
                 end
             else
-                handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, #=allow_typevars=#false)
+                handled_all_cases &= handle_any_const_result!(cases, result, match, argtypes, flag, state, false)
             end
         end
     end
@@ -1327,9 +1356,10 @@ function compute_inlining_cases(infos::Vector{MethodMatchInfo},
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,
         # so try to handle it by bypassing validate_sparams
-        (i, j) = revisit_idx
+        (i, j, k) = revisit_idx
         match = infos[i].results[j]
-        handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, #=allow_typevars=#true)
+        result = results === nothing ? nothing : results[k]
+        handled_all_cases &= handle_any_const_result!(cases, result, match, argtypes, flag, state, true)
     elseif length(cases) == 0 && only_method isa Method
         # if the signature is fully covered and there is only one applicable method,
         # we can try to inline it even in the presence of unmatched sparams
@@ -1339,59 +1369,15 @@ function compute_inlining_cases(infos::Vector{MethodMatchInfo},
             atype = argtypes_to_type(argtypes)
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), atype, only_method.sig)::SimpleVector
             match = MethodMatch(metharg, methsp::SimpleVector, only_method, true)
+            result = nothing
         else
             @assert length(meth) == 1
             match = meth[1]
+            result = results === nothing ? nothing : results[1]
         end
-        handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, #=allow_typevars=#true) || return nothing
+        handle_any_const_result!(cases, result, match, argtypes, flag, state, true)
         any_fully_covered = handled_all_cases = match.fully_covers
     elseif !handled_all_cases
-        # if we've not seen all candidates, union split is valid only for dispatch tuples
-        filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
-    end
-
-    return cases, handled_all_cases & any_fully_covered
-end
-
-function compute_inlining_cases(info::ConstCallInfo,
-    flag::UInt8, sig::Signature, state::InliningState)
-    argtypes = sig.argtypes
-    (; call, results) = info
-    infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
-    cases = InliningCase[]
-    local any_fully_covered = false
-    local handled_all_cases = true
-    local j = 0
-    for i in 1:length(infos)
-        meth = infos[i].results
-        if meth.ambig
-            # Too many applicable methods
-            # Or there is a (partial?) ambiguity
-            return nothing
-        elseif length(meth) == 0
-            # No applicable methods; try next union split
-            handled_all_cases = false
-            continue
-        end
-        for match in meth
-            j += 1
-            result = results[j]
-            any_fully_covered |= match.fully_covers
-            if isa(result, ConcreteResult)
-                case = concrete_result_item(result, state)
-                push!(cases, InliningCase(result.mi.specTypes, case))
-            elseif isa(result, ConstPropResult)
-                handled_all_cases &= handle_const_prop_result!(result, argtypes, flag, state, cases, #=allow_abstract=#true)
-            elseif isa(result, SemiConcreteResult)
-                handled_all_cases &= handle_semi_concrete_result!(result, cases, #=allow_abstract=#true)
-            else
-                @assert result === nothing
-                handled_all_cases &= handle_match!(match, argtypes, flag, state, cases, #=allow_abstract=#true, #=allow_typevars=#false)
-            end
-        end
-    end
-
-    if !handled_all_cases
         # if we've not seen all candidates, union split is valid only for dispatch tuples
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
@@ -1436,11 +1422,13 @@ end
 
 function handle_const_prop_result!(
     result::ConstPropResult, argtypes::Vector{Any}, flag::UInt8, state::InliningState,
-    cases::Vector{InliningCase}, allow_abstract::Bool)
+    cases::Vector{InliningCase}, allow_abstract::Bool, allow_typevars::Bool = false)
     (; mi) = item = InliningTodo(result.result, argtypes)
     spec_types = mi.specTypes
     allow_abstract || isdispatchtuple(spec_types) || return false
-    validate_sparams(mi.sparam_vals) || return false
+    if !validate_sparams(mi.sparam_vals)
+        (allow_typevars && can_inline_typevars(mi.def, argtypes)) || return false
+    end
     state.mi_cache !== nothing && (item = resolve_todo(item, state, flag))
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
@@ -1496,20 +1484,29 @@ function handle_const_opaque_closure_call!(
 end
 
 function handle_finalizer_call!(
-    ir::IRCode, stmt::Expr, info::FinalizerInfo, state::InliningState)
+    ir::IRCode, idx::Int, stmt::Expr, info::FinalizerInfo, state::InliningState)
+
+    # Finalizers don't return values, so if their execution is not observable,
+    # we can just not register them
+    if is_removable_if_unused(info.effects)
+        ir[SSAValue(idx)] = nothing
+        return nothing
+    end
+
     # Only inline finalizers that are known nothrow and notls.
     # This avoids having to set up state for finalizer isolation
     is_finalizer_inlineable(info.effects) || return nothing
 
     info = info.info
+    if isa(info, ConstCallInfo)
+        # NOTE currently mutable objects are not represented as `Const`
+        # but `finalizer` function can be
+        info = info.call
+    end
     if isa(info, MethodMatchInfo)
         infos = MethodMatchInfo[info]
     elseif isa(info, UnionSplitInfo)
         infos = info.matches
-    # elseif isa(info, ConstCallInfo)
-    #     # NOTE currently this code path isn't active as constant propagation won't happen
-    #     # for `Core.finalizer` call because inference currently isn't able to fold a mutable
-    #     # object as a constant
     else
         return nothing
     end
@@ -1600,7 +1597,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
 
         # Handle finalizer
         if isa(info, FinalizerInfo)
-            handle_finalizer_call!(ir, stmt, info, state)
+            handle_finalizer_call!(ir, idx, stmt, info, state)
             continue
         end
 
@@ -1731,15 +1728,30 @@ function late_inline_special_case!(
 end
 
 function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
-                         @nospecialize(spsig), spvals::Union{SimpleVector, SSAValue},
+                         @nospecialize(spsig), spvals::SimpleVector,
+                         spvals_ssa::Union{Nothing, SSAValue},
                          linetable_offset::Int32, boundscheck::Symbol, compact::IncrementalCompact)
     compact.result[idx][:flag] &= ~IR_FLAG_INBOUNDS
     compact.result[idx][:line] += linetable_offset
-    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, boundscheck, compact, idx)
+    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck, compact, idx)
+end
+
+function insert_spval!(compact::IncrementalCompact, idx::Int, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
+    ret = insert_node!(compact, SSAValue(idx),
+        effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
+    tcheck_not = nothing
+    if do_isdefined
+        tcheck = insert_node!(compact, SSAValue(idx),
+            effect_free(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
+        tcheck_not = insert_node!(compact, SSAValue(idx),
+            effect_free(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
+    end
+    return (ret, tcheck_not)
 end
 
 function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
-                            @nospecialize(spsig), spvals::Union{SimpleVector, SSAValue},
+                            @nospecialize(spsig), spvals::SimpleVector,
+                            spvals_ssa::Union{Nothing, SSAValue},
                             boundscheck::Symbol, compact::IncrementalCompact, idx::Int)
     if isa(val, Argument)
         return arg_replacements[val.n]
@@ -1748,20 +1760,36 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
         e = val::Expr
         head = e.head
         if head === :static_parameter
-            if isa(spvals, SimpleVector)
-                return quoted(spvals[e.args[1]::Int])
+            spidx = e.args[1]::Int
+            val = spvals[spidx]
+            if !isa(val, TypeVar) && val !== Vararg
+                return quoted(val)
             else
-                ret = insert_node!(compact, SSAValue(idx),
-                    effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals, e.args[1]), Any)))
+                flag = compact[SSAValue(idx)][:flag]
+                maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
+                (ret, tcheck_not) = insert_spval!(compact, idx, spvals_ssa, spidx, maybe_undef)
+                if maybe_undef
+                    insert_node!(compact, SSAValue(idx),
+                        non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
+                end
                 return ret
             end
-        elseif head === :cfunction && isa(spvals, SimpleVector)
+        elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
+            spidx = (e.args[1]::Expr).args[1]::Int
+            val = spvals[spidx]
+            if !isa(val, TypeVar)
+                return true
+            else
+                (_, tcheck_not) = insert_spval!(compact, idx, spvals_ssa, spidx, true)
+                return tcheck_not
+            end
+        elseif head === :cfunction && spvals_ssa === nothing
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             e.args[3] = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), e.args[3], spsig, spvals)
             e.args[4] = svec(Any[
                 ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), argt, spsig, spvals)
                 for argt in e.args[4]::SimpleVector ]...)
-        elseif head === :foreigncall && isa(spvals, SimpleVector)
+        elseif head === :foreigncall && spvals_ssa === nothing
             @assert !isa(spsig, UnionAll) || !isempty(spvals)
             for i = 1:length(e.args)
                 if i == 2
@@ -1785,7 +1813,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, boundscheck, compact, idx)
+        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck, compact, idx)
     end
     return urs[]
 end

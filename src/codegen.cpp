@@ -8578,12 +8578,11 @@ extern "C" void jl_init_llvm(void)
     // Register GDB event listener
 #if defined(JL_DEBUG_BUILD)
     jl_using_gdb_jitevents = true;
-# else
-    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
-    if (jit_gdb && atoi(jit_gdb)) {
-        jl_using_gdb_jitevents = true;
-    }
 #endif
+    const char *jit_gdb = getenv("ENABLE_GDBLISTENER");
+    if (jit_gdb) {
+        jl_using_gdb_jitevents = !!atoi(jit_gdb);
+    }
     if (jl_using_gdb_jitevents)
         jl_ExecutionEngine->enableJITDebuggingSupport();
 

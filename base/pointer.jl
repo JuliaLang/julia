@@ -20,14 +20,14 @@ const C_NULL = bitcast(Ptr{Cvoid}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))
+convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))::T
 
 # integer to pointer
 convert(::Type{Ptr{T}}, x::Union{Int,UInt}) where {T} = Ptr{T}(x)
 
 # pointer to pointer
 convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
-convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)::Ptr{T}
 
 # object to pointer (when used with ccall)
 

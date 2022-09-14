@@ -873,10 +873,15 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             end
         elseif is_known_call(stmt, Core.finalizer, compact)
             3 <= length(stmt.args) <= 5 || continue
-            # Inlining performs legality checks on the finalizer to determine
-            # whether or not we may inline it. If so, it appends extra arguments
-            # at the end of the intrinsic. Detect that here.
-            length(stmt.args) == 5 || continue
+            info = compact[SSAValue(idx)][:info]
+            if isa(info, FinalizerInfo)
+                is_finalizer_inlineable(info.effects) || continue
+            else
+                # Inlining performs legality checks on the finalizer to determine
+                # whether or not we may inline it. If so, it appends extra arguments
+                # at the end of the intrinsic. Detect that here.
+                length(stmt.args) == 5 || continue
+            end
             is_finalizer = true
         elseif isexpr(stmt, :foreigncall)
             nccallargs = length(stmt.args[3]::SimpleVector)
@@ -1098,9 +1103,9 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
     return true
 end
 
-is_nothrow(ir::IRCode, pc::Int) = ir.stmts[pc][:flag] & (IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW) ≠ 0
+is_nothrow(ir::IRCode, pc::Int) = (ir.stmts[pc][:flag] & IR_FLAG_NOTHROW) ≠ 0
 
-function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse, inlining::InliningState)
+function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse, inlining::InliningState, info::Union{FinalizerInfo, Nothing})
     # For now: Require that all uses and defs are in the same basic block,
     # so that live range calculations are easy.
     bb = ir.cfg.blocks[block_for_inst(ir.cfg, first(defuse.uses).idx)]
@@ -1128,23 +1133,28 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     all(check_in_range, defuse.defs) || return nothing
 
     # For now: Require all statements in the basic block range to be nothrow.
-    all(minval:maxval) do idx::Int
-        return is_nothrow(ir, idx) || idx == finalizer_idx
+    all(minval:maxval) do sidx::Int
+        return is_nothrow(ir, idx) || sidx == finalizer_idx || sidx == idx
     end || return nothing
 
     # Ok, `finalizer` rewrite is legal.
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:inst]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    inline = finalizer_stmt.args[4]
-    if inline === nothing
-        # No code in the function - Nothing to do
-    else
-        mi = finalizer_stmt.args[5]::MethodInstance
-        if inline::Bool && try_inline_finalizer!(ir, argexprs, maxval, mi, inlining)
-            # the finalizer body has been inlined
+    flags = info === nothing ? UInt8(0) : flags_for_effects(info.effects)
+    if length(finalizer_stmt.args) >= 4
+        inline = finalizer_stmt.args[4]
+        if inline === nothing
+            # No code in the function - Nothing to do
         else
-            insert_node!(ir, maxval, NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), true)
+            mi = finalizer_stmt.args[5]::MethodInstance
+            if inline::Bool && try_inline_finalizer!(ir, argexprs, maxval, mi, inlining)
+                # the finalizer body has been inlined
+            else
+                insert_node!(ir, maxval, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), true)
+            end
         end
+    else
+        insert_node!(ir, maxval, with_flags(NewInstruction(Expr(:call, argexprs...), Nothing), flags), true)
     end
     # Erase the call to `finalizer`
     ir[SSAValue(finalizer_idx)][:inst] = nothing
@@ -1184,7 +1194,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
         end
         if finalizer_idx !== nothing && inlining !== nothing
-            try_resolve_finalizer!(ir, idx, finalizer_idx, defuse, inlining)
+            try_resolve_finalizer!(ir, idx, finalizer_idx, defuse, inlining, ir[SSAValue(finalizer_idx)][:info])
             continue
         end
         # Partition defuses by field
@@ -1409,7 +1419,8 @@ end
 
 function is_union_phi(compact::IncrementalCompact, idx::Int)
     inst = compact.result[idx]
-    return isa(inst[:inst], PhiNode) && is_some_union(inst[:type])
+    isa(inst[:inst], PhiNode) || return false
+    return is_some_union(inst[:type])
 end
 
 """
