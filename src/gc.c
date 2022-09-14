@@ -1750,7 +1750,7 @@ STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) J
 // Pop chunk from `mq`
 STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-    jl_gc_chunk_t c = {.cid = empty_chunk};
+    jl_gc_chunk_t c = {.cid = GC_empty_chunk};
 #ifndef GC_VERIFY
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
@@ -1759,7 +1759,7 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
         // Empty queue
         return c;
     anc.tail--;
-	c = ((jl_gc_chunk_t *)ary->buffer)[anc.tail];
+    c = ((jl_gc_chunk_t *)ary->buffer)[anc.tail];
     jl_atomic_store_release(&cq->anchor, anc);
 #endif
     return c;
@@ -1768,7 +1768,7 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
 // Steal chunk enqueued in `mq`
 STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-    jl_gc_chunk_t c = {.cid = empty_chunk};
+    jl_gc_chunk_t c = {.cid = GC_empty_chunk};
 #ifndef GC_VERIFY
     idemp_ws_queue_t *cq = &mq->cq;
     ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
@@ -1780,7 +1780,7 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_steal_from(jl_gc_markqueue_t *mq) JL_N
     ws_anchor_t anc2 = {anc.tail - 1, anc.tag};
     if (!jl_atomic_cmpswap(&cq->anchor, &anc, anc2))
         // Steal failed
-        c.cid = empty_chunk;
+        c.cid = GC_empty_chunk;
 #endif
     return c;
 }
@@ -1894,7 +1894,7 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     // Decide whether need to chunk objary
     size_t nobjs = (obj_end - obj_begin) / step;
     if (nobjs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
+        jl_gc_chunk_t c = {GC_objary_chunk, obj_parent, obj_begin + step * MAX_REFS_AT_ONCE,
                            obj_end,      NULL,       NULL,
                            step,         nptr};
         gc_chunkqueue_push(mq, &c);
@@ -1923,7 +1923,7 @@ STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_va
     // Decide whether need to chunk ary8
     size_t nrefs = (ary8_end - ary8_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
+        jl_gc_chunk_t c = {GC_ary8_chunk, ary8_parent, ary8_begin + elsize * MAX_REFS_AT_ONCE,
                            ary8_end,   elem_begin,  elem_end,
                            0,          nptr};
         gc_chunkqueue_push(mq, &c);
@@ -1955,7 +1955,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
     // Decide whether need to chunk ary16
     size_t nrefs = (ary16_end - ary16_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
+        jl_gc_chunk_t c = {GC_ary16_chunk, ary16_parent, ary16_begin + elsize * MAX_REFS_AT_ONCE,
                            ary16_end,   elem_begin,   elem_end,
                            0,           nptr};
         gc_chunkqueue_push(mq, &c);
@@ -1975,51 +1975,51 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent,
 }
 
 // Mark chunk of large array
-STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t c) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
-    switch (c.cid) {
-        case objary_chunk: {
-            jl_value_t *obj_parent = c.parent;
-            jl_value_t **obj_begin = c.begin;
-            jl_value_t **obj_end = c.end;
-            uint32_t step = c.step;
-            uintptr_t nptr = c.nptr;
+    switch (c->cid) {
+        case GC_objary_chunk: {
+            jl_value_t *obj_parent = c->parent;
+            jl_value_t **obj_begin = c->begin;
+            jl_value_t **obj_end = c->end;
+            uint32_t step = c->step;
+            uintptr_t nptr = c->nptr;
             gc_mark_objarray(ptls, obj_parent, obj_begin, obj_end, step,
                              nptr);
             break;
         }
-        case ary8_chunk: {
-            jl_value_t *ary8_parent = c.parent;
-            jl_value_t **ary8_begin = c.begin;
-            jl_value_t **ary8_end = c.end;
-            uint8_t *elem_begin = (uint8_t *)c.elem_begin;
-            uint8_t *elem_end = (uint8_t *)c.elem_end;
-            uintptr_t nptr = c.nptr;
+        case GC_ary8_chunk: {
+            jl_value_t *ary8_parent = c->parent;
+            jl_value_t **ary8_begin = c->begin;
+            jl_value_t **ary8_end = c->end;
+            uint8_t *elem_begin = (uint8_t *)c->elem_begin;
+            uint8_t *elem_end = (uint8_t *)c->elem_end;
+            uintptr_t nptr = c->nptr;
             gc_mark_array8(ptls, ary8_parent, ary8_begin, ary8_end, elem_begin, elem_end,
                            nptr);
             break;
         }
-        case ary16_chunk: {
-            jl_value_t *ary16_parent = c.parent;
-            jl_value_t **ary16_begin = c.begin;
-            jl_value_t **ary16_end = c.end;
-            uint16_t *elem_begin = (uint16_t *)c.elem_begin;
-            uint16_t *elem_end = (uint16_t *)c.elem_end;
-            uintptr_t nptr = c.nptr;
+        case GC_ary16_chunk: {
+            jl_value_t *ary16_parent = c->parent;
+            jl_value_t **ary16_begin = c->begin;
+            jl_value_t **ary16_end = c->end;
+            uint16_t *elem_begin = (uint16_t *)c->elem_begin;
+            uint16_t *elem_end = (uint16_t *)c->elem_end;
+            uintptr_t nptr = c->nptr;
             gc_mark_array16(ptls, ary16_parent, ary16_begin, ary16_end, elem_begin, elem_end,
                             nptr);
             break;
         }
-        case finlist_chunk: {
-            jl_value_t **fl_begin = c.begin;
-            jl_value_t **fl_end = c.end;
+        case GC_finlist_chunk: {
+            jl_value_t **fl_begin = c->begin;
+            jl_value_t **fl_end = c->end;
             gc_mark_finlist_(mq, fl_begin, fl_end);
             break;
         }
         default: {
             // `empty-chunk` should be checked by caller
-            jl_safe_printf("GC internal error: chunk mismatch cid=%d\n", c.cid);
+            jl_safe_printf("GC internal error: chunk mismatch cid=%d\n", c->cid);
             abort();
         }
     }
@@ -2143,7 +2143,7 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
     size_t nrefs = (fl_end - fl_begin);
     if (nrefs > MAX_REFS_AT_ONCE) {
         jl_gc_chunk_t c = {
-            finlist_chunk, NULL, fl_begin + MAX_REFS_AT_ONCE, fl_end, 0, 0, 0, 0};
+            GC_finlist_chunk, NULL, fl_begin + MAX_REFS_AT_ONCE, fl_end, 0, 0, 0, 0};
         gc_chunkqueue_push(mq, &c);
         fl_end = fl_begin + MAX_REFS_AT_ONCE;
     }
@@ -2504,14 +2504,14 @@ void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // Drain items from worker's own chunkqueue
 void gc_drain_own_chunkqueue(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-    jl_gc_chunk_t c = {.cid = empty_chunk};
+    jl_gc_chunk_t c = {.cid = GC_empty_chunk};
     do {
         c = gc_chunkqueue_pop(mq);
-        if (c.cid != empty_chunk) {
-            gc_mark_chunk(ptls, mq, c);
+        if (c.cid != GC_empty_chunk) {
+            gc_mark_chunk(ptls, mq, &c);
             gc_mark_loop_(ptls, mq);
         }
-    } while (c.cid != empty_chunk);
+    } while (c.cid != GC_empty_chunk);
 }
 
 // Drain all chunk queues. Mainly necessary because roots are enqueued locally:
@@ -2534,8 +2534,8 @@ void gc_drain_all_queues(jl_ptls_t ptls, jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
         for (int i = 0; i < jl_n_threads; i++) {
             jl_gc_markqueue_t *mq2 = &jl_all_tls_states[i]->mark_queue;
             jl_gc_chunk_t c = gc_chunkqueue_steal_from(mq2);
-            if (c.cid != empty_chunk) {
-                gc_mark_chunk(ptls, mq, c);
+            if (c.cid != GC_empty_chunk) {
+                gc_mark_chunk(ptls, mq, &c);
                 gc_mark_loop_(ptls, mq);
                 goto drain;
             }

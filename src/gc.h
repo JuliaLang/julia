@@ -82,11 +82,11 @@ typedef struct {
 } jl_gc_num_t;
 
 typedef enum {
-    empty_chunk,
-    objary_chunk,
-    ary8_chunk,
-    ary16_chunk,
-    finlist_chunk,
+    GC_empty_chunk,
+    GC_objary_chunk,
+    GC_ary8_chunk,
+    GC_ary16_chunk,
+    GC_finlist_chunk,
 } gc_chunk_id_t;
 
 typedef struct {
