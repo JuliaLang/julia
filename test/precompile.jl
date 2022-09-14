@@ -913,7 +913,7 @@ precompile_test_harness("code caching") do dir
     @test invalidations[j-1] == "insert_backedges_callee"
 
     m = only(methods(MB.map_nbits))
-    @test m.specializations[1].cache.max_world < Base.get_world_counter()   # insert_backedges invalidations also trigger their backedges
+    @test m.specializations[1].cache.max_world <= world   # insert_backedges invalidations also trigger their backedges
 end
 
 precompile_test_harness("invoke") do dir
