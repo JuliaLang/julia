@@ -204,16 +204,23 @@ julia> x[7:8]
 julia> x[13:14]
 [1] rem(x::Integer, T::Type{<:Integer}) in Base at int.jl:584
 [2] &(::Missing, ::Integer) in Base at missing.jl:169
+```
 
 - read each method line by line using a `for` loop and the `readline` function.
-  You go to the next function with the "ENTER" key and exit out of the loop with "CTRL-D":
-``julia
+  You go to the next function with the "ENTER" key and exit out of the loop with
+  "CTRL-C" or "CTRL-D":
+```julia
 julia> for i in methodswith(Int)
            print(i)
            readline()
        end
 AbstractFloat(x::Int64) in Base at float.jl:243
 Float16(x::Int64) in Base at float.jl:146
+Float32(x::Int64) in Base at float.jl:146^C
+ERROR: InterruptException:
+Stacktrace:
+[...]
+```
 """
 function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
