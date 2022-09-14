@@ -20,7 +20,7 @@ end
 # CHECK: gc_queue_root
 function buildarray()
     out = []
-    for i=1:100
+    for i in 1:100
         push!(out, Ref(0))
     end
     out

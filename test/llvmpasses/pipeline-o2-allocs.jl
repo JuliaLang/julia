@@ -21,7 +21,7 @@ end
 function loop_alloc(N)
     ref = Ref(zero(typeof(N)))
     N <= zero(typeof(N)) && return ref
-    for i=one(typeof(N)):N
+    for i in one(typeof(N)):N
         ref = Ref(i)
     end
     ref
@@ -31,7 +31,7 @@ end
 # CHECK-NOT: br
 function loop_const()
     ref = Ref(0)
-    for i=1:1000
+    for i in 1:1000
         ref = Ref(0)
     end
     ref

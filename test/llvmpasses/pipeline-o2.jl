@@ -102,7 +102,7 @@ end
 # ALL: mul
 function sumloop(N)
     total = zero(typeof(N))
-    for i=one(typeof(N)):N
+    for i in one(typeof(N)):N
         total += i
     end
     total
@@ -111,7 +111,7 @@ end
 # ALL: vector.body
 function simd_sumloop(N)
     total = zero(typeof(N))
-    @simd for i=one(typeof(N)):N
+    @simd for i in one(typeof(N)):N
         total += i
     end
     total
@@ -124,7 +124,7 @@ end
 # ALL: ret
 function loopedlength(arr)
     len = length(arr)
-    for i=1:length(arr)
+    for i in 1:length(arr)
         len = length(arr)
     end
     len
