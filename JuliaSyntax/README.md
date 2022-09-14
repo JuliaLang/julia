@@ -435,6 +435,33 @@ julia> text = "x = \"\"\"\n    \$a\n    b\"\"\""
     21:23     │    """                      "\"\"\""
 ```
 
+### Less redundant `block`s
+
+Sometimes `Expr` needs to contain redundant block constructs in order to have a
+place to store `LineNumberNode`s, but we don't need these and avoid adding them
+in several cases:
+* The right hand side of short form function syntax
+* The conditional in `elseif`
+* The body of anonymous functions after the `->`
+
+### Distinct conditional ternary expression
+
+The syntax `a ? b : c` is the same as `if a b else c` in `Expr` so macros can't
+distinguish these cases. Instead, we use a distinct expression head `K"?"` and
+lower to `Expr(:if)` during `Expr` conversion.
+
+### String nodes always wrapped in `K"string"` or `K"cmdstring"`
+
+All strings are surrounded by a node of kind `K"string"`, even non-interpolated
+literals, so `"x"` parses as `(string "x")`. This makes string handling simpler
+and more systematic because interpolations and triple strings with embedded
+trivia don't need to be treated differently. It also gives a container in which
+to attach the delimiting quotes.
+
+The same goes for command strings which are always wrapped in `K"cmdstring"`
+regardless of whether they have multiple pieces (due to triple-quoted
+dedenting) or otherwise.
+
 ## More about syntax kinds
 
 We generally track the type of syntax nodes with a syntax "kind", stored
@@ -549,6 +576,25 @@ name of compatibility, perhaps with a warning.)
   arises from `(set! pred char-hex?)` in `parse-number` accepting hex exponent
   digits, all of which are detected as invalid except for a trailing `f` when
   processed by `isnumtok_base`.
+* `begin` and `end` are not parsed as keywords when indexing. Typed comprehensions
+  initially look the same, but can be distinguished from indexing once we handle
+  a `for` token; it is safe to treat `begin` and `end` as keywords afterwards. The
+  reference parser *only* handles this well when there's a newline before `for`:
+  ```julia
+  Any[foo(i)
+      for i in x if begin
+          true
+      end
+  ]
+  ```
+  works, while
+  ```julia
+  Any[foo(i) for i in x if begin
+          true
+      end
+  ]
+  ```
+  does not. JuliaSyntax handles both cases.
 
 ## Parsing / AST oddities and warts
 
@@ -775,7 +821,7 @@ Here's a few links to relevant Julia issues.
 #### Lowering
 
 * A partial implementation of lowering in Julia https://github.com/JuliaLang/julia/pull/32201 —
-  some of this should be ported.
+  some of this should be ported. (Last commit at https://github.com/JuliaLang/julia/tree/df61138fcf97d03dcbbba10e962571af9700db56/ )
 * The closure capture problem https://github.com/JuliaLang/julia/issues/15276 —
   would be interesting to see whether we can tackle some of the harder cases in
   a new implementation.
