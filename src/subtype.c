@@ -3248,16 +3248,15 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
     }
     int n = 0;
     jl_varbinding_t *v = e->vars;
-    jl_value_t *ub = NULL, *vub = NULL;
-    JL_GC_PUSH2(&ub, &vub);
+    jl_value_t *b1 = NULL, *b2 = NULL;
+    JL_GC_PUSH2(&b1, &b2);
     while (v != NULL) {
-        jl_value_t *lb = jl_svecref(*root, n);
-        if (v->lb != lb)
-            jl_svecset(*root, n, lb ? v->var->lb : v->lb);
-        ub = jl_svecref(*root, n+1);
-        vub = v->ub;
-        if (vub != ub)
-            jl_svecset(*root, n+1, ub ? simple_join(ub, vub) : vub);
+        b1 = jl_svecref(*root, n);
+        b2 = v->lb;
+        jl_svecset(*root, n, simple_meet(b1, b2));
+        b1 = jl_svecref(*root, n+1);
+        b2 = v->ub;
+        jl_svecset(*root, n+1, simple_join(b1, b2));
         n = n + 3;
         v = v->prev;
     }
