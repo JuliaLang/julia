@@ -65,14 +65,7 @@ lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9
 Return `true` if `5^p` is a divisor of `x`.
 """
 @inline function pow5(x, p)
-    count = 0
-    while true
-        q = div(x, 5)
-        r = x - 5 * q
-        r != 0 && return count >= p
-        x = q
-        count += 1
-    end
+    x % (5^p) == 0
 end
 
 """
