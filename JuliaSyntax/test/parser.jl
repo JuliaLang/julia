@@ -242,10 +242,10 @@ tests = [
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
         # do
-        "f() do\nend"         =>  "(do (call f) (-> (tuple) (block)))"
-        "f() do ; body end"   =>  "(do (call f) (-> (tuple) (block body)))"
-        "f() do x, y\n body end"  =>  "(do (call f) (-> (tuple x y) (block body)))"
-        "f(x) do y body end"  =>  "(do (call f x) (-> (tuple y) (block body)))"
+        "f() do\nend"         =>  "(do (call f) (tuple) (block))"
+        "f() do ; body end"   =>  "(do (call f) (tuple) (block body))"
+        "f() do x, y\n body end"  =>  "(do (call f) (tuple x y) (block body))"
+        "f(x) do y body end"  =>  "(do (call f x) (tuple y) (block body))"
         # Keyword arguments depend on call vs macrocall
         "foo(a=1)"  =>  "(call foo (kw a 1))"
         "@foo(a=1)" =>  "(macrocall @foo (= a 1))"

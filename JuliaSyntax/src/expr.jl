@@ -218,15 +218,16 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
         end
     elseif headsym == :module
         pushfirst!(args[3].args, loc)
-    end
-    if headsym == :inert || (headsym == :quote && length(args) == 1 &&
+    elseif headsym == :inert || (headsym == :quote && length(args) == 1 &&
                  !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
                    a1 isa Bool  # <- compat hack, Julia 1.4+
                   ))
         return QuoteNode(only(args))
-    else
-        return Expr(headsym, args...)
+    elseif headsym == :do
+        @check length(args) == 3
+        return Expr(:do, args[1], Expr(:->, args[2], args[3]))
     end
+    return Expr(headsym, args...)
 end
 
 Base.Expr(node::SyntaxNode) = _to_expr(node)
