@@ -686,13 +686,7 @@ end
 
 # SimpleVector
 
-function getindex(v::SimpleVector, i::Int)
-    @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
-    end
-    return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
-end
-
+@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
     return ccall(:jl_svec_len, Int, (Any,), v)
 end
@@ -768,6 +762,7 @@ see [`:`](@ref).
 struct Colon <: Function
 end
 const (:) = Colon()
+
 
 """
     Val(c)

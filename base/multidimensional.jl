@@ -325,7 +325,7 @@ module IteratorsMD
         convert(Tuple{Vararg{UnitRange{Int}}}, R)
 
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
-        CartesianIndices(convert(R, inds.indices))
+        CartesianIndices(convert(R, inds.indices))::CartesianIndices{N,R}
 
     # equality
     Base.:(==)(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
@@ -1348,7 +1348,7 @@ end
 
 # Note: the next two functions rely on the following definition of the conversion to Bool:
 #   convert(::Type{Bool}, x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(...))
-# they're used to pre-emptively check in bulk when possible, which is much faster.
+# they're used to preemptively check in bulk when possible, which is much faster.
 # Also, the functions can be overloaded for custom types T<:Real :
 #  a) in the unlikely eventuality that they use a different logic for Bool conversion
 #  b) to skip the check if not necessary

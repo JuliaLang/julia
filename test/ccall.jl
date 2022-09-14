@@ -1125,12 +1125,12 @@ struct Struct_AA64_2
     v2::Float64
 end
 
-# This is a homogenious short vector aggregate
+# This is a homogeneous short vector aggregate
 struct Struct_AA64_3
     v1::VecReg{8,Int8}
     v2::VecReg{2,Float32}
 end
-# This is NOT a homogenious short vector aggregate
+# This is NOT a homogeneous short vector aggregate
 struct Struct_AA64_4
     v2::VecReg{2,Float32}
     v1::VecReg{8,Int16}
@@ -1791,7 +1791,7 @@ end
     str_identity = @cfunction(identity, Cstring, (Cstring,))
     foo = @ccall $str_identity("foo"::Cstring)::Cstring
     @test unsafe_string(foo) == "foo"
-    # test interpolation of an expresison that returns a pointer.
+    # test interpolation of an expression that returns a pointer.
     foo = @ccall $(@cfunction(identity, Cstring, (Cstring,)))("foo"::Cstring)::Cstring
     @test unsafe_string(foo) == "foo"
 

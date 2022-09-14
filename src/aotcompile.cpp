@@ -5,6 +5,7 @@
 
 // target support
 #include <llvm/ADT/Triple.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/DataLayout.h>
@@ -62,6 +63,14 @@ using namespace llvm;
 #include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "julia_aotcompile"
+
+STATISTIC(CICacheLookups, "Number of codeinst cache lookups");
+STATISTIC(CreateNativeCalls, "Number of jl_create_native calls made");
+STATISTIC(CreateNativeMethods, "Number of methods compiled for jl_create_native");
+STATISTIC(CreateNativeMax, "Max number of methods compiled at once for jl_create_native");
+STATISTIC(CreateNativeGlobals, "Number of globals compiled for jl_create_native");
 
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
@@ -215,6 +224,7 @@ static void makeSafeName(GlobalObject &G)
 
 static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world, jl_code_instance_t **ci_out, jl_code_info_t **src_out)
 {
+    ++CICacheLookups;
     jl_value_t *ci = cgparams.lookup(mi, world, world);
     JL_GC_PROMISE_ROOTED(ci);
     jl_code_instance_t *codeinst = NULL;
@@ -253,6 +263,8 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy)
 {
+    ++CreateNativeCalls;
+    CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
@@ -334,6 +346,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         gvars.push_back(std::string(global.second->getName()));
         data->jl_value_to_llvm[global.first] = gvars.size();
     }
+    CreateNativeMethods += emitted.size();
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
@@ -376,6 +389,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         G->setLinkage(GlobalVariable::InternalLinkage);
         data->jl_sysimg_gvars.push_back(G);
     }
+    CreateNativeGlobals += gvars.size();
 
     //Safe b/c context is locked by params
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -537,17 +551,20 @@ void jl_dump_native_impl(void *native_code,
         if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
 
-    legacy::PassManager optimizer;
-    if (bc_fname || obj_fname || asm_fname) {
-        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-        addMachinePasses(&optimizer, jl_options.opt_level);
-    }
-
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
     dataM->setTargetTriple(TM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*TM));
+
+#ifndef JL_USE_NEW_PM
+    legacy::PassManager optimizer;
+    addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+    addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+    addMachinePasses(&optimizer, jl_options.opt_level);
+#else
+    NewPM optimizer{std::move(TM), getOptLevel(jl_options.opt_level), {true, true, false}};
+#endif
+
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);
@@ -574,7 +591,7 @@ void jl_dump_native_impl(void *native_code,
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
         preopt.run(M, empty.MAM);
-        optimizer.run(M);
+        if (bc_fname || obj_fname || asm_fname) optimizer.run(M);
 
         // We would like to emit an alias or an weakref alias to redirect these symbols
         // but LLVM doesn't let us emit a GlobalAlias to a declaration...
@@ -1051,10 +1068,14 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize) {
+#ifndef JL_USE_NEW_PM
                 legacy::PassManager PM;
                 addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
                 addOptimizationPasses(&PM, jl_options.opt_level);
                 addMachinePasses(&PM, jl_options.opt_level);
+#else
+                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+#endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
             }

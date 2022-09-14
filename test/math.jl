@@ -1280,7 +1280,7 @@ struct BadFloatWrapper <: AbstractFloat
     x::Float64
 end
 
-@testset "not impelemented errors" begin
+@testset "not implemented errors" begin
     x = BadFloatWrapper(1.9)
     for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
         @test_throws MethodError f(x)
@@ -1362,6 +1362,7 @@ end
     end
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
+    @test 3e18^20 == Inf
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

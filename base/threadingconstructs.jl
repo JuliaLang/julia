@@ -199,7 +199,7 @@ microseconds).
 
 `:static` scheduler creates one task per thread and divides the iterations equally among
 them, assigning each task specifically to each thread. In particular, the value of
-[`threadid()`](@ref Threads.threadid) is guranteed to be constant within one iteration.
+[`threadid()`](@ref Threads.threadid) is guaranteed to be constant within one iteration.
 Specifying `:static` is an error if used from inside another `@threads` loop or from a
 thread other than 1.
 

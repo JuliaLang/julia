@@ -409,9 +409,9 @@ function get_value(sym::Expr, fn)
     end
     sym.head !== :. && return (nothing, false)
     for ex in sym.args
-        ex, found = get_value(ex, fn)
+        ex, found = get_value(ex, fn)::Tuple{Any, Bool}
         !found && return (nothing, false)
-        fn, found = get_value(ex, fn)
+        fn, found = get_value(ex, fn)::Tuple{Any, Bool}
         !found && return (nothing, false)
     end
     return (fn, true)

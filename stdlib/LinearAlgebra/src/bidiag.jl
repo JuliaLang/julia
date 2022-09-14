@@ -200,11 +200,17 @@ promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
-convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
+convert(::Type{T}, m::AbstractMatrix) where {T<:Bidiagonal} = m isa T ? m : T(m)::T
 
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
 similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
+function kron(A::Diagonal, B::Bidiagonal)
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kdv = _makevector(kron(diag(A), B.dv))
+    kev = _droplast!(_makevector(kron(diag(A), _pushzero(B.ev))))
+    Bidiagonal(kdv, kev, B.uplo)
+end
 
 ###################
 # LAPACK routines #
@@ -702,14 +708,15 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(B, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(B)), zero(eltype(y)))
+        return dot(x[1], B.dv[1], y[1])
     end
     ev, dv = B.ev, B.dv
-    if B.uplo == 'U'
+    @inbounds if B.uplo == 'U'
         x₀ = x[1]
         r = dot(x[1], dv[1], y[1])
-        @inbounds for j in 2:nx-1
+        for j in 2:nx-1
             x₋, x₀ = x₀, x[j]
             r += dot(adjoint(ev[j-1])*x₋ + adjoint(dv[j])*x₀, y[j])
         end
@@ -719,7 +726,7 @@ function dot(x::AbstractVector, B::Bidiagonal, y::AbstractVector)
         x₀ = x[1]
         x₊ = x[2]
         r = dot(adjoint(dv[1])*x₀ + adjoint(ev[1])*x₊, y[1])
-        @inbounds for j in 2:nx-1
+        for j in 2:nx-1
             x₀, x₊ = x₊, x[j+1]
             r += dot(adjoint(dv[j])*x₀ + adjoint(ev[j])*x₊, y[j])
         end

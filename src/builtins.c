@@ -1258,20 +1258,28 @@ JL_CALLABLE(jl_f_set_binding_type)
 
 // apply_type -----------------------------------------------------------------
 
-int jl_valid_type_param(jl_value_t *v)
+static int is_nestable_type_param(jl_value_t *t)
 {
-    if (jl_is_tuple(v)) {
+    if (jl_is_namedtuple_type(t))
+        t = jl_tparam1(t);
+    if (jl_is_tuple_type(t)) {
         // NOTE: tuples of symbols are not currently bits types, but have been
         // allowed as type parameters. this is a bit ugly.
-        jl_value_t *tt = jl_typeof(v);
-        size_t i, l = jl_nparams(tt);
-        for(i=0; i < l; i++) {
-            jl_value_t *pi = jl_tparam(tt,i);
-            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi)))
+        size_t i, l = jl_nparams(t);
+        for (i = 0; i < l; i++) {
+            jl_value_t *pi = jl_tparam(t, i);
+            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi)))
                 return 0;
         }
         return 1;
     }
+    return 0;
+}
+
+int jl_valid_type_param(jl_value_t *v)
+{
+    if (jl_is_tuple(v) || jl_is_namedtuple(v))
+        return is_nestable_type_param(jl_typeof(v));
     if (jl_is_vararg(v))
         return 0;
     // TODO: maybe more things
@@ -1624,6 +1632,36 @@ JL_CALLABLE(jl_f_finalizer)
     jl_task_t *ct = jl_current_task;
     jl_gc_add_finalizer_(ct->ptls, args[1], args[0]);
     return jl_nothing;
+}
+
+JL_CALLABLE(jl_f__compute_sparams)
+{
+    JL_NARGSV(_compute_sparams, 1);
+    jl_method_t *m = (jl_method_t*)args[0];
+    JL_TYPECHK(_compute_sparams, method, (jl_value_t*)m);
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(args[1], &args[2], nargs-1, 1);
+    jl_svec_t *env = jl_emptysvec;
+    JL_GC_PUSH2(&env, &tt);
+    jl_type_intersection_env((jl_value_t*)tt, m->sig, &env);
+    JL_GC_POP();
+    return (jl_value_t*)env;
+}
+
+JL_CALLABLE(jl_f__svec_ref)
+{
+    JL_NARGS(_svec_ref, 3, 3);
+    jl_value_t *b = args[0];
+    jl_svec_t *s = (jl_svec_t*)args[1];
+    jl_value_t *i = (jl_value_t*)args[2];
+    JL_TYPECHK(_svec_ref, bool, b);
+    JL_TYPECHK(_svec_ref, simplevector, (jl_value_t*)s);
+    JL_TYPECHK(_svec_ref, long, i);
+    size_t len = jl_svec_len(s);
+    ssize_t idx = jl_unbox_long(i);
+    if (idx < 1 || idx > len) {
+        jl_bounds_error_int((jl_value_t*)s, idx);
+    }
+    return jl_svec_ref(s, idx-1);
 }
 
 static int equiv_field_types(jl_value_t *old, jl_value_t *ft)
@@ -1998,6 +2036,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);
     jl_builtin_compilerbarrier = add_builtin_func("compilerbarrier", jl_f_compilerbarrier);
     add_builtin_func("finalizer", jl_f_finalizer);
+    add_builtin_func("_compute_sparams", jl_f__compute_sparams);
+    add_builtin_func("_svec_ref", jl_f__svec_ref);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
