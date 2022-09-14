@@ -451,7 +451,7 @@ end
 """
     oftype(x, y)
 
-Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+Convert `y` to the type of `x` i.e. `convert(typeof(x), y)`.
 
 # Examples
 ```jldoctest
