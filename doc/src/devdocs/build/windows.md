@@ -155,7 +155,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
  2. Build Julia and its dependencies with pre-build dependencies.
 
-    1. Open a new [**MINGW64/MINGW32 shell**](https://www.msys2.org/docs/environments/#overview).  
+    1. Open a new [**MINGW64/MINGW32 shell**](https://www.msys2.org/docs/environments/#overview).
         Currently we can't use both mingw32 and mingw64,
         so if you want to build the x86_64 and i686 versions,
         you'll need to build them in each environment separately.
