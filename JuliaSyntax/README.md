@@ -462,6 +462,23 @@ The same goes for command strings which are always wrapped in `K"cmdstring"`
 regardless of whether they have multiple pieces (due to triple-quoted
 dedenting) or otherwise.
 
+### No desugaring of the closure in do blocks 
+
+The reference parser represents `do` syntax with a closure for the second
+argument. That is,
+
+```julia
+f(x) do y
+    body
+end
+```
+
+becomes `(do (call f x) (-> (tuple y) (block body)))` in the reference parser.
+
+However, the nested closure with `->` head is implied here rather than present
+in the surface syntax, which suggests this is a premature desugaring step.
+Instead we emit the flatter structure `(do (call f x) (tuple y) (block body))`.
+
 ## More about syntax kinds
 
 We generally track the type of syntax nodes with a syntax "kind", stored

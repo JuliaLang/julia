@@ -423,8 +423,7 @@ end
 # a \n b    ==>  (block a b)
 #
 # flisp: parse-block
-function parse_block(ps::ParseState, down=parse_eq, mark=position(ps),
-                     consume_end=false)
+function parse_block(ps::ParseState, down=parse_eq, mark=position(ps))
     parse_block_inner(ps::ParseState, down)
     emit(ps, mark, K"block")
 end
@@ -1452,10 +1451,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             parse_call_arglist(ps, K")", is_macrocall)
             emit(ps, mark, is_macrocall ? K"macrocall" : K"call")
             if peek(ps) == K"do"
-                # f(x) do y body end  ==>  (do (call :f :x) (-> (tuple :y) (block :body)))
-                bump(ps, TRIVIA_FLAG)
-                parse_do(ps)
-                emit(ps, mark, K"do")
+                # f(x) do y body end  ==>  (do (call :f :x) (tuple :y) (block :body))
+                parse_do(ps, mark)
             end
             if is_macrocall
                 break
@@ -2179,23 +2176,24 @@ function parse_catch(ps::ParseState)
 end
 
 # flisp: parse-do
-function parse_do(ps::ParseState)
+function parse_do(ps::ParseState, mark)
+    bump(ps, TRIVIA_FLAG) # do
     ps = normal_context(ps)
-    mark = position(ps)
+    m = position(ps)
     if peek(ps) in KSet"NewlineWs ;"
-        # f() do\nend        ==>  (do (call f) (-> (tuple) (block)))
-        # f() do ; body end  ==>  (do (call f) (-> (tuple) (block body)))
+        # f() do\nend        ==>  (do (call f) (tuple) (block))
+        # f() do ; body end  ==>  (do (call f) (tuple) (block body))
         # this trivia needs to go into the tuple due to the way position()
         # works.
         bump(ps, TRIVIA_FLAG)
     else
-        # f() do x, y\n body end  ==>  (do (call f) (-> (tuple x y) (block body)))
+        # f() do x, y\n body end  ==>  (do (call f) (tuple x y) (block body))
         parse_comma_separated(ps, parse_range)
     end
-    emit(ps, mark, K"tuple")
+    emit(ps, m, K"tuple")
     parse_block(ps)
     bump_closing_token(ps, K"end")
-    emit(ps, mark, K"->")
+    emit(ps, mark, K"do")
 end
 
 function macro_name_kind(k)
