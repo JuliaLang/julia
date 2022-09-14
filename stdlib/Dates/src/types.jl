@@ -140,15 +140,25 @@ abstract type TimeType <: AbstractTime end
 abstract type AbstractDateTime <: TimeType end
 
 """
+    GenericDateTime
+
+`GenericDateTime` wraps a user-parameterized `UTInstant` and interprets it according to the proleptic
+Gregorian calendar.
+"""
+struct GenericDateTime{P<:Period} <: AbstractDateTime
+    instant::UTInstant{P}
+    GenericDateTime(instant::UTInstant{P}) where {P} = new{P}(instant)
+end
+
+"""
     DateTime
 
 `DateTime` wraps a `UTInstant{Millisecond}` and interprets it according to the proleptic
 Gregorian calendar.
 """
-struct DateTime <: AbstractDateTime
-    instant::UTInstant{Millisecond}
-    DateTime(instant::UTInstant{Millisecond}) = new(instant)
-end
+const DateTime = GenericDateTime{Millisecond}
+DateTime(instant::UTInstant) =
+    GenericDateTime(UTInstant(Millisecond(Dates.toms(instant.periods))))
 
 """
     Date

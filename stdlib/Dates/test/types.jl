@@ -277,4 +277,9 @@ end
     @test timedwait(() -> false, Second(0); pollint=Millisecond(1)) === :timed_out
 end
 
+@testset "GenericDateTime" begin
+    nanodt = Dates.GenericDateTime(Dates.UTInstant(Nanosecond(123)))
+    @test nanodt.instant == Dates.UTInstant(Nanosecond(123))
+end
+
 end
