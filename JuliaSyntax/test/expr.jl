@@ -144,4 +144,17 @@
                       LineNumberNode(2),
                       :body))
     end
+
+    @testset "String conversions" begin
+        # String unwrapping / wrapping
+        @test parseall(Expr, "\"str\"", rule=:statement) == "str"
+        @test parseall(Expr, "\"\$(\"str\")\"", rule=:statement) ==
+            Expr(:string, Expr(:string, "str"))
+        # Concatenation of string chunks in triple quoted cases
+        @test parseall(Expr, "```\n  a\n  b```", rule=:statement) ==
+            Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(1),
+                 "a\nb")
+        @test parseall(Expr, "\"\"\"\n  a\n  \$x\n  b\n  c\"\"\"", rule=:statement) ==
+            Expr(:string, "a\n", :x, "\nb\nc")
+    end
 end

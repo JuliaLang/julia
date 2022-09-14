@@ -4,16 +4,19 @@ const EOF_CHAR = typemax(Char)
 
 function is_identifier_char(c::Char)
     c == EOF_CHAR && return false
+    Base.ismalformed(c) && return false
     return Base.is_id_char(c)
 end
 
 function is_identifier_start_char(c::Char)
     c == EOF_CHAR && return false
+    Base.ismalformed(c) && return false
     return Base.is_id_start_char(c)
 end
 
 # Chars that we will never allow to be part of a valid non-operator identifier
 function is_never_id_char(ch::Char)
+    Base.ismalformed(ch) && return true
     cat = Unicode.category_code(ch)
     c = UInt32(ch)
     return (
