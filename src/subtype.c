@@ -3251,15 +3251,13 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
     jl_value_t *ub = NULL, *vub = NULL;
     JL_GC_PUSH2(&ub, &vub);
     while (v != NULL) {
-        if (v->ub != v->var->ub || v->lb != v->var->lb) {
-            jl_value_t *lb = jl_svecref(*root, n);
-            if (v->lb != lb)
-                jl_svecset(*root, n, lb ? jl_bottom_type : v->lb);
-            ub = jl_svecref(*root, n+1);
-            vub = v->ub;
-            if (vub != ub)
-                jl_svecset(*root, n+1, ub ? simple_join(ub, vub) : vub);
-        }
+        jl_value_t *lb = jl_svecref(*root, n);
+        if (v->lb != lb)
+            jl_svecset(*root, n, lb ? v->var->lb : v->lb);
+        ub = jl_svecref(*root, n+1);
+        vub = v->ub;
+        if (vub != ub)
+            jl_svecset(*root, n+1, ub ? simple_join(ub, vub) : vub);
         n = n + 3;
         v = v->prev;
     }
