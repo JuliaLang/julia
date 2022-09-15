@@ -576,6 +576,10 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         jl_serialize_value(s, tn->partial);
     }
     else if (t->layout->nfields > 0) {
+        if (jl_typeis(v, jl_globalref_type)) {
+            // Don't save the cached binding reference in staticdata
+            ((jl_globalref_t*)v)->bnd_cache = NULL;
+        }
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = t->layout->npointers;
         for (i = 0; i < np; i++) {

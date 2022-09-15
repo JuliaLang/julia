@@ -412,7 +412,7 @@ eval(Core, quote
     end
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
-    GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
+    GlobalRef(m::Module, s::Symbol, binding::Ptr{Nothing}) = $(Expr(:new, :GlobalRef, :m, :s, :binding))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
     TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
@@ -811,6 +811,8 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
+
+GlobalRef(m::Module, s::Symbol) = GlobalRef(m, s, bitcast(Ptr{Nothing}, 0))
 
 # Binding for the julia parser, called as
 #
