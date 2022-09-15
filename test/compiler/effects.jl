@@ -438,6 +438,12 @@ end |> Core.Compiler.is_consistent
 
 @test Core.Compiler.is_consistent(Base.infer_effects(setindex!, (Base.RefValue{Int}, Int)))
 
+# Test that :apply_type can be eliminated if it came from a static parameter
+f_apply_type_sparam(x::Ref{T}) where {T} = (Ref{T}; nothing)
+let src = code_typed1(f_apply_type_sparam, (Ref,))
+    @test count(iscall((src, Core.apply_type)), src.code) == 0
+end
+
 # :inaccessiblememonly effect
 const global constant_global::Int = 42
 const global ConstantType = Ref

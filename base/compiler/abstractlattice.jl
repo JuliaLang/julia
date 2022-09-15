@@ -14,12 +14,12 @@ is_valid_lattice(::JLTypeLattice, @nospecialize(elem)) = isa(elem, Type)
 """
     struct ConstsLattice
 
-A lattice extending `JLTypeLattice` and adjoining `Const` and `PartialTypeVar`.
+A lattice extending `JLTypeLattice` and adjoining `Const`, `PartialTypeVar` and `AnySParam`
 """
 struct ConstsLattice <: AbstractLattice; end
 widenlattice(::ConstsLattice) = JLTypeLattice()
 is_valid_lattice(lattice::ConstsLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, Const) || isa(elem, PartialTypeVar)
+    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, Const) || isa(elem, PartialTypeVar) || isa(elem, AnySParam)
 
 """
     struct PartialsLattice{L}

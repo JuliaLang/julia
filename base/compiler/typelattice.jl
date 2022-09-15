@@ -90,6 +90,16 @@ struct PartialTypeVar
     PartialTypeVar(tv::TypeVar, lb_certain::Bool, ub_certain::Bool) = new(tv, lb_certain, ub_certain)
 end
 
+"""
+    AnySParam
+
+This lattice element represents an unknown value that nevertheless came from a
+static parameter. It is thus known to be a valid sparam, i.e. valid_tparam holds
+true for values any type that is ⊑ this lattice element.
+"""
+struct AnySParam
+end
+
 # Wraps a type and represents that the value may also be undef at this point.
 # (only used in optimize, not abstractinterpret)
 # N.B. in the lattice, this is epsilon bigger than `typ` (even Any)
@@ -327,6 +337,10 @@ function ⊑(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
         return b === TypeVar || a === b
     elseif isa(b, PartialTypeVar)
         return false
+    elseif isa(a, AnySParam)
+        return b === AnySParam() || b === Any
+    elseif isa(b, AnySParam)
+        return valid_typeof_tparam(widenconst(a))
     end
     return ⊑(widenlattice(lattice), a, b)
 end
@@ -394,7 +408,7 @@ function is_lattice_equal(lattice::ConstsLattice, @nospecialize(a), @nospecializ
         # N.B. Assumes a === b checked above
         return false
     end
-    if isa(a, PartialTypeVar) || isa(b, PartialTypeVar)
+    if isa(a, PartialTypeVar) || isa(b, PartialTypeVar) || isa(a, AnySParam) || isa(b, AnySParam)
         return false
     end
     return is_lattice_equal(widenlattice(lattice), a, b)
@@ -489,6 +503,7 @@ widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
 widenconst(t::Type) = t
+widenconst(t::AnySParam) = Any
 widenconst(::TypeVar) = error("unhandled TypeVar")
 widenconst(::TypeofVararg) = error("unhandled Vararg")
 widenconst(::LimitedAccuracy) = error("unhandled LimitedAccuracy")
