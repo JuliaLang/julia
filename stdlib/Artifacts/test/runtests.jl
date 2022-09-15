@@ -91,7 +91,7 @@ end
         HelloWorldC_exe_path = joinpath(HelloWorldC_dir, "bin", "hello_world$(exeext)")
         @test isfile(HelloWorldC_exe_path)
 
-        HelloWorldC_dir_explicit_artifact = eval(Expr(:macrocall, Symbol("@artifact_str"), nothing, "HelloWorldC", nothing, joinpath(@__DIR__, "Artifacts.toml")))
+        HelloWorldC_dir_explicit_artifact = eval(:(@artifact_str "HelloWorldC" joinpath(@__DIR__, "Artifacts.toml")))
         @test isdir(HelloWorldC_dir_explicit_artifact)
 
         # Simple slash-indexed lookup
