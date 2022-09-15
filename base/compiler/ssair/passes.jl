@@ -1053,11 +1053,11 @@ end
 # data structure into the global cache (see the comment in `handle_finalizer_call!`)
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::MethodInstance, inlining::InliningState)
     code = get(inlining.mi_cache, mi, nothing)
-    et = inlining.et
+    et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
         if use_const_api(code)
             # No code in the function - Nothing to do
-            et !== nothing && push!(et, mi)
+            add_inlining_backedge!(et, mi)
             return true
         end
         src = @atomic :monotonic code.inferred
@@ -1073,7 +1073,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
     length(src.cfg.blocks) == 1 || return false
 
     # Ok, we're committed to inlining the finalizer
-    et !== nothing && push!(et, mi)
+    add_inlining_backedge!(et, mi)
 
     linetable_offset, extra_coverage_line = ir_inline_linetable!(ir.linetable, src, mi.def, ir[SSAValue(idx)][:line])
     if extra_coverage_line != 0
