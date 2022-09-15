@@ -1527,7 +1527,7 @@ end
 f_union_unmatched(x::Union{Nothing, Type{T}}) where {T} = nothing
 function g_union_unmatched(x)
     if isa(x, Union{Nothing, Type})
-        foo(x)
+        f_union_unmatched(x)
     end
     return nothing
 end

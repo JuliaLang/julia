@@ -1289,6 +1289,7 @@ function handle_any_const_result!(cases::Vector{InliningCase}, @nospecialize(res
 end
 
 function info_effects(@nospecialize(result), match::MethodMatch, state::InliningState)
+#=
     if isa(result, Union{ConcreteResult, SemiConcreteResult})
         return result.effects
     elseif isa(result, ConstPropResult)
@@ -1303,6 +1304,8 @@ function info_effects(@nospecialize(result), match::MethodMatch, state::Inlining
         end
         return Effects()
     end
+=#
+    return Effects()
 end
 
 function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInfo}},
@@ -1349,7 +1352,7 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
             all_result_count += 1
             result = results === nothing ? nothing : results[all_result_count]
             any_fully_covered |= match.fully_covers
-            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
+            joint_effects = merge_effects(joint_effects, Effects())
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
                     handled_all_cases = false
