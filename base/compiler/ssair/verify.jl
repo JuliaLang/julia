@@ -1,14 +1,21 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if !isdefined(@__MODULE__, Symbol("@verify_error"))
-    macro verify_error(arg)
-        arg isa String && return esc(:(print && println(stderr, $arg)))
-        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
-        pushfirst!(arg.args, GlobalRef(Core, :stderr))
-        pushfirst!(arg.args, :println)
-        arg.head = :call
-        return esc(arg)
+function maybe_show_ir(ir::IRCode)
+    if isdefined(Core, :Main)
+        Core.Main.Base.display(ir)
     end
+end
+
+macro verify_error(arg)
+    arg isa String && return esc(:(print && (println(stderr, $arg); Core.Main.Base.display(ir))))
+    (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+    pushfirst!(arg.args, GlobalRef(Core, :stderr))
+    pushfirst!(arg.args, :println)
+    arg.head = :call
+    return esc(quote
+        Core.Main.Base.display(ir)
+        $arg
+    end)
 end
 
 function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
@@ -23,6 +30,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
                 @assert ir.new_nodes.info[op.id - length(ir.stmts)].pos <= use_idx
             else
                 if op.id >= use_idx
+                    Core.eval(Core.Main, :(bad = $ir))
                     @verify_error "Def ($(op.id)) does not dominate use ($(use_idx)) in same BB"
                     error("")
                 end
@@ -31,6 +39,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
                 #@Base.show ir
+                Core.eval(Core.Main, :(bad = $ir))
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error("")
             end
