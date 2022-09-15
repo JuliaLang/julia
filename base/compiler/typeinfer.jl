@@ -567,13 +567,13 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    for (typ, to) in BackedgeIterator(edges)
-        if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+function store_backedges(frame::MethodInstance, edges::Vector{Any})
+    for (; sig, caller) in BackedgeIterator(edges)
+        if isa(caller, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         else
-            typeassert(to, Core.MethodTable)
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            typeassert(caller, Core.MethodTable)
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         end
     end
 end
@@ -806,7 +806,7 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     # of recursion.
     merge_effects!(interp, parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
-        add_cycle_backedge!(child, parent, parent.currpc)
+        add_cycle_backedge!(parent, child, parent.currpc)
         union_caller_cycle!(ancestor, child)
         merge_effects!(interp, child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent

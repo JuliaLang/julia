@@ -126,7 +126,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             for sig_n in splitsigs
                 result = abstract_call_method(interp, method, sig_n, svec(), multiple_matches, sv)
                 (; rt, edge, effects) = result
-                edge === nothing || push!(edges, edge)
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp, result,
@@ -135,12 +134,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 if const_call_result !== nothing
                     if const_call_result.rt ⊑ᵢ rt
                         rt = const_call_result.rt
-                        (; effects, const_result) = const_call_result
+                        (; effects, const_result, edge) = const_call_result
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
                 push!(const_results, const_result)
                 any_const_result |= const_result !== nothing
+                edge === nothing || push!(edges, edge)
                 this_rt = tmerge(this_rt, rt)
                 if bail_out_call(interp, this_rt, sv)
                     break
@@ -153,7 +153,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             (; rt, edge, effects) = result
             this_conditional = ignorelimited(rt)
             this_rt = widenwrappedconditional(rt)
-            edge === nothing || push!(edges, edge)
             # try constant propagation with argtypes for this match
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
@@ -169,12 +168,13 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 if this_const_rt ⊑ᵢ this_rt
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
-                    (; effects, const_result) = const_call_result
+                    (; effects, const_result, edge) = const_call_result
                 end
             end
             all_effects = merge_effects(all_effects, effects)
             push!(const_results, const_result)
             any_const_result |= const_result !== nothing
+            edge === nothing || push!(edges, edge)
         end
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
@@ -483,15 +483,15 @@ function add_call_backedges!(interp::AbstractInterpreter,
         end
     end
     for edge in edges
-        add_backedge!(edge, sv)
+        add_backedge!(sv, edge)
     end
     # also need an edge to the method table in case something gets
     # added that did not intersect with any existing method
     if isa(matches, MethodMatches)
-        matches.fullmatch || add_mt_backedge!(matches.mt, atype, sv)
+        matches.fullmatch || add_mt_backedge!(sv, matches.mt, atype)
     else
         for (thisfullmatch, mt) in zip(matches.fullmatches, matches.mts)
-            thisfullmatch || add_mt_backedge!(mt, atype, sv)
+            thisfullmatch || add_mt_backedge!(sv, mt, atype)
         end
     end
 end
@@ -838,17 +838,18 @@ function concrete_eval_call(interp::AbstractInterpreter,
             f = invoke
         end
         world = get_world_counter(interp)
+        edge = result.edge::MethodInstance
         value = try
             Core._call_in_world_total(world, f, args...)
         catch
             # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
-            return ConstCallResults(Union{}, ConcreteResult(result.edge::MethodInstance, result.effects), result.effects)
+            return ConstCallResults(Union{}, ConcreteResult(edge, result.effects), result.effects, edge)
         end
         if is_inlineable_constant(value) || call_result_unused(sv)
             # If the constant is not inlineable, still do the const-prop, since the
             # code that led to the creation of the Const may be inlineable in the same
             # circumstance and may be optimizable.
-            return ConstCallResults(Const(value), ConcreteResult(result.edge::MethodInstance, EFFECTS_TOTAL, value), EFFECTS_TOTAL)
+            return ConstCallResults(Const(value), ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
         end
         return false
     else # eligible for semi-concrete evaluation
@@ -875,10 +876,12 @@ struct ConstCallResults
     rt::Any
     const_result::ConstResult
     effects::Effects
+    edge::MethodInstance
     ConstCallResults(@nospecialize(rt),
                      const_result::ConstResult,
-                     effects::Effects) =
-        new(rt, const_result, effects)
+                     effects::Effects,
+                     edge::MethodInstance) =
+        new(rt, const_result, effects, edge)
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -888,10 +891,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         return nothing
     end
     res = concrete_eval_call(interp, f, result, arginfo, sv, invokecall)
-    if isa(res, ConstCallResults)
-        add_backedge!(res.const_result.mi, sv, invokecall === nothing ? nothing : invokecall.lookupsig)
-        return res
-    end
+    isa(res, ConstCallResults) && return res
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, match, sv)
     mi === nothing && return nothing
     # try semi-concrete evaluation
@@ -903,7 +903,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             if isa(ir, IRCode)
                 T = ir_abstract_constant_propagation(interp, mi_cache, sv, mi, ir, arginfo.argtypes)
                 if !isa(T, Type) || typeintersect(T, Bool) === Union{}
-                    return ConstCallResults(T, SemiConcreteResult(mi, ir, result.effects), result.effects)
+                    return ConstCallResults(T, SemiConcreteResult(mi, ir, result.effects), result.effects, mi)
                 end
             end
         end
@@ -936,8 +936,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     result = inf_result.result
     # if constant inference hits a cycle, just bail out
     isa(result, InferenceState) && return nothing
-    add_backedge!(mi, sv)
-    return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects)
+    return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects, mi)
 end
 
 # if there's a possibility we could get a better result with these constant arguments
@@ -1692,7 +1691,6 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ti = tienv[1]; env = tienv[2]::SimpleVector
     result = abstract_call_method(interp, method, ti, env, false, sv)
     (; rt, edge, effects) = result
-    edge !== nothing && add_backedge!(edge::MethodInstance, sv, lookupsig)
     match = MethodMatch(ti, env, method, argtype <: method.sig)
     res = nothing
     sig = match.spec_types
@@ -1711,10 +1709,11 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     const_result = nothing
     if const_call_result !== nothing
         if ⊑(typeinf_lattice(interp), const_call_result.rt, rt)
-            (; rt, effects, const_result) = const_call_result
+            (; rt, effects, const_result, edge) = const_call_result
         end
     end
     effects = Effects(effects; nonoverlayed=!overlayed)
+    edge !== nothing && add_invoke_backedge!(sv, lookupsig, edge)
     return CallMeta(from_interprocedural!(ipo_lattice(interp), rt, sv, arginfo, sig), effects, InvokeCallInfo(match, const_result))
 end
 
@@ -1848,7 +1847,6 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     sig = argtypes_to_type(arginfo.argtypes)
     result = abstract_call_method(interp, closure.source, sig, Core.svec(), false, sv)
     (; rt, edge, effects) = result
-    edge !== nothing && add_backedge!(edge, sv)
     tt = closure.typ
     sigT = (unwrap_unionall(tt)::DataType).parameters[1]
     match = MethodMatch(sig, Core.svec(), closure.source, sig <: rewrap_unionall(sigT, tt))
@@ -1858,7 +1856,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
             nothing, arginfo, match, sv)
         if const_call_result !== nothing
             if const_call_result.rt ⊑ rt
-                (; rt, effects, const_result) = const_call_result
+                (; rt, effects, const_result, edge) = const_call_result
             end
         end
     end
@@ -1874,6 +1872,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         end
     end
     rt = from_interprocedural!(ipo, rt, sv, arginfo, match.spec_types)
+    edge !== nothing && add_backedge!(sv, edge)
     return CallMeta(rt, effects, info)
 end
 
