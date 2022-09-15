@@ -428,6 +428,12 @@ ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 endif
 endif
 endif
+
+ifeq ($(USE_BINARYBUILDER_OPENBLAS),0)
+	# https://github.com/JuliaLang/julia/issues/46579
+	USE_BINARYBUILDER_OBJCONV=0
+endif
+
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
 	$(error prefix must not be set for make binary-dist)
 endif
