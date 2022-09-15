@@ -1288,6 +1288,23 @@ function handle_any_const_result!(cases::Vector{InliningCase}, @nospecialize(res
     end
 end
 
+function info_effects(@nospecialize(result), match::MethodMatch, state::InliningState)
+    if isa(result, Union{ConcreteResult, SemiConcreteResult})
+        return result.effects
+    elseif isa(result, ConstPropResult)
+        return result.result.ipo_effects
+    else
+        mi = specialize_method(match; preexisting=true)
+        if isa(mi, MethodInstance)
+            code = get(state.mi_cache, mi, nothing)
+            if code isa CodeInstance
+                return decode_effects(code.ipo_purity_bits)
+            end
+        end
+        return Effects()
+    end
+end
+
 function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInfo}},
     flag::UInt8, sig::Signature, state::InliningState)
     argtypes = sig.argtypes
@@ -1306,6 +1323,7 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
     local meth::MethodLookupResult
     local all_result_count = 0
 
+    joint_effects = EFFECTS_TOTAL
     for i in 1:length(infos)
         meth = infos[i].results
         if meth.ambig
@@ -1331,6 +1349,7 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
             all_result_count += 1
             result = results === nothing ? nothing : results[all_result_count]
             any_fully_covered |= match.fully_covers
+            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
                     handled_all_cases = false
@@ -1346,6 +1365,10 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
                 handled_all_cases &= handle_any_const_result!(cases, result, match, argtypes, flag, state, false)
             end
         end
+    end
+
+    if !any_fully_covered
+        joint_effects = Effects()
     end
 
     if handled_all_cases && revisit_idx !== nothing
@@ -1377,7 +1400,7 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    return cases, handled_all_cases & any_fully_covered
+    return cases, handled_all_cases & any_fully_covered, joint_effects
 end
 
 function handle_call!(
@@ -1385,9 +1408,9 @@ function handle_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     cases = compute_inlining_cases(infos, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, joint_effects = cases
     handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, todo, state.params)
+        all_covered, todo, state.params, joint_effects)
 end
 
 function handle_const_call!(
@@ -1395,9 +1418,9 @@ function handle_const_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, joint_effects = cases
     handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, todo, state.params)
+        all_covered, todo, state.params, joint_effects)
 end
 
 function handle_match!(
@@ -1452,7 +1475,7 @@ end
 
 function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
     cases::Vector{InliningCase}, fully_covered::Bool, todo::Vector{Pair{Int, Any}},
-    params::OptimizationParams)
+    params::OptimizationParams, joint_effects::Effects)
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
@@ -1464,6 +1487,8 @@ function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
             isa(case.sig, DataType) || return nothing
         end
         push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
+    else
+        #ir[SSAValue(idx)][:flag] |= flags_for_effects(joint_effects)
     end
     return nothing
 end
