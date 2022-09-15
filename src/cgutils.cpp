@@ -1076,9 +1076,13 @@ static Value *emit_datatype_nfields(jl_codectx_t &ctx, Value *dt)
 
 static Value *emit_datatype_size(jl_codectx_t &ctx, Value *dt)
 {
-    Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), getInt32PtrTy(ctx.builder.getContext()));
-    Value *Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_t, size) / sizeof(int));
-    return tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(getInt32Ty(ctx.builder.getContext()), ctx.builder.CreateInBoundsGEP(getInt32Ty(ctx.builder.getContext()), Ptr, Idx), Align(sizeof(int32_t))));
+    Value *Ptr = emit_bitcast(ctx, decay_derived(ctx, dt), getInt32PtrTy(ctx.builder.getContext())->getPointerTo());
+    Value *Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_t, layout) / sizeof(int32_t*));
+    Ptr = ctx.builder.CreateInBoundsGEP(getInt32PtrTy(ctx.builder.getContext()), Ptr, Idx);
+    Ptr = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(getInt32PtrTy(ctx.builder.getContext()), Ptr, Align(sizeof(int32_t*))));
+    Idx = ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_datatype_layout_t, size) / sizeof(int32_t));
+    Ptr = ctx.builder.CreateInBoundsGEP(getInt32Ty(ctx.builder.getContext()), Ptr, Idx);
+    return tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(getInt32Ty(ctx.builder.getContext()), Ptr, Align(sizeof(int32_t))));
 }
 
 /* this is valid code, it's simply unused
@@ -1129,7 +1133,6 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         return dyn_size;
     }
 }
-*/
 
 static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
 {
@@ -1143,13 +1146,16 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
     mutabl = ctx.builder.CreateLShr(mutabl, 1);
     return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
 }
+*/
 
-static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *dt)
+static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
-    Value *immut = ctx.builder.CreateNot(emit_datatype_mutabl(ctx, dt));
-    Value *nofields = ctx.builder.CreateICmpEQ(emit_datatype_nfields(ctx, dt), Constant::getNullValue(getSizeTy(ctx.builder.getContext())));
-    Value *sized = ctx.builder.CreateICmpSGT(emit_datatype_size(ctx, dt), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-    return ctx.builder.CreateAnd(immut, ctx.builder.CreateAnd(nofields, sized));
+    Value *isprimitive;
+    isprimitive = ctx.builder.CreateConstInBoundsGEP1_32(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, decay_derived(ctx, typ), getInt8PtrTy(ctx.builder.getContext())), offsetof(jl_datatype_t, hash) + sizeof(((jl_datatype_t*)nullptr)->hash));
+    isprimitive = tbaa_decorate(ctx.tbaa().tbaa_const, ctx.builder.CreateAlignedLoad(getInt8Ty(ctx.builder.getContext()), isprimitive, Align(1)));
+    isprimitive = ctx.builder.CreateLShr(isprimitive, 7);
+    isprimitive = ctx.builder.CreateTrunc(isprimitive, getInt1Ty(ctx.builder.getContext()));
+    return isprimitive;
 }
 
 static Value *emit_datatype_name(jl_codectx_t &ctx, Value *dt)
