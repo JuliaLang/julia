@@ -254,16 +254,31 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            typ = argextype(args[1], src)
+            atyp = argextype(args[1], src)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(typ)
-            isexact || return (false, false, false)
-            isconcretedispatch(typ) || return (false, false, false)
+            typ, isexact = instanceof_tfunc(atyp)
+            if !isexact
+                atyp = unwrap_unionall(widenconst(atyp))
+                if isType(atyp) && isTypeDataType(atyp.parameters[1])
+                    typ = atyp.parameters[1]
+                else
+                    return (false, false, false)
+                end
+                isabstracttype(typ) && return (false, false, false)
+            else
+                isconcretedispatch(typ) || return (false, false, false)
+            end
             typ = typ::DataType
             fieldcount(typ) >= length(args) - 1 || return (false, false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
+                # Currently, we cannot represent any type equality constraints
+                # in the lattice, so if we see any type of type parameter,
+                # there is very little we can say about it
+                if !isexact && has_free_typevars(fT)
+                    return (false, false, false)
+                end
                 eT ⊑ₒ fT || return (false, false, false)
             end
             return (false, true, true)

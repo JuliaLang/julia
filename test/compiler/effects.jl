@@ -655,3 +655,13 @@ end # @testset "effects analysis on array ops" begin
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined, Any[String, Vararg{Any}], Bool))
+
+# Test that :new can be eliminated even if an sparam is unknown
+struct SparamUnused{T}
+    x
+    SparamUnused(x::T) where {T} = new{T}(x)
+end
+mksparamunused(x) = (SparamUnused(x); nothing)
+let src = code_typed1(mksparamunused, (Any,))
+    @test count(isnew, src.code) == 0
+end
