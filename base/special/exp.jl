@@ -177,7 +177,7 @@ const J_TABLE = (0x0000000000000000, 0xaac00b1afa5abcbe, 0x9b60163da9fb3335, 0xa
 # XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
 # because the effect analysis currently can't prove it in the presence of `@inbounds` or
 # `:boundscheck`, but still the access to `J_TABLE` is really safe here
-@noinline Base.@assume_effects :consistent @inline function table_unpack(ind::Int32)
+Base.@assume_effects :consistent function table_unpack(ind::Int32)
     ind = ind & 255 + 1 # 255 == length(J_TABLE) - 1
     j = @inbounds J_TABLE[ind]
     jU = reinterpret(Float64, JU_CONST | (j&JU_MASK))
