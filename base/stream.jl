@@ -106,7 +106,7 @@ function eof(s::LibuvStream)
     wait_readnb(s, 1)
     # This function is race-y if used from multiple threads, but we guarantee
     # it to never return true until the stream is definitively exhausted
-    # and that we won't return false if there's a readerror pending (it'll instead get thrown).
+    # and that we won't return true if there's a readerror pending (it'll instead get thrown).
     # This requires some careful ordering here (TODO: atomic loads)
     bytesavailable(s) > 0 && return false
     open = isreadable(s) # must precede readerror check
