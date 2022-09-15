@@ -4171,8 +4171,8 @@ for setting = (:type, :const, :conditional)
 end
 
 # https://github.com/JuliaLang/julia/issues/46426
-@noinline Base.@assume_effects :nothrow typebarrier() = Base.inferencebarrier(0.0)
-@noinline Base.@assume_effects :nothrow constbarrier() = Base.compilerbarrier(:const, 0.0)
+@noinline typebarrier() = Base.inferencebarrier(0.0)
+@noinline constbarrier() = Base.compilerbarrier(:const, 0.0)
 let src = code_typed1() do
         typebarrier()
     end
