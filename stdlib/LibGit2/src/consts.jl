@@ -247,6 +247,11 @@ const RESET_HARD  = Cint(3) # MIXED plus changes in working tree discarded
                             REBASE_OPERATION_FIXUP  = Cint(4),
                             REBASE_OPERATION_EXEC   = Cint(5))
 
+# git_remote_redirect_t
+const GIT_REMOTE_REDIRECT_NONE    = Cint(0)
+const GIT_REMOTE_REDIRECT_INITIAL = Cint(1)
+const GIT_REMOTE_REDIRECT_ALL     = Cint(2)
+
 # fetch_prune
 const FETCH_PRUNE_UNSPECIFIED = Cint(0)
 const FETCH_PRUNE             = Cint(1)
