@@ -1,13 +1,14 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+eigencopy_oftype(A::HermOrSym, S) = copymutable_oftype(A, S) # preserves HermOrSym wrapper
+
 # Eigensolvers for symmetric and Hermitian matrices
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
     Eigen(sorteig!(LAPACK.syevr!('V', 'A', A.uplo, A.data, 0.0, 0.0, 0, 0, -1.0)..., sortby)...)
 
 function eigen(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), sortby=sortby)
 end
 
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}, irange::UnitRange) =
@@ -31,9 +32,8 @@ The [`UnitRange`](@ref) `irange` specifies indices of the sorted eigenvalues to 
     will be a *truncated* factorization.
 """
 function eigen(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), irange)
 end
 
 eigen!(A::RealHermSymComplexHerm{T,<:StridedMatrix}, vl::Real, vh::Real) where {T<:BlasReal} =
@@ -57,9 +57,8 @@ The following functions are available for `Eigen` objects: [`inv`](@ref), [`det`
     will be a *truncated* factorization.
 """
 function eigen(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigen!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    S = eigtype(eltype(A))
+    eigen!(eigencopy_oftype(A, S), vl, vh)
 end
 
 function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing)
@@ -69,9 +68,8 @@ function eigvals!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby:
 end
 
 function eigvals(A::RealHermSymComplexHerm; sortby::Union{Function,Nothing}=nothing)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), sortby=sortby)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), sortby=sortby)
 end
 
 """
@@ -110,9 +108,8 @@ julia> eigvals(A)
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, irange::UnitRange)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), irange)
 end
 
 """
@@ -150,9 +147,8 @@ julia> eigvals(A)
 ```
 """
 function eigvals(A::RealHermSymComplexHerm, vl::Real, vh::Real)
-    T = eltype(A)
-    S = eigtype(T)
-    eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh)
+    S = eigtype(eltype(A))
+    eigvals!(eigencopy_oftype(A, S), vl, vh)
 end
 
 eigmax(A::RealHermSymComplexHerm{<:Real,<:StridedMatrix}) = eigvals(A, size(A, 1):size(A, 1))[1]

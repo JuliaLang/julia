@@ -98,6 +98,13 @@ aimg  = randn(n,n)/2
             @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
             gh = eigen(Hermitian(asym_sg), Diagonal(a_sg'a_sg))
             @test Hermitian(asym_sg)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
+            gd = eigen(Diagonal(a_sg'a_sg), Diagonal(a_sg'a_sg))
+            @test all(isone, gd.values)
+            @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
+            gd = eigen(Matrix(Diagonal(a_sg'a_sg)), Diagonal(a_sg'a_sg))
+            @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
+            gd = eigen(Diagonal(a_sg'a_sg), Matrix(Diagonal(a_sg'a_sg)))
+            @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
         end
         @testset "Non-symmetric generalized eigenproblem" begin
             if isa(a, Array)

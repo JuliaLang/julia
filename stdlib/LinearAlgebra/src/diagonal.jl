@@ -762,6 +762,20 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     end
     Eigen(λ, evecs)
 end
+function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(!isfinite, Da.diag) || any(!isfinite, Db.diag) || any(iszero, Db.diag)
+        throw(ArgumentError("matrix contains Infs or NaNs"))
+    end
+    return GeneralizedEigen(eigen(Db \ Da; sortby)...)
+end
+function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(!isfinite, D.diag) || any(iszero, D.diag)
+        throw(ArgumentError("right-hand side diagonal matrix contains Infs or NaNs or is singular"))
+    end
+    DA = D \ A
+    E = DA isa Matrix ? eigen!(DA; sortby) : eigen(DA; sortby)
+    return GeneralizedEigen(E...)
+end
 
 #Singular system
 svdvals(D::Diagonal{<:Number}) = sort!(abs.(D.diag), rev = true)
