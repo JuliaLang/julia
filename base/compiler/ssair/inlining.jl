@@ -1755,7 +1755,7 @@ function insert_spval!(insert_node_before!, spvals_ssa::SSAValue, spidx::Int, do
     return (ret, tcheck_not)
 end
 
-function ssa_substitute_op!(insert_node_before!, subst_inst::Instruction,
+function ssa_substitute_op!(insert_node_before!::Inserter, subst_inst::Instruction,
                             @nospecialize(val), arg_replacements::Vector{Any},
                             @nospecialize(spsig), spvals::SimpleVector,
                             spvals_ssa::Union{Nothing, SSAValue},
