@@ -2737,9 +2737,7 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
         return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     };
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
-    bool modified = lateLowerGCFrame.runOnFunction(F);
-    assert(!verifyFunction(F, &errs()));
-    return modified;
+    return lateLowerGCFrame.runOnFunction(F);
 }
 
 PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
