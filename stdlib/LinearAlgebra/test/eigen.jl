@@ -99,7 +99,7 @@ aimg  = randn(n,n)/2
             gh = eigen(Hermitian(asym_sg), Diagonal(a_sg'a_sg))
             @test Hermitian(asym_sg)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
             gd = eigen(Diagonal(a_sg'a_sg), Diagonal(a_sg'a_sg))
-            @test all(isone, gd.values)
+            @test all(≈(1), gd.values)
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Matrix(Diagonal(a_sg'a_sg)), Diagonal(a_sg'a_sg))
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
