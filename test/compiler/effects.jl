@@ -770,3 +770,14 @@ gotoifnot_throw_check_48583(x) = x ? x : 0
 @test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Missing,)))
 @test !Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Any,)))
 @test Core.Compiler.is_nothrow(Base.infer_effects(gotoifnot_throw_check_48583, (Bool,)))
+
+
+# unknown :static_parameter should taint :nothrow
+# https://github.com/JuliaLang/julia/issues/46771
+unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
+
+unknown_sparam_nothrow(x::Ref{T}) where {T} = (T; nothing)
+@test_broken Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow, (Ref,)))
+
