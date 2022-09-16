@@ -6,8 +6,8 @@
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_internal.h"
-#ifndef _OS_WINDOWS_
 #include <unistd.h>
+#ifndef _OS_WINDOWS_
 #include <sys/mman.h>
 #endif
 
