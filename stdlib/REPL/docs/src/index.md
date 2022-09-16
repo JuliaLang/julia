@@ -413,7 +413,7 @@ Tab completion can also help completing fields:
 ```julia-repl
 julia> x = 3 + 4im;
 
-julia> julia> x.[TAB][TAB]
+julia> x.[TAB][TAB]
 im re
 
 julia> import UUIDs
