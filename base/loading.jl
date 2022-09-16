@@ -1692,11 +1692,12 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
                        stderr = internal_stderr, stdout = internal_stdout),
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
-    write(io.in, """
+    io_in = io.in::PipeEndpoint
+    write(io_in, """
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
-    close(io.in)
+    close(io_in)
     return io
 end
 
