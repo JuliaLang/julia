@@ -1525,10 +1525,11 @@ end
 
 # Test effect annotation of declined inline unionsplit
 f_union_unmatched(x::Union{Nothing, Type{T}}) where {T} = nothing
-function g_union_unmatched(x)
-    if isa(x, Union{Nothing, Type})
-        foo(x)
+let src = code_typed1((Any,)) do x
+        if isa(x, Union{Nothing, Type})
+            f_union_unmatched(x)
+        end
+        nothing
     end
-    return nothing
+    @test count(iscall((src, f_union_unmatched)), src.code) == 0
 end
-@test fully_eliminated(g_union_unmatched, Tuple{Any})

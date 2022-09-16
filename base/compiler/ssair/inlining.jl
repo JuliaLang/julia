@@ -1311,19 +1311,43 @@ function handle_any_const_result!(cases::Vector{InliningCase}, @nospecialize(res
 end
 
 function info_effects(@nospecialize(result), match::MethodMatch, state::InliningState)
-    if isa(result, Union{ConcreteResult, SemiConcreteResult})
+    if isa(result, ConcreteResult)
+        return result.effects
+    elseif isa(result, SemiConcreteResult)
         return result.effects
     elseif isa(result, ConstPropResult)
         return result.result.ipo_effects
     else
         mi = specialize_method(match; preexisting=true)
-        code = get(state.mi_cache, mi, nothing)
-        if code isa CodeInstance
-            return decode_effects(code.ipo_purity_bits)
-        else
-            return Effects()
+        if isa(mi, MethodInstance)
+            code = get(state.mi_cache, mi, nothing)
+            if code isa CodeInstance
+                return decode_effects(code.ipo_purity_bits)
+            end
+        end
+        return Effects()
+    end
+end
+
+function compute_joint_effects(info::Union{ConstCallInfo, Vector{MethodMatchInfo}}, state::InliningState)
+    if isa(info, ConstCallInfo)
+        (; call, results) = info
+        infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
+    else
+        results = nothing
+        infos = info
+    end
+    local all_result_count = 0
+    local joint_effects::Effects = EFFECTS_TOTAL
+    for i in 1:length(infos)
+        meth = infos[i].results
+        for (j, match) in enumerate(meth)
+            all_result_count += 1
+            result = results === nothing ? nothing : results[all_result_count]
+            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
         end
     end
+    return joint_effects
 end
 
 function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInfo}},
@@ -1343,8 +1367,6 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
     local only_method = nothing
     local meth::MethodLookupResult
     local all_result_count = 0
-
-    joint_effects = EFFECTS_TOTAL
     for i in 1:length(infos)
         meth = infos[i].results
         if meth.ambig
@@ -1370,7 +1392,6 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
             all_result_count += 1
             result = results === nothing ? nothing : results[all_result_count]
             any_fully_covered |= match.fully_covers
-            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
                     handled_all_cases = false
@@ -1386,10 +1407,6 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
                 handled_all_cases &= handle_any_const_result!(cases, result, match, argtypes, flag, state, false)
             end
         end
-    end
-
-    if !any_fully_covered
-        joint_effects = Effects()
     end
 
     if handled_all_cases && revisit_idx !== nothing
@@ -1421,7 +1438,10 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    return cases, handled_all_cases & any_fully_covered, joint_effects
+    # TODO fuse `compute_joint_effects` into the loop above, which currently causes compilation error
+    joint_effects = Effects(compute_joint_effects(info, state); nothrow=handled_all_cases)
+
+    return cases, (handled_all_cases & any_fully_covered), joint_effects
 end
 
 function handle_call!(
@@ -1439,7 +1459,7 @@ function handle_const_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, joint_effects = cases
     handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
         all_covered, todo, state.params, joint_effects)
 end
@@ -1563,7 +1583,7 @@ function handle_finalizer_call!(
 
     cases = compute_inlining_cases(infos, #=flag=#UInt8(0), sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, _ = cases
     if all_covered && length(cases) == 1
         # NOTE we don't append `item1` to `stmt` here so that we don't serialize
         # `Core.Compiler` data structure into the global cache
