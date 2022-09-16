@@ -905,7 +905,11 @@ precompile_test_harness("code caching") do dir
         mi.def == m
     end
     idx = only(idxsbits)
-    @test invalidations[idx-1].specTypes.parameters[end] === Integer
+    for mi in m.specializations
+        mi === nothing && continue
+        hv = hasvalid(mi, world)
+        @test mi.specTypes.parameters[end] === Integer ? !hv : hv
+    end
 
     tagbad = invalidations[idx+1]
     buildid = invalidations[idx+2]
@@ -916,7 +920,7 @@ precompile_test_harness("code caching") do dir
     @test invalidations[j-1] == "insert_backedges_callee"
 
     m = only(methods(MB.map_nbits))
-    @test m.specializations[1].cache.max_world <= world   # insert_backedges invalidations also trigger their backedges
+    @test !hasvalid(m.specializations[1], world) # insert_backedges invalidations also trigger their backedges
 end
 
 precompile_test_harness("invoke") do dir
