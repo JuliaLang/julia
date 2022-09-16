@@ -12,6 +12,7 @@
 // analysis passes
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/BasicAliasAnalysis.h>
+#include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
 #include <llvm/IR/IRBuilder.h>
@@ -376,10 +377,13 @@ void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLeve
             invokeLateLoopOptimizationCallbacks(LPM1, PB, O);
             //We don't know if the loop callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM1), /*UseMemorySSA = */false));
-            LPM2.addPass(LICMPass());
+#if JL_LLVM_VERSION < 150000
+#define LICMOptions()
+#endif
+            LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
             LPM2.addPass(SimpleLoopUnswitchPass());
-            LPM2.addPass(LICMPass());
+            LPM2.addPass(LICMPass(LICMOptions()));
             JULIA_PASS(LPM2.addPass(JuliaLICMPass()));
             //LICM needs MemorySSA now, so we must use it
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM2), /*UseMemorySSA = */true));

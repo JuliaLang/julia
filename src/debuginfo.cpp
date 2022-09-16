@@ -20,10 +20,13 @@
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
 
+#ifdef _OS_DARWIN_
+#include <CoreFoundation/CoreFoundation.h>
+#endif
+
 using namespace llvm;
 
-#include "julia.h"
-#include "julia_internal.h"
+#include "jitlayers.h"
 #include "debuginfo.h"
 #if defined(_OS_LINUX_)
 #  include <link.h>
@@ -37,11 +40,6 @@ using namespace llvm;
 #include <mutex>
 #include "julia_assert.h"
 
-#ifdef _OS_DARWIN_
-#include <CoreFoundation/CoreFoundation.h>
-#endif
-
-#include "jitlayers.h"
 
 static JITDebugInfoRegistry &getJITDebugRegistry() JL_NOTSAFEPOINT {
     return jl_ExecutionEngine->getDebugInfoRegistry();

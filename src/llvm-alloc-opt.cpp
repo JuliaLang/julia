@@ -27,12 +27,12 @@
 
 #include <llvm/InitializePasses.h>
 
+#include "passes.h"
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
 #include "llvm-alloc-helpers.h"
-#include "passes.h"
 
 #include <map>
 #include <set>
