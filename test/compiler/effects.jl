@@ -743,3 +743,13 @@ end
 
 @test Base.ismutationfree(Type{Union{}})
 @test Core.Compiler.is_total(Base.infer_effects(typejoin, ()))
+
+
+# unknown :static_parameter should taint :nothrow
+# https://github.com/JuliaLang/julia/issues/46771
+unknown_sparam_throw(::Union{Nothing, Type{T}}) where T = (T; nothing)
+@test Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Type{Int},)))
+@test !Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_throw, (Nothing,)))
+
+unknown_sparam_nothrow(x::Ref{T}) where {T} = (T; nothing)
+@test_broken Core.Compiler.is_nothrow(Base.infer_effects(unknown_sparam_nothrow, (Ref,)))

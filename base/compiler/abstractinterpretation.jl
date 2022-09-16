@@ -2192,6 +2192,10 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, vtypes::
         if 1 <= n <= length(sv.sptypes)
             rt = sv.sptypes[n]
         end
+        if !isa(rt, Const)
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow=false))
+        end
+        return rt
     elseif head === :boundscheck
         if isa(sv, InferenceState)
             # If there is no particular `@inbounds` for this function, then we only taint `:noinbounds`,
