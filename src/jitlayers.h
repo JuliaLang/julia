@@ -417,7 +417,10 @@ public:
     JL_JITSymbol findUnmangledSymbol(StringRef Name);
     JITTargetAddress getGlobalValueAddress(StringRef Name);
     JITTargetAddress getFunctionAddress(StringRef Name);
+
     StringRef getFunctionAtAddress(JITTargetAddress Addr, jl_code_instance_t *codeinst);
+    JITTargetAddress getAssemblyPointer(StringRef Name);
+
     auto getContext() {
         return *ContextPool;
     }
@@ -457,6 +460,7 @@ private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
     void shareStrings(Module &M);
+    void registerGlobalName(StringRef Name, JITTargetAddress Addr);
 
     const std::unique_ptr<TargetMachine> TM;
     const DataLayout DL;

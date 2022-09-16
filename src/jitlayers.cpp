@@ -501,8 +501,11 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
-        if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+        if (getwrapper) {
+            auto asmptr = jl_ExecutionEngine->getAssemblyPointer(
+                            jl_ExecutionEngine->getFunctionAtAddress(fptr, codeinst));
+            return jl_dump_fptr_asm(asmptr, raw_mc, asm_variant, debuginfo, binary);
+        }
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -540,8 +543,11 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
             JL_UNLOCK(&jl_codegen_lock);
         }
-        if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
+        if (specfptr != 0) {
+            auto asmptr = jl_ExecutionEngine->getAssemblyPointer(
+                            jl_ExecutionEngine->getFunctionAtAddress(specfptr, codeinst));
+            return jl_dump_fptr_asm(asmptr, raw_mc, asm_variant, debuginfo, binary);
+        }
     }
 
     // whatever, that didn't work - use the assembler output instead
@@ -1277,6 +1283,7 @@ void JuliaOJIT::addGlobalMapping(StringRef Name, JITTargetAddress Addr)
 {
     cantFail(JD.define(orc::absoluteSymbols({{mangle(Name),
         JITEvaluatedSymbol::fromPointer(jitTargetAddressToPointer<void*>(Addr))}})));
+    registerGlobalName(Name, Addr);
 }
 
 void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
@@ -1289,7 +1296,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         shareStrings(M);
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                NewExports.push_back(getMangledName(F.getName()));
+                NewExports.push_back(F.getName().str());
             }
         }
 #if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
@@ -1317,9 +1324,10 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     cantFail(OptSelLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
-    for (auto Name : NewExports)
-        cantFail(ES.lookup({&JD}, Name));
-
+    for (auto Name : NewExports) {
+        auto Addr = getGlobalValueAddress(Name);
+        registerGlobalName(Name, Addr);
+    }
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
@@ -1355,8 +1363,8 @@ JITTargetAddress JuliaOJIT::getFunctionAddress(StringRef Name)
 StringRef JuliaOJIT::getFunctionAtAddress(JITTargetAddress Addr, jl_code_instance_t *codeinst)
 {
     std::lock_guard<std::mutex> lock(RLST_mutex);
-    auto &fname = ReverseLocalSymbolTable[Addr];
-    if (!fname) {
+    auto &ptr = ReverseLocalSymbolTable[Addr];
+    if (!ptr) {
         std::string string_fname;
         raw_string_ostream stream_fname(string_fname);
         // try to pick an appropriate name that describes it
@@ -1375,12 +1383,16 @@ StringRef JuliaOJIT::getFunctionAtAddress(JITTargetAddress Addr, jl_code_instanc
         }
         const char* unadorned_name = jl_symbol_name(codeinst->def->def.method->name);
         stream_fname << unadorned_name << "_" << RLST_inc++;
-        fname = ES.intern(stream_fname.str()); // store to ReverseLocalSymbolTable
-        addGlobalMapping(*fname, Addr);
+        cantFail(JD.define(orc::absoluteSymbols({{mangle(stream_fname.str()),
+            JITEvaluatedSymbol::fromPointer(jitTargetAddressToPointer<void*>(Addr))}})));
+        ptr = ES.intern(stream_fname.str());
     }
-    return *fname;
+    return *ptr;
 }
 
+JITTargetAddress JuliaOJIT::getAssemblyPointer(StringRef Name) {
+    return getFunctionAddress(Name);
+}
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION < 140000
@@ -1590,6 +1602,14 @@ void JuliaOJIT::shareStrings(Module &M)
     }
     for (auto GV : erase)
         GV->eraseFromParent();
+}
+
+void JuliaOJIT::registerGlobalName(StringRef Name, JITTargetAddress Addr) {
+    if (!Addr) return;
+    std::lock_guard<std::mutex> lock(RLST_mutex);
+    auto &ptr = ReverseLocalSymbolTable[Addr];
+    assert(!ptr && "Attempted to map two names to the same address!");
+    ptr = ES.intern(Name);
 }
 
 //TargetMachine pass-through methods
