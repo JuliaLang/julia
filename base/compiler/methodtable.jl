@@ -44,6 +44,12 @@ struct OverlayMethodTable <: MethodTableView
     mt::Core.MethodTable
 end
 
+struct MethodMatchKey
+    sig # ::Type
+    limit::Int
+    MethodMatchKey(@nospecialize(sig), limit::Int) = new(sig, limit)
+end
+
 """
     struct CachedMethodTable <: MethodTableView
 
@@ -51,10 +57,10 @@ Overlays another method table view with an additional local fast path cache that
 can respond to repeated, identical queries faster than the original method table.
 """
 struct CachedMethodTable{T} <: MethodTableView
-    cache::IdDict{Any, Union{Missing, MethodMatchResult}}
+    cache::IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}
     table::T
 end
-CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{Any, Union{Missing, MethodMatchResult}}(), table)
+CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}(), table)
 
 """
     findall(sig::Type, view::MethodTableView; limit::Int=typemax(Int)) ->
@@ -109,9 +115,11 @@ function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=
         # as for concrete types, we cache result at on the next level
         return findall(sig, table.table; limit)
     end
-    box = Core.Box(sig)
-    return get!(table.cache, sig) do
-        findall(box.contents, table.table; limit)
+    key = MethodMatchKey(sig, limit)
+    if haskey(table.cache, key)
+        return table.cache[key]
+    else
+        return table.cache[key] = findall(sig, table.table; limit)
     end
 end
 
