@@ -7,7 +7,6 @@ version = "0.1.0"
 julia = "1.6"
 
 [deps]
-Mmap = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [extras]
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"

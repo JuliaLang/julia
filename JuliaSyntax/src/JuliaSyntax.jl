@@ -1,7 +1,5 @@
 module JuliaSyntax
 
-using Mmap
-
 # Helper utilities
 include("utils.jl")
 
