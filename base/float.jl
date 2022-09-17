@@ -844,8 +844,8 @@ end
 """
     floatmin(T = Float64)
 
-Return the smallest positive normal number representable by the floating-point
-type `T`.
+Not the inverse of `floatmax`! Return the smallest positive normal number
+representable by the floating-point type `T`.
 
 # Examples
 ```jldoctest
