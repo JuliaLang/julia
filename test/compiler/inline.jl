@@ -1288,7 +1288,7 @@ end
 # Test finalizers with static parameters
 mutable struct DoAllocNoEscapeSparam{T}
     x
-    function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
+    @inline function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
         nothrow_side_effect(nothing)
         nothrow_side_effect(T)
     end
@@ -1301,8 +1301,28 @@ let src = code_typed1(Tuple{Any}) do x
             DoAllocNoEscapeSparam(x)
         end
     end
-    # FIXME
-    @test_broken count(isnew, src.code) == 0 && count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) == 0
+    @test count(x->isexpr(x, :static_parameter), src.code) == 0 # A bad inline might leave left-over :static_parameter
+    nnothrow_invokes = count(isinvoke(:nothrow_side_effect), src.code)
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
+          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes
+    # TODO: Our effect modeling is not yet strong enough to fully eliminate this
+    @test_broken count(isnew, src.code) == 0
+end
+
+# Test finalizer varargs
+function varargs_finalizer(args...)
+    nothrow_side_effect(args[1])
+end
+mutable struct DoAllocNoEscapeNoVarargs
+    function DoAllocNoEscapeNoInline()
+        finalizer(noinline_finalizer, new())
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeNoInline()
+        end
+    end
 end
 
 # Test noinline finalizer
