@@ -103,6 +103,8 @@ aimg  = randn(n,n)/2
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Matrix(Diagonal(a_sg'a_sg)), Diagonal(a_sg'a_sg))
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
+            gd = eigen(Matrix(Hermitian(a_sg'a_sg)), Diagonal(a_sg'a_sg))
+            @test Hermitian(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Diagonal(a_sg'a_sg), Matrix(Diagonal(a_sg'a_sg)))
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
         end
@@ -121,6 +123,8 @@ aimg  = randn(n,n)/2
             @test prod(f.values) ≈ prod(eigvals(a1_nsg/a2_nsg, sortby = sortfunc)) atol=50000ε
             @test eigvecs(a1_nsg, a2_nsg; sortby = sortfunc) == f.vectors
             @test_throws ErrorException f.Z
+            g = eigen(a1_nsg, Diagonal(a2_nsg); sortby = sortfunc)
+            @test a1_nsg*g.vectors ≈ (Diagonal(a2_nsg)*g.vectors) * Diagonal(g.values)
 
             d,v = eigen(a1_nsg, a2_nsg; sortby = sortfunc)
             @test d == f.values

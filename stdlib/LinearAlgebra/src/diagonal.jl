@@ -772,9 +772,16 @@ function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=n
     if any(!isfinite, D.diag) || any(iszero, D.diag)
         throw(ArgumentError("right-hand side diagonal matrix contains Infs or NaNs or is singular"))
     end
-    DA = D \ A
-    E = DA isa Matrix ? eigen!(DA; sortby) : eigen(DA; sortby)
-    return GeneralizedEigen(E...)
+    if size(A, 1) == size(A, 2) && isdiag(A)
+        return eigen(Diagonal(A), D)        
+    elseif ishermitian(A)
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+    else
+        DA = D \ A
+        E = DA isa Matrix ? eigen!(DA; sortby) : eigen(DA; sortby)
+        return GeneralizedEigen(E...)
+    end
 end
 
 #Singular system
