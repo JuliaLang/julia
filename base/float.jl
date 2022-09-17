@@ -847,6 +847,8 @@ end
 Not the inverse of `floatmax`! Return the smallest positive normal number
 representable by the floating-point type `T`.
 
+See also: [`eps`](@ref), [`prevfloat`](@ref), [`nextfloat`](@ref).
+
 # Examples
 ```jldoctest
 julia> floatmin(Float16)
