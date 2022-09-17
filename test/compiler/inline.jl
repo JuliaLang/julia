@@ -1542,3 +1542,14 @@ let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))
                  count(iscall((src, Core._svec_ref)), src.code) == 0 &&
                  count(iscall((src, Core.nfields)), src.code) == 1
 end
+
+# Test effect annotation of declined inline unionsplit
+f_union_unmatched(x::Union{Nothing, Type{T}}) where {T} = nothing
+let src = code_typed1((Any,)) do x
+        if isa(x, Union{Nothing, Type})
+            f_union_unmatched(x)
+        end
+        nothing
+    end
+    @test count(iscall((src, f_union_unmatched)), src.code) == 0
+end
