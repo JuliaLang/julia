@@ -1100,6 +1100,9 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
     return src
 end
 
+# TODO change the interface of `return_type` to allow it to recognize caller module context
+# so that we can see its `get_max_methods` setting as the ordinary inference
+
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = ccall(:jl_get_tls_world_age, UInt, ())
     args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
@@ -1129,7 +1132,10 @@ function _return_type(interp::AbstractInterpreter, t::DataType)
         rt = builtin_tfunction(interp, f, args, nothing)
         rt = widenconst(rt)
     else
-        for match in _methods_by_ftype(t, -1, get_world_counter(interp))::Vector
+        lim = get_max_methods(interp, f)
+        ms = _methods_by_ftype(t, lim, get_world_counter(interp))
+        ms isa Vector || return Any
+        for match in ms
             match = match::MethodMatch
             ty = typeinf_type(interp, match.method, match.spec_types, match.sparams)
             ty === nothing && return Any
