@@ -259,6 +259,7 @@ to do so), or pressing Esc and then the key.
 | `^W`                | Delete previous text up to the nearest whitespace                                                          |
 | `meta-w`            | Copy the current region in the kill ring                                                                   |
 | `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
+| `^U`                | "Kill" to beginning of line, placing the text in the kill ring                                             |
 | `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
