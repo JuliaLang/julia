@@ -229,8 +229,10 @@ endif
 endif
 endif
 
+# Note that we disable MSYS2's path munging here, as otherwise
+# it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
-	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
+	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
 endef
 
 
