@@ -250,10 +250,6 @@ function ParseStream(io::Base.GenericIOBuffer; version=VERSION)
     textbuf = unsafe_wrap(Vector{UInt8}, pointer(io.data), length(io.data))
     ParseStream(textbuf, io, position(io)+1, version)
 end
-function ParseStream(io::IOStream; version=VERSION)
-    textbuf = Mmap.mmap(io)
-    ParseStream(textbuf, io, position(io)+1, version)
-end
 function ParseStream(io::IO; version=VERSION)
     textbuf = read(io)
     ParseStream(textbuf, textbuf, 1, version)
