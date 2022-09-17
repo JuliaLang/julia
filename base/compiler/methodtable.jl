@@ -63,21 +63,22 @@ end
 CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}(), table)
 
 """
-    findall(sig::Type, view::MethodTableView; limit::Int=typemax(Int)) ->
+    findall(sig::Type, view::MethodTableView; limit::Int=-1) ->
         MethodMatchResult(matches::MethodLookupResult, overlayed::Bool) or missing
 
 Find all methods in the given method table `view` that are applicable to the given signature `sig`.
 If no applicable methods are found, an empty result is returned.
-If the number of applicable methods exceeded the specified limit, `missing` is returned.
+If the number of applicable methods exceeded the specified `limit`, `missing` is returned.
+Note that the default setting `limit=-1` does not limit the number of applicable methods.
 `overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
-function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1)
     result = _findall(sig, nothing, table.world, limit)
     result === missing && return missing
     return MethodMatchResult(result, false)
 end
 
-function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1)
     result = _findall(sig, table.mt, table.world, limit)
     result === missing && return missing
     nr = length(result)
@@ -110,7 +111,7 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1)
     if isconcretetype(sig)
         # as for concrete types, we cache result at on the next level
         return findall(sig, table.table; limit)
