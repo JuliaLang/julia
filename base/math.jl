@@ -932,9 +932,8 @@ ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 """
     exponent(x) -> Int
 
-Get the exponent of a normalized floating-point number.
-
 Returns the largest integer `y` such that `2^y ≤ abs(x)`.
+For a normalized floating-point number `x` this corresponds to the exponent of `x`.
 
 # Examples
 ```jldoctest
