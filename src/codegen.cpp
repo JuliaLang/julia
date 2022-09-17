@@ -155,8 +155,6 @@ typedef Instruction TerminatorInst;
 #define NOMINMAX
 #endif
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "jitlayers.h"
 #include "codegen_shared.h"
 #include "processor.h"
@@ -8543,7 +8541,9 @@ extern "C" void jl_init_llvm(void)
     // Initialize passes
     PassRegistry &Registry = *PassRegistry::getPassRegistry();
     initializeCore(Registry);
+#if JL_LLVM_VERSION < 150000
     initializeCoroutines(Registry);
+#endif
     initializeScalarOpts(Registry);
     initializeVectorization(Registry);
     initializeAnalysis(Registry);

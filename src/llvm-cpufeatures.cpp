@@ -26,7 +26,6 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
 
-#include "julia.h"
 #include "jitlayers.h"
 
 #define DEBUG_TYPE "cpufeatures"

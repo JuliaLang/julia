@@ -34,6 +34,7 @@
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
@@ -59,8 +60,6 @@
 
 using namespace llvm;
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
 
@@ -814,7 +813,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
+#if JL_LLVM_VERSION >= 150000
+    PM->add(createSimpleLoopUnswitchLegacyPass());
+#else
     PM->add(createLoopUnswitchPass());
+#endif
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
     PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars

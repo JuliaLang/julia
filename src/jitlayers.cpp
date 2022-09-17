@@ -36,8 +36,6 @@
 
 using namespace llvm;
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "codegen_shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
@@ -1145,7 +1143,7 @@ JuliaOJIT::JuliaOJIT()
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
 #ifdef JL_LLVM_OPAQUE_POINTERS
-        ctx->enableOpaquePointers();
+        ctx->setOpaquePointers(true);
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
