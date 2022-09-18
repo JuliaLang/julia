@@ -364,29 +364,29 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     return linetable_offset, extra_coverage_line
 end
 
-function ir_prepare_inlining!(insert_node_here!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
+function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
         linetable::Vector{LineInfoNode}, ir′::IRCode, sparam_vals::SimpleVector,
         def::Method, inlined_at::Int32, argexprs::Vector{Any})
     topline::Int32 = length(linetable) + Int32(1)
     linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, def, inlined_at)
     if extra_coverage_line != 0
-        insert_node_here!(NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
+        insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
     end
     sp_ssa = nothing
     if !validate_sparams(sparam_vals)
         # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
-        sp_ssa = insert_node_here!(
+        sp_ssa = insert_node!(
             effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
     end
     if def.isva
         nargs_def = Int(def.nargs::Int32)
         if nargs_def > 0
-            argexprs = fix_va_argexprs!(insert_node_here!, inline_target, argexprs, nargs_def, topline)
+            argexprs = fix_va_argexprs!(insert_node!, inline_target, argexprs, nargs_def, topline)
         end
     end
     if def.is_for_opaque_closure
         # Replace the first argument by a load of the capture environment
-        argexprs[1] = insert_node_here!(
+        argexprs[1] = insert_node!(
             NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
             ir′.argtypes[1], topline))
     end
@@ -485,7 +485,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     return_value
 end
 
-function fix_va_argexprs!(insert_node_here!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
+function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
     argexprs::Vector{Any}, nargs_def::Int, line_idx::Int32)
     newargexprs = argexprs[1:(nargs_def-1)]
     tuple_call = Expr(:call, TOP_TUPLE)
@@ -497,7 +497,7 @@ function fix_va_argexprs!(insert_node_here!::Inserter, inline_target::Union{IRCo
     end
     tuple_typ = tuple_tfunc(OptimizerLattice(), tuple_typs)
     tuple_inst = NewInstruction(tuple_call, tuple_typ, line_idx)
-    push!(newargexprs, insert_node_here!(tuple_inst))
+    push!(newargexprs, insert_node!(tuple_inst))
     return newargexprs
 end
 
@@ -1798,31 +1798,31 @@ function late_inline_special_case!(
     return nothing
 end
 
-function ssa_substitute!(insert_node_before!,
+function ssa_substitute!(insert_node!::Inserter,
                          subst_inst::Instruction, @nospecialize(val), arg_replacements::Vector{Any},
                          @nospecialize(spsig), spvals::SimpleVector,
                          spvals_ssa::Union{Nothing, SSAValue},
                          linetable_offset::Int32, boundscheck::Symbol)
     subst_inst[:flag] &= ~IR_FLAG_INBOUNDS
     subst_inst[:line] += linetable_offset
-    return ssa_substitute_op!(insert_node_before!, subst_inst,
+    return ssa_substitute_op!(insert_node!, subst_inst,
         val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
 end
 
-function insert_spval!(insert_node_before!, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
-    ret = insert_node_before!(
+function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
+    ret = insert_node!(
         effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
-        tcheck = insert_node_before!(
+        tcheck = insert_node!(
             effect_free(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
-        tcheck_not = insert_node_before!(
+        tcheck_not = insert_node!(
             effect_free(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
     return (ret, tcheck_not)
 end
 
-function ssa_substitute_op!(insert_node_before!::Inserter, subst_inst::Instruction,
+function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
                             @nospecialize(val), arg_replacements::Vector{Any},
                             @nospecialize(spsig), spvals::SimpleVector,
                             spvals_ssa::Union{Nothing, SSAValue},
@@ -1841,9 +1841,9 @@ function ssa_substitute_op!(insert_node_before!::Inserter, subst_inst::Instructi
             else
                 flag = subst_inst[:flag]
                 maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
-                (ret, tcheck_not) = insert_spval!(insert_node_before!, spvals_ssa, spidx, maybe_undef)
+                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, maybe_undef)
                 if maybe_undef
-                    insert_node_before!(
+                    insert_node!(
                         non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
                 end
                 return ret
@@ -1854,7 +1854,7 @@ function ssa_substitute_op!(insert_node_before!::Inserter, subst_inst::Instructi
             if !isa(val, TypeVar)
                 return true
             else
-                (_, tcheck_not) = insert_spval!(insert_node_before!, spvals_ssa, spidx, true)
+                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, true)
                 return tcheck_not
             end
         elseif head === :cfunction && spvals_ssa === nothing
@@ -1887,7 +1887,7 @@ function ssa_substitute_op!(insert_node_before!::Inserter, subst_inst::Instructi
     isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(insert_node_before!, subst_inst, op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
+        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
     end
     return urs[]
 end
