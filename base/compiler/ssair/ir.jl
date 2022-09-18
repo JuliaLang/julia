@@ -28,12 +28,18 @@ function cfg_delete_edge!(cfg::CFG, from::Int, to::Int)
     nothing
 end
 
+function bb_ordering()
+    lt=(<=)
+    by=x->first(x.stmts)
+    ord(lt, by, nothing, Forward)
+end
+
 function block_for_inst(index::Vector{Int}, inst::Int)
     return searchsortedfirst(index, inst, lt=(<=))
 end
 
 function block_for_inst(index::Vector{BasicBlock}, inst::Int)
-    return searchsortedfirst(index, BasicBlock(StmtRange(inst, inst)), by=x->first(x.stmts), lt=(<=))-1
+    return searchsortedfirst(index, BasicBlock(StmtRange(inst, inst)), bb_ordering())-1
 end
 
 block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
@@ -674,7 +680,8 @@ end
 function block_for_inst(compact::IncrementalCompact, idx::SSAValue)
     id = idx.id
     if id < compact.result_idx # if ssa within result
-        return block_for_inst(compact.result_bbs, id)
+        return searchsortedfirst(compact.result_bbs, BasicBlock(StmtRange(id, id)),
+            1, compact.active_result_bb, bb_ordering())-1
     else
         return block_for_inst(compact.ir.cfg, id)
     end
@@ -683,7 +690,8 @@ end
 function block_for_inst(compact::IncrementalCompact, idx::OldSSAValue)
     id = idx.id
     if id < compact.idx # if ssa within result
-        return block_for_inst(compact.result_bbs, compact.ssa_rename[id])
+        id = compact.ssa_rename[id]
+        return block_for_inst(compact, SSAValue(id))
     else
         return block_for_inst(compact.ir.cfg, id)
     end
