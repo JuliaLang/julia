@@ -1338,27 +1338,6 @@ function info_effects(@nospecialize(result), match::MethodMatch, state::Inlining
     end
 end
 
-function compute_joint_effects(info::Union{ConstCallInfo, Vector{MethodMatchInfo}}, state::InliningState)
-    if isa(info, ConstCallInfo)
-        (; call, results) = info
-        infos = isa(call, MethodMatchInfo) ? MethodMatchInfo[call] : call.matches
-    else
-        results = nothing
-        infos = info
-    end
-    local all_result_count = 0
-    local joint_effects::Effects = EFFECTS_TOTAL
-    for i in 1:length(infos)
-        meth = infos[i].results
-        for (j, match) in enumerate(meth)
-            all_result_count += 1
-            result = results === nothing ? nothing : results[all_result_count]
-            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
-        end
-    end
-    return joint_effects
-end
-
 function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInfo}},
     flag::UInt8, sig::Signature, state::InliningState)
     argtypes = sig.argtypes
@@ -1376,6 +1355,8 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
     local only_method = nothing
     local meth::MethodLookupResult
     local all_result_count = 0
+    local joint_effects::Effects = EFFECTS_TOTAL
+    local nothrow::Bool = true
     for i in 1:length(infos)
         meth = infos[i].results
         if meth.ambig
@@ -1400,6 +1381,8 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
         for (j, match) in enumerate(meth)
             all_result_count += 1
             result = results === nothing ? nothing : results[all_result_count]
+            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
+            nothrow &= match.fully_covers
             any_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
@@ -1417,6 +1400,8 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
             end
         end
     end
+
+    joint_effects = Effects(joint_effects; nothrow)
 
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,
@@ -1446,9 +1431,6 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
         # if we've not seen all candidates, union split is valid only for dispatch tuples
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
-
-    # TODO fuse `compute_joint_effects` into the loop above, which currently causes compilation error
-    joint_effects = Effects(compute_joint_effects(info, state); nothrow=handled_all_cases)
 
     return cases, (handled_all_cases & any_fully_covered), joint_effects
 end
