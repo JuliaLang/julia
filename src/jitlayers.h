@@ -9,6 +9,8 @@
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
 
+#include <llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h>
+#include <llvm/ExecutionEngine/Orc/EPCIndirectionUtils.h>
 #include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
@@ -47,6 +49,7 @@
 # endif
 # define JL_USE_JITLINK
 #endif
+# define JL_USE_JITLINK
 
 #ifdef JL_USE_JITLINK
 # include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
@@ -269,6 +272,7 @@ public:
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::CompileOnDemandLayer CODLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
     template
     <typename ResourceT, size_t max = 0,
@@ -423,6 +427,7 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
+    JITTargetAddress getAssemblyPointer(JITTargetAddress maybeTrampoline);
     auto getContext() {
         return *ContextPool;
     }
@@ -484,12 +489,15 @@ private:
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
+    std::unique_ptr<orc::EPCIndirectionUtils> EPCIU;
+
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
+    CODLayerT CODLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());

@@ -497,8 +497,10 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     jl_code_instance_t *codeinst = jl_generate_fptr(mi, world);
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
-        if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+        if (getwrapper) {
+            auto assembly = jl_ExecutionEngine->getAssemblyPointer(fptr);
+            return jl_dump_fptr_asm(assembly, raw_mc, asm_variant, debuginfo, binary);
+        }
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -536,8 +538,10 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
             JL_UNLOCK(&jl_codegen_lock);
         }
-        if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
+        if (specfptr != 0) {
+            auto assembly = jl_ExecutionEngine->getAssemblyPointer(specfptr);
+            return jl_dump_fptr_asm(assembly, raw_mc, asm_variant, debuginfo, binary);
+        }
     }
 
     // whatever, that didn't work - use the assembler output instead
@@ -565,6 +569,12 @@ static auto countBasicBlocks(const Function &F)
 }
 
 void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
+    //We may enter compilation here, which may clobber errno/LastError
+    //Pretend like nothing happened
+    int last_errno = errno;
+#ifdef _OS_WINDOWS_
+    DWORD last_error = GetLastError();
+#endif
     ++ModulesOptimized;
     size_t optlevel = SIZE_MAX;
     TSM.withModuleDo([&](Module &M) {
@@ -590,6 +600,10 @@ void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsib
     });
     assert(optlevel != SIZE_MAX && "Failed to select a valid optimization level!");
     this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
+#ifdef _OS_WINDOWS_
+    SetLastError(last_error);
+#endif
+    errno = last_errno;
 }
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
@@ -1116,6 +1130,13 @@ namespace {
 
         JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
     };
+
+    std::unique_ptr<orc::EPCIndirectionUtils> createEPCIU(orc::ExecutionSession &ES) {
+        auto EPCIU = cantFail(orc::EPCIndirectionUtils::Create(ES.getExecutorProcessControl()));
+        EPCIU->createLazyCallThroughManager(ES, 0);
+        cantFail(orc::setUpInProcessLCTMReentryViaEPCIU(*EPCIU));
+        return EPCIU;
+    }
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -1147,6 +1168,7 @@ JuliaOJIT::JuliaOJIT()
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
+    EPCIU(createEPCIU(ES)),
 #ifdef JL_USE_JITLINK
     // TODO: Port our memory management optimisations to JITLink instead of using the
     // default InProcessMemoryManager.
@@ -1171,7 +1193,8 @@ JuliaOJIT::JuliaOJIT()
         std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
         std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
     },
-    OptSelLayer(Pipelines)
+    OptSelLayer(Pipelines),
+    CODLayer(ES, OptSelLayer, EPCIU->getLazyCallThroughManager(), [this]() { return EPCIU->createIndirectStubsManager(); })
 {
 #ifdef JL_USE_JITLINK
 # if defined(LLVM_SHLIB)
@@ -1193,6 +1216,7 @@ JuliaOJIT::JuliaOJIT()
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
+    CODLayer.setPartitionFunction(CODLayerT::compileWholeModule);
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
@@ -1308,8 +1332,13 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
 #endif
     });
+    static constexpr bool JL_USE_COD = true;
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, std::move(TSM)));
+    if (JL_USE_COD) {
+        cantFail(CODLayer.add(JD, std::move(TSM)));
+    } else {
+        cantFail(OptSelLayer.add(JD, std::move(TSM)));
+    }
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
@@ -1381,6 +1410,19 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
     return *fname;
 }
 
+
+JITTargetAddress JuliaOJIT::getAssemblyPointer(JITTargetAddress maybeTrampoline) {
+    std::promise<JITTargetAddress> result;
+    auto future = result.get_future();
+    EPCIU->getLazyCallThroughManager().resolveTrampolineLandingAddress(maybeTrampoline, [&result](JITTargetAddress Resolved) {
+        result.set_value(Resolved);
+    });
+    auto addr = future.get();
+    if (!addr) {
+        return maybeTrampoline;
+    }
+    return addr;
+}
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION < 140000
