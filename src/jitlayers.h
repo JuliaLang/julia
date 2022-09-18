@@ -100,9 +100,7 @@ struct OptimizationOptions {
 // for middle-end IR optimizations. However, we have not qualified the new
 // pass manager on our optimization pipeline yet, so this remains an optional
 // define
-#if defined(HAS_SANITIZER) && JL_LLVM_VERSION >= 150000
 #define JL_USE_NEW_PM
-#endif
 
 struct NewPM {
     std::unique_ptr<TargetMachine> TM;
