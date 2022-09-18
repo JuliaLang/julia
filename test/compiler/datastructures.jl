@@ -1,3 +1,27 @@
+using Test
+
+@testset "CachedMethodTable" begin
+    # cache result should be separated per `limit` and `sig`
+    # https://github.com/JuliaLang/julia/pull/46799
+    interp = Core.Compiler.NativeInterpreter()
+    table = Core.Compiler.method_table(interp)
+    sig = Tuple{typeof(*), Any, Any}
+    result1 = Core.Compiler.findall(sig, table; limit=-1)
+    result2 = Core.Compiler.findall(sig, table; limit=Core.Compiler.get_max_methods(*, @__MODULE__, interp))
+    @test result1 !== Core.Compiler.missing && !Core.Compiler.isempty(result1.matches)
+    @test result2 === Core.Compiler.missing
+end
+
+@testset "BitSetBoundedMinPrioritySet" begin
+    bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
+    Core.Compiler.push!(bsbmp, 2)
+    Core.Compiler.push!(bsbmp, 2)
+    @test Core.Compiler.popfirst!(bsbmp) == 2
+    Core.Compiler.push!(bsbmp, 1)
+    @test Core.Compiler.popfirst!(bsbmp) == 1
+    @test Core.Compiler.isempty(bsbmp)
+end
+
 @testset "basic heap functionality" begin
     v = [2,3,1]
     @test Core.Compiler.heapify!(v, Core.Compiler.Forward) === v
