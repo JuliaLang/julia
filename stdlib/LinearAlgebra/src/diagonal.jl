@@ -773,7 +773,7 @@ function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=n
         throw(ArgumentError("right-hand side diagonal matrix contains Infs or NaNs or is singular"))
     end
     if size(A, 1) == size(A, 2) && isdiag(A)
-        return eigen(Diagonal(A), D)
+        return eigen(Diagonal(A), D; sortby)
     elseif ishermitian(A)
         S = promote_type(eigtype(eltype(A)), eltype(D))
         return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
