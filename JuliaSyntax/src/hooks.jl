@@ -46,7 +46,7 @@ end
 # https://github.com/JuliaLang/julia/pull/43876
 # Prior to this, the following signature was needed:
 function core_parser_hook(code, filename, offset, options)
-    core_parser_hook(code, filename, LineNumberNode(0), offset, options)
+    core_parser_hook(code, filename, 1, offset, options)
 end
 
 # Debug log file for dumping parsed code
@@ -96,6 +96,7 @@ function _core_parser_hook(code, filename, lineno, offset, options)
             e = Expr(:error, ParseError(SourceFile(code, filename=filename), stream.diagnostics))
             ex = options === :all ? Expr(:toplevel, e) : e
         else
+            # FIXME: Add support to lineno to this tree build (via SourceFile?)
             ex = build_tree(Expr, stream, filename=filename, wrap_toplevel_as_kind=K"None")
             if Meta.isexpr(ex, :None)
                 # The None wrapping is only to give somewhere for trivia to be
