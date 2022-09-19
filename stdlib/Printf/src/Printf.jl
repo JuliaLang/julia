@@ -89,7 +89,7 @@ struct InvalidFormatStringError <: Exception
 end
 
 function Base.showerror(io::IO, err::InvalidFormatStringError)
-    io_has_color = get(io, :color, false)
+    io_has_color = get(io, :color, false)::Bool
 
     println(io, "InvalidFormatStringError: ", err.message)
     print(io, "    \"", @view(err.format[begin:prevind(err.format, err.start_color)]))

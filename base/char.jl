@@ -318,7 +318,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
-    get(io, :compact, false) && return
+    get(io, :compact, false)::Bool && return
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)
