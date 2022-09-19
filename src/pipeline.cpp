@@ -541,11 +541,8 @@ PIC->addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
         // Register the AA manager first so that our version is the one used.
         FAM.registerPass([&] JL_NOTSAFEPOINT {
             AAManager AA;
-            // TODO: Why are we only doing this for -O3?
-            if (O.getSpeedupLevel() >= 3) {
-                AA.registerFunctionAnalysis<BasicAA>();
-            }
             if (O.getSpeedupLevel() >= 2) {
+                AA.registerFunctionAnalysis<BasicAA>();
                 AA.registerFunctionAnalysis<ScopedNoAliasAA>();
                 AA.registerFunctionAnalysis<TypeBasedAA>();
             }
