@@ -146,7 +146,7 @@ namespace {
             // Opts.Recover = CodeGenOpts.SanitizeRecover.has(Mask);
             // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
             // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
-            MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
+            // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
             // MPM.addPass(ModuleAddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
             //Let's assume the defaults are actually fine for our purposes
