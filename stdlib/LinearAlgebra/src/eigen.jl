@@ -513,8 +513,6 @@ end
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
 
 eigencopy_oftype(A, S) = copy_similar(A, S) # creates a dense matrix of eltype S
-# the following line is placed in symmetriceigen.jl for bootstrap reasons
-# eigencopy_oftype(A::HermOrSym, S) = copymutable_oftype(A, S) # preserves HermOrSym wrapper
 
 """
     eigvals!(A, B; sortby) -> values

@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-eigencopy_oftype(A::HermOrSym, S) = copymutable_oftype(A, S) # preserves HermOrSym wrapper
+# preserve HermOrSym wrapper
+eigencopy_oftype(A::Hermitian, S) = Hermitian(copy_similar(A, S), sym_uplo(A.uplo))
+eigencopy_oftype(A::Symmetric, S) = Symmetric(copy_similar(A, S), sym_uplo(A.uplo))
 
 # Eigensolvers for symmetric and Hermitian matrices
 eigen!(A::RealHermSymComplexHerm{<:BlasReal,<:StridedMatrix}; sortby::Union{Function,Nothing}=nothing) =
