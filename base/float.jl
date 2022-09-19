@@ -844,7 +844,14 @@ end
 """
     floatmin(T = Float64)
 
-Not the inverse of `floatmax`! Return the smallest positive normal number
+Return the smallest positive floating-point number which is not sub-nomal.
+
+The smallest positive number without this restriction is [`nextfloat`](@ref)`(zero(T))`;
+see [`issubnormal`](@ref) for an explanation of sub-normal numbers.
+The most negative finite number is `-`[`floatmax`](@ref)`(T)`.
+
+Floating point numbers always include infinity [`Inf`](@ref)` and negative real infinity `-Inf`, 
+which is what [`typemax`](@ref) and [`typemin`](@ref) return.
 representable by the floating-point type `T`.
 
 See also: [`eps`](@ref), [`prevfloat`](@ref), [`nextfloat`](@ref).
