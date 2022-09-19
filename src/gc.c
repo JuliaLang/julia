@@ -227,6 +227,8 @@ STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 #else
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
+    if (uv_get_available_memory() < sz)
+        jl_throw(jl_memory_exception);
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
         return malloc(sz);
@@ -3532,6 +3534,8 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
     }
+    if (uv_get_available_memory() < sz)
+        jl_throw(jl_memory_exception);
     return malloc(sz);
 }
 
@@ -3547,6 +3551,8 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
     }
+    if (uv_get_available_memory() < sz)
+        jl_throw(jl_memory_exception);
     return calloc(nm, sz);
 }
 
@@ -3696,6 +3702,8 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    if (allocsz > oldsz && uv_get_available_memory() < (allocsz-oldsz))
+        jl_throw(jl_memory_exception);
     void *b;
     if (isaligned)
         b = realloc_cache_align(d, allocsz, oldsz);
@@ -3775,6 +3783,8 @@ static void *gc_perm_alloc_large(size_t sz, int zero, unsigned align, unsigned o
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    if (uv_get_available_memory() < sz)
+        jl_throw(jl_memory_exception);
     uintptr_t base = (uintptr_t)(zero ? calloc(1, sz) : malloc(sz));
     if (base == 0)
         jl_throw(jl_memory_exception);
