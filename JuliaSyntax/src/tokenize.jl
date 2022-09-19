@@ -98,13 +98,13 @@ function Lexer(io::IO)
         c2 = read(io, Char)
         p2 = position(io)
         if eof(io)
-            c3, p3 = EOF_CHAR, p1
-            c4, p4 = EOF_CHAR, p1
+            c3, p3 = EOF_CHAR, p2
+            c4, p4 = EOF_CHAR, p2
         else
             c3 = read(io, Char)
             p3 = position(io)
             if eof(io)
-                c4, p4 = EOF_CHAR, p1
+                c4, p4 = EOF_CHAR, p3
             else
                 c4 = read(io, Char)
                 p4 = position(io)
