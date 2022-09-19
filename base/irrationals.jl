@@ -31,7 +31,7 @@ struct Irrational{sym} <: AbstractIrrational end
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
 function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, sym)
     else
         print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")

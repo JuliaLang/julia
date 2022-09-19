@@ -50,7 +50,7 @@ struct Rotation{T} <: AbstractRotation{T}
 end
 
 convert(::Type{T}, r::T) where {T<:AbstractRotation} = r
-convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)
+convert(::Type{T}, r::AbstractRotation) where {T<:AbstractRotation} = T(r)::T
 
 Givens(i1, i2, c, s) = Givens(i1, i2, promote(c, s)...)
 Givens{T}(G::Givens{T}) where {T} = G

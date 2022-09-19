@@ -307,6 +307,9 @@ effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
 non_effect_free(inst::NewInstruction) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag & ~IR_FLAG_EFFECT_FREE, true)
+with_flags(inst::NewInstruction, flags::UInt8) =
+    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | flags, true)
+
 
 struct IRCode
     stmts::InstructionStream
@@ -394,7 +397,7 @@ struct UndefToken end; const UNDEF_TOKEN = UndefToken()
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
         return stmt.val
-    elseif isa(stmt, Union{SSAValue, NewSSAValue})
+    elseif isa(stmt, Union{SSAValue, NewSSAValue, GlobalRef})
         op == 1 || return OOB_TOKEN
         return stmt
     elseif isa(stmt, UpsilonNode)
@@ -446,7 +449,7 @@ end
     elseif isa(stmt, ReturnNode)
         op == 1 || throw(BoundsError())
         stmt = typeof(stmt)(v)
-    elseif isa(stmt, Union{SSAValue, NewSSAValue})
+    elseif isa(stmt, Union{SSAValue, NewSSAValue, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -504,9 +507,9 @@ scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::S
 # Manually specialized copy of the above with push! === Compiler.push!
 scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
-function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false)
-    node = add!(ir.new_nodes, pos, attach_after)
-    node[:line] = something(inst.line, ir.stmts[pos][:line])
+function insert_node!(ir::IRCode, pos::SSAValue, inst::NewInstruction, attach_after::Bool=false)
+    node = add!(ir.new_nodes, pos.id, attach_after)
+    node[:line] = something(inst.line, ir[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
         (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, ir)
@@ -522,6 +525,8 @@ function insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::
     node[:inst], node[:type], node[:flag] = inst.stmt, inst.type, flag
     return SSAValue(length(ir.stmts) + node.idx)
 end
+insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false) =
+    insert_node!(ir, SSAValue(pos), inst, attach_after)
 
 # For bootstrapping
 function my_sortperm(v)
@@ -1145,11 +1150,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result_idx += 1
     elseif isa(stmt, GlobalRef)
         total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
-        if (result[result_idx][:flag] & total_flags) == total_flags
+        flag = result[result_idx][:flag]
+        if (flag & total_flags) == total_flags
             ssa_rename[idx] = stmt
         else
             result[result_idx][:inst] = stmt
             result[result_idx][:type] = argextype(stmt, compact)
+            result[result_idx][:flag] = flag
             result_idx += 1
         end
     elseif isa(stmt, GotoNode)
@@ -1663,3 +1670,18 @@ function iterate(x::BBIdxIter, (idx, bb)::Tuple{Int, Int}=(1, 1))
     end
     return (bb, idx), (idx + 1, next_bb)
 end
+
+# Inserters
+
+abstract type Inserter; end
+
+struct InsertHere <: Inserter
+    compact::IncrementalCompact
+end
+(i::InsertHere)(new_inst::NewInstruction) = insert_node_here!(i.compact, new_inst)
+
+struct InsertBefore{T<:Union{IRCode, IncrementalCompact}} <: Inserter
+    src::T
+    pos::SSAValue
+end
+(i::InsertBefore)(new_inst::NewInstruction) = insert_node!(i.src, i.pos, new_inst)

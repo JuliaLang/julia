@@ -769,6 +769,12 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+# Just check it doesn't error
+f46594(::Vararg{T, 2}) where T = 1
+let repr = sprint(show, "text/html", first(methods(f46594)))
+    @test occursin("f46594(::Vararg{T, 2}) where T", replace(repr, r"</?[A-Za-z]>"=>""))
+end
+
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
 end
 let repr = sprint(show, "text/plain", methods(triangular_methodshow))
@@ -2298,6 +2304,8 @@ end
 
     @eval f1(var"a.b") = 3
     @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
+
+    @test sprint(_show, Method[]) == "0-element Vector{Method}"
 
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 

@@ -25,6 +25,7 @@ function find_tfunc(@nospecialize f)
 end
 
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
+const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
 
 ##########
 # tfuncs #
@@ -823,7 +824,10 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     if isa(s, Union)
         return getfield_nothrow(rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isa(s, DataType)
+    elseif isType(s) && isTypeDataType(s.parameters[1])
+        s = s0 = DataType
+    end
+    if isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
         s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
@@ -863,15 +867,40 @@ function getfield_tfunc(s00, name, order, boundscheck)
     return getfield_tfunc(s00, name)
 end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, name, false)
+
+function _getfield_fieldindex(@nospecialize(s), name::Const)
+    nv = name.val
+    if isa(nv, Symbol)
+        nv = fieldindex(s, nv, false)
+    end
+    if isa(nv, Int)
+        return nv
+    end
+    return nothing
+end
+
+function _getfield_tfunc_const(@nospecialize(sv), name::Const, setfield::Bool)
+    if isa(name, Const)
+        nv = _getfield_fieldindex(typeof(sv), name)
+        nv === nothing && return Bottom
+        if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+            return Const(getfield(sv, nv))
+        end
+        if isconst(typeof(sv), nv)
+            if isdefined(sv, nv)
+                return Const(getfield(sv, nv))
+            end
+            return Union{}
+        end
+    end
+    return nothing
+end
+
 function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
     if isa(s00, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
-            sv = s00.parameters[1]
-        else
-            sv = s00.val
-        end
+    elseif isa(s00, Const)
+        sv = s00.val
         if isa(name, Const)
             nv = name.val
             if isa(sv, Module)
@@ -881,31 +910,15 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
                 end
                 return Bottom
             end
-            if isa(nv, Symbol)
-                nv = fieldindex(typeof(sv), nv, false)
-            end
-            if !isa(nv, Int)
-                return Bottom
-            end
-            if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
-                return Const(getfield(sv, nv))
-            end
-            if isconst(typeof(sv), nv)
-                if isdefined(sv, nv)
-                    return Const(getfield(sv, nv))
-                end
-                return Union{}
-            end
+            r = _getfield_tfunc_const(sv, name, setfield)
+            r !== nothing && return r
         end
         s = typeof(sv)
     elseif isa(s00, PartialStruct)
         s = widenconst(s00)
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
-            nv = name.val
-            if isa(nv, Symbol)
-                nv = fieldindex(sty, nv, false)
-            end
+            nv = _getfield_fieldindex(sty, name)
             if isa(nv, Int) && 1 <= nv <= length(s00.fields)
                 return unwrapva(s00.fields[nv])
             end
@@ -916,6 +929,27 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
     if isa(s, Union)
         return tmerge(_getfield_tfunc(rewrap_unionall(s.a, s00), name, setfield),
                       _getfield_tfunc(rewrap_unionall(s.b, s00), name, setfield))
+    end
+    if isType(s)
+        if isconstType(s)
+            sv = s00.parameters[1]
+	    if isa(name, Const)
+                r = _getfield_tfunc_const(sv, name, setfield)
+                r !== nothing && return r
+	    end
+            s = typeof(sv)
+        else
+            sv = s.parameters[1]
+            if isTypeDataType(sv) && isa(name, Const)
+                nv = _getfield_fieldindex(DataType, name)
+                if nv == DATATYPE_NAME_FIELDINDEX
+                    # N.B. This only works for fields that do not depend on type
+                    # parameters (which we do not know here).
+                    return Const(sv.name)
+                end
+                s = DataType
+            end
+        end
     end
     isa(s, DataType) || return Any
     isabstracttype(s) && return Any
@@ -972,13 +1006,8 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         end
         return t
     end
-    fld = name.val
-    if isa(fld, Symbol)
-        fld = fieldindex(s, fld, false)
-    end
-    if !isa(fld, Int)
-        return Bottom
-    end
+    fld = _getfield_fieldindex(s, name)
+    fld === nothing && return Bottom
     if s <: Tuple && fld >= nf && isvarargtype(ftypes[nf])
         return rewrap_unionall(unwrapva(ftypes[nf]), s00)
     end
@@ -1827,6 +1856,10 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
         2 <= length(argtypes) <= 4 || return false
         # Core.finalizer does no error checking - that's done in Base.finalizer
         return true
+    elseif f === Core.compilerbarrier
+        length(argtypes) == 2 || return false
+        a1 = argtypes[1]
+        return isa(a1, Const) && contains_is((:type, :const, :conditional), a1.val)
     end
     return false
 end
@@ -1839,7 +1872,7 @@ const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, getglobal,
+    typeassert, throw, arraysize, getglobal, compilerbarrier
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -1858,7 +1891,7 @@ const _CONSISTENT_BUILTINS = Any[
     (<:),
     typeassert,
     throw,
-    setfield!,
+    setfield!
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -1877,6 +1910,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     tuple,
     typeassert,
     typeof,
+    compilerbarrier,
 ]
 
 const _ARGMEM_BUILTINS = Any[

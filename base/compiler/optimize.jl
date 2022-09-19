@@ -64,14 +64,13 @@ EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
 intersect!(et::EdgeTracker, range::WorldRange) =
     et.valid_worlds[] = intersect(et.valid_worlds[], range)
 
-push!(et::EdgeTracker, mi::MethodInstance) = push!(et.edges, mi)
-function add_edge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    invokesig === nothing && return push!(et.edges, mi)
-    push!(et.edges, invokesig, mi)
+function add_backedge!(et::EdgeTracker, mi::MethodInstance)
+    push!(et.edges, mi)
+    return nothing
 end
-function push!(et::EdgeTracker, ci::CodeInstance)
-    intersect!(et, WorldRange(min_world(li), max_world(li)))
-    push!(et, ci.def)
+function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
+    push!(et.edges, invokesig, mi)
+    return nothing
 end
 
 struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInterpreter}
@@ -208,9 +207,10 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 """
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact})
+    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
+        (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
 
-Returns a tuple of (consistent,  effect_free_and_nothrow, nothrow) for a given statement.
+Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
 """
 function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
@@ -253,16 +253,31 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            typ = argextype(args[1], src)
+            atyp = argextype(args[1], src)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(typ)
-            isexact || return (false, false, false)
-            isconcretedispatch(typ) || return (false, false, false)
+            typ, isexact = instanceof_tfunc(atyp)
+            if !isexact
+                atyp = unwrap_unionall(widenconst(atyp))
+                if isType(atyp) && isTypeDataType(atyp.parameters[1])
+                    typ = atyp.parameters[1]
+                else
+                    return (false, false, false)
+                end
+                isabstracttype(typ) && return (false, false, false)
+            else
+                isconcretedispatch(typ) || return (false, false, false)
+            end
             typ = typ::DataType
             fieldcount(typ) >= length(args) - 1 || return (false, false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
+                # Currently, we cannot represent any type equality constraints
+                # in the lattice, so if we see any type of type parameter,
+                # there is very little we can say about it
+                if !isexact && has_free_typevars(fT)
+                    return (false, false, false)
+                end
                 eT ⊑ₒ fT || return (false, false, false)
             end
             return (false, true, true)
@@ -335,7 +350,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_global(x.mod, x.name)
+        return abstract_eval_globalref(x)
     elseif isa(x, PhiNode)
         return Any
     elseif isa(x, PiNode)

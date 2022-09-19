@@ -59,6 +59,7 @@ done by `get_item_for_reloc`.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // printf
+#include <inttypes.h> // PRIxPTR
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -576,6 +577,10 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         jl_serialize_value(s, tn->partial);
     }
     else if (t->layout->nfields > 0) {
+        if (jl_typeis(v, jl_globalref_type)) {
+            // Don't save the cached binding reference in staticdata
+            ((jl_globalref_t*)v)->bnd_cache = NULL;
+        }
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = t->layout->npointers;
         for (i = 0; i < np; i++) {
@@ -1947,9 +1952,22 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         jl_write_gv_tagrefs(&s);
     }
 
-    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
-        const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
-        jl_printf(JL_STDERR, "ERROR: system image too large\n");
+    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: system image too large: sysimg.size is %jd but the limit is %" PRIxPTR "\n",
+            (intmax_t)sysimg.size,
+            ((uintptr_t)1 << RELOC_TAG_OFFSET)
+        );
+        jl_exit(1);
+    }
+    if (const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: system image too large: const_data.size is %jd but the limit is %" PRIxPTR "\n",
+            (intmax_t)const_data.size,
+            ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)
+        );
         jl_exit(1);
     }
 

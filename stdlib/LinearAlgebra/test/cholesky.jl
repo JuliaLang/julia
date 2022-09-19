@@ -303,6 +303,7 @@ end
     v = rand(5)
     @test cholesky(Diagonal(v)) \ B ≈ Diagonal(v) \ B
     @test B / cholesky(Diagonal(v)) ≈ B / Diagonal(v)
+    @test inv(cholesky(Diagonal(v)))::Diagonal ≈ Diagonal(1 ./ v)
 end
 
 struct WrappedVector{T} <: AbstractVector{T}

@@ -605,9 +605,10 @@ function kron(A::Diagonal, B::SymTridiagonal)
     SymTridiagonal(kdv, kev)
 end
 function kron(A::Diagonal, B::Tridiagonal)
-    kd = kron(diag(A), B.d)
-    kdl = _droplast!(kron(diag(A), _pushzero(B.dl)))
-    kdu = _droplast!(kron(diag(A), _pushzero(B.du)))
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kd = _makevector(kron(diag(A), B.d))
+    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
     Tridiagonal(kdl, kd, kdu)
 end
 
@@ -826,6 +827,8 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 
 @inline cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
 @inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copymutable_oftype(A, choltype(A))
