@@ -1541,7 +1541,7 @@ when the `:compact` property is set to `true`, falling back to the long
 representation if the property is `false` or absent:
 ```jldoctest polartype
 julia> function Base.show(io::IO, z::Polar)
-           if get(io, :compact, false)
+           if get(io, :compact, false)::Bool
                print(io, z.r, "ℯ", z.Θ, "im")
            else
                print(io, z.r, " * exp(", z.Θ, "im)")

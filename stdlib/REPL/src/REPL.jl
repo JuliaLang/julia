@@ -263,9 +263,9 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
         if d.repl isa LineEditREPL
             mistate = d.repl.mistate
             mode = LineEdit.mode(mistate)
-            LineEdit.write_output_prefix(io, mode, get(io, :color, false))
+            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
         end
-        get(io, :color, false) && write(io, answer_color(d.repl))
+        get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
