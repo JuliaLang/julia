@@ -844,7 +844,7 @@ end
 """
     floatmin(T = Float64)
 
-Return the smallest positive floating-point number which is not sub-normal
+Return the smallest positive floating-point number (which is not sub-normal)
 representable by the floating-point type T.
 
 This is not the opposite of `floatmax`! See the Extended help section for more info.
