@@ -897,6 +897,12 @@ end
     ]
 end
 
+@testset "lexer initialization" begin
+    # Ranges of EndMarker
+    @test (t = last(collect(tokenize("+"))); (t.startbyte, t.endbyte)) == (1,0)
+    @test (t = last(collect(tokenize("+*"))); (t.startbyte, t.endbyte)) == (2,1)
+end
+
 @testset "dotop miscellanea" begin
     @test strtok("a .-> b")  ==  ["a", " ", ".-", ">", " ", "b", ""]
     @test strtok(".>: b")    ==  [".>:", " ", "b", ""]
