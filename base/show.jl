@@ -436,7 +436,7 @@ Julia code when possible.
 
 For a more verbose human-readable text output for objects of type `T`, define
 `show(io::IO, ::MIME"text/plain", ::T)` in addition. Checking the `:compact`
-[`IOContext`](@ref) key (often checked as `get(io, :compact, false)`)
+[`IOContext`](@ref) key (often checked as `get(io, :compact, false)::Bool`)
 of `io` in such methods is recommended,
 since some containers show their elements by calling this method with
 `:compact => true`.
