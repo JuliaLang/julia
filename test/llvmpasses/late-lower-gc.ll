@@ -125,6 +125,22 @@ top:
 ; CHECK: ret i32
 }
 
+; COM: the bug here may be caught by death-by-verify-assertion
+define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input) {
+  top:
+  %0 = call {}*** @julia.get_pgcstack()
+  %1 = addrspacecast {} addrspace(13)* addrspace(10)* %input to {} addrspace(13)* addrspace(11)*
+  %2 = bitcast {} addrspace(13)* addrspace(11)* %1 to {} addrspace(11)*
+  switch i32 0, label %end [
+    i32 1, label %end
+    i32 0, label %end
+  ]
+  end:
+  %phi = phi {} addrspace(11)* [ %2, %top ], [ %2, %top ], [ %2, %top ]
+  ; CHECK: %gclift
+  ret {} addrspace(10)* null
+}
+
 !0 = !{i64 0, i64 23}
 !1 = !{!1}
 !2 = !{!7} ; scope list
