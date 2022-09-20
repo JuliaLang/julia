@@ -741,11 +741,13 @@ public:
 };
 
 class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
-    private:
+private:
     std::atomic<size_t> &total_size;
-    public:
 
-    JLMemoryUsagePlugin(std::atomic<size_t> &total_size) : total_size(total_size) {}
+public:
+
+    JLMemoryUsagePlugin(std::atomic<size_t> &total_size)
+        : total_size(total_size) {}
 
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
         return Error::success();
@@ -754,11 +756,11 @@ class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
         return Error::success();
     }
     void notifyTransferringResources(orc::ResourceKey DstKey,
-                                    orc::ResourceKey SrcKey) override {}
+                                     orc::ResourceKey SrcKey) override {}
 
     void modifyPassConfig(orc::MaterializationResponsibility &,
-                            jitlink::LinkGraph &,
-                            jitlink::PassConfiguration &Config) override {
+                          jitlink::LinkGraph &,
+                          jitlink::PassConfiguration &Config) override {
         Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
             size_t graph_size = 0;
             for (auto block : G.blocks()) {
@@ -770,6 +772,8 @@ class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
     }
 };
 
+// TODO: Port our memory management optimisations to JITLink instead of using the
+// default InProcessMemoryManager.
 std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
 #if JL_LLVM_VERSION < 140000
     return std::make_unique<jitlink::InProcessMemoryManager>();
@@ -1191,8 +1195,6 @@ JuliaOJIT::JuliaOJIT()
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
-    // TODO: Port our memory management optimisations to JITLink instead of using the
-    // default InProcessMemoryManager.
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
 #else
