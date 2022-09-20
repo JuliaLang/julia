@@ -66,25 +66,25 @@ struct JuliaPassContext {
     // Initializes a pass context's functions only.
     // Also sets the current module to the given module.
     void initFunctions(llvm::Module &M);
-
-    // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
-    // point of the given function, if there exists such a call.
-    // Otherwise, `nullptr` is returned.
-    llvm::CallInst *getPGCstack(llvm::Function &F) const;
-
-    // Gets the intrinsic or well-known function that conforms to
-    // the given description if it exists in the module. If not,
-    // `nullptr` is returned.
-    llvm::Function *getOrNull(llvm::Module &M,
-        const jl_intrinsics::IntrinsicDescription &desc) const;
-
-    // Gets the intrinsic or well-known function that conforms to
-    // the given description if it exists in the module. If not,
-    // declares the intrinsic or well-known function and adds it
-    // to the module.
-    llvm::Function *getOrDeclare(llvm::Module &M,
-        const jl_intrinsics::IntrinsicDescription &desc);
 };
+
+// Gets a call to the `julia.get_pgcstack' intrinsic in the entry
+// point of the given function, if there exists such a call.
+// Otherwise, `nullptr` is returned.
+llvm::CallInst *getPGCstack(llvm::Function &F);
+
+// Gets the intrinsic or well-known function that conforms to
+// the given description if it exists in the module. If not,
+// `nullptr` is returned.
+llvm::Function *getOrNull(llvm::Module &M,
+    const jl_intrinsics::IntrinsicDescription &desc);
+
+// Gets the intrinsic or well-known function that conforms to
+// the given description if it exists in the module. If not,
+// declares the intrinsic or well-known function and adds it
+// to the module.
+llvm::Function *getOrDeclare(llvm::Module &M,
+    const jl_intrinsics::IntrinsicDescription &desc);
 
 namespace jl_intrinsics {
     // `julia.get_gc_frame_slot`: an intrinsic that creates a

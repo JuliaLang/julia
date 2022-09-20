@@ -51,8 +51,12 @@ void JuliaPassContext::initAll(Module &M)
     T_prjlvalue = JuliaType::get_prjlvalue_ty(M.getContext());
 }
 
-llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
+llvm::CallInst *getPGCstack(llvm::Function &F)
 {
+    auto pgcstack_getter = F.getParent()->getFunction("julia.get_pgcstack");
+    if (!pgcstack_getter) {
+        return nullptr;
+    }
     for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
          pgcstack_getter && I != E; ++I) {
         if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
@@ -64,13 +68,13 @@ llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
     return nullptr;
 }
 
-llvm::Function *JuliaPassContext::getOrNull(Module &M,
-    const jl_intrinsics::IntrinsicDescription &desc) const
+llvm::Function *getOrNull(Module &M,
+    const jl_intrinsics::IntrinsicDescription &desc)
 {
     return M.getFunction(desc.name);
 }
 
-llvm::Function *JuliaPassContext::getOrDeclare(Module &M,
+llvm::Function *getOrDeclare(Module &M,
     const jl_intrinsics::IntrinsicDescription &desc)
 {
     auto local = getOrNull(M, desc);

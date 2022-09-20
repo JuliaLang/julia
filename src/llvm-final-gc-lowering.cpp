@@ -38,7 +38,7 @@ using namespace llvm;
 // runtime library is available. Atypical back-ends should supply
 // their own lowering pass.
 
-struct FinalLowerGC: private JuliaPassContext {
+struct FinalLowerGC {
     bool runOnFunction(Function &F);
     bool doInitialization(Module &M);
     bool doFinalization(Module &M);
@@ -50,6 +50,7 @@ private:
     Function *bigAllocFunc;
     Instruction *pgcstack;
     MDNode *tbaa_gcframe;
+    Type *T_prjlvalue;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
     Value *lowerNewGCFrame(CallInst *target, Function &F);
@@ -230,7 +231,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 
 bool FinalLowerGC::doInitialization(Module &M) {
     // Initialize platform-agnostic references.
-    initAll(M);
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(M.getContext());
     tbaa_gcframe = tbaa_make_child_with_context(M.getContext(), "jtbaa_gcframe").first;
 
     // Initialize platform-specific references.
@@ -304,10 +305,6 @@ static void replaceInstruction(
 bool FinalLowerGC::runOnFunction(Function &F)
 {
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
-    // Check availability of functions again since they might have been deleted.
-    initFunctions(*F.getParent());
-    if (!pgcstack_getter)
-        return false;
 
     // Look for a call to 'julia.get_pgcstack'.
     pgcstack = getPGCstack(F);
