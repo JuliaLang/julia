@@ -87,8 +87,8 @@ aimg  = randn(n,n)/2
             # solver for in-place U' \ A / U (#14896)
             if !(eltya <: Integer)
                 for atyp in (eltya <: Real ? (Symmetric, Hermitian) : (Hermitian,))
-                    for utyp in (UpperTriangular, Diagonal)
-                        A = atyp(asym_sg)
+                    for utyp in (UpperTriangular, Diagonal), uplo in (:L, :U)
+                        A = atyp(asym_sg, uplo)
                         U = utyp(a_sg'a_sg)
                         @test UtiAUi!(copy(A), U) ≈ U' \ A / U
                     end
@@ -96,29 +96,31 @@ aimg  = randn(n,n)/2
             end
 
             # matrices of different types (#14896)
-            if eltya <: Real
-                fs = eigen(Symmetric(asym_sg), a_sg'a_sg)
-                @test fs.values ≈ f.values
-                @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
-                gs = eigen(Symmetric(asym_sg), Diagonal(a_sg'a_sg))
-                @test Symmetric(asym_sg)*gs.vectors ≈ (Diagonal(a_sg'a_sg)*gs.vectors) * Diagonal(gs.values)
+            for uplo in (:L, :U)
+                if eltya <: Real
+                    fs = eigen(Symmetric(asym_sg, uplo), a_sg'a_sg)
+                    @test fs.values ≈ f.values
+                    @test abs.(fs.vectors) ≈ abs.(f.vectors)  # may change sign
+                    gs = eigen(Symmetric(asym_sg, uplo), Diagonal(a_sg'a_sg))
+                    @test Symmetric(asym_sg, uplo)*gs.vectors ≈ (Diagonal(a_sg'a_sg)*gs.vectors) * Diagonal(gs.values)
+                end
+                fh = eigen(Hermitian(asym_sg, uplo), a_sg'a_sg)
+                @test fh.values ≈ f.values
+                @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
+                gh = eigen(Hermitian(asym_sg, uplo), Diagonal(a_sg'a_sg))
+                @test Hermitian(asym_sg, uplo)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
+                gd = eigen(Matrix(Hermitian(a_sg'a_sg, uplo)), Diagonal(a_sg'a_sg))
+                @test Hermitian(a_sg'a_sg, uplo) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
+                gd = eigen(Hermitian(Tridiagonal(a_sg'a_sg), uplo), Diagonal(a_sg'a_sg))
+                @test Hermitian(Tridiagonal(a_sg'a_sg), uplo) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             end
-            fh = eigen(Hermitian(asym_sg), a_sg'a_sg)
-            @test fh.values ≈ f.values
-            @test abs.(fh.vectors) ≈ abs.(f.vectors)  # may change sign
-            gh = eigen(Hermitian(asym_sg), Diagonal(a_sg'a_sg))
-            @test Hermitian(asym_sg)*gh.vectors ≈ (Diagonal(a_sg'a_sg)*gh.vectors) * Diagonal(gh.values)
             gd = eigen(Diagonal(a_sg'a_sg), Diagonal(a_sg'a_sg))
             @test all(≈(1), gd.values)
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Matrix(Diagonal(a_sg'a_sg)), Diagonal(a_sg'a_sg))
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
-            gd = eigen(Matrix(Hermitian(a_sg'a_sg)), Diagonal(a_sg'a_sg))
-            @test Hermitian(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Diagonal(a_sg'a_sg), Matrix(Diagonal(a_sg'a_sg)))
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
-            gd = eigen(Hermitian(Tridiagonal(a_sg'a_sg)), Diagonal(a_sg'a_sg))
-            @test Hermitian(Tridiagonal(a_sg'a_sg)) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Tridiagonal(a_sg'a_sg), Matrix(Diagonal(a_sg'a_sg)))
             @test Tridiagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
         end
