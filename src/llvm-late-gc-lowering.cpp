@@ -322,7 +322,7 @@ private:
     bool runOnFunction(Function &F) override;
 };
 
-struct LateLowerGCFrame:  private JuliaPassContext {
+struct LateLowerGCFrame {
     function_ref<DominatorTree &()> GetDT;
     LateLowerGCFrame(function_ref<DominatorTree &()> GetDT) : GetDT(GetDT) {}
 
@@ -332,6 +332,7 @@ public:
 private:
     CallInst *pgcstack;
     Type *T_prjlvalue;
+    JuliaIntrinsicFunctions intrinsics;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -1487,7 +1488,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     }
                 }
                 auto callee = CI->getCalledFunction();
-                if (callee && callee == typeof_func) {
+                if (callee && callee == intrinsics.typeof_func) {
                     MaybeNoteDef(S, BBS, CI, BBS.Safepoints, SmallVector<int, 1>{-2});
                 }
                 else {
@@ -1548,7 +1549,7 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     S.ReturnsTwice.push_back(CI);
                 }
                 if (callee) {
-                    if (callee == gc_preserve_begin_func) {
+                    if (callee == intrinsics.gc_preserve_begin_func) {
                         std::vector<int> args;
                         for (Use &U : CI->args()) {
                             Value *V = U;
@@ -1573,11 +1574,16 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         continue;
                     }
                     // Known functions emitted in codegen that are not safepoints
-                    if (callee == pointer_from_objref_func || callee == gc_preserve_begin_func ||
-                        callee == gc_preserve_end_func || callee == typeof_func ||
-                        callee == pgcstack_getter || callee->getName() == XSTR(jl_egal__unboxed) ||
-                        callee->getName() == XSTR(jl_lock_value) || callee->getName() == XSTR(jl_unlock_value) ||
-                        callee == write_barrier_func || callee == write_barrier_binding_func ||
+                    if (callee == intrinsics.pointer_from_objref_func ||
+                        callee == intrinsics.gc_preserve_begin_func ||
+                        callee == intrinsics.gc_preserve_end_func ||
+                        callee == intrinsics.typeof_func ||
+                        callee == intrinsics.pgcstack_getter ||
+                        callee->getName() == XSTR(jl_egal__unboxed) ||
+                        callee->getName() == XSTR(jl_lock_value) ||
+                        callee->getName() == XSTR(jl_unlock_value) ||
+                        callee == intrinsics.write_barrier_func ||
+                        callee == intrinsics.write_barrier_binding_func ||
                         callee->getName() == "memcmp") {
                         continue;
                     }
@@ -2311,16 +2317,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
             Value *callee = CI->getCalledOperand();
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
-                        || callee == gc_preserve_end_func)) {
+            if (callee && (callee == intrinsics.gc_flush_func || callee == intrinsics.gc_preserve_begin_func
+                        || callee == intrinsics.gc_preserve_end_func)) {
                 /* No replacement */
-            } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
+            } else if (callee && callee == intrinsics.pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
                 auto *ASCI = new AddrSpaceCastInst(obj, JuliaType::get_pjlvalue_ty(obj->getContext()), "", CI);
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
-            } else if (alloc_obj_func && callee == alloc_obj_func) {
+            } else if (callee && callee == intrinsics.alloc_obj_func) {
                 assert(CI->arg_size() == 3);
 
                 // Initialize an IR builder.
@@ -2393,7 +2399,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 
                 // Update the pointer numbering.
                 UpdatePtrNumbering(CI, newI, S);
-            } else if (typeof_func && callee == typeof_func) {
+            } else if (callee && callee == intrinsics.typeof_func) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
@@ -2404,8 +2410,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if ((write_barrier_func && callee == write_barrier_func) ||
-                       (write_barrier_binding_func && callee == write_barrier_binding_func)) {
+            } else if (callee && (callee == intrinsics.write_barrier_func ||
+                       callee == intrinsics.write_barrier_binding_func)) {
                 // The replacement for this requires creating new BasicBlocks
                 // which messes up the loop. Queue all of them to be replaced later.
                 assert(CI->arg_size() >= 1);
@@ -2413,8 +2419,8 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 ChangesMade = true;
                 ++it;
                 continue;
-            } else if ((call_func && callee == call_func) ||
-                       (call2_func && callee == call2_func)) {
+            } else if (callee && (callee == call_func ||
+                       callee == call2_func)) {
                 assert(T_prjlvalue);
                 size_t nargs = CI->arg_size();
                 size_t nframeargs = nargs-1;
@@ -2514,10 +2520,10 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         auto trigTerm = SplitBlockAndInsertIfThen(anyChldNotMarked, mayTrigTerm, false,
                                                   MDB.createBranchWeights(Weights));
         builder.SetInsertPoint(trigTerm);
-        if (CI->getCalledOperand() == write_barrier_func) {
+        if (CI->getCalledOperand() == intrinsics.write_barrier_func) {
             builder.CreateCall(getOrDeclare(*F.getParent(), jl_intrinsics::queueGCRoot), parent);
         }
-        else if (CI->getCalledOperand() == write_barrier_binding_func) {
+        else if (CI->getCalledOperand() == intrinsics.write_barrier_binding_func) {
             builder.CreateCall(getOrDeclare(*F.getParent(), jl_intrinsics::queueGCBinding), parent);
         }
         else {
@@ -2722,7 +2728,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
-    initFunctions(*F.getParent());
+    intrinsics.init(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
 
     T_prjlvalue = JuliaType::get_prjlvalue_ty(F.getContext());

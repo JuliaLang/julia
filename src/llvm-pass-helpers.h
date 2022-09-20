@@ -11,8 +11,6 @@
 #include <llvm/IR/Type.h>
 #include <llvm/IR/Value.h>
 
-struct JuliaPassContext;
-
 // A namespace for Julia intrinsic descriptions.
 namespace jl_intrinsics {
     // A description of an intrinsic that can be used to find existing
@@ -39,7 +37,7 @@ namespace jl_intrinsics {
 // A data structure that can read Julia-specific intrinsics
 // from modules or add them if they're not available yet.
 // Mainly useful for building Julia-specific LLVM passes.
-struct JuliaPassContext {
+struct JuliaIntrinsicFunctions {
 
     // Intrinsics.
     llvm::Function *pgcstack_getter;
@@ -52,13 +50,10 @@ struct JuliaPassContext {
     llvm::Function *write_barrier_func;
     llvm::Function *write_barrier_binding_func;
 
-    // Creates a pass context. Type and function pointers
-    // are set to `nullptr`. Metadata nodes are initialized.
-    JuliaPassContext();
+    JuliaIntrinsicFunctions();
 
-    // Initializes a pass context's functions only.
-    // Also sets the current module to the given module.
-    void initFunctions(llvm::Module &M);
+    // Initializes a pass context's functions.
+    void init(llvm::Module &M);
 };
 
 // Gets a call to the `julia.get_pgcstack' intrinsic in the entry

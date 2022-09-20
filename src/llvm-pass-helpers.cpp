@@ -18,7 +18,7 @@
 
 using namespace llvm;
 
-JuliaPassContext::JuliaPassContext()
+JuliaIntrinsicFunctions::JuliaIntrinsicFunctions()
   : pgcstack_getter(nullptr), gc_flush_func(nullptr),
     gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
     pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
@@ -27,7 +27,7 @@ JuliaPassContext::JuliaPassContext()
 {
 }
 
-void JuliaPassContext::initFunctions(Module &M)
+void JuliaIntrinsicFunctions::init(Module &M)
 {
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
     gc_flush_func = M.getFunction("julia.gcroot_flush");

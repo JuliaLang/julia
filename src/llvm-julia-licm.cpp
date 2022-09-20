@@ -128,11 +128,12 @@ struct JuliaLICMPassLegacy : public LoopPass {
         }
 };
 
-struct JuliaLICM : public JuliaPassContext {
+struct JuliaLICM {
     function_ref<DominatorTree &()> GetDT;
     function_ref<LoopInfo &()> GetLI;
     function_ref<MemorySSA *()> GetMSSA;
     function_ref<ScalarEvolution *()> GetSE;
+    JuliaIntrinsicFunctions intrinsics;
     JuliaLICM(function_ref<DominatorTree &()> GetDT,
               function_ref<LoopInfo &()> GetLI,
               function_ref<MemorySSA *()> GetMSSA,
@@ -151,13 +152,13 @@ struct JuliaLICM : public JuliaPassContext {
             return false;
         BasicBlock *header = L->getHeader();
         const llvm::DataLayout &DL = header->getModule()->getDataLayout();
-        initFunctions(*header->getModule());
+        intrinsics.init(*header->getModule());
         // Also require `gc_preserve_begin_func` whereas
         // `gc_preserve_end_func` is optional since the input to
         // `gc_preserve_end_func` must be from `gc_preserve_begin_func`.
         // We also hoist write barriers here, so we don't exit if write_barrier_func exists
-        if (!gc_preserve_begin_func && !write_barrier_func && !write_barrier_binding_func &&
-            !alloc_obj_func)
+        if (!intrinsics.gc_preserve_begin_func && !intrinsics.write_barrier_func &&
+            !intrinsics.write_barrier_binding_func && !intrinsics.alloc_obj_func)
             return false;
         auto LI = &GetLI();
         auto DT = &GetDT();
@@ -198,7 +199,7 @@ struct JuliaLICM : public JuliaPassContext {
                 // If all the input arguments dominates the whole loop we can
                 // hoist the `begin` and if a `begin` dominates the loop the
                 // corresponding `end` can be moved to the loop exit.
-                if (callee == gc_preserve_begin_func) {
+                if (callee == intrinsics.gc_preserve_begin_func) {
                     bool canhoist = true;
                     for (Use &U : call->args()) {
                         // Check if all arguments are generated outside the loop
@@ -216,7 +217,7 @@ struct JuliaLICM : public JuliaPassContext {
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     changed = true;
                 }
-                else if (callee == gc_preserve_end_func) {
+                else if (callee == intrinsics.gc_preserve_end_func) {
                     auto begin = cast<Instruction>(call->getArgOperand(0));
                     if (!DT->properlyDominates(begin->getParent(), header))
                         continue;
@@ -235,8 +236,8 @@ struct JuliaLICM : public JuliaPassContext {
                         createNewInstruction(CI, call, MSSAU);
                     }
                 }
-                else if (callee == write_barrier_func ||
-                         callee == write_barrier_binding_func) {
+                else if (callee == intrinsics.write_barrier_func ||
+                         callee == intrinsics.write_barrier_binding_func) {
                     bool valid = true;
                     for (std::size_t i = 0; i < call->arg_size(); i++) {
                         if (!makeLoopInvariant(L, call->getArgOperand(i),
@@ -252,10 +253,10 @@ struct JuliaLICM : public JuliaPassContext {
                         changed = true;
                     }
                 }
-                else if (callee == alloc_obj_func) {
+                else if (callee == intrinsics.alloc_obj_func) {
                     jl_alloc::AllocUseInfo use_info;
                     jl_alloc::CheckInst::Stack check_stack;
-                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, *this, DL};
+                    jl_alloc::EscapeAnalysisRequiredArgs required{use_info, check_stack, intrinsics, DL};
                     jl_alloc::runEscapeAnalysis(call, required, jl_alloc::EscapeAnalysisOptionalArgs().with_valid_set(&L->getBlocksSet()));
                     if (use_info.escaped || use_info.addrescaped) {
                         continue;
