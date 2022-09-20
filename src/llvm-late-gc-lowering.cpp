@@ -2643,7 +2643,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         // Replace Allocas
         unsigned AllocaSlot = 2; // first two words are metadata
         auto M = S.F->getParent();
-        auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32, M](AllocaInst *&AI) {
+        auto replace_alloca = [gcframe, &AllocaSlot, T_int32, M](AllocaInst *&AI) {
             // Pick a slot for the alloca.
             AI->getAlign();
             unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
