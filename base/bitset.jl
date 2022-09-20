@@ -16,6 +16,29 @@ mutable struct BitSet <: AbstractSet{Int}
     offset::Int
 
     BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
+    function BitSet(v::AbstractVector)
+        isempty(v) && return new(zeros(UInt64, 0), NO_OFFSET)
+
+        # This is equivalent to
+        # lo, hi = extrema(_check_bitset_bounds, v)
+        # but extrema(::Function, ::AbstractVector) is not available to the compiler
+        lo = hi = _check_bitset_bounds(first(v))
+        for i in firstindex(v)+1:lastindex(v)
+            x = _check_bitset_bounds(@inbounds v[i])
+            lo = min(lo, x)
+            hi = max(hi, x)
+        end
+
+        offset = _div64(lo)
+        bits = zeros(UInt64, _div64(hi)-offset+1)
+        for x in v
+            intx = Int(x)
+            i1 = _div64(intx) - offset + 1
+            i2 = _mod64(intx)
+            @inbounds bits[i1] |= 1 << i2
+        end
+        new(bits, offset)
+    end
 end
 
 """
