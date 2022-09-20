@@ -154,7 +154,7 @@ mutable struct OptimizationState
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
             nothing,
-            WorldView(code_cache(interp), get_world_counter()),
+            WorldView(code_cache(interp), get_world_counter(interp)),
             interp)
         return new(linfo, src, nothing, stmt_info, mod,
                    sptypes, slottypes, inlining, nothing)
