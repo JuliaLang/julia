@@ -3432,7 +3432,7 @@ void jl_gc_init(void)
     // on a big memory machine, set max_collect_interval to totalmem / nthreads / 2
     uint64_t total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
+    if (constrained_mem != 0)
         total_mem = constrained_mem;
     size_t maxmem = total_mem / jl_n_threads / 2;
     if (maxmem > max_collect_interval)
