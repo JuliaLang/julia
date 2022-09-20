@@ -19,7 +19,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&);
+        typedef llvm::Function *(*DeclarationFunction)(llvm::LLVMContext &);
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
