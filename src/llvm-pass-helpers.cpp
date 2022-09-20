@@ -25,15 +25,12 @@ JuliaPassContext::JuliaPassContext()
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        write_barrier_binding_func(nullptr), call_func(nullptr),
-        call2_func(nullptr), module(nullptr)
+        write_barrier_binding_func(nullptr)
 {
 }
 
 void JuliaPassContext::initFunctions(Module &M)
 {
-    module = &M;
-
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
@@ -43,8 +40,6 @@ void JuliaPassContext::initFunctions(Module &M)
     write_barrier_func = M.getFunction("julia.write_barrier");
     write_barrier_binding_func = M.getFunction("julia.write_barrier_binding");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
-    call_func = M.getFunction("julia.call");
-    call2_func = M.getFunction("julia.call2");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -52,11 +47,8 @@ void JuliaPassContext::initAll(Module &M)
     // First initialize the functions.
     initFunctions(M);
 
-    // Then initialize types and metadata nodes.
-    auto &ctx = M.getContext();
-
     // Construct derived types.
-    T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(M.getContext());
 }
 
 llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
@@ -72,16 +64,16 @@ llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
     return nullptr;
 }
 
-llvm::Function *JuliaPassContext::getOrNull(
+llvm::Function *JuliaPassContext::getOrNull(Module &M,
     const jl_intrinsics::IntrinsicDescription &desc) const
 {
-    return module->getFunction(desc.name);
+    return M.getFunction(desc.name);
 }
 
-llvm::Function *JuliaPassContext::getOrDeclare(
+llvm::Function *JuliaPassContext::getOrDeclare(Module &M,
     const jl_intrinsics::IntrinsicDescription &desc)
 {
-    auto local = getOrNull(desc);
+    auto local = getOrNull(M, desc);
     if (local) {
         // If the function exists already, then we'll
         // just return it.
@@ -90,9 +82,9 @@ llvm::Function *JuliaPassContext::getOrDeclare(
     else {
         // Otherwise, we'll declare it and add it to the module.
         // Declare the function.
-        auto func = desc.declare(module->getContext());
+        auto func = desc.declare(M.getContext());
         // Add it to the function list.
-        module->getFunctionList().push_back(func);
+        M.getFunctionList().push_back(func);
         // Return the newly created function.
         return func;
     }

@@ -54,8 +54,6 @@ struct JuliaPassContext {
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
     llvm::Function *write_barrier_binding_func;
-    llvm::Function *call_func;
-    llvm::Function *call2_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -69,12 +67,6 @@ struct JuliaPassContext {
     // Also sets the current module to the given module.
     void initFunctions(llvm::Module &M);
 
-    // Gets the LLVM context for this pass context.
-    llvm::LLVMContext &getLLVMContext() const
-    {
-        return module->getContext();
-    }
-
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
     // Otherwise, `nullptr` is returned.
@@ -83,18 +75,15 @@ struct JuliaPassContext {
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
     // `nullptr` is returned.
-    llvm::Function *getOrNull(
+    llvm::Function *getOrNull(llvm::Module &M,
         const jl_intrinsics::IntrinsicDescription &desc) const;
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
     // declares the intrinsic or well-known function and adds it
     // to the module.
-    llvm::Function *getOrDeclare(
+    llvm::Function *getOrDeclare(llvm::Module &M,
         const jl_intrinsics::IntrinsicDescription &desc);
-
-private:
-    llvm::Module *module;
 };
 
 namespace jl_intrinsics {

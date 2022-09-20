@@ -234,10 +234,10 @@ bool FinalLowerGC::doInitialization(Module &M) {
     tbaa_gcframe = tbaa_make_child_with_context(M.getContext(), "jtbaa_gcframe").first;
 
     // Initialize platform-specific references.
-    queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
-    queueBindingFunc = getOrDeclare(jl_well_known::GCQueueBinding);
-    poolAllocFunc = getOrDeclare(jl_well_known::GCPoolAlloc);
-    bigAllocFunc = getOrDeclare(jl_well_known::GCBigAlloc);
+    queueRootFunc = getOrDeclare(M, jl_well_known::GCQueueRoot);
+    queueBindingFunc = getOrDeclare(M, jl_well_known::GCQueueBinding);
+    poolAllocFunc = getOrDeclare(M, jl_well_known::GCPoolAlloc);
+    bigAllocFunc = getOrDeclare(M, jl_well_known::GCBigAlloc);
 
     GlobalValue *functionList[] = {queueRootFunc, queueBindingFunc, poolAllocFunc, bigAllocFunc};
     unsigned j = 0;
@@ -315,13 +315,13 @@ bool FinalLowerGC::runOnFunction(Function &F)
         return false;
 
     // Acquire intrinsic functions.
-    auto newGCFrameFunc = getOrNull(jl_intrinsics::newGCFrame);
-    auto pushGCFrameFunc = getOrNull(jl_intrinsics::pushGCFrame);
-    auto popGCFrameFunc = getOrNull(jl_intrinsics::popGCFrame);
-    auto getGCFrameSlotFunc = getOrNull(jl_intrinsics::getGCFrameSlot);
-    auto GCAllocBytesFunc = getOrNull(jl_intrinsics::GCAllocBytes);
-    auto queueGCRootFunc = getOrNull(jl_intrinsics::queueGCRoot);
-    auto queueGCBindingFunc = getOrNull(jl_intrinsics::queueGCBinding);
+    auto newGCFrameFunc = getOrNull(*F.getParent(), jl_intrinsics::newGCFrame);
+    auto pushGCFrameFunc = getOrNull(*F.getParent(), jl_intrinsics::pushGCFrame);
+    auto popGCFrameFunc = getOrNull(*F.getParent(), jl_intrinsics::popGCFrame);
+    auto getGCFrameSlotFunc = getOrNull(*F.getParent(), jl_intrinsics::getGCFrameSlot);
+    auto GCAllocBytesFunc = getOrNull(*F.getParent(), jl_intrinsics::GCAllocBytes);
+    auto queueGCRootFunc = getOrNull(*F.getParent(), jl_intrinsics::queueGCRoot);
+    auto queueGCBindingFunc = getOrNull(*F.getParent(), jl_intrinsics::queueGCBinding);
 
     // Lower all calls to supported intrinsics.
     for (BasicBlock &BB : F) {
