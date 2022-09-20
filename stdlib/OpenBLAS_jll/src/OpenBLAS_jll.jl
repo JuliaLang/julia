@@ -37,6 +37,15 @@ function __init__()
         ENV["OPENBLAS_MAIN_FREE"] = "1"
     end
 
+    # Ensure that OpenBLAS does not grab a huge amount of memory at first,
+    # since it instantly allocates scratch buffer space for the number of
+    # threads it thinks it needs to use.
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS")
+        # We set this to `1` here, and then LinearAlgebra will update
+        # to the true value in its `__init__()` function.
+        ENV["OPENBLAS_NUM_THREADS"] = "1"
+    end
+
     global libopenblas_handle = dlopen(libopenblas)
     global libopenblas_path = dlpath(libopenblas_handle)
     global artifact_dir = dirname(Sys.BINDIR)
