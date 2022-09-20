@@ -45,6 +45,16 @@ aimg  = randn(n,n)/2
             @test eigvecs(f) === f.vectors
             @test Array(f) ≈ a
 
+            for T in (Tridiagonal(a), Hermitian(Tridiagonal(a)))
+                f = eigen(T)
+                d, v = f
+                for i in 1:size(a,2)
+                    @test T*v[:,i] ≈ d[i]*v[:,i]
+                end
+                @test det(T) ≈ det(f)
+                @test inv(T) ≈ inv(f)
+            end
+
             num_fact = eigen(one(eltya))
             @test num_fact.values[1] == one(eltya)
             h = asym
@@ -107,6 +117,10 @@ aimg  = randn(n,n)/2
             @test Hermitian(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
             gd = eigen(Diagonal(a_sg'a_sg), Matrix(Diagonal(a_sg'a_sg)))
             @test Diagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
+            gd = eigen(Hermitian(Tridiagonal(a_sg'a_sg)), Diagonal(a_sg'a_sg))
+            @test Hermitian(Tridiagonal(a_sg'a_sg)) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
+            gd = eigen(Tridiagonal(a_sg'a_sg), Matrix(Diagonal(a_sg'a_sg)))
+            @test Tridiagonal(a_sg'a_sg) * gd.vectors ≈ Diagonal(a_sg'a_sg) * gd.vectors * Diagonal(gd.values)
         end
         @testset "Non-symmetric generalized eigenproblem" begin
             if isa(a, Array)
