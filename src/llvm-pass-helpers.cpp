@@ -21,8 +21,6 @@ using namespace llvm;
 JuliaPassContext::JuliaPassContext()
     : T_prjlvalue(nullptr),
 
-        tbaa_gcframe(nullptr), tbaa_tag(nullptr),
-
         pgcstack_getter(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
@@ -35,13 +33,6 @@ JuliaPassContext::JuliaPassContext()
 void JuliaPassContext::initFunctions(Module &M)
 {
     module = &M;
-    LLVMContext &llvmctx = M.getContext();
-
-    tbaa_gcframe = tbaa_make_child_with_context(llvmctx, "jtbaa_gcframe").first;
-    MDNode *tbaa_data;
-    MDNode *tbaa_data_scalar;
-    std::tie(tbaa_data, tbaa_data_scalar) = tbaa_make_child_with_context(llvmctx, "jtbaa_data");
-    tbaa_tag = tbaa_make_child_with_context(llvmctx, "jtbaa_tag", tbaa_data_scalar).first;
 
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
     gc_flush_func = M.getFunction("julia.gcroot_flush");

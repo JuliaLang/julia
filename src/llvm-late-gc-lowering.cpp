@@ -365,7 +365,7 @@ private:
     void FixUpRefinements(ArrayRef<int> PHINumbers, State &S);
     void RefineLiveSet(BitVector &LS, State &S, const std::vector<int> &CalleeRoots);
     Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V);
-    Value *EmitLoadTag(IRBuilder<> &builder, Value *V);
+    Value *EmitLoadTag(IRBuilder<> &builder, Value *V, MDNode *tbaa_tag);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
@@ -2194,7 +2194,7 @@ Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Value *V)
     return builder.CreateInBoundsGEP(T, cast, ConstantInt::get(T_size, -1));
 }
 
-Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V)
+Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Value *V, MDNode *tbaa_tag)
 {
     auto T_size = getSizeTy(builder.getContext());
     auto addr = EmitTagPtr(builder, T_size, V);
@@ -2272,6 +2272,9 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             ConstantInt::get(T_int32, maxframeargs), "", StartOff);
     }
     std::vector<CallInst*> write_barriers;
+    MDNode *tbaa_gcframe = tbaa_make_child_with_context(F.getContext(), "jtbaa_gcframe").first;
+    MDNode *tbaa_data_scalar = tbaa_make_child_with_context(F.getContext(), "jtbaa_data").second;
+    MDNode *tbaa_tag = tbaa_make_child_with_context(F.getContext(), "jtbaa_tag", tbaa_data_scalar).first;
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             Instruction *I = &*it;
@@ -2391,7 +2394,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, CI->getArgOperand(0));
+                auto tag = EmitLoadTag(builder, CI->getArgOperand(0), tbaa_tag);
                 auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
                 auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
                                                        T_prjlvalue);
@@ -2491,14 +2494,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
         }
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, parent), 3);
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, parent, tbaa_tag), 3);
         auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, 3));
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child), 1);
+            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, child, tbaa_tag), 1);
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0));
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }

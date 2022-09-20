@@ -49,6 +49,7 @@ private:
     Function *poolAllocFunc;
     Function *bigAllocFunc;
     Instruction *pgcstack;
+    MDNode *tbaa_gcframe;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
     Value *lowerNewGCFrame(CallInst *target, Function &F);
@@ -230,6 +231,7 @@ Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 bool FinalLowerGC::doInitialization(Module &M) {
     // Initialize platform-agnostic references.
     initAll(M);
+    tbaa_gcframe = tbaa_make_child_with_context(M.getContext(), "jtbaa_gcframe").first;
 
     // Initialize platform-specific references.
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
