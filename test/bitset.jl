@@ -16,6 +16,7 @@ end
     @test eltype(BitSet()) === Int
     @test eltype(BitSet) === Int
     @test isequal(empty(BitSet([1,2,3])), BitSet())
+    @test BitSet() == BitSet([]) == BitSet(error() for _ in 1:0)
 end
 
 @testset "show" begin
