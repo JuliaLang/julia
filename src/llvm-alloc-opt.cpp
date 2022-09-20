@@ -100,6 +100,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
 struct AllocOpt : public JuliaPassContext {
 
     const DataLayout *DL;
+    Type *T_prjlvalue;
 
     Function *lifetime_start;
     Function *lifetime_end;
@@ -1159,11 +1160,12 @@ cleanup:
 
 bool AllocOpt::doInitialization(Module &M)
 {
-    initAll(M);
+    initFunctions(M);
     if (!alloc_obj_func)
         return false;
 
     DL = &M.getDataLayout();
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(M.getContext());
 
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { Type::getInt8PtrTy(M.getContext(), DL->getAllocaAddrSpace()) });
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { Type::getInt8PtrTy(M.getContext(), DL->getAllocaAddrSpace()) });

@@ -19,13 +19,11 @@
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()
-    : T_prjlvalue(nullptr),
-
-        pgcstack_getter(nullptr), gc_flush_func(nullptr),
-        gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
-        pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
-        typeof_func(nullptr), write_barrier_func(nullptr),
-        write_barrier_binding_func(nullptr)
+  : pgcstack_getter(nullptr), gc_flush_func(nullptr),
+    gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
+    pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
+    typeof_func(nullptr), write_barrier_func(nullptr),
+    write_barrier_binding_func(nullptr)
 {
 }
 
@@ -40,15 +38,6 @@ void JuliaPassContext::initFunctions(Module &M)
     write_barrier_func = M.getFunction("julia.write_barrier");
     write_barrier_binding_func = M.getFunction("julia.write_barrier_binding");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
-}
-
-void JuliaPassContext::initAll(Module &M)
-{
-    // First initialize the functions.
-    initFunctions(M);
-
-    // Construct derived types.
-    T_prjlvalue = JuliaType::get_prjlvalue_ty(M.getContext());
 }
 
 llvm::CallInst *getPGCstack(llvm::Function &F)

@@ -41,9 +41,6 @@ namespace jl_intrinsics {
 // Mainly useful for building Julia-specific LLVM passes.
 struct JuliaPassContext {
 
-    // Types derived from 'jl_value_t'.
-    llvm::PointerType *T_prjlvalue;
-
     // Intrinsics.
     llvm::Function *pgcstack_getter;
     llvm::Function *gc_flush_func;
@@ -58,10 +55,6 @@ struct JuliaPassContext {
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
     JuliaPassContext();
-
-    // Populates a pass context by inspecting a module.
-    // Also sets the current module to the given module.
-    void initAll(llvm::Module &M);
 
     // Initializes a pass context's functions only.
     // Also sets the current module to the given module.

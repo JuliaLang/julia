@@ -331,6 +331,7 @@ public:
 
 private:
     CallInst *pgcstack;
+    Type *T_prjlvalue;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const std::vector<int> &SafepointsSoFar, SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
     void NoteUse(State &S, BBState &BBS, Value *V, BitVector &Uses);
@@ -2721,9 +2722,10 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 }
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
-    initAll(*F.getParent());
+    initFunctions(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
 
+    T_prjlvalue = JuliaType::get_prjlvalue_ty(F.getContext());
     pgcstack = getPGCstack(F);
     if (!pgcstack)
         return CleanupIR(F, nullptr, CFGModified);
