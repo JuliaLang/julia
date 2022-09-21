@@ -1923,8 +1923,8 @@ julia> col0 = Matrix(undef, 2, 0)  # empty matrix, size (2,0)
 
 julia> hcat([1.1, 9.9], col0, ms[3])
 2×3 Matrix{Any}:
- 1.1  50  60
- 9.9  70  80
+ 1.1  50.0  60.0
+ 9.9  70.0  80.0
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
