@@ -63,11 +63,7 @@ struct OptimizationParams
     compilesig_invokes::Bool
     trust_inference::Bool
 
-    # Duplicating for now because optimizer inlining requires it.
-    # Keno assures me this will be removed in the near future
-    MAX_METHODS::Int
     MAX_TUPLE_SPLAT::Int
-    MAX_UNION_SPLITTING::Int
 
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
@@ -75,9 +71,7 @@ struct OptimizationParams
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 250,
             inline_error_path_cost::Int = 20,
-            max_methods::Int = 3,
             tuple_splat::Int = 32,
-            union_splitting::Int = 4,
             compilesig_invokes::Bool = true,
             trust_inference::Bool = false
         )
@@ -89,9 +83,7 @@ struct OptimizationParams
             inline_error_path_cost,
             compilesig_invokes,
             trust_inference,
-            max_methods,
             tuple_splat,
-            union_splitting
         )
     end
 end
