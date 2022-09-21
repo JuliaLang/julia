@@ -766,14 +766,14 @@ function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothi
     if any(!isfinite, Da.diag) || any(!isfinite, Db.diag)
         throw(ArgumentError("matrices contain Infs or NaNs"))
     end
-    if !isposdef(Db)
-        throw(ArgumentError("right-hand side diagonal matrix is not positive definit"))
+    if any(iszero, Db.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
     end
     return GeneralizedEigen(eigen(Db \ Da; sortby)...)
 end
 function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=nothing)
-    if !isposdef(D)
-        throw(ArgumentError("right-hand side diagonal matrix is not positive definit"))
+    if any(iszero, D.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
     end
     if size(A, 1) == size(A, 2) && isdiag(A)
         return eigen(Diagonal(A), D; sortby)
