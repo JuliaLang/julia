@@ -66,9 +66,11 @@ end
 end
 
 @testset "issue #8570" begin
-    @test 400 > @allocated s = BitSet(typemax(Int32))
-    @test length(s) === 1
-    for b in s; b; end
+    let s
+        @test 400 > @allocated s = BitSet(typemax(Int32))
+        @test length(s) === 1
+        for b in s; b; end
+    end
 end
 
 @testset "union!, symdiff!" begin
