@@ -167,7 +167,7 @@ end
 function eigen!(A::RealHermSymComplexHerm{T,S}, B::AbstractMatrix{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number,S<:StridedMatrix}
     return _choleigen!(A, B, sortby)
 end
-function eigen!(A::StridedMatrix{T}, B::RealHermSymComplexHerm{T}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
+function eigen!(A::StridedMatrix{T}, B::Union{RealHermSymComplexHerm{T},Diagonal{T}}; sortby::Union{Function,Nothing}=nothing) where {T<:Number}
     return _choleigen!(A, B, sortby)
 end
 function _choleigen!(A, B, sortby)
