@@ -69,7 +69,7 @@ end
     let s
         @test 400 > @allocated s = BitSet(typemax(Int32))
         @test length(s) === 1
-        for b in s; b; end
+        @test only(s) == typemax(Int32)
     end
 end
 
