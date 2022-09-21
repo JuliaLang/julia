@@ -46,6 +46,11 @@ struct ParseError <: Exception
     diagnostics::Vector{Diagnostic}
 end
 
+function ParseError(stream::ParseStream; filename=nothing)
+    source = SourceFile(sourcetext(stream), filename=filename)
+    ParseError(source, stream.diagnostics)
+end
+
 function Base.showerror(io::IO, err::ParseError, bt; backtrace=false)
     println(io, "ParseError:")
     show_diagnostics(io, err.diagnostics, err.source)
@@ -156,8 +161,7 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
         emit_diagnostic(stream, error="unexpected text after parsing $rule")
     end
     if any_error(stream.diagnostics)
-        source = SourceFile(sourcetext(stream, steal_textbuf=true), filename=filename)
-        throw(ParseError(source, stream.diagnostics))
+        throw(ParseError(stream, filename=filename))
     end
     # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
     # mess that we've got here.

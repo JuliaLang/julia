@@ -1,6 +1,76 @@
 # This file provides an adaptor to match the API expected by the Julia runtime
 # code in the binding Core._parse
 
+# Find the first error in a SyntaxNode tree, returning the index of the error
+# within its parent and the node itself.
+function _first_error(t::SyntaxNode)
+    if is_error(t)
+        return 0,t
+    end
+    if haschildren(t)
+        for (i,c) in enumerate(children(t))
+            if is_error(c)
+                return i,c
+            else
+                x = _first_error(c)
+                if x != (0,nothing)
+                    return x
+                end
+            end
+        end
+    end
+    return 0,nothing
+end
+
+# Classify an incomplete expression, returning a Symbol compatible with
+# Base.incomplete_tag().
+#
+# Roughly, the intention here is to classify which expression head is expected
+# next if the incomplete stream was to continue. (Though this is just rough. In
+# practice several categories are combined for the purposes of the REPL -
+# perhaps we can/should do something more precise in the future.)
+function _incomplete_tag(n::SyntaxNode)
+    i,c = _first_error(n)
+    if isnothing(c)
+        return :none
+    end
+    # TODO: Check error hits last character
+    if kind(c) == K"error" && begin
+                cs = children(c)
+                length(cs) > 0
+            end
+        k1 = kind(cs[1])
+        if k1 == K"ErrorEofMultiComment"
+            return :comment
+        elseif k1 == K"ErrorEofChar"
+            # TODO: Make this case into an internal node
+            return :char
+        end
+        for cc in cs
+            if kind(cc) == K"error"
+                return :other
+            end
+        end
+    end
+    kp = kind(c.parent)
+    if kp == K"string"
+        return :string
+    elseif kp == K"cmdstring"
+        return :cmd
+    elseif kp in KSet"block quote let try"
+        return :block
+    elseif kp in KSet"for while function if"
+        return i == 1 ? :other : :block
+    elseif kp in KSet"module struct"
+        return i == 2 ? :other : :block
+    elseif kp == K"do"
+        return i < 3  ? :other : :block
+    else
+        return :other
+    end
+end
+
+#-------------------------------------------------------------------------------
 @static if isdefined(Core, :_setparser!)
     const _set_core_parse_hook = Core._setparser!
 elseif isdefined(Core, :set_parser)
@@ -93,11 +163,29 @@ function _core_parser_hook(code, filename, lineno, offset, options)
         end
 
         if any_error(stream)
-            e = Expr(:error, ParseError(SourceFile(code, filename=filename), stream.diagnostics))
-            ex = options === :all ? Expr(:toplevel, e) : e
+            tree = build_tree(SyntaxNode, stream, wrap_toplevel_as_kind=K"None")
+            _,err = _first_error(tree)
+            # In the flisp parser errors are normally `Expr(:error, msg)` where
+            # `msg` is a String. By using a ParseError for msg we can do fancy
+            # error reporting instead.
+            if last_byte(err) == lastindex(code)
+                tag = _incomplete_tag(tree)
+                # Here we replicate the particular messages 
+                msg =
+                    tag === :string  ? "incomplete: invalid string syntax"     :
+                    tag === :comment ? "incomplete: unterminated multi-line comment #= ... =#" :
+                    tag === :block   ? "incomplete: construct requires end"    :
+                    tag === :cmd     ? "incomplete: invalid \"`\" syntax"      :
+                    tag === :char    ? "incomplete: invalid character literal" :
+                                       "incomplete: premature end of input"
+                error_ex = Expr(:incomplete, msg)
+            else
+                error_ex = Expr(:error, ParseError(stream, filename=filename))
+            end
+            ex = options === :all ? Expr(:toplevel, error_ex) : error_ex
         else
             # FIXME: Add support to lineno to this tree build (via SourceFile?)
-            ex = build_tree(Expr, stream, filename=filename, wrap_toplevel_as_kind=K"None")
+            ex = build_tree(Expr, stream; filename=filename, wrap_toplevel_as_kind=K"None")
             if Meta.isexpr(ex, :None)
                 # The None wrapping is only to give somewhere for trivia to be
                 # attached; unwrap!

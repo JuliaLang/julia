@@ -31,8 +31,69 @@
 
         # Check that Meta.parse throws the JuliaSyntax.ParseError rather than
         # Meta.ParseError when Core integration is enabled.
-        @test_throws JuliaSyntax.ParseError Meta.parse("[x")
+        @test_throws JuliaSyntax.ParseError Meta.parse("[x)")
 
+        JuliaSyntax.enable_in_core!(false)
+    end
+
+    @testset "Expr(:incomplete)" begin
+        JuliaSyntax.enable_in_core!()
+
+        @test Meta.isexpr(Meta.parse("[x"), :incomplete)
+
+        for (str, tag) in [
+                ""             => :none
+                "\""           => :string
+                "\"\$foo"      => :string
+                "#="           => :comment
+                "'"            => :char
+                "'a"           => :char
+                "`"            => :cmd
+                "("            => :other
+                "["            => :other
+                "begin"        => :block
+                "quote"        => :block
+                "let"          => :block
+                "let;"         => :block
+                "for"          => :other
+                "for x=xs"     => :block
+                "function"     => :other
+                "function f()" => :block
+                "macro"        => :other
+                "macro f()"    => :block
+                "f() do"       => :other
+                "f() do x"     => :block
+                "module"       => :other
+                "module X"     => :block
+                "baremodule"   => :other
+                "baremodule X" => :block
+                "mutable struct"    => :other
+                "mutable struct X"  => :block
+                "struct"       => :other
+                "struct X"     => :block
+                "if"           => :other
+                "if x"         => :block
+                "while"        => :other
+                "while x"      => :block
+                "try"          => :block
+                # could be `try x catch exc body end` or `try x catch ; body end`
+                "try x catch"  => :block
+                "using"        => :other
+                "import"       => :other
+                "local"        => :other
+                "global"       => :other
+
+                "1 == 2 ?"     => :other
+                "1 == 2 ? 3 :" => :other
+                "1,"           => :other
+                "1, "          => :other
+                "1,\n"         => :other
+                "1, \n"        => :other
+            ]
+            @testset "$(repr(str))" begin
+                @test Base.incomplete_tag(Meta.parse(str, raise=false)) == tag
+            end
+        end
         JuliaSyntax.enable_in_core!(false)
     end
 end

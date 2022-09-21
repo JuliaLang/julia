@@ -120,6 +120,9 @@ children(node::SyntaxNode) = haschildren(node) ? node.val::Vector{SyntaxNode} : 
 
 span(node::SyntaxNode) = span(node.raw)
 
+first_byte(node::SyntaxNode) = node.position
+last_byte(node::SyntaxNode)  = node.position + span(node) - 1
+
 """
     sourcetext(node)
 
@@ -138,7 +141,7 @@ end
 function _show_syntax_node(io, current_filename, node::SyntaxNode, indent)
     fname = node.source.filename
     line, col = source_location(node.source, node.position)
-    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(node.position,6)):$(rpad(node.position+span(node)-1,6))│"
+    posstr = "$(lpad(line, 4)):$(rpad(col,3))│$(lpad(first_byte(node),6)):$(rpad(last_byte(node),6))│"
     val = node.val
     nodestr = haschildren(node) ? "[$(untokenize(head(node)))]" :
               isa(val, Symbol) ? string(val) : repr(val)
