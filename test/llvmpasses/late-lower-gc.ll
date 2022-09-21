@@ -125,20 +125,27 @@ top:
 ; CHECK: ret i32
 }
 
-; COM: the bug here may be caught by death-by-verify-assertion
-define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input) {
+; COM: the bugs here may be caught by death-by-verify-assertion
+define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input, i1 %unpredictable) {
   top:
   %0 = call {}*** @julia.get_pgcstack()
-  %1 = addrspacecast {} addrspace(13)* addrspace(10)* %input to {} addrspace(13)* addrspace(11)*
+  br i1 %unpredictable, label %mid1, label %mid2
+  mid1:
+  br label %mid2
+  mid2:
+  %root = phi {} addrspace(13)* addrspace(10)* [ %input, %top ], [ %input, %mid1 ]
+  %unrelated = phi i1 [ %unpredictable, %top ], [ %unpredictable, %mid1 ]
+  %1 = addrspacecast {} addrspace(13)* addrspace(10)* %root to {} addrspace(13)* addrspace(11)*
   %2 = bitcast {} addrspace(13)* addrspace(11)* %1 to {} addrspace(11)*
-  switch i32 0, label %end [
-    i32 1, label %end
-    i32 0, label %end
+  switch i1 %unpredictable, label %end [
+    i1 1, label %end
+    i1 0, label %end
   ]
   end:
-  %phi = phi {} addrspace(11)* [ %2, %top ], [ %2, %top ], [ %2, %top ]
+  %phi = phi {} addrspace(11)* [ %2, %mid2 ], [ %2, %mid2 ], [ %2, %mid2 ]
+  %ret = bitcast {} addrspace(13)* addrspace(10)* %input to {} addrspace(10)*
   ; CHECK: %gclift
-  ret {} addrspace(10)* null
+  ret {} addrspace(10)* %ret
 }
 
 !0 = !{i64 0, i64 23}
