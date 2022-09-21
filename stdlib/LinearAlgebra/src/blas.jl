@@ -20,8 +20,8 @@ export
     scal!,
     scal,
     blascopy!,
-    axpy!,
-    axpby!,
+    # xAXPY!,
+    # xAXPBY!,
     # xDOT
     dotc,
     dotu,
