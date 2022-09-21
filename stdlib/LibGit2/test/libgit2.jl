@@ -1985,7 +1985,7 @@ mktempdir() do dir
             @test parse(GitCredentialHelper, "store") == GitCredentialHelper(`git credential-store`)
         end
 
-        @testset "empty helper" begin
+        @testset "credential helpers" begin
             config_path = joinpath(dir, config_file)
 
             # Note: LibGit2.set! doesn't allow us to set duplicates or ordering
@@ -1998,16 +1998,14 @@ mktempdir() do dir
                     [credential]
                         helper = !echo second
                     """)
+                # Git for Windows uses this config (see issue #45693)
+                write(fp,"""
+                [credential "helperselector"]
+                    selected = manager-core
+                """)
             end
 
             LibGit2.with(LibGit2.GitConfig(config_path, LibGit2.Consts.CONFIG_LEVEL_APP)) do cfg
-                iter = LibGit2.GitConfigIter(cfg, r"credential.*\.helper")
-                @test LibGit2.split_cfg_entry.(iter) == [
-                    ("credential", "", "helper", "!echo first"),
-                    ("credential", "https://mygithost", "helper", ""),
-                    ("credential", "", "helper", "!echo second"),
-                ]
-
                 expected = [
                     GitCredentialHelper(`echo first`),
                     GitCredentialHelper(`echo second`),

@@ -346,6 +346,9 @@ The fields represent:
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
     end
+    @static if LibGit2.VERSION >= v"1.4.0"
+        follow_redirects::Cint         = Consts.GIT_REMOTE_REDIRECT_INITIAL
+    end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
     end
@@ -676,6 +679,9 @@ The fields represent:
     callbacks::RemoteCallbacks         = RemoteCallbacks()
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"1.4.0"
+        follow_redirects::Cint         = Consts.GIT_REMOTE_REDIRECT_INITIAL
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()

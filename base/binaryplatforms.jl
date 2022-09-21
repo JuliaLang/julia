@@ -1027,7 +1027,7 @@ function platforms_match(a::AbstractPlatform, b::AbstractPlatform)
 
         # Call the comparator, passing in which objects requested this comparison (one, the other, or both)
         # For some comparators this doesn't matter, but for non-symmetrical comparisons, it does.
-        if !comparator(ak, bk, a_comp == comparator, b_comp == comparator)
+        if !(comparator(ak, bk, a_comp == comparator, b_comp == comparator)::Bool)
             return false
         end
     end

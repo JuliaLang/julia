@@ -312,8 +312,10 @@ JL_DLLEXPORT int jl_enqueue_task(jl_task_t *task)
     char failed;
     if (multiq_insert(task, task->prio) == -1)
         failed = 1;
-    failed = 0;
-    JL_PROBE_RT_TASKQ_INSERT(jl_current_task->ptls, task);
+    else {
+        failed = 0;
+        JL_PROBE_RT_TASKQ_INSERT(jl_current_task->ptls, task);
+    }
     return failed;
 }
 

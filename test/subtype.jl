@@ -2020,3 +2020,14 @@ end
 #issue #43082
 struct X43082{A, I, B<:Union{Ref{I},I}}; end
 @testintersect(Tuple{X43082{T}, Int} where T, Tuple{X43082{Int}, Any}, Tuple{X43082{Int}, Int})
+
+#issue #46735
+T46735{B<:Real} = Pair{<:Union{B, Val{<:B}}, <:Union{AbstractMatrix{B}, AbstractMatrix{Vector{B}}}}
+@testintersect(T46735{B} where {B}, T46735, !Union{})
+@testintersect(T46735{B} where {B<:Integer}, T46735, !Union{})
+S46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,<:(Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}})}
+@testintersect(S46735{B} where {B}, S46735, !Union{})
+@testintersect(S46735{B, M} where {B, M}, S46735, !Union{})
+A46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
+@testintersect(A46735{B} where {B}, A46735, !Union{})
+@testintersect(A46735{B, M} where {B, M}, A46735, !Union{})

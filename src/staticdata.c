@@ -59,6 +59,7 @@ done by `get_item_for_reloc`.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // printf
+#include <inttypes.h> // PRIxPTR
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -1812,6 +1813,49 @@ static void jl_set_nroots_sysimg(void)
 static void jl_init_serializer2(int);
 static void jl_cleanup_serializer2(void);
 
+jl_array_t *jl_global_roots_table;
+static jl_mutex_t global_roots_lock;
+
+JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
+{
+    if (jl_is_concrete_type(val) || jl_is_bool(val) || jl_is_symbol(val) ||
+            val == (jl_value_t*)jl_any_type || val == (jl_value_t*)jl_bottom_type || val == (jl_value_t*)jl_core_module)
+        return 1;
+    if (val == ((jl_datatype_t*)jl_typeof(val))->instance)
+        return 1;
+    return 0;
+}
+
+JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
+{
+    if (jl_is_globally_rooted(val))
+        return val;
+    if (jl_is_uint8(val))
+        return jl_box_uint8(jl_unbox_uint8(val));
+    if (jl_is_int32(val)) {
+        int32_t n = jl_unbox_int32(val);
+        if ((uint32_t)(n+512) < 1024)
+            return jl_box_int32(n);
+    }
+    else if (jl_is_int64(val)) {
+        uint64_t n = jl_unbox_uint64(val);
+        if ((uint64_t)(n+512) < 1024)
+            return jl_box_int64(n);
+    }
+    JL_GC_PUSH1(&val);
+    JL_LOCK(&global_roots_lock);
+    jl_value_t *rval = jl_eqtable_getkey(jl_global_roots_table, val, NULL);
+    if (rval) {
+        val = rval;
+    }
+    else {
+        jl_global_roots_table = jl_eqtable_put(jl_global_roots_table, val, jl_nothing, NULL);
+    }
+    JL_UNLOCK(&global_roots_lock);
+    JL_GC_POP();
+    return val;
+}
+
 static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
 {
     jl_gc_collect(JL_GC_FULL);
@@ -1878,6 +1922,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_value_t *tag = *tags[i];
             jl_serialize_value(&s, tag);
         }
+        jl_serialize_value(&s, jl_global_roots_table);
         jl_serialize_reachable(&s);
         // step 1.1: check for values only found in the generated code
         arraylist_t typenames;
@@ -1912,9 +1957,22 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         jl_write_gv_tagrefs(&s);
     }
 
-    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
-        const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
-        jl_printf(JL_STDERR, "ERROR: system image too large\n");
+    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: system image too large: sysimg.size is %jd but the limit is %" PRIxPTR "\n",
+            (intmax_t)sysimg.size,
+            ((uintptr_t)1 << RELOC_TAG_OFFSET)
+        );
+        jl_exit(1);
+    }
+    if (const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: system image too large: const_data.size is %jd but the limit is %" PRIxPTR "\n",
+            (intmax_t)const_data.size,
+            ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)
+        );
         jl_exit(1);
     }
 
@@ -1958,6 +2016,7 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
             jl_value_t *tag = *tags[i];
             jl_write_value(&s, tag);
         }
+        jl_write_value(&s, jl_global_roots_table);
         jl_write_value(&s, s.ptls->root_task->tls);
         write_uint32(f, jl_get_gs_ctr());
         write_uint32(f, jl_atomic_load_acquire(&jl_world_counter));
@@ -2084,6 +2143,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
         jl_value_t **tag = tags[i];
         *tag = jl_read_value(&s);
     }
+    jl_global_roots_table = (jl_array_t*)jl_read_value(&s);
     // set typeof extra-special values now that we have the type set by tags above
     jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
     jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;

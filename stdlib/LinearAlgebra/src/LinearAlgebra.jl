@@ -19,6 +19,8 @@ using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     splat
 using Base.Broadcast: Broadcasted, broadcasted
+using Base.PermutedDimsArrays: CommutativeOps
+
 import Libdl
 
 export
