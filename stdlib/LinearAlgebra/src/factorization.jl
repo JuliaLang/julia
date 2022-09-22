@@ -17,6 +17,7 @@ size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
 checknonsingular(info, ::RowMaximum) = info == 0 || throw(SingularException(info))
+checknonsingular(info, ::RowNonZero) = info == 0 || throw(SingularException(info))
 checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
 checknonsingular(info) = checknonsingular(info, RowMaximum())
 
@@ -31,12 +32,12 @@ Test that a factorization of a matrix succeeded.
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 true
 
 julia> F = lu([1 0; 0 0]; check = false);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 false
 ```
 """
@@ -53,9 +54,9 @@ function det(F::Factorization)
 end
 
 convert(::Type{T}, f::T) where {T<:Factorization} = f
-convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)::T
 
-convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)::T
 
 ### General promotion rules
 Factorization{T}(F::Factorization{T}) where {T} = F
@@ -114,8 +115,18 @@ end
 /(B::TransposeAbsVec, adjF::Adjoint{<:Any,<:Factorization}) = adjoint(adjF.parent \ adjoint(B))
 
 
-# support the same 3-arg idiom as in our other in-place A_*_B functions:
-function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
+function ldiv!(Y::AbstractVector, A::Factorization, B::AbstractVector)
+    require_one_based_indexing(Y, B)
+    m, n = size(A, 1), size(A, 2)
+    if m > n
+        Bc = copy(B)
+        ldiv!(A, Bc)
+        return copyto!(Y, 1, Bc, 1, n)
+    else
+        return ldiv!(A, copyto!(Y, B))
+    end
+end
+function ldiv!(Y::AbstractMatrix, A::Factorization, B::AbstractMatrix)
     require_one_based_indexing(Y, B)
     m, n = size(A, 1), size(A, 2)
     if m > n
@@ -123,7 +134,8 @@ function ldiv!(Y::AbstractVecOrMat, A::Factorization, B::AbstractVecOrMat)
         ldiv!(A, Bc)
         return copyto!(Y, view(Bc, 1:n, :))
     else
-        return ldiv!(A, copyto!(Y, view(B, 1:m, :)))
+        copyto!(view(Y, 1:m, :), view(B, 1:m, :))
+        return ldiv!(A, Y)
     end
 end
 

@@ -117,7 +117,7 @@ if Sys.iswindows()
                 m = nothing
             end
             if m === nothing
-                @warn "malformed environment entry: $env"
+                @warn "malformed environment entry" env
                 continue
             end
             return (Pair{String,String}(winuppercase(env[1:prevind(env, m)]), env[nextind(env, m):end]), (pos, blk))
@@ -131,8 +131,8 @@ else # !windows
             env = env::String
             m = findfirst('=', env)
             if m === nothing
-                @warn "malformed environment entry: $env"
-                nothing
+                @warn "malformed environment entry" env
+                continue
             end
             return (Pair{String,String}(env[1:prevind(env, m)], env[nextind(env, m):end]), i+1)
         end
@@ -155,7 +155,7 @@ function show(io::IO, ::EnvDict)
 end
 
 """
-    withenv(f::Function, kv::Pair...)
+    withenv(f, kv::Pair...)
 
 Execute `f` in an environment that is temporarily modified (not replaced as in `setenv`)
 by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
@@ -163,7 +163,7 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
 """
-function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
+function withenv(f, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
     for (key,val) in keyvals
         old[key] = get(ENV,key,nothing)
@@ -176,4 +176,4 @@ function withenv(f::Function, keyvals::Pair{T}...) where T<:AbstractString
         end
     end
 end
-withenv(f::Function) = f() # handle empty keyvals case; see #10853
+withenv(f) = f() # handle empty keyvals case; see #10853

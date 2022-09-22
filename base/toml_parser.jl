@@ -104,7 +104,7 @@ function Parser(str::String; filepath=nothing)
             IdSet{TOMLDict}(),    # defined_tables
             root,
             filepath,
-            isdefined(Base, :loaded_modules) ? get(Base.loaded_modules, DATES_PKGID, nothing) : nothing,
+            isdefined(Base, :maybe_root_module) ? Base.maybe_root_module(DATES_PKGID) : nothing,
         )
     startup(l)
     return l
@@ -226,7 +226,7 @@ const err_message = Dict(
     ErrEmptyBareKey                         => "bare key cannot be empty",
     ErrExpectedNewLineKeyValue              => "expected newline after key value pair",
     ErrNewLineInString                      => "newline character in single quoted string",
-    ErrUnexpectedEndString                  => "string literal ened unexpectedly",
+    ErrUnexpectedEndString                  => "string literal ended unexpectedly",
     ErrExpectedEndOfTable                   => "expected end of table ']'",
     ErrAddKeyToInlineTable                  => "tried to add a new key to an inline table",
     ErrArrayTreatedAsDictionary             => "tried to add a key to an array",
@@ -326,7 +326,7 @@ function Base.showerror(io::IO, err::ParserError)
     str1, err1 = point_to_line(err.str::String, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
         # See https://github.com/JuliaLang/julia/issues/36015
-        format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
+        format_fixer = get(io, :color, false)::Bool == true ? "\e[0m" : ""
         println(io, "$format_fixer  ", str1)
         print(io, "$format_fixer  ", err1)
     else
@@ -672,7 +672,7 @@ function push!!(v::Vector, el)
         out[1] = el
         return out
     else
-        if typeof(T) === Union
+        if T isa Union
             newT = Any
         else
             newT = Union{T, typeof(el)}
@@ -1165,7 +1165,7 @@ function parse_string_continue(l::Parser, multiline::Bool, quoted::Bool)::Err{St
 end
 
 function take_chunks(l::Parser, unescape::Bool)::String
-    nbytes = sum(length, l.chunks)
+    nbytes = sum(length, l.chunks; init=0)
     str = Base._string_n(nbytes)
     offset = 1
     for chunk in l.chunks

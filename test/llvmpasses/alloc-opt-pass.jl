@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia-internal%shlibext -AllocOpt -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -AllocOpt -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S - | FileCheck %s
 
 isz = sizeof(UInt) == 8 ? "i64" : "i32"
 

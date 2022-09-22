@@ -9,6 +9,11 @@ include("testenv.jl")
 @test isa((() -> Core.Intrinsics.bitcast(Ptr{Int8}, 0))(), Ptr{Int8})
 @test isa(convert(Char, 65), Char)
 
+truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
+@test truncbool(0x01) == 0x01
+@test truncbool(0x02) == 0x00
+@test truncbool(0x03) == 0x01
+
 # runtime intrinsics
 @testset "runtime intrinsics" begin
     @test Core.Intrinsics.add_int(1, 1) == 2
@@ -164,8 +169,41 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-@test Core.Intrinsics.atomic_fence(:sequentially_consistent) === nothing
+if Sys.ARCH == :aarch64
+    # On AArch64 we are following the `_Float16` ABI. Buthe these functions expect `Int16`.
+    # TODO: SHould we have `Chalf == Int16` and `Cfloat16 == Float16`?
+    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Int16,), reinterpret(Int16, x))
+    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Int16,), reinterpret(Int16, x))
+    truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, Int16, (Float32,), x))
+    gnu_f2h_ieee(x::Float32) = reinterpret(Float16, ccall("extern __gnu_f2h_ieee", llvmcall, Int16, (Float32,), x))
+    truncdfhf2(x::Float64) = reinterpret(Float16, ccall("extern __truncdfhf2", llvmcall, Int16, (Float64,), x))
+else
+    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Float16,), x)
+    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Float16,), x)
+    truncsfhf2(x::Float32) = ccall("extern __truncsfhf2", llvmcall, Float16, (Float32,), x)
+    gnu_f2h_ieee(x::Float32) = ccall("extern __gnu_f2h_ieee", llvmcall, Float16, (Float32,), x)
+    truncdfhf2(x::Float64) = ccall("extern __truncdfhf2", llvmcall, Float16, (Float64,), x)
+end
+
+@testset "Float16 intrinsics (crt)" begin
+    @test extendhfsf2(Float16(3.3)) == 3.3007812f0
+    @test gnu_h2f_ieee(Float16(3.3)) == 3.3007812f0
+    @test truncsfhf2(3.3f0) == Float16(3.3)
+    @test gnu_f2h_ieee(3.3f0) == Float16(3.3)
+    @test truncdfhf2(3.3) == Float16(3.3)
+end
+
+using Base.Experimental: @force_compile
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(:u)) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") (@force_compile; Core.Intrinsics.atomic_fence(Symbol("u", "x"))) === nothing
+@test_throws ConcurrencyViolationError("invalid atomic ordering") Core.Intrinsics.atomic_fence(Symbol("u", "x")) === nothing
+for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :sequentially_consistent)
+    @test Core.Intrinsics.atomic_fence(order) === nothing
+    @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
+    @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
+end
 @test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)

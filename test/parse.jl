@@ -236,6 +236,13 @@ end
     @test_throws ArgumentError parse(Int, "2", base = 63)
 end
 
+@testset "issue #42616" begin
+    @test tryparse(Bool, "") === nothing
+    @test tryparse(Bool, " ") === nothing
+    @test_throws ArgumentError parse(Bool, "")
+    @test_throws ArgumentError parse(Bool, " ")
+end
+
 # issue #17333: tryparse should still throw on invalid base
 for T in (Int32, BigInt), base in (0,1,100)
     @test_throws ArgumentError tryparse(T, "0", base = base)

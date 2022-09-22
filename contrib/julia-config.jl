@@ -11,8 +11,6 @@ const options = [
     "--framework"
 ];
 
-threadingOn() = ccall(:jl_threading_enabled, Cint, ()) != 0
-
 function shell_escape(str)
     str = replace(str, "'" => "'\''")
     return "'$str'"
@@ -79,7 +77,7 @@ end
 
 function cflags(doframework)
     flags = IOBuffer()
-    print(flags, "-std=gnu99")
+    print(flags, "-std=gnu11")
     if doframework
         include = shell_escape(frameworkDir())
         print(flags, " -F", include)

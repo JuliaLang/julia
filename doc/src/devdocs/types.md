@@ -82,7 +82,7 @@ f3(A::Array{T}) where {T<:Any} = 3
 f4(A::Array{Any}) = 4
 ```
 
-The signature - as described in [Function calls](@ref) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
+The signature - as described in [Function calls](@ref Function-calls) - of `f3` is a `UnionAll` type wrapping a tuple type: `Tuple{typeof(f3), Array{T}} where T`.
 All but `f4` can be called with `a = [1,2]`; all but `f2` can be called with `b = Any[1,2]`.
 
 Let's look at these types a little more closely:
@@ -478,7 +478,7 @@ We have not yet worked out a complete algorithm for this.
 Most operations for dealing with types are found in the files `jltypes.c` and `subtype.c`.
 A good way to start is to watch subtyping in action.
 Build Julia with `make debug` and fire up Julia within a debugger.
-[gdb debugging tips](@ref) has some tips which may be useful.
+[gdb debugging tips](@ref gdb-debugging-tips) has some tips which may be useful.
 
 Because the subtyping code is used heavily in the REPL itself -- and hence breakpoints in this
 code get triggered often -- it will be easiest if you make the following definition:

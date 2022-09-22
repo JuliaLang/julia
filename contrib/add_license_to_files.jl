@@ -46,8 +46,6 @@ const skipfiles = [
     "../src/abi_x86.cpp",
     "../src/abi_x86_64.cpp",
     "../src/disasm.cpp",
-    "../src/getopt.c",
-    "../src/getopt.h",
     "../src/support/END.h",
     "../src/support/ENTRY.amd64.h",
     "../src/support/ENTRY.i387.h",
@@ -61,6 +59,7 @@ const skipfiles = [
     "../src/support/tzfile.h",
     "../src/support/utf8.c",
     "../src/crc32c.c",
+    "../src/mach_excUser.c",
 ]
 
 const ext_prefix = Dict([

@@ -9,7 +9,7 @@
 # 2. We do not run any external actions.
 # 3. We only give the `GITHUB_TOKEN` the minimum necessary set of permissions.
 
-name: Statuses
+name: Create Buildbot Statuses
 
 on:
   push:
@@ -31,8 +31,8 @@ permissions:
   statuses: write
 
 jobs:
-  statuses:
-    name: statuses
+  create-buildbot-statuses:
+    name: Create Buildbot Statuses
     runs-on: ubuntu-latest
     if: github.repository == 'JuliaLang/julia'
     steps:
@@ -48,10 +48,6 @@ jobs:
       - run: |
           declare -a CONTEXT_LIST=(
                 "buildbot/tester_freebsd64"
-                "buildbot/tester_linux32"
-                "buildbot/tester_linux64"
-                "buildbot/tester_linuxaarch64"
-                "buildbot/tester_macos64"
                 "buildbot/tester_win32"
                 "buildbot/tester_win64"
                 )

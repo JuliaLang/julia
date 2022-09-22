@@ -1,7 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-version.h"
+#include "passes.h"
 
+#include <llvm/Pass.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -34,13 +36,11 @@ static bool removeNI(Module &M)
 }
 }
 
-struct RemoveNI : PassInfoMixin<RemoveNI> {
-    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-};
-
 PreservedAnalyses RemoveNI::run(Module &M, ModuleAnalysisManager &AM)
 {
-    removeNI(M);
+    if (removeNI(M)) {
+        return PreservedAnalyses::allInSet<CFGAnalyses>();
+    }
     return PreservedAnalyses::all();
 }
 
@@ -68,7 +68,7 @@ Pass *createRemoveNIPass()
     return new RemoveNILegacy();
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddRemoveNIPass_impl(LLVMPassManagerRef PM)
 {
     unwrap(PM)->add(createRemoveNIPass());
 }

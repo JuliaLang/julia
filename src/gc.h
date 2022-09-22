@@ -11,9 +11,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#ifndef _MSC_VER
 #include <strings.h>
-#endif
 #include <inttypes.h>
 #include "julia.h"
 #include "julia_threads.h"
@@ -26,6 +24,7 @@
 #endif
 #endif
 #include "julia_assert.h"
+#include "gc-alloc-profiler.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,7 +56,7 @@ typedef struct {
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
 
-// This struct must be kept in sync with the Julia type of the same name in base/util.jl
+// This struct must be kept in sync with the Julia type of the same name in base/timing.jl
 typedef struct {
     int64_t     allocd;
     int64_t     deferred_alloc;
@@ -73,6 +72,14 @@ typedef struct {
     size_t      interval;
     int         pause;
     int         full_sweep;
+    uint64_t    max_pause;
+    uint64_t    max_memory;
+    uint64_t    time_to_safepoint;
+    uint64_t    max_time_to_safepoint;
+    uint64_t    sweep_time;
+    uint64_t    mark_time;
+    uint64_t    total_sweep_time;
+    uint64_t    total_mark_time;
 } jl_gc_num_t;
 
 enum {
@@ -376,13 +383,7 @@ unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
 #else
 STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
 {
-#if defined(_COMPILER_MICROSOFT_)
-    unsigned long j;
-    _BitScanForward(&j, bitvec);
-    return j;
-#else
     return __builtin_ffs(bitvec) - 1;
-#endif
 }
 #endif
 
@@ -564,6 +565,10 @@ void gc_time_mark_pause(int64_t t0, int64_t scanned_bytes,
 void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int64_t live_bytes, int64_t estimate_freed,
                          int sweep_full);
+void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
+                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t pause, uint64_t ttsp, uint64_t mark,
+                     uint64_t sweep);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
@@ -589,6 +594,8 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
 #define gc_time_mark_pause(t0, scanned_bytes, perm_scanned_bytes)
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
+#define  gc_time_summary(sweep_full, start, end, freed, live,           \
+                         interval, pause, ttsp, mark, sweep)
 #endif
 
 #ifdef MEMFENCE
@@ -703,6 +710,9 @@ void gc_stats_big_obj(void);
 void gc_count_pool(void);
 
 size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT;
+
+JL_DLLEXPORT void jl_enable_gc_logging(int enable);
+void _report_gc_finished(uint64_t pause, uint64_t freed, int full, int recollect) JL_NOTSAFEPOINT;
 
 #ifdef __cplusplus
 }

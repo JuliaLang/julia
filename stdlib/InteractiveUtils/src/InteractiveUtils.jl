@@ -34,7 +34,7 @@ The memory consumption estimate is an approximate lower bound on the size of the
 - `sortby` : the column to sort results by. Options are `:name` (default), `:size`, and `:summary`.
 - `minsize` : only includes objects with size at least `minsize` bytes. Defaults to `0`.
 """
-function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
+function varinfo(m::Module=Base.active_module(), pattern::Regex=r""; all::Bool = false, imported::Bool = false, sortby::Symbol = :name, recursive::Bool = false, minsize::Int=0)
     sortby in (:name, :size, :summary) || throw(ArgumentError("Unrecognized `sortby` value `:$sortby`. Possible options are `:name`, `:size`, and `:summary`"))
     rows = Vector{Any}[]
     workqueue = [(m, ""),]
@@ -45,7 +45,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
                 continue
             end
             value = getfield(m2, v)
-            isbuiltin = value === Base || value === Main || value === Core
+            isbuiltin = value === Base || value === Base.active_module() || value === Core
             if recursive && !isbuiltin && isa(value, Module) && value !== m2 && nameof(value) === v && parentmodule(value) === m2
                 push!(workqueue, (value, "$prep$v."))
             end
@@ -60,11 +60,11 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
             end
         end
     end
-    let (col, rev) = if sortby == :name
+    let (col, rev) = if sortby === :name
             1, false
-        elseif sortby == :size
+        elseif sortby === :size
             4, true
-        elseif sortby == :summary
+        elseif sortby === :summary
             3, false
         else
             @assert "unreachable"
@@ -75,7 +75,7 @@ function varinfo(m::Module=Main, pattern::Regex=r""; all::Bool = false, imported
 
     return Markdown.MD(Any[Markdown.Table(map(r->r[1:3], rows), Symbol[:l, :r, :l])])
 end
-varinfo(pat::Regex; kwargs...) = varinfo(Main, pat, kwargs...)
+varinfo(pat::Regex; kwargs...) = varinfo(Base.active_module(), pat; kwargs...)
 
 """
     versioninfo(io::IO=stdout; verbose::Bool=false)
@@ -84,6 +84,10 @@ Print information about the version of Julia in use. The output is
 controlled with boolean keyword arguments:
 
 - `verbose`: print all additional information
+
+!!! warning "Warning"
+    The output of this function may contain sensitive information. Before sharing the output,
+    please review the output and remove any data that should not be shared publicly.
 
 See also: [`VERSION`](@ref).
 """
@@ -118,13 +122,13 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(String(take!(cpuio)), "\n"))
+        for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
             println(io, prefix, line)
         end
     else
         cpu = Sys.cpu_info()
-        println(io, "  CPU: ", cpu[1].model)
+        println(io, "  CPU: ", length(cpu), " × ", cpu[1].model)
     end
 
     if verbose
@@ -137,11 +141,20 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LIBM: ",Base.libm_name)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  Threads: ", Threads.nthreads(), " on ", Sys.CPU_THREADS, " virtual cores")
 
-    env_strs = [String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"JULIA", k)];
-                (verbose ?
-                 String[ "  $(k) = $(v)" for (k,v) in ENV if occursin(r"PATH|FLAG|^TERM$|HOME", k)] :
-                 [])]
+    function is_nonverbose_env(k::String)
+        return occursin(r"^JULIA_|^DYLD_|^LD_", k)
+    end
+    function is_verbose_env(k::String)
+        return occursin(r"PATH|FLAG|^TERM$|HOME", k) && !is_nonverbose_env(k)
+    end
+    env_strs = String[
+        String["  $(k) = $(v)" for (k,v) in ENV if is_nonverbose_env(uppercase(k))];
+        (verbose ?
+         String["  $(k) = $(v)" for (k,v) in ENV if is_verbose_env(uppercase(k))] :
+         String[]);
+    ]
     if !isempty(env_strs)
         println(io, "Environment:")
         for str in env_strs

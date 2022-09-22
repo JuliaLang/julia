@@ -90,7 +90,12 @@ begin
     @test f((1,2,3), A) == 3
     @test f((1,2), A) == 2
     @test f((), reshape([1])) == 1
+
+    oldstderr = stderr
+    newstderr = redirect_stderr() # redirect stderr to avoid method definition overwrite warning
     f(dims::NTuple{N,Int}, A::AbstractArray{T,N}) where {T,N} = 4
+    redirect_stderr(oldstderr)
+
     @test f((1,2), A) == 4
     @test f((1,2,3), A) == 3
 end

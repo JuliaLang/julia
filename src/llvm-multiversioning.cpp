@@ -1,17 +1,16 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Function multi-versioning
-#define DEBUG_TYPE "julia_multiversioning"
-#undef DEBUG
-
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
@@ -23,6 +22,7 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #include "julia.h"
@@ -38,18 +38,16 @@
 #include "codegen_shared.h"
 #include "julia_assert.h"
 
+#define DEBUG_TYPE "julia_multiversioning"
+#undef DEBUG
+
 using namespace llvm;
 
-extern std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
-                                                  bool isConstant=false);
+extern Optional<bool> always_have_fma(Function&);
 
 namespace {
-
-// These are valid detail cloning conditions in the target flags.
 constexpr uint32_t clone_mask =
-    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH;
-
-struct MultiVersioning;
+    JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
 
 // Treat identical mapping as missing and return `def` in that case.
 // We mainly need this to identify cloned function using value map after LLVM cloning
@@ -246,7 +244,7 @@ struct CloneCtx {
             return cast<Function>(vmap->lookup(orig_f));
         }
     };
-    CloneCtx(MultiVersioning *pass, Module &M);
+    CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG, bool allow_bad_fvars);
     void clone_bases();
     void collect_func_infos();
     void clone_all_partials();
@@ -272,20 +270,17 @@ private:
     Constant *get_ptrdiff32(Constant *ptr, Constant *base) const;
     template<typename T>
     Constant *emit_offset_table(const std::vector<T*> &vars, StringRef name) const;
+    void rewrite_alias(GlobalAlias *alias, Function* F);
 
-    LLVMContext &ctx;
-    Type *T_size;
-    Type *T_int32;
-    Type *T_void;
-    PointerType *T_psize;
-    PointerType *T_pvoidfunc;
     MDNode *tbaa_const;
-    MultiVersioning *pass;
     std::vector<jl_target_spec_t> specs;
     std::vector<Group> groups{};
     std::vector<Function*> fvars;
     std::vector<Constant*> gvars;
     Module &M;
+    function_ref<LoopInfo&(Function&)> GetLI;
+    function_ref<CallGraph&()> GetCG;
+
     // Map from original functiton to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
@@ -295,29 +290,15 @@ private:
     std::vector<std::pair<Constant*,uint32_t>> gv_relocs{};
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
     std::map<uint32_t,GlobalVariable*> const_relocs;
+    // Functions that were referred to by a global alias, and might not have other uses.
+    std::set<uint32_t> alias_relocs;
     bool has_veccall{false};
     bool has_cloneall{false};
-};
-
-struct MultiVersioning: public ModulePass {
-    static char ID;
-    MultiVersioning()
-        : ModulePass(ID)
-    {}
-
-private:
-    bool runOnModule(Module &M) override;
-    void getAnalysisUsage(AnalysisUsage &AU) const override
-    {
-        AU.addRequired<LoopInfoWrapperPass>();
-        AU.addRequired<CallGraphWrapperPass>();
-        AU.addPreserved<LoopInfoWrapperPass>();
-    }
-    friend struct CloneCtx;
+    bool allow_bad_fvars{false};
 };
 
 template<typename T>
-static inline std::vector<T*> consume_gv(Module &M, const char *name)
+static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow_bad_fvars)
 {
     // Get information about sysimg export functions from the two global variables.
     // Strip them from the Module so that it's easier to handle the uses.
@@ -326,8 +307,17 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name)
     auto *ary = cast<ConstantArray>(gv->getInitializer());
     unsigned nele = ary->getNumOperands();
     std::vector<T*> res(nele);
-    for (unsigned i = 0; i < nele; i++)
-        res[i] = cast<T>(ary->getOperand(i)->stripPointerCasts());
+    unsigned i = 0;
+    while (i < nele) {
+        llvm::Value *val = ary->getOperand(i)->stripPointerCasts();
+        if (allow_bad_fvars && (!isa<T>(val) || (isa<Function>(val) && cast<Function>(val)->isDeclaration()))) {
+            // Shouldn't happen in regular use, but can happen in bugpoint.
+            nele--;
+            continue;
+        }
+        res[i++] = cast<T>(val);
+    }
+    res.resize(nele);
     assert(gv->use_empty());
     gv->eraseFromParent();
     if (ary->use_empty())
@@ -336,19 +326,15 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name)
 }
 
 // Collect basic information about targets and functions.
-CloneCtx::CloneCtx(MultiVersioning *pass, Module &M)
-    : ctx(M.getContext()),
-      T_size(M.getDataLayout().getIntPtrType(ctx, 0)),
-      T_int32(Type::getInt32Ty(ctx)),
-      T_void(Type::getVoidTy(ctx)),
-      T_psize(PointerType::get(T_size, 0)),
-      T_pvoidfunc(FunctionType::get(T_void, false)->getPointerTo()),
-      tbaa_const(tbaa_make_child("jtbaa_const", nullptr, true).first),
-      pass(pass),
+CloneCtx::CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG, bool allow_bad_fvars)
+    : tbaa_const(tbaa_make_child_with_context(M.getContext(), "jtbaa_const", nullptr, true).first),
       specs(jl_get_llvm_clone_targets()),
-      fvars(consume_gv<Function>(M, "jl_sysimg_fvars")),
-      gvars(consume_gv<Constant>(M, "jl_sysimg_gvars")),
-      M(M)
+      fvars(consume_gv<Function>(M, "jl_sysimg_fvars", allow_bad_fvars)),
+      gvars(consume_gv<Constant>(M, "jl_sysimg_gvars", false)),
+      M(M),
+      GetLI(GetLI),
+      GetCG(GetCG),
+      allow_bad_fvars(allow_bad_fvars)
 {
     groups.emplace_back(0, specs[0]);
     uint32_t ntargets = specs.size();
@@ -451,7 +437,7 @@ bool CloneCtx::is_vector(FunctionType *ty) const
 uint32_t CloneCtx::collect_func_info(Function &F)
 {
     uint32_t flag = 0;
-    if (!pass->getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo().empty())
+    if (!GetLI(F).empty())
         flag |= JL_TARGET_CLONE_LOOP;
     if (is_vector(F.getFunctionType())) {
         flag |= JL_TARGET_CLONE_SIMD;
@@ -468,6 +454,16 @@ uint32_t CloneCtx::collect_func_info(Function &F)
                     auto name = callee->getName();
                     if (name.startswith("llvm.muladd.") || name.startswith("llvm.fma.")) {
                         flag |= JL_TARGET_CLONE_MATH;
+                    }
+                    else if (name.startswith("julia.cpu.")) {
+                        if (name.startswith("julia.cpu.have_fma.")) {
+                            // for some platforms we know they always do (or don't) support
+                            // FMA. in those cases we don't need to clone the function.
+                            if (!always_have_fma(*callee).hasValue())
+                                flag |= JL_TARGET_CLONE_CPU;
+                        } else {
+                            flag |= JL_TARGET_CLONE_CPU;
+                        }
                     }
                 }
             }
@@ -555,7 +551,7 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
     auto *next_set = &sets[1];
     // Reduce dispatch by expand the cloning set to functions that are directly called by
     // and calling cloned functions.
-    auto &graph = pass->getAnalysis<CallGraphWrapperPass>().getCallGraph();
+    auto &graph = GetCG();
     while (!cur_set->empty()) {
         for (auto orig_f: *cur_set) {
             // Use the uncloned function since it's already in the call graph
@@ -653,6 +649,12 @@ uint32_t CloneCtx::get_func_id(Function *F)
 {
     auto &ref = func_ids[F];
     if (!ref) {
+        if (allow_bad_fvars && F->isDeclaration()) {
+            // This should never happen in regular use, but can happen if
+            // bugpoint deletes the function. Just do something here to
+            // allow bugpoint to proceed.
+            return (uint32_t)-1;
+        }
         fvars.push_back(F);
         ref = fvars.size();
     }
@@ -702,6 +704,54 @@ Constant *CloneCtx::rewrite_gv_init(const Stack& stack)
     return res;
 }
 
+// replace an alias to a function with a trampoline and (uninitialized) global variable slot
+void CloneCtx::rewrite_alias(GlobalAlias *alias, Function *F)
+{
+    assert(!is_vector(F->getFunctionType()));
+
+    Function *trampoline =
+        Function::Create(F->getFunctionType(), alias->getLinkage(), "", &M);
+    trampoline->copyAttributesFrom(F);
+    trampoline->takeName(alias);
+    alias->eraseFromParent();
+
+    uint32_t id;
+    GlobalVariable *slot;
+    std::tie(id, slot) = get_reloc_slot(F);
+    for (auto &grp: groups) {
+        grp.relocs.insert(id);
+        for (auto &tgt: grp.clones) {
+            tgt.relocs.insert(id);
+        }
+    }
+    alias_relocs.insert(id);
+
+    auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
+    IRBuilder<> irbuilder(BB);
+
+    auto ptr = irbuilder.CreateLoad(F->getType(), slot);
+    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(F->getContext(), None));
+
+    std::vector<Value *> Args;
+    for (auto &arg : trampoline->args())
+        Args.push_back(&arg);
+    auto call = irbuilder.CreateCall(F->getFunctionType(), ptr, makeArrayRef(Args));
+    if (F->isVarArg())
+#if (defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_PPC64_))
+        abort();    // musttail support is very bad on ARM, PPC, PPC64 (as of LLVM 3.9)
+#else
+        call->setTailCallKind(CallInst::TCK_MustTail);
+#endif
+    else
+        call->setTailCallKind(CallInst::TCK_Tail);
+
+    if (F->getReturnType() == Type::getVoidTy(F->getContext()))
+        irbuilder.CreateRetVoid();
+    else
+        irbuilder.CreateRet(call);
+}
+
 void CloneCtx::fix_gv_uses()
 {
     auto single_pass = [&] (Function *orig_f) {
@@ -712,14 +762,20 @@ void CloneCtx::fix_gv_uses()
             auto info = uses.get_info();
             // We only support absolute pointer relocation.
             assert(info.samebits);
-            // And only for non-constant global variable initializers
-            auto val = cast<GlobalVariable>(info.val);
+            GlobalVariable *val;
+            if (auto alias = dyn_cast<GlobalAlias>(info.val)) {
+                rewrite_alias(alias, orig_f);
+                continue;
+            }
+            else {
+                val = cast<GlobalVariable>(info.val);
+            }
             assert(info.use->getOperandNo() == 0);
             assert(!val->isConstant());
             auto fid = get_func_id(orig_f);
-            auto addr = ConstantExpr::getPtrToInt(val, T_size);
+            auto addr = ConstantExpr::getPtrToInt(val, getSizeTy(val->getContext()));
             if (info.offset)
-                addr = ConstantExpr::getAdd(addr, ConstantInt::get(T_size, info.offset));
+                addr = ConstantExpr::getAdd(addr, ConstantInt::get(getSizeTy(val->getContext()), info.offset));
             gv_relocs.emplace_back(addr, fid);
             val->setInitializer(rewrite_gv_init(stack));
         }
@@ -739,8 +795,8 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F)
     auto id = get_func_id(F);
     auto &slot = const_relocs[id];
     if (!slot)
-        slot = new GlobalVariable(M, T_pvoidfunc, false, GlobalVariable::InternalLinkage,
-                                  ConstantPointerNull::get(T_pvoidfunc),
+        slot = new GlobalVariable(M, F->getType(), false, GlobalVariable::InternalLinkage,
+                                  ConstantPointerNull::get(F->getType()),
                                   F->getName() + ".reloc_slot");
     return std::make_pair(id, slot);
 }
@@ -783,7 +839,7 @@ Value *CloneCtx::rewrite_inst_use(const Stack& stack, Value *replace, Instructio
         }
         else if (isa<ConstantVector>(val)) {
             replace = InsertElementInst::Create(ConstantVector::get(args), replace,
-                                                ConstantInt::get(T_size, idx), "",
+                                                ConstantInt::get(getSizeTy(insert_before->getContext()), idx), "",
                                                 insert_before);
         }
         else {
@@ -820,10 +876,9 @@ void CloneCtx::fix_inst_uses()
                     uint32_t id;
                     GlobalVariable *slot;
                     std::tie(id, slot) = get_reloc_slot(orig_f);
-                    Instruction *ptr = new LoadInst(T_pvoidfunc, slot, "", false, insert_before);
+                    Instruction *ptr = new LoadInst(orig_f->getType(), slot, "", false, insert_before);
                     ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-                    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ctx, None));
-                    ptr = new BitCastInst(ptr, F->getType(), "", insert_before);
+                    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
                     use_i->setOperand(info.use->getOperandNo(),
                                       rewrite_inst_use(uses.get_stack(), ptr,
                                                        insert_before));
@@ -848,15 +903,6 @@ template<typename T>
 inline T *CloneCtx::add_comdat(T *G) const
 {
 #if defined(_OS_WINDOWS_)
-    // Add comdat information to make MSVC link.exe happy
-    // it's valid to emit this for ld.exe too,
-    // but makes it very slow to link for no benefit
-#if defined(_COMPILER_MICROSOFT_)
-    Comdat *jl_Comdat = G->getParent()->getOrInsertComdat(G->getName());
-    // ELF only supports Comdat::Any
-    jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
-    G->setComdat(jl_Comdat);
-#endif
     // add __declspec(dllexport) to everything marked for export
     if (G->getLinkage() == GlobalValue::ExternalLinkage)
         G->setDLLStorageClass(GlobalValue::DLLExportStorageClass);
@@ -869,18 +915,20 @@ inline T *CloneCtx::add_comdat(T *G) const
 Constant *CloneCtx::get_ptrdiff32(Constant *ptr, Constant *base) const
 {
     if (ptr->getType()->isPointerTy())
-        ptr = ConstantExpr::getPtrToInt(ptr, T_size);
+        ptr = ConstantExpr::getPtrToInt(ptr, getSizeTy(ptr->getContext()));
     auto ptrdiff = ConstantExpr::getSub(ptr, base);
-    return sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, T_int32) : ptrdiff;
+    return sizeof(void*) == 8 ? ConstantExpr::getTrunc(ptrdiff, Type::getInt32Ty(ptr->getContext())) : ptrdiff;
 }
 
 template<typename T>
 Constant *CloneCtx::emit_offset_table(const std::vector<T*> &vars, StringRef name) const
 {
+    auto T_int32 = Type::getInt32Ty(M.getContext());
+    auto T_size = getSizeTy(M.getContext());
     assert(!vars.empty());
     add_comdat(GlobalAlias::create(T_size, 0, GlobalVariable::ExternalLinkage,
                                    name + "_base",
-                                   ConstantExpr::getBitCast(vars[0], T_psize), &M));
+                                   ConstantExpr::getBitCast(vars[0], T_size->getPointerTo()), &M));
     auto vbase = ConstantExpr::getPtrToInt(vars[0], T_size);
     uint32_t nvars = vars.size();
     std::vector<Constant*> offsets(nvars + 1);
@@ -898,10 +946,15 @@ Constant *CloneCtx::emit_offset_table(const std::vector<T*> &vars, StringRef nam
 
 void CloneCtx::emit_metadata()
 {
+    uint32_t nfvars = fvars.size();
+    if (allow_bad_fvars && nfvars == 0) {
+        // Will result in a non-loadable sysimg, but `allow_bad_fvars` is for bugpoint only
+        return;
+    }
+
     // Store back the information about exported functions.
     auto fbase = emit_offset_table(fvars, "jl_sysimg_fvars");
     auto gbase = emit_offset_table(gvars, "jl_sysimg_gvars");
-    uint32_t nfvars = fvars.size();
 
     uint32_t ntargets = specs.size();
     SmallVector<Target*, 8> targets(ntargets);
@@ -927,7 +980,7 @@ void CloneCtx::emit_metadata()
             auto &specdata = specs[i].data;
             data.insert(data.end(), specdata.begin(), specdata.end());
         }
-        auto value = ConstantDataArray::get(ctx, data);
+        auto value = ConstantDataArray::get(M.getContext(), data);
         add_comdat(new GlobalVariable(M, value->getType(), true,
                                       GlobalVariable::ExternalLinkage,
                                       value, "jl_dispatch_target_ids"));
@@ -936,6 +989,7 @@ void CloneCtx::emit_metadata()
     // Generate `jl_dispatch_reloc_slots`
     std::set<uint32_t> shared_relocs;
     {
+        auto T_int32 = Type::getInt32Ty(M.getContext());
         std::stable_sort(gv_relocs.begin(), gv_relocs.end(),
                          [] (const std::pair<Constant*,uint32_t> &lhs,
                              const std::pair<Constant*,uint32_t> &rhs) {
@@ -959,6 +1013,9 @@ void CloneCtx::emit_metadata()
             if (it != const_relocs.end()) {
                 values.push_back(id_v);
                 values.push_back(get_ptrdiff32(it->second, gbase));
+            }
+            if (alias_relocs.find(id) != alias_relocs.end()) {
+                shared_relocs.insert(id);
             }
         }
         values[0] = ConstantInt::get(T_int32, values.size() / 2);
@@ -997,7 +1054,7 @@ void CloneCtx::emit_metadata()
                 idxs.push_back(baseidx);
                 for (uint32_t j = 0; j < nfvars; j++) {
                     auto base_f = grp->base_func(fvars[j]);
-                    if (shared_relocs.count(j)) {
+                    if (shared_relocs.count(j) || tgt->relocs.count(j)) {
                         count++;
                         idxs.push_back(jl_sysimg_tag_mask | j);
                         auto f = map_get(*tgt->vmap, base_f, base_f);
@@ -1005,18 +1062,18 @@ void CloneCtx::emit_metadata()
                     }
                     else if (auto f = map_get(*tgt->vmap, base_f)) {
                         count++;
-                        idxs.push_back(tgt->relocs.count(j) ? (jl_sysimg_tag_mask | j) : j);
+                        idxs.push_back(j);
                         offsets.push_back(get_ptrdiff32(cast<Function>(f), fbase));
                     }
                 }
             }
             idxs[len_idx] = count;
         }
-        auto idxval = ConstantDataArray::get(ctx, idxs);
+        auto idxval = ConstantDataArray::get(M.getContext(), idxs);
         add_comdat(new GlobalVariable(M, idxval->getType(), true,
                                       GlobalVariable::ExternalLinkage,
                                       idxval, "jl_dispatch_fvars_idxs"));
-        ArrayType *offsets_type = ArrayType::get(T_int32, offsets.size());
+        ArrayType *offsets_type = ArrayType::get(Type::getInt32Ty(M.getContext()), offsets.size());
         add_comdat(new GlobalVariable(M, offsets_type, true,
                                       GlobalVariable::ExternalLinkage,
                                       ConstantArray::get(offsets_type, offsets),
@@ -1024,7 +1081,7 @@ void CloneCtx::emit_metadata()
     }
 }
 
-bool MultiVersioning::runOnModule(Module &M)
+static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function_ref<CallGraph&()> GetCG, bool allow_bad_fvars)
 {
     // Group targets and identify cloning bases.
     // Also initialize function info maps (we'll update these maps as we go)
@@ -1037,7 +1094,13 @@ bool MultiVersioning::runOnModule(Module &M)
     if (M.getName() == "sysimage")
         return false;
 
-    CloneCtx clone(this, M);
+    GlobalVariable *fvars = M.getGlobalVariable("jl_sysimg_fvars");
+    GlobalVariable *gvars = M.getGlobalVariable("jl_sysimg_gvars");
+    if (allow_bad_fvars && (!fvars || !fvars->hasInitializer() || !isa<ConstantArray>(fvars->getInitializer()) ||
+                            !gvars || !gvars->hasInitializer() || !isa<ConstantArray>(gvars->getInitializer())))
+        return false;
+
+    CloneCtx clone(M, GetLI, GetCG, allow_bad_fvars);
 
     // Collect a list of original functions and clone base functions
     clone.clone_bases();
@@ -1072,22 +1135,70 @@ bool MultiVersioning::runOnModule(Module &M)
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
 
+    assert(!verifyModule(M, &errs()));
+
     return true;
 }
 
-char MultiVersioning::ID = 0;
-static RegisterPass<MultiVersioning> X("JuliaMultiVersioning", "JuliaMultiVersioning Pass",
+struct MultiVersioningLegacy: public ModulePass {
+    static char ID;
+    MultiVersioningLegacy(bool allow_bad_fvars=false)
+        : ModulePass(ID), allow_bad_fvars(allow_bad_fvars)
+    {}
+
+private:
+    bool runOnModule(Module &M) override;
+    void getAnalysisUsage(AnalysisUsage &AU) const override
+    {
+        AU.addRequired<LoopInfoWrapperPass>();
+        AU.addRequired<CallGraphWrapperPass>();
+        AU.addPreserved<LoopInfoWrapperPass>();
+    }
+    bool allow_bad_fvars;
+};
+
+bool MultiVersioningLegacy::runOnModule(Module &M)
+{
+    auto GetLI = [this](Function &F) -> LoopInfo & {
+        return getAnalysis<LoopInfoWrapperPass>(F).getLoopInfo();
+    };
+    auto GetCG = [this]() -> CallGraph & {
+        return getAnalysis<CallGraphWrapperPass>().getCallGraph();
+    };
+    return runMultiVersioning(M, GetLI, GetCG, allow_bad_fvars);
+}
+
+
+char MultiVersioningLegacy::ID = 0;
+static RegisterPass<MultiVersioningLegacy> X("JuliaMultiVersioning", "JuliaMultiVersioning Pass",
                                        false /* Only looks at CFG */,
                                        false /* Analysis Pass */);
 
+} // anonymous namespace
+
+PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
+{
+    auto &FAM = AM.getResult<FunctionAnalysisManagerModuleProxy>(M).getManager();
+    auto GetLI = [&](Function &F) -> LoopInfo & {
+        return FAM.getResult<LoopAnalysis>(F);
+    };
+    auto GetCG = [&]() -> CallGraph & {
+        return AM.getResult<CallGraphAnalysis>(M);
+    };
+    if (runMultiVersioning(M, GetLI, GetCG, external_use)) {
+        auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
+        preserved.preserve<LoopAnalysis>();
+        return preserved;
+    }
+    return PreservedAnalyses::all();
 }
 
-Pass *createMultiVersioningPass()
+Pass *createMultiVersioningPass(bool allow_bad_fvars)
 {
-    return new MultiVersioning();
+    return new MultiVersioningLegacy(allow_bad_fvars);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass(LLVMPassManagerRef PM)
+extern "C" JL_DLLEXPORT void LLVMExtraAddMultiVersioningPass_impl(LLVMPassManagerRef PM)
 {
-    unwrap(PM)->add(createMultiVersioningPass());
+    unwrap(PM)->add(createMultiVersioningPass(false));
 }

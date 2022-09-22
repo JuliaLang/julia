@@ -10,12 +10,14 @@ Create a async condition that wakes up tasks waiting for it
 when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
 Use [`isopen`](@ref) to check whether it is still active.
+
+This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
 mutable struct AsyncCondition
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
-    set::Bool
+    @atomic isopen::Bool
+    @atomic set::Bool
 
     function AsyncCondition()
         this = new(Libc.malloc(_sizeof_uv_async), ThreadSynchronizer(), true, false)
@@ -43,13 +45,22 @@ the async condition object itself.
 """
 function AsyncCondition(cb::Function)
     async = AsyncCondition()
-    t = @task while _trywait(async)
-        cb(async)
-        isopen(async) || return
+    t = @task begin
+        unpreserve_handle(async)
+        while _trywait(async)
+            cb(async)
+            isopen(async) || return
+        end
     end
-    lock(async.cond)
-    _wait2(async.cond, t)
-    unlock(async.cond)
+    # here we are mimicking parts of _trywait, in coordination with task `t`
+    preserve_handle(async)
+    @lock async.cond begin
+        if async.set
+            schedule(t)
+        else
+            _wait2(async.cond, t)
+        end
+    end
     return async
 end
 
@@ -60,22 +71,32 @@ end
 
 Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object).
 
-Waiting tasks are woken after an initial delay of `delay` seconds, and then repeating with the given
-`interval` in seconds. If `interval` is equal to `0`, the timer is only triggered once. When
-the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
+at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
+once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
+[`isopen`](@ref) to check whether a timer is still active.
+
+!!! note
+    `interval` is subject to accumulating time skew. If you need precise events at a particular
+    absolute time, create a new timer at each expiration with the difference to the next time computed.
+
+!!! note
+    A `Timer` requires yield points to update its state. For instance, `isopen(t::Timer)` cannot be
+    used to timeout a non-yielding while loop.
+
 """
 mutable struct Timer
-    handle::Ptr{Cvoid}
+    @atomic handle::Ptr{Cvoid}
     cond::ThreadSynchronizer
-    isopen::Bool
-    set::Bool
+    @atomic isopen::Bool
+    @atomic set::Bool
 
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
-        timeout = UInt64(round(timeout * 1000)) + 1
-        interval = UInt64(ceil(interval * 1000))
+        # libuv has a tendency to timeout 1 ms early, so we need +1 on the timeout (in milliseconds), unless it is zero
+        timeoutms = ceil(UInt64, timeout * 1000) + !iszero(timeout)
+        intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
         this = new(Libc.malloc(_sizeof_uv_timer), ThreadSynchronizer(), true, false)
@@ -87,7 +108,7 @@ mutable struct Timer
         ccall(:uv_update_time, Cvoid, (Ptr{Cvoid},), loop)
         err = ccall(:uv_timer_start, Cint, (Ptr{Cvoid}, Ptr{Cvoid}, UInt64, UInt64),
             this, @cfunction(uv_timercb, Cvoid, (Ptr{Cvoid},)),
-            timeout, interval)
+            timeoutms, intervalms)
         @assert err == 0
         iolock_end()
         return this
@@ -99,7 +120,11 @@ unsafe_convert(::Type{Ptr{Cvoid}}, async::AsyncCondition) = async.handle
 
 function _trywait(t::Union{Timer, AsyncCondition})
     set = t.set
-    if !set
+    if set
+        # full barrier now for AsyncCondition
+        t isa Timer || Core.Intrinsics.atomic_fence(:acquire_release)
+    else
+        t.isopen || return false
         t.handle == C_NULL && return false
         iolock_begin()
         set = t.set
@@ -108,14 +133,12 @@ function _trywait(t::Union{Timer, AsyncCondition})
             lock(t.cond)
             try
                 set = t.set
-                if !set
-                    if t.handle != C_NULL
-                        iolock_end()
-                        set = wait(t.cond)
-                        unlock(t.cond)
-                        iolock_begin()
-                        lock(t.cond)
-                    end
+                if !set && t.isopen && t.handle != C_NULL
+                    iolock_end()
+                    set = wait(t.cond)
+                    unlock(t.cond)
+                    iolock_begin()
+                    lock(t.cond)
                 end
             finally
                 unlock(t.cond)
@@ -124,7 +147,7 @@ function _trywait(t::Union{Timer, AsyncCondition})
         end
         iolock_end()
     end
-    t.set = false
+    @atomic :monotonic t.set = false
     return set
 end
 
@@ -134,12 +157,12 @@ function wait(t::Union{Timer, AsyncCondition})
 end
 
 
-isopen(t::Union{Timer, AsyncCondition}) = t.isopen
+isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
 
 function close(t::Union{Timer, AsyncCondition})
     iolock_begin()
-    if t.handle != C_NULL && isopen(t)
-        t.isopen = false
+    if isopen(t)
+        @atomic :monotonic t.isopen = false
         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
     end
     iolock_end()
@@ -151,12 +174,12 @@ function uvfinalize(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
         if t.handle != C_NULL
-            disassociate_julia_struct(t.handle) # not going to call the usual close hooks
+            disassociate_julia_struct(t.handle) # not going to call the usual close hooks anymore
             if t.isopen
-                t.isopen = false
-                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t)
+                @atomic :monotonic t.isopen = false
+                ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), t.handle)
             end
-            t.handle = C_NULL
+            @atomic :monotonic t.handle = C_NULL
             notify(t.cond, false)
         end
     finally
@@ -169,9 +192,9 @@ end
 function _uv_hook_close(t::Union{Timer, AsyncCondition})
     lock(t.cond)
     try
-        t.isopen = false
-        t.handle = C_NULL
-        notify(t.cond, t.set)
+        @atomic :monotonic t.isopen = false
+        Libc.free(@atomicswap :monotonic t.handle = C_NULL)
+        notify(t.cond, false)
     finally
         unlock(t.cond)
     end
@@ -180,9 +203,9 @@ end
 
 function uv_asynccb(handle::Ptr{Cvoid})
     async = @handle_as handle AsyncCondition
-    lock(async.cond)
+    lock(async.cond) # acquire barrier
     try
-        async.set = true
+        @atomic :release async.set = true
         notify(async.cond, true)
     finally
         unlock(async.cond)
@@ -194,7 +217,7 @@ function uv_timercb(handle::Ptr{Cvoid})
     t = @handle_as handle Timer
     lock(t.cond)
     try
-        t.set = true
+        @atomic :monotonic t.set = true
         if ccall(:uv_timer_get_repeat, UInt64, (Ptr{Cvoid},), t) == 0
             # timer is stopped now
             close(t)
@@ -222,18 +245,18 @@ end
 """
     Timer(callback::Function, delay; interval = 0)
 
-Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on the timer object) and
-calls the function `callback`.
+Create a timer that runs the function `callback` at each timer expiration.
 
-Waiting tasks are woken and the function `callback` is called after an initial delay of `delay` seconds,
-and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the timer
-is only triggered once. The function `callback` is called with a single argument, the timer itself.
-When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use [`isopen`](@ref)
-to check whether a timer is still active.
+Waiting tasks are woken and the function `callback` is called after an initial delay of `delay`
+seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
+callback is only run once. The function `callback` is called with a single argument, the timer
+itself. Stop a timer by calling `close`. The `cb` may still be run one final time, if the timer has
+already expired.
 
 # Examples
 
-Here the first number is printed after a delay of two seconds, then the following numbers are printed quickly.
+Here the first number is printed after a delay of two seconds, then the following numbers are
+printed quickly.
 
 ```julia-repl
 julia> begin
@@ -251,62 +274,56 @@ julia> begin
 """
 function Timer(cb::Function, timeout::Real; interval::Real=0.0)
     timer = Timer(timeout, interval=interval)
-    t = @task while _trywait(timer)
-        try
-            cb(timer)
-        catch err
-            write(stderr, "Error in Timer:\n")
-            showerror(stderr, err, catch_backtrace())
-            return
+    t = @task begin
+        unpreserve_handle(timer)
+        while _trywait(timer)
+            try
+                cb(timer)
+            catch err
+                write(stderr, "Error in Timer:\n")
+                showerror(stderr, err, catch_backtrace())
+                return
+            end
+            isopen(timer) || return
         end
-        isopen(timer) || return
     end
-    lock(timer.cond)
-    _wait2(timer.cond, t)
-    unlock(timer.cond)
+    # here we are mimicking parts of _trywait, in coordination with task `t`
+    preserve_handle(timer)
+    @lock timer.cond begin
+        if timer.set
+            schedule(t)
+        else
+            _wait2(timer.cond, t)
+        end
+    end
     return timer
 end
 
 """
-    timedwait(callback::Function, timeout::Real; pollint::Real=0.1)
+    timedwait(testcb, timeout::Real; pollint::Real=0.1)
 
-Waits until `callback` returns `true` or `timeout` seconds have passed, whichever is earlier.
-`callback` is polled every `pollint` seconds. The minimum value for `timeout` and `pollint`
-is `0.001`, that is, 1 millisecond.
+Waits until `testcb()` returns `true` or `timeout` seconds have passed, whichever is earlier.
+The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
+that is, 1 millisecond.
 
 Returns :ok or :timed_out
 """
-function timedwait(testcb::Function, timeout::Real; pollint::Real=0.1)
+function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
     start = time_ns()
     ns_timeout = 1e9 * timeout
-    done = Channel(1)
-    function timercb(aw)
-        try
-            if testcb()
-                put!(done, (:ok, nothing))
-            elseif (time_ns() - start) > ns_timeout
-                put!(done, (:timed_out, nothing))
-            end
-        catch e
-            put!(done, (:error, CapturedException(e, catch_backtrace())))
-        finally
-            isready(done) && close(aw)
+
+    testcb() && return :ok
+
+    t = Timer(pollint, interval=pollint)
+    while _trywait(t) # stop if we ever get closed
+        if testcb()
+            close(t)
+            return :ok
+        elseif (time_ns() - start) > ns_timeout
+            close(t)
+            break
         end
-        nothing
     end
-
-    try
-        testcb() && return :ok
-    catch e
-        throw(CapturedException(e, catch_backtrace()))
-    end
-
-    t = Timer(timercb, pollint, interval = pollint)
-    ret, e = fetch(done)
-    close(t)
-
-    ret === :error && throw(e)
-
-    return ret
+    return :timed_out
 end

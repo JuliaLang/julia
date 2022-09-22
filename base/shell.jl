@@ -211,8 +211,8 @@ function print_shell_escaped_posixly(io::IO, args::AbstractString...)
         first || print(io, ' ')
         # avoid printing quotes around simple enough strings
         # that any (reasonable) shell will definitely never consider them to be special
-        have_single = false
-        have_double = false
+        have_single::Bool = false
+        have_double::Bool = false
         function isword(c::AbstractChar)
             if '0' <= c <= '9' || 'a' <= c <= 'z' || 'A' <= c <= 'Z'
                 # word characters

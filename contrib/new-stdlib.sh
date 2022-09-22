@@ -56,7 +56,7 @@ mv "$ROOT/Makefile.tmp" "$ROOT/Makefile"
 cat >"$ROOT/$NAME.version" <<EOF
 ${UNAME}_BRANCH = master
 ${UNAME}_SHA1 = $SHA1
-${UNAME}_GIT_URL := git://github.com/$USER/$NAME.jl.git
+${UNAME}_GIT_URL := https://github.com/$USER/$NAME.jl.git
 ${UNAME}_TAR_URL = https://api.github.com/repos/$USER/$NAME.jl/tarball/\$1
 EOF
 

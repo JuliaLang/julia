@@ -63,7 +63,7 @@ representation, even though it is exact from the standpoint of binary
 representation.
 
 Example:
-```julia
+```julia-repl
 julia> 1.0 + 1.0001e-15
 1.000000000000001
 
@@ -94,7 +94,7 @@ numbers. Mathematically, `zhi + zlo = x * y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia
+```julia-repl
 julia> x = Float32(π)
 3.1415927f0
 
@@ -126,7 +126,7 @@ numbers. Mathematically, `zhi + zlo ≈ x / y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia
+```julia-repl
 julia> x, y = Float32(π), 3.1f0
 (3.1415927f0, 3.1f0)
 
@@ -162,7 +162,18 @@ div12(x, y) = div12(promote(x, y)...)
     TwicePrecision{T}((num, denom))
 
 A number with twice the precision of `T`, e.g., quad-precision if `T =
-Float64`. `hi` represents the high bits (most significant bits) and
+Float64`.
+
+!!! warning
+    `TwicePrecision` is an internal type used to increase the
+    precision of floating-point ranges, and not intended for external use.
+    If you encounter them in real code, the most likely explanation is
+    that you are directly accessing the fields of a range. Use
+    the function interface instead, `step(r)` rather than `r.step`
+
+# Extended help
+
+`hi` represents the high bits (most significant bits) and
 `lo` the low bits (least significant bits). Rational values
 `num//denom` can be approximated conveniently using the syntax
 `TwicePrecision{T}((num, denom))`.
@@ -257,10 +268,10 @@ TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
-    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
+    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))::TwicePrecision{T}
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)::T
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)::TwicePrecision{T}
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))
@@ -381,23 +392,7 @@ function floatrange(::Type{T}, start_n::Integer, step_n::Integer, len::Integer, 
     steprangelen_hp(T, (ref_n, den), (step_n, den), nb, len, imin)
 end
 
-function floatrange(a::AbstractFloat, st::AbstractFloat, len::Real, divisor::AbstractFloat)
-    len = len + 0 # promote with Int
-    T = promote_type(typeof(a), typeof(st), typeof(divisor))
-    m = maxintfloat(T, Int)
-    if abs(a) <= m && abs(st) <= m && abs(divisor) <= m
-        ia, ist, idivisor = round(Int, a), round(Int, st), round(Int, divisor)
-        if ia == a && ist == st && idivisor == divisor
-            # We can return the high-precision range
-            return floatrange(T, ia, ist, len, idivisor)
-        end
-    end
-    # Fallback (misses the opportunity to set offset different from 1,
-    # but otherwise this is still high-precision)
-    steprangelen_hp(T, (a,divisor), (st,divisor), nbitslen(T, len, 1), len, oneunit(len))
-end
-
-function (:)(start::T, step::T, stop::T) where T<:Union{Float16,Float32,Float64}
+function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
     step == 0 && throw(ArgumentError("range step cannot be zero"))
     # see if the inputs have exact rational approximations (and if so,
     # perform all computations in terms of the rationals)
@@ -442,7 +437,16 @@ end
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T} = T(r.step)
 
-function range_start_step_length(a::T, st::T, len::Integer) where T<:Union{Float16,Float32,Float64}
+range_start_step_length(a::Real, st::IEEEFloat, len::Integer) =
+    range_start_step_length(promote(a, st)..., len)
+
+range_start_step_length(a::IEEEFloat, st::Real, len::Integer) =
+    range_start_step_length(promote(a, st)..., len)
+
+range_start_step_length(a::IEEEFloat, st::IEEEFloat, len::Integer) =
+    range_start_step_length(promote(a, st)..., len)
+
+function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
     len = len + 0 # promote with Int
     start_n, start_d = rat(a)
     step_n, step_d = rat(st)
@@ -458,6 +462,17 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:Union{Float
         end
     end
     steprangelen_hp(T, a, st, 0, len, 1)
+end
+
+range_step_stop_length(step::Real, stop::IEEEFloat, len::Integer) =
+    range_step_stop_length(promote(step, stop)..., len)
+
+range_step_stop_length(step::IEEEFloat, stop::Real, len::Integer) =
+    range_step_stop_length(promote(step, stop)..., len)
+
+function range_step_stop_length(step::IEEEFloat, stop::IEEEFloat, len::Integer)
+    r = range_start_step_length(stop, negate(step), len)
+    reverse(r)
 end
 
 # This assumes that r.step has already been split so that (0:len-1)*r.step.hi is exact

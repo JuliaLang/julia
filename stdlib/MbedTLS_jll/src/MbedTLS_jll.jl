@@ -27,12 +27,12 @@ if Sys.iswindows()
     const libmbedtls = "libmbedtls.dll"
     const libmbedx509 = "libmbedx509.dll"
 elseif Sys.isapple()
-    const libmbedcrypto = "@rpath/libmbedcrypto.5.dylib"
-    const libmbedtls = "@rpath/libmbedtls.13.dylib"
+    const libmbedcrypto = "@rpath/libmbedcrypto.7.dylib"
+    const libmbedtls = "@rpath/libmbedtls.14.dylib"
     const libmbedx509 = "@rpath/libmbedx509.1.dylib"
 else
-    const libmbedcrypto = "libmbedcrypto.so.5"
-    const libmbedtls = "libmbedtls.so.13"
+    const libmbedcrypto = "libmbedcrypto.so.7"
+    const libmbedtls = "libmbedtls.so.14"
     const libmbedx509 = "libmbedx509.so.1"
 end
 

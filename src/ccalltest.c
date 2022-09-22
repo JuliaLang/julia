@@ -13,7 +13,9 @@
 #ifdef _OS_WINDOWS_
 #  define DLLEXPORT __declspec(dllexport)
 #else
-# if defined(_OS_LINUX_)
+# if defined(_OS_LINUX_) && !defined(_COMPILER_CLANG_)
+// Clang and ld disagree about the proper relocation for STV_PROTECTED, causing
+// linker errors.
 #  define DLLEXPORT __attribute__ ((visibility("protected")))
 # else
 #  define DLLEXPORT __attribute__ ((visibility("default")))
@@ -40,11 +42,7 @@ int c_int = 0;
 int xs[300] = {0,0,0,1,0};
 
 //int testUcharX(unsigned char x);
-#ifdef _COMPILER_MICROSOFT_
-int __declspec(noinline)
-#else
 int __attribute__((noinline))
-#endif
 DLLEXPORT testUcharX(unsigned char x) {
     return xs[x];
 }

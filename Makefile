@@ -1,5 +1,7 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
+# import LLVM_SHARED_LIB_NAME
+include $(JULIAHOME)/deps/llvm-ver.make
 
 VERSDIR := v`cut -d. -f1-2 < $(JULIAHOME)/VERSION`
 
@@ -22,12 +24,12 @@ configure-y: | $(BUILDDIRMAKE)
 configure:
 ifeq ("$(origin O)", "command line")
 	@if [ "$$(ls '$(BUILDROOT)' 2> /dev/null)" ]; then \
-		echo 'WARNING: configure called on non-empty directory $(BUILDROOT)'; \
+		printf $(WARNCOLOR)'WARNING: configure called on non-empty directory'$(ENDCOLOR)' %s\n' '$(BUILDROOT)'; \
 		read -p "Proceed [y/n]? " answer; \
 	else \
 		answer=y;\
 	fi; \
-	[ $$answer = 'y' ] && $(MAKE) configure-$$answer
+	[ "y$$answer" = yy ] && $(MAKE) configure-$$answer
 else
 	$(error "cannot rerun configure from within a build directory")
 endif
@@ -48,7 +50,7 @@ $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUI
 
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
-	@echo '@"%~dp0\'"$$(echo $(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE)) | tr / '\\')"\" '%*' > $(BUILDROOT)/julia.bat
+	echo '@"%~dp0/'"$$(echo '$(call rel_path,$(BUILDROOT),$(JULIA_EXECUTABLE))')"'" %*' | tr / '\\' > $(BUILDROOT)/julia.bat
 	chmod a+x $(BUILDROOT)/julia.bat
 else
 ifndef JULIA_VAGRANT_BUILD
@@ -99,7 +101,9 @@ docs-revise:
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	@$(JULIAHOME)/contrib/check-whitespace.sh
+	@# Append the directory containing the julia we just built to the end of `PATH`,
+	@# to give us the best chance of being able to run this check.
+	@PATH="$(PATH):$(dir $(JULIA_EXECUTABLE))" $(JULIAHOME)/contrib/check-whitespace.jl
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -127,15 +131,16 @@ release-candidate: release testall
 	@echo 2. Update references to the julia version in the source directories, such as in README.md
 	@echo 3. Bump VERSION
 	@echo 4. Increase SOMAJOR and SOMINOR if needed.
-	@echo 5. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
-	@echo 6. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 7. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
-	@echo 8. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
-	@echo 9. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
-	@echo 10. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
-	@echo 11. Update checksums on AWS for tarball and packaged binaries
-	@echo 12. Announce on mailing lists
-	@echo 13. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 5. Update SPDX document by running the script contrib/updateSPDX.jl
+	@echo 6. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
+	@echo 7. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
+	@echo 8. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist with USE_BINARYBUILDER=0
+	@echo 9. Check that 'make && make install && make test' succeed with unpacked tarballs even without Internet access.
+	@echo 10. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
+	@echo 11. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 12. Update checksums on AWS for tarball and packaged binaries
+	@echo 13. Announce on mailing lists
+	@echo 14. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
@@ -159,19 +164,23 @@ julia-base-cache: julia-sysimg-$(JULIA_BUILD_MODE) | $(DIRS) $(build_datarootdir
 		$(call cygpath_w,$(build_datarootdir)/julia/base.cache))
 
 # public libraries, that are installed in $(prefix)/lib
+ifeq ($(JULIA_BUILD_MODE),release)
 JL_TARGETS := julia
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-JL_TARGETS += julia-debug
+else ifeq ($(JULIA_BUILD_MODE),debug)
+JL_TARGETS := julia-debug
 endif
 
 # private libraries, that are installed in $(prefix)/lib/julia
-JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest libjulia-internal libjulia-codegen libblastrampoline
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+JL_PRIVATE_LIBS-0 := libccalltest libllvmcalltest
+ifeq ($(JULIA_BUILD_MODE),release)
+JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
+else ifeq ($(JULIA_BUILD_MODE),debug)
 JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 endif
 ifeq ($(USE_GPL_LIBS), 1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSUITESPARSE) += libamd libbtf libcamd libccolamd libcholmod libcolamd libklu libldl librbio libspqr libsuitesparseconfig libumfpack
 endif
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBBLASTRAMPOLINE) += libblastrampoline
 JL_PRIVATE_LIBS-$(USE_SYSTEM_PCRE) += libpcre2-8
 JL_PRIVATE_LIBS-$(USE_SYSTEM_DSFMT) += libdSFMT
 JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
@@ -188,7 +197,7 @@ else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
 ifeq ($(USE_LLVM_SHLIB),1)
-JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM libLLVM-12jl
+JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
 endif
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUNWIND) += libunwind
 
@@ -220,44 +229,40 @@ endif
 endif
 endif
 
+# Note that we disable MSYS2's path munging here, as otherwise
+# it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
-	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
+	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
 endef
 
 
 install: $(build_depsbindir)/stringreplace $(BUILDROOT)/doc/_build/html/en/index.html
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	@$(MAKE) $(QUIET_MAKE) all
-else
-	@$(MAKE) $(QUIET_MAKE) release
-endif
+	@$(MAKE) $(QUIET_MAKE) $(JULIA_BUILD_MODE)
 	@for subdir in $(bindir) $(datarootdir)/julia/stdlib/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir) $(libexecdir); do \
 		mkdir -p $(DESTDIR)$$subdir; \
 	done
 
-	$(INSTALL_M) $(build_bindir)/julia $(DESTDIR)$(bindir)/
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	$(INSTALL_M) $(build_bindir)/julia-debug $(DESTDIR)$(bindir)/
-endif
+	$(INSTALL_M) $(JULIA_EXECUTABLE_$(JULIA_BUILD_MODE)) $(DESTDIR)$(bindir)/
 ifeq ($(OS),WINNT)
-	-$(INSTALL_M) $(filter-out $(build_bindir)/libjulia-debug.dll,$(wildcard $(build_bindir)/*.dll)) $(DESTDIR)$(bindir)/
+	-$(INSTALL_M) $(wildcard $(build_bindir)/*.dll) $(DESTDIR)$(bindir)/
+ifeq ($(JULIA_BUILD_MODE),release)
 	-$(INSTALL_M) $(build_libdir)/libjulia.dll.a $(DESTDIR)$(libdir)/
+else ifeq ($(JULIA_BUILD_MODE),debug)
+	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
+endif
 
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
-	-$(INSTALL_M) $(build_bindir)/libjulia-debug.dll $(DESTDIR)$(bindir)/
-	-$(INSTALL_M) $(build_libdir)/libjulia-debug.dll.a $(DESTDIR)$(libdir)/
-endif
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
 ifneq ($(DARWIN_FRAMEWORK),1)
 ifeq ($(OS),Darwin)
+ifeq ($(JULIA_BUILD_MODE),release)
 	-cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
 	-cp -a $(build_private_libdir)/sys.dylib.dSYM $(DESTDIR)$(private_libdir)
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	-cp -a $(build_libdir)/libjulia-debug.*.dSYM $(DESTDIR)$(libdir)
 	-cp -a $(build_private_libdir)/sys-debug.dylib.dSYM $(DESTDIR)$(private_libdir)
 endif
@@ -272,10 +277,11 @@ endif
 	done
 else
 	# libjulia in Darwin framework has special location and name
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_libdir)/libjulia.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME).dSYM $(DESTDIR)$(prefix)/$(framework_dylib)
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys.dylib.dSYM $(build_private_libdir)/sys.dylib
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_libdir)/libjulia-debug.$(SOMAJOR).$(SOMINOR).dylib $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/$(FRAMEWORK_NAME)_debug.dSYM $(DESTDIR)$(prefix)/$(framework_dylib)_debug
 	@$(DSYMUTIL) -o $(DESTDIR)$(prefix)/$(framework_resources)/sys-debug.dylib.dSYM $(build_private_libdir)/sys-debug.dylib
@@ -303,8 +309,9 @@ endif
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 endif
 
@@ -354,32 +361,44 @@ endif
 		RELEASE_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib); \
 		DEBUG_TARGET=$(DESTDIR)$(prefix)/$(framework_dylib)_debug; \
 	fi; \
-	$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
-	if [ "$(BUNDLE_DEBUG_LIBS)" = "1" ]; then \
+	if [ "$(JULIA_BUILD_MODE)" = "release" ]; then \
+		$(call stringreplace,$${RELEASE_TARGET},sys.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys.$(SHLIB_EXT)); \
+	elif [ "$(JULIA_BUILD_MODE)" = "debug" ]; then \
 		$(call stringreplace,$${DEBUG_TARGET},sys-debug.$(SHLIB_EXT)$$,$(private_libdir_rel)/sys-debug.$(SHLIB_EXT)); \
 	fi;
 endif
 
 	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
 ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
 endif
 endif
 
 
 ifneq ($(LOADER_BUILD_DEP_LIBS),$(LOADER_INSTALL_DEP_LIBS))
 	# Next, overwrite relative path to libjulia-internal in our loader if $$(LOADER_BUILD_DEP_LIBS) != $$(LOADER_INSTALL_DEP_LIBS)
+ifeq ($(JULIA_BUILD_MODE),release)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_BUILD_DEP_LIBS)$$,$(LOADER_INSTALL_DEP_LIBS))
-
-ifeq ($(BUNDLE_DEBUG_LIBS),1)
+else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT),$(LOADER_DEBUG_BUILD_DEP_LIBS)$$,$(LOADER_DEBUG_INSTALL_DEP_LIBS))
 endif
+ifeq ($(OS),Darwin)
+	# Codesign the libjulia we just modified
+ifeq ($(JULIA_BUILD_MODE),release)
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+else ifeq ($(JULIA_BUILD_MODE),debug)
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(DESTDIR)$(shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)"
+endif
+endif
 endif
 
-	# On FreeBSD, remove the build's libdir from each library's RPATH
 ifeq ($(OS),FreeBSD)
+	# On FreeBSD, remove the build's libdir from each library's RPATH
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(libdir) $(build_libdir)
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(private_libdir) $(build_libdir)
 	$(JULIAHOME)/contrib/fixup-rpath.sh "$(PATCHELF)" $(DESTDIR)$(bindir) $(build_libdir)
@@ -411,6 +430,12 @@ ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 endif
 endif
 endif
+
+ifeq ($(USE_BINARYBUILDER_OPENBLAS),0)
+	# https://github.com/JuliaLang/julia/issues/46579
+	USE_BINARYBUILDER_OBJCONV=0
+endif
+
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
 	$(error prefix must not be set for make binary-dist)
 endif
@@ -426,7 +451,12 @@ endif
 ifeq ($(OS), WINNT)
 	cd $(BUILDROOT)/julia-$(JULIA_COMMIT)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 endif
+ifeq ($(OS),Darwin)
+	# If we're on macOS, and we have a codesigning identity, then codesign the binary-dist tarball!
+	$(JULIAHOME)/contrib/codesign.sh "$(MACOS_CODESIGN_IDENTITY)" "$(BUILDROOT)/julia-$(JULIA_COMMIT)"
+endif
 	cd $(BUILDROOT) && $(TAR) zcvf $(JULIA_BINARYDIST_FILENAME).tar.gz julia-$(JULIA_COMMIT)
+
 
 exe:
 	# run Inno Setup to compile installer
@@ -455,8 +485,10 @@ endif
 	-ls stdlib/srccache/*.tar.gz >> light-source-dist.tmp
 	-ls stdlib/*/StdlibArtifacts.toml >> light-source-dist.tmp
 
-	# Exclude git, github and CI config files
-	git ls-files | sed -E -e '/^\..+/d' -e '/\/\..+/d' -e '/appveyor.yml/d' >> light-source-dist.tmp
+	# Include all git-tracked filenames
+	git ls-files >> light-source-dist.tmp
+
+	# Include documentation filenames
 	find doc/_build/html >> light-source-dist.tmp
 
 # Make tarball with only Julia code + stdlib tarballs

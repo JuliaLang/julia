@@ -1,5 +1,6 @@
 using Test
 using InteractiveUtils
+using Core: OpaqueClosure
 
 const_int() = 1
 
@@ -7,8 +8,8 @@ const lno = LineNumberNode(1, :none)
 
 let ci = @code_lowered const_int()
     @eval function oc_trivial()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci)))
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci)))
     end
 end
 @test isa(oc_trivial(), Core.OpaqueClosure{Tuple{}, Any})
@@ -16,8 +17,8 @@ end
 
 let ci = @code_lowered const_int()
     @eval function oc_simple_inf()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci)))
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci)))
     end
 end
 @test isa(oc_simple_inf(), Core.OpaqueClosure{Tuple{}, Int})
@@ -30,8 +31,8 @@ end
 (a::OcClos2Int)() = getfield(a, 1) + getfield(a, 2)
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_trivial_clos()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Int, Int,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             1, 2))
     end
 end
@@ -39,8 +40,8 @@ end
 
 let ci = @code_lowered OcClos2Int(1, 2)();
     @eval function oc_self_call_clos()
-        $(Expr(:new_opaque_closure, Tuple{}, false, Int, Int,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Int, Int,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             1, 2))()
     end
 end
@@ -56,8 +57,8 @@ end
 (a::OcClos1Any)() = getfield(a, 1)
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_pass_clos(x)
-        $(Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Any, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :x))
     end
 end
@@ -66,8 +67,8 @@ end
 
 let ci = @code_lowered OcClos1Any(1)()
     @eval function oc_infer_pass_clos(x)
-        $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :x))
     end
 end
@@ -78,8 +79,8 @@ end
 
 let ci = @code_lowered identity(1)
     @eval function oc_infer_pass_id()
-        $(Expr(:new_opaque_closure, Tuple{Any}, false, Any, Any,
-            Expr(:opaque_closure_method, nothing, 1, lno, ci)))
+        $(Expr(:new_opaque_closure, Tuple{Any}, Any, Any,
+            Expr(:opaque_closure_method, nothing, 1, false, lno, ci)))
     end
 end
 function complicated_identity(x)
@@ -100,8 +101,8 @@ end
 
 let ci = @code_lowered OcOpt([1 2])()
     @eval function oc_opt_ndims(A)
-        $(Expr(:new_opaque_closure, Tuple{}, false, Union{}, Any,
-            Expr(:opaque_closure_method, nothing, 0, lno, ci),
+        $(Expr(:new_opaque_closure, Tuple{}, Union{}, Any,
+            Expr(:opaque_closure_method, nothing, 0, false, lno, ci),
             :A))
     end
 end
@@ -140,13 +141,28 @@ g_world_age = @opaque ()->test_oc_world_age()
 @test g_world_age() == 1
 @test isa(mk_oc_world_age(), Core.OpaqueClosure{Tuple{}, Int})
 
-# Evil, dynamic Vararg stuff (don't do this - made to work for consistency)
-function maybe_opaque(isva::Bool)
-    T = isva ? Vararg{Int, 1} : Int
-    @opaque (x::T)->x
+function maybe_vararg(isva::Bool)
+    T = isva ? Vararg{Int} : Int
+    @opaque Tuple{T} (x...)->x
 end
-@test maybe_opaque(false)(1) == 1
-@test maybe_opaque(true)(1) == (1,)
+@test maybe_vararg(false)(1) == (1,)
+@test_throws MethodError maybe_vararg(false)(1,2,3)
+@test maybe_vararg(true)(1) == (1,)
+@test maybe_vararg(true)(1,2,3) == (1,2,3)
+@test (@opaque Tuple{Int, Int} (a, b, x...)->x)(1,2) === ()
+@test (@opaque Tuple{Int, Int} (a, x...)->x)(1,2) === (2,)
+@test (@opaque Tuple{Int, Vararg{Int}} (a, x...)->x)(1,2,3,4) === (2,3,4)
+@test (@opaque (a::Int, x::Int...)->x)(1,2,3) === (2,3)
+
+@test_throws ErrorException (@opaque Tuple{Vararg{Int}} x->x)
+@test_throws ErrorException (@opaque Tuple{Int, Vararg{Int}} x->x)
+@test_throws ErrorException (@opaque Tuple{Int, Int} x->x)
+@test_throws ErrorException (@opaque Tuple{Any} (x,y)->x)
+@test_throws ErrorException (@opaque Tuple{Vararg{Int}} (x,y...)->x)
+@test_throws ErrorException (@opaque Tuple{Int} (x,y,z...)->x)
+
+# cannot specify types both on arguments and separately
+@test_throws ErrorException @eval @opaque Tuple{Any} (x::Int)->x
 
 # Vargarg in complied mode
 mk_va_opaque() = @opaque (x...)->x
@@ -159,8 +175,8 @@ mk_va_opaque() = @opaque (x...)->x
 # Opaque closure in CodeInfo returned from generated functions
 function mk_ocg(args...)
     ci = @code_lowered const_int()
-    cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, false, Any, Any,
-        Expr(:opaque_closure_method, nothing, 0, lno, ci))).args[1]
+    cig = Meta.lower(@__MODULE__, Expr(:new_opaque_closure, Tuple{}, Any, Any,
+        Expr(:opaque_closure_method, nothing, 0, false, lno, ci))).args[1]
     cig.slotnames = Symbol[Symbol("#self#")]
     cig.slottypes = Any[Any]
     cig.slotflags = UInt8[0x00]
@@ -206,3 +222,51 @@ end
 @test f_oc_noinline_call(1, 2) == 3
 
 @test_throws MethodError (@opaque x->x+1)(1, 2)
+
+# https://github.com/JuliaLang/julia/issues/40409
+const GLOBAL_OPAQUE_CLOSURE = @opaque () -> 123
+call_global_opaque_closure() = GLOBAL_OPAQUE_CLOSURE()
+@test call_global_opaque_closure() == 123
+
+let foo::Int = 42
+    Base.Experimental.@force_compile
+    oc = Base.Experimental.@opaque a::Int->sin(a) + cos(foo)
+
+    @test only(Base.return_types(oc, (Int,))) === Float64
+    code, rt = first(code_typed(oc, (Int,)))
+    @test rt === Float64
+end
+
+let oc = @opaque a->sin(a)
+    @test length(code_typed(oc, (Int,))) == 1
+end
+
+# constructing an opaque closure from IRCode
+let ci = code_typed(+, (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
+    @test OpaqueClosure(ci)(40, 2) == 42
+
+    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Int])
+    @test OpaqueClosure(ir; nargs=2, isva=false)(40, 2) == 42
+    @test isa(OpaqueClosure(ir; nargs=2, isva=false), Core.OpaqueClosure{Tuple{Int, Int}, Int})
+    @test_throws TypeError OpaqueClosure(ir; nargs=2, isva=false)(40.0, 2)
+end
+
+let ci = code_typed((x, y...)->(x, y), (Int, Int))[1][1]
+    ir = Core.Compiler.inflate_ir(ci)
+    let oc = OpaqueClosure(ir; nargs=2, isva=true)
+        @test oc(40, 2) === (40, (2,))
+        @test_throws MethodError oc(1,2,3)
+    end
+    let oc = OpaqueClosure(ci)
+        @test oc(40, 2) === (40, (2,))
+        @test_throws MethodError oc(1,2,3)
+    end
+
+    ir = Core.Compiler.inflate_ir(ci, Any[], Any[Tuple{}, Int, Tuple{Int}])
+    let oc = OpaqueClosure(ir; nargs=2, isva=true)
+        @test oc(40, 2) === (40, (2,))
+        @test_throws MethodError oc(1,2,3)
+    end
+end
