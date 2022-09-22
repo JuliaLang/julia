@@ -71,8 +71,7 @@ JL_DLLEXPORT int jl_set_task_tid(jl_task_t *task, int tid) JL_NOTSAFEPOINT
 }
 
 // GC functions used
-extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
-                                         jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
+extern void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj, uintptr_t *nptr) JL_NOTSAFEPOINT;
 
 // multiq
 // ---
@@ -225,12 +224,12 @@ static inline jl_task_t *multiq_deletemin(void)
 }
 
 
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
+void jl_gc_mark_enqueued_tasks(jl_gc_markqueue_t *mq)
 {
     int32_t i, j;
     for (i = 0; i < heap_p; ++i)
         for (j = 0; j < jl_atomic_load_relaxed(&heaps[i].ntasks); ++j)
-            jl_gc_mark_queue_obj_explicit(gc_cache, sp, (jl_value_t *)heaps[i].tasks[j]);
+            gc_try_claim_and_push(mq, (jl_value_t *)heaps[i].tasks[j], NULL);
 }
 
 
