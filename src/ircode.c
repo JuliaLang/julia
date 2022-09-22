@@ -80,7 +80,7 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
     assert(id >= 0);
     if (rr.key) {
         write_uint8(s->s, TAG_RELOC_METHODROOT);
-        write_int64(s->s, rr.key);
+        write_uint64(s->s, rr.key);
     }
     if (id < 256) {
         write_uint8(s->s, TAG_METHODROOT);
@@ -283,7 +283,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
         else {
             write_uint8(s->s, TAG_INT64);
-            write_int64(s->s, *(int64_t*)data);
+            write_uint64(s->s, *(int64_t*)data);
         }
     }
     else if (jl_typeis(v, jl_int32_type)) {
