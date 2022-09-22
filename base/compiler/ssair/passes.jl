@@ -1177,30 +1177,32 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     # Check #3
     dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
 
-    # Collect all reachable blocks between the finalizer registration and the
-    # insertion point
-    blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
-        reachable_blocks(ir.cfg, finalizer_bb, bb_insert_block)
+    if !inlining.params.assume_fatal_throw
+        # Collect all reachable blocks between the finalizer registration and the
+        # insertion point
+        blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
+            reachable_blocks(ir.cfg, finalizer_bb, bb_insert_block)
 
-    # Check #4
-    function check_range_nothrow(ir::IRCode, s::Int, e::Int)
-        return all(s:e) do sidx::Int
-            sidx == finalizer_idx && return true
-            sidx == idx && return true
-            return is_nothrow(ir, sidx)
+        # Check #4
+        function check_range_nothrow(ir::IRCode, s::Int, e::Int)
+            return all(s:e) do sidx::Int
+                sidx == finalizer_idx && return true
+                sidx == idx && return true
+                return is_nothrow(ir, sidx)
+            end
         end
-    end
-    for bb in blocks
-        range = ir.cfg.blocks[bb].stmts
-        s, e = first(range), last(range)
-        if bb == bb_insert_block
-            bb_insert_idx === nothing && continue
-            e = bb_insert_idx
+        for bb in blocks
+            range = ir.cfg.blocks[bb].stmts
+            s, e = first(range), last(range)
+            if bb == bb_insert_block
+                bb_insert_idx === nothing && continue
+                e = bb_insert_idx
+            end
+            if bb == finalizer_bb
+                s = finalizer_idx
+            end
+            check_range_nothrow(ir, s, e) || return nothing
         end
-        if bb == finalizer_bb
-            s = finalizer_idx
-        end
-        check_range_nothrow(ir, s, e) || return nothing
     end
 
     # Ok, legality check complete. Figure out the exact statement where we're
