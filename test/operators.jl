@@ -344,6 +344,6 @@ end
     gp = Base.Fix2(Base.getproperty, :x)
     @test Base.getproperty(:x) == gp
     @test Base.hasproperty(:x) == Base.Fix2(Base.hasproperty, :x)
-    @test Base.getproperty(:x) == gp
+    @test Base.getproperty(:x)(gp) == :x
     @test Base.hasproperty(:x)(gp)
 end
