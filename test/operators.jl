@@ -341,9 +341,8 @@ end
 end
 
 @testset "getproperty/hasproperty" begin
-    gp = Base.Fix2(Base.getproperty, :x)
-    @test Base.getproperty(:x) == gp
+    @test Base.getproperty(:x) == Base.Fix2(Base.getproperty, :x)
     @test Base.hasproperty(:x) == Base.Fix2(Base.hasproperty, :x)
-    @test Base.getproperty(:x)(gp) == :x
-    @test Base.hasproperty(:x)(gp)
+    @test Base.getproperty(:x)((x=1,)) == 1
+    @test Base.hasproperty(:x)((x=1,))
 end
