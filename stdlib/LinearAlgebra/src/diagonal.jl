@@ -24,9 +24,9 @@ end
 """
     Diagonal(V::AbstractVector)
 
-Construct a matrix with `V` as its diagonal.
+Construct a lazy matrix with `V` as its diagonal.
 
-See also [`diag`](@ref), [`diagm`](@ref).
+See also [`diagm`](@ref) to make a dense matrix, and [`diag`](@ref) to extract diagonal elements.
 
 # Examples
 ```jldoctest
@@ -40,6 +40,20 @@ julia> diagm([7, 13])
 2×2 Matrix{$Int}:
  7   0
  0  13
+```
+
+Note that a one-column matrix is not treated like a vector, but instead calls the
+method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+
+```jldoctest
+julia> A = transpose([7.0 13.0])
+2×1 transpose(::Matrix{Float64}) with eltype Float64:
+  7.0
+ 13.0
+
+julia> Diagonal(A)
+1×1 Diagonal{Float64, Vector{Float64}}:
+ 7.0
 ```
 """
 Diagonal(V::AbstractVector)
