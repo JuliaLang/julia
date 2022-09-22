@@ -728,40 +728,31 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    if length(stmt.args) != 4
-        return
-    end
+    length(stmt.args) != 4 && return
 
     vec = stmt.args[3]
     val = stmt.args[4]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int
-    (1 <= valI) || return
+    valI >= 1 || return
 
     if isa(vec, SimpleVector)
-        if valI <= length(val)
-            compact[idx] = vec[valI]
-        end
-        return
-    end
-
-    if isa(vec, SSAValue)
+        valI <= length(vec) || return
+        compact[idx] = quoted(vec[valI])
+    elseif isa(vec, SSAValue)
         def = compact[vec][:inst]
         if is_known_call(def, Core.svec, compact)
-            nargs = length(def.args)
-            if valI <= nargs-1
-                compact[idx] = def.args[valI+1]
-            end
-            return
+            valI <= length(def.args) - 1 || return
+            compact[idx] = def.args[valI+1]
         elseif is_known_call(def, Core._compute_sparams, compact)
+            valI != 1 && return # TODO generalize this for more values of valI
             res = _lift_svec_ref(def, compact)
-            if res !== nothing
-                compact[idx] = res.val
-            end
-            return
+            res === nothing && return
+            compact[idx] = res.val
         end
     end
+    return
 end
 
 # TODO: We could do the whole lifing machinery here, but really all
@@ -769,12 +760,13 @@ end
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
 @inline function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
+    length(def.args) >= 3 || return nothing
     m = argextype(def.args[2], compact)
     isa(m, Const) || return nothing
     m = m.val
     isa(m, Method) || return nothing
+
     # TODO: More general structural analysis of the intersection
-    length(def.args) >= 3 || return nothing
     sig = m.sig
     isa(sig, UnionAll) || return nothing
     tvar = sig.var
