@@ -5,6 +5,8 @@ using Core.IR
 const Compiler = Core.Compiler
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
+include(normpath(@__DIR__, "irutils.jl"))
+
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
 function make_ci(code)
@@ -416,4 +418,46 @@ let
     ]
 
     test_userefs(body)
+end
+
+let ir = Base.code_ircode((Bool,Any)) do c, x
+        println(x, 1) #1
+        if c
+            println(x, 2) #2
+        else
+            println(x, 3) #3
+        end
+        println(x, 4) #4
+    end |> only |> first
+    # IR legality check
+    @test length(ir.cfg.blocks) == 4
+    for i = 1:4
+        @test any(ir.cfg.blocks[i].stmts) do j
+            inst = ir.stmts[j][:inst]
+            iscall((ir, println), inst) &&
+            inst.args[3] == i
+        end
+    end
+    # domination analysis
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    @test Core.Compiler.dominates(domtree, 1, 2)
+    @test Core.Compiler.dominates(domtree, 1, 3)
+    @test Core.Compiler.dominates(domtree, 1, 4)
+    for i = 2:4
+        for j = 1:4
+            i == j && continue
+            @test !Core.Compiler.dominates(domtree, i, j)
+        end
+    end
+    # post domination analysis
+    post_domtree = Core.Compiler.construct_postdomtree(ir.cfg.blocks)
+    @test Core.Compiler.postdominates(post_domtree, 4, 1)
+    @test Core.Compiler.postdominates(post_domtree, 4, 2)
+    @test Core.Compiler.postdominates(post_domtree, 4, 3)
+    for i = 1:3
+        for j = 1:4
+            i == j && continue
+            @test !Core.Compiler.postdominates(post_domtree, i, j)
+        end
+    end
 end
