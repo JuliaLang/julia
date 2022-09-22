@@ -212,7 +212,7 @@ static void gc_verify_track(jl_ptls_t ptls)
             gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
         gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-        _gc_mark_loop(ptls, &mq);
+        gc_mark_loop_(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -261,7 +261,7 @@ void gc_verify(jl_ptls_t ptls)
         gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
     gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-    _gc_mark_loop(ptls, &mq);
+    gc_mark_loop_(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
