@@ -2844,10 +2844,18 @@ typeassert
 """
     getproperty(value, name::Symbol)
     getproperty(value, name::Symbol, order::Symbol)
+    getproperty(name::Symbol)
 
 The syntax `a.b` calls `getproperty(a, :b)`.
 The syntax `@atomic order a.b` calls `getproperty(a, :b, :order)` and
 the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
+`getproperty(name)` creates a function that returns the property `s` using
+equivalent to `x -> getproperty(x, s)`. The returned function is of type
+`Base.Fix2{typeof(getproperty)}`, which can be used to implement specialized
+methods.
+
+!!! compat "Julia 1.9"
+    `getproperty(name)` requires Julia 1.9.
 
 # Examples
 ```jldoctest

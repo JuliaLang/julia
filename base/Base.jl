@@ -35,6 +35,7 @@ getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
 setproperty!(x::Tuple, f::Int, v) = setfield!(x, f, v) # to get a decent error
 
 getproperty(x, f::Symbol) = (@inline; getfield(x, f))
+getproperty(f) = Base.Fix2(getproperty, f)
 setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f), v))
 
 dotgetproperty(x, f) = getproperty(x, f)

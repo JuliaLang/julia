@@ -1197,6 +1197,20 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
+    hasproperty(s)
+
+Create a function that indicates whether its argument has the property `s` using
+[`hasproperty`](@ref), i.e. a function equivalent to `x -> hasproperty(x, s)`.
+
+The returned function is of type `Base.Fix2{typeof(hasproperty)}`, which can be
+used to implement specialized methods.
+
+!!! compat "Julia 1.9"
+    This functionality requires at least Julia 1.9.
+"""
+hasproperty(s) = Fix2(hasproperty, s)
+
+"""
     Splat(f)
 
 Equivalent to
