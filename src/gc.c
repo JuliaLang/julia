@@ -2096,8 +2096,7 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
     // Decide whether need to chunk finlist
     size_t nrefs = (fl_end - fl_begin);
     if (nrefs > MAX_REFS_AT_ONCE) {
-        jl_gc_chunk_t c = {
-            GC_finlist_chunk, NULL, fl_begin + MAX_REFS_AT_ONCE, fl_end, 0, 0, 0, 0};
+        jl_gc_chunk_t c = {GC_finlist_chunk, NULL, fl_begin + MAX_REFS_AT_ONCE, fl_end, 0, 0, 0, 0};
         gc_chunkqueue_push(mq, &c);
         fl_end = fl_begin + MAX_REFS_AT_ONCE;
     }

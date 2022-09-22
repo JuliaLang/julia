@@ -81,7 +81,7 @@ typedef enum {
     GC_finlist_chunk,
 } gc_chunk_id_t;
 
-typedef struct _jl_gc_chunk_t{
+typedef struct _jl_gc_chunk_t {
     gc_chunk_id_t cid;
     struct _jl_value_t *parent;
     struct _jl_value_t **begin;
