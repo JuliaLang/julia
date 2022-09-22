@@ -1389,6 +1389,36 @@ valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
 valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
 
+
+function is_constrained(U::UnionAll)
+    _is_constrained(U.var) && return true
+    return _is_constrained(U.body, U.var)
+end
+
+_is_constrained(var::TypeVar) = !(var.lb === Union{} && var.ub === Any)
+function _is_constrained(@nospecialize(U), tv::TypeVar)
+    while isa(U, UnionAll)
+        has_typevar(U.var, tv) && return true
+        U = U.body
+    end
+
+    if isa(U, Union)
+        return _is_constrained(U.a, tv) || _is_constrained(U.b, tv)
+    elseif isa(U, DataType)
+        has_free_typevars(U) && return false
+        for i in 1:length(U.parameters)
+            if tv === U.parameters[i]
+                ua = unwrap_unionall(U.name.wrapper)::DataType
+                ua_tv = ua.parameters[i]::TypeVar
+                _is_constrained(ua_tv) && return true
+            end
+        end
+    elseif isa(U, Vararg)
+        return _is_constrained(unwrapva(U), tv)
+    end
+    return false
+end
+
 function apply_type_nothrow(@specialize(lattice::AbstractLattice), argtypes::Array{Any, 1}, @nospecialize(rt))
     rt === Type && return false
     length(argtypes) >= 1 || return false
@@ -1407,39 +1437,13 @@ function apply_type_nothrow(@specialize(lattice::AbstractLattice), argtypes::Arr
     u = headtype
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
-        ai = widenconditional(argtypes[i])
-        if ⊑(lattice, ai, TypeVar) || ai === DataType
-            # We don't know anything about the bounds of this typevar, but as
-            # long as the UnionAll is not constrained, that's ok.
-            if !(u.var.lb === Union{} && u.var.ub === Any)
-                return false
-            end
-        elseif (isa(ai, Const) && isa(ai.val, Type)) || isconstType(ai)
-            ai = isa(ai, Const) ? ai.val : (ai::DataType).parameters[1]
-            if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
-                return false
-            end
-            if !(u.var.lb <: ai <: u.var.ub)
-                return false
-            end
-        else
-            T, exact, _, istype = instanceof_tfunc(ai)
-            if T === Bottom
-                if !(u.var.lb === Union{} && u.var.ub === Any)
-                    return false
-                end
-                if !valid_tparam_type(widenconst(ai))
-                    return false
-                end
-            else
-                istype || return false
-                if !(T <: u.var.ub)
-                    return false
-                end
-                if exact ? !(u.var.lb <: T) : !(u.var.lb === Bottom)
-                    return false
-                end
-            end
+        if has_free_typevars(u.var.lb) || has_free_typevars(u.var.ub)
+            return false
+        end
+        is_constrained(u) && return false
+        ai = widenconst(argtypes[i])
+        if !(ai <: Union{Type, TypeVar}) && !valid_tparam_type(widenconst(ai))
+            return false
         end
         u = u.body
     end
