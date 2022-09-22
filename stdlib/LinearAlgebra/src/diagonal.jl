@@ -26,11 +26,12 @@ end
 
 Construct a lazy matrix with `V` as its diagonal.
 
-See also [`diagm`](@ref) to make a dense matrix, and [`diag`](@ref) to extract diagonal elements.
+See also [`UniformScaling`](@ref) for the lazy identity matrix `I`,
+[`diagm`](@ref) to make a dense matrix, and [`diag`](@ref) to extract diagonal elements.
 
 # Examples
 ```jldoctest
-julia> Diagonal([1, 10, 100])
+julia> d = Diagonal([1, 10, 100])
 3×3 Diagonal{$Int, Vector{$Int}}:
  1   ⋅    ⋅
  ⋅  10    ⋅
@@ -40,6 +41,16 @@ julia> diagm([7, 13])
 2×2 Matrix{$Int}:
  7   0
  0  13
+
+julia> ans + I
+2×2 Matrix{Int64}:
+ 8   0
+ 0  14
+
+julia> I(2)
+2×2 Diagonal{Bool, Vector{Bool}}:
+ 1  ⋅
+ ⋅  1
 ```
 
 Note that a one-column matrix is not treated like a vector, but instead calls the
