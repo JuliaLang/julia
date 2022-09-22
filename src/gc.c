@@ -1755,10 +1755,8 @@ static NOINLINE void gc_chunkqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
-    if (__unlikely(mq->current_chunk == mq->chunk_end)) {
-        jl_safe_printf("resizing...\n");
+    if (__unlikely(mq->current_chunk == mq->chunk_end))
         gc_chunkqueue_resize(mq);
-    }
     *mq->current_chunk = *c;
     mq->current_chunk++;
 #endif
