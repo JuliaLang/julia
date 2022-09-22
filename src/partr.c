@@ -77,8 +77,7 @@ JL_DLLEXPORT int jl_set_task_threadpoolid(jl_task_t *task, int8_t tpid) JL_NOTSA
 }
 
 // GC functions used
-extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
-                                         jl_gc_mark_sp_t *sp, jl_value_t *obj) JL_NOTSAFEPOINT;
+extern void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj, uintptr_t *nptr) JL_NOTSAFEPOINT;
 
 // parallel task runtime
 // ---
@@ -89,6 +88,9 @@ JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
     // one-extend unbias back to 64-bits
     return cong(max, -(uint64_t)-unbias, &ptls->rngseed);
 }
+
+// parallel task runtime
+// ---
 
 // initialize the threading infrastructure
 // (used only by the main thread)
