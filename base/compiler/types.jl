@@ -63,6 +63,16 @@ struct OptimizationParams
     compilesig_invokes::Bool
     trust_inference::Bool
 
+    """
+        assume_fatal_throw::Bool
+
+    If `true`, gives the optimizer license to assume that any `throw` is fatal
+    and thus the state after a `throw` is not externally observable. In particular,
+    this gives the optimizer license to move side effects (that are proven not observed
+    within a particular code path) across a throwing call. Defaults to `false`.
+    """
+    assume_fatal_throw::Bool
+
     MAX_TUPLE_SPLAT::Int
 
     function OptimizationParams(;
@@ -73,7 +83,8 @@ struct OptimizationParams
             inline_error_path_cost::Int = 20,
             tuple_splat::Int = 32,
             compilesig_invokes::Bool = true,
-            trust_inference::Bool = false
+            trust_inference::Bool = false,
+            assume_fatal_throw::Bool = false
         )
         return new(
             inlining,
@@ -83,6 +94,7 @@ struct OptimizationParams
             inline_error_path_cost,
             compilesig_invokes,
             trust_inference,
+            assume_fatal_throw,
             tuple_splat,
         )
     end
