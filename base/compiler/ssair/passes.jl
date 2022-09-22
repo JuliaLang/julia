@@ -1140,8 +1140,8 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
     function note_block_use!(usebb::Int, useidx::Int)
         new_bb_insert_block = nearest_common_dominator(get!(lazypostdomtree),
             bb_insert_block, usebb)
-        if new_bb_insert_block == usebb
-            if usebb == bb_insert_block
+        if new_bb_insert_block == bb_insert_block == usebb
+            if bb_insert_idx !== nothing
                 bb_insert_idx = max(bb_insert_idx, useidx)
             else
                 bb_insert_idx = useidx
@@ -1164,7 +1164,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
         bb = block_for_inst(ir, duidx)
         # Not reachable from finalizer registration - we're ok
         bb ∉ blocks && return true
-        note_block_use!(bb, idx)
+        note_block_use!(bb, duidx)
         if dominates(domtree, finalizer_bb, bb)
             return true
         else
