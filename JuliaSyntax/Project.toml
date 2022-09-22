@@ -1,7 +1,7 @@
 name = "JuliaSyntax"
 uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 authors = ["Chris Foster <chris42f@gmail.com> and contributors"]
-version = "0.1.0"
+version = "0.2.0"
 
 [compat]
 julia = "1.6"
