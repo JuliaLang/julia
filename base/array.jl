@@ -1787,6 +1787,25 @@ function deleteat(src::AbstractVector, inds::AbstractVector{Bool})
     end
     dst
 end
+function deleteat(src::AbstractVector, inds::AbstractUnitRange{<:Integer})
+    srcinds = eachindex(src)
+    N = length(srcinds)
+    dst = similar(src, N - length(inds))
+    src_idx = first(srcinds)
+    dst_idx = firstindex(dst)
+    while src_idx < first(inds)
+        @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+        src_idx += 1
+        dst_idx += 1
+    end
+    src_idx = last(inds) + 1
+    while src_idx <= N
+        @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+        src_idx += 1
+        dst_idx += 1
+    end
+    dst
+end
 function deleteat(src::AbstractVector, inds)
     itr = iterate(inds)
     if itr === nothing
