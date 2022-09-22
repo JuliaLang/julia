@@ -496,7 +496,7 @@ end
 function active_module()
     isassigned(REPL_MODULE_REF) || return Main
     REPL = REPL_MODULE_REF[]
-    return REPL.active_module()::Module
+    return invokelatest(REPL.active_module)::Module
 end
 
 # Check if a particular symbol is exported from a standard library module
