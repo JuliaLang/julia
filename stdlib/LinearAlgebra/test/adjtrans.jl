@@ -489,13 +489,13 @@ end
     @test B == A .* A'
 end
 
-@testset "test show methods for $t of Factorizations" for t in (Adjoint, Transpose)
-    A = randn(4, 4)
+@testset "test show methods for $t of Factorizations" for t in (adjoint, transpose)
+    A = randn(ComplexF64, 4, 4)
     F = lu(A)
     Fop = t(F)
-    @test "LinearAlgebra."*sprint(show, Fop) ==
+    @test sprint(show, Fop) ==
                   "$t of "*sprint(show, parent(Fop))
-    @test "LinearAlgebra."*sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
+    @test sprint((io, t) -> show(io, MIME"text/plain"(), t), Fop) ==
                   "$t of "*sprint((io, t) -> show(io, MIME"text/plain"(), t), parent(Fop))
 end
 

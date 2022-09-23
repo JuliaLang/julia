@@ -421,10 +421,8 @@ Hessenberg(F::Hessenberg, μ::Number) = Hessenberg(F.factors, F.τ, F.H, F.uplo;
 
 copy(F::Hessenberg{<:Any,<:UpperHessenberg}) = Hessenberg(copy(F.factors), copy(F.τ); μ=F.μ)
 copy(F::Hessenberg{<:Any,<:SymTridiagonal}) = Hessenberg(copy(F.factors), copy(F.τ), copy(F.H), F.uplo; μ=F.μ)
-size(F::Hessenberg, d) = size(F.H, d)
+size(F::Hessenberg, d::Integer) = size(F.H, d)
 size(F::Hessenberg) = size(F.H)
-
-adjoint(F::Hessenberg) = Adjoint(F)
 
 # iteration for destructuring into components
 Base.iterate(S::Hessenberg) = (S.Q, Val(:H))
@@ -686,8 +684,8 @@ function rdiv!(B::AbstractVecOrMat{<:Complex}, F::Hessenberg{<:Complex,<:Any,<:A
     return B .= Complex.(Br,Bi)
 end
 
-ldiv!(F::Adjoint{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
-rdiv!(B::AbstractMatrix, F::Adjoint{<:Any,<:Hessenberg}) = ldiv!(F', B')'
+ldiv!(F::AdjointFactorization{<:Any,<:Hessenberg}, B::AbstractVecOrMat) = rdiv!(B', F')'
+rdiv!(B::AbstractMatrix, F::AdjointFactorization{<:Any,<:Hessenberg}) = ldiv!(F', B')'
 
 det(F::Hessenberg) = det(F.H; shift=F.μ)
 logabsdet(F::Hessenberg) = logabsdet(F.H; shift=F.μ)

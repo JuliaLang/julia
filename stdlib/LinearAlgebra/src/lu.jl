@@ -72,8 +72,11 @@ Base.iterate(S::LU, ::Val{:U}) = (S.U, Val(:p))
 Base.iterate(S::LU, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::LU, ::Val{:done}) = nothing
 
-adjoint(F::LU) = Adjoint(F)
-transpose(F::LU) = Transpose(F)
+# LU prefers transpose over adjoint in the real case
+adjoint(F::LU) = AdjointFactorization(F)
+transpose(F::LU) = TransposeFactorization(F)
+# override the generic fallback
+transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
 # StridedMatrix
 lu!(A::StridedMatrix{<:BlasFloat}; check::Bool = true) = lu!(A, RowMaximum(); check=check)
@@ -327,7 +330,7 @@ Factorization{T}(F::LU) where {T} = LU{T}(F)
 copy(A::LU{T,S,P}) where {T,S,P} = LU{T,S,P}(copy(A.factors), copy(A.ipiv), A.info)
 
 size(A::LU)    = size(getfield(A, :factors))
-size(A::LU, i) = size(getfield(A, :factors), i)
+size(A::LU, i::Integer) = size(getfield(A, :factors), i)
 
 function ipiv2perm(v::AbstractVector{T}, maxi::Integer) where T
     require_one_based_indexing(v)
@@ -432,48 +435,28 @@ function ldiv!(A::LU{<:Any,<:StridedMatrix}, B::StridedVecOrMat)
     ldiv!(UpperTriangular(A.factors), ldiv!(UnitLowerTriangular(A.factors), B))
 end
 
-ldiv!(transA::Transpose{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(transA::TransposeFactorization{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     (A = transA.parent; LAPACK.getrs!('T', A.factors, A.ipiv, B))
 
-function ldiv!(transA::Transpose{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
+function ldiv!(transA::TransposeFactorization{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
     A = transA.parent
     ldiv!(transpose(UnitLowerTriangular(A.factors)), ldiv!(transpose(UpperTriangular(A.factors)), B))
     _apply_inverse_ipiv_rows!(A, B)
 end
 
-ldiv!(adjF::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
-    (F = adjF.parent; ldiv!(transpose(F), B))
-ldiv!(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
+ldiv!(adjA::AdjointFactorization{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; LAPACK.getrs!('C', A.factors, A.ipiv, B))
 
-function ldiv!(adjA::Adjoint{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
+function ldiv!(adjA::AdjointFactorization{<:Any,<:LU{<:Any,<:StridedMatrix}}, B::StridedVecOrMat)
     A = adjA.parent
     ldiv!(adjoint(UnitLowerTriangular(A.factors)), ldiv!(adjoint(UpperTriangular(A.factors)), B))
     _apply_inverse_ipiv_rows!(A, B)
 end
 
-(\)(A::Adjoint{<:Any,<:LU}, B::Adjoint{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-(\)(A::Transpose{<:Any,<:LU}, B::Transpose{<:Any,<:StridedVecOrMat}) = A \ copy(B)
-(\)(A::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
+(\)(A::AdjointFactorization{T,<:LU{T,<:StridedMatrix}}, B::Adjoint{T,<:StridedVecOrMat{T}}) where {T<:BlasComplex} =
     LAPACK.getrs!('C', A.parent.factors, A.parent.ipiv, copy(B))
-(\)(A::Transpose{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
+(\)(A::TransposeFactorization{T,<:LU{T,<:StridedMatrix}}, B::Transpose{T,<:StridedVecOrMat{T}}) where {T<:BlasFloat} =
     LAPACK.getrs!('T', A.parent.factors, A.parent.ipiv, copy(B))
-
-function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
-    T = promote_type(eltype(A), eltype(F))
-    return adjoint(ldiv!(F.parent, copymutable_oftype(adjoint(A), T)))
-end
-# To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
-(/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
-(/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
-function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
-    T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
-end
-function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
-    T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
-end
 
 function det(F::LU{T}) where T
     n = checksquare(F)
@@ -650,7 +633,7 @@ function ldiv!(A::LU{T,Tridiagonal{T,V}}, B::AbstractVecOrMat) where {T,V}
     return B
 end
 
-function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(transA::TransposeFactorization{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
     require_one_based_indexing(B)
     A = transA.parent
     n = size(A,1)
@@ -687,7 +670,7 @@ function ldiv!(transA::Transpose{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVec
 end
 
 # Ac_ldiv_B!(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat) where {T<:Real} = At_ldiv_B!(A,B)
-function ldiv!(adjA::Adjoint{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
+function ldiv!(adjA::AdjointFactorization{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMat) where {T,V}
     require_one_based_indexing(B)
     A = adjA.parent
     n = size(A,1)
@@ -724,8 +707,8 @@ function ldiv!(adjA::Adjoint{<:Any,<:LU{T,Tridiagonal{T,V}}}, B::AbstractVecOrMa
 end
 
 rdiv!(B::AbstractMatrix, A::LU) = transpose(ldiv!(transpose(A), transpose(B)))
-rdiv!(B::AbstractMatrix, A::Transpose{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
-rdiv!(B::AbstractMatrix, A::Adjoint{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
+rdiv!(B::AbstractMatrix, A::TransposeFactorization{<:Any,<:LU}) = transpose(ldiv!(A.parent, transpose(B)))
+rdiv!(B::AbstractMatrix, A::AdjointFactorization{<:Any,<:LU}) = adjoint(ldiv!(A.parent, adjoint(B)))
 
 # Conversions
 AbstractMatrix(F::LU) = (F.L * F.U)[invperm(F.p),:]

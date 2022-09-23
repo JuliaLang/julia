@@ -32,7 +32,7 @@ julia> Adjoint(A)
  9-2im  0+0im
 ```
 """
-struct Adjoint{T,S} <: AbstractMatrix{T}
+struct Adjoint{T,S<:AbstractVecOrMat} <: AbstractMatrix{T}
     parent::S
 end
 """
@@ -59,13 +59,13 @@ julia> Transpose(A)
  3  0
 ```
 """
-struct Transpose{T,S} <: AbstractMatrix{T}
+struct Transpose{T,S<:AbstractVecOrMat} <: AbstractMatrix{T}
     parent::S
 end
 
 # basic outer constructors
-Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
-Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
+Adjoint(A::AbstractVecOrMat) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
+Transpose(A::AbstractVecOrMat) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
@@ -460,8 +460,8 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 ## right-division /
 /(u::AdjointAbsVec, A::AbstractMatrix) = adjoint(adjoint(A) \ u.parent)
 /(u::TransposeAbsVec, A::AbstractMatrix) = transpose(transpose(A) \ u.parent)
-/(u::AdjointAbsVec, A::Transpose{<:Any,<:AbstractMatrix}) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
-/(u::TransposeAbsVec, A::Adjoint{<:Any,<:AbstractMatrix}) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
+/(u::AdjointAbsVec, A::TransposeAbsMat) = adjoint(conj(A.parent) \ u.parent) # technically should be adjoint(copy(adjoint(copy(A))) \ u.parent)
+/(u::TransposeAbsVec, A::AdjointAbsMat) = transpose(conj(A.parent) \ u.parent) # technically should be transpose(copy(transpose(copy(A))) \ u.parent)
 
 ## complex conjugate
 conj(A::Transpose) = adjoint(A.parent)

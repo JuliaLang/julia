@@ -211,9 +211,9 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
 end
 
 @testset "transpose errors" begin
-    @test_throws MethodError transpose(qr(randn(3,3)))
-    @test_throws MethodError transpose(qr(randn(3,3), NoPivot()))
-    @test_throws MethodError transpose(qr(big.(randn(3,3))))
+    @test_throws ArgumentError transpose(qr(randn(3,3)))
+    @test_throws ArgumentError transpose(qr(randn(3,3), NoPivot()))
+    @test_throws ArgumentError transpose(qr(big.(randn(3,3))))
 end
 
 @testset "Issue 7304" begin

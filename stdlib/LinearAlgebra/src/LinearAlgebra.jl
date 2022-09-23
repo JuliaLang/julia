@@ -493,7 +493,7 @@ const LAPACKFactorizations{T,S} = Union{
     QRCompactWY{T,S},
     QRPivoted{T,S},
     SVD{T,<:Real,S}}
-function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
+function (\)(F::Union{<:LAPACKFactorizations,AdjointFactorization{<:Any,<:LAPACKFactorizations}}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(F)
     if m != size(B, 1)
@@ -523,7 +523,9 @@ function (\)(F::Union{<:LAPACKFactorizations,Adjoint{<:Any,<:LAPACKFactorization
 end
 # disambiguate
 (\)(F::LAPACKFactorizations{T}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
-    invoke(\, Tuple{Factorization{T}, VecOrMat{Complex{T}}}, F, B)
+    @invoke \(F::Factorization{T}, B::VecOrMat{Complex{T}})
+(\)(F::AdjointFactorization{T,<:LAPACKFactorizations}, B::VecOrMat{Complex{T}}) where {T<:BlasReal} =
+    @invoke \(F::AdjointFactorization{<:Any,<:LAPACKFactorizations}, B::AbstractVecOrMat)
 
 """
     LinearAlgebra.peakflops(n::Integer=2000; parallel::Bool=false)
