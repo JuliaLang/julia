@@ -515,9 +515,10 @@ struct IRShowConfig
     line_info_postprinter
     should_print_stmt
     bb_color::Symbol
+    print_stmt
     function IRShowConfig(line_info_preprinter, line_info_postprinter=default_expr_type_printer;
-                          should_print_stmt=Returns(true), bb_color::Symbol=:light_black)
-        return new(line_info_preprinter, line_info_postprinter, should_print_stmt, bb_color)
+                          should_print_stmt=Returns(true), bb_color::Symbol=:light_black, print_stmt=print_stmt)
+        return new(line_info_preprinter, line_info_postprinter, should_print_stmt, bb_color, print_stmt)
     end
 end
 
@@ -574,14 +575,22 @@ end
 # pop_new_node!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
 #   node at the current index `idx`, which is printed before the statement at index
 #   `idx`. This function is repeatedly called until it returns `nothing`
+#=
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
                       used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        used, cfg, bb_idx; pop_new_node!, config.bb_color)
+                        used, cfg, bb_idx; pop_new_node!, config.bb_color, )
 end
+=#
 
-function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), bb_color=:light_black)
+function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
+                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+#function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
+#                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), bb_color=:light_black)
+    line_info_preprinter = config.line_info_preprinter
+    line_info_postprinter = config.line_info_postprinter
+    bb_color = config.bb_color
+    print_stmt = config.print_stmt
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
