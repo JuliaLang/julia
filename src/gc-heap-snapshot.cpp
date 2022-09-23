@@ -173,7 +173,6 @@ void _add_internal_root(HeapSnapshot *snapshot) {
 size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT {
     auto val = g_snapshot->node_ptr_to_index_map.insert(make_pair(a, g_snapshot->nodes.size()));
     if (!val.second) {
-
         return val.first->second;
     }
 
