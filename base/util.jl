@@ -119,7 +119,7 @@ or an integer between 0 and 255 inclusive. Note that not all terminals support 2
 
 Keywords `bold=true`, `underline=true`, `blink=true` are self-explanatory.
 Keyword `reverse=true` prints with foreground and background colors exchanged,
-and `hidden=true` should be invisibe in the terminal but can still be copied.
+and `hidden=true` should be invisible in the terminal but can still be copied.
 These properties can be used in any combination.
 
 See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
@@ -251,9 +251,10 @@ unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret.
 
-Note that on Windows, the secret might be displayed as it is typed; see
-`Base.winprompt` for securely retrieving username/password pairs from a
-graphical interface.
+!!! info "Windows"
+    Note that on Windows, the secret might be displayed as it is typed; see
+    `Base.winprompt` for securely retrieving username/password pairs from a
+    graphical interface.
 """
 function getpass end
 
@@ -347,7 +348,7 @@ Displays the `message` then waits for user input. Input is terminated when a new
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
 then the user can enter just a newline character to select the `default`.
 
-See also `Base.getpass` and `Base.winprompt` for secure entry of passwords.
+See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of passwords.
 
 # Example
 
@@ -506,9 +507,12 @@ order to function correctly with the keyword outer constructor.
     `Base.@kwdef` for parametric structs, and structs with supertypes
     requires at least Julia 1.1.
 
+!!! compat "Julia 1.9"
+    This macro is exported as of Julia 1.9.
+
 # Examples
 ```jldoctest
-julia> Base.@kwdef struct Foo
+julia> @kwdef struct Foo
            a::Int = 1         # specified default
            b::String          # required keyword
        end

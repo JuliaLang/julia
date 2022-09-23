@@ -2392,16 +2392,10 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(1, jl_slotnumber_type),
                         jl_emptysvec, 0, 0, 1);
 
-    jl_globalref_type =
-        jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "mod", "name"),
-                        jl_svec(2, jl_module_type, jl_symbol_type),
-                        jl_emptysvec, 0, 0, 2);
-
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(20,
+                        jl_perm_symsvec(21,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2420,9 +2414,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             "inlining_cost",
                             "propagate_inbounds",
                             "pure",
+                            "has_fcall",
                             "constprop",
                             "purity"),
-                        jl_svec(20,
+                        jl_svec(21,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -2439,6 +2434,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_bool_type,
                             jl_uint16_type,
+                            jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_uint8_type,
@@ -2532,7 +2528,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_simplevector_type,
                             jl_any_type,
-                            jl_any_type,
+                            jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_bool_type,
@@ -2691,6 +2687,12 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
+
+    jl_globalref_type =
+        jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(3, "mod", "name", "binding"),
+                        jl_svec(3, jl_module_type, jl_symbol_type, pointer_void),
+                        jl_emptysvec, 0, 0, 3);
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,

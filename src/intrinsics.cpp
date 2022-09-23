@@ -1357,7 +1357,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, Value **arg
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
-        // LLVM 5.0 can create FMA in the backend for contractable fmul and fadd
+        // LLVM 5.0 can create FMA in the backend for contractible fmul and fadd
         // Emitting fmul and fadd here since they are easier for other LLVM passes to
         // optimize.
         auto mathb = math_builder(ctx, false, true);

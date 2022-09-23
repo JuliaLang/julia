@@ -229,8 +229,10 @@ endif
 endif
 endif
 
+# Note that we disable MSYS2's path munging here, as otherwise
+# it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
-	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
+	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
 endef
 
 
@@ -370,8 +372,10 @@ endif
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
 endif
 endif
 
@@ -426,6 +430,12 @@ ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 endif
 endif
 endif
+
+ifeq ($(USE_BINARYBUILDER_OPENBLAS),0)
+	# https://github.com/JuliaLang/julia/issues/46579
+	USE_BINARYBUILDER_OBJCONV=0
+endif
+
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
 	$(error prefix must not be set for make binary-dist)
 endif

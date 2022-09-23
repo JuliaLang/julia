@@ -368,6 +368,12 @@ end
     return out
 end
 
+function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
+    _muldiag_size_check(Da, A)
+    _muldiag_size_check(A, Db)
+    return broadcast(*, Da.diag, A, permutedims(Db.diag))
+end
+
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
 @inline mul!(out::AbstractVector, D::Diagonal, V::AbstractVector, alpha::Number, beta::Number) =
     _muldiag!(out, D, V, alpha, beta)
@@ -590,7 +596,21 @@ end
     return C
 end
 
-kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
+kron(A::Diagonal, B::Diagonal) = Diagonal(kron(A.diag, B.diag))
+
+function kron(A::Diagonal, B::SymTridiagonal)
+    kdv = kron(diag(A), B.dv)
+    # We don't need to drop the last element
+    kev = kron(diag(A), _pushzero(_evview(B)))
+    SymTridiagonal(kdv, kev)
+end
+function kron(A::Diagonal, B::Tridiagonal)
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kd = _makevector(kron(diag(A), B.d))
+    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
+    Tridiagonal(kdl, kd, kdu)
+end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     require_one_based_indexing(B)
@@ -807,6 +827,8 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 
 @inline cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
 @inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copymutable_oftype(A, choltype(A))
