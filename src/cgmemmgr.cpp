@@ -858,7 +858,7 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
     // allocating more than one code section can confuse libunwind.
 #if defined(_COMPILER_MSAN_ENABLED_)
     // TODO: Figure out why msan needs this.
-    assert(!code_allocated);
+    // assert(!code_allocated);
     code_allocated = true;
 #endif
     total_allocated += Size;

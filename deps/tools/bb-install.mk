@@ -32,7 +32,10 @@ $(2)_JLL_TAGS ?=
 
 ifeq ($(SANITIZE_MEMORY),1)
 	$(2)_JLL_SANITIZER_TAGS = -sanitize+memory
-	ifneq ($1, csl)
+	ifeq ($1, gmp)
+	TRIPLET_VAR := BB_TRIPLET
+	endif
+	ifeq ($1, openblas)
 	TRIPLET_VAR := BB_TRIPLET
 	endif
 endif

@@ -2120,9 +2120,7 @@ static void jl_init_function(Function *F)
 #if defined(_COMPILER_ASAN_ENABLED_)
     attr.addAttribute(Attribute::SanitizeAddress);
 #endif
-#if defined(_COMPILER_MSAN_ENABLED_)
     attr.addAttribute(Attribute::SanitizeMemory);
-#endif
 #if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);
 #else
