@@ -824,11 +824,10 @@ function collect_to_with_first!(dest, v1, itr, st)
 end
 
 function setindex_widen_up_to(dest::AbstractArray{T}, el, i) where T
-    @inline
     new = similar(dest, promote_typejoin(T, typeof(el)))
     f = first(LinearIndices(dest))
     copyto!(new, first(LinearIndices(new)), dest, f, i-f)
-    @inbounds new[i] = el
+    new[i] = el
     return new
 end
 
@@ -836,10 +835,12 @@ function collect_to!(dest::AbstractArray{T}, itr, offs, st) where T
     # collect to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     i = offs
+    len = length(dest)
     while true
         y = iterate(itr, st)
         y === nothing && break
         el, st = y
+        @assert len == length(dest)
         if el isa T
             @inbounds dest[i] = el
             i += 1
@@ -856,7 +857,7 @@ function grow_to!(dest, itr)
     y === nothing && return dest
     dest2 = empty(dest, typeof(y[1]))
     push!(dest2, y[1])
-    grow_to!(dest2, itr, y[2])
+    return grow_to!(dest2, itr, y[2])
 end
 
 function push_widen(dest, el)
@@ -1120,8 +1121,8 @@ function _append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
     resize!(a, n+Int(length(iter))::Int)
-    @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
-        a[i] = item
+    for (i, item) in zip(i+1:lastindex(a), iter)
+        @inbounds a[i] = item
     end
     a
 end
@@ -1891,8 +1892,8 @@ function reverse!(v::AbstractVector, start::Integer, stop::Integer=lastindex(v))
             throw(BoundsError(v, n))
         end
         r = n
-        @inbounds for i in s:midpoint(s, n-1)
-            v[i], v[r] = v[r], v[i]
+        for i in s:midpoint(s, n-1)
+            @inbounds v[i], v[r] = v[r], v[i]
             r -= 1
         end
     end
@@ -2376,32 +2377,32 @@ function _findall(f::Function, A::AbstractArray{Bool})
     n = count(f, A)
     I = Vector{eltype(keys(A))}(undef, n)
     isempty(I) && return I
-    _findall(f, I, A)
+    return _findall(f, I, A)
 end
 
 function _findall(f::Function, I::Vector, A::AbstractArray{Bool})
     cnt = 1
-    len = length(I)
     for (k, v) in pairs(A)
         @inbounds I[cnt] = k
-        cnt += f(v)
-        cnt > len && return I
+        cnt += f(v)::Bool
+        cnt > length(I) && return I
     end
     # In case of impure f, this line could potentially be hit. In that case,
     # we can't assume I is the correct length.
     resize!(I, cnt - 1)
+    return I
 end
 
 function _findall(f::Function, I::Vector, A::AbstractVector{Bool})
     i = firstindex(A)
     cnt = 1
-    len = length(I)
-    while cnt ≤ len
+    while cnt ≤ length(I)
         @inbounds I[cnt] = i
-        cnt += f(@inbounds A[i])
+        cnt += f(@inbounds A[i])::Bool
         i = nextind(A, i)
     end
-    cnt - 1 == len ? I : resize!(I, cnt - 1)
+    cnt - 1 == length(I) || resize!(I, cnt - 1)
+    return I
 end
 
 findall(f::Function, A::AbstractArray{Bool}) = _findall(f, A)
@@ -2458,10 +2459,10 @@ end
 function _findin(a::Union{AbstractArray, Tuple}, b)
     ind  = Vector{eltype(keys(a))}()
     bset = Set(b)
-    @inbounds for (i,ai) in pairs(a)
+    for (i, ai) in pairs(a)
         ai in bset && push!(ind, i)
     end
-    ind
+    return ind
 end
 
 # If two collections are already sorted, _findin can be computed with
@@ -2476,34 +2477,32 @@ function _sortedfindin(v::Union{AbstractArray, Tuple}, w)
     end
     viteri, i = vy
     witerj, j = wy
-    @inbounds begin
-        vi, wj = v[viteri], w[witerj]
-        while true
-            if isless(vi, wj)
-                vy = iterate(viter, i)
-                if vy === nothing
-                    break
-                end
-                viteri, i = vy
-                vi        = v[viteri]
-            elseif isless(wj, vi)
-                wy = iterate(witer, j)
-                if wy === nothing
-                    break
-                end
-                witerj, j = wy
-                wj        = w[witerj]
-            else
-                push!(out, viteri)
-                vy = iterate(viter, i)
-                if vy === nothing
-                    break
-                end
-                # We only increment the v iterator because v can have
-                # repeated matches to a single value in w
-                viteri, i = vy
-                vi        = v[viteri]
+    @inbounds vi, wj = v[viteri], w[witerj]
+    while true
+        if isless(vi, wj)
+            vy = iterate(viter, i)
+            if vy === nothing
+                break
             end
+            viteri, i = vy
+            vi        = @inbounds v[viteri]
+        elseif isless(wj, vi)
+            wy = iterate(witer, j)
+            if wy === nothing
+                break
+            end
+            witerj, j = wy
+            wj        = @inbounds w[witerj]
+        else
+            push!(out, viteri)
+            vy = iterate(viter, i)
+            if vy === nothing
+                break
+            end
+            # We only increment the v iterator because v can have
+            # repeated matches to a single value in w
+            viteri, i = vy
+            vi        = @inbounds v[viteri]
         end
     end
     return out
@@ -2575,21 +2574,22 @@ function filter(f, a::Array{T, N}) where {T, N}
     j = 1
     b = Vector{T}(undef, length(a))
     for ai in a
-        @inbounds b[j] = ai
+        @inbounds b[j] = ai # XXX: assumes user filter does not modify a
         j = ifelse(f(ai)::Bool, j+1, j)
     end
     resize!(b, j-1)
     sizehint!(b, length(b))
-    b
+    return b
 end
 
 function filter(f, a::AbstractArray)
-    (IndexStyle(a) != IndexLinear()) && return a[map(f, a)::AbstractArray{Bool}]
+    (IndexStyle(a) != IndexLinear()) &&
+        return a[map(f, a)::AbstractArray{Bool}]
 
     j = 1
     idxs = Vector{Int}(undef, length(a))
     for idx in eachindex(a)
-        @inbounds idxs[j] = idx
+        @inbounds idxs[j] = idx # XXX: assumes user filter does not modify a
         ai = @inbounds a[idx]
         j = ifelse(f(ai)::Bool, j+1, j)
     end
@@ -2620,7 +2620,7 @@ julia> filter!(isodd, Vector(1:10))
 function filter!(f, a::AbstractVector)
     j = firstindex(a)
     for ai in a
-        @inbounds a[j] = ai
+        @inbounds a[j] = ai # XXX: assumes user filter does not modify a
         j = ifelse(f(ai)::Bool, nextind(a, j), j)
     end
     j > lastindex(a) && return a
