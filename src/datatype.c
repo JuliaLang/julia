@@ -113,6 +113,55 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     return t;
 }
 
+#include "support/htable.h"
+#include "support/htable.inc"
+
+static uint32_t _hash_djb2(uint32_t hash, const char* mem, size_t s) {
+    for (size_t i = 0; i < s; i++)
+        hash = ((hash << 5) + hash) + mem[i];
+    return hash;
+}
+
+static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT {
+    jl_datatype_layout_t* layout = (jl_datatype_layout_t*)_layout;
+    size_t own_size = sizeof(jl_datatype_layout_t);
+    const char* fields = jl_dt_layout_fields(layout);
+    size_t fields_size = layout->nfields * jl_fielddesc_size(layout->fielddesc_type);
+    const char* pointers = jl_dt_layout_ptrs(layout);
+    size_t pointers_size = (layout->npointers << layout->fielddesc_type);
+    
+    uint_t hash = 5381;
+    hash = _hash_djb2(hash, (char*)layout, own_size);
+    hash = _hash_djb2(hash, fields, fields_size);
+    hash = _hash_djb2(hash, pointers, pointers_size);
+    return hash;
+}
+
+static int layout_eq(void* _l1, void* _l2) {
+    jl_datatype_layout_t* l1 = (jl_datatype_layout_t*)_l1;
+    jl_datatype_layout_t* l2 = (jl_datatype_layout_t*)_l2;
+    if (memcmp(l1, l2, sizeof(jl_datatype_layout_t)))
+        return 0;
+
+    const char* f1 = jl_dt_layout_fields(l1);
+    const char* f2 = jl_dt_layout_fields(l2);
+    size_t fields_size = l1->nfields * jl_fielddesc_size(l1->fielddesc_type);
+    if (memcmp(f1, f2, fields_size))
+        return 0;
+
+    const char* p1 = jl_dt_layout_ptrs(l1);
+    const char* p2 = jl_dt_layout_ptrs(l2);
+    size_t pointers_size = (l1->npointers << l1->fielddesc_type);
+    if (memcmp(p1, p2, pointers_size))
+        return 0;
+
+    return 1;
+}
+
+HTIMPL(layoutcache, _hash_layout_djb2, layout_eq)
+static htable_t layoutcache;
+static int layoutcache_initialized = 0;
+
 static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
                                            uint32_t npointers,
                                            uint32_t alignment,
@@ -147,12 +196,12 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
         }
     }
 
-    // allocate a new descriptor
-    // TODO: lots of these are the same--take advantage of the fact these are immutable to combine them
-    uint32_t fielddesc_size = jl_fielddesc_size(fielddesc_type);
-    jl_datatype_layout_t *flddesc = (jl_datatype_layout_t*)jl_gc_perm_alloc(
-                sizeof(jl_datatype_layout_t) + nfields * fielddesc_size + (npointers << fielddesc_type),
-                0, 4, 0);
+    // allocate a new descriptor, on the stack if possible.
+    size_t fields_size = nfields * jl_fielddesc_size(fielddesc_type);
+    size_t pointers_size = (npointers << fielddesc_type);
+    size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size;
+    int should_malloc = flddesc_sz >= jl_page_size;
+    jl_datatype_layout_t *flddesc = (jl_datatype_layout_t*)(should_malloc ? malloc(flddesc_sz) : alloca(flddesc_sz));
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
@@ -195,7 +244,28 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             ptrs32[i] = pointers[i];
         }
     }
-    return flddesc;
+
+    if (__unlikely(!layoutcache_initialized)) {
+        htable_new(&layoutcache, 4096);
+        layoutcache_initialized = 1;
+    }
+
+    // Check the cache to see if this object already exists.
+    // Add to cache if not present, free temp buffer, return.
+    jl_datatype_layout_t* ret =
+            (jl_datatype_layout_t*)layoutcache_get(&layoutcache, flddesc);
+    if (ret == HT_NOTFOUND) {
+        char* new_mem = (char*)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
+        assert(new_mem);
+        memcpy(new_mem, flddesc, flddesc_sz);
+        layoutcache_put(&layoutcache, new_mem, new_mem);
+
+        if (should_malloc) free(flddesc);
+        return (jl_datatype_layout_t*)new_mem;
+    }
+
+    if (should_malloc) free(flddesc);
+    return ret;
 }
 
 // Determine if homogeneous tuple with fields of type t will have
