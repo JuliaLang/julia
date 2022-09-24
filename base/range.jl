@@ -31,8 +31,10 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     (:)(start, [step], stop)
 
-Range operator. `a:b` constructs a range from `a` to `b` with a step size of 1 (a [`UnitRange`](@ref))
-, and `a:s:b` is similar but uses a step size of `s` (a [`StepRange`](@ref)).
+Range operator. `a:b` constructs a range from `a` to `b` with an implicit step size
+of 1 (a [`UnitRange`](@ref)), and `a:s:b` is similar but uses an explicit step size
+of `s` (a [`StepRange`](@ref)). `a:s:b` where either `a`, `s` or `b` is a floating
+point produces a `StepRangeLen`.
 
 `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 """
