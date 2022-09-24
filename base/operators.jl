@@ -902,7 +902,7 @@ julia> 1:5 |> join
 julia> 1:5 |> collect |> sum |> inv
 0.06666666666666667
 
-julia> 1:5 |> collect .|> (x -> x^2) |> sum |> inv 
+julia> 1:5 |> collect .|> (x -> x^2) |> sum |> inv
 0.01818181818181818
 ```
 """
