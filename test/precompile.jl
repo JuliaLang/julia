@@ -817,6 +817,10 @@ precompile_test_harness("code caching") do dir
         build_stale(37)
         stale('c')
 
+        ## Reporting tests (unrelated to the above)
+        nbits(::Int8) = 8
+        nbits(::Int16) = 16
+
         end
         """
     )
@@ -834,6 +838,11 @@ precompile_test_harness("code caching") do dir
 
         # force precompilation
         useA()
+
+        ## Reporting tests
+        call_nbits(x::Integer) = $StaleA.nbits(x)
+        map_nbits() = map(call_nbits, Integer[Int8(1), Int16(1)])
+        map_nbits()
 
         end
         """
@@ -856,9 +865,12 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    @eval using $StaleC
-    @eval using $StaleB
     MA = getfield(@__MODULE__, StaleA)
+    Base.eval(MA, :(nbits(::UInt8) = 8))
+    @eval using $StaleC
+    invalidations = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    @eval using $StaleB
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     MB = getfield(@__MODULE__, StaleB)
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
@@ -883,6 +895,32 @@ precompile_test_harness("code caching") do dir
     m = only(methods(MC.call_buildstale))
     mi = m.specializations[1]
     @test hasvalid(mi, world)       # was compiled with the new method
+
+    # Reporting test
+    @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
+    idxs = findall(==("insert_backedges"), invalidations)
+    m = only(methods(MB.call_nbits))
+    idxsbits = filter(idxs) do i
+        mi = invalidations[i-1]
+        mi.def == m
+    end
+    idx = only(idxsbits)
+    for mi in m.specializations
+        mi === nothing && continue
+        hv = hasvalid(mi, world)
+        @test mi.specTypes.parameters[end] === Integer ? !hv : hv
+    end
+
+    tagbad = invalidations[idx+1]
+    buildid = invalidations[idx+2]
+    @test isa(buildid, UInt64)
+    j = findfirst(==(tagbad), invalidations)
+    @test invalidations[j+1] == buildid
+    @test isa(invalidations[j-2], Type)
+    @test invalidations[j-1] == "insert_backedges_callee"
+
+    m = only(methods(MB.map_nbits))
+    @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
 end
 
 precompile_test_harness("invoke") do dir
