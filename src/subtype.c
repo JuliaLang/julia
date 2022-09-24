@@ -2840,7 +2840,7 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
         JL_GC_PUSHARGS(env, envsz);
         jl_stenv_t tempe;
         init_stenv(&tempe, env, envsz);
-        tempe.ignore_free = 1;
+        tempe.intersection = tempe.ignore_free = 1;
         if (subtype_in_env(isuper, super_pattern, &tempe)) {
             jl_value_t *wr = wrapper;
             int i;
