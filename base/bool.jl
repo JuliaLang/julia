@@ -57,11 +57,14 @@ true
 julia> xor(true, true)
 false
 
-julia> xor(true, missing)
+julia> xor(false ⊻ false)
+false
+
+julia> true ⊻ missing
 missing
 
-julia> false ⊻ false
-false
+julia> false ⊻ missing
+missing
 
 julia> [true; true; false] .⊻ [true; false; false]
 3-element BitVector:
@@ -78,7 +81,8 @@ xor(x::Bool, y::Bool) = (x != y)
 
 Bitwise nand (not and) of `x` and `y`. Implements
 [three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic),
-returning [`missing`](@ref) if one of the arguments is `missing`.
+returning [`missing`](@ref) if one of the arguments is `missing` and
+the other is `true`.
 
 The infix operation `a ⊼ b` is a synonym for `nand(a,b)`, and
 `⊼` can be typed by tab-completing `\\nand` or `\\barwedge` in the Julia REPL.
@@ -91,10 +95,13 @@ true
 julia> nand(true, true)
 false
 
-julia> nand(true, missing)
+julia> nand(false, false)
+true
+
+julia> true ⊼ missing
 missing
 
-julia> false ⊼ false
+julia> false ⊼ missing
 true
 
 julia> [true; true; false] .⊼ [true; false; false]
@@ -126,11 +133,11 @@ false
 julia> nor(true, true)
 false
 
-julia> nor(true, missing)
-false
-
-julia> false ⊽ false
+julia> nor(false, false)
 true
+
+julia> true ⊽ missing
+false
 
 julia> false ⊽ missing
 missing
