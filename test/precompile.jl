@@ -931,6 +931,7 @@ precompile_test_harness("invoke") do dir
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
               export f44320, g44320
+              export getlast
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
@@ -954,6 +955,16 @@ precompile_test_harness("invoke") do dir
               f44320(::Any) = 2
               g44320() = invoke(f44320, Tuple{Any}, 0)
               g44320()
+
+              # Adding new specializations should not invalidate `invoke`s
+              function getlast(itr)
+                  x = nothing
+                  for y in itr
+                      x = y
+                  end
+                  return x
+              end
+              getlast(a::AbstractArray) = invoke(getlast, Tuple{Any}, a)
           end
           """)
           write(joinpath(dir, "$CallerModule.jl"),
@@ -981,6 +992,8 @@ precompile_test_harness("invoke") do dir
               # Issue #44320
               f44320(::Real) = 3
 
+              call_getlast(x) = getlast(x)
+
               # force precompilation
               begin
                   Base.Experimental.@force_compile
@@ -996,6 +1009,7 @@ precompile_test_harness("invoke") do dir
                   callqnci(3)
                   internal(3)
                   internalnc(3)
+                  call_getlast([1,2,3])
               end
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
@@ -1007,6 +1021,9 @@ precompile_test_harness("invoke") do dir
           end
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
+    @eval using $InvokeModule: $InvokeModule
+    MI = getfield(@__MODULE__, InvokeModule)
+    @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     M = getfield(@__MODULE__, CallerModule)
 
@@ -1058,6 +1075,9 @@ precompile_test_harness("invoke") do dir
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
 
     m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
+
+    m = which(MI.getlast, (Any,))
     @test m.specializations[1].cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types

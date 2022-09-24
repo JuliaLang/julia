@@ -1366,6 +1366,7 @@ static void jl_collect_backedges(jl_array_t *edges, jl_array_t *ext_targets)
     jl_value_t *invokeTypes;
     jl_method_instance_t *c;
     size_t i;
+    size_t world = jl_get_world_counter();
     void **table = edges_map.table;    // edges is caller => callees
     size_t table_size = edges_map.size;
     for (i = 0; i < table_size; i += 2) {
@@ -1408,15 +1409,28 @@ static void jl_collect_backedges(jl_array_t *edges, jl_array_t *ext_targets)
                         size_t min_valid = 0;
                         size_t max_valid = ~(size_t)0;
                         int ambig = 0;
-                        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
-                        if (matches == jl_false) {
-                            valid = 0;
-                            break;
-                        }
-                        size_t k;
-                        for (k = 0; k < jl_array_len(matches); k++) {
-                            jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
-                            jl_array_ptr_set(matches, k, match->method);
+                        jl_value_t *matches;
+                        if (mode == 2 && callee && jl_is_method_instance(callee) && jl_is_type(sig)) {
+                            // invoke, use subtyping
+                            jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
+                            size_t min_world, max_world;
+                            matches = jl_gf_invoke_lookup_worlds(sig, (jl_value_t*)mt, world, &min_world, &max_world);
+                            if (matches == jl_nothing) {
+                                valid = 0;
+                                break;
+                            }
+                            matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
+                        } else {
+                            matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
+                            if (matches == jl_false) {
+                                valid = 0;
+                                break;
+                            }
+                            size_t k;
+                            for (k = 0; k < jl_array_len(matches); k++) {
+                                jl_method_match_t *match = (jl_method_match_t *)jl_array_ptr_ref(matches, k);
+                                jl_array_ptr_set(matches, k, match->method);
+                            }
                         }
                         jl_array_ptr_1d_push(ext_targets, mode == 1 ? NULL : sig);
                         jl_array_ptr_1d_push(ext_targets, callee);
@@ -2544,6 +2558,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     jl_value_t *loctag = NULL, *matches = NULL;
     JL_GC_PUSH2(&loctag, &matches);
     *pvalids = valids;
+    size_t world = jl_get_world_counter();
     for (i = 0; i < l; i++) {
         jl_value_t *invokesig = jl_array_ptr_ref(targets, i * 3);
         jl_value_t *callee = jl_array_ptr_ref(targets, i * 3 + 1);
@@ -2555,33 +2570,43 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         else {
             sig = callee == NULL ? invokesig : callee;
         }
-        jl_array_t *expected = (jl_array_t*)jl_array_ptr_ref(targets, i * 3 + 2);
-        assert(jl_is_array(expected));
+        jl_value_t *expected = jl_array_ptr_ref(targets, i * 3 + 2);
         int valid = 1;
         size_t min_valid = 0;
         size_t max_valid = ~(size_t)0;
         int ambig = 0;
-        // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
-        matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
-        if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
-            valid = 0;
-        }
-        else {
-            size_t j, k, l = jl_array_len(expected);
-            for (k = 0; k < jl_array_len(matches); k++) {
-                jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, k);
-                jl_method_t *m = match->method;
-                for (j = 0; j < l; j++) {
-                    if (m == (jl_method_t*)jl_array_ptr_ref(expected, j))
+        int use_invoke = invokesig == NULL || callee == NULL ? 0 : 1;
+        if (!use_invoke) {
+            // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
+            matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
+            if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
+                valid = 0;
+            }
+            else {
+                assert(jl_is_array(expected));
+                size_t j, k, l = jl_array_len(expected);
+                for (k = 0; k < jl_array_len(matches); k++) {
+                    jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, k);
+                    jl_method_t *m = match->method;
+                    for (j = 0; j < l; j++) {
+                        if (m == (jl_method_t*)jl_array_ptr_ref(expected, j))
+                            break;
+                    }
+                    if (j == l) {
+                        // intersection has a new method or a method was
+                        // deleted--this is now probably no good, just invalidate
+                        // everything about it now
+                        valid = 0;
                         break;
+                    }
                 }
-                if (j == l) {
-                    // intersection has a new method or a method was
-                    // deleted--this is now probably no good, just invalidate
-                    // everything about it now
-                    valid = 0;
-                    break;
-                }
+            }
+        } else {
+            jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
+            size_t min_world, max_world;
+            matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, world, &min_world, &max_world);
+            if (matches == jl_nothing || expected != (jl_value_t*)((jl_method_match_t*)matches)->method) {
+                valid = 0;
             }
         }
         jl_array_uint8_set(valids, i, valid);
@@ -2593,7 +2618,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
             loctag = jl_box_uint64(jl_worklist_key(serializer_worklist));
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
-            if (matches != jl_false) {
+            if (!use_invoke && matches != jl_false) {
                 // setdiff!(matches, expected)
                 size_t j, k, ins = 0;
                 for (j = 0; j < jl_array_len(matches); j++) {
