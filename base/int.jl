@@ -316,6 +316,9 @@ julia> ~10
 
 julia> ~true
 false
+
+julia> ~false
+true
 ```
 """
 (~)(x::BitInteger)             = not_int(x)
@@ -342,6 +345,12 @@ missing
 
 julia> false & missing
 false
+
+julia> [true; true; false] .& [true; false; false]
+3-element BitVector:
+ 1
+ 0
+ 0
 ```
 """
 (&)(x::T, y::T) where {T<:BitInteger} = and_int(x, y)
@@ -367,6 +376,12 @@ true
 
 julia> false | missing
 missing
+
+julia> [true; true; false] .| [true; false; false]
+3-element BitVector:
+ 1
+ 1
+ 0
 ```
 """
 (|)(x::T, y::T) where {T<:BitInteger} = or_int(x, y)
