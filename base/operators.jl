@@ -887,12 +887,22 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 """
     |>(x, f)
 
-Applies a function to the preceding argument. This allows for easy function chaining.
-When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
+Applies a function to the preceding argument. This allows for easy function
+chaining, where the results returned from a function on the chain is passed
+to the next function on the chain, until the last function is called.
+
+When used with anonymous functions, parentheses are typically required around
+the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] .|> (x -> x^2) |> sum |> inv
+julia> 1:5 |> join
+"12345"
+
+julia> 1:5 |> collect |> sum |> inv
+0.06666666666666667
+
+julia> 1:5 |> collect .|> (x -> x^2) |> sum |> inv 
 0.01818181818181818
 ```
 """
