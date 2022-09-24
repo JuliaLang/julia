@@ -1280,3 +1280,110 @@ julia> argmax(A, dims=2)
 ```
 """
 argmax(A::AbstractArray; dims=:) = findmax(A; dims=dims)[2]
+
+"""
+    mean(f, A::AbstractArray; dims)
+
+Apply the function `f` to each element of array `A` and take the mean over dimensions `dims`.
+
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+    Support for older releases is provided by the Statistics package.
+
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+
+julia> mean(√, [1 2 3; 4 5 6], dims=2)
+2×1 Matrix{Float64}:
+ 1.3820881233139908
+ 2.2285192400943226
+```
+"""
+mean(f, A::AbstractArray; dims=:) = _mean(f, A, dims)
+
+"""
+    mean!(r, v)
+
+Compute the mean of `v` over the singleton dimensions of `r`, and write results to `r`.
+
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+    Support for older releases is provided by the Statistics package.
+
+# Examples
+```jldoctest
+julia> v = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> mean!([1., 1.], v)
+2-element Vector{Float64}:
+ 1.5
+ 3.5
+
+julia> mean!([1. 1.], v)
+1×2 Matrix{Float64}:
+ 2.0  3.0
+```
+"""
+function mean!(R::AbstractArray, A::AbstractArray)
+    sum!(R, A; init=true)
+    x = max(1, length(R)) // length(A)
+    R .= R .* x
+    return R
+end
+
+"""
+    mean(A::AbstractArray; dims)
+
+Compute the mean of an array over the given dimensions.
+
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+    Support for older releases is provided by the Statistics package.
+
+# Examples
+```jldoctest
+julia> A = [1 2; 3 4]
+2×2 Matrix{Int64}:
+ 1  2
+ 3  4
+
+julia> mean(A, dims=1)
+1×2 Matrix{Float64}:
+ 2.0  3.0
+
+julia> mean(A, dims=2)
+2×1 Matrix{Float64}:
+ 1.5
+ 3.5
+```
+"""
+mean(A::AbstractArray; dims=:) = _mean(identity, A, dims)
+
+# ::Dims is there to force specializing on Colon (as it is a Function)
+function _mean(f, A::AbstractArray, dims::Dims=:) where Dims
+    isempty(A) && return sum(f, A, dims=dims)/0
+    if dims === (:)
+        n = length(A)
+    else
+        n = mapreduce(i -> size(A, i), *, unique(dims); init=1)
+    end
+    x1 = f(first(A)) / 1
+    result = sum(x -> _mean_promote(x1, f(x)), A, dims=dims)
+    if dims === (:)
+        return result / n
+    else
+        return result ./= n
+    end
+end
+
+function mean(r::AbstractRange{<:Real})
+    isempty(r) && return oftype((first(r) + last(r)) / 2, NaN)
+    (first(r) + last(r)) / 2
+end

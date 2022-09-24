@@ -115,6 +115,8 @@ Base.sum
 Base.sum!
 Base.prod
 Base.prod!
+Base.mean
+Base.mean!
 Base.any(::Any)
 Base.any(::AbstractArray, ::Any)
 Base.any!

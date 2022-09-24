@@ -29,7 +29,6 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "statistics"
 ]
 
 """

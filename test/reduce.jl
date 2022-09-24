@@ -689,3 +689,131 @@ end
     @test @inferred(prod(b)) == prod(collect(b))
     @test @inferred(minimum(a)) == minimum(collect(a))
 end
+
+@testset "mean" begin
+    @test mean((1,2,3)) === 2.
+    @test mean([0]) === 0.
+    @test mean([1.]) === 1.
+    @test mean([1.,3]) == 2.
+    @test mean([1,2,3]) == 2.
+    @test mean([0 1 2; 4 5 6], dims=1) == [2.  3.  4.]
+    @test mean([1 2 3; 4 5 6], dims=1) == [2.5 3.5 4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=1) == [-2.5 -3.5 -4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=2) == transpose([-2.0 -5.0])
+    @test mean(-, [1 2 3 ; 4 5 6], dims=(1, 2)) == -3.5 .* ones(1, 1)
+    @test mean(-, [1 2 3 ; 4 5 6], dims=(1, 1)) == [-2.5 -3.5 -4.5]
+    @test mean(-, [1 2 3 ; 4 5 6], dims=()) == Float64[-1 -2 -3 ; -4 -5 -6]
+    @test mean(i->i+1, 0:2) === 2.
+    @test mean(isodd, [3]) === 1.
+    @test mean(x->3x, (1,1)) === 3.
+
+    # mean of iterables:
+    n = 10; a = randn(n); b = randn(n)
+    @test mean(Tuple(a)) ≈ mean(a)
+    @test mean(Tuple(a + b*im)) ≈ mean(a + b*im)
+    @test mean(cos, Tuple(a)) ≈ mean(cos, a)
+    @test mean(x->x/2, a + b*im) ≈ mean(a + b*im) / 2.
+    @test ismissing(mean(Tuple((1, 2, missing, 4, 5))))
+
+    @test isnan(mean([NaN]))
+    @test isnan(mean([0.0,NaN]))
+    @test isnan(mean([NaN,0.0]))
+
+    @test isnan(mean([0.,Inf,-Inf]))
+    @test isnan(mean([1.,-1.,Inf,-Inf]))
+    @test isnan(mean([-Inf,Inf]))
+    @test isequal(mean([NaN 0.0; 1.2 4.5], dims=2), reshape([NaN; 2.85], 2, 1))
+
+    @test ismissing(mean([1, missing]))
+    @test ismissing(mean([NaN, missing]))
+    @test ismissing(mean([missing, NaN]))
+    @test isequal(mean([missing 1.0; 2.0 3.0], dims=1), [missing 2.0])
+    @test mean(skipmissing([1, missing, 2])) === 1.5
+    @test isequal(mean(Complex{Float64}[]), NaN+NaN*im)
+    @test mean(Complex{Float64}[]) isa Complex{Float64}
+    @test isequal(mean(skipmissing(Complex{Float64}[])), NaN+NaN*im)
+    @test mean(skipmissing(Complex{Float64}[])) isa Complex{Float64}
+    @test isequal(mean(abs, Complex{Float64}[]), NaN)
+    @test mean(abs, Complex{Float64}[]) isa Float64
+    @test isequal(mean(abs, skipmissing(Complex{Float64}[])), NaN)
+    @test mean(abs, skipmissing(Complex{Float64}[])) isa Float64
+    @test isequal(mean(Int[]), NaN)
+    @test mean(Int[]) isa Float64
+    @test isequal(mean(skipmissing(Int[])), NaN)
+    @test mean(skipmissing(Int[])) isa Float64
+    @test_throws MethodError mean([])
+    @test_throws MethodError mean(skipmissing([]))
+    @test_throws ArgumentError mean((1 for i in 2:1))
+    @test_throws ArgumentError mean(())
+    @test_throws ArgumentError mean(Union{}[])
+
+    # Check that small types are accumulated using wider type
+    for T in (Int8, UInt8)
+        x = [typemax(T) typemax(T)]
+        g = (v for v in x)
+        @test mean(x) == mean(g) == typemax(T)
+        @test mean(identity, x) == mean(identity, g) == typemax(T)
+        @test mean(x, dims=2) == [typemax(T)]'
+    end
+    # Check that mean avoids integer overflow (#22)
+    let x = fill(typemax(Int), 10), a = tuple(x...)
+        @test (mean(x) == mean(x, dims=1)[] == mean(float, x)
+               == mean(a) == mean(v for v in x)  == mean(v for v in a)
+               ≈ float(typemax(Int)))
+    end
+    let x = rand(10000)  # mean should use sum's accurate pairwise algorithm
+        @test mean(x) == sum(x) / length(x)
+    end
+    @test mean(Number[1, 1.5, 2+3im]) === 1.5+1im # mixed-type array
+    @test mean(v for v in Number[1, 1.5, 2+3im]) === 1.5+1im
+    @test isnan(@inferred mean(Int[]))
+    @test isnan(@inferred mean(Float32[]))
+    @test isnan(@inferred mean(Float64[]))
+    @test isnan(@inferred mean(Iterators.filter(x -> true, Int[])))
+    @test isnan(@inferred mean(Iterators.filter(x -> true, Float32[])))
+    @test isnan(@inferred mean(Iterators.filter(x -> true, Float64[])))
+end
+
+@testset "mean for ranges" begin
+    for n = 2:5
+        @test mean(2:n) == mean([2:n;])
+        @test mean(2:0.1:n) ≈ mean([2:0.1:n;])
+    end
+    @test mean(2:1) === NaN
+    @test mean(big(2):1) isa BigFloat
+end
+
+@testset "mean!" begin
+    x = rand(5, 3)
+
+    r = similar(x, 5)
+    @test mean!(r, x) === r
+    @test r ≈ mean(x, dims=2)
+
+    r = similar(x, 5, 1)
+    @test mean!(r, x) === r
+    @test r ≈ mean(x, dims=2)
+
+    r = similar(x, 1, 3)
+    @test mean!(r, x) === r
+    @test r ≈ mean(x, dims=1)
+
+    r = similar(x, 5, 3)
+    @test mean!(r, x) === r
+    @test r ≈ x
+
+    r = similar(x, 1)
+    @test mean!(r, x) === r
+    @test r[] ≈ mean(x)
+
+    r = similar(x, ())
+    @test mean!(r, x) === r
+    @test r[] ≈ mean(x)
+
+    @test_throws DimensionMismatch mean!(zeros(0, 0), x)
+    @test_throws DimensionMismatch mean!(zeros(0), x)
+    @test_throws DimensionMismatch mean!(zeros(2), x)
+    @test_throws DimensionMismatch mean!(zeros(2, 2), x)
+    @test_throws DimensionMismatch mean!(zeros(2, 3), x)
+    @test_throws DimensionMismatch mean!(zeros(5, 2), x)
+end

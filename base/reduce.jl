@@ -612,6 +612,77 @@ julia> prod(1:5; init = 1.0)
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
 
+## mean
+
+_mean_promote(x::T, y::S) where {T,S} = convert(promote_type(T, S), y)
+
+"""
+    mean(itr)
+
+Compute the mean of all elements in a collection.
+
+!!! note
+    If `itr` contains `NaN` or [`missing`](@ref) values, the result is also
+    `NaN` or `missing` (`missing` takes precedence if array contains both).
+    Use the [`skipmissing`](@ref) function to omit `missing` entries and compute the
+    mean of non-missing values.
+
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+    Support for older releases is provided by the Statistics package.
+
+# Examples
+```jldoctest
+julia> mean(1:20)
+10.5
+
+julia> mean([1, missing, 3])
+missing
+
+julia> mean(skipmissing([1, missing, 3]))
+2.0
+```
+"""
+mean(itr) = mean(identity, itr)
+
+"""
+    mean(f, itr)
+
+Apply the function `f` to each element of collection `itr` and take the mean.
+
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+    Support for older releases is provided by the Statistics package.
+
+# Examples
+```jldoctest
+julia> mean(√, [1, 2, 3])
+1.3820881233139908
+
+julia> mean([√1, √2, √3])
+1.3820881233139908
+```
+"""
+function mean(f, itr)
+    y = iterate(itr)
+    if y === nothing
+        return mapreduce_empty_iter(f, +, itr,
+                                    IteratorEltype(itr)) / 0
+    end
+    count = 1
+    value, state = y
+    f_value = f(value)/1
+    total = reduce_first(+, f_value)
+    y = iterate(itr, state)
+    while y !== nothing
+        value, state = y
+        total += _mean_promote(total, f(value))
+        count += 1
+        y = iterate(itr, state)
+    end
+    return total/count
+end
+
 ## maximum, minimum, & extrema
 _fast(::typeof(min),x,y) = min(x,y)
 _fast(::typeof(max),x,y) = max(x,y)

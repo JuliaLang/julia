@@ -412,6 +412,8 @@ export
     max,
     maximum!,
     maximum,
+    mean,
+    mean!,
     min,
     minimum!,
     minimum,
@@ -982,12 +984,6 @@ export
 # implemented in Random module
     rand,
     randn,
-
-# statistics
-    mean,
-    mean!,
-    std,
-    var,
 
 # Macros
     # parser internal
