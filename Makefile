@@ -229,8 +229,10 @@ endif
 endif
 endif
 
+# Note that we disable MSYS2's path munging here, as otherwise
+# it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
-	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
+	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
 endef
 
 
@@ -428,6 +430,12 @@ ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 endif
 endif
 endif
+
+ifeq ($(USE_BINARYBUILDER_OPENBLAS),0)
+	# https://github.com/JuliaLang/julia/issues/46579
+	USE_BINARYBUILDER_OBJCONV=0
+endif
+
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
 	$(error prefix must not be set for make binary-dist)
 endif

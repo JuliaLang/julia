@@ -188,11 +188,6 @@ static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 
-static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
-{
-    ios_write(s, (char*)&i, 8);
-}
-
 static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
 {
     write_uint64(s, *((uint64_t*)&x));
@@ -314,77 +309,127 @@ static int type_recursively_external(jl_datatype_t *dt) JL_NOTSAFEPOINT
     return 1;
 }
 
+static void mark_backedges_in_worklist(jl_method_instance_t *mi, htable_t *visited, int found)
+{
+    int oldfound = (char*)ptrhash_get(visited, mi) - (char*)HT_NOTFOUND;
+    if (oldfound < 3)
+        return; // not in-progress
+    ptrhash_put(visited, mi, (void*)((char*)HT_NOTFOUND + 1 + found));
+#ifndef NDEBUG
+    jl_module_t *mod = mi->def.module;
+    if (jl_is_method(mod))
+        mod = ((jl_method_t*)mod)->module;
+    assert(jl_is_module(mod));
+    assert(!mi->precompiled && !module_in_worklist(mod));
+    assert(mi->backedges);
+#endif
+    size_t i = 0, n = jl_array_len(mi->backedges);
+    while (i < n) {
+        jl_method_instance_t *be;
+        i = get_next_edge(mi->backedges, i, NULL, &be);
+        mark_backedges_in_worklist(be, visited, found);
+    }
+}
+
 // When we infer external method instances, ensure they link back to the
 // package. Otherwise they might be, e.g., for external macros
-static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited)
+static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, int depth)
 {
-    void **bp = ptrhash_bp(visited, mi);
-    // HT_NOTFOUND: not yet analyzed
-    // HT_NOTFOUND + 1: doesn't link back
-    // HT_NOTFOUND + 2: does link back
-    if (*bp != HT_NOTFOUND)
-        return (char*)*bp - (char*)HT_NOTFOUND - 1;
-    *bp = (void*)((char*)HT_NOTFOUND + 1);  // preliminarily mark as "not found"
-    // TODO: this algorithm deals with cycles incorrectly
     jl_module_t *mod = mi->def.module;
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
     if (mi->precompiled || module_in_worklist(mod)) {
-        *bp = (void*)((char*)HT_NOTFOUND + 2);      // found
         return 1;
     }
     if (!mi->backedges) {
         return 0;
     }
+    void **bp = ptrhash_bp(visited, mi);
+    // HT_NOTFOUND: not yet analyzed
+    // HT_NOTFOUND + 1: no link back
+    // HT_NOTFOUND + 2: does link back
+    // HT_NOTFOUND + 3 + depth: in-progress
+    int found = (char*)*bp - (char*)HT_NOTFOUND;
+    if (found)
+        return found - 1;
+    *bp = (void*)((char*)HT_NOTFOUND + 3 + depth); // preliminarily mark as in-progress
     size_t i = 0, n = jl_array_len(mi->backedges);
-    jl_method_instance_t *be;
+    int cycle = 0;
     while (i < n) {
+        jl_method_instance_t *be;
         i = get_next_edge(mi->backedges, i, NULL, &be);
-        if (has_backedge_to_worklist(be, visited)) {
-            bp = ptrhash_bp(visited, mi);           // re-acquire since rehashing might change the location
-            *bp = (void*)((char*)HT_NOTFOUND + 2);  // found
-            return 1;
+        int child_found = has_backedge_to_worklist(be, visited, depth + 1);
+        if (child_found == 1) {
+            found = 1;
+            break;
+        }
+        else if (child_found >= 2 && child_found - 2 < cycle) {
+            // record the cycle will resolve at depth "cycle"
+            cycle = child_found - 2;
+            assert(cycle);
         }
     }
-    return 0;
+    if (!found && cycle && cycle != depth)
+        return cycle + 2;
+    bp = ptrhash_bp(visited, mi); // re-acquire since rehashing might change the location
+    *bp = (void*)((char*)HT_NOTFOUND + 1 + found);
+    if (cycle) {
+        // If we are the top of the current cycle, now mark all other parts of
+        // our cycle by re-walking the backedges graph and marking all WIP
+        // items as found.
+        // Be careful to only re-walk as far as we had originally scanned above.
+        // Or if we found a backedge, also mark all of the other parts of the
+        // cycle as also having an backedge.
+        n = i;
+        i = 0;
+        while (i < n) {
+            jl_method_instance_t *be;
+            i = get_next_edge(mi->backedges, i, NULL, &be);
+            mark_backedges_in_worklist(be, visited, found);
+        }
+    }
+    return found;
 }
 
 // given the list of MethodInstances that were inferred during the
 // build, select those that are external and have at least one
-// relocatable CodeInstance.
+// relocatable CodeInstance and are inferred to be called from the worklist
+// or explicitly added by a precompile statement.
 static size_t queue_external_mis(jl_array_t *list)
 {
+    if (list == NULL)
+        return 0;
     size_t i, n = 0;
     htable_t visited;
-    if (list) {
-        assert(jl_is_array(list));
-        size_t n0 = jl_array_len(list);
-        htable_new(&visited, n0);
-        for (i = 0; i < n0; i++) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
-            assert(jl_is_method_instance(mi));
-            if (jl_is_method(mi->def.value)) {
-                jl_method_t *m = mi->def.method;
-                if (!module_in_worklist(m->module)) {
-                    jl_code_instance_t *ci = mi->cache;
-                    int relocatable = 0;
-                    while (ci) {
-                        if (ci->max_world == ~(size_t)0)
-                            relocatable |= ci->relocatability;
-                        ci = ci->next;
-                    }
-                    if (relocatable && ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
-                        if (has_backedge_to_worklist(mi, &visited)) {
-                            ptrhash_put(&external_mis, mi, mi);
-                            n++;
-                        }
+    assert(jl_is_array(list));
+    size_t n0 = jl_array_len(list);
+    htable_new(&visited, n0);
+    for (i = 0; i < n0; i++) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
+        assert(jl_is_method_instance(mi));
+        if (jl_is_method(mi->def.value)) {
+            jl_method_t *m = mi->def.method;
+            if (!module_in_worklist(m->module)) {
+                jl_code_instance_t *ci = mi->cache;
+                int relocatable = 0;
+                while (ci) {
+                    if (ci->max_world == ~(size_t)0)
+                        relocatable |= ci->relocatability;
+                    ci = ci->next;
+                }
+                if (relocatable && ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
+                    int found = has_backedge_to_worklist(mi, &visited, 1);
+                    assert(found == 0 || found == 1);
+                    if (found == 1) {
+                        ptrhash_put(&external_mis, mi, mi);
+                        n++;
                     }
                 }
             }
         }
-        htable_free(&visited);
     }
+    htable_free(&visited);
     return n;
 }
 
@@ -999,7 +1044,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         else {
             write_uint8(s->s, TAG_INT64);
-            write_int64(s->s, *(int64_t*)data);
+            write_uint64(s->s, *(int64_t*)data);
         }
     }
     else if (jl_typeis(v, jl_int32_type)) {
@@ -1163,7 +1208,7 @@ static void serialize_htable_keys(jl_serializer_state *s, htable_t *ht, int nite
 // or method instances not in the queue
 //
 // from MethodTables
-static void jl_collect_missing_backedges_to_mod(jl_methtable_t *mt)
+static void jl_collect_missing_backedges(jl_methtable_t *mt)
 {
     jl_array_t *backedges = mt->backedges;
     if (backedges) {
@@ -1252,7 +1297,7 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL
                                 (jl_value_t*)mt != jl_nothing &&
                                 (mt != jl_type_type_mt && mt != jl_nonfunction_mt)) {
                             jl_collect_methtable_from_mod(s, mt);
-                            jl_collect_missing_backedges_to_mod(mt);
+                            jl_collect_missing_backedges(mt);
                         }
                     }
                 }
@@ -1576,7 +1621,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
         ios_seek(s, initial_pos);
         write_uint64(s, pos - initial_pos);
         ios_seek(s, pos);
-        write_int64(s, 0);
+        write_uint64(s, 0);
     }
     return pos;
 }
@@ -2084,6 +2129,10 @@ static void jl_deserialize_struct(jl_serializer_state *s, jl_value_t *v) JL_GC_D
             entry->min_world = 1;
             entry->max_world = 0;
         }
+    } else if (dt == jl_globalref_type) {
+        jl_globalref_t *r = (jl_globalref_t*)v;
+        jl_binding_t *b = jl_get_binding_if_bound(r->mod, r->name);
+        r->bnd_cache = b && b->value ? b : NULL;
     }
 }
 
@@ -2492,8 +2541,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     size_t i, l = jl_array_len(targets) / 3;
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
-    jl_value_t *loctag = NULL;
-    JL_GC_PUSH1(&loctag);
+    jl_value_t *loctag = NULL, *matches = NULL;
+    JL_GC_PUSH2(&loctag, &matches);
     *pvalids = valids;
     for (i = 0; i < l; i++) {
         jl_value_t *invokesig = jl_array_ptr_ref(targets, i * 3);
@@ -2513,7 +2562,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         size_t max_valid = ~(size_t)0;
         int ambig = 0;
         // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
-        jl_value_t *matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
+        matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing, -1, 0, jl_atomic_load_acquire(&jl_world_counter), &min_valid, &max_valid, &ambig);
         if (matches == jl_false || jl_array_len(matches) != jl_array_len(expected)) {
             valid = 0;
         }
@@ -2537,9 +2586,27 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
         }
         jl_array_uint8_set(valids, i, valid);
         if (!valid && _jl_debug_method_invalidation) {
-            jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)callee);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, callee ? (jl_value_t*)callee : sig);
             loctag = jl_cstr_to_string("insert_backedges_callee");
             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            loctag = jl_box_int32((int32_t)i);
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            loctag = jl_box_uint64(jl_worklist_key(serializer_worklist));
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+            if (matches != jl_false) {
+                // setdiff!(matches, expected)
+                size_t j, k, ins = 0;
+                for (j = 0; j < jl_array_len(matches); j++) {
+                    int found = 0;
+                    jl_method_t *match = ((jl_method_match_t*)jl_array_ptr_ref(matches, j))->method;
+                    for (k = 0; !found && k < jl_array_len(expected); k++)
+                        found |= jl_egal((jl_value_t*)match, jl_array_ptr_ref(expected, k));
+                    if (!found)
+                        jl_array_ptr_set(matches, ins++, match);
+                }
+                jl_array_del_end((jl_array_t*)matches, jl_array_len(matches) - ins);
+            }
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, matches);
         }
     }
     JL_GC_POP();
@@ -2552,9 +2619,10 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
 {
     // foreach(enable, ((edges[2i-1] => ext_targets[edges[2i] .* 3]) for i in 1:length(edges)÷2 if all(valids[edges[2i]])))
     size_t i, l = jl_array_len(edges);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_array_t *valids = NULL;
-    jl_value_t *loctag = NULL;
-    JL_GC_PUSH2(&valids, &loctag);
+    jl_value_t *targetidx = NULL;
+    JL_GC_PUSH2(&valids, &targetidx);
     jl_verify_edges(ext_targets, &valids);
     for (i = 0; i < l; i += 2) {
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, i);
@@ -2563,10 +2631,12 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
         assert(jl_isa((jl_value_t*)idxs_array, jl_array_int32_type));
         int32_t *idxs = (int32_t*)jl_array_data(idxs_array);
         int valid = 1;
-        size_t j;
+        size_t j, idxbad = -1;
         for (j = 0; valid && j < jl_array_len(idxs_array); j++) {
             int32_t idx = idxs[j];
             valid = jl_array_uint8_ref(valids, idx);
+            if (!valid)
+                idxbad = idx;
         }
         if (valid) {
             // if this callee is still valid, add all the backedges
@@ -2603,10 +2673,12 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets)
                 ptrhash_remove(&new_code_instance_validate, codeinst);  // should be left invalid
                 codeinst = jl_atomic_load_relaxed(&codeinst->next);
             }
+            invalidate_backedges(&remove_code_instance_from_validation, caller, world, "insert_backedges");
             if (_jl_debug_method_invalidation) {
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)caller);
-                loctag = jl_cstr_to_string("insert_backedges");
-                jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+                targetidx = jl_box_int32((int32_t)idxbad);
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, targetidx);
+                targetidx = jl_box_uint64(jl_worklist_key(serializer_worklist));
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, targetidx);
             }
         }
     }
@@ -2850,11 +2922,11 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
             jl_collect_extext_methods_from_mod(extext_methods, m);
     }
     jl_collect_methtable_from_mod(extext_methods, jl_type_type_mt);
-    jl_collect_missing_backedges_to_mod(jl_type_type_mt);
+    jl_collect_missing_backedges(jl_type_type_mt);
     jl_collect_methtable_from_mod(extext_methods, jl_nonfunction_mt);
-    jl_collect_missing_backedges_to_mod(jl_nonfunction_mt);
+    jl_collect_missing_backedges(jl_nonfunction_mt);
 
-    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges_to_mod accumulate data in edges_map.
+    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges accumulate data in edges_map.
     // Process this to extract `edges` and `ext_targets`.
     jl_collect_backedges(edges, ext_targets);
 
@@ -2885,7 +2957,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         // Go back and update the source-text position to point to the current position
         int64_t posfile = ios_pos(&f);
         ios_seek(&f, srctextpos);
-        write_int64(&f, posfile);
+        write_uint64(&f, posfile);
         ios_seek_end(&f);
         // Each source-text file is written as
         //   int32: length of abspath

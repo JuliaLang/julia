@@ -235,9 +235,9 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
 which will be one of the following:
 
-- `(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
-- `(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
-- `(specsig, mt::MethodTable)`: an abstract call
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
 
 # Examples
 
@@ -254,7 +254,7 @@ julia> callyou(2.0)
 julia> mi = first(which(callme, (Any,)).specializations)
 MethodInstance for callme(::Float64)
 
-julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi.backedges)
+julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
            println(sig)
            println(caller)
        end
@@ -268,8 +268,11 @@ end
 
 const empty_backedge_iter = BackedgeIterator(Any[])
 
-const MethodInstanceOrTable = Union{MethodInstance, Core.MethodTable}
-const BackedgePair = Pair{Union{Type, Nothing, MethodInstanceOrTable}, MethodInstanceOrTable}
+struct BackedgePair
+    sig # ::Union{Nothing,Type}
+    caller::Union{MethodInstance,Core.MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
@@ -378,7 +381,7 @@ function is_throw_call(e::Expr)
     if e.head === :call
         f = e.args[1]
         if isa(f, GlobalRef)
-            ff = abstract_eval_global(f.mod, f.name)
+            ff = abstract_eval_globalref(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end

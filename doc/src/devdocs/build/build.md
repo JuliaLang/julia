@@ -348,5 +348,5 @@ Note:
     - `make -f contrib/refresh_checksums.mk openlibm`
 4. Check if the patch files `deps/patches/openlibm-*.patch` exist
     - if patches don't exist, skip.
-    - if patches exist, check if they have been merged into the new version and need to be removed.  
+    - if patches exist, check if they have been merged into the new version and need to be removed.
         When deleting a patch, remember to modify the corresponding Makefile file (`deps/openlibm.mk`).
