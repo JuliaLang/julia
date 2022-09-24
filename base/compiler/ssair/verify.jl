@@ -2,7 +2,7 @@
 
 function maybe_show_ir(ir::IRCode)
     if isdefined(Core, :Main)
-        Core.Main.Base.display(ir)
+        invokelatest(Core.Main.Base.display, ir)
     end
 end
 
