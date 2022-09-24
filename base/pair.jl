@@ -28,6 +28,11 @@ julia> for x in p
        end
 foo
 7
+
+julia> join.(["one"=>1, "two"=>2]) # same as join.([["one", 1], ["two", 2]])
+2-element Vector{String}:
+ "one1"
+ "two2"
 ```
 """
 Pair, =>
