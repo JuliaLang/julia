@@ -72,10 +72,9 @@ Base.iterate(S::LU, ::Val{:U}) = (S.U, Val(:p))
 Base.iterate(S::LU, ::Val{:p}) = (S.p, Val(:done))
 Base.iterate(S::LU, ::Val{:done}) = nothing
 
-# LU prefers transpose over adjoint in the real case
 adjoint(F::LU) = AdjointFactorization(F)
 transpose(F::LU) = TransposeFactorization(F)
-# override the generic fallback
+# LU prefers transpose over adjoint in the real case, override the generic fallback
 transpose(F::LU{<:Real}) = TransposeFactorization(F)
 
 # StridedMatrix

@@ -32,7 +32,7 @@ julia> Adjoint(A)
  9-2im  0+0im
 ```
 """
-struct Adjoint{T,S<:AbstractVecOrMat} <: AbstractMatrix{T}
+struct Adjoint{T,S} <: AbstractMatrix{T}
     parent::S
 end
 """
@@ -59,13 +59,13 @@ julia> Transpose(A)
  3  0
 ```
 """
-struct Transpose{T,S<:AbstractVecOrMat} <: AbstractMatrix{T}
+struct Transpose{T,S} <: AbstractMatrix{T}
     parent::S
 end
 
 # basic outer constructors
-Adjoint(A::AbstractVecOrMat) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
-Transpose(A::AbstractVecOrMat) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
+Adjoint(A) = Adjoint{Base.promote_op(adjoint,eltype(A)),typeof(A)}(A)
+Transpose(A) = Transpose{Base.promote_op(transpose,eltype(A)),typeof(A)}(A)
 
 Base.dataids(A::Union{Adjoint, Transpose}) = Base.dataids(A.parent)
 Base.unaliascopy(A::Union{Adjoint,Transpose}) = typeof(A)(Base.unaliascopy(A.parent))
