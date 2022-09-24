@@ -343,7 +343,7 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
         @info "Unable to deploy the documentation: DOCUMENTER_KEY missing"
         return Documenter.DeployDecision(; all_ok=false)
     end
-    release = match(r"release-([0-9]+\.[0-9]+)", Base.GIT_VERSION_INFO.branch)
+    release = match(r"^release-([0-9]+\.[0-9]+)$", Base.GIT_VERSION_INFO.branch)
     if Base.GIT_VERSION_INFO.tagged_commit
         # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
         ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,

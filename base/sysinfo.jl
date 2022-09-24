@@ -20,6 +20,8 @@ export BINDIR,
        loadavg,
        free_memory,
        total_memory,
+       physical_free_memory,
+       physical_total_memory,
        isapple,
        isbsd,
        isdragonfly,
@@ -247,18 +249,43 @@ function loadavg()
 end
 
 """
+    Sys.free_physical_memory()
+
+Get the free memory of the system in bytes. The entire amount may not be available to the
+current process; use `Sys.free_memory()` for the actually available amount.
+"""
+free_physical_memory() = ccall(:uv_get_free_memory, UInt64, ())
+
+"""
+    Sys.total_physical_memory()
+
+Get the total memory in RAM (including that which is currently used) in bytes. The entire
+amount may not be available to the current process; see `Sys.total_memory()`.
+"""
+total_physical_memory() = ccall(:uv_get_total_memory, UInt64, ())
+
+"""
     Sys.free_memory()
 
 Get the total free memory in RAM in bytes.
 """
-free_memory() = ccall(:uv_get_free_memory, UInt64, ())
+free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 """
     Sys.total_memory()
 
 Get the total memory in RAM (including that which is currently used) in bytes.
+This amount may be constrained, e.g., by Linux control groups. For the unconstrained
+amount, see `Sys.physical_memory()`.
 """
-total_memory() = ccall(:uv_get_total_memory, UInt64, ())
+function total_memory()
+    memory = ccall(:uv_get_constrained_memory, UInt64, ())
+    if memory == 0
+        return total_physical_memory()
+    else
+        return memory
+    end
+end
 
 """
     Sys.get_process_title()

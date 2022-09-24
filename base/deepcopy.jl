@@ -21,7 +21,7 @@ so far within the recursion. Within the definition, `deepcopy_internal` should b
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
 """
-function deepcopy(x)
+function deepcopy(@nospecialize x)
     isbitstype(typeof(x)) && return x
     return deepcopy_internal(x, IdDict())::typeof(x)
 end

@@ -817,6 +817,10 @@ precompile_test_harness("code caching") do dir
         build_stale(37)
         stale('c')
 
+        ## Reporting tests (unrelated to the above)
+        nbits(::Int8) = 8
+        nbits(::Int16) = 16
+
         end
         """
     )
@@ -834,6 +838,11 @@ precompile_test_harness("code caching") do dir
 
         # force precompilation
         useA()
+
+        ## Reporting tests
+        call_nbits(x::Integer) = $StaleA.nbits(x)
+        map_nbits() = map(call_nbits, Integer[Int8(1), Int16(1)])
+        map_nbits()
 
         end
         """
@@ -856,9 +865,12 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    @eval using $StaleC
-    @eval using $StaleB
     MA = getfield(@__MODULE__, StaleA)
+    Base.eval(MA, :(nbits(::UInt8) = 8))
+    @eval using $StaleC
+    invalidations = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    @eval using $StaleB
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     MB = getfield(@__MODULE__, StaleB)
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
@@ -883,6 +895,32 @@ precompile_test_harness("code caching") do dir
     m = only(methods(MC.call_buildstale))
     mi = m.specializations[1]
     @test hasvalid(mi, world)       # was compiled with the new method
+
+    # Reporting test
+    @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
+    idxs = findall(==("insert_backedges"), invalidations)
+    m = only(methods(MB.call_nbits))
+    idxsbits = filter(idxs) do i
+        mi = invalidations[i-1]
+        mi.def == m
+    end
+    idx = only(idxsbits)
+    for mi in m.specializations
+        mi === nothing && continue
+        hv = hasvalid(mi, world)
+        @test mi.specTypes.parameters[end] === Integer ? !hv : hv
+    end
+
+    tagbad = invalidations[idx+1]
+    buildid = invalidations[idx+2]
+    @test isa(buildid, UInt64)
+    j = findfirst(==(tagbad), invalidations)
+    @test invalidations[j+1] == buildid
+    @test isa(invalidations[j-2], Type)
+    @test invalidations[j-1] == "insert_backedges_callee"
+
+    m = only(methods(MB.map_nbits))
+    @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
 end
 
 precompile_test_harness("invoke") do dir
@@ -892,6 +930,7 @@ precompile_test_harness("invoke") do dir
           """
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
+              export f44320, g44320
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
@@ -910,6 +949,11 @@ precompile_test_harness("invoke") do dir
               # q will have some callers invalidated
               q(x::Integer) = 0
               qnc(x::Integer) = rand()-1
+              # Issue #44320
+              f44320(::Int) = 1
+              f44320(::Any) = 2
+              g44320() = invoke(f44320, Tuple{Any}, 0)
+              g44320()
           end
           """)
           write(joinpath(dir, "$CallerModule.jl"),
@@ -933,6 +977,9 @@ precompile_test_harness("invoke") do dir
               internal(x::Int) = x < 5 ? 1 : invoke(internal, Tuple{Real}, x)
               internalnc(x::Real) = rand()-1
               internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
+
+              # Issue #44320
+              f44320(::Real) = 3
 
               # force precompilation
               begin
@@ -1009,6 +1056,9 @@ precompile_test_harness("invoke") do dir
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
+
+    m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1

@@ -195,7 +195,7 @@ flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact = get(io, :compact, false)
+    compact = get(io, :compact, false)::Bool
     show(io, r)
     if signbit(i) && !isnan(i)
         print(io, compact ? "-" : " - ")

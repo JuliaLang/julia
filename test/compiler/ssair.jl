@@ -5,6 +5,8 @@ using Core.IR
 const Compiler = Core.Compiler
 using .Compiler: CFG, BasicBlock, NewSSAValue
 
+include(normpath(@__DIR__, "irutils.jl"))
+
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
 function make_ci(code)
@@ -69,8 +71,10 @@ let cfg = CFG(BasicBlock[
 ], Int[])
     dfs = Compiler.DFS(cfg.blocks)
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
-    let correct_idoms = Compiler.naive_idoms(cfg.blocks)
+    let correct_idoms = Compiler.naive_idoms(cfg.blocks),
+        correct_pidoms = Compiler.naive_idoms(cfg.blocks, true)
         @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
+        @test Compiler.construct_postdomtree(cfg.blocks).idoms_bb == correct_pidoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -82,6 +86,7 @@ let cfg = CFG(BasicBlock[
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
                 cfg′ = CFG(blocks, cfg.index)
                 @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
+                @test Compiler.construct_postdomtree(cfg′.blocks).idoms_bb == correct_pidoms
             end
         end
     end
@@ -413,4 +418,46 @@ let
     ]
 
     test_userefs(body)
+end
+
+let ir = Base.code_ircode((Bool,Any)) do c, x
+        println(x, 1) #1
+        if c
+            println(x, 2) #2
+        else
+            println(x, 3) #3
+        end
+        println(x, 4) #4
+    end |> only |> first
+    # IR legality check
+    @test length(ir.cfg.blocks) == 4
+    for i = 1:4
+        @test any(ir.cfg.blocks[i].stmts) do j
+            inst = ir.stmts[j][:inst]
+            iscall((ir, println), inst) &&
+            inst.args[3] == i
+        end
+    end
+    # domination analysis
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    @test Core.Compiler.dominates(domtree, 1, 2)
+    @test Core.Compiler.dominates(domtree, 1, 3)
+    @test Core.Compiler.dominates(domtree, 1, 4)
+    for i = 2:4
+        for j = 1:4
+            i == j && continue
+            @test !Core.Compiler.dominates(domtree, i, j)
+        end
+    end
+    # post domination analysis
+    post_domtree = Core.Compiler.construct_postdomtree(ir.cfg.blocks)
+    @test Core.Compiler.postdominates(post_domtree, 4, 1)
+    @test Core.Compiler.postdominates(post_domtree, 4, 2)
+    @test Core.Compiler.postdominates(post_domtree, 4, 3)
+    for i = 1:3
+        for j = 1:4
+            i == j && continue
+            @test !Core.Compiler.postdominates(post_domtree, i, j)
+        end
+    end
 end

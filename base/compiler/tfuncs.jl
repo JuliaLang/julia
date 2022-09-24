@@ -824,9 +824,8 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     if isa(s, Union)
         return getfield_nothrow(rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isType(s)
-        sv = s.parameters[1]
-        s = s0 = typeof(sv)
+    elseif isType(s) && isTypeDataType(s.parameters[1])
+        s = s0 = DataType
     end
     if isa(s, DataType)
         # Can't say anything about abstract types
@@ -941,10 +940,11 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
             s = typeof(sv)
         else
             sv = s.parameters[1]
-            if isa(sv, DataType) && isa(name, Const) && (!isType(sv) && sv !== Core.TypeofBottom)
+            if isTypeDataType(sv) && isa(name, Const)
                 nv = _getfield_fieldindex(DataType, name)
                 if nv == DATATYPE_NAME_FIELDINDEX
-                    # N.B. This doesn't work in general, because
+                    # N.B. This only works for fields that do not depend on type
+                    # parameters (which we do not know here).
                     return Const(sv.name)
                 end
                 s = DataType
@@ -1856,6 +1856,10 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
         2 <= length(argtypes) <= 4 || return false
         # Core.finalizer does no error checking - that's done in Base.finalizer
         return true
+    elseif f === Core.compilerbarrier
+        length(argtypes) == 2 || return false
+        a1 = argtypes[1]
+        return isa(a1, Const) && contains_is((:type, :const, :conditional), a1.val)
     end
     return false
 end
@@ -1868,7 +1872,7 @@ const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, getglobal,
+    typeassert, throw, arraysize, getglobal, compilerbarrier
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -1887,7 +1891,7 @@ const _CONSISTENT_BUILTINS = Any[
     (<:),
     typeassert,
     throw,
-    setfield!,
+    setfield!
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -1906,6 +1910,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     tuple,
     typeassert,
     typeof,
+    compilerbarrier,
 ]
 
 const _ARGMEM_BUILTINS = Any[
