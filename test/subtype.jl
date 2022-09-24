@@ -1885,3 +1885,10 @@ let A = Tuple{Array{Pair{T, JT} where JT<:Ref{T}, 1} where T, Vector},
     @test_broken I <: A
     @test_broken !Base.has_free_typevars(I)
 end
+
+#issue #46871
+struct A46871{T, N, M} <: AbstractArray{T, N} end
+struct B46871{T, N} <: Ref{A46871{T, N, N}} end
+for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
+    @testintersect(T, Ref{<:AbstractArray{<:Real, 3}}, B46871{Int, 3})
+end
