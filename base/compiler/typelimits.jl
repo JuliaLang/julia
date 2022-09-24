@@ -433,6 +433,8 @@ function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecializ
         end
         return Bool
     end
+    typea = widenconditional(typea)
+    typeb = widenconditional(typeb)
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
@@ -471,8 +473,9 @@ end
 
 function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     # type-lattice for Const and PartialStruct wrappers
-    if ((isa(typea, PartialStruct) || isa(typea, Const)) &&
-        (isa(typeb, PartialStruct) || isa(typeb, Const)))
+    acp = isa(typea, Const) || isa(typea, PartialStruct)
+    bcp = isa(typeb, Const) || isa(typeb, PartialStruct)
+    if acp && bcp
         aty = widenconst(typea)
         bty = widenconst(typeb)
         if aty === bty
@@ -521,22 +524,38 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
             return anyrefine ? PartialStruct(aty, fields) : aty
         end
     end
+    # Don't widen const here - external AbstractInterpreter might insert lattice
+    # layers between us and `ConstsLattice`.
+    isa(typea, PartialStruct) && (typea = widenconst(typea))
+    isa(typeb, PartialStruct) && (typeb = widenconst(typeb))
 
     # type-lattice for PartialOpaque wrapper
-    if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
-        if !(typea.source === typeb.source &&
-             typea.parent === typeb.parent)
-            return widenconst(typea)
+    apo = isa(typea, PartialOpaque)
+    bpo = isa(typeb, PartialOpaque)
+    if apo && bpo
+        aty = widenconst(typea)
+        bty = widenconst(typeb)
+        if aty == bty
+            if !(typea.source === typeb.source &&
+                typea.parent === typeb.parent)
+                return widenconst(typea)
+            end
+            return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
+                typea.parent, typea.source)
         end
-        return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
-            typea.parent, typea.source)
+        typea = aty
+        typeb = bty
+    elseif apo
+        typea = widenconst(typea)
+    elseif bpo
+        typeb = widenconst(typeb)
     end
 
-    # no special type-inference lattice, join the types
-    typea, typeb = widenconst(typea), widenconst(typeb)
-    @assert isa(typea, Type); @assert isa(typeb, Type)
+    return tmerge(widenlattice(lattice), typea, typeb)
+end
 
-    return tmerge(JLTypeLattice(), typea, typeb)
+function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
+    return tmerge(widenlattice(lattice), widenconst(typea), widenconst(typeb))
 end
 
 function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
