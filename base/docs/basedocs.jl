@@ -2097,39 +2097,40 @@ for bit in (8, 16, 32, 64, 128)
     end
 end
 
-"""
-    Int$(Sys.WORD_SIZE) === Int
+@eval begin
 
-$(Sys.WORD_SIZE)-bit signed integer type, `Int <: Signed <: Integer`.
+    """
+        $_Int_symbol === Int
 
-This is the default used for most integer literals, and has an alias `Int`.
-It is the type returned by functions such as [`length`](@ref) and [`ndims`](@ref),
-and the standard type for indexing arrays.
-The default (and the alias) may be 32 or 64 bits on different computers,
-and is indicated by `Sys.WORD_SIZE`.
+    $(Sys.WORD_SIZE)-bit signed integer type, `$Int <: Signed <: Integer <: Real`.
 
-Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
-Overflow can be avoided by using [`BigInt`](@ref), and is checked by most operations on [`Rational`](@ref).
-Very large integer literals will use a wider type, thus `10_000_000_000_000_000_000 isa Int128`.
+    This is the default type of most integer literals, and has an alias `Int`.
+    It is the type returned by functions such as [`length`](@ref), and the standard type for indexing arrays.
+    The default (and the alias) may be 32 or 64 bits on different computers, indicated by `Sys.WORD_SIZE`.
 
-Integer division is [`div`](@ref) alias `÷`,
-whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
+    Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
+    Overflow can be avoided by using [`BigInt`](@ref), and is checked by most operations on [`Rational`](@ref).
+    Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
 
-See also [`$(Symbol("Int", 96 - Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
-"""
-Int
+    Integer division is [`div`](@ref) alias `÷`,
+    whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
 
-"""
-    UInt$(Sys.WORD_SIZE) === UInt
+    See also [`$(Symbol("Int", 96 - Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
+    """
+    $(Symbol(Int))
 
-$(Sys.WORD_SIZE)-bit unsigned integer type, `UInt <: Unsigned <: Integer`.
+    """
+        $_UInt_symbol === UInt
 
-Like [`Int`](@ref), the alias `UInt` may point to either `UInt32` or `UInt64`,
-according to the value of `Sys.WORD_SIZE` on a given computer.
+    $(Sys.WORD_SIZE)-bit unsigned integer type, `$UInt <: Unsigned <: Integer`.
 
-Printed in hexadecimal, thus `UInt(15) === $(repr(UInt(15)))`.
-"""
-UInt
+    Like [`Int`](@ref $Int), the alias `UInt` may point to either `UInt32` or `UInt64`,
+    according to the value of `Sys.WORD_SIZE` on a given computer.
+
+    Printed in hexadecimal, thus `UInt(15) === $(repr(UInt(15)))`.
+    """
+    $(Symbol(UInt))
+end
 
 """
     Symbol
