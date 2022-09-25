@@ -1982,7 +1982,7 @@ Signed
 
 Abstract supertype for all unsigned integers.
 
-All are printed in hexadecimal, with prefix `0x`, 
+All are printed in hexadecimal, with prefix `0x`,
 and can be entered in the same way.
 
 # Examples
@@ -2053,8 +2053,8 @@ This is the default for floating point literals, `1.0 isa Float64`,
 and for many operations such as `1/2, 2pi, log(2), range(0,90,length=4)`.
 Unlike integers, this default does not change with `Sys.WORD_SIZE`.
 
-The exponent for scientific notation can be entered as `e` or `E`, 
-thus `2e3 === 2.0E3 === 2.0 * 10^3`. This is strongly preferred over 
+The exponent for scientific notation can be entered as `e` or `E`,
+thus `2e3 === 2.0E3 === 2.0 * 10^3`. This is strongly preferred over
 `10^n` because integers overflow, thus `10^19 < 0`.
 
 See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
@@ -2067,7 +2067,7 @@ Float64
 32-bit floating point number type (IEEE 754 standard).
 Binary format is 1 sign, 8 exponent, 23 fraction bits.
 
-The exponent for scientific notation should be entered as lower-case `f`, 
+The exponent for scientific notation should be entered as lower-case `f`,
 thus `2f3 === 2.0f0 * 10^3 === Float32(2_000)`.
 For arrays literals and comprehensions, the element type can be specified before
 the square brackets: `Float32[1,4,9] == Float32[i^2 for i in 1:3]`.
@@ -2088,14 +2088,14 @@ for bit in (8, 16, 32, 64, 128)
     Sys.WORD_SIZE == bit && continue  # Int & UInt have separate, more detailed, descriptions
     type = Symbol(:Int, bit)
     unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
-    
+
     @eval begin
         """
             Int$($bit) <: Signed <: Integer
 
         $($bit)-bit signed integer type.
-        
-        Note that integers overflow without warning, 
+
+        Note that integers overflow without warning,
         thus `typemax($($type)) + $($type)(1) < 0`.
         See also [`Int`](@ref), [`widen`](@ref), [`BigInt`](@ref).
         """
@@ -2105,7 +2105,7 @@ for bit in (8, 16, 32, 64, 128)
             UInt$($bit) <: Unsigned <: Integer
 
         $($bit)-bit unsigned integer type.
-        
+
         Printed in hexadecimal, thus $($(unshow)) == $($(bit-1)).
         """
         $(Symbol("UInt", bit))
@@ -2113,9 +2113,8 @@ for bit in (8, 16, 32, 64, 128)
 end
 
 @eval begin
-
     """
-        $_Int_symbol === Int
+        $Int === Int
 
     $(Sys.WORD_SIZE)-bit signed integer type, `$Int <: Signed <: Integer <: Real`.
 
@@ -2135,7 +2134,7 @@ end
     $(Symbol(Int))
 
     """
-        $_UInt_symbol === UInt
+        $UInt === UInt
 
     $(Sys.WORD_SIZE)-bit unsigned integer type, `$UInt <: Unsigned <: Integer`.
 
@@ -2669,7 +2668,7 @@ julia> -[1 2; 3 4]
 2×2 Matrix{Int64}:
  -1  -2
  -3  -4
- 
+
 julia> -(true)  # promotes to Int
 -1
 
@@ -2698,7 +2697,7 @@ julia> -(2, 4.5)
 """
     *(x, y...)
 
-Multiplication operator. 
+Multiplication operator.
 
 Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`,
 which by default then calls `(x*y) * z * ...` starting from the left.
@@ -2728,7 +2727,7 @@ julia> x = [1, 2]; x'x  # adjoint vector * vector
 """
     /(x, y)
 
-Right division operator: multiplication of `x` by the inverse of `y` on the right. 
+Right division operator: multiplication of `x` by the inverse of `y` on the right.
 
 Gives floating-point results for integer arguments.
 See [`÷`](@ref div) for integer division, or [`//`](@ref) for [`Rational`](@ref) results.
