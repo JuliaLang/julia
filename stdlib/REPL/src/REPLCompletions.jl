@@ -195,7 +195,7 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
                 t = typeof(t.parameters[1])
             end
             # Only look for fields if this is a concrete type
-            if isconcretetype(t)
+            if isconcretetype(t) && !(t <: Tuple)
                 fields = fieldnames(t)
                 for field in fields
                     s = string(field)
