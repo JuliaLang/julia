@@ -1116,8 +1116,8 @@ It means three different things, depending on the context where its used.
 * In the context of function calls, the `...` operator is used to cause a single function
   argument to be split into many different arguments. This use of `...` is called **splatting**.
 
-* In the context of variable assignments, the `...` operator is used to unpack part of a
-  collection into a variable. This use of `...` is called **unpacking**.
+* In the context of variable assignments, the `...` operator is used to unpack a collection
+  into variables. This use of `...` is called **unpacking**.
 
 # Examples
 As in function definitions, to indicate that a function accepts an arbitrary number of
