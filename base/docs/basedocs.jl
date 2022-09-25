@@ -1108,23 +1108,48 @@ kw"do"
     ...
 
 The "splat" operator, `...`, represents a sequence of arguments.
-`...` can be used in function definitions, to indicate that the function
-accepts an arbitrary number of arguments.
-`...` can also be used to apply a function to a sequence of arguments.
+
+It means three different things, depending on the context where its used.
+* In the context of function definitions, the `...` operator is used to combine many
+  different arguments into a single argument. This use of `...` is called **slurping**.
+
+* In the context of function calls, the `...` operator is used to cause a single function
+  argument to be split into many different arguments. This use of `...` is called **splatting**.
+
+* In the context of variable assignments, the `...` operator is used to unpack part of a
+  collection into a variable. This use of `...` is called **unpacking**.
 
 # Examples
-```jldoctest
+As in function definitions, to indicate that a function accepts an arbitrary number of
+arguments:
+```julia
 julia> add(xs...) = reduce(+, xs)
 add (generic function with 1 method)
 
+julia> add(2, 4, 6)
+12
+
 julia> add(1, 2, 3, 4, 5)
 15
+```
 
-julia> add([1, 2, 3]...)
+As in function calls, to apply a function to a sequence of arguments:
+```julia
+julia> +([1, 2, 3]...)
 6
 
-julia> add(7, 1:100..., 1000:1100...)
+julia> +(7, 1:100..., 1000:1100...)
 111107
+```
+
+As in assignment, to unpack a collection into a variable:
+```julia
+julia> a, b, c... = [1, 2, 3, 4];
+
+julia> c
+2-element Vector{Int64}:
+3
+4
 ```
 """
 kw"..."
