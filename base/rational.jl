@@ -156,6 +156,10 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
 
+!!! note
+    `rationalize` does inexact conversion; it produces a `Rational` value equal to the
+     decimal value `x`. Use the `Rational` constructor or `convert` for exact conversion.
+
 # Examples
 ```jldoctest
 julia> rationalize(5.6)
