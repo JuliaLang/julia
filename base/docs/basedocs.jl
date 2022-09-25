@@ -2070,21 +2070,19 @@ Binary format is 1 sign, 5 exponent, 10 fraction bits.
 Float16
 
 for bit in (8, 16, 32, 64, 128)
+    Sys.WORD_SIZE == bit && continue  # Int & UInt have separate, more detailed, descriptions
     type = Symbol(:Int, bit)
-    default = Sys.WORD_SIZE == bit ? "\n \n This is the default used for most integer literals \
-    (on systems with `Sys.WORD_SIZE == $bit`) and has an alias `Int === $type`" : ""
-    
     unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
     
     @eval begin
         """
             Int$($bit) <: Signed <: Integer
 
-        $($bit)-bit signed integer type. $($(default))
+        $($bit)-bit signed integer type.
         
         Note that integers overflow without warning, 
         thus `typemax($($type)) + $($type)(1) < 0`.
-        See also [`widen`](@ref), [`BigInt`](@ref).
+        See also [`Int`](@ref), [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
 
@@ -2098,6 +2096,40 @@ for bit in (8, 16, 32, 64, 128)
         $(Symbol("UInt", bit))
     end
 end
+
+"""
+    Int$(Sys.WORD_SIZE) === Int
+
+$(Sys.WORD_SIZE)-bit signed integer type, `Int <: Signed <: Integer`.
+
+This is the default used for most integer literals, and has an alias `Int`.
+It is the type returned by functions such as [`length`](@ref) and [`ndims`](@ref),
+and the standard type for indexing arrays.
+The default (and the alias) may be 32 or 64 bits on different computers,
+and is indicated by `Sys.WORD_SIZE`.
+
+Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
+Overflow can be avoided by using [`BigInt`](@ref), and is checked by most operations on [`Rational`](@ref).
+Very large integer literals will use a wider type, thus `10_000_000_000_000_000_000 isa Int128`.
+
+Integer division is [`div`](@ref) alias `÷`,
+whereas [`/`](@ref) acting on integers returns [`Float64`](@ref).
+
+See also [`$(Symbol("Int", 96 - Sys.WORD_SIZE))`](@ref), [`widen`](@ref), [`typemax`](@ref), [`bitstring`](@ref).
+"""
+Int
+
+"""
+    UInt$(Sys.WORD_SIZE) === UInt
+
+$(Sys.WORD_SIZE)-bit unsigned integer type, `UInt <: Unsigned <: Integer`.
+
+Like [`Int`](@ref), the alias `UInt` may point to either `UInt32` or `UInt64`,
+according to the value of `Sys.WORD_SIZE` on a given computer.
+
+Printed in hexadecimal, thus `UInt(15) === $(repr(UInt(15)))`.
+"""
+UInt
 
 """
     Symbol
