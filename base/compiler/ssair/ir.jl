@@ -276,6 +276,7 @@ struct NewNodeStream
     info::Vector{NewNodeInfo}
 end
 NewNodeStream(len::Int=0) = NewNodeStream(InstructionStream(len), fill(NewNodeInfo(0, false), len))
+empty!(new::NewNodeStream) = NewNodeStream(resize!(new.stmts, 0), empty!(new.info))
 length(new::NewNodeStream) = length(new.stmts)
 isempty(new::NewNodeStream) = isempty(new.stmts)
 function add!(new::NewNodeStream, pos::Int, attach_after::Bool)
@@ -317,7 +318,7 @@ with_flags(inst::NewInstruction, flags::UInt8) =
     NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | flags, true)
 
 
-struct IRCode
+mutable struct IRCode
     stmts::InstructionStream
     argtypes::Vector{Any}
     sptypes::Vector{Any}
@@ -325,16 +326,14 @@ struct IRCode
     cfg::CFG
     new_nodes::NewNodeStream
     meta::Vector{Expr}
+    _compact # Union{Nothing,IncrementalCompact}
 
     function IRCode(stmts::InstructionStream, cfg::CFG, linetable::Vector{LineInfoNode}, argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{Any})
-        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta)
-    end
-    function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
-        return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
+        return new(stmts, argtypes, sptypes, linetable, cfg, NewNodeStream(), meta, nothing)
     end
     global copy
     copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
-        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
+        copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta), nothing)
 end
 
 function block_for_inst(ir::IRCode, inst::Int)
@@ -535,19 +534,21 @@ insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=fals
     insert_node!(ir, SSAValue(pos), inst, attach_after)
 
 # For bootstrapping
-function my_sortperm(v)
-    p = Vector{Int}(undef, length(v))
+function my_sortperm!(p, v)
+    resize!(p, length(v))
     for i = 1:length(v)
         p[i] = i
     end
-    sort!(p, Sort.DEFAULT_UNSTABLE, Order.Perm(Sort.Forward,v))
-    p
+    sort!(p, Sort.DEFAULT_UNSTABLE, Order.Perm(Sort.Forward, v))
+    return p
 end
 
+my_sortperm(v) = my_sortperm!(Vector{Int}(undef, length(v)), v)
+
 mutable struct IncrementalCompact
-    ir::IRCode
-    result::InstructionStream
-    result_bbs::Vector{BasicBlock}
+    ir::IRCode                     # result value
+    result::InstructionStream      # result value
+    result_bbs::Vector{BasicBlock} # result value
 
     ssa_rename::Vector{Any}
     bb_rename_pred::Vector{Int}
@@ -558,7 +559,7 @@ mutable struct IncrementalCompact
     perm::Vector{Int}
     new_nodes_idx::Int
     # This supports insertion while compacting
-    new_new_nodes::NewNodeStream  # New nodes that were before the compaction point at insertion time
+    new_new_nodes::NewNodeStream  # result value - New nodes that were before the compaction point at insertion time
     new_new_used_ssas::Vector{Int}
     # TODO: Switch these two to a min-heap of some sort
     pending_nodes::NewNodeStream  # New nodes that were after the compaction point at insertion time
@@ -571,19 +572,32 @@ mutable struct IncrementalCompact
     renamed_new_nodes::Bool
     cfg_transforms_enabled::Bool
     fold_constant_branches::Bool
+    new::Bool
+    free::Bool
 
-    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
+    global function reset!(compact::IncrementalCompact, code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes after regular ones
-        perm = my_sortperm(Int[let new_node = code.new_nodes.info[i]
-            (new_node.pos * 2 + Int(new_node.attach_after))
-            end for i in 1:length(code.new_nodes)])
+        if isempty(code.new_nodes)
+            empty!(compact.perm)
+        else
+            my_sortperm!(compact.perm, Int[let new_node = code.new_nodes.info[i]
+                (new_node.pos * 2 + Int(new_node.attach_after))
+                end for i in 1:length(code.new_nodes)])
+        end
         new_len = length(code.stmts) + length(code.new_nodes)
-        result = InstructionStream(new_len)
-        used_ssas = fill(0, new_len)
-        new_new_used_ssas = Vector{Int}()
+        if compact.new
+            resize!(compact.result, new_len)
+        else
+            compact.result = InstructionStream(new_len)
+        end
+        fill!(resize!(compact.used_ssas, new_len), 0)
+        @assert isempty(compact.new_new_used_ssas)
+        # empty!(compact.new_new_used_ssas)
         blocks = code.cfg.blocks
+        bb_rename = compact.bb_rename_pred
+        compact.bb_rename_succ = bb_rename # make these alias, and preserve only one of them
         if allow_cfg_transforms
-            bb_rename = Vector{Int}(undef, length(blocks))
+            resize!(bb_rename, length(blocks))
             cur_bb = 1
             domtree = construct_domtree(blocks)
             for i = 1:length(bb_rename)
@@ -611,20 +625,62 @@ mutable struct IncrementalCompact
                 end
             end
             let blocks = blocks, bb_rename = bb_rename
-                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+                compact.result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
             end
         else
-            bb_rename = Vector{Int}()
-            result_bbs = code.cfg.blocks
+            empty!(bb_rename)
+            compact.result_bbs = blocks
         end
-        ssa_rename = Any[SSAValue(i) for i = 1:new_len]
-        late_fixup = Vector{Int}()
-        new_new_nodes = NewNodeStream()
-        pending_nodes = NewNodeStream()
-        pending_perm = Int[]
-        return new(code, result, result_bbs, ssa_rename, bb_rename, bb_rename, used_ssas, late_fixup, perm, 1,
-            new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, false, allow_cfg_transforms, allow_cfg_transforms)
+        ssa_rename = compact.ssa_rename
+        resize!(ssa_rename, new_len)
+        for i = 1:new_len
+            ssa_rename[i] = SSAValue(i)
+        end
+        @assert isempty(compact.late_fixup)
+        # empty!(compact.late_fixup)
+        if !compact.new
+            compact.new_new_nodes = NewNodeStream()
+        end
+        @assert isempty(compact.pending_nodes)
+        # empty!(compact.pending_nodes)
+        @assert isempty(compact.pending_perm)
+        # empty!(compact.pending_perm)
+        compact.idx = 1
+        compact.result_idx = 1
+        compact.active_result_bb = 1
+        compact.renamed_new_nodes = false
+        compact.cfg_transforms_enabled = allow_cfg_transforms
+        compact.fold_constant_branches = allow_cfg_transforms
+        compact.new = false
+        return compact
+    end
+
+    function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
+        # return the object stashed in `code`, if available
+        # otherwise make a new one, and stash that away
+        compact = code._compact
+        if isa(compact, IncrementalCompact)
+            @assert compact.free
+            compact.free = false
+        else
+            perm = Int[]
+            result = InstructionStream(0)
+            used_ssas = Int[]
+            new_new_used_ssas = Vector{Int}()
+            blocks = code.cfg.blocks
+            bb_rename = Int[]
+            result_bbs = BasicBlock[]
+            ssa_rename = Any[]
+            late_fixup = Int[]
+            new_new_nodes = NewNodeStream()
+            pending_nodes = NewNodeStream()
+            pending_perm = Int[]
+            compact = new(code, result, result_bbs, ssa_rename, bb_rename, bb_rename, used_ssas, late_fixup, perm, 1,
+                new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
+                1, 1, 1, false, false, false, true, false)
+        end
+        reset!(compact, code, allow_cfg_transforms)
+        return compact
     end
 
     # For inlining
@@ -639,7 +695,7 @@ mutable struct IncrementalCompact
             parent.result_bbs, ssa_rename, bb_rename, bb_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, parent.active_result_bb, false, false, false)
+            1, result_offset, parent.active_result_bb, false, false, false, false, false)
     end
 end
 
@@ -1663,7 +1719,13 @@ function complete(compact::IncrementalCompact)
     if __check_ssa_counts__[]
         oracle_check(compact)
     end
-    return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
+    ir = compact.ir
+    compact.result = swapfield!(ir, :stmts, compact.result)
+    ir.cfg = cfg
+    compact.new_new_nodes = swapfield!(ir, :new_nodes, compact.new_new_nodes)
+    compact.new = true
+    compact.free = true
+    return ir
 end
 
 function compact!(code::IRCode, allow_cfg_transforms::Bool=false)

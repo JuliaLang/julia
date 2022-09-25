@@ -512,8 +512,10 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
         end
         new_node[:inst] = renumber_ssa!(new_node_inst, inst_rename, true)
     end
-    new_ir = IRCode(ir, result, cfg, new_new_nodes)
-    return new_ir
+    ir.stmts = result
+    ir.cfg = cfg
+    ir.new_nodes = new_new_nodes
+    return ir
 end
 
 compute_live_ins(cfg::CFG, slot::SlotInfo) = compute_live_ins(cfg, slot.defs, slot.uses)
