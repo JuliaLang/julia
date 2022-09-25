@@ -1295,6 +1295,10 @@ end
         dict = Dict(:a=>1, :b=>2)
         @test Base.setindex(dict, 10, :a) ==ₜ Dict(:a=>10, :b=>2)
         @test dict == Dict(:a=>1, :b=>2)
+
+        iddict = IdDict{Any,String}(true => "yes", 1 => "no", 1.0 => "maybe")
+        @test Base.setindex(iddict, :yes, true) ==ₜ IdDict{Any,Any}(true => :yes, 1 => "no", 1.0 => "maybe")
+        @test iddict == iddict
     end
 
     d1 = ImmutableDict{Symbol,Int}()
