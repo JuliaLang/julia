@@ -411,8 +411,19 @@ julia> push!(a, 2, 3)
  3
 
 ```
-Assigning `[]` does not eliminate elements from a collection; instead use [`filter!`](@ref).
+Assigning `[]` does not replace or eliminate elements from a collection; instead use [`replace`](@ref) or [`filter!`](@ref)
+respectively; howeover, replacing an element with `[]` should be avoided for performance reasons.
 ```jldoctest
+julia> a = collect(1:3); a[2] = []
+ERROR: MethodError: Cannot `convert` an object of type Vector{Any} to an object of type Int64
+[...]
+
+julia> replace(a, a[2]=>[])
+3-element Vector{Any}:
+ 1
+  Any[]
+ 3
+
 julia> a = collect(1:3); a[a .<= 1] = []
 ERROR: DimensionMismatch: tried to assign 0 elements to 1 destinations
 [...]
