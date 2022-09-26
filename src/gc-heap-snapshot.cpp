@@ -370,9 +370,8 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
                     g_snapshot->names.find_or_create_string_id(path));
 }
 
-void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_t* binding) JL_NOTSAFEPOINT {
-    
-
+void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_t* binding) JL_NOTSAFEPOINT
+{
     auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
     auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(binding->name));
     auto value_idx = (binding->value) ? record_node_to_gc_snapshot(binding->value) : 0;
