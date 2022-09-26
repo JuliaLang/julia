@@ -555,6 +555,8 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
 end
 
 function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
+    # the equality of the constants can be checked here, but the equivalent check is usually
+    # done by `tmerge_fast_path` at earlier lattice stage
     return tmerge(widenlattice(lattice), widenconst(typea), widenconst(typeb))
 end
 
