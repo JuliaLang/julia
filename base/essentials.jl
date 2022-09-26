@@ -13,6 +13,8 @@ length(a::Array) = arraylen(a)
 eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
 eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
 
+==(a::GlobalRef, b::GlobalRef) = a.mod === b.mod && a.name === b.name
+
 """
     AbstractSet{T}
 

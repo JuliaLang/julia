@@ -3486,7 +3486,7 @@ void jl_gc_init(void)
     // on a big memory machine, set max_collect_interval to totalmem / nthreads / 2
     uint64_t total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem > 0 && constrained_mem < total_mem)
+    if (constrained_mem != 0)
         total_mem = constrained_mem;
     size_t maxmem = total_mem / jl_n_threads / 2;
     if (maxmem > max_collect_interval)
@@ -3494,7 +3494,7 @@ void jl_gc_init(void)
 #endif
 
     // We allocate with abandon until we get close to the free memory on the machine.
-    uint64_t free_mem = uv_get_free_memory();
+    uint64_t free_mem = uv_get_available_memory();
     uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
 
     if (high_water_mark < max_total_memory)

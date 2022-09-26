@@ -204,6 +204,9 @@ function compare_inconsistent(x::T) where T
 end
 @test !compare_inconsistent(3)
 
+# Effect modeling for Core.compilerbarrier
+@test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
+
 # allocation/access of uninitialized fields should taint the :consistent-cy
 struct Maybe{T}
     x::T
@@ -655,3 +658,13 @@ end # @testset "effects analysis on array ops" begin
 
 # Test that builtin_effects handles vararg correctly
 @test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined, Any[String, Vararg{Any}], Bool))
+
+# Test that :new can be eliminated even if an sparam is unknown
+struct SparamUnused{T}
+    x
+    SparamUnused(x::T) where {T} = new{T}(x)
+end
+mksparamunused(x) = (SparamUnused(x); nothing)
+let src = code_typed1(mksparamunused, (Any,))
+    @test count(isnew, src.code) == 0
+end

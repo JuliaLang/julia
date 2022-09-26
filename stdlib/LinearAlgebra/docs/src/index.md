@@ -324,6 +324,8 @@ LinearAlgebra.dot(::Any, ::Any, ::Any)
 LinearAlgebra.cross
 LinearAlgebra.axpy!
 LinearAlgebra.axpby!
+LinearAlgebra.rotate!
+LinearAlgebra.reflect!
 LinearAlgebra.factorize
 LinearAlgebra.Diagonal
 LinearAlgebra.Bidiagonal

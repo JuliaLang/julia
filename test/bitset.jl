@@ -65,11 +65,13 @@ end
     @test !(-1 in BitSet(1:10))
 end
 
-# # issue #8570
-# This requires 2^29 bytes of storage, which is too much for a simple test
-# s = BitSet(typemax(Int32))
-# @test length(s) === 1
-# for b in s; b; end
+@testset "issue #8570" begin
+    let s
+        @test 400 > @allocated s = BitSet(typemax(Int32))
+        @test length(s) === 1
+        @test only(s) == typemax(Int32)
+    end
+end
 
 @testset "union!, symdiff!" begin
     i = BitSet([1, 2, 3])

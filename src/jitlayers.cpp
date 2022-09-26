@@ -36,8 +36,6 @@
 
 using namespace llvm;
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "codegen_shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
@@ -49,6 +47,9 @@ using namespace llvm;
 # endif
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
+# if JL_LLVM_VERSION >= 150000
+# include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
+# endif
 #else
 # include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #endif
@@ -738,6 +739,50 @@ public:
         });
     }
 };
+
+class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
+private:
+    std::atomic<size_t> &total_size;
+
+public:
+
+    JLMemoryUsagePlugin(std::atomic<size_t> &total_size)
+        : total_size(total_size) {}
+
+    Error notifyFailed(orc::MaterializationResponsibility &MR) override {
+        return Error::success();
+    }
+    Error notifyRemovingResources(orc::ResourceKey K) override {
+        return Error::success();
+    }
+    void notifyTransferringResources(orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
+
+    void modifyPassConfig(orc::MaterializationResponsibility &,
+                          jitlink::LinkGraph &,
+                          jitlink::PassConfiguration &Config) override {
+        Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
+            size_t graph_size = 0;
+            for (auto block : G.blocks()) {
+                graph_size += block->getSize();
+            }
+            this->total_size.fetch_add(graph_size, std::memory_order_relaxed);
+            return Error::success();
+        });
+    }
+};
+
+// TODO: Port our memory management optimisations to JITLink instead of using the
+// default InProcessMemoryManager.
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
+#if JL_LLVM_VERSION < 140000
+    return std::make_unique<jitlink::InProcessMemoryManager>();
+#elif JL_LLVM_VERSION < 150000
+    return cantFail(jitlink::InProcessMemoryManager::Create());
+#else
+    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
+#endif
+}
 }
 
 # ifdef LLVM_SHLIB
@@ -1145,18 +1190,13 @@ JuliaOJIT::JuliaOJIT()
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
 #ifdef JL_LLVM_OPAQUE_POINTERS
-        ctx->enableOpaquePointers();
+        ctx->setOpaquePointers(true);
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
-    // TODO: Port our memory management optimisations to JITLink instead of using the
-    // default InProcessMemoryManager.
-# if JL_LLVM_VERSION < 140000
-    ObjectLayer(ES, std::make_unique<jitlink::InProcessMemoryManager>()),
-# else
-    ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
-# endif
+    MemMgr(createJITLinkMemoryManager()),
+    ObjectLayer(ES, *MemMgr),
 #else
     MemMgr(createRTDyldMemoryManager()),
     ObjectLayer(
@@ -1187,6 +1227,7 @@ JuliaOJIT::JuliaOJIT()
         ES, std::move(ehRegistrar)));
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
+    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(total_size));
 #else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
@@ -1437,8 +1478,7 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
 #ifdef JL_USE_JITLINK
 size_t JuliaOJIT::getTotalBytes() const
 {
-    // TODO: Implement in future custom JITLink memory manager.
-    return 0;
+    return total_size.load(std::memory_order_relaxed);
 }
 #else
 size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);

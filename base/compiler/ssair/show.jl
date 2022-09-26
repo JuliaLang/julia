@@ -736,7 +736,7 @@ function inline_linfo_printer(code::IRCode)
         end
         # Print location information right aligned. If the line below is too long, it'll overwrite this,
         # but that's what we want.
-        if get(io, :color, false)
+        if get(io, :color, false)::Bool
             method_start_column = cols - max_method_width - max_loc_width - 2
             filler = " "^(max_loc_width-length(annotation))
             printstyled(io, "\e[$(method_start_column)G$(annotation)$(filler)$(loc_method)\e[1G", color = :light_black)

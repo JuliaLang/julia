@@ -12,9 +12,8 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
 
-#include "codegen_shared.h"
-#include "julia.h"
 #include "passes.h"
+#include "codegen_shared.h"
 
 #define DEBUG_TYPE "remove_addrspaces"
 

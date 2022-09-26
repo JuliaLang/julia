@@ -78,7 +78,24 @@ struct UnionSplit
         new(fully_covered, atype, cases, Int[])
 end
 
+struct InliningEdgeTracker
+    et::Union{Nothing,EdgeTracker}
+    invokesig # ::Union{Nothing,Type}
+    InliningEdgeTracker(et::Union{Nothing,EdgeTracker}, @nospecialize(invokesig=nothing)) = new(et, invokesig)
+end
+
 @specialize
+
+function add_inlining_backedge!((; et, invokesig)::InliningEdgeTracker, mi::MethodInstance)
+    if et !== nothing
+        if invokesig === nothing
+            add_backedge!(et, mi)
+        else
+            add_invoke_backedge!(et, invokesig, mi)
+        end
+    end
+    return nothing
+end
 
 function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
@@ -347,6 +364,35 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     return linetable_offset, extra_coverage_line
 end
 
+function ir_prepare_inlining!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
+        linetable::Vector{LineInfoNode}, ir′::IRCode, sparam_vals::SimpleVector,
+        def::Method, inlined_at::Int32, argexprs::Vector{Any})
+    topline::Int32 = length(linetable) + Int32(1)
+    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, ir′, def, inlined_at)
+    if extra_coverage_line != 0
+        insert_node!(NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
+    end
+    sp_ssa = nothing
+    if !validate_sparams(sparam_vals)
+        # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
+        sp_ssa = insert_node!(
+            effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
+    end
+    if def.isva
+        nargs_def = Int(def.nargs::Int32)
+        if nargs_def > 0
+            argexprs = fix_va_argexprs!(insert_node!, inline_target, argexprs, nargs_def, topline)
+        end
+    end
+    if def.is_for_opaque_closure
+        # Replace the first argument by a load of the capture environment
+        argexprs[1] = insert_node!(
+            NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
+            ir′.argtypes[1], topline))
+    end
+    return (Pair{Union{Nothing, SSAValue}, Vector{Any}}(sp_ssa, argexprs), linetable_offset)
+end
+
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                          linetable::Vector{LineInfoNode}, item::InliningTodo,
                          boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
@@ -355,30 +401,10 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     sparam_vals = item.mi.sparam_vals
     def = item.mi.def::Method
     inlined_at = compact.result[idx][:line]
-    linetable_offset::Int32 = length(linetable)
-    topline::Int32 = linetable_offset + Int32(1)
-    linetable_offset, extra_coverage_line = ir_inline_linetable!(linetable, item.spec.ir, def, inlined_at)
-    if extra_coverage_line != 0
-        insert_node_here!(compact, NewInstruction(Expr(:code_coverage_effect), Nothing, extra_coverage_line))
-    end
-    sp_ssa = nothing
-    if !validate_sparams(sparam_vals)
-        # N.B. This works on the caller-side argexprs, (i.e. before the va fixup below)
-        sp_ssa = insert_node_here!(compact,
-            effect_free(NewInstruction(Expr(:call, Core._compute_sparams, def, argexprs...), SimpleVector, topline)))
-    end
-    if def.isva
-        nargs_def = Int(def.nargs::Int32)
-        if nargs_def > 0
-            argexprs = fix_va_argexprs!(compact, argexprs, nargs_def, topline)
-        end
-    end
-    if def.is_for_opaque_closure
-        # Replace the first argument by a load of the capture environment
-        argexprs[1] = insert_node_here!(compact,
-            NewInstruction(Expr(:call, GlobalRef(Core, :getfield), argexprs[1], QuoteNode(:captures)),
-            spec.ir.argtypes[1], topline))
-    end
+
+    ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertHere(compact), compact, linetable,
+            item.spec.ir, sparam_vals, def, inlined_at, argexprs)
+
     if boundscheck === :default || boundscheck === :propagate
         if (compact.result[idx][:flag] & IR_FLAG_INBOUNDS) != 0
             boundscheck = :off
@@ -399,7 +425,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
             # face of rename_arguments! mutating in place - should figure out
             # something better eventually.
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck, inline_compact)
+            stmt′ = ssa_substitute!(InsertBefore(inline_compact, SSAValue(idx′)), inline_compact[SSAValue(idx′)], stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck)
             if isa(stmt′, ReturnNode)
                 val = stmt′.val
                 return_value = SSAValue(idx′)
@@ -426,7 +452,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
         inline_compact = IncrementalCompact(compact, spec.ir, compact.result_idx)
         for ((_, idx′), stmt′) in inline_compact
             inline_compact[idx′] = nothing
-            stmt′ = ssa_substitute!(idx′, stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck, inline_compact)
+            stmt′ = ssa_substitute!(InsertBefore(inline_compact, SSAValue(idx′)), inline_compact[SSAValue(idx′)], stmt′, argexprs, sig, sparam_vals, sp_ssa, linetable_offset, boundscheck)
             if isa(stmt′, ReturnNode)
                 if isdefined(stmt′, :val)
                     val = stmt′.val
@@ -459,7 +485,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
     return_value
 end
 
-function fix_va_argexprs!(compact::IncrementalCompact,
+function fix_va_argexprs!(insert_node!::Inserter, inline_target::Union{IRCode, IncrementalCompact},
     argexprs::Vector{Any}, nargs_def::Int, line_idx::Int32)
     newargexprs = argexprs[1:(nargs_def-1)]
     tuple_call = Expr(:call, TOP_TUPLE)
@@ -467,11 +493,11 @@ function fix_va_argexprs!(compact::IncrementalCompact,
     for i in nargs_def:length(argexprs)
         arg = argexprs[i]
         push!(tuple_call.args, arg)
-        push!(tuple_typs, argextype(arg, compact))
+        push!(tuple_typs, argextype(arg, inline_target))
     end
     tuple_typ = tuple_tfunc(OptimizerLattice(), tuple_typs)
     tuple_inst = NewInstruction(tuple_call, tuple_typ, line_idx)
-    push!(newargexprs, insert_node_here!(compact, tuple_inst))
+    push!(newargexprs, insert_node!(tuple_inst))
     return newargexprs
 end
 
@@ -802,37 +828,36 @@ function rewrite_apply_exprargs!(
     return new_argtypes
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing},
-        match::MethodMatch, effects::Effects; compilesig_invokes = true)
+function compileable_specialization(match::MethodMatch, effects::Effects,
+    et::InliningEdgeTracker; compilesig_invokes::Bool=true)
     mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
-    et !== nothing && push!(et, mi)
+    add_inlining_backedge!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing},
-        linfo::MethodInstance, effects::Effects; compilesig_invokes = true)
+function compileable_specialization(linfo::MethodInstance, effects::Effects,
+    et::InliningEdgeTracker; compilesig_invokes::Bool=true)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
     mi === nothing && return nothing
-    et !== nothing && push!(et, mi)
+    add_inlining_backedge!(et, mi)
     return InvokeCase(mi, effects)
 end
 
-function compileable_specialization(et::Union{EdgeTracker, Nothing}, result::InferenceResult, effects::Effects; kwargs...)
-    return compileable_specialization(et, result.linfo, effects; kwargs...)
-end
+compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
+    compileable_specialization(result.linfo, args...; kwargs...))
 
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     mi = todo.mi
     (; match, argtypes, invokesig) = todo.spec::DelayedInliningSpec
-    et = state.et
+    et = InliningEdgeTracker(state.et, invokesig)
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(match, InferenceResult)
         inferred_src = match.src
         if isa(inferred_src, ConstAPI)
             # use constant calling convention
-            et !== nothing && add_edge!(et, invokesig, mi)
+            add_inlining_backedge!(et, mi)
             return ConstantCase(quoted(inferred_src.val))
         else
             src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
@@ -843,7 +868,7 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         if code isa CodeInstance
             if use_const_api(code)
                 # in this case function can be inlined to a constant
-                et !== nothing && add_edge!(et, invokesig, mi)
+                add_inlining_backedge!(et, mi)
                 return ConstantCase(quoted(code.rettype_const))
             else
                 src = @atomic :monotonic code.inferred
@@ -858,16 +883,16 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !state.params.inlining || is_stmt_noinline(flag)
-        return compileable_specialization(et, match, effects;
+        return compileable_specialization(match, effects, et;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
-    src === nothing && return compileable_specialization(et, match, effects;
+    src === nothing && return compileable_specialization(match, effects, et;
         compilesig_invokes=state.params.compilesig_invokes)
 
-    et !== nothing && add_edge!(et, invokesig, mi)
+    add_inlining_backedge!(et, mi)
     return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
 end
 
@@ -907,7 +932,7 @@ function can_inline_typevars(method::Method, argtypes::Vector{Any})
 end
 can_inline_typevars(m::MethodMatch, argtypes::Vector{Any}) = can_inline_typevars(m.method, argtypes)
 
-function analyze_method!(match::MethodMatch, argtypes::Vector{Any}, invokesig,
+function analyze_method!(match::MethodMatch, argtypes::Vector{Any}, @nospecialize(invokesig),
                          flag::UInt8, state::InliningState, allow_typevars::Bool = false)
     method = match.method
     spec_types = match.spec_types
@@ -934,12 +959,13 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any}, invokesig,
         (allow_typevars && can_inline_typevars(match, argtypes)) || return nothing
     end
 
-    et = state.et
-
     # See if there exists a specialization for this method signature
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
-    isa(mi, MethodInstance) || return compileable_specialization(et,
-        match, Effects(); compilesig_invokes=state.params.compilesig_invokes)
+    if mi === nothing
+        et = InliningEdgeTracker(state.et, invokesig)
+        return compileable_specialization(match, Effects(), et;
+            compilesig_invokes=state.params.compilesig_invokes)
+    end
 
     todo = InliningTodo(mi, match, argtypes, invokesig)
     # If we don't have caches here, delay resolving this MethodInstance
@@ -1142,10 +1168,10 @@ function inline_invoke!(
         return nothing
     end
     result = info.result
+    invokesig = invoke_signature(sig.argtypes)
     if isa(result, ConcreteResult)
-        item = concrete_result_item(result, state)
+        item = concrete_result_item(result, state, invokesig)
     else
-        invokesig = invoke_signature(sig.argtypes)
         argtypes = invoke_rewrite(sig.argtypes)
         if isa(result, ConstPropResult)
             (; mi) = item = InliningTodo(result.result, argtypes, invokesig)
@@ -1162,8 +1188,8 @@ function inline_invoke!(
     return nothing
 end
 
-function invoke_signature(invokesig::Vector{Any})
-    ft, argtyps = widenconst(invokesig[2]), instanceof_tfunc(widenconst(invokesig[3]))[1]
+function invoke_signature(argtypes::Vector{Any})
+    ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]))[1]
     return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
 end
 
@@ -1244,7 +1270,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
             length(info.results) == 1 || return nothing
             match = info.results[1]::MethodMatch
             match.fully_covers || return nothing
-            case = compileable_specialization(state.et, match, Effects();
+            case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et);
                 compilesig_invokes=state.params.compilesig_invokes)
             case === nothing && return nothing
             stmt.head = :invoke_modify
@@ -1293,6 +1319,25 @@ function handle_any_const_result!(cases::Vector{InliningCase}, @nospecialize(res
     end
 end
 
+function info_effects(@nospecialize(result), match::MethodMatch, state::InliningState)
+    if isa(result, ConcreteResult)
+        return result.effects
+    elseif isa(result, SemiConcreteResult)
+        return result.effects
+    elseif isa(result, ConstPropResult)
+        return result.result.ipo_effects
+    else
+        mi = specialize_method(match; preexisting=true)
+        if isa(mi, MethodInstance)
+            code = get(state.mi_cache, mi, nothing)
+            if code isa CodeInstance
+                return decode_effects(code.ipo_purity_bits)
+            end
+        end
+        return Effects()
+    end
+end
+
 function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInfo}},
     flag::UInt8, sig::Signature, state::InliningState)
     argtypes = sig.argtypes
@@ -1310,7 +1355,8 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
     local only_method = nothing
     local meth::MethodLookupResult
     local all_result_count = 0
-
+    local joint_effects::Effects = EFFECTS_TOTAL
+    local nothrow::Bool = true
     for i in 1:length(infos)
         meth = infos[i].results
         if meth.ambig
@@ -1335,6 +1381,8 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
         for (j, match) in enumerate(meth)
             all_result_count += 1
             result = results === nothing ? nothing : results[all_result_count]
+            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
+            nothrow &= match.fully_covers
             any_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
                 if !match.fully_covers
@@ -1352,6 +1400,8 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
             end
         end
     end
+
+    joint_effects = Effects(joint_effects; nothrow)
 
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,
@@ -1382,7 +1432,7 @@ function compute_inlining_cases(info::Union{ConstCallInfo, Vector{MethodMatchInf
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    return cases, handled_all_cases & any_fully_covered
+    return cases, (handled_all_cases & any_fully_covered), joint_effects
 end
 
 function handle_call!(
@@ -1390,9 +1440,9 @@ function handle_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     cases = compute_inlining_cases(infos, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, joint_effects = cases
     handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, todo, state.params)
+        all_covered, todo, state.params, joint_effects)
 end
 
 function handle_const_call!(
@@ -1400,9 +1450,9 @@ function handle_const_call!(
     sig::Signature, state::InliningState, todo::Vector{Pair{Int, Any}})
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, joint_effects = cases
     handle_cases!(ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, todo, state.params)
+        all_covered, todo, state.params, joint_effects)
 end
 
 function handle_match!(
@@ -1444,10 +1494,11 @@ function handle_semi_concrete_result!(result::SemiConcreteResult, cases::Vector{
     return true
 end
 
-function concrete_result_item(result::ConcreteResult, state::InliningState)
+function concrete_result_item(result::ConcreteResult, state::InliningState, @nospecialize(invokesig=nothing))
     if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        case = compileable_specialization(state.et, result.mi, result.effects;
-            compilesig_invokes = state.params.compilesig_invokes)
+        et = InliningEdgeTracker(state.et, invokesig)
+        case = compileable_specialization(result.mi, result.effects, et;
+            compilesig_invokes=state.params.compilesig_invokes)
         @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
         return case
     end
@@ -1457,7 +1508,7 @@ end
 
 function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
     cases::Vector{InliningCase}, fully_covered::Bool, todo::Vector{Pair{Int, Any}},
-    params::OptimizationParams)
+    params::OptimizationParams, joint_effects::Effects)
     # If we only have one case and that case is fully covered, we may either
     # be able to do the inlining now (for constant cases), or push it directly
     # onto the todo list
@@ -1469,6 +1520,8 @@ function handle_cases!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(atype),
             isa(case.sig, DataType) || return nothing
         end
         push!(todo, idx=>UnionSplit(fully_covered, atype, cases))
+    else
+        ir[SSAValue(idx)][:flag] |= flags_for_effects(joint_effects)
     end
     return nothing
 end
@@ -1521,7 +1574,7 @@ function handle_finalizer_call!(
 
     cases = compute_inlining_cases(infos, #=flag=#UInt8(0), sig, state)
     cases === nothing && return nothing
-    cases, all_covered = cases
+    cases, all_covered, _ = cases
     if all_covered && length(cases) == 1
         # NOTE we don't append `item1` to `stmt` here so that we don't serialize
         # `Core.Compiler` data structure into the global cache
@@ -1727,32 +1780,35 @@ function late_inline_special_case!(
     return nothing
 end
 
-function ssa_substitute!(idx::Int, @nospecialize(val), arg_replacements::Vector{Any},
+function ssa_substitute!(insert_node!::Inserter,
+                         subst_inst::Instruction, @nospecialize(val), arg_replacements::Vector{Any},
                          @nospecialize(spsig), spvals::SimpleVector,
                          spvals_ssa::Union{Nothing, SSAValue},
-                         linetable_offset::Int32, boundscheck::Symbol, compact::IncrementalCompact)
-    compact.result[idx][:flag] &= ~IR_FLAG_INBOUNDS
-    compact.result[idx][:line] += linetable_offset
-    return ssa_substitute_op!(val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck, compact, idx)
+                         linetable_offset::Int32, boundscheck::Symbol)
+    subst_inst[:flag] &= ~IR_FLAG_INBOUNDS
+    subst_inst[:line] += linetable_offset
+    return ssa_substitute_op!(insert_node!, subst_inst,
+        val, arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
 end
 
-function insert_spval!(compact::IncrementalCompact, idx::Int, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
-    ret = insert_node!(compact, SSAValue(idx),
+function insert_spval!(insert_node!::Inserter, spvals_ssa::SSAValue, spidx::Int, do_isdefined::Bool)
+    ret = insert_node!(
         effect_free(NewInstruction(Expr(:call, Core._svec_ref, false, spvals_ssa, spidx), Any)))
     tcheck_not = nothing
     if do_isdefined
-        tcheck = insert_node!(compact, SSAValue(idx),
+        tcheck = insert_node!(
             effect_free(NewInstruction(Expr(:call, Core.isa, ret, Core.TypeVar), Bool)))
-        tcheck_not = insert_node!(compact, SSAValue(idx),
+        tcheck_not = insert_node!(
             effect_free(NewInstruction(Expr(:call, not_int, tcheck), Bool)))
     end
     return (ret, tcheck_not)
 end
 
-function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
+function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
+                            @nospecialize(val), arg_replacements::Vector{Any},
                             @nospecialize(spsig), spvals::SimpleVector,
                             spvals_ssa::Union{Nothing, SSAValue},
-                            boundscheck::Symbol, compact::IncrementalCompact, idx::Int)
+                            boundscheck::Symbol)
     if isa(val, Argument)
         return arg_replacements[val.n]
     end
@@ -1765,11 +1821,11 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
             if !isa(val, TypeVar) && val !== Vararg
                 return quoted(val)
             else
-                flag = compact[SSAValue(idx)][:flag]
+                flag = subst_inst[:flag]
                 maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
-                (ret, tcheck_not) = insert_spval!(compact, idx, spvals_ssa, spidx, maybe_undef)
+                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, maybe_undef)
                 if maybe_undef
-                    insert_node!(compact, SSAValue(idx),
+                    insert_node!(
                         non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
                 end
                 return ret
@@ -1780,7 +1836,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
             if !isa(val, TypeVar)
                 return true
             else
-                (_, tcheck_not) = insert_spval!(compact, idx, spvals_ssa, spidx, true)
+                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, true)
                 return tcheck_not
             end
         elseif head === :cfunction && spvals_ssa === nothing
@@ -1813,7 +1869,7 @@ function ssa_substitute_op!(@nospecialize(val), arg_replacements::Vector{Any},
     isa(val, Union{SSAValue, NewSSAValue}) && return val # avoid infinite loop
     urs = userefs(val)
     for op in urs
-        op[] = ssa_substitute_op!(op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck, compact, idx)
+        op[] = ssa_substitute_op!(insert_node!, subst_inst, op[], arg_replacements, spsig, spvals, spvals_ssa, boundscheck)
     end
     return urs[]
 end

@@ -247,7 +247,7 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
     end
 
     # module & file, re-using function from errorshow.jl
-    if get(io, :compact, false) # single-line mode
+    if get(io, :compact, false)::Bool # single-line mode
         print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width)
     else
         println(io)
