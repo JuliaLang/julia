@@ -314,7 +314,10 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->arg_size() == 3);
-    size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
+    auto CI = dyn_cast<ConstantInt>(call->getArgOperand(1));
+    if (!CI)
+        return -1;
+    size_t sz = (size_t)CI->getZExtValue();
     if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
         return sz;
     return -1;
