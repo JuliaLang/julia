@@ -2097,7 +2097,7 @@ for bit in (8, 16, 32, 64, 128)
 
         Note that integers overflow without warning,
         thus `typemax($($type)) + $($type)(1) < 0`.
-        See also [`Int`](@ref), [`widen`](@ref), [`BigInt`](@ref).
+        See also [`Int`](@ref $Int), [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
 
