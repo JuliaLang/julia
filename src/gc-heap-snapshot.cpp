@@ -372,7 +372,7 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
 
 void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_t* binding) JL_NOTSAFEPOINT
 {
-    auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
+    auto from_node_idx = record_node_to_gc_snapshot(module);
     auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(binding->name));
     auto value_idx = (binding->value) ? record_node_to_gc_snapshot(binding->value) : 0;
     auto ty_idx = (binding->ty) ? record_node_to_gc_snapshot(binding->ty) : 0;
