@@ -34,6 +34,7 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 Range operator. `a:b` constructs a range from `a` to `b` with an implicit step size
 of 1 (often a [`UnitRange`](@ref)), and `a:s:b` is similar but uses an explicit step
 size of `s` (a [`StepRange`](@ref) or [`StepRangeLen`](@ref)).
+See also [`range`](@ref) for more control.
 
 `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
 """
