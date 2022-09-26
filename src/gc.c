@@ -2655,7 +2655,6 @@ mark: {
             else if (flags.how == 3) {
                 jl_value_t *owner = jl_array_data_owner(a);
                 uintptr_t nptr = (1 << 2) | (bits & GC_OLD);
-                // TODO: Keep an eye on the edge type here, we're _pretty sure_ it's right..
                 gc_heap_snapshot_record_internal_array_edge(new_obj, owner);
                 int markowner = gc_try_setmark(owner, &nptr, &tag, &bits);
                 gc_mark_push_remset(ptls, new_obj, nptr);
