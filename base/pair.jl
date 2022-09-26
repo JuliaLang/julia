@@ -29,10 +29,10 @@ julia> for x in p
 foo
 7
 
-julia> join.(["one"=>1, "two"=>2]) # same as join.([["one", 1], ["two", 2]])
+julia> replace.(["xops", "oxps"], "x" => "o")
 2-element Vector{String}:
- "one1"
- "two2"
+ "oops"
+ "oops"
 ```
 """
 Pair, =>
