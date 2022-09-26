@@ -201,7 +201,10 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     size_t pointers_size = (npointers << fielddesc_type);
     size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size;
     int should_malloc = flddesc_sz >= jl_page_size;
-    jl_datatype_layout_t *flddesc = (jl_datatype_layout_t*)(should_malloc ? malloc(flddesc_sz) : alloca(flddesc_sz));
+    jl_datatype_layout_t* mallocmem = (jl_datatype_layout_t*)(should_malloc ? malloc(flddesc_sz) : NULL);
+    jl_datatype_layout_t* allocamem = (jl_datatype_layout_t*)(should_malloc ? NULL : alloca(flddesc_sz));
+    jl_datatype_layout_t *flddesc = should_malloc ? mallocmem : allocamem;
+    assert(flddesc);
     flddesc->nfields = nfields;
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
@@ -255,13 +258,17 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     jl_datatype_layout_t* ret =
             (jl_datatype_layout_t*)layoutcache_get(&layoutcache, flddesc);
     if (ret == HT_NOTFOUND) {
-        char* new_mem = (char*)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
-        assert(new_mem);
-        memcpy(new_mem, flddesc, flddesc_sz);
-        layoutcache_put(&layoutcache, new_mem, new_mem);
-
-        if (should_malloc) free(flddesc);
-        return (jl_datatype_layout_t*)new_mem;
+        if (!should_malloc) {
+            char* perm_mem = (char*)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
+            assert(perm_mem);
+            ret = (jl_datatype_layout_t*)perm_mem;
+            memcpy(perm_mem, flddesc, flddesc_sz);
+        }
+        else {
+            ret = mallocmem;
+        }
+        layoutcache_put(&layoutcache, ret, ret);
+        return ret;
     }
 
     if (should_malloc) free(flddesc);
