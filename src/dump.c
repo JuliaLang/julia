@@ -2556,7 +2556,8 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
     jl_array_t *valids = jl_alloc_array_1d(jl_array_uint8_type, l);
     memset(jl_array_data(valids), 1, l);
     jl_value_t *loctag = NULL, *matches = NULL;
-    JL_GC_PUSH2(&loctag, &matches);
+    jl_methtable_t *mt = NULL;
+    JL_GC_PUSH3(&loctag, &matches, &mt);
     *pvalids = valids;
     size_t world = jl_get_world_counter();
     for (i = 0; i < l; i++) {
@@ -2602,7 +2603,7 @@ static void jl_verify_edges(jl_array_t *targets, jl_array_t **pvalids)
                 }
             }
         } else {
-            jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
+            mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
             size_t min_world, max_world;
             matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, world, &min_world, &max_world);
             if (matches == jl_nothing || expected != (jl_value_t*)((jl_method_match_t*)matches)->method) {
