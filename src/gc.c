@@ -3150,7 +3150,6 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // 2.1. mark every object in the `last_remsets` and `rem_binding`
         jl_gc_queue_remset(gc_cache, &sp, ptls2);
         // 2.2. mark every thread local root
-        // TODO: treat these as roots
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
         // 2.3. mark any managed objects in the backtrace buffer
         // TODO: treat these as roots
