@@ -134,11 +134,16 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ir::IRCode, mi_cache,
     return nothing
 end
 
+function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ir::IRCode, id::Int, dt::LazyDomtree)
+    return abstract_eval_phi(interp, phi, nothing, ir)
+end
+
 function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::MethodInstance,
                                 mi_cache,
                                 tpdum::TwoPhaseDefUseMap, idx::Int, bb::Union{Int, Nothing},
                                 @nospecialize(inst), @nospecialize(typ),
-                                phi_revisit::BitSet)
+                                phi_revisit::BitSet,
+                                dt::LazyDomtree)
     function update_phi!(from::Int, to::Int)
         if length(ir.cfg.blocks[to].preds) == 0
             return
@@ -181,7 +186,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
         if isa(inst, Expr) || isa(inst, PhiNode)
             if isa(inst, PhiNode) || inst.head === :call || inst.head === :foreigncall || inst.head === :new
                 if isa(inst, PhiNode)
-                    rt = abstract_eval_phi(interp, inst, nothing, ir)
+                    rt = abstract_eval_phi_stmt(interp, inst, ir, idx, dt)
                 else
                     (;rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, mi)
                     # All other effects already guaranteed effect free by construction
@@ -243,6 +248,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
     all_rets = Int[]
 
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
+    dt = LazyDomtree(ir)
 
     """
         process_terminator!
@@ -303,7 +309,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
                 delete!(ssa_refined, idx)
             end
             if any_refined && reprocess_instruction!(interp, ir, mi, mi_cache,
-                    tpdum, idx, bb, inst, typ, ssa_refined)
+                    tpdum, idx, bb, inst, typ, ssa_refined, dt)
                 push!(ssa_refined, idx)
             end
             if idx == lstmt && process_terminator!(ip, bb, idx)
@@ -370,7 +376,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
         inst = ir.stmts[idx][:inst]
         typ = ir.stmts[idx][:type]
         if reprocess_instruction!(interp, ir, mi, mi_cache,
-                tpdum, idx, nothing, inst, typ, ssa_refined)
+                tpdum, idx, nothing, inst, typ, ssa_refined, dt)
             append!(stmt_ip, tpdum[idx])
         end
     end
