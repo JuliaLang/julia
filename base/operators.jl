@@ -896,14 +896,14 @@ the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> 1:5 |> join
-"12345"
+julia> 4 |> inv
+0.25
 
-julia> 1:5 |> collect |> sum |> inv
-0.06666666666666667
+julia> [2,3,5] |> sum |> inv
+0.1
 
-julia> 1:5 |> collect .|> (x -> x^2) |> sum |> inv
-0.01818181818181818
+julia> [0 1; 2 3] .|> (x -> x^2) |> sum
+14
 ```
 """
 |>(x, f) = f(x)
