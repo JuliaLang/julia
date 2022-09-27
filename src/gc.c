@@ -2501,8 +2501,6 @@ module_binding: {
             if (value) {
                 verify_parent2("module", binding->parent,
                                &b->value, "binding(%s)", jl_symbol_name(b->name));
-                gc_heap_snapshot_record_module_edge(binding->parent, value,
-                               jl_symbol_name(b->name));
                 if (gc_try_setmark(value, &binding->nptr, &tag, &bits)) {
                     new_obj = value;
                     begin += 2;
