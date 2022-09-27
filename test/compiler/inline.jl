@@ -1537,6 +1537,34 @@ let
     @test get_finalization_count() == 1000
 end
 
+
+function cfg_finalization7(io)
+    for i = -999:1000
+        o = DoAllocWithField(0)
+        o.x = 0
+        if i == 1000
+            o.x = i # with `setfield!`
+        end
+        o.x = i
+        if i == 999
+            o.x = i
+        end
+        o.x = 0
+        if i == 1000
+            o.x = i
+        end
+    end
+end
+let src = code_typed1(cfg_finalization7, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization7(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
     @eval begin
