@@ -160,7 +160,7 @@ void _add_internal_root(HeapSnapshot *snapshot) {
         snapshot->node_types.find_or_create_string_id("synthetic"),
         snapshot->names.find_or_create_string_id(""), // name
         0, // id
-        1, // size
+        0, // size
         0, // size_t trace_node_id (unused)
         0, // int detachedness;  // 0 - unknown,  1 - attached;  2 - detached
         vector<Edge>() // outgoing edges
@@ -370,6 +370,7 @@ void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void
 void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_t* binding) JL_NOTSAFEPOINT {
     auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
     auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(binding->name));
+
     auto value_idx = (binding->value) ? record_node_to_gc_snapshot(binding->value) : 0;
     auto ty_idx = (binding->ty) ? record_node_to_gc_snapshot(binding->ty) : 0;
     auto globalref_idx = (binding->globalref) ? record_node_to_gc_snapshot(binding->globalref) : 0;
