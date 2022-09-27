@@ -1713,6 +1713,6 @@ end
 # Test that inlining doesn't unnecesarily move things to stmt position
 @noinline f_no_inline_invoke(x::Union{Symbol, Nothing}=nothing) = Base.donotdelete(x)
 g_no_inline_invoke(x) = f_no_inline_invoke(x)
-let src = code_typed1(g_no_inline_invoke, Tuple{Any})
+let src = code_typed1(g_no_inline_invoke, Tuple{Union{Symbol, Nothing}})
     @test count(x->isa(x, GlobalRef), src.code) == 0
 end
