@@ -150,6 +150,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, tmpdir_pwd)
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
+            @show tmpdir
+            @show pwd()
             @test samefile(".", tmpdir)
             write(stdin_write, "\b")
 
