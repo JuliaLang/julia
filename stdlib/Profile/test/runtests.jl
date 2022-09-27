@@ -273,7 +273,7 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    fname = tempname(cleanup=false)
+    fname = tempname()
     Profile.take_heap_snapshot(fname)
 
     open(fname) do fs
