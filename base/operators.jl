@@ -1208,7 +1208,7 @@ used to implement specialized methods.
 !!! compat "Julia 1.9"
     This functionality requires at least Julia 1.9.
 """
-hasproperty(s) = Fix2(hasproperty, s)
+hasproperty(s::Union{Symbol,String}) = Fix2(hasproperty, s)
 
 """
     Splat(f)
