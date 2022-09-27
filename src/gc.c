@@ -2754,6 +2754,7 @@ mark: {
             void *stkbuf = ta->stkbuf;
             if (stkbuf && ta->copy_stack) {
                 gc_setmark_buf_(ptls, stkbuf, bits, ta->bufsz);
+                // For gc_heap_snapshot_record:
                 // TODO: attribute size of stack
                 // TODO: edge to stack data
                 // TODO: synthetic node for stack data (how big is it?)
@@ -3152,7 +3153,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         // 2.2. mark every thread local root
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
         // 2.3. mark any managed objects in the backtrace buffer
-        // TODO: treat these as roots
+        // TODO: treat these as roots for gc_heap_snapshot_record
         jl_gc_queue_bt_buf(gc_cache, &sp, ptls2);
     }
 
