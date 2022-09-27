@@ -1,13 +1,11 @@
 function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
     src = code.inferred
     mi = code.def
-
     if isa(src, Vector{UInt8})
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
+    else
+        isa(src, CodeInfo) || return src
     end
-
-    isa(src, CodeInfo) || return src
-
     return inflate_ir(src, mi)
 end
 
@@ -134,40 +132,37 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ir::IRCode, mi_cache,
     return nothing
 end
 
-function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ir::IRCode, id::Int, dt::LazyDomtree)
+function abstract_eval_phi_stmt(interp::AbstractInterpreter, phi::PhiNode, ir::IRCode, ::Int, ::LazyDomtree)
     return abstract_eval_phi(interp, phi, nothing, ir)
 end
 
-function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::MethodInstance,
-                                mi_cache,
-                                tpdum::TwoPhaseDefUseMap, idx::Int, bb::Union{Int, Nothing},
-                                @nospecialize(inst), @nospecialize(typ),
-                                phi_revisit::BitSet,
-                                dt::LazyDomtree)
-    function update_phi!(from::Int, to::Int)
-        if length(ir.cfg.blocks[to].preds) == 0
-            return
-        end
-        for idx in ir.cfg.blocks[to].stmts
-            stmt = ir.stmts[idx][:inst]
-            isa(stmt, Nothing) && continue
-            isa(stmt, PhiNode) || break
-            for (i, edge) in enumerate(stmt.edges)
-                if edge == from
-                    deleteat!(stmt.edges, i)
-                    deleteat!(stmt.values, i)
-                    push!(phi_revisit, idx)
-                    break
-                end
-            end
-        end
-    end
-
+function reprocess_instruction!(interp::AbstractInterpreter,
+    ir::IRCode, mi::MethodInstance, mi_cache, tpdum::TwoPhaseDefUseMap, idx::Int,
+    bb::Union{Int, Nothing}, @nospecialize(inst), @nospecialize(typ), phi_revisit::BitSet,
+    lazydomtree::LazyDomtree)
     if isa(inst, GotoIfNot)
         cond = argextype(inst.cond, ir)
         if isa(cond, Const)
+            function update_phi!(from::Int, to::Int)
+                if length(ir.cfg.blocks[to].preds) == 0
+                    return
+                end
+                for idx in ir.cfg.blocks[to].stmts
+                    stmt = ir.stmts[idx][:inst]
+                    isa(stmt, Nothing) && continue
+                    isa(stmt, PhiNode) || break
+                    for (i, edge) in enumerate(stmt.edges)
+                        if edge == from
+                            deleteat!(stmt.edges, i)
+                            deleteat!(stmt.values, i)
+                            push!(phi_revisit, idx)
+                            break
+                        end
+                    end
+                end
+            end
             if isa(inst.cond, SSAValue)
-                kill_def_use!(tpdum, inst.cond, idx)
+                kill_def_use!(tpdum, inst.cond::SSAValue, idx)
             end
             if bb === nothing
                 bb = block_for_inst(ir, idx)
@@ -182,60 +177,50 @@ function reprocess_instruction!(interp::AbstractInterpreter, ir::IRCode, mi::Met
             return true
         end
         return false
-    else
-        if isa(inst, Expr) || isa(inst, PhiNode)
-            if isa(inst, PhiNode) || inst.head === :call || inst.head === :foreigncall || inst.head === :new
-                if isa(inst, PhiNode)
-                    rt = abstract_eval_phi_stmt(interp, inst, ir, idx, dt)
+    end
+
+    rt = nothing
+    if isa(inst, Expr)
+        if inst.head === :call || inst.head === :foreigncall || inst.head === :new
+            (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, mi)
+            # All other effects already guaranteed effect free by construction
+            if is_nothrow(effects)
+                if isa(rt, Const) && is_inlineable_constant(rt.val)
+                    ir.stmts[idx][:inst] = quoted(rt.val)
                 else
-                    (;rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, mi)
-                    # All other effects already guaranteed effect free by construction
-                    if is_nothrow(effects)
-                        if isa(rt, Const) && is_inlineable_constant(rt.val)
-                            ir.stmts[idx][:inst] = quoted(rt.val)
-                        else
-                            ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
-                        end
-                    end
+                    ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
                 end
-                if !⊑(typeinf_lattice(interp), typ, rt)
-                    ir.stmts[idx][:type] = rt
-                    return true
-                end
-            elseif inst.head === :invoke
-                mi′ = inst.args[1]::MethodInstance
-                if mi′ !== mi # prevent infinite loop
-                    rr = concrete_eval_invoke(interp, ir, mi_cache, inst, mi′)
-                    if rr !== nothing
-                        if !⊑(typeinf_lattice(interp), typ, rr)
-                            ir.stmts[idx][:type] = rr
-                            return true
-                        end
-                    end
-                end
-            else
-                ccall(:jl_, Cvoid, (Any,), inst)
-                error()
             end
-        elseif isa(inst, ReturnNode)
-            # Handled at the very end
-            return false
-        elseif isa(inst, PiNode)
-            rr = tmeet(argextype(inst.val, ir), inst.typ)
-            if !⊑(typeinf_lattice(interp), typ, rr)
-                ir.stmts[idx][:type] = rr
-                return true
+        elseif inst.head === :invoke
+            mi′ = inst.args[1]::MethodInstance
+            if mi′ !== mi # prevent infinite loop
+                rt = concrete_eval_invoke(interp, ir, mi_cache, inst, mi′)
             end
         else
             ccall(:jl_, Cvoid, (Any,), inst)
             error()
         end
+    elseif isa(inst, PhiNode)
+        rt = abstract_eval_phi_stmt(interp, inst, ir, idx, lazydomtree)
+    elseif isa(inst, ReturnNode)
+        # Handled at the very end
+        return false
+    elseif isa(inst, PiNode)
+        rt = tmeet(argextype(inst.val, ir), inst.typ)
+    else
+        ccall(:jl_, Cvoid, (Any,), inst)
+        error()
+    end
+    if rt !== nothing && !⊑(typeinf_lattice(interp), typ, rt)
+        ir.stmts[idx][:type] = rt
+        return true
     end
     return false
 end
 
-function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache,
-        mi::MethodInstance, ir::IRCode, argtypes::Vector{Any}; extra_reprocess = nothing)
+function _ir_abstract_constant_propagation(interp::AbstractInterpreter,
+    mi_cache, mi::MethodInstance, ir::IRCode, argtypes::Vector{Any};
+    extra_reprocess::Union{Nothing,BitSet} = nothing)
     argtypes = va_process_argtypes(argtypes, mi)
     argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
     empty!(ir.argtypes)
@@ -248,7 +233,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
     all_rets = Int[]
 
     tpdum = TwoPhaseDefUseMap(length(ir.stmts))
-    dt = LazyDomtree(ir)
+    lazydomtree = LazyDomtree(ir)
 
     """
         process_terminator!
@@ -308,8 +293,10 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
                 any_refined = true
                 delete!(ssa_refined, idx)
             end
-            if any_refined && reprocess_instruction!(interp, ir, mi, mi_cache,
-                    tpdum, idx, bb, inst, typ, ssa_refined, dt)
+            if any_refined && reprocess_instruction!(interp,
+                ir, mi, mi_cache, tpdum, idx,
+                bb, inst, typ, ssa_refined,
+                lazydomtree)
                 push!(ssa_refined, idx)
             end
             if idx == lstmt && process_terminator!(ip, bb, idx)
@@ -322,76 +309,81 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, mi_cache
     end
     @goto compute_rt
 
-@label residual_scan
-    stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
-    # Slow Path Phase 1.A: Complete use scanning
-    while !isempty(ip)
-        bb = popfirst!(ip)
-        stmts = bbs[bb].stmts
-        lstmt = last(stmts)
-        for idx = stmts
-            inst = ir.stmts[idx][:inst]
-            for ur in userefs(inst)
-                val = ur[]
-                if isa(val, Argument)
-                    if argtypes_refined[val.n]
-                        push!(stmt_ip, idx)
+    # Slow path
+    begin @label residual_scan
+        stmt_ip = BitSetBoundedMinPrioritySet(length(ir.stmts))
+
+        # Slow Path Phase 1.A: Complete use scanning
+        while !isempty(ip)
+            bb = popfirst!(ip)
+            stmts = bbs[bb].stmts
+            lstmt = last(stmts)
+            for idx = stmts
+                inst = ir.stmts[idx][:inst]
+                for ur in userefs(inst)
+                    val = ur[]
+                    if isa(val, Argument)
+                        if argtypes_refined[val.n]
+                            push!(stmt_ip, idx)
+                        end
+                    elseif isa(val, SSAValue)
+                        count!(tpdum, val)
                     end
-                elseif isa(val, SSAValue)
-                    count!(tpdum, val)
                 end
+                idx == lstmt && process_terminator!(ip, bb, idx)
             end
-            idx == lstmt && process_terminator!(ip, bb, idx)
         end
-    end
 
-    # Slow Path Phase 1.B: Assemble def-use map
-    complete!(tpdum)
-    push!(ip, 1)
-    while !isempty(ip)
-        bb = popfirst!(ip)
-        stmts = bbs[bb].stmts
-        lstmt = last(stmts)
-        for idx = stmts
+        # Slow Path Phase 1.B: Assemble def-use map
+        complete!(tpdum)
+        push!(ip, 1)
+        while !isempty(ip)
+            bb = popfirst!(ip)
+            stmts = bbs[bb].stmts
+            lstmt = last(stmts)
+            for idx = stmts
+                inst = ir.stmts[idx][:inst]
+                for ur in userefs(inst)
+                    val = ur[]
+                    if isa(val, SSAValue)
+                        push!(tpdum[val.id], idx)
+                    end
+                end
+                idx == lstmt && process_terminator!(ip, bb, idx)
+            end
+        end
+
+        # Slow Path Phase 2: Use def-use map to converge cycles.
+        # TODO: It would be possible to return to the fast path after converging
+        #       each cycle, but that's somewhat complicated.
+        for val in ssa_refined
+            append!(stmt_ip, tpdum[val])
+        end
+        while !isempty(stmt_ip)
+            idx = popfirst!(stmt_ip)
             inst = ir.stmts[idx][:inst]
-            for ur in userefs(inst)
-                val = ur[]
-                if isa(val, SSAValue)
-                    push!(tpdum[val.id], idx)
-                end
+            typ = ir.stmts[idx][:type]
+            if reprocess_instruction!(interp,
+                ir, mi, mi_cache, tpdum, idx,
+                nothing, inst, typ, ssa_refined,
+                lazydomtree)
+                append!(stmt_ip, tpdum[idx])
             end
-            idx == lstmt && process_terminator!(ip, bb, idx)
         end
     end
 
-    # Slow Path Phase 2: Use def-use map to converge cycles.
-    # TODO: It would be possible to return to the fast path after converging
-    #       each cycle, but that's somewhat complicated.
-    for val in ssa_refined
-        append!(stmt_ip, tpdum[val])
-    end
-
-    while !isempty(stmt_ip)
-        idx = popfirst!(stmt_ip)
-        inst = ir.stmts[idx][:inst]
-        typ = ir.stmts[idx][:type]
-        if reprocess_instruction!(interp, ir, mi, mi_cache,
-                tpdum, idx, nothing, inst, typ, ssa_refined, dt)
-            append!(stmt_ip, tpdum[idx])
+    begin @label compute_rt
+        ultimate_rt = Union{}
+        for idx in all_rets
+            bb = block_for_inst(ir.cfg, idx)
+            if bb != 1 && length(ir.cfg.blocks[bb].preds) == 0
+                # Could have discovered this block is dead after the initial scan
+                continue
+            end
+            inst = ir.stmts[idx][:inst]::ReturnNode
+            rt = argextype(inst.val, ir)
+            ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
         end
-    end
-
-@label compute_rt
-    ultimate_rt = Union{}
-    for idx in all_rets
-        bb = block_for_inst(ir.cfg, idx)
-        if bb != 1 && length(ir.cfg.blocks[bb].preds) == 0
-            # Could have discovered this block is dead after the initial scan
-            continue
-        end
-        inst = ir.stmts[idx][:inst]::ReturnNode
-        rt = argextype(inst.val, ir)
-        ultimate_rt = tmerge(typeinf_lattice(interp), ultimate_rt, rt)
     end
 
     return ultimate_rt
