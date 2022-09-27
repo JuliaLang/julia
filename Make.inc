@@ -1149,6 +1149,8 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.30|GLIBCXX_3\.5\.|GLIBCXX_4\.
+
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
