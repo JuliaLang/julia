@@ -2240,7 +2240,9 @@ end
 
 function abstract_eval_phi(interp::AbstractInterpreter, phi::PhiNode, vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode})
     rt = Union{}
-    for val in phi.values
+    for i in 1:length(phi.values)
+        isassigned(phi.values, i) || continue
+        val = phi.values[i]
         rt = tmerge(typeinf_lattice(interp), rt, abstract_eval_special_value(interp, val, vtypes, sv))
     end
     return rt
