@@ -356,11 +356,6 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
     _record_gc_edge("array", "element", from, to, index);
 }
 
-void _gc_heap_snapshot_record_module_edge(jl_module_t *from, jl_value_t *to, char *name) JL_NOTSAFEPOINT {
-    _record_gc_edge("object", "property", (jl_value_t *)from, to,
-                    g_snapshot->names.find_or_create_string_id(name));
-}
-
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT {
     string path = _fieldpath_for_slot(from, slot);
     _record_gc_edge("object", "property", from, to,
