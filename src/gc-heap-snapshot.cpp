@@ -366,9 +366,12 @@ void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_
     auto from_node_idx = record_node_to_gc_snapshot((jl_value_t*)module);
     auto to_node_idx = record_pointer_to_gc_snapshot(binding, sizeof(jl_binding_t), jl_symbol_name(binding->name));
 
-    auto value_idx = (binding->value) ? record_node_to_gc_snapshot(binding->value) : 0;
-    auto ty_idx = (binding->ty) ? record_node_to_gc_snapshot(binding->ty) : 0;
-    auto globalref_idx = (binding->globalref) ? record_node_to_gc_snapshot(binding->globalref) : 0;
+    jl_value_t *value = jl_atomic_load_relaxed(&binding->value);
+    auto value_idx = value ? record_node_to_gc_snapshot(value) : 0;
+    jl_value_t *ty = jl_atomic_load_relaxed(&binding->ty);
+    auto ty_idx = ty ? record_node_to_gc_snapshot(ty) : 0;
+    jl_value_t *globalref = jl_atomic_load_relaxed(&binding->globalref);
+    auto globalref_idx = globalref ? record_node_to_gc_snapshot(globalref) : 0;
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
     auto &to_node = g_snapshot->nodes[to_node_idx];
