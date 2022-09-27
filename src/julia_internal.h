@@ -723,7 +723,7 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(
-    jl_method_t *method) JL_NOTSAFEPOINT;
+    jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT);
 
 JL_DLLEXPORT int jl_pointer_egal(jl_value_t *t);
