@@ -887,9 +887,9 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 """
     |>(x, f)
 
-Applies a function to the preceding argument. This allows for easy function
-chaining, where the results returned from a function on the chain is passed
-to the next function on the chain, until the last function is called.
+Infix operator which applies function `f` to the argument `x`.
+This allows `f(g(x))` to be written `x |> g |> f`.
+Such a pipe, or function chain, is often useful in interactive use.
 
 When used with anonymous functions, parentheses are typically required around
 the definition to get the intended chain.
