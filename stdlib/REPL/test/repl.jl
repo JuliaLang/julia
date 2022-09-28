@@ -151,8 +151,9 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
-            @show tmpdir
-            @show pwd()
+            @show stat(tmpdir)
+            @show stat(".")
+            @show stat(pwd())
             write(stdin_write, "\b")
 
             # Test using `cd` to move to the home directory
