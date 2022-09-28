@@ -301,6 +301,8 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
 
+static htable_t layout_cache;
+
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
@@ -1165,15 +1167,21 @@ static void jl_write_values(jl_serializer_state *s)
                     size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
                     char *flddesc = (char*)dt->layout;
                     size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
-                    if (dt->layout->first_ptr != -1)
-                        fldsize += np << dt->layout->fielddesc_type;
-                    uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
-                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
-                    newdt->layout = NULL; // relocation offset
-                    layout /= sizeof(void*);
-                    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location
-                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
-                    ios_write(s->const_data, flddesc, fldsize);
+                    char** bp = (char**)ptrhash_bp(&layout_cache, flddesc);
+                    // TODO: Which condition to check?
+                    // I see both checked elsewhere.
+                    if (*bp == HT_NOTFOUND || *bp == NULL) {
+                        *bp = (char*)newdt->layout;
+                        if (dt->layout->first_ptr != -1)
+                            fldsize += np << dt->layout->fielddesc_type;
+                        uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
+                        write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
+                        newdt->layout = NULL; // relocation offset
+                        layout /= sizeof(void*);
+                        arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location
+                        arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
+                        ios_write(s->const_data, flddesc, fldsize);
+                    }
                 }
             }
             else if (jl_is_typename(v)) {
@@ -2290,6 +2298,7 @@ static void jl_init_serializer2(int for_serialize)
         htable_new(&symbol_table, 0);
         htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
         htable_new(&backref_table, 0);
+        htable_new(&layout_cache, 0); // TODO: Is this in the right spot to initialize?
         uintptr_t i;
         for (i = 0; id_to_fptrs[i] != NULL; i++) {
             ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
@@ -2306,6 +2315,7 @@ static void jl_cleanup_serializer2(void)
     htable_reset(&symbol_table, 0);
     htable_reset(&fptr_to_id, 0);
     htable_reset(&backref_table, 0);
+    htable_reset(&layout_cache, 0);
     arraylist_free(&deser_sym);
 }
 
