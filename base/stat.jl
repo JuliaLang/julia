@@ -476,6 +476,8 @@ function samefile(a::AbstractString, b::AbstractString)
     infob = stat(b)
     if ispath(infoa) && ispath(infob)
         samefile(infoa, infob)
+        @show infoa
+        @show infob
     else
         return false
     end
