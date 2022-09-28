@@ -842,7 +842,7 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld((x - m) + y, y))
 function fld1(x::T, y::T) where T<:Integer
     d = div(x, y)
     return d + (!signbit(x ⊻ y) & (d * y != x))
