@@ -680,10 +680,16 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
     perm_idx = Ref(1)
 
-    return function (idx::Int)
+    return function get_new_node(idx::Int)
         perm_idx[] <= length(new_nodes_perm) || return nothing
         node_idx = new_nodes_perm[perm_idx[]]
-        if node_idx < new_nodes_idx || new_nodes_info[node_idx].pos != idx
+        if node_idx < new_nodes_idx
+            # skip new nodes that have already been processed by incremental compact
+            # (but don't just return nothing because there may be multiple at this pos)
+            perm_idx[] += 1
+            return get_new_node(idx)
+        end
+        if new_nodes_info[node_idx].pos != idx
             return nothing
         end
         perm_idx[] += 1
