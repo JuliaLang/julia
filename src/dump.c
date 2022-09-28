@@ -698,15 +698,13 @@ static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DIS
     return 0;
 }
 
-static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst,
-                                       int skip_partial_opaque, int internal,
-                                       int force) JL_GC_DISABLED
+static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst, int skip_partial_opaque, int internal) JL_GC_DISABLED
 {
     if (internal > 2) {
         while (codeinst && !codeinst->relocatability)
             codeinst = codeinst->next;
     }
-    if (!force && jl_serialize_generic(s, (jl_value_t*)codeinst)) {
+    if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
         return;
     }
     assert(codeinst != NULL); // handle by jl_serialize_generic, but this makes clang-sa happy
@@ -727,7 +725,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     if (write_ret_type && codeinst->rettype_const &&
             jl_typeis(codeinst->rettype_const, jl_partial_opaque_type)) {
         if (skip_partial_opaque) {
-            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal, 0);
+            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal);
             return;
         }
         else {
@@ -754,7 +752,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
         jl_serialize_value(s, jl_nothing);
     }
     write_uint8(s->s, codeinst->relocatability);
-    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal, 0);
+    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal);
 }
 
 enum METHOD_SERIALIZATION_MODE {
@@ -1015,10 +1013,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
         jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
-        jl_serialize_code_instance(s, mi->cache, 1, internal, 0);
+        jl_serialize_code_instance(s, mi->cache, 1, internal);
     }
     else if (jl_is_code_instance(v)) {
-        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0, 2, 1);
+        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0, 2);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
