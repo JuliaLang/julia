@@ -111,8 +111,12 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             samefile = Base.Filesystem.samefile
             tmpdir_pwd = cd(pwd, tmpdir)
             homedir_pwd = cd(pwd, homedir())
-
+            
+            write(stdin_write, ";") # consume ^C signal
+            readuntil(stdout_read, "shell> ")
             cd(tmpdir)
+            write(stdin_write, "cd")
+            readuntil(stdin_read, "cd")
             @test samefile(".", tmpdir)
             @show stat(tmpdir)
             @show stat(".")
