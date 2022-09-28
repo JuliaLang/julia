@@ -855,13 +855,14 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     end
 
     # Print uncompacted nodes from the original IR
+
+    # print a separator
     stmts = compact.ir.stmts
+    indent = length(string(length(stmts)))
+    # config.line_info_preprinter(io, "", compact.idx)
+    printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+
     pop_new_node! = new_nodes_iter(compact.ir)
-    if compact.idx < length(stmts)
-        indent = length(string(length(stmts)))
-        # config.line_info_preprinter(io, "", compact.idx)
-        printstyled(io, "─"^(width-indent-1), '\n', color=:red)
-    end
     let io = IOContext(io, :maxssaid=>length(compact.ir.stmts))
         show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
     end

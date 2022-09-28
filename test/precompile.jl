@@ -1552,8 +1552,8 @@ precompile_test_harness("issue #46296") do load_path
         module CodeInstancePrecompile
 
         mi = first(methods(identity)).specializations[1]
-        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt64),
-                            typemax(UInt64), zero(UInt32), zero(UInt32), nothing, 0x00)
+        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+                               typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
         __init__() = @assert ci isa Core.CodeInstance
 
