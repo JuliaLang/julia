@@ -474,10 +474,10 @@ Check if the paths `path_a` and `path_b` refer to the same existing file or dire
 function samefile(a::AbstractString, b::AbstractString)
     infoa = stat(a)
     infob = stat(b)
+    @show infoa
+    @show infob
     if ispath(infoa) && ispath(infob)
         samefile(infoa, infob)
-        @show infoa
-        @show infob
     else
         return false
     end
