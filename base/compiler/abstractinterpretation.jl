@@ -901,9 +901,10 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         if code !== nothing
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
-                T = ir_abstract_constant_propagation(interp, mi_cache, sv, mi, ir, arginfo.argtypes)
-                if !isa(T, Type) || typeintersect(T, Bool) === Union{}
-                    return ConstCallResults(T, SemiConcreteResult(mi, ir, result.effects), result.effects, mi)
+                irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
+                rt = ir_abstract_constant_propagation(interp, irsv)
+                if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
+                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, result.effects), result.effects, mi)
                 end
             end
         end
