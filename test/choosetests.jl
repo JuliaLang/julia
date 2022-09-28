@@ -3,32 +3,10 @@
 using Random, Sockets
 
 const STDLIB_DIR = Sys.STDLIB
-const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
+const STDLIBS = ["REPL"]
 
 const TESTNAMES = [
-        "subarray", "core", "compiler", "worlds", "atomics",
-        "keywordargs", "numbers", "subtype",
-        "char", "strings", "triplequote", "unicode", "intrinsics",
-        "dict", "hashing", "iobuffer", "staged", "offsetarray",
-        "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
-        "intfuncs", "simdloop", "vecelement", "rational",
-        "bitarray", "copy", "math", "fastmath", "functional", "iterators",
-        "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
-        "sorting", "spawn", "backtrace", "exceptions",
-        "file", "read", "version", "namedtuple",
-        "mpfr", "broadcast", "complex",
-        "floatapprox", "stdlib", "reflection", "regex", "float16",
-        "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show", "client",
-        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
-        "some", "meta", "stacktraces", "docs",
-        "misc", "threads", "stress", "binaryplatforms", "atexit",
-        "enums", "cmdlineargs", "int", "interpreter",
-        "checked", "bitset", "floatfuncs", "precompile",
-        "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity",
-        "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
-        "smallarrayshrink", "opaque_closure", "filesystem", "download",
+        "compiler", "worlds", "atomics",
 ]
 
 """
