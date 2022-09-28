@@ -1116,7 +1116,7 @@ end
 
 function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse,
         inlining::InliningState, lazydomtree::LazyDomtree,
-        lazypostdomtree::LazyPostDomtree, info::Union{FinalizerInfo, Nothing})
+        lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
     # For now, require that:
     # 1. The allocation dominates the finalizer registration
     # 2. The finalizer registration dominates all uses reachable from the
@@ -1212,7 +1212,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:inst]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flags = info === nothing ? UInt8(0) : flags_for_effects(info.effects)
+    flags = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing

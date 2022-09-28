@@ -1,18 +1,19 @@
 # TODO this file contains many duplications with the inlining analysis code, factor them out
 
 import Core.Compiler:
-    MethodInstance, InferenceResult, Signature, ConstPropResult, ConcreteResult, SemiConcreteResult,
-    MethodResultPure, MethodMatchInfo, UnionSplitInfo, ConstCallInfo, InvokeCallInfo,
-    call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction, validate_sparams,
-    specialize_method, invoke_rewrite
+    MethodInstance, InferenceResult, Signature, ConstPropResult, ConcreteResult,
+    SemiConcreteResult, CallInfo, NoCallInfo, MethodResultPure, MethodMatchInfo,
+    UnionSplitInfo, ConstCallInfo, InvokeCallInfo,
+    call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction,
+    validate_sparams, specialize_method, invoke_rewrite
 
 const Linfo = Union{MethodInstance,InferenceResult}
-struct CallInfo
+struct EACallInfo
     linfos::Vector{Linfo}
     nothrow::Bool
 end
 
-function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info))
+function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo))
     sig = call_sig(ir, stmt)
     if sig === nothing
         return missing
@@ -36,7 +37,7 @@ function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info))
     end
     if info isa MethodResultPure
         return true
-    elseif info === false
+    elseif info === NoCallInfo
         return missing
     end
     # TODO handle OpaqueClosureCallInfo
@@ -63,16 +64,16 @@ function analyze_invoke_call(sig::Signature, info::InvokeCallInfo)
     end
     result = info.result
     if isa(result, ConstPropResult)
-        return CallInfo(Linfo[result.result], true)
+        return EACallInfo(Linfo[result.result], true)
     elseif isa(result, ConcreteResult)
-        return CallInfo(Linfo[result.mi], true)
+        return EACallInfo(Linfo[result.mi], true)
     elseif isa(result, SemiConcreteResult)
-        return CallInfo(Linfo[result.mi], true)
+        return EACallInfo(Linfo[result.mi], true)
     else
         argtypes = invoke_rewrite(sig.argtypes)
         mi = analyze_match(match, length(argtypes))
         mi === nothing && return missing
-        return CallInfo(Linfo[mi], true)
+        return EACallInfo(Linfo[mi], true)
     end
 end
 
@@ -110,7 +111,7 @@ function analyze_const_call(sig::Signature, cinfo::ConstCallInfo)
             nothrow &= match.fully_covers
         end
     end
-    return CallInfo(linfos, nothrow)
+    return EACallInfo(linfos, nothrow)
 end
 
 function analyze_call(sig::Signature, infos::Vector{MethodMatchInfo})
@@ -133,7 +134,7 @@ function analyze_call(sig::Signature, infos::Vector{MethodMatchInfo})
             nothrow &= match.fully_covers
         end
     end
-    return CallInfo(linfos, nothrow)
+    return EACallInfo(linfos, nothrow)
 end
 
 function analyze_match(match::MethodMatch, npassedargs::Int)

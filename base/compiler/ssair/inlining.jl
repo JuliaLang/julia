@@ -1091,14 +1091,14 @@ function inline_apply!(
         if isa(info, UnionSplitApplyCallInfo)
             if length(info.infos) != 1
                 # TODO: Handle union split applies?
-                new_info = info = false
+                new_info = info = NoCallInfo()
             else
                 info = info.infos[1]
                 new_info = info.call
             end
         else
-            @assert info === nothing || info === false
-            new_info = info = false
+            @assert info === NoCallInfo()
+            new_info = info = NoCallInfo()
         end
         arg_start = 3
         argtypes = sig.argtypes
@@ -1618,7 +1618,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             inline_const_if_inlineable!(ir[SSAValue(idx)]) && continue
             info = info.info
         end
-        if info === false
+        if info === NoCallInfo()
             # Inference determined this couldn't be analyzed. Don't question it.
             continue
         end

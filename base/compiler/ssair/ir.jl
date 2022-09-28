@@ -188,15 +188,15 @@ const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 struct InstructionStream
     inst::Vector{Any}
     type::Vector{Any}
-    info::Vector{Any}
+    info::Vector{CallInfo}
     line::Vector{Int32}
     flag::Vector{UInt8}
 end
 function InstructionStream(len::Int)
-    insts = Array{Any}(undef, len)
-    types = Array{Any}(undef, len)
-    info = Array{Any}(undef, len)
-    fill!(info, nothing)
+    insts = Vector{Any}(undef, len)
+    types = Vector{Any}(undef, len)
+    info = Vector{CallInfo}(undef, len)
+    fill!(info, NoCallInfo())
     lines = fill(Int32(0), len)
     flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(insts, types, info, lines, flags)
@@ -227,7 +227,7 @@ function resize!(stmts::InstructionStream, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
         stmts.flag[i] = IR_FLAG_NULL
-        stmts.info[i] = nothing
+        stmts.info[i] = NoCallInfo()
     end
     return stmts
 end
