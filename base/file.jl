@@ -373,7 +373,8 @@ end
 
 Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
-`into=true` moves `src` into `dst = joinpath(dst, basename(src))`.
+`into=true` moves `src` into `dst` which must be an existing directory;
+the full destination path will be `joinpath(dst, basename(src))`.
 Return `dst`.
 
 # Examples
