@@ -401,7 +401,8 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t byt
 }
 
 static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT {
+                                   jl_value_t *a, jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
+{
     auto from_node_idx = record_node_to_gc_snapshot(a);
     auto to_node_idx = record_node_to_gc_snapshot(b);
 
