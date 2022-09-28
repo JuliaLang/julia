@@ -393,7 +393,7 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t byt
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
     auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, "<malloc>");
-    
+
     auto &from_node = g_snapshot->nodes[from_node_idx];
     from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
 
