@@ -6,7 +6,7 @@ const STDLIB_DIR = Sys.STDLIB
 const STDLIBS = ["REPL"]
 
 const TESTNAMES = [
-        "compiler", "worlds", "atomics",
+        "stdlib", "worlds", "atomics",
 ]
 
 """
