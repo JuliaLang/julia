@@ -262,7 +262,7 @@ LoadingCache() = LoadingCache(load_path(), Dict(), Dict(), Dict(), Set())
 
 
 struct TOMLCache
-    p::TOML.Parser
+    p::TOML.Parser{String}
     d::Dict{String, CachedTOMLDict}
 end
 const TOML_CACHE = TOMLCache(TOML.Parser(), Dict{String, Dict{String, Any}}())

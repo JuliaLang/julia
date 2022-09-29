@@ -33,8 +33,8 @@ const TOMLDict  = Dict{String, Any}
 # Parser #
 ##########
 
-mutable struct Parser
-    str::String
+mutable struct Parser{S <: Union{String, SubString{String}}}
+    str::S
     # 1 character look ahead
     current_char::Char
     pos::Int
@@ -86,7 +86,7 @@ end
 
 const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
 
-function Parser(str::String; filepath=nothing)
+function Parser(str::Union{String, SubString{String}}; filepath=nothing)
     root = TOMLDict()
     l = Parser(
             str,                  # str
@@ -122,7 +122,7 @@ end
 Parser() = Parser("")
 Parser(io::IO) = Parser(read(io, String))
 
-function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
+function reinit!(p::Parser{S}, str::S; filepath::Union{Nothing, String}=nothing) where{S}
     p.str = str
     p.current_char = EOF_CHAR
     p.pos = firstindex(str)
