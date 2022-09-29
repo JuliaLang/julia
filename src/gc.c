@@ -2500,7 +2500,7 @@ module_binding: {
             jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
             if (ty && ty != (jl_value_t*)jl_any_type) {
                 verify_parent2("module", binding->parent,
-                               &b->typ, "binding(%s)", jl_symbol_name(b->name));
+                               &b->ty, "binding(%s)", jl_symbol_name(b->name));
                 if (gc_try_setmark(ty, &binding->nptr, &tag, &bits)) {
                     new_obj = ty;
                     gc_repush_markdata(&sp, gc_mark_binding_t);
