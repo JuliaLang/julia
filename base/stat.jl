@@ -472,18 +472,10 @@ samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
 Check if the paths `path_a` and `path_b` refer to the same existing file or directory.
 """
 function samefile(a::AbstractString, b::AbstractString)
-    before = get(ENV, "OLDPWD", "")
     infoa = stat(a)
     infob = stat(b)
-    @show infoa
-    @show infob
     if ispath(infoa) && ispath(infob)
-        res = samefile(infoa, infob)
-        @show res
-        @show after = get(ENV, "OLDPWD", "")
-        @show afterswitch = get(ENV, "OLDPWD", "")
-        @show before
-        res
+        samefile(infoa, infob)
     else
         return false
     end
