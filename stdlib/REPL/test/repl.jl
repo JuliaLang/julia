@@ -116,7 +116,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, "shell> ")
             cd(tmpdir)
             write(stdin_write, "cd")
-            readuntil(stdin_read, "cd")
+            readuntil(stdout_read, "cd")
             @test samefile(".", tmpdir)
             @show stat(tmpdir)
             @show stat(".")
