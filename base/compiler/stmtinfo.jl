@@ -33,6 +33,9 @@ struct MethodMatchInfo <: CallInfo
     effects::Effects
 end
 call_effects_impl(info::MethodMatchInfo) = info.effects
+nsplit_impl(info::MethodMatchInfo) = 1
+getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
+getresult_impl(::MethodMatchInfo, ::Int) = nothing
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -48,6 +51,9 @@ struct UnionSplitInfo <: CallInfo
     effects::Effects
 end
 call_effects_impl(info::UnionSplitInfo) = info.effects
+nsplit_impl(info::UnionSplitInfo) = length(info.matches)
+getsplit_impl(info::UnionSplitInfo, idx::Int) = info.matches[idx]
+getresult_impl(::UnionSplitInfo, ::Int) = nothing
 
 struct ConstPropResult
     result::InferenceResult
@@ -81,6 +87,9 @@ struct ConstCallInfo <: CallInfo
     results::Vector{Union{Nothing,ConstResult}}
 end
 call_effects_impl(info::ConstCallInfo) = call_effects(info.call)
+nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
+getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
+getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
 
 """
     info::MethodResultPure <: CallInfo
@@ -216,6 +225,9 @@ struct FinalizerInfo <: CallInfo
     finalizer_effects::Effects # the effects for the finalizer call
 end
 call_effects_impl(::FinalizerInfo) = Effects()
+nsplit_impl(info::FinalizerInfo) = nsplit(info.info)
+getsplit_impl(info::FinalizerInfo, idx::Int) = getsplit(info.info, idx)
+getresult_impl(info::FinalizerInfo, idx::Int) = getresult(info.info, idx)
 
 """
     info::ModifyFieldInfo <: CallInfo

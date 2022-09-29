@@ -286,4 +286,17 @@ ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
 
 abstract type CallInfo end
-call_effects(@nospecialize info::CallInfo) = call_effects_impl(info)::Effects
+
+@nospecialize
+
+call_effects(info::CallInfo) = call_effects_impl(info)::Effects
+nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
+getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
+
+call_effects_impl(::CallInfo) = Effects()
+nsplit_impl(::CallInfo) = nothing
+getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+getresult_impl(::CallInfo, ::Int) = nothing
+
+@specialize
