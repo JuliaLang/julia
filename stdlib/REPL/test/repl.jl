@@ -91,6 +91,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             homedir_pwd = cd(pwd, homedir())
             @show realpath(".")
             # Test `cd`'ing to an absolute path
+            before = get(ENV, "OLDPWD", "")
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
             write(stdin_write, "cd $(escape_string(tmpdir))\n")
@@ -98,12 +99,20 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             readuntil(stdout_read, tmpdir_pwd)
             readuntil(stdout_read, "\n")
             readuntil(stdout_read, "\n")
+            after =get(ENV, "OLDPWD", "")
             @show realpath(".")
             @show realpath(tmpdir)
+            @show stat(".")
             @test samefile(".", tmpdir)
+            afterafter = get(ENV, "OLDPWD", "")
             @show stat(tmpdir)
             @show stat(".")
             @show stat(pwd())
+            afterafterafter = get(ENV, "OLDPWD", "")
+            @show before
+            @show after
+            @show afterafter
+            @show afterafterafter
             write(stdin_write, "\b")
         finally
             cd(origpwd)
