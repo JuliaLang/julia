@@ -480,6 +480,7 @@ function samefile(a::AbstractString, b::AbstractString)
     if ispath(infoa) && ispath(infob)
         res = samefile(infoa, infob)
         @show after = get(ENV, "OLDPWD", "")
+        @show afterswitch = get(ENV, "OLDPWD", "")
         @show before
         res
     else
