@@ -89,7 +89,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             samefile = Base.Filesystem.samefile
             tmpdir_pwd = cd(pwd, tmpdir)
             homedir_pwd = cd(pwd, homedir())
-
+            @show realpath(".")
             # Test `cd`'ing to an absolute path
             write(stdin_write, ";")
             readuntil(stdout_read, "shell> ")
