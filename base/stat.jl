@@ -476,8 +476,12 @@ function samefile(a::AbstractString, b::AbstractString)
     infob = stat(b)
     @show infoa
     @show infob
+    before = get(ENV, "OLDPWD", "")
     if ispath(infoa) && ispath(infob)
-        samefile(infoa, infob)
+        res = samefile(infoa, infob)
+        @show after = get(ENV, "OLDPWD", "")
+        @show before
+        res
     else
         return false
     end
