@@ -3314,12 +3314,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                                 if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
                                     !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
                                     ambig1 = 1;
+                                    break;
                                 }
-                            }
-                            else {
-                                // otherwise some aspect of m is not ambiguous
-                                ambig1 = 0;
-                                break;
                             }
                         }
                     }
