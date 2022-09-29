@@ -1091,6 +1091,10 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&ccallable_list, (void*)3);
                 }
             }
+            else if (jl_is_method_instance(v)) {
+                jl_method_instance_t *newmi = (jl_method_instance_t*)&s->s->buf[reloc_offset];
+                newmi->precompiled = 0;
+            }
             else if (jl_is_code_instance(v)) {
                 // Handle the native-code pointers
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
@@ -1806,16 +1810,6 @@ static int set_nroots_sysimg__(jl_typemap_entry_t *def, void *_env)
 {
     jl_method_t *m = def->func.method;
     m->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
-    // Also ensure that mi->precompiled is set to false
-    jl_svec_t *specializations = m->specializations;
-    size_t i, l = jl_svec_len(specializations);
-    for (i = 0; i < l; i++) {
-        jl_value_t *mi = jl_svecref(specializations, i);
-        if (mi != jl_nothing)
-            ((jl_method_instance_t*)mi)->precompiled = 0;
-    }
-    if (m->unspecialized)
-        m->unspecialized->precompiled = 0;
     return 1;
 }
 
