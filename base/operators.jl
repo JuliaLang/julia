@@ -1197,11 +1197,10 @@ used to implement specialized methods.
 <(x) = Fix2(<, x)
 
 """
-    hasproperty(s)
+    hasproperty(name::Symbol)
 
-Create a function that indicates whether its argument has the property `s` using
-[`hasproperty`](@ref), i.e. a function equivalent to `x -> hasproperty(x, s)`.
-
+Create a function that indicates whether its argument has the property `name` using
+[`hasproperty(x, name)`](@ref), i.e. a function equivalent to `x -> hasproperty(x, name)`.
 The returned function is of type `Base.Fix2{typeof(hasproperty)}`, which can be
 used to implement specialized methods.
 
