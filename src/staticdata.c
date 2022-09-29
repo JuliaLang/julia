@@ -1165,14 +1165,14 @@ static void jl_write_values(jl_serializer_state *s)
                     newdt->layout = NULL;
 
                     char *flddesc = (char*)dt->layout;
-                    int64_t streampos = ios_pos(s->const_data);
-                    uintptr_t align = LLT_ALIGN(streampos, sizeof(void*));
-                    uintptr_t layout = align / sizeof(void*);
                     void* reloc_from = (void*)(reloc_offset + offsetof(jl_datatype_t, layout));
                     void* reloc_to;
 
                     void** bp = ptrhash_bp(&layout_cache, flddesc);
                     if (*bp == HT_NOTFOUND) {
+                        int64_t streampos = ios_pos(s->const_data);
+                        uintptr_t align = LLT_ALIGN(streampos, sizeof(void*));
+                        uintptr_t layout = align / sizeof(void*);
                         *bp = reloc_to = (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout);
 
                         size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
