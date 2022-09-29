@@ -1275,12 +1275,6 @@ end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
 end
-let sv = Core.svec(:a, :b, :c)
-    # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
-    repr = sprint(dump, sv)
-    @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
-end
 let repr = sprint(dump, sin)
     @test repr == "sin (function of type typeof(sin))\n"
 end

@@ -784,7 +784,7 @@ end
 mutable struct Type11167{T,N} end
 function count11167()
     let cache = Type11167.body.body.name.cache
-        return sum(i -> isassigned(cache, i), 0:length(cache))
+        return sum(i -> cache[i] !== nothing, 1:length(cache), init=0)
     end
 end
 @test count11167() == 0

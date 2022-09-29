@@ -3547,17 +3547,26 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
         }
     }
     if (sz == 0 && szb > 0) {
-        while (jl_is_unionall(b)) {
-            env[i++] = (jl_value_t*)((jl_unionall_t*)b)->var;
-            b = ((jl_unionall_t*)b)->body;
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        while (jl_is_unionall(ub)) {
+            env[i++] = (jl_value_t*)ub->var;
+            ub = (jl_unionall_t*)ub->body;
         }
         sz = szb;
     }
     if (penv) {
         jl_svec_t *e = jl_alloc_svec(sz);
         *penv = e;
-        for(i=0; i < sz; i++)
+        for (i = 0; i < sz; i++)
             jl_svecset(e, i, env[i]);
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        for (i = 0; i < sz; i++) {
+            assert(jl_is_unionall(ub));
+            // TODO: assert(env[i] != NULL);
+            if (env[i] == NULL)
+                env[i] = (jl_value_t*)ub->var;
+            ub = (jl_unionall_t*)ub->body;
+        }
     }
  bot:
     JL_GC_POP();
@@ -3601,6 +3610,14 @@ int jl_subtype_matching(jl_value_t *a, jl_value_t *b, jl_svec_t **penv)
         *penv = e;
         for (i = 0; i < szb; i++)
             jl_svecset(e, i, env[i]);
+        jl_unionall_t *ub = (jl_unionall_t*)b;
+        for (i = 0; i < szb; i++) {
+            assert(jl_is_unionall(ub));
+            // TODO: assert(env[i] != NULL);
+            if (env[i] == NULL)
+                env[i] = (jl_value_t*)ub->var;
+            ub = (jl_unionall_t*)ub->body;
+        }
     }
     JL_GC_POP();
     return sub;

@@ -690,7 +690,7 @@ end
 
 @eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
-    return ccall(:jl_svec_len, Int, (Any,), v)
+    return unsafe_load(Ptr{Int}(pointer_from_objref(v)))
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -745,7 +745,7 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    return ccall(:jl_svec_isassigned, Bool, (Any, Int), v, i - 1)
+    return true
 end
 
 
