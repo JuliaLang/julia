@@ -2418,3 +2418,33 @@ end
         @test isempty(read(f, String)) # make sure we don't unnecessarily lean anything into `stdout`
     end
 end
+
+@testset "IRCode: fix coloring of invalid SSA values" begin
+    # get some ir
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # replace an instruction
+    add_stmt = ir.stmts[1]
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    node = Core.Compiler.insert_node!(ir, 1, inst)
+    Core.Compiler.setindex!(add_stmt, node, :inst)
+
+    # the new node should be colored green (as it's uncompacted IR),
+    # and its uses shouldn't be colored at all (since they're just plain valid references)
+    str = sprint(; context=:color=>true) do io
+        show(io, ir)
+    end
+    @test contains(str, "\e[32m%6 =")
+    @test contains(str, "%1 = %6")
+
+    # if we insert an invalid node, it should be colored appropriately
+    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :inst)
+    str = sprint(; context=:color=>true) do io
+        show(io, ir)
+    end
+    @test contains(str, "%1 = \e[31m%7")
+end
