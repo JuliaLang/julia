@@ -81,16 +81,7 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
     repltask = @async begin
         REPL.run_repl(repl)
     end
-    C = Channel()
-    C2 = Channel()
-    repltask2 = @async begin
-        for c in C
-            put!(C2, eval(c))
-        end
-    end
 
-    put!(C, :("HI"))
-    @show take!(C2)
     # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
@@ -98,9 +89,15 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             samefile = Base.Filesystem.samefile
             tmpdir_pwd = cd(pwd, tmpdir)
             homedir_pwd = cd(pwd, homedir())
-            
-            put!(C, :(cd($tmpdir)))
-            @show take!(C2)
+
+            # Test `cd`'ing to an absolute path
+            write(stdin_write, ";")
+            readuntil(stdout_read, "shell> ")
+            write(stdin_write, "cd $(escape_string(tmpdir))\n")
+            readuntil(stdout_read, "cd $(escape_string(tmpdir))")
+            readuntil(stdout_read, tmpdir_pwd)
+            readuntil(stdout_read, "\n")
+            readuntil(stdout_read, "\n")
             @test samefile(".", tmpdir)
             @show stat(tmpdir)
             @show stat(".")
