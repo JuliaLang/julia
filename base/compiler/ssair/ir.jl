@@ -1663,6 +1663,19 @@ function complete(compact::IncrementalCompact)
     if __check_ssa_counts__[]
         oracle_check(compact)
     end
+
+    # trim trailing undefined statements due to copy propagation
+    nundef = 0
+    for i in length(compact.result):-1:1
+        if isassigned(compact.result.inst, i)
+            break
+        end
+        nundef += 1
+    end
+    if nundef > 0
+        resize!(compact.result, length(compact.result) - nundef)
+    end
+
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
