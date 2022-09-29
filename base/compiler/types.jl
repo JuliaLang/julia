@@ -429,9 +429,11 @@ abstract type CallInfo end
 nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
 getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
 getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
+call_effects(info::CallInfo) = call_effects_impl(info)::Effects
 
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
 getresult_impl(::CallInfo, ::Int) = nothing
+call_effects_impl(::CallInfo) = Effects()
 
 @specialize

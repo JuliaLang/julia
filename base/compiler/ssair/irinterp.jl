@@ -132,7 +132,7 @@ end
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::IRCode, max_methods::Int)
-    return CallMeta(Any, Effects(), NoCallInfo())
+    return CallMeta(Any, NoCallInfo())
 end
 
 function collect_limitations!(@nospecialize(typ), ::IRCode)

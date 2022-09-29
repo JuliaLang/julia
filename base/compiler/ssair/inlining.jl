@@ -967,8 +967,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if mi === nothing
         et = InliningEdgeTracker(state.et, invokesig)
-        effects = info_effects(nothing, match, state)
-        return compileable_specialization(match, effects, et, info;
+        return compileable_specialization(match, call_effects(info), et, info;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
@@ -1101,8 +1100,8 @@ function inline_apply!(todo::Vector{Pair{Int,Any}},
                 new_info = info.call
             end
         else
-            @assert info === NoCallInfo()
-            new_info = info = NoCallInfo()
+            @assert info isa NoCallInfo
+            new_info = info
         end
         arg_start = 3
         argtypes = sig.argtypes
@@ -1279,7 +1278,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stat
     end
 
     if (sig.f !== Core.invoke && sig.f !== Core.finalizer && sig.f !== modifyfield!) && is_builtin(sig)
-        # No inlining for builtins (other invoke/apply/typeassert/finalizer)
+        # No inlining for builtins
         return nothing
     end
 
@@ -1315,25 +1314,6 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     end
 end
 
-function info_effects(@nospecialize(result), match::MethodMatch, state::InliningState)
-    if isa(result, ConcreteResult)
-        return result.effects
-    elseif isa(result, SemiConcreteResult)
-        return result.effects
-    elseif isa(result, ConstPropResult)
-        return result.result.ipo_effects
-    else
-        mi = specialize_method(match; preexisting=true)
-        if isa(mi, MethodInstance)
-            code = get(code_cache(state), mi, nothing)
-            if code isa CodeInstance
-                return decode_effects(code.ipo_purity_bits)
-            end
-        end
-        return Effects()
-    end
-end
-
 function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig::Signature,
     state::InliningState)
     nunion = nsplit(info)
@@ -1346,7 +1326,6 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
     local only_method = nothing
     local meth::MethodLookupResult
     local all_result_count = 0
-    local joint_effects::Effects = EFFECTS_TOTAL
     local nothrow::Bool = true
     for i = 1:nunion
         meth = getsplit(info, i)
@@ -1372,7 +1351,6 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
         for (j, match) in enumerate(meth)
             all_result_count += 1
             result = getresult(info, all_result_count)
-            joint_effects = merge_effects(joint_effects, info_effects(result, match, state))
             nothrow &= match.fully_covers
             any_fully_covered |= match.fully_covers
             if !validate_sparams(match.sparams)
@@ -1392,8 +1370,6 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
             end
         end
     end
-
-    joint_effects = Effects(joint_effects; nothrow)
 
     if handled_all_cases && revisit_idx !== nothing
         # we handled everything except one match with unmatched sparams,
@@ -1426,7 +1402,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
         filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
     end
 
-    return cases, (handled_all_cases & any_fully_covered), joint_effects
+    return cases, (handled_all_cases & any_fully_covered)
 end
 
 function handle_call!(todo::Vector{Pair{Int,Any}},
@@ -1434,9 +1410,9 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     state::InliningState)
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
-    cases, all_covered, joint_effects = cases
+    cases, all_covered = cases
     handle_cases!(todo, ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, joint_effects, state.params)
+        all_covered, call_effects(info), state.params)
 end
 
 function handle_match!(cases::Vector{InliningCase},
@@ -1558,17 +1534,16 @@ end
 
 function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::FinalizerInfo,
     state::InliningState)
-
     # Finalizers don't return values, so if their execution is not observable,
     # we can just not register them
-    if is_removable_if_unused(info.effects)
+    if is_removable_if_unused(info.finalizer_effects)
         ir[SSAValue(idx)] = nothing
         return nothing
     end
 
     # Only inline finalizers that are known nothrow and notls.
     # This avoids having to set up state for finalizer isolation
-    is_finalizer_inlineable(info.effects) || return nothing
+    is_finalizer_inlineable(info.finalizer_effects) || return nothing
 
     ft = argextype(stmt.args[2], ir)
     has_free_typevars(ft) && return nothing
@@ -1580,7 +1555,7 @@ function handle_finalizer_call!(ir::IRCode, idx::Int, stmt::Expr, info::Finalize
 
     cases = compute_inlining_cases(info.info, #=flag=#UInt8(0), sig, state)
     cases === nothing && return nothing
-    cases, all_covered, _ = cases
+    cases, all_covered = cases
     if all_covered && length(cases) == 1
         # NOTE we don't append `item1` to `stmt` here so that we don't serialize
         # `Core.Compiler` data structure into the global cache
