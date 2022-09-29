@@ -1048,7 +1048,9 @@ end
 
 # NOTE we resolve the inlining source here as we don't want to serialize `Core.Compiler`
 # data structure into the global cache (see the comment in `handle_finalizer_call!`)
-function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::MethodInstance, inlining::InliningState, attach_after::Bool)
+function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
+    mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
+    attach_after::Bool)
     code = get(inlining.mi_cache, mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
@@ -1062,7 +1064,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
         src = code
     end
 
-    src = inlining_policy(inlining.interp, src, IR_FLAG_NULL, mi, Any[])
+    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
     src === nothing && return false
     src = retrieve_ir_for_inlining(mi, src)
 
@@ -1219,7 +1221,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             # No code in the function - Nothing to do
         else
             mi = finalizer_stmt.args[5]::MethodInstance
-            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, inlining, attach_after)
+            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
                 insert_node!(ir, loc, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), attach_after)

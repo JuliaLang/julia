@@ -129,8 +129,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                 (; rt, edge, effects) = result
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
                 this_arginfo = ArgInfo(fargs, this_argtypes)
-                const_call_result = abstract_call_method_with_const_args(interp, result,
-                    f, this_arginfo, si, match, sv)
+                const_call_result = abstract_call_method_with_const_args(interp,
+                    result, f, this_arginfo, si, match, sv)
                 const_result = nothing
                 if const_call_result !== nothing
                     if const_call_result.rt ⊑ᵢ rt
@@ -158,8 +158,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # this is in preparation for inlining, or improving the return result
             this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[i]
             this_arginfo = ArgInfo(fargs, this_argtypes)
-            const_call_result = abstract_call_method_with_const_args(interp, result,
-                f, this_arginfo, si, match, sv)
+            const_call_result = abstract_call_method_with_const_args(interp,
+                result, f, this_arginfo, si, match, sv)
             const_result = nothing
             if const_call_result !== nothing
                 this_const_conditional = ignorelimited(const_call_result.rt)
@@ -938,9 +938,9 @@ end
 
 # if there's a possibility we could get a better result with these constant arguments
 # (hopefully without doing too much work), returns `MethodInstance`, or nothing otherwise
-function maybe_get_const_prop_profitable(interp::AbstractInterpreter, result::MethodCallResult,
-                                         @nospecialize(f), arginfo::ArgInfo, si::StmtInfo, match::MethodMatch,
-                                         sv::InferenceState)
+function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
+    result::MethodCallResult, @nospecialize(f), arginfo::ArgInfo, si::StmtInfo,
+    match::MethodMatch, sv::InferenceState)
     method = match.method
     force = force_const_prop(interp, f, method)
     force || const_prop_entry_heuristic(interp, result, si, sv) || return nothing
@@ -1127,9 +1127,8 @@ end
 # This is a heuristic to avoid trying to const prop through complicated functions
 # where we would spend a lot of time, but are probably unlikely to get an improved
 # result anyway.
-function const_prop_methodinstance_heuristic(
-    interp::AbstractInterpreter, match::MethodMatch, mi::MethodInstance,
-    (; argtypes)::ArgInfo, sv::InferenceState)
+function const_prop_methodinstance_heuristic(interp::AbstractInterpreter,
+    match::MethodMatch, mi::MethodInstance, arginfo::ArgInfo, sv::InferenceState)
     method = match.method
     if method.is_for_opaque_closure
         # Not inlining an opaque closure can be very expensive, so be generous
@@ -1162,7 +1161,8 @@ function const_prop_methodinstance_heuristic(
                 else
                     inferred = code.inferred
                 end
-                if inlining_policy(interp, inferred, IR_FLAG_NULL, mi, argtypes) !== nothing
+                # TODO propagate a specific `CallInfo` that conveys information about this call
+                if inlining_policy(interp, inferred, NoCallInfo(), IR_FLAG_NULL, mi, arginfo.argtypes) !== nothing
                     return true
                 end
             end
