@@ -752,7 +752,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     λ = eigvals(D)
     if !isnothing(sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
-        λ = λ[p] # make a copy, otherwise this permutes D.diag
+        λ = λ[p]
         evecs = zeros(Td, size(D))
         @inbounds for i in eachindex(p)
             evecs[p[i],i] = one(Td)
@@ -761,6 +761,29 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         evecs = Matrix{Td}(I, size(D))
     end
     Eigen(λ, evecs)
+end
+function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(!isfinite, Da.diag) || any(!isfinite, Db.diag)
+        throw(ArgumentError("matrices contain Infs or NaNs"))
+    end
+    if any(iszero, Db.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    return GeneralizedEigen(eigen(Db \ Da; sortby)...)
+end
+function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(iszero, D.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    if size(A, 1) == size(A, 2) && isdiag(A)
+        return eigen(Diagonal(A), D; sortby)
+    elseif ishermitian(A)
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+    else
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+    end
 end
 
 #Singular system
