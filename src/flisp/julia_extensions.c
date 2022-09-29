@@ -82,9 +82,10 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
               wc == 0x22a4 || wc == 0x22a5 ||   // ⊤ ⊥
 
-              (wc >= 0x2202 && wc <= 0x2233 &&
+              (wc >= 0x2200 && wc <= 0x2233 &&
                (wc == 0x2202 || wc == 0x2205 || wc == 0x2206 || // ∂, ∅, ∆
                 wc == 0x2207 || wc == 0x220e || wc == 0x220f || // ∇, ∎, ∏
+                wc == 0x2200 || wc == 0x2203 || wc == 0x2204 || // ∀, ∃, ∄
                 wc == 0x2210 || wc == 0x2211 || // ∐, ∑
                 wc == 0x221e || wc == 0x221f || // ∞, ∟
                 wc >= 0x222b)) || // ∫, ∬, ∭, ∮, ∯, ∰, ∱, ∲, ∳
@@ -327,22 +328,22 @@ value_t fl_accum_julia_symbol(fl_context_t *fl_ctx, value_t *args, uint32_t narg
     ios_t *s = fl_toiostream(fl_ctx, args[1], "accum-julia-symbol");
     if (!iscprim(args[0]) || ((cprim_t*)ptr(args[0]))->type != fl_ctx->wchartype)
         type_error(fl_ctx, "accum-julia-symbol", "wchar", args[0]);
-    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0]));
+    uint32_t wc = *(uint32_t*)cp_data((cprim_t*)ptr(args[0])); // peek the first character we'll read
     ios_t str;
     int allascii = 1;
     ios_mem(&str, 0);
     do {
-        allascii &= (wc <= 0x7f);
         ios_getutf8(s, &wc);
         if (wc == '!') {
             uint32_t nwc = 0;
             ios_peekutf8(s, &nwc);
             // make sure != is always an operator
             if (nwc == '=') {
-                ios_ungetc('!', s);
+                ios_skip(s, -1);
                 break;
             }
         }
+        allascii &= (wc <= 0x7f);
         ios_pututf8(&str, wc);
         if (safe_peekutf8(fl_ctx, s, &wc) == IOS_EOF)
             break;
@@ -360,6 +361,55 @@ value_t fl_string2normsymbol(fl_context_t *fl_ctx, value_t *args, uint32_t nargs
     return symbol(fl_ctx, normalize(fl_ctx, (char*)cvalue_data(args[0])));
 }
 
+static uint32_t _iterate_continued(uint8_t *s, size_t n, size_t *i, uint32_t u) {
+    if (u < 0xc0000000) { ++*i; return u; }
+    uint8_t b;
+
+    if (++*i >= n) return u;
+    b = s[*i]; // cont byte 1
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b << 16;
+
+    if (++*i >= n || u < 0xe0000000) return u;
+    b = s[*i]; // cont byte 2
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b << 8;
+
+    if (++*i >= n || u < 0xf0000000) return u;
+    b = s[*i]; // cont byte 3
+    if ((b & 0xc0) != 0x80) return u;
+    u |= (uint32_t)b; ++*i;
+
+    return u;
+}
+
+static uint32_t _string_only_julia_char(uint8_t *s, size_t n) {
+    if (!(0 < n && n <= 4))
+        return -1;
+    size_t i = 0;
+    uint8_t b = s[i];
+    uint32_t u = (uint32_t)b << 24;
+    if (0x80 <= b && b <= 0xf7)
+        u = _iterate_continued(s, n, &i, u);
+    else
+        i = 1;
+    if (i < n)
+        return -1;
+    return u;
+}
+
+value_t fl_string_only_julia_char(fl_context_t *fl_ctx, value_t *args, uint32_t nargs) {
+    argcount(fl_ctx, "string.only-julia-char", nargs, 1);
+    if (!fl_isstring(fl_ctx, args[0]))
+        type_error(fl_ctx, "string.only-julia-char", "string", args[0]);
+    uint8_t *s = (uint8_t*)cvalue_data(args[0]);
+    size_t len = cv_len((cvalue_t*)ptr(args[0]));
+    uint32_t u = _string_only_julia_char(s, len);
+    if (u == (uint32_t)-1)
+        return fl_ctx->F;
+    return fl_list2(fl_ctx, fl_ctx->jl_char_sym, mk_uint32(fl_ctx, u));
+}
+
 static const builtinspec_t julia_flisp_func_info[] = {
     { "skip-ws", fl_skipws },
     { "accum-julia-symbol", fl_accum_julia_symbol },
@@ -370,6 +420,7 @@ static const builtinspec_t julia_flisp_func_info[] = {
     { "strip-op-suffix", fl_julia_strip_op_suffix },
     { "underscore-symbol?", fl_julia_underscore_symbolp },
     { "string->normsymbol", fl_string2normsymbol },
+    { "string.only-julia-char", fl_string_only_julia_char },
     { NULL, NULL }
 };
 

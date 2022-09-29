@@ -13,6 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
+import SHA
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 
@@ -27,7 +28,7 @@ export rand!, randn!,
        shuffle, shuffle!,
        randperm, randperm!,
        randcycle, randcycle!,
-       AbstractRNG, MersenneTwister, RandomDevice
+       AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
 ## general definitions
 
@@ -142,8 +143,10 @@ Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
 
 typeof_rng(rng::AbstractRNG) = typeof(rng)
 
-Sampler(::Type{<:AbstractRNG}, sp::Sampler, ::Repetition) =
-    throw(ArgumentError("Sampler for this object is not defined"))
+# this method is necessary to prevent rand(rng::AbstractRNG, X) from
+# recursively constructing nested Sampler types.
+Sampler(T::Type{<:AbstractRNG}, sp::Sampler, r::Repetition) =
+    throw(MethodError(Sampler, (T, sp, r)))
 
 # default shortcut for the general case
 Sampler(::Type{RNG}, X) where {RNG<:AbstractRNG} = Sampler(RNG, X, Val(Inf))
@@ -212,7 +215,7 @@ end
 # TODO: make constraining constructors to enforce that those
 # types are <: Sampler{T}
 
-##### Adapter to generate a randome value in [0, n]
+##### Adapter to generate a random value in [0, n]
 
 struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T
@@ -291,16 +294,22 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
 
+
+include("Xoshiro.jl")
 include("RNGs.jl")
 include("generation.jl")
 include("normal.jl")
 include("misc.jl")
+include("XoshiroSimd.jl")
 
 ## rand & rand! & seed! docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=default_rng()], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
@@ -345,14 +354,14 @@ julia> rand(Float64, (2, 3))
     The complexity of `rand(rng, s::Union{AbstractDict,AbstractSet})`
     is linear in the length of `s`, unless an optimized method with
     constant complexity is available, which is the case for `Dict`,
-    `Set` and `BitSet`. For more than a few calls, use `rand(rng,
+    `Set` and dense `BitSet`s. For more than a few calls, use `rand(rng,
     collect(s))` instead, or either `rand(rng, Dict(s))` or `rand(rng,
     Set(s))` as appropriate.
 """
 rand
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=default_rng()], A, [S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -376,8 +385,8 @@ julia> rand!(rng, zeros(5))
 rand!
 
 """
-    seed!([rng=GLOBAL_RNG], seed) -> rng
-    seed!([rng=GLOBAL_RNG]) -> rng
+    seed!([rng=default_rng()], seed) -> rng
+    seed!([rng=default_rng()]) -> rng
 
 Reseed the random number generator: `rng` will give a reproducible
 sequence of numbers if and only if a `seed` is provided. Some RNGs
@@ -386,40 +395,40 @@ After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
 
 If `rng` is not specified, it defaults to seeding the state of the
-shared thread-local generator.
+shared task-local generator.
 
 # Examples
 ```julia-repl
 julia> Random.seed!(1234);
 
 julia> x1 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> Random.seed!(1234);
 
 julia> x2 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> x1 == x2
 true
 
-julia> rng = MersenneTwister(1234); rand(rng, 2) == x1
+julia> rng = Xoshiro(1234); rand(rng, 2) == x1
 true
 
-julia> MersenneTwister(1) == Random.seed!(rng, 1)
+julia> Xoshiro(1) == Random.seed!(rng, 1)
 true
 
 julia> rand(Random.seed!(rng), Bool) # not reproducible
 true
 
-julia> rand(Random.seed!(rng), Bool)
+julia> rand(Random.seed!(rng), Bool) # not reproducible either
 false
 
-julia> rand(MersenneTwister(), Bool) # not reproducible either
+julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using DelimitedFiles, Random, Sockets
+using Random, Sockets
 
 mktempdir() do dir
 
@@ -98,30 +98,27 @@ s = io(text)
 close(s)
 push!(l, ("PipeEndpoint", io))
 
-#FIXME See https://github.com/JuliaLang/julia/issues/14747
-#      Reading from open(::Command) seems to deadlock on Linux
-#=
-if !Sys.iswindows()
 
-# Windows type command not working?
-# See "could not spawn `type 'C:\Users\appveyor\AppData\Local\Temp\1\jul3516.tmp\file.txt'`"
-#https://ci.appveyor.com/project/StefanKarpinski/julia/build/1.0.12733/job/hpwjs4hmf03vs5ag#L1244
-
-# Pipe
+# Pipe (#14747)
 io = (text) -> begin
     write(filename, text)
-    open(`$(Sys.iswindows() ? "type" : "cat") $filename`)[1]
-#    Was open(`echo -n $text`)[1]
-#    See https://github.com/JuliaLang/julia/issues/14747
+    # we can skip using shell_escape_wincmd, since ", ^, and % aren't legal in
+    # a filename, so unconditionally wrapping in " is sufficient (okay, that's
+    # a lie, since ^ and % actually are legal, but DOS is broken)
+    if Sys.iswindows()
+        cmd = Cmd(["cmd.exe", "/c type \"$(replace(filename, '/' => '\\'))\""])
+        cmd = Cmd(cmd; windows_verbatim=true)
+        cmd = pipeline(cmd, stderr=devnull)
+    else
+        cmd = `cat $filename`
+    end
+    open(cmd)
 end
 s = io(text)
 @test isa(s, IO)
-@test isa(s, Pipe)
+@test isa(s, Base.Process)
 close(s)
-push!(l, ("Pipe", io))
-
-end
-=#
+push!(l, ("Process", io))
 
 
 open_streams = []
@@ -140,7 +137,6 @@ end
 verbose = false
 
 for (name, f) in l
-    local f
     local function io(text=text)
         local s = f(text)
         push!(open_streams, s)
@@ -297,6 +293,14 @@ for (name, f) in l
         @test collect(eachline(io(), keep=true)) == collect(eachline(filename, keep=true))
         @test collect(eachline(io())) == collect(eachline(IOBuffer(text)))
         @test collect(@inferred(eachline(io()))) == collect(@inferred(eachline(filename))) #20351
+        if try; seekend(io()); true; catch; false; end # reverse iteration only supports seekable streams
+            for keep in (true, false)
+                lines = readlines(io(); keep)
+                @test last(lines) == last(eachline(io(); keep))
+                @test last(lines,2) == last(eachline(io(); keep),2)
+                @test reverse!(lines) == collect(Iterators.reverse(eachline(io(); keep))) == collect(Iterators.reverse(eachline(IOBuffer(text); keep)))
+            end
+        end
 
         cleanup()
 
@@ -308,20 +312,14 @@ for (name, f) in l
 
         verbose && println("$name countlines...")
         @test countlines(io()) == countlines(IOBuffer(text))
-
-        verbose && println("$name readdlm...")
-        @test readdlm(io(), ',') == readdlm(IOBuffer(text), ',')
-        @test readdlm(io(), ',') == readdlm(filename, ',')
-
-        cleanup()
     end
 
     text = old_text
     write(filename, text)
 
-    if !(typeof(io()) in [Base.PipeEndpoint, Pipe, TCPSocket])
+    if !isa(io(), Union{Base.PipeEndpoint, Base.AbstractPipe, TCPSocket})
         verbose && println("$name position...")
-        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s))  == 4
+        @test (s = io(); read!(s, Vector{UInt8}(undef, 4)); position(s)) == 4
 
         verbose && println("$name seek...")
         for n = 0:length(text)-1
@@ -465,7 +463,7 @@ rm(f)
 io = Base.Filesystem.open(f, Base.Filesystem.JL_O_WRONLY | Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL, 0o000)
 @test write(io, "abc") == 3
 close(io)
-if !Sys.iswindows() && get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if !Sys.iswindows() && Libc.geteuid() != 0 # root user
     # msvcrt _wchmod documentation states that all files are readable,
     # so we don't test that it correctly set the umask on windows
     @test_throws SystemError open(f)
@@ -515,7 +513,7 @@ close(f1)
 close(f2)
 @test eof(f1)
 @test_throws Base.IOError eof(f2)
-if get(ENV, "USER", "") != "root" && get(ENV, "HOME", "") != "/root"
+if Libc.geteuid() != 0 # root user
     @test_throws SystemError open(f, "r+")
     @test_throws Base.IOError Base.Filesystem.open(f, Base.Filesystem.JL_O_RDWR)
 else
@@ -600,7 +598,7 @@ end
     read!(io, @view y[4:7])
     @test y[4:7] == v
     seekstart(io)
-    @test_throws ErrorException read!(io, @view z[4:6])
+    @test_throws Base.CanonicalIndexError read!(io, @view z[4:6])
 end
 
 # Bulk read from pipe
@@ -624,4 +622,33 @@ end
     @test !isempty(itr)
     first(itr) # consume the iterator
     @test  isempty(itr) # now it is empty
+end
+
+# more tests for reverse(eachline)
+@testset "reverse(eachline)" begin
+    lines = vcat(repr.(1:4), ' '^50000 .* repr.(5:10), repr.(11:10^5))
+    for lines in (lines, reverse(lines)), finalnewline in (true, false), eol in ("\n", "\r\n")
+        buf = IOBuffer(join(lines, eol) * (finalnewline ? eol : ""))
+        @test reverse!(collect(Iterators.reverse(eachline(seekstart(buf))))) == lines
+        @test last(eachline(seekstart(buf))) == last(lines)
+        @test last(eachline(seekstart(buf)),10^4) == last(lines,10^4)
+        @test last(eachline(seekstart(buf)),length(lines)*2) == lines
+        @test reverse!(collect(Iterators.reverse(eachline(seek(buf, sum(sizeof, lines[1:100]) + 100*sizeof(eol)))))) == lines[101:end]
+        @test isempty(Iterators.reverse(eachline(buf)))
+    end
+
+    let rempty = Iterators.reverse(eachline(IOBuffer()))
+        @test isempty(rempty)
+        @test isempty(collect(rempty))
+    end
+
+    let buf = IOBuffer("foo\nbar")
+        @test readline(buf) == "foo"
+        r = Iterators.reverse(eachline(buf))
+        line, state = iterate(r)
+        @test line == "bar"
+        @test Base.isdone(r, state)
+        @test Base.isdone(r)
+        @test isempty(r) && isempty(collect(r))
+    end
 end

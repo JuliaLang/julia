@@ -1,6 +1,7 @@
 # [Strings](@id lib-strings)
 
 ```@docs
+Core.AbstractString
 Core.AbstractChar
 Core.Char
 Base.codepoint
@@ -14,6 +15,8 @@ Base.repeat(::AbstractChar, ::Integer)
 Base.repr(::Any)
 Core.String(::AbstractString)
 Base.SubString
+Base.LazyString
+Base.@lazy_str
 Base.transcode
 Base.unsafe_string
 Base.ncodeunits(::AbstractString)
@@ -48,7 +51,8 @@ Base.findlast(::AbstractChar, ::AbstractString)
 Base.findprev(::AbstractString, ::AbstractString, ::Integer)
 Base.occursin
 Base.reverse(::Union{String,SubString{String}})
-Base.replace(s::AbstractString, ::Pair)
+Base.replace(s::AbstractString, ::Pair...)
+Base.eachsplit
 Base.split
 Base.rsplit
 Base.strip
@@ -66,6 +70,8 @@ Base.uppercasefirst
 Base.lowercasefirst
 Base.join
 Base.chop
+Base.chopprefix
+Base.chopsuffix
 Base.chomp
 Base.thisind
 Base.nextind

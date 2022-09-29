@@ -51,21 +51,32 @@ end
 """
     addprocs(machines; tunnel=false, sshflags=\`\`, max_parallel=10, kwargs...) -> List of process identifiers
 
-Add processes on remote machines via SSH. See `exename` to set the path to the `julia` installation on remote machines.
+Add worker processes on remote machines via SSH. Configuration is done with keyword
+arguments (see below). In particular, the `exename` keyword can be used to specify
+the path to the `julia` binary on the remote machine(s).
 
-`machines` is a vector of machine specifications. Workers are started for each specification.
+`machines` is a vector of "machine specifications" which are given as strings of
+the form `[user@]host[:port] [bind_addr[:port]]`. `user` defaults to current user and `port`
+to the standard SSH port. If `[bind_addr[:port]]` is specified, other workers will connect
+to this worker at the specified `bind_addr` and `port`.
 
-A machine specification is either a string `machine_spec` or a tuple - `(machine_spec, count)`.
+It is possible to launch multiple processes on a remote host by using a tuple in the
+`machines` vector or the form `(machine_spec, count)`, where `count` is the number of
+workers to be launched on the specified host. Passing `:auto` as the worker count will
+launch as many workers as the number of CPU threads on the remote host.
 
-`machine_spec` is a string of the form `[user@]host[:port] [bind_addr[:port]]`. `user`
-defaults to current user, `port` to the standard ssh port. If `[bind_addr[:port]]` is
-specified, other workers will connect to this worker at the specified `bind_addr` and
-`port`.
+**Examples**:
+```julia
+addprocs([
+    "remote1",               # one worker on 'remote1' logging in with the current username
+    "user@remote2",          # one worker on 'remote2' logging in with the 'user' username
+    "user@remote3:2222",     # specifying SSH port to '2222' for 'remote3'
+    ("user@remote4", 4),     # launch 4 workers on 'remote4'
+    ("user@remote5", :auto), # launch as many workers as CPU threads on 'remote5'
+])
+```
 
-`count` is the number of workers to be launched on the specified host. If specified as
-`:auto` it will launch as many workers as the number of CPU threads on the specific host.
-
-Keyword arguments:
+**Keyword arguments**:
 
 * `tunnel`: if `true` then SSH tunneling will be used to connect to the worker from the
   master process. Default is `false`.
@@ -82,7 +93,10 @@ Keyword arguments:
 
 * `shell`: specifies the type of shell to which ssh connects on the workers.
 
-    + `shell=:posix`: a POSIX-compatible Unix/Linux shell (bash, sh, etc.). The default.
+    + `shell=:posix`: a POSIX-compatible Unix/Linux shell
+      (sh, ksh, bash, dash, zsh, etc.). The default.
+
+    + `shell=:csh`: a Unix C shell (csh, tcsh).
 
     + `shell=:wincmd`: Microsoft Windows `cmd.exe`.
 
@@ -93,7 +107,9 @@ Keyword arguments:
   processes. Default is `false`.
 
 * `exename`: name of the `julia` executable. Defaults to `"\$(Sys.BINDIR)/julia"` or
-  `"\$(Sys.BINDIR)/julia-debug"` as the case may be.
+  `"\$(Sys.BINDIR)/julia-debug"` as the case may be. It is recommended that a common Julia
+  version is used on all remote machines because serialization and code distribution might
+  fail otherwise.
 
 * `exeflags`: additional flags passed to the worker processes.
 
@@ -180,8 +196,8 @@ function parse_machine(machine::AbstractString)
 
     if machine[begin] == '['  # ipv6 bracket notation (RFC 2732)
         ipv6_end = findlast(']', machine)
-        if ipv6_end == nothing
-            throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine_def\""))
+        if ipv6_end === nothing
+            throw(ArgumentError("invalid machine definition format string: invalid port format \"$machine\""))
         end
         hoststr = machine[begin+1 : prevind(machine,ipv6_end)]
         machine_def = split(machine[ipv6_end : end] , ':')
@@ -198,7 +214,7 @@ function parse_machine(machine::AbstractString)
         portstr = machine_def[2]
 
         portnum = tryparse(Int, portstr)
-        if portnum == nothing
+        if portnum === nothing
             msg = "invalid machine definition format string: invalid port format \"$machine_def\""
             throw(ArgumentError(msg))
         end
@@ -265,10 +281,10 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
     end
 
     # Julia process with passed in command line flag arguments
-    if shell == :posix
+    if shell === :posix
         # ssh connects to a POSIX shell
 
-        cmds = "$(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
+        cmds = "exec $(shell_escape_posixly(exename)) $(shell_escape_posixly(exeflags))"
         # set environment variables
         for (var, val) in env
             occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
@@ -281,7 +297,23 @@ function launch_on_machine(manager::SSHManager, machine::AbstractString, cnt, pa
         # shell login (-l) with string command (-c) to launch julia process
         remotecmd = shell_escape_posixly(`sh -l -c $cmds`)
 
-    elseif shell == :wincmd
+    elseif shell === :csh
+        # ssh connects to (t)csh
+
+        remotecmd = "exec $(shell_escape_csh(exename)) $(shell_escape_csh(exeflags))"
+
+        # set environment variables
+        for (var, val) in env
+            occursin(r"^[a-zA-Z_][a-zA-Z_0-9]*\z", var) ||
+                throw(ArgumentError("invalid env key $var"))
+            remotecmd = "setenv $(var) $(shell_escape_csh(val))\n$remotecmd"
+        end
+        # change working directory
+        if dir !== nothing && dir != ""
+            remotecmd = "cd $(shell_escape_csh(dir))\n$remotecmd"
+        end
+
+    elseif shell === :wincmd
         # ssh connects to Windows cmd.exe
 
         any(c -> c == '"', exename) && throw(ArgumentError("invalid exename"))
@@ -411,26 +443,23 @@ struct LocalManager <: ClusterManager
 end
 
 """
-    addprocs(; kwargs...) -> List of process identifiers
+    addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...) -> List of process identifiers
 
-Equivalent to `addprocs(Sys.CPU_THREADS; kwargs...)`
+Launch `np` workers on the local host using the in-built `LocalManager`.
 
-Note that workers do not run a `.julia/config/startup.jl` startup script, nor do they synchronize
-their global state (such as global variables, new method definitions, and loaded modules) with any
-of the other running processes.
+Local workers inherit the current package environment (i.e., active project,
+[`LOAD_PATH`](@ref), and [`DEPOT_PATH`](@ref)) from the main process.
+
+**Keyword arguments**:
+ - `restrict::Bool`: if `true` (default) binding is restricted to `127.0.0.1`.
+ - `dir`, `exename`, `exeflags`, `env`, `topology`, `lazy`, `enable_threaded_blas`: same effect
+   as for `SSHManager`, see documentation for [`addprocs(machines::AbstractVector)`](@ref).
+
+!!! compat "Julia 1.9"
+    The inheriting of the package environment and the `env` keyword argument were
+    added in Julia 1.9.
 """
-addprocs(; kwargs...) = addprocs(Sys.CPU_THREADS; kwargs...)
-
-"""
-    addprocs(np::Integer; restrict=true, kwargs...) -> List of process identifiers
-
-Launches workers using the in-built `LocalManager` which only launches workers on the
-local host. This can be used to take advantage of multiple cores. `addprocs(4)` will add 4
-processes on the local machine. If `restrict` is `true`, binding is restricted to
-`127.0.0.1`. Keyword args `dir`, `exename`, `exeflags`, `topology`, `lazy` and
-`enable_threaded_blas` have the same effect as documented for `addprocs(machines)`.
-"""
-function addprocs(np::Integer; restrict=true, kwargs...)
+function addprocs(np::Integer=Sys.CPU_THREADS; restrict=true, kwargs...)
     manager = LocalManager(np, restrict)
     check_addprocs_args(manager, kwargs)
     addprocs(manager; kwargs...)
@@ -443,10 +472,32 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     exename = params[:exename]
     exeflags = params[:exeflags]
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
+    env = Dict{String,String}(params[:env])
+
+    # TODO: Maybe this belongs in base/initdefs.jl as a package_environment() function
+    #       together with load_path() etc. Might be useful to have when spawning julia
+    #       processes outside of Distributed.jl too.
+    # JULIA_(LOAD|DEPOT)_PATH are used to populate (LOAD|DEPOT)_PATH on startup,
+    # but since (LOAD|DEPOT)_PATH might have changed they are re-serialized here.
+    # Users can opt-out of this by passing `env = ...` to addprocs(...).
+    pathsep = Sys.iswindows() ? ";" : ":"
+    if get(env, "JULIA_LOAD_PATH", nothing) === nothing
+        env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep)
+    end
+    if get(env, "JULIA_DEPOT_PATH", nothing) === nothing
+        env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
+    end
+    # Set the active project on workers using JULIA_PROJECT.
+    # Users can opt-out of this by (i) passing `env = ...` or (ii) passing
+    # `--project=...` as `exeflags` to addprocs(...).
+    project = Base.ACTIVE_PROJECT[]
+    if project !== nothing && get(env, "JULIA_PROJECT", nothing) === nothing
+        env["JULIA_PROJECT"] = project
+    end
 
     for i in 1:manager.np
         cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker`
-        io = open(detach(setenv(cmd, dir=dir)), "r+")
+        io = open(detach(setenv(addenv(cmd, env), dir=dir)), "r+")
         write_cookie(io)
 
         wconfig = WorkerConfig()
@@ -673,4 +724,27 @@ function kill(manager::SSHManager, pid::Int, config::WorkerConfig)
     remote_do(exit, pid)
     cancel_ssh_tunnel(config)
     nothing
+end
+
+function kill(manager::LocalManager, pid::Int, config::WorkerConfig; exit_timeout = 15, term_timeout = 15)
+    # First, try sending `exit()` to the remote over the usual control channels
+    remote_do(exit, pid)
+
+    timer_task = @async begin
+        sleep(exit_timeout)
+
+        # Check to see if our child exited, and if not, send an actual kill signal
+        if !process_exited(config.process)
+            @warn("Failed to gracefully kill worker $(pid), sending SIGTERM")
+            kill(config.process, Base.SIGTERM)
+
+            sleep(term_timeout)
+            if !process_exited(config.process)
+                @warn("Worker $(pid) ignored SIGTERM, sending SIGKILL")
+                kill(config.process, Base.SIGKILL)
+            end
+        end
+    end
+    errormonitor(timer_task)
+    return nothing
 end

@@ -135,6 +135,17 @@ i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
 """
 function exponent_raw_max end
 
+"""
+    uabs(x::Integer)
+
+Return the absolute value of `x`, possibly returning a different type should the
+operation be susceptible to overflow. This typically arises when `x` is a two's complement
+signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
+`uabs(x)` will be an unsigned integer of the same size.
+"""
+uabs(x::Integer) = abs(x)
+uabs(x::BitSigned) = unsigned(abs(x))
+
 ## conversions to floating-point ##
 
 # TODO: deprecate in 2.0
@@ -165,33 +176,45 @@ promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
 function Float64(x::UInt128)
-    x == 0 && return 0.0
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
-    else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+    if x < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+        low_exp = 0x1p52
+        high_exp = 0x1p104
+        low_bits = (x % UInt64) & Base.significand_mask(Float64)
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((x >> 52) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        low_value + high_value
+    else # Large enough that low bits only affect rounding, pack low bits
+        low_exp = 0x1p76
+        high_exp = 0x1p128
+        low_bits = ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((x >> 76) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        low_value + high_value
     end
-    d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, d + y)
 end
 
 function Float64(x::Int128)
-    x == 0 && return 0.0
-    s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
-    x = abs(x) % UInt128
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
-    else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+    sign_bit = ((x >> 127) % UInt64) << 63
+    ux = uabs(x)
+    if ux < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+        low_exp = 0x1p52
+        high_exp = 0x1p104
+        low_bits = (ux % UInt64) & Base.significand_mask(Float64)
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((ux >> 52) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
+    else # Large enough that low bits only affect rounding, pack low bits
+        low_exp = 0x1p76
+        high_exp = 0x1p128
+        low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((ux >> 76) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
     end
-    d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, s | d + y)
 end
 
 function Float32(x::UInt128)
@@ -225,8 +248,8 @@ function Float32(x::Int128)
 end
 
 # TODO: optimize
-Float16(x::UInt128) = convert(Float16, Float32(x))
-Float16(x::Int128)  = convert(Float16, Float32(x))
+Float16(x::UInt128) = convert(Float16, Float64(x))
+Float16(x::Int128)  = convert(Float16, Float64(x))
 
 Float16(x::Float32) = fptrunc(Float16, x)
 Float16(x::Float64) = fptrunc(Float16, x)
@@ -290,23 +313,29 @@ float(::Type{T}) where {T<:AbstractFloat} = T
     unsafe_trunc(T, x)
 
 Return the nearest integral value of type `T` whose absolute value is
-less than or equal to `x`. If the value is not representable by `T`, an arbitrary value will
-be returned.
+less than or equal to the absolute value of `x`. If the value is not representable by `T`,
+an arbitrary value will be returned.
+See also [`trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> unsafe_trunc(Int, -2.2)
+-2
+
+julia> unsafe_trunc(Int, NaN)
+-9223372036854775808
+```
 """
 function unsafe_trunc end
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float16) = fptosi($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float32) = fptosi($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float64) = fptosi($Ti, x)
+        unsafe_trunc(::Type{$Ti}, x::IEEEFloat) = fptosi($Ti, x)
     end
 end
 for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
-        unsafe_trunc(::Type{$Ti}, x::Float16) = fptoui($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float32) = fptoui($Ti, x)
-        unsafe_trunc(::Type{$Ti}, x::Float64) = fptoui($Ti, x)
+        unsafe_trunc(::Type{$Ti}, x::IEEEFloat) = fptoui($Ti, x)
     end
 end
 
@@ -343,33 +372,25 @@ unsafe_trunc(::Type{Int128}, x::Float16) = unsafe_trunc(Int128, Float32(x))
 
 # matches convert methods
 # also determines floor, ceil, round
-trunc(::Type{Signed}, x::Float16) = trunc(Int,x)
-trunc(::Type{Signed}, x::Float32) = trunc(Int,x)
-trunc(::Type{Signed}, x::Float64) = trunc(Int,x)
-trunc(::Type{Unsigned}, x::Float16) = trunc(UInt,x)
-trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
-trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
-trunc(::Type{Integer}, x::Float16) = trunc(Int,x)
-trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
-trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
+trunc(::Type{Signed}, x::IEEEFloat) = trunc(Int,x)
+trunc(::Type{Unsigned}, x::IEEEFloat) = trunc(UInt,x)
+trunc(::Type{Integer}, x::IEEEFloat) = trunc(Int,x)
 
 # fallbacks
 floor(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundDown))
 ceil(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundUp))
 round(::Type{T}, x::AbstractFloat) where {T<:Integer} = trunc(T,round(x, RoundNearest))
 
-round(x::Float64, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::Float32, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::Float16, r::RoundingMode{:ToZero})  = trunc_llvm(x)
-round(x::Float64, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::Float32, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::Float16, r::RoundingMode{:Down})    = floor_llvm(x)
-round(x::Float64, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float32, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float16, r::RoundingMode{:Up})      = ceil_llvm(x)
-round(x::Float64, r::RoundingMode{:Nearest}) = rint_llvm(x)
-round(x::Float32, r::RoundingMode{:Nearest}) = rint_llvm(x)
-round(x::Float16, r::RoundingMode{:Nearest}) = rint_llvm(x)
+# Bool
+trunc(::Type{Bool}, x::AbstractFloat) = (-1 < x < 2) ? 1 <= x : throw(InexactError(:trunc, Bool, x))
+floor(::Type{Bool}, x::AbstractFloat) = (0 <= x < 2) ? 1 <= x : throw(InexactError(:floor, Bool, x))
+ceil(::Type{Bool}, x::AbstractFloat)  = (-1 < x <= 1) ? 0 < x : throw(InexactError(:ceil, Bool, x))
+round(::Type{Bool}, x::AbstractFloat) = (-0.5 <= x < 1.5) ? 0.5 < x : throw(InexactError(:round, Bool, x))
+
+round(x::IEEEFloat, r::RoundingMode{:ToZero})  = trunc_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Down})    = floor_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Up})      = ceil_llvm(x)
+round(x::IEEEFloat, r::RoundingMode{:Nearest}) = rint_llvm(x)
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -380,36 +401,20 @@ widen(::Type{Float16}) = Float32
 widen(::Type{Float32}) = Float64
 
 ## floating point arithmetic ##
--(x::Float64) = neg_float(x)
--(x::Float32) = neg_float(x)
--(x::Float16) = neg_float(x)
+-(x::IEEEFloat) = neg_float(x)
 
-+(x::Float16, y::Float16) = add_float(x, y)
-+(x::Float32, y::Float32) = add_float(x, y)
-+(x::Float64, y::Float64) = add_float(x, y)
--(x::Float16, y::Float16) = sub_float(x, y)
--(x::Float32, y::Float32) = sub_float(x, y)
--(x::Float64, y::Float64) = sub_float(x, y)
-*(x::Float16, y::Float16) = mul_float(x, y)
-*(x::Float32, y::Float32) = mul_float(x, y)
-*(x::Float64, y::Float64) = mul_float(x, y)
-/(x::Float16, y::Float16) = div_float(x, y)
-/(x::Float32, y::Float32) = div_float(x, y)
-/(x::Float64, y::Float64) = div_float(x, y)
++(x::T, y::T) where {T<:IEEEFloat} = add_float(x, y)
+-(x::T, y::T) where {T<:IEEEFloat} = sub_float(x, y)
+*(x::T, y::T) where {T<:IEEEFloat} = mul_float(x, y)
+/(x::T, y::T) where {T<:IEEEFloat} = div_float(x, y)
 
-muladd(x::Float16, y::Float16, z::Float16) = muladd_float(x, y, z)
-muladd(x::Float32, y::Float32, z::Float32) = muladd_float(x, y, z)
-muladd(x::Float64, y::Float64, z::Float64) = muladd_float(x, y, z)
+muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::Float16, y::Float16) = rem_float(x, y)
-rem(x::Float32, y::Float32) = rem_float(x, y)
-rem(x::Float64, y::Float64) = rem_float(x, y)
-
-cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
+rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
 
 function mod(x::T, y::T) where T<:AbstractFloat
     r = rem(x,y)
@@ -423,22 +428,12 @@ function mod(x::T, y::T) where T<:AbstractFloat
 end
 
 ## floating point comparisons ##
-==(x::Float16, y::Float16) = eq_float(x, y)
-==(x::Float32, y::Float32) = eq_float(x, y)
-==(x::Float64, y::Float64) = eq_float(x, y)
-!=(x::Float16, y::Float16) = ne_float(x, y)
-!=(x::Float32, y::Float32) = ne_float(x, y)
-!=(x::Float64, y::Float64) = ne_float(x, y)
-<( x::Float16, y::Float16) = lt_float(x, y)
-<( x::Float32, y::Float32) = lt_float(x, y)
-<( x::Float64, y::Float64) = lt_float(x, y)
-<=(x::Float16, y::Float16) = le_float(x, y)
-<=(x::Float32, y::Float32) = le_float(x, y)
-<=(x::Float64, y::Float64) = le_float(x, y)
+==(x::T, y::T) where {T<:IEEEFloat} = eq_float(x, y)
+!=(x::T, y::T) where {T<:IEEEFloat} = ne_float(x, y)
+<( x::T, y::T) where {T<:IEEEFloat} = lt_float(x, y)
+<=(x::T, y::T) where {T<:IEEEFloat} = le_float(x, y)
 
-isequal(x::Float16, y::Float16) = fpiseq(x, y)
-isequal(x::Float32, y::Float32) = fpiseq(x, y)
-isequal(x::Float64, y::Float64) = fpiseq(x, y)
+isequal(x::T, y::T) where {T<:IEEEFloat} = fpiseq(x, y)
 
 # interpret as sign-magnitude integer
 @inline function _fpint(x)
@@ -467,7 +462,7 @@ end
 #  b. unsafe_convert undefined behaviour if fy == Tf(typemax(Ti))
 #     (but consequently x == fy > y)
 for Ti in (Int64,UInt64,Int128,UInt128)
-    for Tf in (Float16,Float32,Float64)
+    for Tf in (Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
@@ -509,9 +504,7 @@ for op in (:(==), :<, :<=)
 end
 
 
-abs(x::Float16) = abs_float(x)
-abs(x::Float32) = abs_float(x)
-abs(x::Float64) = abs_float(x)
+abs(x::IEEEFloat) = abs_float(x)
 
 """
     isnan(f) -> Bool
@@ -666,28 +659,31 @@ end
 
 
 """
-    precision(num::AbstractFloat)
+    precision(num::AbstractFloat; base::Integer=2)
+    precision(T::Type; base::Integer=2)
 
 Get the precision of a floating point number, as defined by the effective number of bits in
-the significand.
+the significand, or the precision of a floating-point type `T` (its current default, if
+`T` is a variable-precision type like [`BigFloat`](@ref)).
+
+If `base` is specified, then it returns the maximum corresponding
+number of significand digits in that base.
+
+!!! compat "Julia 1.8"
+    The `base` keyword requires at least Julia 1.8.
 """
 function precision end
 
-precision(::Type{Float16}) = 11
-precision(::Type{Float32}) = 24
-precision(::Type{Float64}) = 53
-precision(::T) where {T<:AbstractFloat} = precision(T)
-
-"""
-    uabs(x::Integer)
-
-Return the absolute value of `x`, possibly returning a different type should the
-operation be susceptible to overflow. This typically arises when `x` is a two's complement
-signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
-`uabs(x)` will be an unsigned integer of the same size.
-"""
-uabs(x::Integer) = abs(x)
-uabs(x::BitSigned) = unsigned(abs(x))
+_precision(::Type{Float16}) = 11
+_precision(::Type{Float32}) = 24
+_precision(::Type{Float64}) = 53
+function _precision(x, base::Integer=2)
+    base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
+    p = _precision(x)
+    return base == 2 ? Int(p) : floor(Int, p / log2(base))
+end
+precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
+precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 
 
 """

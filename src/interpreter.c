@@ -37,7 +37,7 @@ typedef struct {
   JL_GCC_IGNORE_STOP
 #endif
 
-#ifdef __clang_analyzer__
+#ifdef __clang_gcanalyzer__
 
 extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
@@ -78,28 +78,37 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 {
     jl_value_t **args = jl_array_ptr_data(ex->args);
-    jl_sym_t *fname = (jl_sym_t*)args[0];
-    jl_module_t *modu = s->module;
-    if (jl_is_globalref(fname)) {
-        modu = jl_globalref_mod(fname);
-        fname = jl_globalref_name(fname);
-    }
-    assert(jl_expr_nargs(ex) != 1 || jl_is_symbol(fname));
 
-    if (jl_is_symbol(fname)) {
+    // generic function definition
+    if (jl_expr_nargs(ex) == 1) {
+        jl_value_t **args = jl_array_ptr_data(ex->args);
+        jl_sym_t *fname = (jl_sym_t*)args[0];
+        jl_module_t *modu = s->module;
+        if (jl_is_globalref(fname)) {
+            modu = jl_globalref_mod(fname);
+            fname = jl_globalref_name(fname);
+        }
+        if (!jl_is_symbol(fname)) {
+            jl_error("method: invalid declaration");
+        }
         jl_value_t *bp_owner = (jl_value_t*)modu;
         jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        jl_value_t **bp = &b->value;
+        _Atomic(jl_value_t*) *bp = &b->value;
         jl_value_t *gf = jl_generic_function_def(b->name, b->owner, bp, bp_owner, b);
-        if (jl_expr_nargs(ex) == 1)
-            return gf;
+        return gf;
     }
 
-    jl_value_t *atypes = NULL, *meth = NULL;
-    JL_GC_PUSH2(&atypes, &meth);
+    jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
+    JL_GC_PUSH3(&atypes, &meth, &fname);
+
+    fname = eval_value(args[0], s);
+    jl_methtable_t *mt = NULL;
+    if (jl_typeis(fname, jl_methtable_type)) {
+        mt = (jl_methtable_t*)fname;
+    }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
-    jl_method_def((jl_svec_t*)atypes, (jl_code_info_t*)meth, s->module);
+    jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
     JL_GC_POP();
     return jl_nothing;
 }
@@ -142,6 +151,17 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
+jl_value_t *jl_eval_globalref(jl_globalref_t *g)
+{
+    if (g->bnd_cache) {
+        jl_value_t *v = jl_atomic_load_relaxed(&g->bnd_cache->value);
+        if (v == NULL)
+            jl_undefined_var_error(g->name);
+        return v;
+    }
+    return jl_eval_global_var(g->mod, g->name);
+}
+
 static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
 {
     return jl_array_len(src->slotflags);
@@ -181,7 +201,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_global_var(jl_globalref_mod(e), jl_globalref_name(e));
+        return jl_eval_globalref((jl_globalref_t*)e);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e);
@@ -202,13 +222,16 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     jl_value_t **args = jl_array_ptr_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     jl_sym_t *head = ex->head;
-    if (head == call_sym) {
+    if (head == jl_call_sym) {
         return do_call(args, nargs, s);
     }
-    else if (head == invoke_sym) {
+    else if (head == jl_invoke_sym) {
         return do_invoke(args, nargs, s);
     }
-    else if (head == isdefined_sym) {
+    else if (head == jl_invoke_modify_sym) {
+        return do_call(args + 1, nargs - 1, s);
+    }
+    else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
         if (jl_is_slot(sym) || jl_is_argument(sym)) {
@@ -223,7 +246,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         else if (jl_is_symbol(sym)) {
             defined = jl_boundp(s->module, (jl_sym_t*)sym);
         }
-        else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == static_parameter_sym) {
+        else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == jl_static_parameter_sym) {
             ssize_t n = jl_unbox_long(jl_exprarg(sym, 0));
             assert(n > 0);
             if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
@@ -240,19 +263,19 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         }
         return defined ? jl_true : jl_false;
     }
-    else if (head == throw_undef_if_not_sym) {
+    else if (head == jl_throw_undef_if_not_sym) {
         jl_value_t *cond = eval_value(args[1], s);
         assert(jl_is_bool(cond));
         if (cond == jl_false) {
             jl_sym_t *var = (jl_sym_t*)args[0];
-            if (var == getfield_undefref_sym)
+            if (var == jl_getfield_undefref_sym)
                 jl_throw(jl_undefref_exception);
             else
                 jl_undefined_var_error(var);
         }
         return jl_nothing;
     }
-    else if (head == new_sym) {
+    else if (head == jl_new_sym) {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
@@ -261,7 +284,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
-    else if (head == splatnew_sym) {
+    else if (head == jl_splatnew_sym) {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 2);
         argv[0] = eval_value(args[0], s);
@@ -270,18 +293,18 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_POP();
         return v;
     }
-    else if (head == new_opaque_closure_sym) {
+    else if (head == jl_new_opaque_closure_sym) {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
-        JL_NARGSV(new_opaque_closure, 5);
+        JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv[4], argv+5, nargs-5);
+            argv[3], argv+4, nargs-4);
         JL_GC_POP();
         return ret;
     }
-    else if (head == static_parameter_sym) {
+    else if (head == jl_static_parameter_sym) {
         ssize_t n = jl_unbox_long(args[0]);
         assert(n > 0);
         if (s->sparam_vals && n <= jl_svec_len(s->sparam_vals)) {
@@ -293,27 +316,33 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         // static parameter val unknown needs to be an error for ccall
         jl_error("could not determine static parameter value");
     }
-    else if (head == copyast_sym) {
+    else if (head == jl_copyast_sym) {
         return jl_copy_ast(eval_value(args[0], s));
     }
-    else if (head == exc_sym) {
+    else if (head == jl_exc_sym) {
         return jl_current_exception();
     }
-    else if (head == boundscheck_sym) {
+    else if (head == jl_boundscheck_sym) {
         return jl_true;
     }
-    else if (head == meta_sym || head == coverageeffect_sym || head == inbounds_sym || head == loopinfo_sym ||
-             head == aliasscope_sym || head == popaliasscope_sym) {
+    else if (head == jl_meta_sym || head == jl_coverageeffect_sym || head == jl_inbounds_sym || head == jl_loopinfo_sym ||
+             head == jl_aliasscope_sym || head == jl_popaliasscope_sym || head == jl_inline_sym || head == jl_noinline_sym) {
         return jl_nothing;
     }
-    else if (head == gc_preserve_begin_sym || head == gc_preserve_end_sym) {
+    else if (head == jl_gc_preserve_begin_sym || head == jl_gc_preserve_end_sym) {
         // The interpreter generally keeps values that were assigned in this scope
         // rooted. If the interpreter learns to be more aggressive here, we may
         // want to explicitly root these values.
         return jl_nothing;
     }
-    else if (head == method_sym && nargs == 1) {
+    else if (head == jl_method_sym && nargs == 1) {
         return eval_methoddef(ex, s);
+    }
+    else if (head == jl_foreigncall_sym) {
+        jl_error("`ccall` requires the compiler");
+    }
+    else if (head == jl_cfunction_sym) {
+        jl_error("`cfunction` requires the compiler");
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
@@ -405,13 +434,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 {
     jl_handler_t __eh;
     size_t ns = jl_array_len(stmts);
+    jl_task_t *ct = jl_current_task;
 
     while (1) {
         s->ip = ip;
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
         if (toplevel)
-            jl_get_ptls_states()->world_age = jl_world_counter;
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
@@ -443,7 +473,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            if (head == assign_sym) {
+            if (head == jl_assign_sym) {
                 jl_value_t *lhs = jl_exprarg(stmt, 0);
                 jl_value_t *rhs = eval_value(jl_exprarg(stmt, 1), s);
                 if (jl_is_slot(lhs)) {
@@ -464,12 +494,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                         sym = (jl_sym_t*)lhs;
                     }
                     JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym, 1);
+                    jl_binding_t *b = jl_get_binding_wr_or_error(modu, sym);
                     jl_checked_assignment(b, rhs);
                     JL_GC_POP();
                 }
             }
-            else if (head == enter_sym) {
+            else if (head == jl_enter_sym) {
                 jl_enter_handler(&__eh);
                 // This is a bit tricky, but supports the implementation of PhiC nodes.
                 // They are conceptually slots, but the slot to store to doesn't get explicitly
@@ -507,62 +537,67 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->continue_at = 0;
                     continue;
                 }
-                else { // a real exeception
+                else { // a real exception
                     ip = catch_ip;
                     continue;
                 }
             }
-            else if (head == leave_sym) {
+            else if (head == jl_leave_sym) {
                 int hand_n_leave = jl_unbox_long(jl_exprarg(stmt, 0));
                 assert(hand_n_leave > 0);
                 // equivalent to jl_pop_handler(hand_n_leave), but retaining eh for longjmp:
-                jl_ptls_t ptls = jl_get_ptls_states();
-                jl_handler_t *eh = ptls->current_task->eh;
+                jl_handler_t *eh = ct->eh;
                 while (--hand_n_leave > 0)
                     eh = eh->prev;
                 jl_eh_restore_state(eh);
                 // leave happens during normal control flow, but we must
                 // longjmp to pop the eval_body call for each enter.
                 s->continue_at = next_ip;
+                asan_unpoison_task_stack(ct, &eh->eh_ctx);
                 jl_longjmp(eh->eh_ctx, 1);
             }
-            else if (head == pop_exception_sym) {
+            else if (head == jl_pop_exception_sym) {
                 size_t prev_state = jl_unbox_ulong(eval_value(jl_exprarg(stmt, 0), s));
                 jl_restore_excstack(prev_state);
             }
             else if (toplevel) {
-                if (head == method_sym && jl_expr_nargs(stmt) > 1) {
+                if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
                     eval_methoddef((jl_expr_t*)stmt, s);
                 }
-                else if (head == toplevel_sym) {
+                else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
                 }
-                else if (head == meta_sym) {
-                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)nospecialize_sym) {
+                else if (head == jl_meta_sym) {
+                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)jl_nospecialize_sym) {
                         jl_set_module_nospecialize(s->module, 1);
                     }
-                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)specialize_sym) {
+                    if (jl_expr_nargs(stmt) == 1 && jl_exprarg(stmt, 0) == (jl_value_t*)jl_specialize_sym) {
                         jl_set_module_nospecialize(s->module, 0);
                     }
                     if (jl_expr_nargs(stmt) == 2) {
-                        if (jl_exprarg(stmt, 0) == (jl_value_t*)optlevel_sym) {
+                        if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_optlevel_sym) {
                             if (jl_is_long(jl_exprarg(stmt, 1))) {
                                 int n = jl_unbox_long(jl_exprarg(stmt, 1));
                                 jl_set_module_optlevel(s->module, n);
                             }
                         }
-                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)compile_sym) {
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_compile_sym) {
                             if (jl_is_long(jl_exprarg(stmt, 1))) {
                                 jl_set_module_compile(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
                             }
                         }
-                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)infer_sym) {
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_infer_sym) {
                             if (jl_is_long(jl_exprarg(stmt, 1))) {
                                 jl_set_module_infer(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
+                            }
+                        }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_max_methods_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                jl_set_module_max_methods(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
                             }
                         }
                     }
@@ -665,12 +700,17 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     return r;
 }
 
+JL_DLLEXPORT jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret_call;
+
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
     jl_method_t *source = oc->source;
     jl_code_info_t *code = jl_uncompress_ir(source, NULL, (jl_array_t*)source->source);
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = oc->world;
     jl_value_t **locals = NULL;
     JL_GC_PUSHFRAME(s, locals, nroots);
     locals[0] = (jl_value_t*)oc;
@@ -685,9 +725,8 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->preevaluation = 0;
     s->continue_at = 0;
     s->mi = NULL;
-
     size_t defargs = source->nargs;
-    int isva = !!oc->isva;
+    int isva = source->isva;
     assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
     for (size_t i = 1; i < defargs - isva; i++)
         s->locals[i] = args[i - 1];
@@ -697,6 +736,10 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     }
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(code->code, s, 0, 0);
+    locals[0] = r; // GC root
+    JL_GC_PROMISE_ROOTED(r);
+    jl_typeassert(r, jl_tparam1(jl_typeof(oc)));
+    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }
@@ -714,9 +757,10 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->continue_at = 0;
     s->mi = NULL;
     JL_GC_ENABLEFRAME(s);
-    size_t last_age = jl_get_ptls_states()->world_age;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
-    jl_get_ptls_states()->world_age = last_age;
+    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }

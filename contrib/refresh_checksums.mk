@@ -8,6 +8,11 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 
+# force a sane / stable configuration
+export LC_ALL=C
+export LANG=C
+.SUFFIXES:
+
 # Default target that will have everything else added to it as a dependency
 all: checksum pack-checksum
 
@@ -19,9 +24,9 @@ CLANG_TRIPLETS=$(filter %-darwin %-freebsd,$(TRIPLETS))
 NON_CLANG_TRIPLETS=$(filter-out %-darwin %-freebsd,$(TRIPLETS))
 
 # These are the projects currently using BinaryBuilder; both GCC-expanded and non-GCC-expanded:
-BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib suitesparse openlibm blastrampoline
+BB_PROJECTS=mbedtls libssh2 nghttp2 mpfr curl libgit2 pcre libuv unwind llvmunwind dsfmt objconv p7zip zlib libsuitesparse openlibm blastrampoline
 BB_GCC_EXPANDED_PROJECTS=openblas csl
-BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools
+BB_CXX_EXPANDED_PROJECTS=gmp llvm clang llvm-tools lld
 # These are non-BB source-only deps
 NON_BB_PROJECTS=patchelf mozillacert lapack libwhich utf8proc
 
@@ -46,7 +51,7 @@ endef
 # note that `"src"` is a special triplet value.
 # if $(3) is "assert", we set BINARYBUILDER_LLVM_ASSERTS=1
 define checksum_dep
-checksum-$(1)-$(2)-$(3):
+checksum-$(1)-$(2)-$(3): clean-$(1)
 	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" $(call make_flags,$(1),$(2),$(3)) checksum-$(1)
 .PHONY: checksum-$(1)-$(2)-$(3)
 
@@ -75,8 +80,12 @@ $(foreach project,$(BB_CXX_EXPANDED_PROJECTS),$(foreach triplet,$(CLANG_TRIPLETS
 
 # Special libLLVM_asserts_jll/LLVM_assert_jll targets
 $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,llvm,$(triplet)-$(cxxstring_abi),assert))))
+$(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,clang,$(triplet)-$(cxxstring_abi),assert))))
+$(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,lld,$(triplet)-$(cxxstring_abi),assert))))
 $(foreach triplet,$(NON_CLANG_TRIPLETS),$(foreach cxxstring_abi,cxx11 cxx03,$(eval $(call checksum_dep,llvm-tools,$(triplet)-$(cxxstring_abi),assert))))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm,$(triplet),assert)))
+$(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,clang,$(triplet),assert)))
+$(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,lld,$(triplet),assert)))
 $(foreach triplet,$(CLANG_TRIPLETS),$(eval $(call checksum_dep,llvm-tools,$(triplet),assert)))
 
 # External stdlibs
@@ -91,34 +100,42 @@ checksum-doc-unicodedata:
 all: checksum-doc-unicodedata
 .PHONY: checksum-doc-unicodedata
 
-# Special LLVM source hashes for optional targets
-checksum-llvm-special-src:
-	-+$(MAKE) $(QUIET_MAKE) -C "$(JULIAHOME)/deps" USE_BINARYBUILDER_LLVM=0 DEPS_GIT=0 BUILD_LLDB=1 BUILD_LLVM_CLANG=1 BUILD_CUSTOM_LIBCXX=1 USECLANG=1 checksum-llvm
-all: checksum-llvm-special-src
-.PHONY: checksum-llvm-special-src
-
 # merge substring project names to avoid races
 pack-checksum-llvm-tools: | pack-checksum-llvm
+	@# nothing to do but disable the prefix rule
 pack-checksum-llvm: | checksum-llvm-tools
 pack-checksum-csl: | pack-checksum-compilersupportlibraries
+	@# nothing to do but disable the prefix rule
 pack-checksum-compilersupportlibraries: | checksum-csl
+pack-checksum-libsuitesparse: | pack-checksum-suitesparse
+	@# nothing to do but disable the prefix rule
+pack-checksum-suitesparse: | checksum-libsuitesparse
+# This is a bit tricky: we want llvmunwind to be separate from unwind and llvm,
+# so we add a rule to process those first
+pack-checksum-llvm pack-checksum-unwind: | pack-checksum-llvmunwind
+# and the name for LLVMLibUnwind is awkward, so handle that with a regex
+pack-checksum-llvmunwind: | pack-checksum-llvm.*unwind
+	cd "$(JULIAHOME)/deps/checksums" && mv 'llvm.*unwind' llvmunwind
+
+clean-%: FORCE
+	-rm "$(JULIAHOME)/deps/checksums"/'$*'
 
 # define how to pack parallel checksums into a single file format
 pack-checksum-%: FORCE
-	@echo making "$(JULIAHOME)/deps/checksums/$*"
+	@echo making "$(JULIAHOME)/deps/checksums/"'$*'
 	@cd "$(JULIAHOME)/deps/checksums" && \
 		for each in $$(ls | grep -i '$*'); do \
-			if [ -d $$each ]; then \
-				for type in $$(ls $$each); do \
-					echo $$each/$$type/$$(cat $$each/$$type); \
-					rm $$each/$$type; \
+			if [ -d "$$each" ]; then \
+				for type in $$(ls "$$each"); do \
+					echo "$$each"/"$$type"/$$(cat "$$each"/"$$type"); \
+					rm "$$each"/"$$type"; \
 				done; \
-				rmdir $$each; \
+				rmdir "$$each"; \
 			fi; \
-		done >> $*
+		done >> '$*'
 	@cd "$(JULIAHOME)/deps/checksums" && \
-		sort $* > $*.tmp && \
-		mv $*.tmp $*
+		sort '$*' > '$*.tmp' && \
+		mv '$*.tmp' '$*'
 
 # This file is completely phony
 FORCE:

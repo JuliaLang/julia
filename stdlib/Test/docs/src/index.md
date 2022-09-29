@@ -19,7 +19,8 @@ Base.runtests
 The `Test` module provides simple *unit testing* functionality. Unit testing is a way to
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
-of specifying the behaviors your code should have when complete.
+of specifying the behaviors your code should have when complete. You may also want to look at the
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -107,19 +108,19 @@ Test.TestSetException
 
 We can put our tests for the `foo(x)` function in a test set:
 
-```jldoctest testfoo
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @test foo("a")   == 1
            @test foo("ab")  == 4
            @test foo("abc") == 9
        end;
-Test Summary: | Pass  Total
-Foo Tests     |    3      3
+Test Summary: | Pass  Total  Time
+Foo Tests     |    3      3  0.0s
 ```
 
 Test sets can also be nested:
 
-```jldoctest testfoo
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -130,14 +131,28 @@ julia> @testset "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total
-Foo Tests     |    8      8
+Test Summary: | Pass  Total  Time
+Foo Tests     |    8      8  0.0s
 ```
 
+As well as call functions:
+
+```jldoctest testfoo; filter = r"[0-9\.]+s"
+julia> f(x) = @test isone(x)
+f (generic function with 1 method)
+
+julia> @testset f(1);
+Test Summary: | Pass  Total  Time
+f             |    1      1  0.0s
+```
+
+This can be used to allow for factorization of test sets, making it easier to run individual
+test sets by running the associated functions instead.
+Note that in the case of functions, the test set will be given the name of the called function.
 In the event that a nested test set has no failures, as happened here, it will be hidden in the
 summary, unless the `verbose=true` option is passed:
 
-```jldoctest testfoo
+```jldoctest testfoo; filter = r"[0-9\.]+s"
 julia> @testset verbose = true "Foo Tests" begin
            @testset "Animals" begin
                @test foo("cat") == 9
@@ -148,17 +163,17 @@ julia> @testset verbose = true "Foo Tests" begin
                @test foo(fill(1.0, i)) == i^2
            end
        end;
-Test Summary: | Pass  Total
-Foo Tests     |    8      8
-  Animals     |    2      2
-  Arrays 1    |    2      2
-  Arrays 2    |    2      2
-  Arrays 3    |    2      2
+Test Summary: | Pass  Total  Time
+Foo Tests     |    8      8  0.0s
+  Animals     |    2      2  0.0s
+  Arrays 1    |    2      2  0.0s
+  Arrays 2    |    2      2  0.0s
+  Arrays 3    |    2      2  0.0s
 ```
 
 If we do have a test failure, only the details for the failed test sets will be shown:
 
-```julia-repl
+```julia-repl; filter = r"[0-9\.]+s"
 julia> @testset "Foo Tests" begin
            @testset "Animals" begin
                @testset "Felines" begin
@@ -178,11 +193,21 @@ Arrays: Test Failed
   Expression: foo(fill(1.0, 4)) == 15
    Evaluated: 16 == 15
 [...]
-Test Summary: | Pass  Fail  Total
-Foo Tests     |    3     1      4
-  Animals     |    2            2
-  Arrays      |    1     1      2
+Test Summary: | Pass  Fail  Total  Time
+Foo Tests     |    3     1      4  0.0s
+  Animals     |    2            2  0.0s
+  Arrays      |    1     1      2  0.0s
 ERROR: Some tests did not pass: 3 passed, 1 failed, 0 errored, 0 broken.
+```
+
+## Testing Log Statements
+
+One can use the [`@test_logs`](@ref) macro to test log statements, or use a [`TestLogger`](@ref).
+
+```@docs
+Test.@test_logs
+Test.TestLogger
+Test.LogRecord
 ```
 
 ## Other Test Macros
@@ -211,7 +236,6 @@ Note that this is not a specific feature of the `≈` but rather a general featu
 
 ```@docs
 Test.@inferred
-Test.@test_logs
 Test.@test_deprecated
 Test.@test_warn
 Test.@test_nowarn
@@ -307,6 +331,148 @@ Test.GenericString
 Test.detect_ambiguities
 Test.detect_unbound_args
 ```
+
+## Workflow for Testing Packages
+
+Using the tools available to us in the previous sections, here is a potential workflow of creating a package and adding tests to it.
+
+### Generating an Example Package
+
+For this workflow, we will create a package called `Example`:
+
+```julia
+pkg> generate Example
+shell> cd Example
+shell> mkdir test
+pkg> activate .
+```
+
+### Creating Sample Functions
+
+The number one requirement for testing a package is to have functionality to test.
+For that, we will add some simple functions to `Example` that we can test.
+Add the following to `src/Example.jl`:
+
+```julia
+module Example
+
+function greet()
+    "Hello world!"
+end
+
+function simple_add(a, b)
+    a + b
+end
+
+function type_multiply(a::Float64, b::Float64)
+    a * b
+end
+
+end
+```
+
+### Creating a Test Environment
+
+From within the root of the `Example` package, navigate to the `test` directory, activate a new environment there, and add the `Test` package to the environment:
+
+```julia
+shell> cd test
+pkg> activate .
+(test) pkg> add Test
+```
+
+### Testing Our Package
+
+Now, we are ready to add tests to `Example`.
+It is standard practice to create a file within the `test` directory called `runtests.jl` which contains the test sets we want to run.
+Go ahead and create that file within the `test` directory and add the following code to it:
+
+```julia
+using Example
+using Test
+
+@testset "Example tests" begin
+
+	@testset "Math tests" begin
+		include("math_tests.jl")
+	end
+
+	@testset "Greeting tests" begin
+		include("greeting_tests.jl")
+	end
+end
+```
+
+We will need to create those two included files, `math_tests.jl` and `greeting_tests.jl`, and add some tests to them.
+
+> **Note:** Notice how we did not have to specify add `Example` into the `test` environment's `Project.toml`.
+> This is a benefit of Julia's testing system that you could [read about more here](https://pkgdocs.julialang.org/dev/creating-packages/).
+
+#### Writing Tests for `math_tests.jl`
+
+Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+
+```julia
+@testset "Testset 1" begin
+	@test 2 == simple_add(1, 1)
+	@test 3.5 == simple_add(1, 2.5)
+        @test_throws MethodError simple_add(1, "A")
+        @test_throws MethodError simple_add(1, 2, 3)
+end
+
+@testset "Testset 2" begin
+	@test 1.0 == type_multiply(1.0, 1.0)
+        @test isa(type_multiply(2.0, 2.0), Float64)
+	@test_throws MethodError type_multiply(1, 2.5)
+end
+```
+
+#### Writing Tests for `greeting_tests.jl`
+
+Using our knowledge of `Test.jl`, here are some example tests we could add to `math_tests.jl`:
+
+```julia
+@testset "Testset 3" begin
+    @test "Hello world!" == greet()
+    @test_throws MethodError greet("Antonia")
+end
+```
+
+### Testing Our Package
+
+Now that we have added our tests and our `runtests.jl` script in `test`, we can test our `Example` package by going back to the root of the `Example` package environment and reactivating the `Example` environment:
+
+```julia
+shell> cd ..
+pkg> activate .
+```
+
+From there, we can finally run our test suite as follows:
+
+```julia
+(Example) pkg> test
+     Testing Example
+      Status `/tmp/jl_Yngpvy/Project.toml`
+  [fa318bd2] Example v0.1.0 `/home/src/Projects/tmp/errata/Example`
+  [8dfed614] Test `@stdlib/Test`
+      Status `/tmp/jl_Yngpvy/Manifest.toml`
+  [fa318bd2] Example v0.1.0 `/home/src/Projects/tmp/errata/Example`
+  [2a0f44e3] Base64 `@stdlib/Base64`
+  [b77e0a4c] InteractiveUtils `@stdlib/InteractiveUtils`
+  [56ddb016] Logging `@stdlib/Logging`
+  [d6f4376e] Markdown `@stdlib/Markdown`
+  [9a3f8284] Random `@stdlib/Random`
+  [ea8e919c] SHA `@stdlib/SHA`
+  [9e88b42a] Serialization `@stdlib/Serialization`
+  [8dfed614] Test `@stdlib/Test`
+     Testing Running tests...
+Test Summary: | Pass  Total
+Example tests |    9      9
+     Testing Example tests passed
+```
+
+And if all went correctly, you should see a similar output as above.
+Using `Test.jl`, more complicated tests can be added for packages but this should ideally point developers in the direction of how to get started with testing their own created packages.
 
 ```@meta
 DocTestSetup = nothing

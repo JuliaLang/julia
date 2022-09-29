@@ -95,34 +95,68 @@ end
     @test max(1) === 1
     @test minmax(1) === (1, 1)
     @test minmax(5, 3) == (3, 5)
-    @test minmax(3., 5.) == (3., 5.)
-    @test minmax(5., 3.) == (3., 5.)
-    @test minmax(3., NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, 3) ≣ (NaN, NaN)
-    @test minmax(Inf, NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, Inf) ≣ (NaN, NaN)
-    @test minmax(-Inf, NaN) ≣ (NaN, NaN)
-    @test minmax(NaN, -Inf) ≣ (NaN, NaN)
-    @test minmax(NaN, NaN) ≣ (NaN, NaN)
-    @test min(-0.0,0.0) === min(0.0,-0.0)
-    @test max(-0.0,0.0) === max(0.0,-0.0)
-    @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
-    @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
-    @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
-    @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
-    @test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
-    @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
-    @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
-    @test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
-    @test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
-    @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
-    @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
-    @test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
-    @test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
-    @test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
-    @test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
-    @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
-    @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
+    Top(T, op, x, y) = op(T.(x), T.(y))
+    Top(T, op) = (x, y) -> Top(T, op, x, y)
+    _compare(x, y) = x == y
+    for T in (Float16, Float32, Float64, BigFloat)
+        minmax = Top(T,Base.minmax)
+        min = Top(T,Base.min)
+        max = Top(T,Base.max)
+        (==) = Top(T,_compare)
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equivalent
+        @test minmax(3., 5.) == (3., 5.)
+        @test minmax(5., 3.) == (3., 5.)
+        @test minmax(3., NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, 3) ≣ (NaN, NaN)
+        @test minmax(Inf, NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, Inf) ≣ (NaN, NaN)
+        @test minmax(-Inf, NaN) ≣ (NaN, NaN)
+        @test minmax(NaN, -Inf) ≣ (NaN, NaN)
+        @test minmax(NaN, NaN) ≣ (NaN, NaN)
+        @test min(-0.0,0.0) === min(0.0,-0.0)
+        @test max(-0.0,0.0) === max(0.0,-0.0)
+        @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
+        @test max(-3.2, 5.1) == max(5.1, -3.2) == 5.1
+        @test min(-3.2, 5.1) == min(5.1, -3.2) == -3.2
+        @test max(-3.2, Inf) == max(Inf, -3.2) == Inf
+        @test max(-3.2, NaN) ≣ max(NaN, -3.2) ≣ NaN
+        @test min(5.1, Inf) == min(Inf, 5.1) == 5.1
+        @test min(5.1, -Inf) == min(-Inf, 5.1) == -Inf
+        @test min(5.1, NaN) ≣ min(NaN, 5.1) ≣ NaN
+        @test min(5.1, -NaN) ≣ min(-NaN, 5.1) ≣ NaN
+        @test minmax(-3.2, 5.1) == (min(-3.2, 5.1), max(-3.2, 5.1))
+        @test minmax(-3.2, Inf) == (min(-3.2, Inf), max(-3.2, Inf))
+        @test minmax(-3.2, NaN) ≣ (min(-3.2, NaN), max(-3.2, NaN))
+        @test (max(Inf,NaN), max(-Inf,NaN), max(Inf,-NaN), max(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+        @test (max(NaN,Inf), max(NaN,-Inf), max(-NaN,Inf), max(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+        @test (min(Inf,NaN), min(-Inf,NaN), min(Inf,-NaN), min(-Inf,-NaN)) ≣ (NaN,NaN,NaN,NaN)
+        @test (min(NaN,Inf), min(NaN,-Inf), min(-NaN,Inf), min(-NaN,-Inf)) ≣ (NaN,NaN,NaN,NaN)
+        @test minmax(-Inf,NaN) ≣ (min(-Inf,NaN), max(-Inf,NaN))
+    end
+end
+@testset "Base._extrema_rf for float" begin
+    for T in (Float16, Float32, Float64, BigFloat)
+        ordered = T[-Inf, -5, -0.0, 0.0, 3, Inf]
+        unorded = T[NaN, -NaN]
+        for i1 in 1:6, i2 in 1:6, j1 in 1:6, j2 in 1:6
+            x = ordered[i1], ordered[i2]
+            y = ordered[j1], ordered[j2]
+            z = ordered[min(i1,j1)], ordered[max(i2,j2)]
+            @test Base._extrema_rf(x, y) === z
+        end
+        for i in 1:2, j1 in 1:6, j2 in 1:6 # unordered test (only 1 NaN)
+            x = unorded[i] , unorded[i]
+            y = ordered[j1], ordered[j2]
+            @test Base._extrema_rf(x, y) === x
+            @test Base._extrema_rf(y, x) === x
+        end
+        for i in 1:2, j in 1:2 # unordered test (2 NaNs)
+            x = unorded[i], unorded[i]
+            y = unorded[j], unorded[j]
+            z = Base._extrema_rf(x, y)
+            @test z === x || z === y
+        end
+    end
 end
 @testset "fma" begin
     let x = Int64(7)^7
@@ -490,6 +524,8 @@ end
     @test isa(sign(2//3), Rational{Int})
     @test isa(2//3 + 2//3im, Complex{Rational{Int}})
     @test isa(sign(2//3 + 2//3im), ComplexF64)
+    @test sign(pi) === 1.0
+    @test sign(pi) === -sign(-pi)
     @test sign(one(UInt)) == 1
     @test sign(zero(UInt)) == 0
 
@@ -1035,6 +1071,15 @@ end
     @test Float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
     @test Float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
     @test Float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
+
+    # Test lsb/msb gaps of 54 (wont fit in 64 bit mantissa)
+    @test Float64(Int128(9007199254740993)) == 9.007199254740992e15
+    @test Float64(UInt128(9007199254740993)) == 9.007199254740992e15
+    # Test 2^104-1 and 2^104 (2^104 is cutoff for which case is run in the conversion algorithm)
+    @test Float64(Int128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(Int128(20282409603651670423947251286016)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286016)) == 2.028240960365167e31
 end
 @testset "Float vs Int128 comparisons" begin
     @test Int128(1e30) == 1e30
@@ -1115,11 +1160,13 @@ end
 
     @test sqrt(2) == 1.4142135623730951
 end
+Base.@irrational i46051 4863.185427757 1548big(pi)
 @testset "Irrational printing" begin
     @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
     @test sprint(show, "text/plain", π, context=:compact => true) == "π"
     @test sprint(show, π) == "π"
-
+    # issue #46051
+    @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
@@ -1648,8 +1695,13 @@ end
         @test rem(prevfloat(1.0),1.0) == prevfloat(1.0)
         @test mod(prevfloat(1.0),1.0) == prevfloat(1.0)
     end
-    # issue #3046
-    @test mod(Int64(2),typemax(Int64)) == 2
+    @test mod(Int64(2), typemax(Int64)) == 2  # issue #3046
+    @testset "issue #45875" begin
+        @test cld(+1.1, 0.1) == div(+1.1, 0.1, RoundUp)   ==  ceil(big(+1.1)/big(0.1)) == +12.0
+        @test fld(+1.1, 0.1) == div(+1.1, 0.1, RoundDown) == floor(big(+1.1)/big(0.1)) == +11.0
+        @test cld(-1.1, 0.1) == div(-1.1, 0.1, RoundUp)   ==  ceil(big(-1.1)/big(0.1)) == -11.0
+        @test fld(-1.1, 0.1) == div(-1.1, 0.1, RoundDown) == floor(big(-1.1)/big(0.1)) == -12.0
+    end
 end
 @testset "return types" begin
     for T in (Int8,Int16,Int32,Int64,Int128, UInt8,UInt16,UInt32,UInt64,UInt128)
@@ -2007,8 +2059,11 @@ end
     end
     @test nextpow(2, 56789) == 65536
     @test_throws DomainError nextpow(2, -56789)
+    @test_throws DomainError nextpow(Int8(4), 128)
     @test prevpow(2, 56789) == 32768
     @test_throws DomainError prevpow(2, -56789)
+    @test_throws DomainError prevpow(Int8(4), 128)
+    @test_throws OverflowError nextpow(Int8(4), 65)
     for i = 1:100
         @test nextpow(2, i) == nextpow(2, big(i))
         @test prevpow(2, i) == prevpow(2, big(i))
@@ -2016,6 +2071,14 @@ end
     for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64)
         @test nextpow(2, T(42)) === T(64)
         @test prevpow(2, T(42)) === T(32)
+    end
+    for T in (Float16, Float32, Float64)
+        @test prevpow(2, prevfloat(T(1024.0))) == T(512.0)
+        @test nextpow(2, nextfloat(T(1024.0))) == T(2048.0)
+        @test prevpow(T(2.0), prevfloat(T(1024.0))) == T(512.0)
+        @test nextpow(T(2.0), nextfloat(T(1024.0))) == T(2048.0)
+        @test prevpow(T(2.0), prevfloat(T(Inf))) < T(Inf)
+        @test nextpow(T(2.0), prevfloat(T(Inf))) == T(Inf)
     end
 end
 @testset "ispow2" begin
@@ -2291,12 +2354,6 @@ end
     end
 end
 @testset "getindex error throwing" begin
-    #getindex(x::Number,-1) throws BoundsError
-    #getindex(x::Number,0) throws BoundsError
-    #getindex(x::Number,2) throws BoundsError
-    #getindex(x::Array,-1) throws BoundsError
-    #getindex(x::Array,0 throws BoundsError
-    #getindex(x::Array,length(x::Array)+1) throws BoundsError
     for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
         @test_throws BoundsError getindex(x,-1)
         @test_throws BoundsError getindex(x,0)
@@ -2305,6 +2362,23 @@ end
         @test_throws BoundsError getindex([x x],0)
         @test_throws BoundsError getindex([x x],length([x,x])+1)
         @test_throws BoundsError getindex(x, 1, 0)
+    end
+end
+@testset "get(x::Number, ...)" begin
+    for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
+        @test get(x, 1, 99) == x
+        @test get(x, (), 99) == x
+        @test get(x, (1,), 99) == x
+        @test get(x, 2, 99) == 99
+        @test get(x, 0, pi) == pi
+        @test get(x, (1,2), pi) == pi
+        c = Ref(0)
+        @test get(() -> c[]+=1, x, 1) == x
+        @test get(() -> c[]+=1, x, ()) == x
+        @test get(() -> c[]+=1, x, (1,1,1)) == x
+        @test get(() -> c[]+=1, x, 2) == 1
+        @test get(() -> c[]+=1, x, -1) == 2
+        @test get(() -> c[]+=1, x, (3,2,1)) == 3
     end
 end
 @testset "copysign and flipsign" begin
@@ -2396,6 +2470,12 @@ end
 zero(::Type{TestNumber{Inner}}) where {Inner} = TestNumber(zero(Inner))
 big(test_number::TestNumber) = TestNumber(big(test_number.inner))
 @test big(TestNumber{Int}) == TestNumber{BigInt}
+
+# abstract abs2
+Base.:*(x::TestNumber, y::TestNumber) = TestNumber(x.inner*y.inner)
+Base.:(==)(x::TestNumber, y::TestNumber) = x.inner == y.inner
+Base.abs(x::TestNumber) = TestNumber(abs(x.inner))
+@test abs2(TestNumber(3+4im)) == TestNumber(25)
 
 @testset "multiplicative inverses" begin
     function testmi(numrange, denrange)
@@ -2494,18 +2574,33 @@ end
     @test rem(T(1), T(2), RoundNearest) == 1
     @test rem(T(1), T(2), RoundDown)    == 1
     @test rem(T(1), T(2), RoundUp)      == -1
+    @test rem(T(1), T(2), RoundFromZero) == -1
     @test rem(T(1.5), T(2), RoundToZero)  == 1.5
     @test rem(T(1.5), T(2), RoundNearest) == -0.5
     @test rem(T(1.5), T(2), RoundDown)    == 1.5
     @test rem(T(1.5), T(2), RoundUp)      == -0.5
+    @test rem(T(1.5), T(2), RoundFromZero) == -0.5
     @test rem(T(-1), T(2), RoundToZero)  == -1
     @test rem(T(-1), T(2), RoundNearest) == -1
     @test rem(T(-1), T(2), RoundDown)    == 1
     @test rem(T(-1), T(2), RoundUp)      == -1
+    @test rem(T(-1), T(2), RoundFromZero) == 1
     @test rem(T(-1.5), T(2), RoundToZero)  == -1.5
     @test rem(T(-1.5), T(2), RoundNearest) == 0.5
     @test rem(T(-1.5), T(2), RoundDown)    == 0.5
     @test rem(T(-1.5), T(2), RoundUp)      == -1.5
+    @test rem(T(-1.5), T(2), RoundFromZero) == 0.5
+    for mode in [RoundToZero, RoundNearest, RoundDown, RoundUp, RoundFromZero]
+        @test isnan(rem(T(1), T(0), mode))
+        @test isnan(rem(T(Inf), T(2), mode))
+        @test isnan(rem(T(1), T(NaN), mode))
+        @test rem(T(4), floatmin(T) * 2, mode) == 0
+    end
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundToZero),  -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundNearest), -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundDown),     0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundUp),      -0.0)
+    @test isequal(rem(nextfloat(typemin(T)), T(2), RoundFromZero), 0.0)
 end
 
 @testset "rem for $T RoundNearest" for T in (Int8, Int16, Int32, Int64, Int128)
@@ -2519,6 +2614,41 @@ end
         @test rem(T(n), T(-5), RoundNearest) == rem(T(n)//T(1), T(-5)//T(1), RoundNearest)
         @test rem(T(-n), T(-5), RoundNearest) == rem(T(-n)//T(1), T(-5)//T(1), RoundNearest)
     end
+end
+
+@testset "divrem rounded" begin
+    #rounded Floats
+    for T in (Float16, Float32, Float64, BigFloat)
+        @test divrem(T(1.5), T(2), RoundToZero)[2]  == 1.5
+        @test divrem(T(1.5), T(2), RoundNearest)[2] == -0.5
+        @test divrem(T(1.5), T(2), RoundDown)[2]    == 1.5
+        @test divrem(T(1.5), T(2), RoundUp)[2]      == -0.5
+        @test divrem(T(-1.5), T(2), RoundToZero)[2]  == -1.5
+        @test divrem(T(-1.5), T(2), RoundNearest)[2] == 0.5
+        @test divrem(T(-1.5), T(2), RoundDown)[2]    == 0.5
+        @test divrem(T(-1.5), T(2), RoundUp)[2]      == -1.5
+    end
+    #rounded Integers
+    for (a, b) in (
+            (3, 2),
+            (5, 3),
+            (-3, 2),
+            (5, 2),
+            (-5, 2),
+            (-5, 3),
+            (5, -3))
+        for sign in (+1, -1)
+            (a, b) = (a*sign, b*sign)
+            @test divrem(a, b, RoundNearest) == (div(a, b, RoundNearest),rem(a, b, RoundNearest))
+        end
+    end
+
+    a = 122322388883338838388383888823233122323
+    b = 343443
+    c = 122322388883338838388383888823233122333
+    @test divrem(a, b) == (div(a,b), rem(a,b))
+    @test divrem(a, c) == (div(a,c), rem(a,c))
+    @test divrem(a,-(a-20), RoundDown) == (div(a,-(a-20), RoundDown), rem(a,-(a-20), RoundDown))
 end
 
 @testset "rem2pi $T" for T in (Float16, Float32, Float64, BigFloat)
@@ -2546,6 +2676,15 @@ end
     @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
     @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
+end
+
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+    for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
+        for x in (Inf, -Inf, NaN, -NaN)
+            @test isnan(rem2pi(T(x), r))
+            @test rem2pi(T(x), r) isa T
+        end
+    end
 end
 
 import Base.^
@@ -2624,6 +2763,10 @@ end
     @test !isone(triu(fill(1, 5, 5)))
     @test !isone(zeros(Int, 5, 5))
     @test isone(Matrix(1I, 5, 5))
+    @test !isone(view(rand(5,5), [1,3,4], :))
+    Dv = view(Diagonal([1,1, 1]), [1,2], 1:2)
+    @test isone(Dv)
+    @test (@allocated isone(Dv)) == 0
     @test isone(Matrix(1I, 1000, 1000)) # sizeof(X) > 2M == ISONE_CUTOFF
 end
 
@@ -2725,7 +2868,7 @@ end
 @testset "constructor inferability for BigFloat" begin
     T = BigFloat
     @test_broken all(R -> R<:T, Base.return_types(T))
-    @test all(m -> m.file == Symbol("deprecated.jl"),
+    @test all(m -> m.file === Symbol("deprecated.jl"),
         collect(methods(T))[findall(R -> !(R<:T), Base.return_types(T))])
 end
 
@@ -2743,4 +2886,46 @@ end
     b = MyRealFld(3.0)
     @test_throws MethodError fld(a, b)
     @test_throws MethodError cld(a, b)
+end
+
+@testset "Bool rounding (#25074)" begin
+    @testset "round Bool" begin
+        @test_throws InexactError round(Bool, -4.1)
+        @test_throws InexactError round(Bool, 1.5)
+        @test true == round(Bool, 1.0)
+        @test false == round(Bool, 0.0)
+        @test true == round(Bool, 0.6)
+        @test false == round(Bool, 0.4)
+        @test false == round(Bool, 0.5)
+        @test false == round(Bool, -0.5)
+    end
+
+    @testset "trunc Bool" begin
+        @test_throws InexactError trunc(Bool, -4.1)
+        @test_throws InexactError trunc(Bool, 2.5)
+        @test true == trunc(Bool, 1.0)
+        @test false == trunc(Bool, 0.0)
+        @test false == trunc(Bool, 0.6)
+        @test false == trunc(Bool, 0.4)
+        @test true == trunc(Bool, 1.8)
+        @test false == trunc(Bool, -0.5)
+    end
+
+    @testset "floor Bool" begin
+        @test_throws InexactError floor(Bool, -0.1)
+        @test_throws InexactError floor(Bool, 2.5)
+        @test true == floor(Bool, 1.0)
+        @test false == floor(Bool, 0.0)
+        @test false == floor(Bool, 0.6)
+        @test true == floor(Bool, 1.8)
+    end
+
+    @testset "ceil Bool" begin
+        @test_throws InexactError ceil(Bool, -1.4)
+        @test_throws InexactError ceil(Bool, 1.5)
+        @test true == ceil(Bool, 1.0)
+        @test false == ceil(Bool, 0.0)
+        @test true == ceil(Bool, 0.6)
+        @test false == ceil(Bool, -0.7)
+    end
 end

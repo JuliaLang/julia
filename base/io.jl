@@ -20,7 +20,7 @@ struct SystemError <: Exception
     extrainfo
     SystemError(p::AbstractString, e::Integer, extrainfo) = new(p, e, extrainfo)
     SystemError(p::AbstractString, e::Integer) = new(p, e, nothing)
-    SystemError(p::AbstractString) = new(p, Libc.errno())
+    SystemError(p::AbstractString) = new(p, Libc.errno(), nothing)
 end
 
 lock(::IO) = nothing
@@ -60,9 +60,50 @@ function isopen end
 Close an I/O stream. Performs a [`flush`](@ref) first.
 """
 function close end
+
+"""
+    closewrite(stream)
+
+Shutdown the write half of a full-duplex I/O stream. Performs a [`flush`](@ref)
+first. Notify the other end that no more data will be written to the underlying
+file. This is not supported by all IO types.
+
+# Examples
+```jldoctest
+julia> io = Base.BufferStream(); # this never blocks, so we can read and write on the same Task
+
+julia> write(io, "request");
+
+julia> # calling `read(io)` here would block forever
+
+julia> closewrite(io);
+
+julia> read(io, String)
+"request"
+```
+"""
+function closewrite end
+
+"""
+    flush(stream)
+
+Commit all currently buffered writes to the given stream.
+"""
 function flush end
-function wait_readnb end
-function wait_close end
+
+"""
+    bytesavailable(io)
+
+Return the number of bytes available for reading before a read from this stream or buffer will block.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer("JuliaLang is a GitHub organization");
+
+julia> bytesavailable(io)
+34
+```
+"""
 function bytesavailable end
 
 """
@@ -81,7 +122,7 @@ function readavailable end
 """
     isreadable(io) -> Bool
 
-Return `true` if the specified IO object is readable (if that can be determined).
+Return `false` if the specified IO object is not readable.
 
 # Examples
 ```jldoctest
@@ -99,12 +140,12 @@ true
 julia> rm("myfile.txt")
 ```
 """
-function isreadable end
+isreadable(io::IO) = isopen(io)
 
 """
     iswritable(io) -> Bool
 
-Return `true` if the specified IO object is writable (if that can be determined).
+Return `false` if the specified IO object is not writable.
 
 # Examples
 ```jldoctest
@@ -122,9 +163,35 @@ false
 julia> rm("myfile.txt")
 ```
 """
-function iswritable end
-function copy end
+iswritable(io::IO) = isopen(io)
+
+"""
+    eof(stream) -> Bool
+
+Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
+function will block to wait for more data if necessary, and then return `false`. Therefore
+it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
+`false` as long as buffered data is still available, even if the remote end of a connection
+is closed.
+
+# Examples
+```jldoctest
+julia> b = IOBuffer("my buffer");
+
+julia> eof(b)
+false
+
+julia> seekend(b);
+
+julia> eof(b)
+true
+```
+"""
 function eof end
+
+function copy end
+function wait_readnb end
+function wait_close end
 
 """
     read(io::IO, T)
@@ -314,11 +381,9 @@ descriptor upon completion.
 
 # Examples
 ```jldoctest
-julia> open("myfile.txt", "w") do io
-           write(io, "Hello world!")
-       end;
+julia> write("myfile.txt", "Hello world!");
 
-julia> open(f->read(f, String), "myfile.txt")
+julia> open(io->read(io, String), "myfile.txt")
 "Hello world!"
 
 julia> rm("myfile.txt")
@@ -357,69 +422,41 @@ end
 function pipe_reader end
 function pipe_writer end
 
+for f in (:flush, :closewrite, :iswritable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_writer(io)::IO)
+end
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
 write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
 buffer_writes(io::AbstractPipe, args...) = buffer_writes(pipe_writer(io)::IO, args...)
-flush(io::AbstractPipe) = flush(pipe_writer(io)::IO)
 
+for f in (
+        # peek/mark interface
+        :mark, :unmark, :reset, :ismarked,
+        # Simple reader functions
+        :read, :readavailable, :bytesavailable, :reseteof, :isreadable)
+    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
+end
 read(io::AbstractPipe, byte::Type{UInt8}) = read(pipe_reader(io)::IO, byte)::UInt8
 unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader(io)::IO, p, nb)
-read(io::AbstractPipe) = read(pipe_reader(io)::IO)
 readuntil(io::AbstractPipe, arg::UInt8; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
-
-for f in (
-        # peek/mark interface
-        :mark, :unmark, :reset, :ismarked,
-        # Simple reader functions
-        :readavailable, :isreadable)
-    @eval $(f)(io::AbstractPipe) = $(f)(pipe_reader(io)::IO)
-end
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
+wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
+eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
 
-iswritable(io::AbstractPipe) = iswritable(pipe_writer(io)::IO)
 isopen(io::AbstractPipe) = isopen(pipe_writer(io)::IO) || isopen(pipe_reader(io)::IO)
 close(io::AbstractPipe) = (close(pipe_writer(io)::IO); close(pipe_reader(io)::IO))
-wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
 wait_close(io::AbstractPipe) = (wait_close(pipe_writer(io)::IO); wait_close(pipe_reader(io)::IO))
-
-"""
-    bytesavailable(io)
-
-Return the number of bytes available for reading before a read from this stream or buffer will block.
-
-# Examples
-```jldoctest
-julia> io = IOBuffer("JuliaLang is a GitHub organization");
-
-julia> bytesavailable(io)
-34
-```
-"""
-bytesavailable(io::AbstractPipe) = bytesavailable(pipe_reader(io)::IO)
-bytesavailable(io::DevNull) = 0
-
-"""
-    eof(stream) -> Bool
-
-Test whether an I/O stream is at end-of-file. If the stream is not yet exhausted, this
-function will block to wait for more data if necessary, and then return `false`. Therefore
-it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
-`false` as long as buffered data is still available, even if the remote end of a connection
-is closed.
-"""
-eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
-reseteof(io::AbstractPipe) = reseteof(pipe_reader(io)::IO)
 
 
 # Exception-safe wrappers (io = open(); try f(io) finally close(io))
 
-write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), filename, "w")
+write(filename::AbstractString, a1, args...) = open(io->write(io, a1, args...), convert(String, filename)::String, "w")
 
 """
     read(filename::AbstractString, args...)
@@ -431,9 +468,9 @@ Open a file and read its contents. `args` is passed to `read`: this is equivalen
 
 Read the entire contents of a file as a string.
 """
-read(filename::AbstractString, args...) = open(io->read(io, args...), filename)
+read(filename::AbstractString, args...) = open(io->read(io, args...), convert(String, filename)::String)
 
-read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), filename)
+read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), convert(String, filename)::String)
 
 """
     read!(stream::IO, array::AbstractArray)
@@ -443,7 +480,7 @@ Read binary data from an I/O stream or file, filling in `array`.
 """
 function read! end
 
-read!(filename::AbstractString, a) = open(io->read!(io, a), filename)
+read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, filename)::String)
 
 """
     readuntil(stream::IO, delim; keep::Bool = false)
@@ -456,10 +493,7 @@ The text is assumed to be encoded in UTF-8.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readuntil("my_file.txt", 'L')
 "Julia"
@@ -470,7 +504,7 @@ julia> readuntil("my_file.txt", '.', keep = true)
 julia> rm("my_file.txt")
 ```
 """
-readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), filename)
+readuntil(filename::AbstractString, args...; kw...) = open(io->readuntil(io, args...; kw...), convert(String, filename)::String)
 
 """
     readline(io::IO=stdin; keep::Bool=false)
@@ -485,10 +519,7 @@ line.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readline("my_file.txt")
 "JuliaLang is a GitHub organization."
@@ -497,6 +528,14 @@ julia> readline("my_file.txt", keep=true)
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
+```
+```julia-repl
+julia> print("Enter your name: ")
+Enter your name:
+
+julia> your_name = readline()
+Logan
+"Logan"
 ```
 """
 function readline(filename::AbstractString; keep::Bool=false)
@@ -523,14 +562,12 @@ end
 
 Read all lines of an I/O stream or a file as a vector of strings. Behavior is
 equivalent to saving the result of reading [`readline`](@ref) repeatedly with the same
-arguments and saving the resulting lines as a vector of strings.
+arguments and saving the resulting lines as a vector of strings.  See also
+[`eachline`](@ref) to iterate over the lines without reading them all at once.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end
-57
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readlines("my_file.txt")
 2-element Vector{String}:
@@ -885,8 +922,9 @@ end
 
 function readuntil(io::IO, target::AbstractString; keep::Bool=false)
     # small-string target optimizations
-    isempty(target) && return ""
-    c, rest = Iterators.peel(target)
+    x = Iterators.peel(target)
+    isnothing(x) && return ""
+    c, rest = x
     if isempty(rest) && c <= '\x7f'
         return readuntil_string(io, c % UInt8, keep)
     end
@@ -912,9 +950,7 @@ if there is one. Equivalent to `chomp(read(x, String))`.
 
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
 julia> readchomp("my_file.txt")
 "JuliaLang is a GitHub organization.\\nIt has many members."
@@ -965,7 +1001,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-read(s::IO, ::Type{String}) = String(read(s))
+read(s::IO, ::Type{String}) = String(read(s)::Vector{UInt8})
 read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##
@@ -991,11 +1027,14 @@ closed when the `EachLine` object is garbage collected.
 
 To iterate over each line of a `String`, `eachline(IOBuffer(str))` can be used.
 
+[`Iterators.reverse`](@ref) can be used on an `EachLine` object to read the lines
+in reverse order (for files, buffers, and other I/O streams supporting [`seek`](@ref)),
+and [`first`](@ref) or [`last`](@ref) can be used to extract the initial or final
+lines, respectively.
+
 # Examples
 ```jldoctest
-julia> open("my_file.txt", "w") do io
-           write(io, "JuliaLang is a GitHub organization.\\n It has many members.\\n");
-       end;
+julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\n It has many members.\\n");
 
 julia> for line in eachline("my_file.txt")
            print(line)
@@ -1004,6 +1043,9 @@ JuliaLang is a GitHub organization. It has many members.
 
 julia> rm("my_file.txt");
 ```
+
+!!! compat "Julia 1.8"
+       Julia 1.8 is required to use `Iterators.reverse` or `last` with `eachline` iterators.
 """
 function eachline(stream::IO=stdin; keep::Bool=false)
     EachLine(stream, keep=keep)::EachLine
@@ -1025,6 +1067,115 @@ IteratorSize(::Type{<:EachLine}) = SizeUnknown()
 
 isdone(itr::EachLine, state...) = eof(itr.stream)
 
+# Reverse-order iteration for the EachLine iterator for seekable streams,
+# which works by reading the stream from the end in 4kiB chunks.
+function iterate(r::Iterators.Reverse{<:EachLine})
+    p0 = position(r.itr.stream)
+    seekend(r.itr.stream) # may throw if io is non-seekable
+    p = position(r.itr.stream)
+    # chunks = circular buffer of 4kiB blocks read from end of stream
+    chunks = empty!(Vector{Vector{UInt8}}(undef, 2)) # allocate space for 2 buffers (common case)
+    inewline = jnewline = 0
+    while p > p0 && inewline == 0 # read chunks until we find a newline or we read whole file
+        chunk = Vector{UInt8}(undef, min(4096, p-p0))
+        p -= length(chunk)
+        readbytes!(seek(r.itr.stream, p), chunk)
+        pushfirst!(chunks, chunk)
+        inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+        if length(chunks) == 1 && inewline == length(chunks[1])
+            # found newline at end of file … keep looking
+            jnewline = inewline
+            inewline = something(findprev(==(UInt8('\n')), chunk, inewline-1), 0)
+        end
+    end
+    return iterate(r, (; p0, p, chunks, ichunk=1, inewline, jchunk=length(chunks), jnewline = jnewline == 0 && !isempty(chunks) ? length(chunks[end]) : jnewline))
+end
+function iterate(r::Iterators.Reverse{<:EachLine}, state)
+    function _stripnewline(keep, pos, data)
+        # strip \n or \r\n from data[pos] by decrementing pos
+        if !keep && pos > 0 && data[pos] == UInt8('\n')
+            pos -= 1
+            pos -= pos > 0 && data[pos] == UInt8('\r')
+        end
+        return pos
+    end
+    # state tuple: p0 = initial file position, p = current position,
+    #              chunks = circular array of chunk buffers,
+    #              current line is from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
+    p0, p, chunks, ichunk, inewline, jchunk, jnewline = state
+    if inewline == 0 # no newline found, remaining line = rest of chunks (if any)
+        isempty(chunks) && return (r.itr.ondone(); nothing)
+        buf = IOBuffer(sizehint = ichunk==jchunk ? jnewline : 4096)
+        while ichunk != jchunk
+            write(buf, chunks[ichunk])
+            ichunk = ichunk == length(chunks) ? 1 : ichunk + 1
+        end
+        chunk = chunks[jchunk]
+        write(buf, view(chunk, 1:jnewline))
+        buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
+        empty!(chunks) # will cause next iteration to terminate
+        seekend(r.itr.stream) # reposition to end of stream for isdone
+        s = String(take!(buf))
+    else
+        # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
+        if ichunk == jchunk # common case: current and previous newline in same chunk
+            chunk = chunks[ichunk]
+            s = String(view(chunk, inewline+1:_stripnewline(r.itr.keep, jnewline, chunk)))
+        else
+            buf = IOBuffer(sizehint=max(128, length(chunks[ichunk])-inewline+jnewline))
+            write(buf, view(chunks[ichunk], inewline+1:length(chunks[ichunk])))
+            i = ichunk
+            while true
+                i = i == length(chunks) ? 1 : i + 1
+                i == jchunk && break
+                write(buf, chunks[i])
+            end
+            write(buf, view(chunks[jchunk], 1:jnewline))
+            buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
+            s = String(take!(buf))
+
+            # overwrite obsolete chunks (ichunk+1:jchunk)
+            i = jchunk
+            while i != ichunk
+                chunk = chunks[i]
+                p -= length(resize!(chunk, min(4096, p-p0)))
+                readbytes!(seek(r.itr.stream, p), chunk)
+                i = i == 1 ? length(chunks) : i - 1
+            end
+        end
+
+        # find the newline previous to inewline
+        jchunk = ichunk
+        jnewline = inewline
+        while true
+            inewline = something(findprev(==(UInt8('\n')), chunks[ichunk], inewline-1), 0)
+            inewline > 0 && break
+            ichunk = ichunk == 1 ? length(chunks) : ichunk - 1
+            ichunk == jchunk && break # found nothing — may need to read more chunks
+            inewline = length(chunks[ichunk])+1 # start for next findprev
+        end
+
+        # read more chunks to look for a newline (should rarely happen)
+        if inewline == 0 && p > p0
+            ichunk = jchunk + 1
+            while true
+                chunk = Vector{UInt8}(undef, min(4096, p-p0))
+                p -= length(chunk)
+                readbytes!(seek(r.itr.stream, p), chunk)
+                insert!(chunks, ichunk, chunk)
+                inewline = something(findlast(==(UInt8('\n')), chunk), 0)
+                (p == p0 || inewline > 0) && break
+            end
+        end
+    end
+    return (s, (; p0, p, chunks, ichunk, inewline, jchunk, jnewline))
+end
+isdone(r::Iterators.Reverse{<:EachLine}, state) = isempty(state.chunks)
+isdone(r::Iterators.Reverse{<:EachLine}) = isdone(r.itr)
+
+# use reverse iteration to get end of EachLines (if possible)
+last(itr::EachLine) = first(Iterators.reverse(itr))
+
 struct ReadEachIterator{T, IOT <: IO}
     stream::IOT
 end
@@ -1034,7 +1185,7 @@ end
 
 Return an iterable object yielding [`read(io, T)`](@ref).
 
-See also: [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref)
+See also [`skipchars`](@ref), [`eachline`](@ref), [`readuntil`](@ref).
 
 !!! compat "Julia 1.6"
     `readeach` requires Julia 1.6 or later.
@@ -1067,7 +1218,7 @@ isdone(itr::ReadEachIterator, state...) = eof(itr.stream)
 # not in base.
 
 """
-    mark(s)
+    mark(s::IO)
 
 Add a mark at the current position of stream `s`. Return the marked position.
 
@@ -1078,7 +1229,7 @@ function mark(io::IO)
 end
 
 """
-    unmark(s)
+    unmark(s::IO)
 
 Remove a mark from stream `s`. Return `true` if the stream was marked, `false` otherwise.
 
@@ -1091,7 +1242,7 @@ function unmark(io::IO)
 end
 
 """
-    reset(s)
+    reset(s::IO)
 
 Reset a stream `s` to a previously marked position, and remove the mark. Return the
 previously marked position. Throw an error if the stream is not marked.
@@ -1107,7 +1258,7 @@ function reset(io::T) where T<:IO
 end
 
 """
-    ismarked(s)
+    ismarked(s::IO)
 
 Return `true` if stream `s` is marked.
 
@@ -1118,11 +1269,6 @@ ismarked(io::IO) = io.mark >= 0
 # Make sure all IO streams support flush, even if only as a no-op,
 # to make it easier to write generic I/O code.
 
-"""
-    flush(stream)
-
-Commit all currently buffered writes to the given stream.
-"""
 flush(io::IO) = nothing
 
 """

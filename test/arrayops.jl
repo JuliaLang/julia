@@ -6,8 +6,6 @@ using .Main.OffsetArrays
 
 isdefined(@__MODULE__, :T24Linear) || include("testhelpers/arrayindexingtypes.jl")
 
-using SparseArrays
-
 using Random, LinearAlgebra
 using Dates
 
@@ -547,9 +545,17 @@ end
 
 @testset "findall, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
+    m = [false false; true false]
     @test findall(!iszero, a) == [2,3,4,6,7,8]
     @test findall(a.==2) == [3,7]
     @test findall(isodd,a) == [2,4,6,8]
+    @test findall(Bool[]) == Int[]
+    @test findall([false, false]) == Int[]
+    @test findall(m) == [k for (k,v) in pairs(m) if v]
+    @test findall(!, [false, true, true]) == [1]
+    @test findall(i -> true, [false, true, false]) == [1, 2, 3]
+    @test findall(i -> false, rand(2, 2)) == Int[]
+    @test findall(!, m) == [k for (k,v) in pairs(m) if !v]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
@@ -567,6 +573,7 @@ end
     @test findlast(!iszero, a) == 8
     @test findlast(a.==0) == 5
     @test findlast(a.==5) == nothing
+    @test findlast(false) == nothing # test non-AbstractArray findlast
     @test findlast(isequal(3), [1,2,4,1,2,3,4]) == 6
     @test findlast(isodd, [2,4,6,3,9,2,0]) == 5
     @test findlast(isodd, [2,4,6,2,0]) == nothing
@@ -592,6 +599,10 @@ end
         @test findnext(b, T(3)) isa keytype(b)
         @test findprev(b, T(1)) isa keytype(b)
         @test findprev(b, T(2)) isa keytype(b)
+    end
+
+    @testset "issue 43078" begin
+        @test_throws TypeError findall([1])
     end
 end
 @testset "find with Matrix" begin
@@ -697,7 +708,7 @@ end
     ap = PermutedDimsArray(Array(a), (2,1,3))
     @test strides(ap) == (3,1,12)
 
-    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
+    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1), [rand(ComplexF64, 2,2) for _ in 1:2, _ in 1:3, _ in 1:2, _ in 1:4]]
         perm = randperm(4)
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
@@ -705,6 +716,10 @@ end
         @test sum(permutedims(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
         @test sum(permutedims(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
         @test sum(permutedims(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
+
+        @test prod(permutedims(A,perm)) ≈ prod(PermutedDimsArray(A,perm))
+        @test prod(permutedims(A,perm), dims=2) ≈ prod(PermutedDimsArray(A,perm), dims=2)
+        @test prod(permutedims(A,perm), dims=(2,4)) ≈ prod(PermutedDimsArray(A,perm), dims=(2,4))
     end
 
     m = [1 2; 3 4]
@@ -748,6 +763,24 @@ end
     @test res === dst == [5 6 4; 2 3 1]
     res = circshift!(dst, src, (3.0, 2.0))
     @test res === dst == [5 6 4; 2 3 1]
+
+    # https://github.com/JuliaLang/julia/issues/41402
+    src = Float64[]
+    @test circshift(src, 1) == src
+    src = zeros(Bool, (4,0))
+    @test circshift(src, 1) == src
+
+    # 1d circshift! (https://github.com/JuliaLang/julia/issues/46533)
+    a = [1:5;]
+    @test circshift!(a, 1) === a
+    @test a == circshift([1:5;], 1) == [5, 1, 2, 3, 4]
+    a = [1:5;]
+    @test circshift!(a, -2) === a
+    @test a == circshift([1:5;], -2) == [3, 4, 5, 1, 2]
+    a = [1:5;]
+    oa = OffsetVector(copy(a), -1)
+    @test circshift!(oa, 1) === oa
+    @test oa == circshift(OffsetVector(a, -1), 1)
 end
 
 @testset "circcopy" begin
@@ -784,6 +817,10 @@ let A, B, C, D
 
     # With hash collisions
     @test map(x -> x.x, unique(map(HashCollision, B), dims=1)) == C
+
+    # With NaNs:
+    E = [1 NaN 3; 1 NaN 3; 1 NaN 3];
+    @test isequal(unique(E, dims=1), [1  NaN  3])
 end
 
 @testset "large matrices transpose" begin
@@ -1106,11 +1143,16 @@ end
     @test isequal(intersect([1,2,3], Float64[]), Float64[])
     @test isequal(intersect(Int64[], [1,2,3]), Int64[])
     @test isequal(intersect(Int64[]), Int64[])
+    @test isequal(intersect([1, 3], 1:typemax(Int)), [1, 3])
+    @test isequal(intersect(1:typemax(Int), [1, 3]), [1, 3])
+    @test isequal(intersect([1, 2, 3], 2:0.1:5), [2., 3.])
+    @test isequal(intersect([1.0, 2.0, 3.0], 2:5), [2., 3.])
+
     @test isequal(setdiff([1,2,3,4], [2,5,4]), [1,3])
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
     @test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
-    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2])
+    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
     @test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
     @test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
     @test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
@@ -1155,7 +1197,6 @@ end
     @test mapslices(prod,["1"],dims=1) == ["1"]
 
     # issue #5177
-
     c = fill(1,2,3,4)
     m1 = mapslices(_ -> fill(1,2,3), c, dims=[1,2])
     m2 = mapslices(_ -> fill(1,2,4), c, dims=[1,3])
@@ -1178,12 +1219,26 @@ end
     @test o == fill(1, 3, 4)
 
     # issue #18524
-    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
+    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1) # see variations of this below
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
 
-    # issue #21123
-    @test mapslices(nnz, sparse(1.0I, 3, 3), dims=1) == [1 1 1]
+    r = rand(Int8, 4,5,2)
+    @test vec(mapslices(repr, r, dims=(2,1))) == map(repr, eachslice(r, dims=3))
+    @test mapslices(tuple, [1 2; 3 4], dims=1) == [([1, 3],)  ([2, 4],)]
+    @test mapslices(transpose, r, dims=(1,3)) == permutedims(r, (3,2,1))
+
+    # failures
+    @test_broken @inferred(mapslices(tuple, [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
+    @test_broken @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
+
+    # re-write, #40996
+    @test_throws ArgumentError mapslices(identity, rand(2,3), dims=0) # previously BoundsError
+    @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
+    @test_throws DimensionMismatch mapslices(x -> x * x', rand(2,3), dims=1) # explicitly caught
+    @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
+    @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
+    @test_broken @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4]
 end
 
 @testset "single multidimensional index" begin
@@ -1446,6 +1501,26 @@ end
     @test isempty(eoa)
 end
 
+@testset "logical keepat!" begin
+    # Vector
+    a = Vector(1:10)
+    keepat!(a, [falses(5); trues(5)])
+    @test a == 6:10
+    @test_throws BoundsError keepat!(a, trues(1))
+    @test_throws BoundsError keepat!(a, trues(11))
+
+    # BitVector
+    ba = rand(10) .> 0.5
+    @test isa(ba, BitArray)
+    keepat!(ba, ba)
+    @test all(ba)
+
+    # empty array
+    ea = []
+    keepat!(ea, Bool[])
+    @test isempty(ea)
+end
+
 @testset "deleteat!" begin
     for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                    8:9, 9:10, 6:9, 7:10]
@@ -1481,6 +1556,11 @@ end
     @test_throws BoundsError deleteat!([], [2])
     @test deleteat!([], []) == []
     @test deleteat!([], Bool[]) == []
+    let a = Vector{Any}(undef, 2)
+        a[1] = 1
+        @test isassigned(deleteat!(copy(a), [2]), 1)
+        @test !isassigned(deleteat!(copy(a), [1]), 1)
+    end
 end
 
 @testset "comprehensions" begin
@@ -1545,6 +1625,12 @@ end
     @test reverse!(Any[]) == Any[]
 end
 
+@testset "reverseind" begin
+    @test reverseind([1, 2, 3], 2) == 2
+    @test reverseind([1, 2, 3], 0) == 4
+    @test reverseind([1, 2, 3], 3) == 1
+end
+
 @testset "reverse dim" begin
     @test isequal(reverse([2,3,1], dims=1), [1,3,2])
     @test_throws ArgumentError reverse([2,3,1], dims=2)
@@ -1588,15 +1674,32 @@ end
 end
 
 @testset "isdiag, istril, istriu" begin
+    # Scalar
     @test isdiag(3)
     @test istril(4)
     @test istriu(5)
+
+    # Square matrix
     @test !isdiag([1 2; 3 4])
     @test !istril([1 2; 3 4])
     @test !istriu([1 2; 3 4])
     @test isdiag([1 0; 0 4])
     @test istril([1 0; 3 4])
     @test istriu([1 2; 0 4])
+
+    # Non-square matrix
+    @test !isdiag([1 2 0; 3 4 0])
+    @test !istril([1 2 0; 3 4 0])
+    @test !istriu([1 2 0; 3 4 0])
+    @test isdiag([1 0 0; 0 4 0])
+    @test istril([1 0 0; 3 4 0])
+    @test istriu([1 2 0; 0 4 0])
+    @test !isdiag([1 2 0; 3 4 1])
+    @test !istril([1 2 0; 3 4 1])
+    @test !istriu([1 2 0; 3 4 1])
+    @test !isdiag([1 0 0; 0 4 1])
+    @test !istril([1 0 0; 3 4 1])
+    @test istriu([1 2 0; 0 4 1])
 end
 
 # issue 4228
@@ -1908,13 +2011,6 @@ end
     @test isless(CartesianIndex((2,1)), CartesianIndex((1,2)))
     @test !isless(CartesianIndex((1,2)), CartesianIndex((2,1)))
 
-    a = spzeros(2,3)
-    @test CartesianIndices(size(a)) == eachindex(a)
-    a[CartesianIndex{2}(2,3)] = 5
-    @test a[2,3] == 5
-    b = view(a, 1:2, 2:3)
-    b[CartesianIndex{2}(1,1)] = 7
-    @test a[1,2] == 7
     @test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
     @test CartesianIndex{3}(1,2,3)*2 == CartesianIndex{3}(2,4,6)
     @test_throws ErrorException iterate(CartesianIndex{3}(1,2,3))
@@ -1967,16 +2063,6 @@ end
     y = iterate(itr, y[2])
     @test y === nothing
     @test r[val] == 3
-    r = sparse(2:3:8)
-    itr = eachindex(r)
-    y = iterate(itr)
-    @test y !== nothing
-    y = iterate(itr, y[2])
-    y = iterate(itr, y[2])
-    @test y !== nothing
-    val, state = y
-    @test r[val] == 8
-    @test iterate(itr, state) == nothing
 end
 
 R = CartesianIndices((1,3))
@@ -2076,6 +2162,16 @@ end
     @test_throws ArgumentError LinearAlgebra.copy_transpose!(a,2:3,1:3,b,1:5,2:7)
 end
 
+@testset "empty copyto!" begin
+    @test isempty(copyto!(Int[], ()))
+    @test isempty(copyto!(Int[], Int[]))
+    @test copyto!([1,2], ()) == [1,2]
+
+    @test isempty(copyto!(Int[], 1, ()))
+    @test isempty(copyto!(Int[], 1, Int[]))
+    @test copyto!([1,2], 1, ()) == [1,2]
+end
+
 module RetTypeDecl
     using Test
     import Base: +, *, broadcast, convert
@@ -2125,19 +2221,75 @@ end
 end
 
 # row/column/slice iterator tests
-using Base: eachrow, eachcol
 @testset "row/column/slice iterators" begin
+    # check type aliases
+    @test RowSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test eachrow(ones(3)) isa RowSlices
+    @test eachrow(ones(3,3)) isa RowSlices
+    @test ColumnSlices <: AbstractSlices{<:AbstractVector, 1} <: AbstractVector{<:AbstractVector}
+    @test eachcol(ones(3)) isa ColumnSlices
+    @test eachcol(ones(3,3)) isa ColumnSlices
+
     # Simple ones
     M = [1 2 3; 4 5 6; 7 8 9]
-    @test collect(eachrow(M)) == collect(eachslice(M, dims = 1)) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
-    @test collect(eachcol(M)) == collect(eachslice(M, dims = 2)) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
+    @test eachrow(M) == eachslice(M, dims = 1) == [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+    @test eachcol(M) == eachslice(M, dims = 2) == [[1, 4, 7], [2, 5, 8], [3, 6, 9]]
     @test_throws DimensionMismatch eachslice(M, dims = 4)
 
-    # Higher-dimensional case
-    M = reshape([(1:16)...], 2, 2, 2, 2)
+    SR = @inferred eachrow(M)
+    @test SR[2] isa eltype(SR)
+    SR[2] = [14,15,16]
+    @test SR[2] == M[2,:] == [14,15,16]
+    @test parent(SR) === M
+
+    SC = @inferred eachcol(M)
+    @test SC[3] isa eltype(SC)
+    SC[3] = [23,26,29]
+    @test SC[3] == M[:,3] == [23,26,29]
+    @test parent(SC) === M
+
+    # Higher-dimensional cases
+    M = reshape(collect(1:16), (2,2,2,2))
     @test_throws MethodError collect(eachrow(M))
     @test_throws MethodError collect(eachcol(M))
-    @test collect(eachslice(M, dims = 1))[1][:, :, 1] == [1 5; 3 7]
+
+    S1 = eachslice(M, dims = 1)
+    @test S1 isa AbstractSlices{<:AbstractArray{Int, 3}, 1}
+    @test size(S1) == (2,)
+    @test S1[1] == M[1,:,:,:]
+
+    S1K = eachslice(M, dims = 1, drop=false)
+    @test S1K isa AbstractSlices{<:AbstractArray{Int, 3}, 4}
+    @test size(S1K) == (2,1,1,1)
+    @test S1K[1,1,1,1] == M[1,:,:,:]
+
+    S23 = eachslice(M, dims = (2,3))
+    @test S23 isa AbstractSlices{<:AbstractArray{Int, 2}, 2}
+    @test size(S23) == (2,2)
+    @test S23[2,1] == M[:,2,1,:]
+
+    S23K = eachslice(M, dims = (2,3), drop=false)
+    @test S23K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
+    @test size(S23K) == (1,2,2,1)
+    @test S23K[1,2,1,1] == M[:,2,1,:]
+
+    S32 = eachslice(M, dims = (3,2))
+    @test S32 isa AbstractSlices{<:AbstractArray{Int, 2}, 2}
+    @test size(S32) == (2,2)
+    @test S32[2,1] == M[:,1,2,:]
+
+    S32K = eachslice(M, dims = (3,2), drop=false)
+    @test S32K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
+    @test size(S32K) == (1,2,2,1)
+    @test S32K[1,2,1,1] == M[:,2,1,:]
+
+    @testset "eachslice inference (#45923)" begin
+        a = [1 2; 3 4]
+        f1(a) = eachslice(a, dims=1)
+        @test (@inferred f1(a)) == eachrow(a)
+        f2(a) = eachslice(a, dims=2)
+        @test (@inferred f2(a)) == eachcol(a)
+    end
 end
 
 ###
@@ -2289,10 +2441,12 @@ let A = zeros(Int, 2, 2), B = zeros(Float64, 2, 2)
     f40() = Float64[A A]
     f41() = [A B]
     f42() = Int[A B]
+    f43() = Int[A...]
+    f44() = Float64[A..., B...]
 
     for f in [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16,
               f17, f18, f19, f20, f21, f22, f23, f24, f25, f26, f27, f28, f29, f30,
-              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42]
+              f31, f32, f33, f34, f35, f36, f37, f38, f39, f40, f41, f42, f43, f44]
         @test isconcretetype(Base.return_types(f, ())[1])
     end
 end
@@ -2660,7 +2814,7 @@ let TT = Union{UInt8, Int8}
     resize!(b, 1)
     @assert pointer(a) == pa
     @assert pointer(b) == pb
-    unsafe_store!(pa, 0x1, 2) # reset a[2] to 1
+    unsafe_store!(Ptr{UInt8}(pa), 0x1, 2) # reset a[2] to 1
     @test length(a) == length(b) == 1
     @test a[1] == b[1] == 0x0
     @test a == b
@@ -2907,4 +3061,14 @@ end
     @test [fill(1); [2; 2]] == [1; 2; 2]
     @test [fill(1); fill(2, (2,1,1))] == reshape([1; 2; 2], (3, 1, 1))
     @test_throws DimensionMismatch [fill(1); rand(2, 2, 2)]
+end
+
+@testset "eltype of zero for arrays (issue #41348)" begin
+    for a in Any[[DateTime(2020), DateTime(2021)], [Date(2000), Date(2001)], [Time(1), Time(2)]]
+        @test a + zero(a) == a
+        b = reshape(a, :, 1)
+        @test b + zero(b) == b
+        c = view(b, 1:1, 1:1)
+        @test c + zero(c) == c
+    end
 end

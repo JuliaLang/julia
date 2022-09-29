@@ -643,10 +643,10 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
             if (init == 0) {
 #if defined(RTLD_SELF)
                 jl_static_print = (size_t (*)(ios_t*, void*))
-                    (uintptr_t)dlsym(RTLD_SELF, "jl_static_show");
+                    (uintptr_t)dlsym(RTLD_SELF, "ijl_static_show");
 #elif defined(RTLD_DEFAULT)
                 jl_static_print = (size_t (*)(ios_t*, void*))
-                    (uintptr_t)dlsym(RTLD_DEFAULT, "jl_static_show");
+                    (uintptr_t)dlsym(RTLD_DEFAULT, "ijl_static_show");
 #elif defined(_OS_WINDOWS_)
                 HMODULE handle;
                 if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
@@ -654,7 +654,7 @@ static void cvalue_printdata(fl_context_t *fl_ctx, ios_t *f, void *data,
                                        (LPCWSTR)(&cvalue_printdata),
                                        &handle)) {
                     jl_static_print = (size_t (*)(ios_t*, void*))
-                        (uintptr_t)GetProcAddress(handle, "jl_static_show");
+                        (uintptr_t)GetProcAddress(handle, "ijl_static_show");
                 }
 #endif
                 init = 1;

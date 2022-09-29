@@ -2,7 +2,9 @@
 
 module TestAdjointTranspose
 
-using Test, LinearAlgebra, SparseArrays
+using Test, LinearAlgebra
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 
 @testset "Adjoint and Transpose inner constructor basics" begin
     intvec, intmat = [1, 2], [1 2; 3 4]
@@ -239,6 +241,25 @@ end
     @test convert(Transpose{Float64,Matrix{Float64}}, Transpose(intmat))::Transpose{Float64,Matrix{Float64}} == Transpose(intmat)
 end
 
+isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))
+using .Main.ImmutableArrays
+
+@testset "Adjoint and Transpose convert methods to AbstractArray" begin
+    # tests corresponding to #34995
+    intvec, intmat = [1, 2], [1 2 3; 4 5 6]
+    statvec = ImmutableArray(intvec)
+    statmat = ImmutableArray(intmat)
+
+    @test convert(AbstractArray{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractArray{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractArray{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractArray{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statvec))::Adjoint{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Adjoint(statvec)
+    @test convert(AbstractMatrix{Float64}, Adjoint(statmat))::Array{Float64,2} == Adjoint(statmat)
+    @test convert(AbstractMatrix{Float64}, Transpose(statvec))::Transpose{Float64,ImmutableArray{Float64,1,Array{Float64,1}}} == Transpose(statvec)
+    @test convert(AbstractMatrix{Float64}, Transpose(statmat))::Array{Float64,2} == Transpose(statmat)
+end
+
 @testset "Adjoint and Transpose similar methods" begin
     intvec, intmat = [1, 2], [1 2 3; 4 5 6]
     # similar with no additional specifications, vector (rewrapping) semantics
@@ -333,14 +354,6 @@ end
     @test broadcast(+, Transpose(vec), 1, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1
     @test broadcast(+, Adjoint(vec), 1im, Adjoint(vec))::Adjoint{Complex{Int},Vector{Complex{Int}}} == avec + avec .+ 1im
     @test broadcast(+, Transpose(vec), 1im, Transpose(vec))::Transpose{Complex{Int},Vector{Complex{Int}}} == tvec + tvec .+ 1im
-    # ascertain inference friendliness, ref. https://github.com/JuliaLang/julia/pull/25083#issuecomment-353031641
-    sparsevec = SparseVector([1.0, 2.0, 3.0])
-    @test map(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test map(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Adjoint(sparsevec), Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(-, Transpose(sparsevec), Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Adjoint(sparsevec), 1.0, Adjoint(sparsevec)) isa Adjoint{Float64,SparseVector{Float64,Int}}
-    @test broadcast(+, Transpose(sparsevec), 1.0, Transpose(sparsevec)) isa Transpose{Float64,SparseVector{Float64,Int}}
 end
 
 @testset "Adjoint/Transpose-wrapped vector multiplication" begin
@@ -527,7 +540,6 @@ end
     @test pointer(Transpose(D)) === pointer(D)
 end
 
-const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
 using .Main.OffsetArrays
 
@@ -576,24 +588,52 @@ end
     @test transpose(Int[]) * Int[] == 0
 end
 
-@testset "reductions: $adjtrans" for adjtrans in [transpose, adjoint]
-    mat = rand(ComplexF64, 3,5)
-    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
-    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
-    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+@testset "reductions: $adjtrans" for adjtrans in (transpose, adjoint)
+    for (reduction, reduction!, op) in ((sum, sum!, +), (prod, prod!, *), (minimum, minimum!, min), (maximum, maximum!, max))
+        T = op in (max, min) ? Float64 : ComplexF64
+        mat = rand(T, 3,5)
+        rd1 = zeros(T, 1, 3)
+        rd2 = zeros(T, 5, 1)
+        rd3 = zeros(T, 1, 1)
+        @test reduction(adjtrans(mat)) ≈ reduction(copy(adjtrans(mat)))
+        @test reduction(adjtrans(mat), dims=1) ≈ reduction(copy(adjtrans(mat)), dims=1)
+        @test reduction(adjtrans(mat), dims=2) ≈ reduction(copy(adjtrans(mat)), dims=2)
+        @test reduction(adjtrans(mat), dims=(1,2)) ≈ reduction(copy(adjtrans(mat)), dims=(1,2))
 
-    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
-    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
+        @test reduction!(rd1, adjtrans(mat)) ≈ reduction!(rd1, copy(adjtrans(mat)))
+        @test reduction!(rd2, adjtrans(mat)) ≈ reduction!(rd2, copy(adjtrans(mat)))
+        @test reduction!(rd3, adjtrans(mat)) ≈ reduction!(rd3, copy(adjtrans(mat)))
 
-    mat = [rand(ComplexF64,2,2) for _ in 1:3, _ in 1:5]
-    @test sum(adjtrans(mat)) ≈ sum(collect(adjtrans(mat)))
-    @test sum(adjtrans(mat), dims=1) ≈ sum(collect(adjtrans(mat)), dims=1)
-    @test sum(adjtrans(mat), dims=(1,2)) ≈ sum(collect(adjtrans(mat)), dims=(1,2))
+        @test reduction(imag, adjtrans(mat)) ≈ reduction(imag, copy(adjtrans(mat)))
+        @test reduction(imag, adjtrans(mat), dims=1) ≈ reduction(imag, copy(adjtrans(mat)), dims=1)
+        @test reduction(imag, adjtrans(mat), dims=2) ≈ reduction(imag, copy(adjtrans(mat)), dims=2)
+        @test reduction(imag, adjtrans(mat), dims=(1,2)) ≈ reduction(imag, copy(adjtrans(mat)), dims=(1,2))
 
-    @test sum(imag, adjtrans(mat)) ≈ sum(imag, collect(adjtrans(mat)))
-    @test sum(x -> x[1,2], adjtrans(mat)) ≈ sum(x -> x[1,2], collect(adjtrans(mat)))
-    @test sum(imag, adjtrans(mat), dims=1) ≈ sum(imag, collect(adjtrans(mat)), dims=1)
-    @test sum(x -> x[1,2], adjtrans(mat), dims=1) ≈ sum(x -> x[1,2], collect(adjtrans(mat)), dims=1)
+        @test Base.mapreducedim!(imag, op, rd1, adjtrans(mat)) ≈ Base.mapreducedim!(imag, op, rd1, copy(adjtrans(mat)))
+        @test Base.mapreducedim!(imag, op, rd2, adjtrans(mat)) ≈ Base.mapreducedim!(imag, op, rd2, copy(adjtrans(mat)))
+        @test Base.mapreducedim!(imag, op, rd3, adjtrans(mat)) ≈ Base.mapreducedim!(imag, op, rd3, copy(adjtrans(mat)))
+
+        op in (max, min) && continue
+        mat = [rand(T,2,2) for _ in 1:3, _ in 1:5]
+        rd1 = fill(zeros(T, 2, 2), 1, 3)
+        rd2 = fill(zeros(T, 2, 2), 5, 1)
+        rd3 = fill(zeros(T, 2, 2), 1, 1)
+        @test reduction(adjtrans(mat)) ≈ reduction(copy(adjtrans(mat)))
+        @test reduction(adjtrans(mat), dims=1) ≈ reduction(copy(adjtrans(mat)), dims=1)
+        @test reduction(adjtrans(mat), dims=2) ≈ reduction(copy(adjtrans(mat)), dims=2)
+        @test reduction(adjtrans(mat), dims=(1,2)) ≈ reduction(copy(adjtrans(mat)), dims=(1,2))
+
+        @test reduction(imag, adjtrans(mat)) ≈ reduction(imag, copy(adjtrans(mat)))
+        @test reduction(x -> x[1,2], adjtrans(mat)) ≈ reduction(x -> x[1,2], copy(adjtrans(mat)))
+        @test reduction(imag, adjtrans(mat), dims=1) ≈ reduction(imag, copy(adjtrans(mat)), dims=1)
+        @test reduction(x -> x[1,2], adjtrans(mat), dims=1) ≈ reduction(x -> x[1,2], copy(adjtrans(mat)), dims=1)
+    end
+    # see #46605
+    Ac = [1 2; 3 4]'
+    @test mapreduce(identity, (x, y) -> 10x+y, copy(Ac)) == mapreduce(identity, (x, y) -> 10x+y, Ac) == 1234
+    @test extrema([3,7,4]') == (3, 7)
+    @test mapreduce(x -> [x;;;], +, [1, 2, 3]') == sum(x -> [x;;;], [1, 2, 3]') == [6;;;]
+    @test mapreduce(string, *, [1 2; 3 4]') == mapreduce(string, *, copy([1 2; 3 4]')) == "1234"
 end
 
 end # module TestAdjointTranspose

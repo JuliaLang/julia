@@ -13,28 +13,26 @@
 
 struct ABI_AArch64Layout : AbiLayout {
 
-Type *get_llvm_vectype(jl_datatype_t *dt) const
+Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
+    // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields > 0`
     if (dt->layout == NULL || jl_is_layout_opaque(dt->layout))
         return nullptr;
     size_t nfields = dt->layout->nfields;
     assert(nfields > 0);
     if (nfields < 2)
         return nullptr;
-    static Type *T_vec64 = FixedVectorType::get(T_int32, 2);
-    static Type *T_vec128 = FixedVectorType::get(T_int32, 4);
     Type *lltype;
     // Short vector should be either 8 bytes or 16 bytes.
     // Note that there are only two distinct fundamental types for
     // short vectors so we normalize them to <2 x i32> and <4 x i32>
     switch (jl_datatype_size(dt)) {
     case 8:
-        lltype = T_vec64;
+        lltype = FixedVectorType::get(Type::getInt32Ty(ctx), 2);
         break;
     case 16:
-        lltype = T_vec128;
+        lltype = FixedVectorType::get(Type::getInt32Ty(ctx), 4);
         break;
     default:
         return nullptr;
@@ -45,9 +43,11 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
     // the homogeneity check.
     jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
     // `ft0` should be a `VecElement` type and the true element type
-    // should be a primitive type
-    if (ft0->name != jl_vecelement_typename ||
-        ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
+    // should be a primitive type (nfields == 0)
+    if (!jl_is_datatype(ft0) || ft0->name != jl_vecelement_typename)
+        return nullptr;
+    jl_datatype_t *ft00 = (jl_datatype_t*)jl_field_type(ft0, 0);
+    if (!jl_is_datatype(ft00) || ft00->layout->nfields)
         return nullptr;
     for (size_t i = 1; i < nfields; i++) {
         if (jl_field_type(dt, i) != (jl_value_t*)ft0) {
@@ -59,24 +59,24 @@ Type *get_llvm_vectype(jl_datatype_t *dt) const
 }
 
 #define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type)
-Type *get_llvm_fptype(jl_datatype_t *dt) const
+Type *get_llvm_fptype(jl_datatype_t *dt, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    // `!dt->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
+    // `!dt->name->mutabl && dt->pointerfree && !dt->haspadding && dt->nfields == 0`
     Type *lltype;
     // Check size first since it's cheaper.
     switch (jl_datatype_size(dt)) {
     case 2:
-        lltype = T_float16;
+        lltype = Type::getHalfTy(ctx);
         break;
     case 4:
-        lltype = T_float32;
+        lltype = Type::getFloatTy(ctx);
         break;
     case 8:
-        lltype = T_float64;
+        lltype = Type::getDoubleTy(ctx);
         break;
     case 16:
-        lltype = T_float128;
+        lltype = Type::getFP128Ty(ctx);
         break;
     default:
         return nullptr;
@@ -85,12 +85,12 @@ Type *get_llvm_fptype(jl_datatype_t *dt) const
             lltype : nullptr);
 }
 
-Type *get_llvm_fp_or_vectype(jl_datatype_t *dt) const
+Type *get_llvm_fp_or_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
-    if (dt->mutabl || dt->layout->npointers || dt->layout->haspadding)
+    if (dt->name->mutabl || dt->layout->npointers || dt->layout->haspadding)
         return nullptr;
-    return dt->layout->nfields ? get_llvm_vectype(dt) : get_llvm_fptype(dt);
+    return dt->layout->nfields ? get_llvm_vectype(dt, ctx) : get_llvm_fptype(dt, ctx);
 }
 
 struct ElementType {
@@ -105,7 +105,7 @@ struct ElementType {
 // Data Types of the members that compose the type are the same.
 // Note that it is the fundamental types that are important and not the member
 // types.
-bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) const
+bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, LLVMContext &ctx) const
 {
     // Assume:
     //     dt is a pointerfree type, (all members are isbits)
@@ -122,18 +122,20 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) c
         // For composite types, find the first non zero sized member
         size_t i;
         size_t fieldsz;
-        for (i = 0;i < nfields;i++) {
+        for (i = 0; i < nfields; i++) {
             if ((fieldsz = jl_field_size(dt, i))) {
                 break;
             }
         }
         assert(i < nfields);
-        // If there's only one non zero sized member, try again on this member
+        // If there's only one non-zero sized member, try again on this member
         if (fieldsz == dsz) {
             dt = (jl_datatype_t*)jl_field_type(dt, i);
+            if (!jl_is_datatype(dt))
+                return false;
             continue;
         }
-        if (Type *vectype = get_llvm_vectype(dt)) {
+        if (Type *vectype = get_llvm_vectype(dt, ctx)) {
             if ((ele.sz && dsz != ele.sz) || (ele.type && ele.type != vectype))
                 return false;
             ele.type = vectype;
@@ -142,14 +144,16 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) c
             return true;
         }
         // Otherwise, process each members
-        for (;i < nfields;i++) {
+        for (; i < nfields; i++) {
             size_t fieldsz = jl_field_size(dt, i);
             if (fieldsz == 0)
                 continue;
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, i);
+            if (!jl_is_datatype(dt))
+                return false;
             // Check element count.
             // This needs to be done after the zero size member check
-            if (nele > 3 || !isHFAorHVA(fieldtype, fieldsz, nele, ele)) {
+            if (nele > 3 || !isHFAorHVA(fieldtype, fieldsz, nele, ele, ctx)) {
                 return false;
             }
         }
@@ -158,7 +162,7 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) c
     // For bitstypes
     if (ele.sz && dsz != ele.sz)
         return false;
-    Type *new_type = get_llvm_fptype(dt);
+    Type *new_type = get_llvm_fptype(dt, ctx);
     if (new_type && (!ele.type || ele.type == new_type)) {
         ele.type = new_type;
         ele.sz = dsz;
@@ -168,7 +172,7 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele) c
     return false;
 }
 
-Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
+Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele, LLVMContext &ctx) const
 {
     // Assume jl_is_datatype(dt) && !jl_is_abstracttype(dt)
 
@@ -184,18 +188,18 @@ Type *isHFAorHVA(jl_datatype_t *dt, size_t &nele) const
         return NULL;
     nele = 0;
     ElementType eltype;
-    if (isHFAorHVA(dt, dsz, nele, eltype))
+    if (isHFAorHVA(dt, dsz, nele, eltype, ctx))
         return eltype.type;
     return NULL;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     // B.2
     //   If the argument type is an HFA or an HVA, then the argument is used
     //   unmodified.
     size_t size;
-    if (isHFAorHVA(dt, size))
+    if (isHFAorHVA(dt, size, ctx))
         return false;
     // B.3
     //   If the argument type is a Composite Type that is larger than 16 bytes,
@@ -222,7 +226,7 @@ bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab) override
 //
 // All the out parameters should be default to `false`.
 Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
-                   size_t *rewrite_len) const
+                   size_t *rewrite_len, LLVMContext &ctx) const
 {
     // Based on section 5.4 C of the Procedure Call Standard
     // C.1
@@ -231,7 +235,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     //   the argument is allocated to the least significant bits of register
     //   v[NSRN]. The NSRN is incremented by one. The argument has now been
     //   allocated.
-    if (get_llvm_fp_or_vectype(dt)) {
+    if (get_llvm_fp_or_vectype(dt, ctx)) {
         *fpreg = true;
         return NULL;
     }
@@ -243,7 +247,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     //   Floating-point Registers (with one register per member of the HFA
     //   or HVA). The NSRN is incremented by the number of registers used.
     //   The argument has now been allocated.
-    if (Type *eltype = isHFAorHVA(dt, *rewrite_len)) {
+    if (Type *eltype = isHFAorHVA(dt, *rewrite_len, ctx)) {
         assert(*rewrite_len > 0 && *rewrite_len <= 4);
         // HFA and HVA have <= 4 members
         *fpreg = true;
@@ -322,7 +326,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     assert(jl_datatype_size(dt) <= 16); // Should be pass by reference otherwise
     *rewrite_len = (jl_datatype_size(dt) + 7) >> 3;
     // Rewrite to [n x Int64] where n is the **size in dword**
-    return jl_datatype_size(dt) ? T_int64 : NULL;
+    return jl_datatype_size(dt) ? Type::getInt64Ty(ctx) : NULL;
 
     // C.11
     //   The NGRN is set to 8.
@@ -346,7 +350,7 @@ Type *classify_arg(jl_datatype_t *dt, bool *fpreg, bool *onstack,
     // <handled by C.10 above>
 }
 
-bool use_sret(jl_datatype_t *dt) override
+bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
 {
     // Section 5.5
     // If the type, T, of the result of a function is such that
@@ -360,18 +364,18 @@ bool use_sret(jl_datatype_t *dt) override
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    classify_arg(dt, &fpreg, &onstack, &rewrite_len);
+    classify_arg(dt, &fpreg, &onstack, &rewrite_len, ctx);
     return onstack;
 }
 
-Type *preferred_llvm_type(jl_datatype_t *dt, bool isret) const override
+Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const override
 {
-    if (Type *fptype = get_llvm_fp_or_vectype(dt))
+    if (Type *fptype = get_llvm_fp_or_vectype(dt, ctx))
         return fptype;
     bool fpreg = false;
     bool onstack = false;
     size_t rewrite_len = 0;
-    if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len))
+    if (Type *rewrite_ty = classify_arg(dt, &fpreg, &onstack, &rewrite_len, ctx))
         return ArrayType::get(rewrite_ty, rewrite_len);
     return NULL;
 }

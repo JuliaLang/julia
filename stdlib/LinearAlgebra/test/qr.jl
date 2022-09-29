@@ -11,7 +11,7 @@ n = 10
 n1 = div(n, 2)
 n2 = 2*n1
 
-Random.seed!(1234321)
+Random.seed!(1234325)
 
 areal = randn(n,n)/2
 aimg  = randn(n,n)/2
@@ -49,7 +49,6 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
             a_1 = size(a, 1)
             @testset "QR decomposition (without pivoting)" begin
                 qra   = @inferred qr(a)
-                @inferred qr(a)
                 q, r  = qra.Q, qra.R
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
@@ -78,8 +77,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "Thin QR decomposition (without pivoting)" begin
-                qra   = @inferred qr(a[:, 1:n1], Val(false))
-                @inferred qr(a[:, 1:n1], Val(false))
+                qra   = @inferred qr(a[:, 1:n1], NoPivot())
                 q,r   = qra.Q, qra.R
                 @test_throws ErrorException qra.Z
                 @test q'*squareQ(q) ≈ Matrix(I, a_1, a_1)
@@ -104,7 +102,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test Base.propertynames(qra)       == (:R, :Q)
             end
             @testset "(Automatic) Fat (pivoted) QR decomposition" begin
-                @inferred qr(a, Val(true))
+                @inferred qr(a, ColumnNorm())
 
                 qrpa  = factorize(a[1:n1,:])
                 q,r = qrpa.Q, qrpa.R
@@ -190,7 +188,7 @@ rectangularQ(Q::LinearAlgebra.AbstractQ) = convert(Array, Q)
                 @test mul!(c, b, q') ≈ b*q'
                 @test_throws DimensionMismatch mul!(Matrix{eltya}(I, n+1, n), q, b)
 
-                qra = qr(a[:,1:n1], Val(false))
+                qra = qr(a[:,1:n1], NoPivot())
                 q, r = qra.Q, qra.R
                 @test rmul!(copy(squareQ(q)'), q) ≈ Matrix(I, n, n)
                 @test_throws DimensionMismatch rmul!(Matrix{eltya}(I, n+1, n+1),q)
@@ -214,11 +212,8 @@ end
 
 @testset "transpose errors" begin
     @test_throws MethodError transpose(qr(randn(3,3)))
-    @test_throws MethodError adjoint(qr(randn(3,3)))
-    @test_throws MethodError transpose(qr(randn(3,3), Val(false)))
-    @test_throws MethodError adjoint(qr(randn(3,3), Val(false)))
+    @test_throws MethodError transpose(qr(randn(3,3), NoPivot()))
     @test_throws MethodError transpose(qr(big.(randn(3,3))))
-    @test_throws MethodError adjoint(qr(big.(randn(3,3))))
 end
 
 @testset "Issue 7304" begin
@@ -249,14 +244,14 @@ end
 end
 
 @testset "Issue 16520" begin
-    @test_throws DimensionMismatch Matrix{Float64}(undef,3,2)\(1:5)
+    @test_throws DimensionMismatch rand(3,2)\(1:5)
 end
 
 @testset "Issue 22810" begin
     A = zeros(1, 2)
     B = zeros(1, 1)
     @test A \ B == zeros(2, 1)
-    @test qr(A, Val(true)) \ B == zeros(2, 1)
+    @test qr(A, ColumnNorm()) \ B == zeros(2, 1)
 end
 
 @testset "Issue 24107" begin
@@ -275,11 +270,19 @@ end
     b  = randn(3)
     b0 = copy(b)
     c  = randn(2)
+    B  = randn(3,3)
+    B0 = copy(B)
+    C  = randn(2,3)
     @test A \b ≈ ldiv!(c, qr(A ), b)
     @test b == b0
+    @test A \B ≈ ldiv!(C, qr(A ), B)
+    @test B == B0
     c0 = copy(c)
-    @test Ac\c ≈ ldiv!(b, qr(Ac, Val(true)), c)
+    C0 = copy(C)
+    @test Ac\c ≈ ldiv!(b, qr(Ac, ColumnNorm()), c)
     @test c0 == c
+    @test Ac\C ≈ ldiv!(B, qr(Ac, ColumnNorm()), C)
+    @test C0 == C
 end
 
 @testset "Issue reflector of zero-length vector" begin
@@ -295,11 +298,11 @@ end
 
 @testset "det(Q::Union{QRCompactWYQ, QRPackedQ})" begin
     # 40 is the number larger than the default block size 36 of QRCompactWY
-    @testset for n in [1:3; 40], m in [1:3; 40], pivot in [false, true]
+    @testset for n in [1:3; 40], m in [1:3; 40], pivot in (NoPivot(), ColumnNorm())
         @testset "real" begin
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(n - k, m - k); dims=(1, 2))
-                Q, = qr(A, Val(pivot))
+                Q, = qr(A, pivot)
                 @test det(Q) ≈ det(collect(Q))
                 @test abs(det(Q)) ≈ 1
             end
@@ -307,7 +310,7 @@ end
         @testset "complex" begin
             @testset for k in 0:min(n, m, 5)
                 A = cat(Array(I(k)), randn(ComplexF64, n - k, m - k); dims=(1, 2))
-                Q, = qr(A, Val(pivot))
+                Q, = qr(A, pivot)
                 @test det(Q) ≈ det(collect(Q))
                 @test abs(det(Q)) ≈ 1
             end
@@ -369,6 +372,98 @@ end
         copyto!(dest3, Q)
         @test dest3 ≈ Qmat
     end
+end
+
+@testset "adjoint of QR" begin
+    n = 5
+    B = randn(5, 2)
+
+    @testset "size(b)=$(size(b))" for b in (B[:, 1], B)
+        @testset "size(A)=$(size(A))" for A in (
+            randn(n, n),
+            # Wide problems become minimum norm (in x) problems similarly to LQ
+            randn(n + 2, n),
+            complex.(randn(n, n), randn(n, n)))
+
+            @testset "QRCompactWY" begin
+                F = qr(A)
+                x = F'\b
+                @test x ≈ A'\b
+                @test length(size(x)) == length(size(b))
+            end
+
+            @testset "QR" begin
+                F = LinearAlgebra.qrfactUnblocked!(copy(A))
+                x = F'\b
+                @test x ≈ A'\b
+                @test length(size(x)) == length(size(b))
+            end
+
+            @testset "QRPivoted" begin
+                F = LinearAlgebra.qr(A, ColumnNorm())
+                x = F'\b
+                @test x ≈ A'\b
+                @test length(size(x)) == length(size(b))
+            end
+        end
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n))'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1))'\b
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    LinearAlgebra.qrfactUnblocked!(randn(n - 2, n))'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") LinearAlgebra.qrfactUnblocked!(randn(n, n + 1))'\b
+        @test_throws DimensionMismatch("overdetermined systems are not supported")    qr(randn(n - 2, n), ColumnNorm())'\b
+        @test_throws DimensionMismatch("arguments must have the same number of rows") qr(randn(n, n + 1), ColumnNorm())'\b
+    end
+end
+
+@testset "issue #38974" begin
+    A = qr(ones(3, 1))
+    B = I(3)
+    C = B*A.Q'
+    @test C ≈ A.Q
+    @test A.Q' * B ≈ A.Q
+end
+
+@testset "convert between eltypes" begin
+    a = rand(Float64, 10, 5)
+    qra = qr(a)
+    qrwy = LinearAlgebra.QRCompactWY{Float32}(qra.factors, qra.T)
+    @test Array(qrwy) ≈ Array(qr(Float32.(a)))
+    @test eltype(qrwy.factors) == eltype(qrwy.T) == Float32
+    qra = qr(a, ColumnNorm())
+    qrp = QRPivoted{Float32}(qra.factors, qra.τ, qra.jpvt)
+    @test Array(qrp) ≈ Array(qr(Float32.(a), ColumnNorm()))
+    @test eltype(qrp.factors) == eltype(qrp.τ) == Float32
+    a = rand(Float16, 10, 5)
+    qra = qr(a)
+    qrnonblas = QR{ComplexF16}(qra.factors, qra.τ)
+    @test Array(qrnonblas) ≈ Array(qr(ComplexF16.(a)))
+    @test eltype(qrnonblas.factors) == eltype(qrnonblas.τ) == ComplexF16
+end
+
+# We use approximate equals to get MKL.jl tests to pass.
+@testset "optimized getindex for an AbstractQ" begin
+    for T in [Float64, ComplexF64]
+        Q = qr(rand(T, 4, 4))
+        Q2 = Q.Q
+        M = Matrix(Q2)
+        for j in axes(M, 2)
+            @test Q2[:, j] ≈ M[:, j]
+            for i in axes(M, 1)
+                @test Q2[i, :] ≈ M[i, :]
+                @test Q2[i, j] ≈ M[i, j]
+            end
+        end
+        @test Q2[:] ≈ M[:]
+        @test Q2[:, :] ≈ M[:, :]
+        @test Q2[:, :, :] ≈ M[:, :, :]
+    end
+    # Check that getindex works if copy returns itself (#44729)
+    struct MyIdentity{T} <: LinearAlgebra.AbstractQ{T} end
+    Base.size(::MyIdentity, dim::Integer) = dim in (1,2) ? 2 : 1
+    Base.size(::MyIdentity) = (2, 2)
+    Base.copy(J::MyIdentity) = J
+    LinearAlgebra.lmul!(::MyIdentity{T}, M::Array{T}) where {T} = M
+    @test MyIdentity{Float64}()[1,:] == [1.0, 0.0]
 end
 
 end # module TestQR

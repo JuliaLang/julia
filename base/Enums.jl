@@ -17,7 +17,7 @@ abstract type Enum{T<:Integer} end
 basetype(::Type{<:Enum{T}}) where {T<:Integer} = T
 
 (::Type{T})(x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(bitcast(T2, x))::T
-Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)
+Base.cconvert(::Type{T}, x::Enum{T2}) where {T<:Integer,T2<:Integer} = T(x)::T
 Base.write(io::IO, x::Enum{T}) where {T<:Integer} = write(io, T(x))
 Base.read(io::IO, ::Type{T}) where {T<:Enum} = T(read(io, basetype(T)))
 
@@ -25,12 +25,18 @@ Base.isless(x::T, y::T) where {T<:Enum} = isless(basetype(T)(x), basetype(T)(y))
 
 Base.Symbol(x::Enum) = namemap(typeof(x))[Integer(x)]::Symbol
 
-Base.print(io::IO, x::Enum) = print(io, Symbol(x))
+function _symbol(x::Enum)
+    names = namemap(typeof(x))
+    x = Integer(x)
+    get(() -> Symbol("<invalid #$x>"), names, x)::Symbol
+end
+
+Base.print(io::IO, x::Enum) = print(io, _symbol(x))
 
 function Base.show(io::IO, x::Enum)
-    sym = Symbol(x)
+    sym = _symbol(x)
     if !(get(io, :compact, false)::Bool)
-        from = get(io, :module, Main)
+        from = get(io, :module, Base.active_module())
         def = typeof(x).name.module
         if from === nothing || !Base.isvisible(sym, def, from)
             show(io, def)
@@ -119,6 +125,13 @@ To list all the instances of an enum use `instances`, e.g.
 julia> instances(Fruit)
 (apple, orange, kiwi)
 ```
+
+It is possible to construct a symbol from an enum instance:
+
+```jldoctest fruitenum
+julia> Symbol(apple)
+:apple
+```
 """
 macro enum(T::Union{Symbol,Expr}, syms...)
     if isempty(syms)
@@ -138,8 +151,7 @@ macro enum(T::Union{Symbol,Expr}, syms...)
     values = Vector{basetype}()
     seen = Set{Symbol}()
     namemap = Dict{basetype,Symbol}()
-    lo = hi = 0
-    i = zero(basetype)
+    lo = hi = i = zero(basetype)
     hasexpr = false
 
     if length(syms) == 1 && syms[1] isa Expr && syms[1].head === :block
@@ -180,7 +192,6 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         if length(values) == 1
             lo = hi = i
         else
-            lo = min(lo, i)
             hi = max(hi, i)
         end
         i += oneunit(i)
@@ -195,6 +206,9 @@ macro enum(T::Union{Symbol,Expr}, syms...)
         Enums.namemap(::Type{$(esc(typename))}) = $(esc(namemap))
         Base.typemin(x::Type{$(esc(typename))}) = $(esc(typename))($lo)
         Base.typemax(x::Type{$(esc(typename))}) = $(esc(typename))($hi)
+        let enum_hash = hash($(esc(typename)))
+            Base.hash(x::$(esc(typename)), h::UInt) = hash(enum_hash, hash(Integer(x), h))
+        end
         let insts = (Any[ $(esc(typename))(v) for v in $values ]...,)
             Base.instances(::Type{$(esc(typename))}) = insts
         end

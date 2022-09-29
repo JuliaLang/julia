@@ -1,4 +1,5 @@
 ## mbedtls
+include $(SRCDIR)/mbedtls.version
 
 ifneq ($(USE_BINARYBUILDER_MBEDTLS), 1)
 MBEDTLS_SRC = mbedtls-$(MBEDTLS_VER)
@@ -7,7 +8,7 @@ MBEDTLS_URL = https://github.com/ARMmbed/mbedtls/archive/v$(MBEDTLS_VER).tar.gz
 MBEDTLS_OPTS := $(CMAKE_COMMON) -DUSE_SHARED_MBEDTLS_LIBRARY=ON \
     -DUSE_STATIC_MBEDTLS_LIBRARY=OFF -DENABLE_PROGRAMS=OFF -DCMAKE_BUILD_TYPE=Release
 
-MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=OFF
+MBEDTLS_OPTS += -DENABLE_ZLIB_SUPPORT=OFF -DMBEDTLS_FATAL_WARNINGS=OFF
 ifeq ($(BUILD_OS),WINNT)
 MBEDTLS_OPTS += -G"MSYS Makefiles"
 endif
@@ -30,17 +31,6 @@ $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 
 checksum-mbedtls: $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz
 	$(JLCHECKSUM) $<
-
-$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
-	# Apply workaround for CMake 3.18.2 bug (https://github.com/ARMmbed/mbedtls/pull/3691).
-	# This patch merged upstream shortly after MBedTLS's 2.25.0 minor release, so chances
-	# are it will be included at least in their next minor release (2.26.0?).
-	cd $(SRCCACHE)/$(MBEDTLS_SRC) && \
-		patch -p1 -f < $(SRCDIR)/patches/mbedtls-cmake-findpy.patch
-	echo 1 > $@
-
-$(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: \
-	$(SRCCACHE)/$(MBEDTLS_SRC)/mbedtls-cmake-findpy.patch-applied
 
 $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured: $(SRCCACHE)/$(MBEDTLS_SRC)/source-extracted
 	mkdir -p $(dir $@)
@@ -75,19 +65,19 @@ $(eval $(call staged-install, \
 	MBEDTLS_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedtls.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedx509.0.dylib @rpath/libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.3.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
-	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.3.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedx509.1.dylib @rpath/libmbedx509.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.7.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedtls.$$(SHLIB_EXT) && \
+	$$(INSTALL_NAME_CHANGE_CMD) libmbedcrypto.7.dylib @rpath/libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedx509.$$(SHLIB_EXT) && \
 	$$(INSTALL_NAME_CMD)libmbedcrypto.$$(SHLIB_EXT) $$(build_shlibdir)/libmbedcrypto.$$(SHLIB_EXT)))
 
 
 clean-mbedtls:
-	-rm $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
+	-rm -f $(BUILDDIR)/$(MBEDTLS_SRC)/build-configured \
 		$(BUILDDIR)/$(MBEDTLS_SRC)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(MBEDTLS_SRC) clean
 
 distclean-mbedtls:
-	-rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
+	rm -rf $(SRCCACHE)/$(MBEDTLS_SRC).tar.gz \
 		$(SRCCACHE)/$(MBEDTLS_SRC) \
 		$(BUILDDIR)/$(MBEDTLS_SRC)
 

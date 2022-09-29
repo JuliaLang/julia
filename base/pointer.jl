@@ -20,14 +20,14 @@ const C_NULL = bitcast(Ptr{Cvoid}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))
+convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))::T
 
 # integer to pointer
 convert(::Type{Ptr{T}}, x::Union{Int,UInt}) where {T} = Ptr{T}(x)
 
 # pointer to pointer
 convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
-convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)::Ptr{T}
 
 # object to pointer (when used with ccall)
 
@@ -77,7 +77,10 @@ element type. `dims` is either an integer (for a 1d array) or a tuple of the arr
 calling `free` on the pointer when the array is no longer referenced.
 
 This function is labeled "unsafe" because it will crash if `pointer` is not
-a valid memory address to data of the requested length.
+a valid memory address to data of the requested length. Unlike [`unsafe_load`](@ref)
+and [`unsafe_store!`](@ref), the programmer is responsible also for ensuring that the
+underlying data is not accessed through two arrays of different element type, similar
+to the strict aliasing rule in C.
 """
 function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
                      p::Ptr{T}, dims::NTuple{N,Int}; own::Bool = false) where {T,N}
@@ -89,7 +92,8 @@ function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Cvoid}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}; own::Bool = false) where {N} =
+unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+            p::Ptr{T}, dims::NTuple{N,<:Integer}; own::Bool = false) where {T,N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own = own)
 
 """
@@ -99,8 +103,10 @@ Load a value of type `T` from the address of the `i`th element (1-indexed) start
 This is equivalent to the C expression `p[i-1]`.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
-pointer `p` to ensure that it is valid. Incorrect usage may segfault your program or return
-garbage answers, in the same manner as C.
+pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
+that referenced memory is not freed or garbage collected while invoking this function.
+Incorrect usage may segfault your program or return garbage answers. Unlike C, dereferencing
+memory region allocated as different type may be valid provided that the types are compatible.
 """
 unsafe_load(p::Ptr, i::Integer=1) = pointerref(p, Int(i), 1)
 
@@ -111,8 +117,10 @@ Store a value of type `T` to the address of the `i`th element (1-indexed) starti
 This is equivalent to the C expression `p[i-1] = x`.
 
 The `unsafe` prefix on this function indicates that no validation is performed on the
-pointer `p` to ensure that it is valid. Incorrect usage may corrupt or segfault your
-program, in the same manner as C.
+pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
+that referenced memory is not freed or garbage collected while invoking this function.
+Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
+different type may be valid provided that that the types are compatible.
 """
 unsafe_store!(p::Ptr{Any}, @nospecialize(x), i::Integer=1) = pointerset(p, x, Int(i), 1)
 unsafe_store!(p::Ptr{T}, x, i::Integer=1) where {T} = pointerset(p, convert(T,x), Int(i), 1)
@@ -125,7 +133,7 @@ Convert a `Ptr` to an object reference. Assumes the pointer refers to a valid he
 Julia object. If this is not the case, undefined behavior results, hence this function is
 considered "unsafe" and should be used with care.
 
-See also: [`pointer_from_objref`](@ref).
+See also [`pointer_from_objref`](@ref).
 """
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Cvoid},), x)
 
@@ -139,11 +147,11 @@ remains referenced for the whole time that the `Ptr` will be used.
 This function may not be called on immutable objects, since they do not have
 stable memory addresses.
 
-See also: [`unsafe_pointer_to_objref`](@ref).
+See also [`unsafe_pointer_to_objref`](@ref).
 """
 function pointer_from_objref(@nospecialize(x))
-    @_inline_meta
-    typeof(x).mutable || error("pointer_from_objref cannot be used on immutable objects")
+    @inline
+    ismutable(x) || error("pointer_from_objref cannot be used on immutable objects")
     ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), x)
 end
 

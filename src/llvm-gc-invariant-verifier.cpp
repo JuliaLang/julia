@@ -4,6 +4,7 @@
 // See the devdocs for a description of these invariants.
 
 #include "llvm-version.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -33,11 +34,10 @@
 
 using namespace llvm;
 
-struct GCInvariantVerifier : public FunctionPass, public InstVisitor<GCInvariantVerifier> {
-    static char ID;
+struct GCInvariantVerifier : public InstVisitor<GCInvariantVerifier> {
     bool Broken = false;
     bool Strong;
-    GCInvariantVerifier(bool Strong = false) : FunctionPass(ID), Strong(Strong) {}
+    GCInvariantVerifier(bool Strong = false) : Strong(Strong) {}
 
 private:
     void Check(bool Cond, const char *message, Value *Val) {
@@ -48,20 +48,18 @@ private:
     }
 
 public:
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        FunctionPass::getAnalysisUsage(AU);
-        AU.setPreservesAll();
-    }
-
-    bool runOnFunction(Function &F) override;
     void visitAddrSpaceCastInst(AddrSpaceCastInst &I);
-    void visitStoreInst(StoreInst &SI);
     void visitLoadInst(LoadInst &LI);
+    void visitStoreInst(StoreInst &SI);
+    void visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI);
+    void visitAtomicRMWInst(AtomicRMWInst &SI);
     void visitReturnInst(ReturnInst &RI);
     void visitGetElementPtrInst(GetElementPtrInst &GEP);
     void visitIntToPtrInst(IntToPtrInst &IPI);
     void visitPtrToIntInst(PtrToIntInst &PII);
     void visitCallInst(CallInst &CI);
+
+    void checkStoreInst(Type *VTy, unsigned AS, Value &SI);
 };
 
 void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
@@ -80,8 +78,7 @@ void GCInvariantVerifier::visitAddrSpaceCastInst(AddrSpaceCastInst &I) {
           "Illegal address space cast from decayed ptr", &I);
 }
 
-void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
-    Type *VTy = SI.getValueOperand()->getType();
+void GCInvariantVerifier::checkStoreInst(Type *VTy, unsigned AS, Value &SI) {
     if (VTy->isPointerTy()) {
         /* We currently don't obey this for arguments. That's ok - they're
            externally rooted. */
@@ -90,12 +87,23 @@ void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
               AS != AddressSpace::Derived,
               "Illegal store of decayed value", &SI);
     }
-    VTy = SI.getPointerOperand()->getType();
-    if (VTy->isPointerTy()) {
-        unsigned AS = cast<PointerType>(VTy)->getAddressSpace();
-        Check(AS != AddressSpace::CalleeRooted,
-              "Illegal store to callee rooted value", &SI);
-    }
+    Check(AS != AddressSpace::CalleeRooted,
+          "Illegal store to callee rooted value", &SI);
+}
+
+void GCInvariantVerifier::visitStoreInst(StoreInst &SI) {
+    Type *VTy = SI.getValueOperand()->getType();
+    checkStoreInst(VTy, SI.getPointerAddressSpace(), SI);
+}
+
+void GCInvariantVerifier::visitAtomicRMWInst(AtomicRMWInst &SI) {
+    Type *VTy = SI.getValOperand()->getType();
+    checkStoreInst(VTy, SI.getPointerAddressSpace(), SI);
+}
+
+void GCInvariantVerifier::visitAtomicCmpXchgInst(AtomicCmpXchgInst &SI) {
+    Type *VTy = SI.getNewValOperand()->getType();
+    checkStoreInst(VTy, SI.getPointerAddressSpace(), SI);
 }
 
 void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
@@ -110,7 +118,7 @@ void GCInvariantVerifier::visitLoadInst(LoadInst &LI) {
     if (Ty->isPointerTy()) {
         unsigned AS = cast<PointerType>(Ty)->getAddressSpace();
         Check(AS != AddressSpace::CalleeRooted,
-              "Illegal store of callee rooted value", &LI);
+              "Illegal load of callee rooted value", &LI);
     }
 }
 
@@ -152,12 +160,15 @@ void GCInvariantVerifier::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 }
 
 void GCInvariantVerifier::visitCallInst(CallInst &CI) {
-    CallingConv::ID CC = CI.getCallingConv();
-    if (CC == JLCALL_F_CC || CC == JLCALL_F2_CC) {
-        for (Value *Arg : CI.arg_operands()) {
+    Function *Callee = CI.getCalledFunction();
+    if (Callee && (Callee->getName() == "julia.call" ||
+                   Callee->getName() == "julia.call2")) {
+        bool First = true;
+        for (Value *Arg : CI.args()) {
             Type *Ty = Arg->getType();
-            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == AddressSpace::Tracked,
+            Check(Ty->isPointerTy() && cast<PointerType>(Ty)->getAddressSpace() == (First ? 0 : AddressSpace::Tracked),
                 "Invalid derived pointer in jlcall", &CI);
+            First = false;
         }
     }
 }
@@ -174,22 +185,44 @@ void GCInvariantVerifier::visitPtrToIntInst(PtrToIntInst &PII) {
           "Illegal inttoptr", &PII);
 }
 
-bool GCInvariantVerifier::runOnFunction(Function &F) {
-    visit(F);
-    if (Broken) {
+PreservedAnalyses GCInvariantVerifierPass::run(Function &F, FunctionAnalysisManager &AM) {
+    GCInvariantVerifier GIV(Strong);
+    GIV.visit(F);
+    if (GIV.Broken) {
         abort();
     }
-    return false;
+    return PreservedAnalyses::all();
 }
 
-char GCInvariantVerifier::ID = 0;
-static RegisterPass<GCInvariantVerifier> X("GCInvariantVerifier", "GC Invariant Verification Pass", false, false);
+struct GCInvariantVerifierLegacy : public FunctionPass {
+    static char ID;
+    bool Strong;
+    GCInvariantVerifierLegacy(bool Strong=false) : FunctionPass(ID), Strong(Strong) {}
+
+public:
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+        FunctionPass::getAnalysisUsage(AU);
+        AU.setPreservesAll();
+    }
+
+    bool runOnFunction(Function &F) override {
+        GCInvariantVerifier GIV(Strong);
+        GIV.visit(F);
+        if (GIV.Broken) {
+            abort();
+        }
+        return false;
+    }
+};
+
+char GCInvariantVerifierLegacy::ID = 0;
+static RegisterPass<GCInvariantVerifierLegacy> X("GCInvariantVerifier", "GC Invariant Verification Pass", false, false);
 
 Pass *createGCInvariantVerifierPass(bool Strong) {
-    return new GCInvariantVerifier(Strong);
+    return new GCInvariantVerifierLegacy(Strong);
 }
 
-extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass(LLVMPassManagerRef PM, LLVMBool Strong)
+extern "C" JL_DLLEXPORT void LLVMExtraAddGCInvariantVerifierPass_impl(LLVMPassManagerRef PM, LLVMBool Strong)
 {
     unwrap(PM)->add(createGCInvariantVerifierPass(Strong));
 }

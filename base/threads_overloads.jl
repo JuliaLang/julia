@@ -20,6 +20,21 @@ to load-balancing. This approach thus may be more suitable for fine-grained,
 uniform workloads, but may perform worse than `FairSchedule` in concurrence
 with other multithreaded workloads.
 
+# Examples
+```julia-repl
+julia> n = 20
+
+julia> c = Channel{Int}(ch -> foreach(i -> put!(ch, i), 1:n), 1)
+
+julia> d = Channel{Int}(n) do ch
+           f = i -> put!(ch, i^2)
+           Threads.foreach(f, c)
+       end
+
+julia> collect(d)
+collect(d) = [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256, 289, 324, 361, 400]
+```
+
 !!! compat "Julia 1.6"
     This function requires Julia 1.6 or later.
 """
@@ -35,7 +50,7 @@ function Threads.foreach(f, channel::Channel;
                 # do `stop[] && break` after `f(item)` to avoid losing `item`.
                 # this isn't super comprehensive since a task could still get
                 # stuck on `take!` at `for item in channel`. We should think
-                # about a more robust mechanism to avoid dropping items. See also:
+                # about a more robust mechanism to avoid dropping items. See also
                 # https://github.com/JuliaLang/julia/pull/34543#discussion_r422695217
                 stop[] && break
             end

@@ -147,6 +147,8 @@ end
 @test Base.front((a = 1, )) ≡ NamedTuple()
 @test_throws ArgumentError Base.tail(NamedTuple())
 @test_throws ArgumentError Base.front(NamedTuple())
+@test @inferred(reverse((a=1,))) === (a=1,)
+@test @inferred(reverse((a=1, b=:c))) === (b=:c, a=1)
 
 # syntax errors
 
@@ -257,10 +259,10 @@ abstr_nt_22194_3()
 @test findall(isequal(1), (a=1, b=1)) == [:a, :b]
 @test isempty(findall(isequal(1), NamedTuple()))
 @test isempty(findall(isequal(1), (a=2, b=3)))
-@test findfirst(isequal(1), (a=1, b=2)) == :a
-@test findlast(isequal(1), (a=1, b=2)) == :a
-@test findfirst(isequal(1), (a=1, b=1)) == :a
-@test findlast(isequal(1), (a=1, b=1)) == :b
+@test findfirst(isequal(1), (a=1, b=2)) === :a
+@test findlast(isequal(1), (a=1, b=2)) === :a
+@test findfirst(isequal(1), (a=1, b=1)) === :a
+@test findlast(isequal(1), (a=1, b=1)) === :b
 @test findfirst(isequal(1), ()) === nothing
 @test findlast(isequal(1), ()) === nothing
 @test findfirst(isequal(1), (a=2, b=3)) === nothing
@@ -330,3 +332,9 @@ end
 # issue #37926
 @test nextind((a=1,), 1) == nextind((1,), 1) == 2
 @test prevind((a=1,), 2) == prevind((1,), 2) == 1
+
+# issue #43045
+@test merge(NamedTuple(), Iterators.reverse(pairs((a=1,b=2)))) === (b = 2, a = 1)
+
+# issue #44086
+@test NamedTuple{(:x, :y, :z), Tuple{Int8, Int16, Int32}}((z=1, x=2, y=3)) === (x = Int8(2), y = Int16(3), z = Int32(1))

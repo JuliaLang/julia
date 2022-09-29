@@ -1,0 +1,23 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    printf("Tracing Julia GC Stop-The-World Latency... Hit Ctrl-C to end.\n");
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__begin
+{
+    @start[pid] = nsecs;
+}
+
+usdt:usr/lib/libjulia-internal.so:julia:gc__stop_the_world
+/@start[pid]/
+{
+    @usecs[pid] = hist((nsecs - @start[pid]) / 1000);
+    delete(@start[pid]);
+}
+
+END
+{
+    clear(@start);
+}

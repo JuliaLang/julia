@@ -8,12 +8,14 @@ Base.Filesystem.readdir
 Base.Filesystem.walkdir
 Base.Filesystem.mkdir
 Base.Filesystem.mkpath
+Base.Filesystem.hardlink
 Base.Filesystem.symlink
 Base.Filesystem.readlink
 Base.Filesystem.chmod
 Base.Filesystem.chown
 Base.RawFD
 Base.stat
+Base.Filesystem.diskstat
 Base.Filesystem.lstat
 Base.Filesystem.ctime
 Base.Filesystem.mtime
@@ -56,6 +58,8 @@ Base.Filesystem.normpath
 Base.Filesystem.realpath
 Base.Filesystem.relpath
 Base.Filesystem.expanduser
+Base.Filesystem.contractuser
+Base.Filesystem.samefile
 Base.Filesystem.splitdir
 Base.Filesystem.splitdrive
 Base.Filesystem.splitext

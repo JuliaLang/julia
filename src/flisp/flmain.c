@@ -8,14 +8,6 @@
 extern "C" {
 #endif
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-const char* __asan_default_options() {
-    return "detect_leaks=0";
-}
-#endif
-#endif
-
 static value_t argv_list(fl_context_t *fl_ctx, int argc, char *argv[])
 {
     int i;

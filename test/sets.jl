@@ -22,6 +22,7 @@ using Dates
         @test isa(Set(sin(x) for x = 1:3), Set{Float64})
         @test isa(Set(f17741(x) for x = 1:3), Set{Int})
         @test isa(Set(f17741(x) for x = -1:1), Set{Integer})
+        @test isa(Set(f17741(x) for x = 1:0), Set{Integer})
     end
     let s1 = Set(["foo", "bar"]), s2 = Set(s1)
         @test s1 == s2
@@ -114,7 +115,7 @@ end
     @test in(2,s)
     @test length(s) == 2
     @test_throws KeyError pop!(s,1)
-    @test pop!(s,1,:foo) == :foo
+    @test pop!(s,1,:foo) === :foo
     @test length(delete!(s,2)) == 1
     @test !in(1,s)
     @test !in(2,s)
@@ -138,6 +139,10 @@ end
     @test !in(200,s)
 end
 
+@testset "copy(::KeySet) (issue #41537)" begin
+    @test union(keys(Dict(1=>2, 3=>4))) == copy(keys(Dict(1=>2, 3=>4))) == Set([1,3])
+end
+
 @testset "copy!" begin
     for S = (Set, BitSet)
         s = S([1, 2])
@@ -146,6 +151,9 @@ end
             @test s === copy!(s, BitSet(a)) == S(a)
         end
     end
+    s = Set([1, 2])
+    s2 = copy(s)
+    @test copy!(s, s) == s2
 end
 
 @testset "sizehint, empty" begin
@@ -220,6 +228,16 @@ end
     s2 = Set([nothing])
     union!(s2, [nothing])
     @test s2 == Set([nothing])
+
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(union(a, b)) == Float64
+            @test eltype(union(b, a)) == Float64
+        end
+    end
 end
 
 @testset "intersect" begin
@@ -227,6 +245,9 @@ end
         s = S([1,2]) ∩ S([3,4])
         @test s == S()
         s = intersect(S([5,6,7,8]), S([7,8,9]))
+        slong = S(collect(3:63))
+        # test #36339 length/order short-cut
+        @test intersect(S([5,6,7,8]), slong) == intersect(slong, S([5,6,7,8]))
         @test s == S([7,8])
         @test intersect(S([2,3,1]), S([4,2,3]), S([5,4,3,2])) == S([2,3])
         let s1 = S([1,2,3])
@@ -238,7 +259,9 @@ end
         end
     end
     @test intersect(Set([1]), BitSet()) isa Set{Int}
-    @test intersect(BitSet([1]), Set()) isa BitSet
+    @test intersect(BitSet([1]), Set()) isa Set{Any}
+    @test intersect(BitSet([1]), Set([1])) isa BitSet
+    @test intersect(BitSet([1]), Set([1]), Set([1])) isa BitSet
     @test intersect([1], BitSet()) isa Vector{Int}
     # intersect must uniquify
     @test intersect([1, 2, 1]) == intersect!([1, 2, 1]) == [1, 2]
@@ -249,7 +272,22 @@ end
     y = () ∩ (42,)
     @test isempty(x)
     @test isempty(y)
-    @test eltype(x) == eltype(y) == Union{}
+
+    # Discussed in PR#41769
+    @testset "promotion" begin
+        ints = [1:5, [1, 2], Set([1, 2])]
+        floats = [2:0.1:3, [2.0, 3.5], Set([2.0, 3.5])]
+
+        for a in ints, b in floats
+            @test eltype(intersect(a, b)) == Float64
+            @test eltype(intersect(b, a)) == Float64
+            @test eltype(intersect(a, a, b)) == Float64
+        end
+    end
+
+    # 3-argument version is correctly covered
+    @test intersect(Set([1,2]), Set([2]), Set([1,2,3])) == Set([2])
+    @test intersect(Set([1,2]), Set([2]), Set([1.,2,3])) == Set([2.])
 end
 
 @testset "setdiff" begin
@@ -355,9 +393,10 @@ end
     @test symdiff(Set([1]), BitSet()) isa Set{Int}
     @test symdiff(BitSet([1]), Set{Int}()) isa BitSet
     @test symdiff([1], BitSet()) isa Vector{Int}
-    # symdiff must NOT uniquify
-    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
-    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+    #symdiff does uniquify
+    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [1,2]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
 
     # Base.hasfastin
     @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
@@ -388,6 +427,9 @@ end
     @test in(1, u)
     @test in(2, u)
     @test length(u) == 2
+    @test unique(iseven, []) == []
+    # type promotion
+    @test unique(x -> x^2, [1, 3.]) == [1, 3.]
     @test @inferred(unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 8]
     @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
     @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
@@ -410,6 +452,8 @@ end
 end
 
 @testset "unique!" begin
+    u = []
+    @test unique!(u) === u
     u = [1,1,3,2,1]
     @inferred(unique!(u))
     @test u == [1,3,2]
@@ -456,10 +500,23 @@ end
     @test allunique([])
     @test allunique(Set())
     @test allunique([1,2,3])
+    @test allunique([1 2; 3 4])
     @test allunique([:a,:b,:c])
     @test allunique(Set([1,2,3]))
     @test !allunique([1,1,2])
     @test !allunique([:a,:b,:c,:a])
+    @test allunique(unique(randn(100)))  # longer than 32
+    @test allunique(collect('A':'z')) # 58-element Vector{Char}
+    @test !allunique(repeat(1:99, 1, 2))
+    @test !allunique(vcat(pi, randn(1998), pi))  # longer than 1000
+    @test allunique(eachrow(hcat(1:10, 1:10)))
+    @test allunique(x for x in 'A':'Z' if randn()>0)
+    @test !allunique(x for x in repeat(1:2000, 3) if true)
+    @test allunique([0.0, -0.0])
+    @test allunique(x for x in [0.0, -0.0] if true)
+    @test !allunique([NaN, NaN])
+    @test !allunique(x for x in [NaN, NaN] if true)
+    # ranges
     @test allunique(4:7)
     @test allunique(1:1)
     @test allunique(4.0:0.3:7.0)
@@ -468,6 +525,7 @@ end
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
     @test allunique(('a':1:'c')[1:2]) == true
+    @test allunique(collect(1:1001))
     for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
              1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
              StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
@@ -475,7 +533,43 @@ end
              LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    # tuples
+    @test allunique(())
+    @test allunique((1,2,3))
+    @test allunique(ntuple(identity, 40))
+    @test !allunique((1,2,3,4,3))
+    @test allunique((0.0, -0.0))
+    @test !allunique((NaN, NaN))
 end
+
+@testset "allequal" begin
+    @test allequal(Set())
+    @test allequal(Set(1))
+    @test !allequal(Set([1, 2]))
+    @test allequal(Dict())
+    @test allequal(Dict(:a => 1))
+    @test !allequal(Dict(:a => 1, :b => 2))
+    @test allequal([])
+    @test allequal([1])
+    @test allequal([1, 1])
+    @test !allequal([1, 1, 2])
+    @test allequal([:a, :a])
+    @test !allequal([:a, :b])
+    @test !allequal(1:2)
+    @test allequal(1:1)
+    @test !allequal(4.0:0.3:7.0)
+    @test allequal(4:-1:5)       # empty range
+    @test !allequal(7:-1:1)       # negative step
+    @test !allequal(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
+    @test !allequal(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
+    @test allequal(StepRangeLen(1.0, 0.0, 2))
+    @test !allequal(StepRangeLen(1.0, 1.0, 2))
+    @test allequal(LinRange(1, 1, 0))
+    @test allequal(LinRange(1, 1, 1))
+    @test allequal(LinRange(1, 1, 2))
+    @test !allequal(LinRange(1, 2, 2))
+end
+
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
     @test s !== filter( isodd, s) == S([1,3])
@@ -755,4 +849,45 @@ Base.IteratorSize(::Type{<:OpenInterval}) = Base.SizeUnknown()
     i = OpenInterval(2, 4)
     @test 3 ∈ i
     @test issubset(3, i)
+end
+
+@testset "IdSet" begin
+    a = [1]
+    b = [2]
+    c = [3]
+    d = [4]
+    e = [5]
+    A = Base.IdSet{Vector{Int}}([a, b, c, d])
+    @test !isempty(A)
+    B = copy(A)
+    @test A ⊆ B
+    @test B ⊆ A
+    A = filter!(x->isodd(x[1]), A)
+    @test A ⊆ B
+    @test !(B ⊆ A)
+    @test !isempty(A)
+    a_ = pop!(A, a)
+    @test a_ === a
+    @test !isempty(A)
+    e_ = pop!(A, a, e)
+    @test e_ === e
+    @test !isempty(A)
+    A = empty!(A)
+    @test isempty(A)
+end
+
+@testset "⊊, ⊋" begin
+    @test !((1, 2) ⊊ (1, 2, 2))
+    @test !((1, 2, 2) ⊋ (1, 2))
+end
+
+@testset "AbstractSet & Fallback" begin
+    mutable struct TestSet{T} <: AbstractSet{T}
+        set::Set{T}
+        function TestSet{T}() where T
+            new{T}(Set{T}())
+        end
+    end
+    set = TestSet{Any}()
+    @test sizehint!(set, 1) === set
 end

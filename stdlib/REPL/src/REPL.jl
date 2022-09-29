@@ -29,8 +29,7 @@ import Base:
     display,
     show,
     AnyDict,
-    ==,
-    catch_stack
+    ==
 
 _displaysize(io::IO) = displaysize(io)::Tuple{Int,Int}
 
@@ -56,10 +55,12 @@ import ..LineEdit:
     history_last,
     history_search,
     accept_result,
+    setmodifiers!,
     terminal,
     MIState,
     PromptState,
-    TextInterface
+    TextInterface,
+    mode_idx
 
 include("REPLCompletions.jl")
 using .REPLCompletions
@@ -76,6 +77,9 @@ end
 answer_color(::AbstractREPL) = ""
 
 const JULIA_PROMPT = "julia> "
+const PKG_PROMPT = "pkg> "
+const SHELL_PROMPT = "shell> "
+const HELP_PROMPT = "help?> "
 
 mutable struct REPLBackend
     "channel for AST"
@@ -129,7 +133,7 @@ const repl_ast_transforms = Any[softscope] # defaults for new REPL backends
 # to e.g. install packages on demand
 const install_packages_hooks = Any[]
 
-function eval_user_input(@nospecialize(ast), backend::REPLBackend)
+function eval_user_input(@nospecialize(ast), backend::REPLBackend, mod::Module)
     lasterr = nothing
     Base.sigatomic_begin()
     while true
@@ -145,10 +149,9 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 for xf in backend.ast_transforms
                     ast = Base.invokelatest(xf, ast)
                 end
-                value = Core.eval(Main, ast)
+                value = Core.eval(mod, ast)
                 backend.in_eval = false
-                # note: use jl_set_global to make sure value isn't passed through `expand`
-                ccall(:jl_set_global, Cvoid, (Any, Any, Any), Main, :ans, value)
+                setglobal!(mod, :ans, value)
                 put!(backend.response_channel, Pair{Any, Bool}(value, false))
             end
             break
@@ -157,7 +160,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
                 println("SYSTEM ERROR: Failed to report error to REPL frontend")
                 println(err)
             end
-            lasterr = catch_stack()
+            lasterr = current_exceptions()
         end
     end
     Base.sigatomic_end()
@@ -165,6 +168,7 @@ function eval_user_input(@nospecialize(ast), backend::REPLBackend)
 end
 
 function check_for_missing_packages_and_run_hooks(ast)
+    isa(ast, Expr) || return
     mods = modules_to_be_loaded(ast)
     filter!(mod -> isnothing(Base.identify_package(String(mod))), mods) # keep missing modules
     if !isempty(mods)
@@ -174,22 +178,28 @@ function check_for_missing_packages_and_run_hooks(ast)
     end
 end
 
-function modules_to_be_loaded(ast, mods = Symbol[])
-    if ast.head in [:using, :import]
+function modules_to_be_loaded(ast::Expr, mods::Vector{Symbol} = Symbol[])
+    ast.head === :quote && return mods # don't search if it's not going to be run during this eval
+    if ast.head === :using || ast.head === :import
         for arg in ast.args
-            if first(arg.args) isa Symbol # i.e. `Foo`
-                if first(arg.args) != :. # don't include local imports
-                    push!(mods, first(arg.args))
+            arg = arg::Expr
+            arg1 = first(arg.args)
+            if arg1 isa Symbol # i.e. `Foo`
+                if arg1 != :. # don't include local imports
+                    push!(mods, arg1)
                 end
             else # i.e. `Foo: bar`
-                push!(mods, first(first(arg.args).args))
+                push!(mods, first((arg1::Expr).args))
             end
         end
     end
     for arg in ast.args
-        arg isa Expr && modules_to_be_loaded(arg, mods)
+        if isexpr(arg, (:block, :if, :using, :import))
+            modules_to_be_loaded(arg, mods)
+        end
     end
-    return mods
+    filter!(mod -> !in(String(mod), ["Base", "Main", "Core"]), mods) # Exclude special non-package modules
+    return unique(mods)
 end
 
 """
@@ -200,11 +210,12 @@ end
 
     Deprecated since sync / async behavior cannot be selected
 """
-function start_repl_backend(repl_channel::Channel{Any}, response_channel::Channel{Any})
+function start_repl_backend(repl_channel::Channel{Any}, response_channel::Channel{Any}
+                            ; get_module::Function = ()->Main)
     # Maintain legacy behavior of asynchronous backend
     backend = REPLBackend(repl_channel, response_channel, false)
     # Assignment will be made twice, but will be immediately available
-    backend.backend_task = @async start_repl_backend(backend)
+    backend.backend_task = @async start_repl_backend(backend; get_module)
     return backend
 end
 
@@ -216,14 +227,14 @@ end
 
     Does not return backend until loop is finished.
 """
-function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing))
+function start_repl_backend(backend::REPLBackend,  @nospecialize(consumer = x -> nothing); get_module::Function = ()->Main)
     backend.backend_task = Base.current_task()
     consumer(backend)
-    repl_backend_loop(backend)
+    repl_backend_loop(backend, get_module)
     return backend
 end
 
-function repl_backend_loop(backend::REPLBackend)
+function repl_backend_loop(backend::REPLBackend, get_module::Function)
     # include looks at this to determine the relative include path
     # nothing means cwd
     while true
@@ -234,7 +245,7 @@ function repl_backend_loop(backend::REPLBackend)
             # exit flag
             break
         end
-        eval_user_input(ast, backend)
+        eval_user_input(ast, backend, get_module())
     end
     return nothing
 end
@@ -248,8 +259,13 @@ end
 function display(d::REPLDisplay, mime::MIME"text/plain", x)
     x = Ref{Any}(x)
     with_repl_linfo(d.repl) do io
-        io = IOContext(io, :limit => true, :module => Main::Module)
-        get(io, :color, false) && write(io, answer_color(d.repl))
+        io = IOContext(io, :limit => true, :module => active_module(d)::Module)
+        if d.repl isa LineEditREPL
+            mistate = d.repl.mistate
+            mode = LineEdit.mode(mistate)
+            LineEdit.write_output_prefix(io, mode, get(io, :color, false)::Bool)
+        end
+        get(io, :color, false)::Bool && write(io, answer_color(d.repl))
         if isdefined(d.repl, :options) && isdefined(d.repl.options, :iocontext)
             # this can override the :limit property set initially
             io = foldl(IOContext, d.repl.options.iocontext, init=io)
@@ -264,7 +280,7 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
-        io = IOContext(io, :module => Main::Module)
+        io = IOContext(io, :module => active_module(repl)::Module)
         print_response(io, response, show_value, have_color, specialdisplay(repl))
     end
     return nothing
@@ -276,6 +292,8 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
         try
             Base.sigatomic_end()
             if iserr
+                val = Base.scrub_repl_backtrace(val)
+                Base.istrivialerror(val) || setglobal!(Main, :err, val)
                 Base.invokelatest(Base.display_error, errio, val)
             else
                 if val !== nothing && show_value
@@ -292,12 +310,14 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
             end
             break
-        catch
+        catch ex
             if iserr
                 println(errio) # an error during printing is likely to leave us mid-line
                 println(errio, "SYSTEM (REPL): showing an error caused an error")
                 try
-                    Base.invokelatest(Base.display_error, errio, catch_stack())
+                    excs = Base.scrub_repl_backtrace(current_exceptions())
+                    setglobal!(Main, :err, excs)
+                    Base.invokelatest(Base.display_error, errio, excs)
                 catch e
                     # at this point, only print the name of the type as a Symbol to
                     # minimize the possibility of further errors.
@@ -307,7 +327,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 end
                 break
             end
-            val = catch_stack()
+            val = current_exceptions()
             iserr = true
         end
     end
@@ -321,6 +341,7 @@ struct REPLBackendRef
     response_channel::Channel{Any}
 end
 REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
+
 function destroy(ref::REPLBackendRef, state::Task)
     if istaskfailed(state)
         close(ref.repl_channel, TaskFailedException(state))
@@ -338,8 +359,7 @@ end
 
     consumer is an optional function that takes a REPLBackend as an argument
 """
-function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true)
-    backend = REPLBackend()
+function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); backend_on_current_task::Bool = true, backend = REPLBackend())
     backend_ref = REPLBackendRef(backend)
     cleanup = @task try
             destroy(backend_ref, t)
@@ -348,13 +368,14 @@ function run_repl(repl::AbstractREPL, @nospecialize(consumer = x -> nothing); ba
             Core.println(Core.stderr, e)
             Core.println(Core.stderr, catch_backtrace())
         end
+    get_module = () -> active_module(repl)
     if backend_on_current_task
         t = @async run_frontend(repl, backend_ref)
         errormonitor(t)
         Base._wait2(t, cleanup)
-        start_repl_backend(backend, consumer)
+        start_repl_backend(backend, consumer; get_module)
     else
-        t = @async start_repl_backend(backend, consumer)
+        t = @async start_repl_backend(backend, consumer; get_module)
         errormonitor(t)
         Base._wait2(t, cleanup)
         run_frontend(repl, backend_ref)
@@ -450,7 +471,7 @@ mutable struct LineEditREPL <: AbstractREPL
             in_help,envcolors,false,nothing, opts, nothing, Tuple{String,Int}[])
     end
 end
-outstream(r::LineEditREPL) = r.t isa TTYTerminal ? r.t.out_stream : r.t
+outstream(r::LineEditREPL) = (t = r.t; t isa TTYTerminal ? t.out_stream : t)
 specialdisplay(r::LineEditREPL) = r.specialdisplay
 specialdisplay(r::AbstractREPL) = nothing
 terminal(r::LineEditREPL) = r.t
@@ -466,16 +487,45 @@ LineEditREPL(t::TextTerminal, hascolor::Bool, envcolors::Bool=false) =
         false, false, false, envcolors
     )
 
-mutable struct REPLCompletionProvider <: CompletionProvider end
+mutable struct REPLCompletionProvider <: CompletionProvider
+    modifiers::LineEdit.Modifiers
+end
+REPLCompletionProvider() = REPLCompletionProvider(LineEdit.Modifiers())
+
 mutable struct ShellCompletionProvider <: CompletionProvider end
 struct LatexCompletions <: CompletionProvider end
 
+function active_module() # this method is also called from Base
+    isdefined(Base, :active_repl) || return Main
+    return active_module(Base.active_repl::AbstractREPL)
+end
+active_module((; mistate)::LineEditREPL) = mistate === nothing ? Main : mistate.active_module
+active_module(::AbstractREPL) = Main
+active_module(d::REPLDisplay) = active_module(d.repl)
+
+setmodifiers!(c::REPLCompletionProvider, m::LineEdit.Modifiers) = c.modifiers = m
+
+"""
+    activate(mod::Module=Main)
+
+Set `mod` as the default contextual module in the REPL,
+both for evaluating expressions and printing them.
+"""
+function activate(mod::Module=Main)
+    mistate = (Base.active_repl::LineEditREPL).mistate
+    mistate === nothing && return nothing
+    mistate.active_module = mod
+    Base.load_InteractiveUtils(mod)
+    return nothing
+end
+
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
-function complete_line(c::REPLCompletionProvider, s::PromptState)
+function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module)
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, lastindex(partial))
+    ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift)
+    c.modifiers = LineEdit.Modifiers()
     return unique!(map(completion_text, ret)), partial[range], should_complete
 end
 
@@ -507,6 +557,7 @@ end
 
 mutable struct REPLHistoryProvider <: HistoryProvider
     history::Vector{String}
+    file_path::String
     history_file::Union{Nothing,IO}
     start_idx::Int
     cur_idx::Int
@@ -517,7 +568,7 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     modes::Vector{Symbol}
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
-    REPLHistoryProvider(String[], nothing, 0, 0, -1, IOBuffer(),
+    REPLHistoryProvider(String[], "", nothing, 0, 0, -1, IOBuffer(),
                         nothing, mode_mapping, UInt8[])
 
 invalid_history_message(path::String) = """
@@ -529,6 +580,12 @@ Invalid character: """
 munged_history_message(path::String) = """
 Invalid history file ($path) format:
 An editor may have converted tabs to spaces at line """
+
+function hist_open_file(hp::REPLHistoryProvider)
+    f = open(hp.file_path, read=true, write=true, create=true)
+    hp.history_file = f
+    seekend(f)
+end
 
 function hist_from_file(hp::REPLHistoryProvider, path::String)
     getline(lines, i) = i > length(lines) ? "" : lines[i]
@@ -575,14 +632,6 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
     return hp
 end
 
-function mode_idx(hist::REPLHistoryProvider, mode::TextInterface)
-    c = :julia
-    for (k,v) in hist.mode_mapping
-        isequal(v, mode) && (c = k)
-    end
-    return c
-end
-
 function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(String(take!(copy(s.input_buffer))))
     isempty(strip(str)) && return
@@ -598,7 +647,14 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     $(replace(str, r"^"ms => "\t"))
     """
     # TODO: write-lock history file
-    seekend(hist.history_file)
+    try
+        seekend(hist.history_file)
+    catch err
+        (err isa SystemError) || rethrow()
+        # File handle might get stale after a while, especially under network file systems
+        # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
+        hist_open_file(hist)
+    end
     print(hist.history_file, entry)
     flush(hist.history_file)
     nothing
@@ -713,7 +769,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):1:max_idx)
     for idx in idxs
-        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
+        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || get(hist.mode_mapping, hist.modes[idx], nothing) !== LineEdit.mode(s)))
             m = history_move(s, hist, idx)
             if m === :ok
                 if idx == max_idx
@@ -831,7 +887,7 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 ast = Base.invokelatest(f, line)
                 response = eval_with_backend(ast, backend(repl))
             catch
-                response = Pair{Any, Bool}(catch_stack(), true)
+                response = Pair{Any, Bool}(current_exceptions(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
             print_response(repl, response, !hide_output, hascolor(repl))
@@ -880,6 +936,15 @@ repl_filename(repl, hp) = "REPL"
 const JL_PROMPT_PASTE = Ref(true)
 enable_promptpaste(v::Bool) = JL_PROMPT_PASTE[] = v
 
+function contextual_prompt(repl::LineEditREPL, prompt::Union{String,Function})
+    function ()
+        mod = active_module(repl)
+        prefix = mod == Main ? "" : string('(', mod, ") ")
+        pr = prompt isa String ? prompt : prompt()
+        prefix * pr
+    end
+end
+
 setup_interface(
     repl::LineEditREPL;
     # those keyword arguments may be deprecated eventually in favor of the Options mechanism
@@ -924,7 +989,7 @@ function setup_interface(
     replc = REPLCompletionProvider()
 
     # Set up the main Julia prompt
-    julia_prompt = Prompt(JULIA_PROMPT;
+    julia_prompt = Prompt(contextual_prompt(repl, JULIA_PROMPT);
         # Copy colors from the prompt object
         prompt_prefix = hascolor ? repl.prompt_color : "",
         prompt_suffix = hascolor ?
@@ -934,19 +999,19 @@ function setup_interface(
         on_enter = return_callback)
 
     # Setup help mode
-    help_mode = Prompt("help?> ",
+    help_mode = Prompt(contextual_prompt(repl, "help?> "),
         prompt_prefix = hascolor ? repl.help_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
         repl = repl,
         complete = replc,
         # When we're done transform the entered line into a call to helpmode function
-        on_done = respond(line::String->helpmode(outstream(repl), line), repl, julia_prompt,
-                          pass_empty=true, suppress_on_semicolon=false))
+        on_done = respond(line::String->helpmode(outstream(repl), line, repl.mistate.active_module),
+                          repl, julia_prompt, pass_empty=true, suppress_on_semicolon=false))
 
 
     # Set up shell mode
-    shell_mode = Prompt("shell> ";
+    shell_mode = Prompt(SHELL_PROMPT;
         prompt_prefix = hascolor ? repl.shell_color : "",
         prompt_suffix = hascolor ?
             (repl.envcolors ? Base.input_color : repl.input_color) : "",
@@ -974,16 +1039,15 @@ function setup_interface(
         try
             hist_path = find_hist_file()
             mkpath(dirname(hist_path))
-            f = open(hist_path, read=true, write=true, create=true)
-            hp.history_file = f
-            seekend(f)
+            hp.file_path = hist_path
+            hist_open_file(hp)
             finalizer(replc) do replc
-                close(f)
+                close(hp.history_file)
             end
             hist_from_file(hp, hist_path)
         catch
             # use REPL.hascolor to avoid using the local variable with the same name
-            print_response(repl, Pair{Any, Bool}(catch_stack(), true), true, REPL.hascolor(repl))
+            print_response(repl, Pair{Any, Bool}(current_exceptions(), true), true, REPL.hascolor(repl))
             println(outstream(repl))
             @info "Disabling history file for this session"
             repl.history_file = false
@@ -999,6 +1063,11 @@ function setup_interface(
 
     search_prompt, skeymap = LineEdit.setup_search_keymap(hp)
     search_prompt.complete = LatexCompletions()
+
+    shell_prompt_len = length(SHELL_PROMPT)
+    help_prompt_len = length(HELP_PROMPT)
+    jl_prompt_regex = r"^In \[[0-9]+\]: |^(?:\(.+\) )?julia> "
+    pkg_prompt_regex = r"^(?:\(.+\) )?pkg> "
 
     # Canonicalize user keymap input
     if isa(extra_repl_keymap, Dict)
@@ -1052,20 +1121,50 @@ function setup_interface(
             oldpos = firstindex(input)
             firstline = true
             isprompt_paste = false
-            jl_prompt_len = 7 # "julia> "
+            curr_prompt_len = 0
+            pasting_help = false
+
             while oldpos <= lastindex(input) # loop until all lines have been executed
                 if JL_PROMPT_PASTE[]
-                    # Check if the next statement starts with "julia> ", in that case
-                    # skip it. But first skip whitespace
-                    while input[oldpos] in ('\n', ' ', '\t')
+                    # Check if the next statement starts with a prompt i.e. "julia> ", in that case
+                    # skip it. But first skip whitespace unless pasting in a docstring which may have
+                    # indented prompt examples that we don't want to execute
+                    while input[oldpos] in (pasting_help ? ('\n') : ('\n', ' ', '\t'))
                         oldpos = nextind(input, oldpos)
                         oldpos >= sizeof(input) && return
                     end
+                    substr = SubString(input, oldpos)
                     # Check if input line starts with "julia> ", remove it if we are in prompt paste mode
-                    if (firstline || isprompt_paste) && startswith(SubString(input, oldpos), JULIA_PROMPT)
+                    if (firstline || isprompt_paste) && startswith(substr, jl_prompt_regex)
+                        detected_jl_prompt = match(jl_prompt_regex, substr).match
                         isprompt_paste = true
-                        oldpos += jl_prompt_len
-                    # If we are prompt pasting and current statement does not begin with julia> , skip to next line
+                        curr_prompt_len = sizeof(detected_jl_prompt)
+                        oldpos += curr_prompt_len
+                        transition(s, julia_prompt)
+                        pasting_help = false
+                    # Check if input line starts with "pkg> " or "(...) pkg> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(substr, pkg_prompt_regex)
+                        detected_pkg_prompt = match(pkg_prompt_regex, substr).match
+                        isprompt_paste = true
+                        curr_prompt_len = sizeof(detected_pkg_prompt)
+                        oldpos += curr_prompt_len
+                        Base.active_repl.interface.modes[1].keymap_dict[']'](s, o...)
+                        pasting_help = false
+                    # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(substr, SHELL_PROMPT)
+                        isprompt_paste = true
+                        oldpos += shell_prompt_len
+                        curr_prompt_len = shell_prompt_len
+                        transition(s, shell_mode)
+                        pasting_help = false
+                    # Check if input line starts with "help?> ", remove it if we are in prompt paste mode and switch mode
+                    elseif (firstline || isprompt_paste) && startswith(substr, HELP_PROMPT)
+                        isprompt_paste = true
+                        oldpos += help_prompt_len
+                        curr_prompt_len = help_prompt_len
+                        transition(s, help_mode)
+                        pasting_help = true
+                    # If we are prompt pasting and current statement does not begin with a mode prefix, skip to next line
                     elseif isprompt_paste
                         while input[oldpos] != '\n'
                             oldpos = nextind(input, oldpos)
@@ -1074,11 +1173,35 @@ function setup_interface(
                         continue
                     end
                 end
-                ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
-                if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
-                        (pos > ncodeunits(input) && !endswith(input, '\n'))
-                    # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
-                    # Insert all the remaining text as one line (might be empty)
+                dump_tail = false
+                nl_pos = findfirst('\n', input[oldpos:end])
+                if s.current_mode == julia_prompt
+                    ast, pos = Meta.parse(input, oldpos, raise=false, depwarn=false)
+                    if (isa(ast, Expr) && (ast.head === :error || ast.head === :incomplete)) ||
+                            (pos > ncodeunits(input) && !endswith(input, '\n'))
+                        # remaining text is incomplete (an error, or parser ran to the end but didn't stop with a newline):
+                        # Insert all the remaining text as one line (might be empty)
+                        dump_tail = true
+                    end
+                elseif isnothing(nl_pos) # no newline at end, so just dump the tail into the prompt and don't execute
+                    dump_tail = true
+                elseif s.current_mode == shell_mode # handle multiline shell commands
+                    lines = split(input[oldpos:end], '\n')
+                    pos = oldpos + sizeof(lines[1]) + 1
+                    if length(lines) > 1
+                        for line in lines[2:end]
+                            # to be recognized as a multiline shell command, the lines must be indented to the
+                            # same prompt position
+                            if !startswith(line, ' '^curr_prompt_len)
+                                break
+                            end
+                            pos += sizeof(line) + 1
+                        end
+                    end
+                else
+                    pos = oldpos + nl_pos
+                end
+                if dump_tail
                     tail = input[oldpos:end]
                     if !firstline
                         # strip leading whitespace, but only if it was the result of executing something
@@ -1086,7 +1209,7 @@ function setup_interface(
                         tail = lstrip(tail)
                     end
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        tail = replace(tail, r"^"m * ' '^jl_prompt_len => "")
+                        tail = replace(tail, r"^"m * ' '^curr_prompt_len => "")
                     end
                     LineEdit.replace_line(s, tail, true)
                     LineEdit.refresh_line(s)
@@ -1096,7 +1219,7 @@ function setup_interface(
                 line = strip(input[oldpos:prevind(input, pos)])
                 if !isempty(line)
                     if isprompt_paste # remove indentation spaces corresponding to the prompt
-                        line = replace(line, r"^"m * ' '^jl_prompt_len => "")
+                        line = replace(line, r"^"m * ' '^curr_prompt_len => "")
                     end
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
@@ -1124,7 +1247,12 @@ function setup_interface(
             if n <= 0 || n > length(linfos) || startswith(linfos[n][1], "REPL[")
                 @goto writeback
             end
-            InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            try
+                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+            catch ex
+                ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
+                @info "edit failed" _exception=ex
+            end
             LineEdit.refresh_line(s)
             return
             @label writeback
@@ -1190,56 +1318,49 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
+let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
+    "`" => r"`", "```" => r"```", "#" => r"$"m, "#=" => r"=#|#=")
+    global _rm_strings_and_comments
+    function _rm_strings_and_comments(code::Union{String,SubString{String}})
+        buf = IOBuffer(sizehint = sizeof(code))
+        pos = 1
+        while true
+            i = findnext(r"\"(?!\"\")|\"\"\"|'|`(?!``)|```|#(?!=)|#=", code, pos)
+            isnothing(i) && break
+            match = SubString(code, i)
+            j = findnext(matchend[match]::Regex, code, nextind(code, last(i)))
+            if match == "#=" # possibly nested
+                nested = 1
+                while j !== nothing
+                    nested += SubString(code, j) == "#=" ? +1 : -1
+                    iszero(nested) && break
+                    j = findnext(r"=#|#=", code, nextind(code, last(j)))
+                end
+            elseif match[1] != '#' # quote match: check non-escaped
+                while j !== nothing
+                    notbackslash = findprev(!=('\\'), code, prevind(code, first(j)))::Int
+                    isodd(first(j) - notbackslash) && break # not escaped
+                    j = findnext(matchend[match]::Regex, code, nextind(code, first(j)))
+                end
+            end
+            isnothing(j) && break
+            if match[1] == '#'
+                print(buf, SubString(code, pos, prevind(code, first(i))))
+            else
+                print(buf, SubString(code, pos, last(i)), ' ', SubString(code, j))
+            end
+            pos = nextind(code, last(j))
+        end
+        print(buf, SubString(code, pos, lastindex(code)))
+        return String(take!(buf))
+    end
+end
+
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
-function ends_with_semicolon(line::AbstractString)
-    match = findlast(isequal(';'), line)::Union{Nothing,Int}
-    if match !== nothing
-        # state for comment parser, assuming that the `;` isn't in a string or comment
-        # so input like ";#" will still thwart this to give the wrong (anti-conservative) answer
-        comment = false
-        comment_start = false
-        comment_close = false
-        comment_multi = 0
-        for c in line[(match + 1):end]
-            if comment_multi > 0
-                # handle nested multi-line comments
-                if comment_close && c == '#'
-                    comment_close = false
-                    comment_multi -= 1
-                elseif comment_start && c == '='
-                    comment_start = false
-                    comment_multi += 1
-                else
-                    comment_start = (c == '#')
-                    comment_close = (c == '=')
-                end
-            elseif comment
-                # handle line comments
-                if c == '\r' || c == '\n'
-                    comment = false
-                end
-            elseif comment_start
-                # see what kind of comment this is
-                comment_start = false
-                if c == '='
-                    comment_multi = 1
-                else
-                    comment = true
-                end
-            elseif c == '#'
-                # start handling for a comment
-                comment_start = true
-            else
-                # outside of a comment, encountering anything but whitespace
-                # means the semi-colon was internal to the expression
-                isspace(c) || return false
-            end
-        end
-        return true
-    end
-    return false
-end
+ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
+ends_with_semicolon(code::Union{String,SubString{String}}) =
+    contains(_rm_strings_and_comments(code), r";\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = hascolor(repl)
@@ -1270,5 +1391,66 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     dopushdisplay && popdisplay(d)
     nothing
 end
+
+module IPython
+
+using ..REPL
+
+__current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+
+function repl_eval_counter(hp)
+    length(hp.history)-hp.start_idx
+end
+
+function out_transform(x, repl::LineEditREPL, n::Ref{Int})
+    return quote
+        julia_prompt = $repl.interface.modes[1]
+        mod = $REPL.active_module()
+        if !isdefined(mod, :Out)
+            setglobal!(mod, :Out, Dict{Int, Any}())
+        end
+        local __temp_val = $x # workaround https://github.com/JuliaLang/julia/issues/46451
+        if __temp_val !== getglobal(mod, :Out) && __temp_val !== nothing # remove this?
+            getglobal(mod, :Out)[$(n[])] = __temp_val
+        end
+        __temp_val
+    end
+end
+
+function set_prompt(repl::LineEditREPL, n::Ref{Int})
+    julia_prompt = repl.interface.modes[1]
+    julia_prompt.prompt = function()
+        n[] = repl_eval_counter(julia_prompt.hist)+1
+        string("In [", n[], "]: ")
+    end
+end
+
+function set_output_prefix(repl::LineEditREPL, n::Ref{Int})
+    julia_prompt = repl.interface.modes[1]
+    if REPL.hascolor(repl)
+        julia_prompt.output_prefix_prefix = Base.text_colors[:red]
+    end
+    julia_prompt.output_prefix = () -> string("Out[", n[], "]: ")
+end
+
+function __current_ast_transforms(backend)
+    if backend === nothing
+        isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
+    else
+        backend.ast_transforms
+    end
+end
+
+
+function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
+    n = Ref{Int}(0)
+    set_prompt(repl, n)
+    set_output_prefix(repl, n)
+    push!(__current_ast_transforms(backend), ast -> out_transform(ast, repl, n))
+    return
+end
+end
+
+import .IPython.ipython_mode!
 
 end # module

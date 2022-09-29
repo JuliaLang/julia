@@ -1,6 +1,6 @@
 # [Interactive Utilities](@id man-interactive-utils)
 
-This module is intended for interactive work. It is loaded automaticaly in [interactive mode](@ref command-line-options).
+This module is intended for interactive work. It is loaded automaticaly in [interactive mode](@ref command-line-interface).
 
 ```@docs
 InteractiveUtils.apropos
@@ -26,5 +26,6 @@ InteractiveUtils.code_llvm
 InteractiveUtils.@code_llvm
 InteractiveUtils.code_native
 InteractiveUtils.@code_native
+InteractiveUtils.@time_imports
 InteractiveUtils.clipboard
 ```

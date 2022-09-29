@@ -1,5 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+An abstract type representing any sort of pattern matching expression
+(typically a regular expression). `AbstractPattern` objects can be used to
+match strings with [`match`](@ref).
+
+!!! compat "Julia 1.6"
+    This type is available in Julia 1.6 and later.
+"""
+abstract type AbstractPattern end
+
 nothing_sentinel(i) = i == 0 ? nothing : i
 
 function findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:AbstractChar},
@@ -24,6 +34,9 @@ findfirst(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a
 
 findnext(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_search(a, pred.x, i))
+
+findfirst(::typeof(iszero), a::ByteArray) = nothing_sentinel(_search(a, zero(UInt8)))
+findnext(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_search(a, zero(UInt8), i))
 
 function _search(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = 1)
     if i < 1
@@ -64,6 +77,9 @@ findlast(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a:
 
 findprev(pred::Fix2{<:Union{typeof(isequal),typeof(==)},<:Union{Int8,UInt8}}, a::ByteArray, i::Integer) =
     nothing_sentinel(_rsearch(a, pred.x, i))
+
+findlast(::typeof(iszero), a::ByteArray) = nothing_sentinel(_rsearch(a, zero(UInt8)))
+findprev(::typeof(iszero), a::ByteArray, i::Integer) = nothing_sentinel(_rsearch(a, zero(UInt8), i))
 
 function _rsearch(a::Union{String,ByteArray}, b::Union{Int8,UInt8}, i::Integer = sizeof(a))
     if i < 1
@@ -162,17 +178,18 @@ in(c::AbstractChar, s::AbstractString) = (findfirst(isequal(c),s)!==nothing)
 function _searchindex(s::Union{AbstractString,ByteArray},
                       t::Union{AbstractString,AbstractChar,Int8,UInt8},
                       i::Integer)
-    if isempty(t)
+    x = Iterators.peel(t)
+    if isnothing(x)
         return 1 <= i <= nextind(s,lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(t)
+    t1, trest = x
     while true
         i = findnext(isequal(t1),s,i)
         if i === nothing return 0 end
         ii = nextind(s, i)::Int
         a = Iterators.Stateful(trest)
-        matched = all(splat(==), zip(SubString(s, ii), a))
+        matched = all(Splat(==), zip(SubString(s, ii), a))
         (isempty(a) && matched) && return i
         i = ii
     end
@@ -399,6 +416,67 @@ true
 """
 findlast(ch::AbstractChar, string::AbstractString) = findlast(==(ch), string)
 
+"""
+    findall(
+        pattern::Union{AbstractString,AbstractPattern},
+        string::AbstractString;
+        overlap::Bool = false,
+    )
+    findall(
+        pattern::Vector{UInt8}
+        A::Vector{UInt8};
+        overlap::Bool = false,
+    )
+
+Return a `Vector{UnitRange{Int}}` of all the matches for `pattern` in `string`.
+Each element of the returned vector is a range of indices where the
+matching sequence is found, like the return value of [`findnext`](@ref).
+
+If `overlap=true`, the matching sequences are allowed to overlap indices in the
+original string, otherwise they must be from disjoint character ranges.
+
+# Examples
+```jldoctest
+julia> findall("a", "apple")
+1-element Vector{UnitRange{Int64}}:
+ 1:1
+
+julia> findall("nana", "banana")
+1-element Vector{UnitRange{Int64}}:
+ 3:6
+
+julia> findall("a", "banana")
+3-element Vector{UnitRange{Int64}}:
+ 2:2
+ 4:4
+ 6:6
+
+julia> findall(UInt8[1,2], UInt8[1,2,3,1,2])
+2-element Vector{UnitRange{Int64}}:
+ 1:2
+ 4:5
+```
+
+!!! compat "Julia 1.3"
+     This method requires at least Julia 1.3.
+"""
+
+function findall(t::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+                 s::Union{AbstractString, AbstractPattern, AbstractVector{<:Union{Int8,UInt8}}},
+                 ; overlap::Bool=false)
+    found = UnitRange{Int}[]
+    i, e = firstindex(s), lastindex(s)
+    while true
+        r = findnext(t, s, i)
+        isnothing(r) && break
+        push!(found, r)
+        j = overlap || isempty(r) ? first(r) : last(r)
+        j > e && break
+        @inbounds i = nextind(s, j)
+    end
+    return found
+end
+
 # AbstractString implementation of the generic findprev interface
 function findprev(testf::Function, s::AbstractString, i::Integer)
     i = Int(i)
@@ -420,7 +498,7 @@ function _rsearchindex(s::AbstractString,
         return 1 <= i <= nextind(s, lastindex(s))::Int ? i :
                throw(BoundsError(s, i))
     end
-    t1, trest = Iterators.peel(Iterators.reverse(t))
+    t1, trest = Iterators.peel(Iterators.reverse(t))::NTuple{2,Any}
     while true
         i = findprev(isequal(t1), s, i)
         i === nothing && return 0
@@ -428,7 +506,7 @@ function _rsearchindex(s::AbstractString,
         a = Iterators.Stateful(trest)
         b = Iterators.Stateful(Iterators.reverse(
             pairs(SubString(s, 1, ii))))
-        matched = all(splat(==), zip(a, (x[2] for x in b)))
+        matched = all(Splat(==), zip(a, (x[2] for x in b)))
         if matched && isempty(a)
             isempty(b) && return firstindex(s)
             return nextind(s, popfirst!(b)[1])::Int
@@ -458,7 +536,7 @@ function _rsearchindex(s::AbstractVector{<:Union{Int8,UInt8}}, t::AbstractVector
     n = length(t)
     m = length(s)
     k = Int(_k) - sentinel
-    k < 1 && throw(BoundsError(s, _k))
+    k < 0 && throw(BoundsError(s, _k))
 
     if n == 0
         return 0 <= k <= m ? max(k, 1) : sentinel
@@ -616,7 +694,7 @@ julia> occursin(r"a.a", "abba")
 false
 ```
 
-See also: [`contains`](@ref).
+See also [`contains`](@ref).
 """
 occursin(needle::Union{AbstractString,AbstractChar}, haystack::AbstractString) =
     _searchindex(haystack, needle, firstindex(haystack)) != 0
@@ -634,4 +712,4 @@ The returned function is of type `Base.Fix2{typeof(occursin)}`.
 """
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
-in(::AbstractString, ::AbstractString) = error("use occursin(x, y) for string containment")
+in(::AbstractString, ::AbstractString) = error("use occursin(needle, haystack) for string containment")

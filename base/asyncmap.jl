@@ -15,7 +15,7 @@ up to 100 tasks will be used for concurrent mapping.
 
 `ntasks` can also be specified as a zero-arg function. In this case, the
 number of tasks to run in parallel is checked before processing every element and a new
-task started if the value of `ntasks_func` is less than the current number
+task started if the value of `ntasks_func` is greater than the current number
 of tasks.
 
 If `batch_size` is specified, the collection is processed in batch mode. `f` must
@@ -236,7 +236,7 @@ function start_worker_task!(worker_tasks, exec_func, chnl, batch_size=nothing)
             end
         catch e
             close(chnl)
-            retval = e
+            retval = capture_exception(e, catch_backtrace())
         end
         retval
     end
@@ -305,20 +305,7 @@ end
 function iterate(itr::AsyncCollector)
     itr.ntasks = verify_ntasks(itr.enumerator, itr.ntasks)
     itr.batch_size = verify_batch_size(itr.batch_size)
-    if itr.batch_size !== nothing
-        exec_func = batch -> begin
-            # extract indices from the input tuple
-            batch_idxs = map(x->x[1], batch)
 
-            # and the args tuple....
-            batched_args = map(x->x[2], batch)
-
-            results = f(batched_args)
-            foreach(x -> (itr.results[batch_idxs[x[1]]] = x[2]), enumerate(results))
-        end
-    else
-        exec_func = (i,args) -> (itr.results[i]=itr.f(args...))
-    end
     chnl, worker_tasks = setup_chnl_and_tasks((i,args) -> (itr.results[i]=itr.f(args...)), itr.ntasks, itr.batch_size)
     return iterate(itr, AsyncCollectorState(chnl, worker_tasks))
 end

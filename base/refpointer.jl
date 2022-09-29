@@ -101,7 +101,7 @@ IteratorSize(::Type{<:Ref}) = HasShape{0}()
 unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
 unsafe_convert(::Type{Ref{T}}, x) where {T} = unsafe_convert(Ptr{T}, x)
 
-convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
+convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)::RefValue{T}
 
 ### Methods for a Ref object that is backed by an array at index i
 struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
@@ -117,7 +117,7 @@ convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefArray{T})::P where T
     if allocatedinline(T)
         p = pointer(b.x, b.i)
-    elseif isconcretetype(T) && T.mutable
+    elseif isconcretetype(T) && ismutabletype(T)
         p = pointer_from_objref(b.x[b.i])
     else
         # see comment on equivalent branch for RefValue

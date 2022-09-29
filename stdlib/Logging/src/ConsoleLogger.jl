@@ -70,10 +70,10 @@ function default_metafmt(level::LogLevel, _module, group, id, file, line)
     prefix = string(level == Warn ? "Warning" : string(level), ':')
     suffix::String = ""
     Info <= level < Warn && return color, prefix, suffix
-    _module !== nothing && (suffix *= "$(_module)")
+    _module !== nothing && (suffix *= string(_module)::String)
     if file !== nothing
         _module !== nothing && (suffix *= " ")
-        suffix *= Base.contractuser(file)::String
+        suffix *= contractuser(file)::String
         if line !== nothing
             suffix *= ":$(isa(line, UnitRange) ? "$(first(line))-$(last(line))" : line)"
         end
@@ -116,10 +116,10 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
 
     # Generate a text representation of the message and all key value pairs,
     # split into lines.
-    msglines = [(indent=0, msg=l) for l in split(chomp(string(message)::String), '\n')]
-    stream = logger.stream
-    if !isopen(stream)
-        stream = level < Warn ? stdout : stderr
+    msglines = [(indent=0, msg=l) for l in split(chomp(convert(String, string(message))::String), '\n')]
+    stream::IO = logger.stream
+    if !(isopen(stream)::Bool)
+        stream = stderr
     end
     dsize = displaysize(stream)::Tuple{Int,Int}
     nkwargs = length(kwargs)::Int

@@ -59,9 +59,9 @@ end
 """
     ARTIFACT_OVERRIDES
 
-Artifact locations can be overridden by writing `Override.toml` files within the artifact
+Artifact locations can be overridden by writing `Overrides.toml` files within the artifact
 directories of Pkg depots.  For example, in the default depot `~/.julia`, one may create
-a `~/.julia/artifacts/Override.toml` file with the following contents:
+a `~/.julia/artifacts/Overrides.toml` file with the following contents:
 
     78f35e74ff113f02274ce60dab6e92b4546ef806 = "/path/to/replacement"
     c76f8cda85f83a06d17de6c57aabf9e294eb2537 = "fb886e813a4aed4147d5979fcdf27457d20aa35d"
@@ -73,7 +73,7 @@ a `~/.julia/artifacts/Override.toml` file with the following contents:
 This file defines four overrides; two which override specific artifacts identified
 through their content hashes, two which override artifacts based on their bound names
 within a particular package's UUID.  In both cases, there are two different targets of
-the override: overriding to an on-disk location through an absolutet path, and
+the override: overriding to an on-disk location through an absolute path, and
 overriding to another artifact by its content-hash.
 """
 const ARTIFACT_OVERRIDES = Ref{Union{Dict{Symbol,Any},Nothing}}(nothing)
@@ -88,7 +88,7 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     #
     # Overrides per UUID/bound name are intercepted upon Artifacts.toml load, and new
     # entries within the "hash" overrides are generated on-the-fly.  Thus, all redirects
-    # mechanisticly happen through the "hash" overrides.
+    # mechanistically happen through the "hash" overrides.
     overrides = Dict{Symbol,Any}(
         # Overrides by UUID
         :UUID => Dict{Base.UUID,Dict{String,Union{String,SHA1}}}(),
@@ -267,22 +267,22 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     if !haskey(entry, "arch")
-        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entrty '$name' missing 'arch' key")
+        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'arch' key")
         return nothing
     end
 
     # Collect all String-valued mappings in `entry` and use them as tags
-    tags = Dict{Symbol, String}()
+    tags = Dict{String, String}()
     for (k, v) in entry
         if v isa String
-            tags[Symbol(k)] = v
+            tags[k] = v
         end
     end
     # Removing some known entries that shouldn't be passed through `tags`
-    delete!(tags, :os)
-    delete!(tags, :arch)
-    delete!(tags, Symbol("git-tree-sha1"))
-    return Platform(entry["arch"], entry["os"]; tags...)
+    delete!(tags, "os")
+    delete!(tags, "arch")
+    delete!(tags, "git-tree-sha1")
+    return Platform(entry["arch"], entry["os"], tags)
 end
 
 function pack_platform!(meta::Dict, p::AbstractPlatform)
@@ -313,7 +313,7 @@ end
 """
     process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
 
-When loading an `Artifacts.toml` file, we must check `Override.toml` files to see if any
+When loading an `Artifacts.toml` file, we must check `Overrides.toml` files to see if any
 of the artifacts within it have been overridden by UUID.  If they have, we honor the
 overrides by inspecting the hashes of the targeted artifacts, then overriding them to
 point to the given override, punting the actual redirection off to the hash-based
@@ -325,7 +325,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
     # override for this UUID, and inserting new overrides for those hashes.
     overrides = load_overrides()
     if haskey(overrides[:UUID], pkg_uuid)
-        pkg_overrides = overrides[:UUID][pkg_uuid]
+        pkg_overrides = overrides[:UUID][pkg_uuid]::Dict{String, <:Any}
 
         for name in keys(artifact_dict)
             # Skip names that we're not overriding
@@ -524,14 +524,16 @@ function jointail(dir, tail)
 end
 
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, @nospecialize(lazyartifacts))
-    if haskey(Base.module_keys, __module__)
+    moduleroot = Base.moduleroot(__module__)
+    if haskey(Base.module_keys, moduleroot)
         # Process overrides for this UUID, if we know what it is
-        process_overrides(artifact_dict, Base.module_keys[__module__].uuid)
+        process_overrides(artifact_dict, Base.module_keys[moduleroot].uuid)
     end
 
     # If the artifact exists, we're in the happy path and we can immediately
     # return the path to the artifact:
-    for dir in artifact_paths(hash; honor_overrides=true)
+    dirs = artifact_paths(hash; honor_overrides=true)
+    for dir in dirs
         if isdir(dir)
             return jointail(dir, path_tail)
         end
@@ -548,13 +550,27 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
     end
-    error("Artifact $(repr(name)) was not installed correctly. Try `using Pkg; Pkg.instantiate()` to re-install all missing resources.")
+
+    path_str = if length(dirs) == 1
+        "path \"$(first(dirs))\". "
+    else
+        string("paths:\n", join("  " .* contractuser.(dirs), '\n'), '\n')
+    end
+
+    suggestion_str = if query_override(hash) !== nothing
+        "Check that your `Overrides.toml` file is correct (https://pkgdocs.julialang.org/v1/artifacts/#Overriding-artifact-locations)."
+    else
+        "Try `using Pkg; Pkg.instantiate()` to re-install all missing resources if the artifact is part of a package \
+         or call `Pkg.ensure_artifact_installed` (https://pkgdocs.julialang.org/v1/api/#Pkg.Artifacts.ensure_artifact_installed) if not."
+    end
+
+    error("Artifact $(repr(name)) was not found by looking in the $(path_str)$suggestion_str")
 end
 
 raw"""
     split_artifact_slash(name::String)
 
-Splits an artifact indexing string by path deliminters, isolates the first path element,
+Splits an artifact indexing string by path delimiters, isolates the first path element,
 returning that and the `joinpath()` of the remaining arguments.  This normalizes all path
 separators to the native path separator for the current platform.  Examples:
 
@@ -696,7 +712,7 @@ end
 with_artifacts_directory(f::Function, artifacts_dir::AbstractString) =
     with_artifacts_directory(f, String(artifacts_dir)::String)
 query_override(pkg::Base.UUID, artifact_name::AbstractString; overrides::Dict=load_overrides()) =
-    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}(overrides)))
+    query_override(pkg, String(artifact_name)::String; overrides=convert(Dict{Symbol, Any}, overrides))
 unpack_platform(entry::Dict, name::AbstractString, artifacts_toml::AbstractString) =
     unpack_platform(convert(Dict{String, Any}, entry), String(name)::String, String(artifacts_toml)::String)
 load_artifacts_toml(artifacts_toml::AbstractString; kwargs...) =
@@ -717,5 +733,10 @@ split_artifact_slash(name::AbstractString) =
     split_artifact_slash(String(name)::String)
 artifact_slash_lookup(name::AbstractString, artifact_dict::Dict, artifacts_toml::AbstractString) =
     artifact_slash_lookup(String(name)::String, artifact_dict, String(artifacts_toml)::String)
+
+# Precompilation to reduce latency
+precompile(load_artifacts_toml, (String,))
+precompile(NamedTuple{(:pkg_uuid,)}, (Tuple{Base.UUID},))
+precompile(Core.kwfunc(load_artifacts_toml), (NamedTuple{(:pkg_uuid,), Tuple{Base.UUID}}, typeof(load_artifacts_toml), String))
 
 end # module Artifacts

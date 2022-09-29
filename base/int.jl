@@ -87,6 +87,10 @@ signed(::Type{T}) where {T<:Signed} = T
 (+)(x::T, y::T) where {T<:BitInteger} = add_int(x, y)
 (*)(x::T, y::T) where {T<:BitInteger} = mul_int(x, y)
 
+negate(x) = -x
+negate(x::Unsigned) = -convert(Signed, x)
+#widenegate(x) = -convert(widen(signed(typeof(x))), x)
+
 inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::T, y::T) where {T<:Integer} = float(x) / float(y)
 # skip promotion for system integer types
@@ -96,6 +100,9 @@ inv(x::Integer) = float(one(x)) / float(x)
     isodd(x::Number) -> Bool
 
 Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -113,6 +120,9 @@ isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
     iseven(x::Number) -> Bool
 
 Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
+
+!!! compat "Julia 1.7"
+    Non-`Integer` arguments require Julia 1.7 or later.
 
 # Examples
 ```jldoctest
@@ -164,8 +174,12 @@ julia> abs(-3)
 julia> abs(1 + im)
 1.4142135623730951
 
-julia> abs(typemin(Int64))
--9223372036854775808
+julia> abs.(Int8[-128 -127 -126 0 126 127])  # overflow at typemin(Int8)
+1×6 Matrix{Int8}:
+ -128  127  126  0  126  127
+
+julia> maximum(abs, [1, -2, 3, -4])
+4
 ```
 """
 function abs end
@@ -188,8 +202,11 @@ See also: [`signed`](@ref), [`sign`](@ref), [`signbit`](@ref).
 julia> unsigned(-2)
 0xfffffffffffffffe
 
-julia> unsigned(2)
-0x0000000000000002
+julia> unsigned(Int8(2))
+0x02
+
+julia> typeof(ans)
+UInt8
 
 julia> signed(unsigned(-2))
 -2
@@ -377,7 +394,7 @@ julia> string(bswap(1), base = 2)
 "100000000000000000000000000000000000000000000000000000000"
 ```
 """
-bswap(x::Union{Int8, UInt8}) = x
+bswap(x::Union{Int8, UInt8, Bool}) = x
 bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 
@@ -390,6 +407,9 @@ Number of ones in the binary representation of `x`.
 ```jldoctest
 julia> count_ones(7)
 3
+
+julia> count_ones(Int32(-1))
+32
 ```
 """
 count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
@@ -429,6 +449,9 @@ Number of zeros in the binary representation of `x`.
 ```jldoctest
 julia> count_zeros(Int32(2 ^ 16 - 1))
 16
+
+julia> count_zeros(-1)
+0
 ```
 """
 count_zeros(x::Integer) = count_ones(~x)
@@ -555,8 +578,17 @@ if nameof(@__MODULE__) === :Base
 
         # Examples
         ```jldoctest
-        julia> 129 % Int8
+        julia> x = 129 % Int8
         -127
+
+        julia> typeof(x)
+        Int8
+
+        julia> x = 129 % BigInt
+        129
+
+        julia> typeof(x)
+        BigInt
         ```
         """ $fname(x::Integer, T::Type{<:Integer})
     end
@@ -577,14 +609,26 @@ unsafe_trunc(::Type{T}, x::Integer) where {T<:Integer} = rem(x, T)
     trunc(x; sigdigits::Integer= [, base = 10])
 
 `trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
-is less than or equal to `x`.
+is less than or equal to the absolute value of `x`.
 
 `trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the value is
 not representable.
 
 Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
 
-See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref).
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> trunc(2.22)
+2.0
+
+julia> trunc(-2.22, digits=1)
+-2.2
+
+julia> trunc(Int, -2.22)
+-2
+```
 """
 function trunc end
 
@@ -627,10 +671,19 @@ floor(::Type{T}, x::Integer) where {T<:Integer} = convert(T, x)
 
 """
     @int128_str str
-    @int128_str(str)
 
-`@int128_str` parses a string into a Int128
-Throws an `ArgumentError` if the string is not a valid integer
+Parse `str` as an [`Int128`](@ref).
+Throw an `ArgumentError` if the string is not a valid integer.
+
+# Examples
+```jldoctest
+julia> int128"123456789123"
+123456789123
+
+julia> int128"123456789123.4"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
+[...]
+```
 """
 macro int128_str(s)
     return parse(Int128, s)
@@ -638,10 +691,19 @@ end
 
 """
     @uint128_str str
-    @uint128_str(str)
 
-`@uint128_str` parses a string into a UInt128
-Throws an `ArgumentError` if the string is not a valid integer
+Parse `str` as an [`UInt128`](@ref).
+Throw an `ArgumentError` if the string is not a valid integer.
+
+# Examples
+```
+julia> uint128"123456789123"
+0x00000000000000000000001cbe991a83
+
+julia> uint128"-123456789123"
+ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
+[...]
+```
 """
 macro uint128_str(s)
     return parse(UInt128, s)
@@ -649,7 +711,6 @@ end
 
 """
     @big_str str
-    @big_str(str)
 
 Parse a string into a [`BigInt`](@ref) or [`BigFloat`](@ref),
 and throw an `ArgumentError` if the string is not a valid number.
@@ -662,28 +723,37 @@ julia> big"123_456"
 
 julia> big"7891.5"
 7891.5
+
+julia> big"_"
+ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
+[...]
 ```
 """
 macro big_str(s)
+    message = "invalid number format $s for BigInt or BigFloat"
+    throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
         # remove _ in s[2:end-1]
         bf = IOBuffer(maxsize=lastindex(s))
-        print(bf, s[1])
+        c = s[1]
+        print(bf, c)
+        is_prev_underscore = (c == '_')
+        is_prev_dot = (c == '.')
         for c in SubString(s, 2, lastindex(s)-1)
             c != '_' && print(bf, c)
+            c == '_' && is_prev_dot && return throw_error
+            c == '.' && is_prev_underscore && return throw_error
+            is_prev_underscore = (c == '_')
+            is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        seekstart(bf)
-        n = tryparse(BigInt, String(take!(bf)))
-        n === nothing || return n
-    else
-        n = tryparse(BigInt, s)
-        n === nothing || return n
-        n = tryparse(BigFloat, s)
-        n === nothing || return n
+        s = String(take!(bf))
     end
-    message = "invalid number format $s for BigInt or BigFloat"
-    return :(throw(ArgumentError($message)))
+    n = tryparse(BigInt, s)
+    n === nothing || return n
+    n = tryparse(BigFloat, s)
+    n === nothing || return n
+    return throw_error
 end
 
 ## integer promotions ##
@@ -711,13 +781,24 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
+julia> typemin(Int8)
+-128
+
+julia> typemin(UInt32)
+0x00000000
+
 julia> typemin(Float16)
 -Inf16
 
 julia> typemin(Float32)
 -Inf32
+
+julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
+-3.4028235f38
 ```
 """
 function typemin end
@@ -740,7 +821,10 @@ julia> typemax(UInt32)
 julia> typemax(Float64)
 Inf
 
-julia> floatmax(Float32)  # largest finite floating point number
+julia> typemax(Float32)
+Inf32
+
+julia> floatmax(Float32)  # largest finite Float32 floating point number
 3.4028235f38
 ```
 """

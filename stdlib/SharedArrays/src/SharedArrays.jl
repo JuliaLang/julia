@@ -374,7 +374,7 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
-convert(T::Type{<:SharedArray}, a::Array) = T(a)
+convert(T::Type{<:SharedArray}, a::Array) = T(a)::T
 
 function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]
@@ -507,9 +507,9 @@ end
 Array(S::SharedArray) = S.s
 
 # pass through getindex and setindex! - unlike DArrays, these always work on the complete array
-getindex(S::SharedArray, i::Real) = getindex(S.s, i)
+Base.@propagate_inbounds getindex(S::SharedArray, i::Real) = getindex(S.s, i)
 
-setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
+Base.@propagate_inbounds setindex!(S::SharedArray, x, i::Real) = setindex!(S.s, x, i)
 
 function fill!(S::SharedArray, v)
     vT = convert(eltype(S), v)
@@ -693,9 +693,15 @@ function _shm_mmap_array(T, dims, shm_seg_name, mode)
 end
 
 shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Cstring,), shm_seg_name)
-shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Cint,
-    (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
-
+function shm_open(shm_seg_name, oflags, permissions)
+    # On macOS, `shm_open()` is a variadic function, so to properly match
+    # calling ABI, we must declare our arguments as variadic as well.
+    @static if Sys.isapple()
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t...), shm_seg_name, oflags, permissions)
+    else
+        return ccall(:shm_open, Cint, (Cstring, Cint, Base.Cmode_t), shm_seg_name, oflags, permissions)
+    end
+end
 end # os-test
 
 end # module

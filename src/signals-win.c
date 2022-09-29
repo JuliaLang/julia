@@ -2,6 +2,7 @@
 
 // Windows
 // Note that this file is `#include`d by "signal-handling.c"
+#include <mmsystem.h> // hidden by LEAN_AND_MEAN
 
 #define sig_stack_size 131072 // 128k reserved for SEGV handling
 
@@ -43,11 +44,11 @@ static char *strsignal(int sig)
 
 static void jl_try_throw_sigint(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     int force = jl_check_force_sigint();
-    if (force || (!ptls->defer_signal && ptls->io_wait)) {
+    if (force || (!ct->ptls->defer_signal && ct->ptls->io_wait)) {
         jl_safepoint_consume_sigint();
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
@@ -59,7 +60,6 @@ static void jl_try_throw_sigint(void)
 
 void __cdecl crt_sig_handler(int sig, int num)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
     CONTEXT Context;
     switch (sig) {
     case SIGFPE:
@@ -86,29 +86,31 @@ void __cdecl crt_sig_handler(int sig, int num)
         }
         break;
     default: // SIGSEGV, (SSIGTERM, IGILL)
-        if (ptls->safe_restore)
+        if (jl_get_safe_restore())
             jl_rethrow();
         memset(&Context, 0, sizeof(Context));
         RtlCaptureContext(&Context);
         if (sig == SIGILL)
             jl_show_sigill(&Context);
-        jl_critical_error(sig, &Context);
+        jl_critical_error(sig, &Context, jl_get_current_task());
         raise(sig);
     }
 }
 
 // StackOverflowException needs extra stack space to record the backtrace
 // so we keep one around, shared by all threads
-static jl_mutex_t backtrace_lock;
-static jl_ucontext_t collect_backtrace_fiber;
-static jl_ucontext_t error_return_fiber;
+static uv_mutex_t backtrace_lock;
+static win32_ucontext_t collect_backtrace_fiber;
+static win32_ucontext_t error_return_fiber;
 static PCONTEXT stkerror_ctx;
 static jl_ptls_t stkerror_ptls;
 static int have_backtrace_fiber;
 static void JL_NORETURN start_backtrace_fiber(void)
 {
     // collect the backtrace
-    stkerror_ptls->bt_size = rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx, stkerror_ptls->pgcstack);
+    stkerror_ptls->bt_size =
+        rec_backtrace_ctx(stkerror_ptls->bt_data, JL_MAX_BT_SIZE, stkerror_ctx,
+                          NULL /*current_task?*/);
     // switch back to the execution fiber
     jl_setcontext(&error_return_fiber);
     abort();
@@ -122,7 +124,8 @@ void restore_signals(void)
 
 void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp & (DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
@@ -130,18 +133,19 @@ void jl_throw_in_ctx(jl_value_t *excpt, PCONTEXT ctxThread)
 #else
 #error WIN16 not supported :P
 #endif
-    if (!ptls->safe_restore) {
+    if (!jl_get_safe_restore()) {
         assert(excpt != NULL);
         ptls->bt_size = 0;
         if (excpt != jl_stackovf_exception) {
-            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread, ptls->pgcstack);
+            ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, ctxThread,
+                                              ct->gcstack);
         }
         else if (have_backtrace_fiber) {
-            JL_LOCK(&backtrace_lock);
+            uv_mutex_lock(&backtrace_lock);
             stkerror_ctx = ctxThread;
             stkerror_ptls = ptls;
             jl_swapcontext(&error_return_fiber, &collect_backtrace_fiber);
-            JL_UNLOCK_NOGC(&backtrace_lock);
+            uv_mutex_unlock(&backtrace_lock);
         }
         ptls->sig_exception = excpt;
     }
@@ -222,7 +226,8 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 
 LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -248,7 +253,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
                     }
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
-                if (ptls->safe_restore) {
+                if (jl_get_safe_restore()) {
                     jl_throw_in_ctx(NULL, ExceptionInfo->ContextRecord);
                     return EXCEPTION_CONTINUE_EXECUTION;
                 }
@@ -309,7 +314,7 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
         jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
-        jl_critical_error(0, ExceptionInfo->ContextRecord);
+        jl_critical_error(0, ExceptionInfo->ContextRecord, ct);
         static int recursion = 0;
         if (recursion++)
             exit(1);
@@ -339,7 +344,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 continue;
             }
             else {
-                JL_LOCK_NOGC(&jl_in_stackwalk);
+                uv_mutex_lock(&jl_in_stackwalk);
                 jl_lock_profile();
                 if ((DWORD)-1 == SuspendThread(hMainThread)) {
                     fputs("failed to suspend main thread. aborting profiling.", stderr);
@@ -356,22 +361,39 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     // Get backtrace data
                     bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
-                    // Mark the end of this block with 0
+
+                    jl_ptls_t ptls = jl_all_tls_states[0]; // given only profiling hMainThread
+
+                    // store threadid but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
+
+                    // store task id
+                    bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
+
+                    // store cpu cycle clock
+                    bt_data_prof[bt_size_cur++].uintptr = cycleclock();
+
+                    // store whether thread is sleeping but add 1 as 0 is preserved to indicate end of block
+                    bt_data_prof[bt_size_cur++].uintptr = jl_atomic_load_relaxed(&ptls->sleep_check_state) + 1;
+
+                    // Mark the end of this block with two 0's
+                    bt_data_prof[bt_size_cur++].uintptr = 0;
                     bt_data_prof[bt_size_cur++].uintptr = 0;
                 }
                 jl_unlock_profile();
-                JL_UNLOCK_NOGC(&jl_in_stackwalk);
+                uv_mutex_unlock(&jl_in_stackwalk);
                 if ((DWORD)-1 == ResumeThread(hMainThread)) {
                     jl_profile_stop_timer();
                     fputs("failed to resume main thread! aborting.", stderr);
-                    gc_debug_critical_error();
+                    jl_gc_debug_critical_error();
                     abort();
                 }
+                jl_check_profile_autostop();
             }
         }
     }
     jl_unlock_profile();
-    JL_UNLOCK_NOGC(&jl_in_stackwalk);
+    uv_mutex_unlock(&jl_in_stackwalk);
     jl_profile_stop_timer();
     hBtThread = 0;
     return 0;
@@ -453,6 +475,6 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     collect_backtrace_fiber.uc_stack.ss_sp = (void*)stk;
     collect_backtrace_fiber.uc_stack.ss_size = ssize;
     jl_makecontext(&collect_backtrace_fiber, start_backtrace_fiber);
-    JL_MUTEX_INIT(&backtrace_lock);
+    uv_mutex_init(&backtrace_lock);
     have_backtrace_fiber = 1;
 }

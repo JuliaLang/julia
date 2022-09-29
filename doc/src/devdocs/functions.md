@@ -13,7 +13,7 @@ share the same `Complex` type name object.
 All objects in Julia are potentially callable, because every object has a type, which in turn
 has a `TypeName`.
 
-## Function calls
+## [Function calls](@id Function-calls)
 
 Given the call `f(x,y)`, the following steps are performed: first, the method table to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
@@ -101,10 +101,30 @@ currently share a method table via special arrangement.
 
 The "builtin" functions, defined in the `Core` module, are:
 
-```
-=== typeof sizeof <: isa typeassert throw tuple getfield setfield! fieldtype
-nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
-_expr svec
+```@eval
+function lines(words)
+    io = IOBuffer()
+    n = 0
+    for w in words
+        if n+length(w) > 80
+            print(io, '\n', w)
+            n = length(w)
+        elseif n == 0
+            print(io, w);
+            n += length(w)
+        else
+            print(io, ' ', w);
+            n += length(w)+1
+        end
+    end
+    String(take!(io))
+end
+import Markdown
+[string(n) for n in names(Core;all=true)
+    if getfield(Core,n) isa Core.Builtin && nameof(getfield(Core,n)) === n] |>
+    lines |>
+    s ->  "```\n$s\n```" |>
+    Markdown.parse
 ```
 
 These are all singleton objects whose types are subtypes of `Builtin`, which is a subtype of

@@ -11,12 +11,12 @@ import
         inv, exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rem, rem2pi, round, show, float,
-        sum, sqrt, string, print, trunc, precision, exp10, expm1, log1p,
+        sum, sqrt, string, print, trunc, precision, _precision, exp10, expm1, log1p,
         eps, signbit, sign, sin, cos, sincos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose
+        isone, big, _string_n, decompose, minmax
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -151,6 +151,11 @@ global precision; `convert` will always return `x`.
 convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
+See also:
+- [`@big_str`](@ref)
+- [`rounding`](@ref) and [`setrounding`](@ref)
+- [`precision`](@ref) and [`setprecision`](@ref)
+
 !!! compat "Julia 1.1"
     `precision` as a keyword argument requires at least Julia 1.1.
     In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
@@ -169,11 +174,6 @@ julia> BigFloat("2.1", RoundUp)
 julia> BigFloat("2.1", RoundUp, precision=128)
 2.100000000000000000000000000000000000007
 ```
-
-# See also
-- [`@big_str`](@ref)
-- [`rounding`](@ref) and [`setrounding`](@ref)
-- [`precision`](@ref) and [`setprecision`](@ref)
 """
 BigFloat(x, r::RoundingMode)
 
@@ -181,7 +181,7 @@ widen(::Type{Float64}) = BigFloat
 widen(::Type{BigFloat}) = BigFloat
 
 function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    if precision == MPFR.precision(x)
+    if precision == _precision(x)
         return x
     else
         z = BigFloat(;precision=precision)
@@ -192,7 +192,7 @@ function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
 end
 
 function _duplicate(x::BigFloat)
-    z = BigFloat(;precision=precision(x))
+    z = BigFloat(;precision=_precision(x))
     ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, 0)
     return z
 end
@@ -294,7 +294,14 @@ function round(::Type{T}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
     end
     return unsafe_trunc(T, res)
 end
-round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) = _unchecked_cast(BigInt, x, r)
+
+function round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
+    clear_flags()
+    res = _unchecked_cast(BigInt, x, r)
+    had_range_exception() && throw(InexactError(:round, BigInt, x))
+    return res
+end
+
 round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} =
     invoke(round, Tuple{Type{<:Union{Signed, Unsigned}}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
 round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =
@@ -338,8 +345,23 @@ Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
     _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
 Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 
-# TODO: avoid double rounding
-Float16(x::BigFloat) = Float16(Float64(x))
+function Float16(x::BigFloat) :: Float16
+    res = Float32(x)
+    resi = reinterpret(UInt32, res)
+    if (resi&0x7fffffff) < 0x38800000 # if Float16(res) is subnormal
+        #shift so that the mantissa lines up where it would for normal Float16
+        shift = 113-((resi & 0x7f800000)>>23)
+        if shift<23
+            resi |= 0x0080_0000 # set implicit bit
+            resi >>= shift
+        end
+    end
+    if (resi & 0x1fff == 0x1000) # if we are halfway between 2 Float16 values
+        # adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
+        res = nextfloat(res, cmp(x, res))
+    end
+    return res
+end
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
@@ -675,20 +697,21 @@ function log1p(x::BigFloat)
     return z
 end
 
-function max(x::BigFloat, y::BigFloat)
-    isnan(x) && return x
-    isnan(y) && return y
-    z = BigFloat()
-    ccall((:mpfr_max, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, x, y, ROUNDING_MODE[])
-    return z
+# For `min`/`max`, general fallback for `AbstractFloat` is good enough.
+# Only implement `minmax` and `_extrema_rf` to avoid repeated calls.
+function minmax(x::BigFloat, y::BigFloat)
+    isnan(x) && return x, x
+    isnan(y) && return y, y
+    Base.Math._isless(x, y) ? (x, y) : (y, x)
 end
 
-function min(x::BigFloat, y::BigFloat)
-    isnan(x) && return x
-    isnan(y) && return y
-    z = BigFloat()
-    ccall((:mpfr_min, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, x, y, ROUNDING_MODE[])
-    return z
+function Base._extrema_rf(x::NTuple{2,BigFloat}, y::NTuple{2,BigFloat})
+    (x1, x2), (y1, y2) = x, y
+    isnan(x1) && return x
+    isnan(y1) && return y
+    z1 = Base.Math._isless(x1, y1) ? x1 : y1
+    z2 = Base.Math._isless(x2, y2) ? y2 : x2
+    z1, z2
 end
 
 function modf(x::BigFloat)
@@ -792,37 +815,37 @@ function sign(x::BigFloat)
     return c < 0 ? -one(x) : one(x)
 end
 
-function precision(x::BigFloat)  # precision of an object of type BigFloat
+function _precision(x::BigFloat)  # precision of an object of type BigFloat
     return ccall((:mpfr_get_prec, :libmpfr), Clong, (Ref{BigFloat},), x)
 end
+precision(x::BigFloat; base::Integer=2) = _precision(x, base)
+
+_precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # default precision of the type BigFloat itself
 
 """
-    precision(BigFloat)
+    setprecision([T=BigFloat,] precision::Int; base=2)
 
-Get the precision (in bits) currently used for [`BigFloat`](@ref) arithmetic.
-"""
-precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # precision of the type BigFloat itself
-
-"""
-    setprecision([T=BigFloat,] precision::Int)
-
-Set the precision (in bits) to be used for `T` arithmetic.
+Set the precision (in bits, by default) to be used for `T` arithmetic.
+If `base` is specified, then the precision is the minimum required to give
+at least `precision` digits in the given `base`.
 
 !!! warning
 
     This function is not thread-safe. It will affect code running on all threads, but
     its behavior is undefined if called concurrently with computations that use the
     setting.
+
+!!! compat "Julia 1.8"
+    The `base` keyword requires at least Julia 1.8.
 """
-function setprecision(::Type{BigFloat}, precision::Integer)
-    if precision < 2
-        throw(DomainError(precision, "`precision` cannot be less than 2."))
-    end
-    DEFAULT_PRECISION[] = precision
+function setprecision(::Type{BigFloat}, precision::Integer; base::Integer=2)
+    base > 1 || throw(DomainError(base, "`base` cannot be less than 2."))
+    precision > 0 || throw(DomainError(precision, "`precision` cannot be less than 1."))
+    DEFAULT_PRECISION[] = base == 2 ? precision : ceil(Int, precision * log2(base))
     return precision
 end
 
-setprecision(precision::Integer) = setprecision(BigFloat, precision)
+setprecision(precision::Integer; base::Integer=2) = setprecision(BigFloat, precision; base)
 
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
 maxintfloat(::Type{BigFloat}) = BigFloat(2)^precision(BigFloat)
@@ -916,9 +939,9 @@ floatmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
 floatmax(::Type{BigFloat}) = prevfloat(BigFloat(Inf))
 
 """
-    setprecision(f::Function, [T=BigFloat,] precision::Integer)
+    setprecision(f::Function, [T=BigFloat,] precision::Integer; base=2)
 
-Change the `T` arithmetic precision (in bits) for the duration of `f`.
+Change the `T` arithmetic precision (in the given `base`) for the duration of `f`.
 It is logically equivalent to:
 
     old = precision(BigFloat)
@@ -929,11 +952,14 @@ It is logically equivalent to:
 Often used as `setprecision(T, precision) do ... end`
 
 Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
-`setprecision`
+`setprecision`.
+
+!!! compat "Julia 1.8"
+    The `base` keyword requires at least Julia 1.8.
 """
-function setprecision(f::Function, ::Type{T}, prec::Integer) where T
+function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
     old_prec = precision(T)
-    setprecision(T, prec)
+    setprecision(T, prec; kws...)
     try
         return f()
     finally
@@ -941,7 +967,7 @@ function setprecision(f::Function, ::Type{T}, prec::Integer) where T
     end
 end
 
-setprecision(f::Function, prec::Integer) = setprecision(f, BigFloat, prec)
+setprecision(f::Function, prec::Integer; base::Integer=2) = setprecision(f, BigFloat, prec; base)
 
 function string_mpfr(x::BigFloat, fmt::String)
     pc = Ref{Ptr{UInt8}}()
@@ -962,7 +988,7 @@ function string_mpfr(x::BigFloat, fmt::String)
 end
 
 function _prettify_bigfloat(s::String)::String
-    mantissa, exponent = split(s, 'e')
+    mantissa, exponent = eachsplit(s, 'e')
     if !occursin('.', mantissa)
         mantissa = string(mantissa, '.')
     end
@@ -973,7 +999,7 @@ function _prettify_bigfloat(s::String)::String
     expo = parse(Int, exponent)
     if -5 < expo < 6
         expo == 0 && return mantissa
-        int, frac = split(mantissa, '.')
+        int, frac = eachsplit(mantissa, '.')
         if expo > 0
             expo < length(frac) ?
                 string(int, frac[1:expo], '.', frac[expo+1:end]) :
@@ -1000,7 +1026,7 @@ string(b::BigFloat) = _string(b)
 
 print(io::IO, b::BigFloat) = print(io, string(b))
 function show(io::IO, b::BigFloat)
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, _string(b, 5))
     else
         print(io, _string(b))
@@ -1021,14 +1047,14 @@ set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong
 set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
-    haskey(stackdict, x) && return stackdict[x]
-    # d = copy(x._d)
-    d = x._d
-    d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
-    y = _BigFloat(x.prec, x.sign, x.exp, d′)
-    #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
-    stackdict[x] = y
-    return y
+    get!(stackdict, x) do
+        # d = copy(x._d)
+        d = x._d
+        d′ = GC.@preserve d unsafe_string(pointer(d), sizeof(d)) # creates a definitely-new String
+        y = _BigFloat(x.prec, x.sign, x.exp, d′)
+        #ccall((:mpfr_custom_move,:libmpfr), Cvoid, (Ref{BigFloat}, Ptr{Limb}), y, d) # unnecessary
+        return y
+    end
 end
 
 function decompose(x::BigFloat)::Tuple{BigInt, Int, Int}

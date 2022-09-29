@@ -23,7 +23,7 @@
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
-static uint32_t num_stack_mappings = 0;
+static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
@@ -106,6 +106,9 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 
 static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
 {
+#ifdef _COMPILER_ASAN_ENABLED_
+    __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
@@ -119,7 +122,8 @@ static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
 
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz)
 {
-    _jl_free_stack(jl_get_ptls_states(), stkbuf, bufsz);
+    jl_task_t *ct = jl_current_task;
+    _jl_free_stack(ct->ptls, stkbuf, bufsz);
 }
 
 
@@ -134,6 +138,9 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
             task->stkbuf = NULL;
+#ifdef _COMPILER_ASAN_ENABLED_
+            __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
             arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
         }
     }
@@ -142,7 +149,8 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 
 JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, jl_task_t *owner) JL_NOTSAFEPOINT
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     size_t ssize = *bufsz;
     void *stk = NULL;
     if (ssize <= pool_sizes[JL_N_STACK_POOLS - 1]) {
@@ -231,7 +239,7 @@ void sweep_stack_pools(void)
                     t->stkbuf = NULL;
                     _jl_free_stack(ptls2, stkbuf, bufsz);
                 }
-#ifdef JL_TSAN_ENABLED
+#ifdef _COMPILER_TSAN_ENABLED_
                 if (t->ctx.tsan_state) {
                     __tsan_destroy_fiber(t->ctx.tsan_state);
                     t->ctx.tsan_state = NULL;
@@ -250,13 +258,14 @@ void sweep_stack_pools(void)
 
 JL_DLLEXPORT jl_array_t *jl_live_tasks(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
     arraylist_t *live_tasks = &ptls->heap.live_tasks;
     size_t i, j, l;
     jl_array_t *a;
     do {
         l = live_tasks->len;
-        a = jl_alloc_vec_any(l + 1); // may gc
+        a = jl_alloc_vec_any(l + 1); // may gc, changing the number of tasks
     } while (l + 1 < live_tasks->len);
     l = live_tasks->len;
     void **lst = live_tasks->items;

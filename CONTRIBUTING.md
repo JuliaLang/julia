@@ -158,7 +158,9 @@ Examples written within docstrings can be used as testcases known as "doctests" 
     "DOCSTRING TEST"
     ```
 
-A doctest needs to match an interactive REPL including the `julia>` prompt. To run doctests you need to run `make -C doc doctest=true` from the root directory. It is recommended to add the header `# Examples` above the doctests.
+A doctest needs to match an interactive REPL including the `julia>` prompt. It is recommended to add the header `# Examples` above the doctests.
+
+To run doctests you need to run `make -C doc doctest=true` from the root directory. You can use `make -C doc doctest=true revise=true` if you are modifying the doctests and don't want to rebuild Julia after each change (see details below about the Revise.jl workflow).
 
 #### News-worthy changes
 
@@ -199,11 +201,12 @@ Add new code to Julia's base libraries as follows (this is the "basic" approach;
 
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
 
-Note: You can run specific test files with `make`:
+#### Running specific tests
+There are `make` targets for running specific tests:
 
     make test-bitarray
 
-or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
+You can also use the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
@@ -240,11 +243,74 @@ If you need to restart your Julia session, just start at step 2 above.
 built and incorporate them automatically. You only need to rebuild
 Julia if you made code-changes that Revise cannot handle.
 
-For convenience, there are also `test-revise-*` targets for every `test-*`
-target that use Revise to load any modifications to Base into the current
-process before running the corresponding test. This can be useful as a shortcut
+For convenience, there are also `test-revise-*` targets for every [`test-*`
+target](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#running-specific-tests) that use Revise to load any modifications to Base into the current
+system image before running the corresponding test. This can be useful as a shortcut
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
+
+### Contributing to the standard library
+
+The standard library (stdlib) packages are baked into the Julia system image.
+When running the ordinary test workflow on the stdlib packages, the system image
+version overrides the version you are developing.
+To test stdlib packages, you can do the following steps:
+
+1. Edit the UUID field of the `Project.toml` in the stdlib package
+2. Change the current directory to the directory of the stdlib you are developing
+3. Start julia with `julia --project=.`
+4. You can now test the package by running `pkg> test` in Pkg mode.
+
+Because you changed the UUID, the package manager treats the stdlib package as
+different from the one in the system image, and the system image version will
+not override the package.
+
+Be sure to change the UUID value back before making the pull request.
+
+### Contributing to patch releases
+
+The process of [creating a patch release](https://docs.julialang.org/en/v1/devdocs/build/distributing/#Point-releasing-101) is roughly as follows:
+
+1. Create a new branch (e.g. `backports-release-1.6`) against the relevant minor release
+   branch (e.g. `release-1.6`). Usually a corresponding pull request is created as well.
+
+2. Add commits, nominally from `master` (hence "backports"), to that branch.
+   See below for more information on this process.
+
+3. Run the [BaseBenchmarks.jl](https://github.com/JuliaCI/BaseBenchmarks.jl) benchmark
+   suite and [PkgEval.jl](https://github.com/JuliaCI/PkgEval.jl) package ecosystem
+   exerciser against that branch. Nominally BaseBenchmarks.jl and PkgEval.jl are
+   invoked via [Nanosoldier.jl](https://github.com/JuliaCI/Nanosoldier.jl) from
+   the pull request associated with the backports branch. Fix any issues.
+
+4. Once all test and benchmark reports look good, merge the backports branch into
+   the corresponding release branch (e.g. merge `backports-release-1.6` into
+   `release-1.6`).
+
+5. Open a pull request that bumps the version of the relevant minor release to the
+   next patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37718).
+
+6. Ping `@JuliaLang/releases` to tag the patch release and update the website.
+
+7. Open a pull request that bumps the version of the relevant minor release to the
+   next prerelase patch version, e.g. as in [this pull request](https://github.com/JuliaLang/julia/pull/37724).
+
+Step 2 above, i.e. backporting commits to the `backports-release-X.Y` branch, has largely
+been automated via [`Backporter`](https://github.com/KristofferC/Backporter): Backporter
+searches for merged pull requests with the relevant `backport-X.Y` tag, and attempts to
+cherry-pick the commits from those pull requests onto the `backports-release-X.Y` branch.
+Some commits apply successfully without intervention, others not so much. The latter
+commits require "manual" backporting, with which help is generally much appreciated.
+Backporter generates a report identifying those commits it managed to backport automatically
+and those that require manual backporting; this report is usually copied into the first
+post of the pull request associated with `backports-release-X.Y` and maintained as
+additional commits are automatically and/or manually backported.
+
+When contributing a manual backport, if you have the necessary permissions, please push the
+backport directly to the `backports-release-X.Y` branch. If you lack the relevant
+permissions, please open a pull request against the `backports-release-X.Y` branch with the
+manual backport. Once the manual backport is live on the `backports-release-X.Y` branch,
+please remove the `backport-X.Y` tag from the originating pull request for the commits.
 
 ### Code Formatting Guidelines
 
@@ -279,13 +345,17 @@ runtest harness).
  - If you see any unrelated changes to submodules like `deps/libuv`, `deps/openlibm`, etc., try running `git submodule update` first.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
- - GitHub does not send notifications when you push a new commit to a pull request, so please add a comment to the pull request thread to let reviewers know when you've made changes.
  - When linking to specific lines of code in discussion of an issue or pull request, hit the `y` key while viewing code on GitHub to reload the page with a URL that includes the specific version that you're viewing. That way any lines of code that you refer to will still make sense in the future, even if the content of the file changes.
  - Whitespace can be automatically removed from existing commits with `git rebase`.
    - To remove whitespace for the previous commit, run
      `git rebase --whitespace=fix HEAD~1`.
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
+
+#### Git Recommendations For Pull Request Reviewers
+
+- When merging, we generally like `squash+merge`. Unless it is the rare case of a PR with carefully staged individual commits that you want in the history separately, in which case `merge` is acceptable, but usually prefer `squash+merge`.
+
 
 ## Resources
 
@@ -297,7 +367,7 @@ runtest harness).
   - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
 
 * Design of Julia
-  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/research/julia-fresh-approach-BEKS.pdf)
+  - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/assets/research/julia-fresh-approach-BEKS.pdf)
   - [Julia: Dynamism and Performance Reconciled by Design](http://janvitek.org/pubs/oopsla18b.pdf)
   - [All Julia Publications](https://julialang.org/research)
 

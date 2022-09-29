@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 static uint64_t t0;
-uint64_t jl_timing_data[(int)JL_TIMING_LAST] = {0};
+JL_DLLEXPORT uint64_t jl_timing_data[(int)JL_TIMING_LAST] = {0};
 const char *jl_timing_names[(int)JL_TIMING_LAST] =
     {
 #define X(name) #name
@@ -48,7 +48,7 @@ void jl_init_timing(void)
 
 void jl_destroy_timing(void)
 {
-    jl_ptls_t ptls = jl_get_ptls_states();
+    jl_ptls_t ptls = jl_current_task->ptls;
     jl_timing_block_t *stack = ptls->timing_stack;
     while (stack) {
         _jl_timing_block_destroy(stack);

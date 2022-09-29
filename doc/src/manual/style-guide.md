@@ -144,7 +144,7 @@ is stated to be the API. This has several benefits:
 - Package developers are freer to change the implementation without breaking
   user code.
 - Methods can be passed to higher-order constructs like [`map`](@ref) (e.g.
-  `map(imag, zs))` rather than `[z.im for z in zs]`).
+  `map(imag, zs)`) rather than `[z.im for z in zs]`).
 - Methods can be defined on abstract types.
 - Methods can describe a conceptual operation that can be shared across
   disparate types (e.g. `real(z)` works on Complex numbers or Quaternions).
@@ -345,8 +345,7 @@ to behave in a certain way, and overly customizing its behavior can make it hard
 ## Avoid type piracy
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
-or other packages on types that you have not defined. In some cases, you can get away with
-type piracy with little ill effect. In extreme cases, however, you can even crash Julia
+or other packages on types that you have not defined. In extreme cases, you can crash Julia
 (e.g. if your method extension or redefinition causes invalid input to be passed to a
 `ccall`). Type piracy can complicate reasoning about code, and may introduce
 incompatibilities that are hard to predict and diagnose.

@@ -14,7 +14,7 @@
 
 multi_menu = MultiSelectMenu(string.(1:20), charset=:ascii)
 @test TerminalMenus.options(multi_menu) == string.(1:20)
-@test TerminalMenus.header(multi_menu) == "[press: d=done, a=all, n=none]"
+@test TerminalMenus.header(multi_menu) == "[press: Enter=toggle, a=all, n=none, d=done, q=abort]"
 
 # Output
 for kws in ((charset=:ascii,),
@@ -30,10 +30,10 @@ for kws in ((charset=:ascii,),
     TerminalMenus.writeline(buf, multi_menu, 1, true)
     @test String(take!(buf)) == "$uck 1"
     TerminalMenus.printmenu(buf, multi_menu, 1; init=true)
-    @test startswith(String(take!(buf)), string("\e[2K[press: d=done, a=all, n=none]\r\n\e[2K $cur $uck 1"))
+    @test startswith(String(take!(buf)), string("\e[2K[press: Enter=toggle, a=all, n=none, d=done, q=abort]\r\n\e[2K $cur $uck 1"))
     push!(multi_menu.selected, 1)
     TerminalMenus.printmenu(buf, multi_menu, 2; init=true)
-    @test startswith(String(take!(buf)), string("\e[2K[press: d=done, a=all, n=none]\r\n\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
+    @test startswith(String(take!(buf)), string("\e[2K[press: Enter=toggle, a=all, n=none, d=done, q=abort]\r\n\e[2K   $chk 1\r\n\e[2K $cur $uck 2"))
 end
 
 # Preselection
@@ -52,6 +52,6 @@ end
 
 # Test SDTIN
 multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
-@test simulate_input(Set([1,2]), multi_menu, :enter, :down, :enter, 'd')
+@test simulate_input(multi_menu, :enter, :down, :enter, 'd') == Set([1,2])
 multi_menu = MultiSelectMenu(["single option"], charset=:ascii)
-@test simulate_input(Set([1]), multi_menu, :up, :up, :down, :enter, 'd')
+@test simulate_input(multi_menu, :up, :up, :down, :enter, 'd') == Set([1])

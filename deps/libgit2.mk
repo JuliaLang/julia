@@ -1,7 +1,7 @@
 ## libgit2
 ifneq ($(USE_BINARYBUILDER_LIBGIT2),1)
 
-LIBGIT2_GIT_URL := git://github.com/libgit2/libgit2.git
+LIBGIT2_GIT_URL := https://github.com/libgit2/libgit2.git
 LIBGIT2_TAR_URL = https://api.github.com/repos/libgit2/libgit2/tarball/$1
 $(eval $(call git-external,libgit2,LIBGIT2,CMakeLists.txt,,$(SRCCACHE)))
 
@@ -13,7 +13,7 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DTHREADSAFE=ON -DUSE_BUNDLED_ZLIB=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -30,7 +30,7 @@ endif
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
-LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DSHA1_BACKEND="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
+LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
@@ -40,28 +40,17 @@ $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied: $(LIBGIT2_SRC_PATH)/so
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-agent-nonfatal.patch
 	echo 1 > $@
 
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5685 lands
-$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
-	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-mbedtls-incdir.patch
-	echo 1 > $@
-
-$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
 	echo 1 > $@
 
-# This can be removed once a release with https://github.com/libgit2/libgit2/pull/5740 lands
-$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-continue-zlib.patch
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-win32-ownership.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: \
-	$(LIBGIT2_SRC_PATH)/libgit2-agent-nonfatal.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-mbedtls-incdir.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied \
-	$(LIBGIT2_SRC_PATH)/libgit2-continue-zlib.patch-applied
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
@@ -94,8 +83,8 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libgit2.$$(SHLIB_EXT) $$(build_shlibdir)/libgit2.$$(SHLIB_EXT)))
 
 clean-libgit2:
-	-rm $(build_datarootdir)/julia/cert.pem
-	-rm $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
+	-rm -f $(build_datarootdir)/julia/cert.pem
+	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)

@@ -81,8 +81,7 @@ Here is an overview of some of the subdirectories that may exist in a depot:
 * `packages`: Contains packages, some of which were explicitly installed and some which are implicit dependencies. Maintained by `Pkg.jl`.
 * `registries`: Contains package registries. By default only `General`. Maintained by `Pkg.jl`.
 
-See also:
-[`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
+See also [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
 [Code Loading](@ref code-loading).
 """
 const DEPOT_PATH = String[]
@@ -90,9 +89,9 @@ const DEPOT_PATH = String[]
 function append_default_depot_path!(DEPOT_PATH)
     path = joinpath(homedir(), ".julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR::String, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR::String, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -101,7 +100,7 @@ function init_depot_path()
     if haskey(ENV, "JULIA_DEPOT_PATH")
         str = ENV["JULIA_DEPOT_PATH"]
         isempty(str) && return
-        for path in split(str, Sys.iswindows() ? ';' : ':')
+        for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
             if isempty(path)
                 append_default_depot_path!(DEPOT_PATH)
             else
@@ -161,7 +160,7 @@ have special meanings:
 The fully expanded value of `LOAD_PATH` that is searched for projects and packages
 can be seen by calling the `Base.load_path()` function.
 
-See also:
+See also
 [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH),
 [`JULIA_PROJECT`](@ref JULIA_PROJECT),
 [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH), and
@@ -170,7 +169,11 @@ See also:
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 # HOME_PROJECT is no longer used, here just to avoid breaking things
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
-const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing)
+const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing) # Modify this only via `Base.set_active_project(proj)`
+## Watchers for when the active project changes (e.g., Revise)
+# Each should be a thunk, i.e., `f()`. To determine the current active project,
+# the thunk can query `Base.active_project()`.
+const active_project_callbacks = []
 
 function current_project(dir::AbstractString)
     # look for project file in current dir and parents
@@ -199,7 +202,7 @@ end
 function parse_load_path(str::String)
     envs = String[]
     isempty(str) && return envs
-    for env in split(str, Sys.iswindows() ? ';' : ':')
+    for env in eachsplit(str, Sys.iswindows() ? ';' : ':')
         if isempty(env)
             for env′ in DEFAULT_LOAD_PATH
                 env′ in envs || push!(envs, env′)
@@ -232,10 +235,11 @@ function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
-    ACTIVE_PROJECT[] =
+    set_active_project(
         project === nothing ? nothing :
         project == "" ? nothing :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
+    )
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -247,7 +251,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB::String
+        env == "@stdlib" && return Sys.STDLIB
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
@@ -281,7 +285,7 @@ load_path_expand(::Nothing) = nothing
 """
     active_project()
 
-Return the path of the active `Project.toml` file.
+Return the path of the active `Project.toml` file. See also [`Base.set_active_project`](@ref).
 """
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
@@ -308,12 +312,31 @@ function active_project(search_load_path::Bool=true)
 end
 
 """
+    set_active_project(projfile::Union{AbstractString,Nothing})
+
+Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+"""
+function set_active_project(projfile::Union{AbstractString,Nothing})
+    ACTIVE_PROJECT[] = projfile
+    for f in active_project_callbacks
+        try
+            Base.invokelatest(f)
+        catch
+            @error "active project callback $f failed" maxlog=1
+        end
+    end
+end
+
+
+"""
     load_path()
 
 Return the fully expanded value of [`LOAD_PATH`](@ref) that is searched for projects and
 packages.
 """
 function load_path()
+    cache = LOADING_CACHE[]
+    cache !== nothing && return cache.load_path
     paths = String[]
     for env in LOAD_PATH
         path = load_path_expand(env)
@@ -345,6 +368,26 @@ atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 function _atexit()
     while !isempty(atexit_hooks)
         f = popfirst!(atexit_hooks)
+        try
+            f()
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
+            println(stderr)
+        end
+    end
+end
+
+## postoutput: register post output hooks ##
+## like atexit but runs after any requested output.
+## any hooks saved in the sysimage are cleared in Base._start
+const postoutput_hooks = Callable[]
+
+postoutput(f::Function) = (pushfirst!(postoutput_hooks, f); nothing)
+
+function _postoutput()
+    while !isempty(postoutput_hooks)
+        f = popfirst!(postoutput_hooks)
         try
             f()
         catch ex

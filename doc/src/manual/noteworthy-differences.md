@@ -8,7 +8,7 @@ may trip up Julia users accustomed to MATLAB:
 
   * Julia arrays are indexed with square brackets, `A[i,j]`.
   * Julia arrays are not copied when assigned to another variable. After `A = B`, changing elements of `B`
-    will modify `A` as well.
+    will modify `A` as well. To avoid this, use `A = copy(B)`.
   * Julia values are not copied when passed to a function. If a function modifies an array, the changes
     will be visible in the caller.
   * Julia does not automatically grow arrays in an assignment statement. Whereas in MATLAB `a(4) = 3.2`
@@ -97,6 +97,7 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, varargs are specified using the splat operator `...`, which always follows the name
     of a specific variable, unlike R, for which `...` can occur in isolation.
   * In Julia, modulus is `mod(a, b)`, not `a %% b`. `%` in Julia is the remainder operator.
+  * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * In Julia, not all data structures support logical indexing. Furthermore, logical indexing in Julia
     is supported only with vectors of length equal to the object being indexed. For example:
 
@@ -122,7 +123,6 @@ For users coming to Julia from R, these are some noteworthy differences:
     statements in the latter two syntaxes must be explicitly wrapped in parentheses, e.g. `cond && (x = value)`.
   * In Julia, `<-`, `<<-` and `->` are not assignment operators.
   * Julia's `->` creates an anonymous function.
-  * Julia constructs vectors using brackets. Julia's `[1, 2, 3]` is the equivalent of R's `c(1, 2, 3)`.
   * Julia's [`*`](@ref) operator can perform matrix multiplication, unlike in R. If `A` and `B` are
     matrices, then `A * B` denotes a matrix multiplication in Julia, equivalent to R's `A %*% B`.
     In R, this same notation would perform an element-wise (Hadamard) product. To get the element-wise
@@ -163,6 +163,9 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, a range like `a:b` is not shorthand for a vector like in R, but is a specialized `AbstractRange`
     object that is used for iteration. To convert a range into a vector, use
     [`collect(a:b)`](@ref).
+  * The `:` operator has a different precedence in R and Julia. In particular, in Julia arithmetic operators
+    have higher precedence than the `:` operator, whereas the reverse is true in R. For example, `1:n-1` in
+    Julia is equivalent to `1:(n-1)` in R.
   * Julia's [`max`](@ref) and [`min`](@ref) are the equivalent of `pmax` and `pmin` respectively
     in R, but both arguments need to have the same dimensions.  While [`maximum`](@ref) and [`minimum`](@ref)
     replace `max` and `min` in R, there are important differences.
@@ -207,10 +210,13 @@ For users coming to Julia from R, these are some noteworthy differences:
   * In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
   * Julia's slice indexing includes the last element, unlike in Python. `a[2:3]` in Julia is `a[1:3]`
     in Python.
-  * Julia does not support negative indices. In particular, the last element of a list or array is
-    indexed with `end` in Julia, not `-1` as in Python.
+  * Unlike Python, Julia allows [AbstractArrays with arbitrary indexes](https://julialang.org/blog/2017/04/offset-arrays/).
+    Python's special interpretation of negative indexing, `a[-1]` and `a[-2]`, should be written
+    `a[end]` and `a[end-1]` in Julia.
   * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
   * Julia's range indexing has the format of `x[start:step:stop]`, whereas Python's format is `x[start:(stop+1):step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
+  * In Julia, ranges can be constructed independently as `start:step:stop`, the same syntax it uses
+    in array-indexing.  The `range` function is also supported.
   * In Julia, indexing a matrix with arrays like `X[[1,2], [1,3]]` refers to a sub-matrix that contains the intersections of the first and second rows with the first and third columns. In Python, `X[[1,2], [1,3]]` refers to a vector that contains the values of cell `[1,1]` and `[2,3]` in the matrix. `X[[1,2], [1,3]]` in Julia is equivalent with `X[np.ix_([0,1],[0,2])]` in Python. `X[[0,1], [0,2]]` in Python is equivalent with `X[[CartesianIndex(1,1), CartesianIndex(2,3)]]` in Julia.
   * Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
     expression, it is considered done; otherwise the input continues. One way to force an expression
@@ -246,10 +252,12 @@ For users coming to Julia from R, these are some noteworthy differences:
   * The logical Julia program structure (Packages and Modules) is independent of the file structure (`include` for additional files), whereas the Python code structure is defined by directories (Packages) and files (Modules).
   * The ternary operator `x > 0 ? 1 : -1` in Julia corresponds to a conditional expression in Python `1 if x > 0 else -1`.
   * In Julia the `@` symbol refers to a macro, whereas in Python it refers to a decorator.
-  * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia due to performance reasons.
+  * Exception handling in Julia is done using `try` — `catch` — `finally`, instead of `try` — `except` — `finally`. In contrast to Python, it is not recommended to use exception handling as part of the normal workflow in Julia (compared with Python, Julia is faster at ordinary control flow but slower at exception-catching).
   * In Julia loops are fast, there is no need to write "vectorized" code for performance reasons.
   * Be careful with non-constant global variables in Julia, especially in tight loops. Since you can write close-to-metal code in Julia (unlike Python), the effect of globals can be drastic (see [Performance Tips](@ref man-performance-tips)).
-  * In Python, the majority of values can be used in logical contexts (e.g. `if "a":` means the following block is executed, and `if "":` means it is not). In Julia, you need explicit conversion to `Bool` (e.g. `if "a"` throws an exception). If you want to test for a non-empty string in Julia, you would explicitly write `if !isempty("")`.
+  * In Julia, rounding and truncation are explicit. Python's `int(3.7)` should be `floor(Int, 3.7)` or `Int(floor(3.7))` and is distinguished from `round(Int, 3.7)`. `floor(x)` and `round(x)` on their own return an integer value of the same type as `x` rather than always returning `Int`.
+  * In Julia, parsing is explicit. Python's `float("3.7")` would be `parse(Float64, "3.7")` in Julia.
+  * In Python, the majority of values can be used in logical contexts (e.g. `if "a":` means the following block is executed, and `if "":` means it is not). In Julia, you need explicit conversion to `Bool` (e.g. `if "a"` throws an exception). If you want to test for a non-empty string in Julia, you would explicitly write `if !isempty("")`.  Perhaps surprisingly, in Python `if "False"` and `bool("False")` both evaluate to `True` (because `"False"` is a non-empty string); in Julia, `parse(Bool, "false")` returns `false`.
   * In Julia, a new local scope is introduced by most code blocks, including loops and `try` — `catch` — `finally`. Note that comprehensions (list, generator, etc.) introduce a new local scope both in Python and Julia, whereas `if` blocks do not introduce a new local scope in both languages.
 
 ## Noteworthy differences from C/C++

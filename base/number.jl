@@ -4,7 +4,7 @@
 
 # Numbers are convertible
 convert(::Type{T}, x::T)      where {T<:Number} = x
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
     isinteger(x) -> Bool
@@ -94,15 +94,20 @@ keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
-    @_inline_meta
-    @boundscheck i == 1 || throw(BoundsError())
+    @inline
+    @boundscheck i == 1 || throw(BoundsError(x, i))
     x
 end
 function getindex(x::Number, I::Integer...)
-    @_inline_meta
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @inline
+    @boundscheck all(isone, I) || throw(BoundsError(x, I))
     x
 end
+get(x::Number, i::Integer, default) = isone(i) ? x : default
+get(x::Number, ind::Tuple, default) = all(isone, ind) ? x : default
+get(f::Callable, x::Number, i::Integer) = isone(i) ? x : f()
+get(f::Callable, x::Number, ind::Tuple) = all(isone, ind) ? x : f()
+
 first(x::Number) = x
 last(x::Number) = x
 copy(x::Number) = x # some code treats numbers as collection-like
@@ -163,12 +168,24 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 
 Squared absolute value of `x`.
 
+This can be faster than `abs(x)^2`, especially for complex
+numbers where `abs(x)` requires a square root via [`hypot`](@ref).
+
+See also [`abs`](@ref), [`conj`](@ref), [`real`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs2(-3)
 9
+
+julia> abs2(3.0 + 4.0im)
+25.0
+
+julia> sum(abs2, [1+2im, 3+4im])  # LinearAlgebra.norm(x)^2
+30
 ```
 """
+abs2(x::Number) = abs(x)^2
 abs2(x::Real) = x*x
 
 """
