@@ -419,6 +419,24 @@ void jl_show_sigill(void *_ctx)
 #endif
 }
 
+// make it invalid for a task to return from this point to its stack
+// this is generally quite an foolish operation, but does free you up to do
+// arbitrary things on this stack now without worrying about corrupt state that
+// existed already on it
+void jl_task_frame_noreturn(jl_task_t *ct)
+{
+    jl_set_safe_restore(NULL);
+    if (ct) {
+        ct->gcstack = NULL;
+        ct->eh = NULL;
+        ct->excstack = NULL;
+        ct->ptls->locks.len = 0;
+        ct->ptls->in_pure_callback = 0;
+        ct->ptls->in_finalizer = 0;
+        ct->world_age = 1;
+    }
+}
+
 // what to do on a critical error on a thread
 void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
 {
@@ -427,16 +445,7 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
     size_t i, n = ct ? *bt_size : 0;
     if (sig) {
         // kill this task, so that we cannot get back to it accidentally (via an untimely ^C or jlbacktrace in jl_exit)
-        jl_set_safe_restore(NULL);
-        if (ct) {
-            ct->gcstack = NULL;
-            ct->eh = NULL;
-            ct->excstack = NULL;
-            ct->ptls->locks.len = 0;
-            ct->ptls->in_pure_callback = 0;
-            ct->ptls->in_finalizer = 1;
-            ct->world_age = 1;
-        }
+        jl_task_frame_noreturn(ct);
 #ifndef _OS_WINDOWS_
         sigset_t sset;
         sigemptyset(&sset);
