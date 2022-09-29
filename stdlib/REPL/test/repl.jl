@@ -81,29 +81,16 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
     repltask = @async begin
         REPL.run_repl(repl)
     end
-
-    global inc = false
-    global b = Condition()
-    global c = Condition()
-    let cmd = "\"Hello REPL\""
-        write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
-    end
-    let t = @async begin
-            inc = true
-            notify(b)
-            wait(c)
+    C = Channel()
+    C2 = Channel()
+    repltask2 = @async begin
+        for c in C
+            put!(C2, eval(c))
         end
-        while (d = readline(stdout_read)) != ""
-            # first line [optional]: until 80th char of input
-            # second line: until end of input
-            # third line: "Hello REPL"
-            # last line: blank
-            # last+1 line: next prompt
-        end
-        wait(t)
     end
 
-    write(stdin_write, '\x03')
+    put!(C, :("HI"))
+    @show take!(C2)
     # Test cd feature in shell mode.
     origpwd = pwd()
     mktempdir() do tmpdir
@@ -112,11 +99,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
             tmpdir_pwd = cd(pwd, tmpdir)
             homedir_pwd = cd(pwd, homedir())
             
-            write(stdin_write, ";") # consume ^C signal
-            readuntil(stdout_read, "shell> ")
-            cd(tmpdir)
-            write(stdin_write, "cd")
-            readuntil(stdout_read, "cd")
+            put!(C, :(cd($tmpdir)))
+            @show take!(C2)
             @test samefile(".", tmpdir)
             @show stat(tmpdir)
             @show stat(".")
