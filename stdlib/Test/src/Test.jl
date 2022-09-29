@@ -1333,6 +1333,9 @@ when they all pass (the default is `false`).
 - `failfast`: if `true`, any test failure or error will cause the testset and any
 child testsets to return immediately (the default is `false`). This can also be set
 globally via the env var `JULIA_TEST_FAILFAST`.
+    
+!!! compat "Julia 1.8"
+    `@testset foo()` requires at least Julia 1.8.
 
 !!! compat "Julia 1.9"
     `failfast` requires at least Julia 1.9.
