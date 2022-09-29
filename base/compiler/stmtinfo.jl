@@ -10,11 +10,15 @@ and any additional information (`call.info`) for a given generic call.
 """
 struct CallMeta
     rt::Any
-    effects::Effects
     info::CallInfo
+    CallMeta(@nospecialize(rt), @nospecialize(info::CallInfo)) = new(rt, info)
 end
 
-struct NoCallInfo <: CallInfo end
+struct NoCallInfo <: CallInfo
+    effects::Effects
+end
+NoCallInfo() = NoCallInfo(Effects())
+call_effects_impl(info::NoCallInfo) = info.effects
 
 """
     info::MethodMatchInfo <: CallInfo
@@ -26,7 +30,9 @@ not a call to a generic function.
 """
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
+    effects::Effects
 end
+call_effects_impl(info::MethodMatchInfo) = info.effects
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -38,17 +44,10 @@ each partition (`info.matches::Vector{MethodMatchInfo}`).
 This info is illegal on any statement that is not a call to a generic function.
 """
 struct UnionSplitInfo <: CallInfo
-    matches::Vector{MethodMatchInfo}
+    matches::Vector{MethodLookupResult}
+    effects::Effects
 end
-
-nmatches(info::MethodMatchInfo) = length(info.results)
-function nmatches(info::UnionSplitInfo)
-    n = 0
-    for mminfo in info.matches
-        n += nmatches(mminfo)
-    end
-    return n
-end
+call_effects_impl(info::UnionSplitInfo) = info.effects
 
 struct ConstPropResult
     result::InferenceResult
@@ -78,9 +77,10 @@ In addition to the original call information `info.call`, this info also keeps t
 of constant inference `info.results::Vector{Union{Nothing,ConstResult}}`.
 """
 struct ConstCallInfo <: CallInfo
-    call::Union{MethodMatchInfo,UnionSplitInfo}
+    call::CallInfo
     results::Vector{Union{Nothing,ConstResult}}
 end
+call_effects_impl(info::ConstCallInfo) = call_effects(info.call)
 
 """
     info::MethodResultPure <: CallInfo
@@ -92,10 +92,11 @@ by calling an `@pure` function).
 struct MethodResultPure <: CallInfo
     info::CallInfo
 end
-let instance = MethodResultPure(NoCallInfo())
+let instance = MethodResultPure(NoCallInfo(EFFECTS_TOTAL))
     global MethodResultPure
     MethodResultPure() = instance
 end
+call_effects_impl(info::MethodResultPure) = call_effects(info.info)
 
 """
     ainfo::AbstractIterationInfo
@@ -106,7 +107,6 @@ Each (abstract) call to `iterate`, corresponds to one entry in `ainfo.each::Vect
 struct AbstractIterationInfo
     each::Vector{CallMeta}
 end
-
 const MaybeAbstractIterationInfo = Union{Nothing, AbstractIterationInfo}
 
 """
@@ -121,10 +121,11 @@ not an `_apply_iterate` call.
 """
 struct ApplyCallInfo <: CallInfo
     # The info for the call itself
-    call::Any
+    call::CallInfo
     # AbstractIterationInfo for each argument, if applicable
     arginfo::Vector{MaybeAbstractIterationInfo}
 end
+call_effects_impl(info::ApplyCallInfo) = call_effects(info.call)
 
 """
     info::UnionSplitApplyCallInfo <: CallInfo
@@ -134,6 +135,13 @@ This info is illegal on any statement that is not an `_apply_iterate` call.
 """
 struct UnionSplitApplyCallInfo <: CallInfo
     infos::Vector{ApplyCallInfo}
+end
+function call_effects_impl(info::UnionSplitApplyCallInfo)
+    all_effects = EFFECTS_TOTAL
+    for ainfo in info.infos
+        all_effects = merge_effects(all_effects, call_effects(ainfo))
+    end
+    return all_effects
 end
 
 """
@@ -146,10 +154,12 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct InvokeCallInfo <: CallInfo
     match::MethodMatch
     result::Union{Nothing,ConstResult}
+    effects::Effects
 end
+call_effects_impl(info::InvokeCallInfo) = info.effects
 
 """
-    info::OpaqueClosureCallInfo
+    info::OpaqueClosureCallInfo <: CallInfo
 
 Represents a resolved call of opaque closure, carrying the `info.match::MethodMatch` of
 the method that has been processed.
@@ -158,7 +168,9 @@ Optionally keeps `info.result::InferenceResult` that keeps constant information.
 struct OpaqueClosureCallInfo <: CallInfo
     match::MethodMatch
     result::Union{Nothing,ConstResult}
+    effects::Effects
 end
+call_effects_impl(info::OpaqueClosureCallInfo) = info.effects
 
 """
     info::OpaqueClosureCreateInfo <: CallInfo
@@ -175,6 +187,7 @@ struct OpaqueClosureCreateInfo <: CallInfo
         return new(unspec)
     end
 end
+call_effects_impl(::OpaqueClosureCreateInfo) = Effects()
 
 # Stmt infos that are used by external consumers, but not by optimization.
 # These are not produced by default and must be explicitly opted into by
@@ -184,12 +197,13 @@ end
     info::ReturnTypeCallInfo <: CallInfo
 
 Represents a resolved call of `Core.Compiler.return_type`.
-`info.call` wraps the info corresponding to the call that `Core.Compiler.return_type` call
-was supposed to analyze.
+`info.call` wraps the call information corresponding to the call that
+the `Core.Compiler.return_type` call was supposed to analyze.
 """
 struct ReturnTypeCallInfo <: CallInfo
     info::CallInfo
 end
+call_effects_impl(::ReturnTypeCallInfo) = EFFECTS_TOTAL
 
 """
     info::FinalizerInfo <: CallInfo
@@ -199,7 +213,19 @@ object type.
 """
 struct FinalizerInfo <: CallInfo
     info::CallInfo
-    effects::Effects
+    finalizer_effects::Effects # the effects for the finalizer call
 end
+call_effects_impl(::FinalizerInfo) = Effects()
+
+"""
+    info::ModifyFieldInfo <: CallInfo
+
+Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
+`info.info` wraps the call information of `op(getfield(obj, name), x)`.
+"""
+struct ModifyFieldInfo <: CallInfo
+    info::CallInfo
+end
+call_effects_impl(::ModifyFieldInfo) = Effects()
 
 @specialize

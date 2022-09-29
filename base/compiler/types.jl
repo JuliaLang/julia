@@ -286,3 +286,4 @@ ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
 
 abstract type CallInfo end
+call_effects(@nospecialize info::CallInfo) = call_effects_impl(info)::Effects

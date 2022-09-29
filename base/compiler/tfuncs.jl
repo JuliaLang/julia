@@ -1148,15 +1148,15 @@ end
 function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+        nargs - 1 <= 6 || return CallMeta(Bottom, NoCallInfo(EFFECTS_THROWS))
         nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+        5 <= nargs <= 6 || return CallMeta(Bottom, NoCallInfo(EFFECTS_THROWS))
     end
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
     RT = modifyfield!_tfunc(o, f, Any, Any)
-    info = false
+    info = NoCallInfo()
     if nargs >= 5 && RT !== Bottom
         # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
         # as well as compute the info for the method matches
@@ -1172,9 +1172,9 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         elseif isconcretetype(RT) && has_nontrivial_const_info(typeinf_lattice(interp), TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
-        info = callinfo.info
+        info = ModifyFieldInfo(callinfo.info)
     end
-    return CallMeta(RT, Effects(), info)
+    return CallMeta(RT, info)
 end
 replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
@@ -2237,7 +2237,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
+                        return CallMeta(Const(Union{}), NoCallInfo(EFFECTS_TOTAL))
                     end
                     # Run the abstract_call without restricting abstract call
                     # sites. Otherwise, our behavior model of abstract_call
@@ -2250,36 +2250,40 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     else
                         call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
                     end
-                    info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
+                    if verbose_stmt_info(interp)
+                        info = MethodResultPure(ReturnTypeCallInfo(call.info))
+                    else
+                        info = MethodResultPure(NoCallInfo(EFFECTS_TOTAL))
+                    end
                     rt = widenconditional(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
-                        return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)
+                        return CallMeta(Const(typeof(rt.val)), info)
                     end
                     rt = widenconst(rt)
                     if rt === Bottom || (isconcretetype(rt) && !iskindtype(rt))
                         # output cannot be improved so it is known for certain
-                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+                        return CallMeta(Const(rt), info)
                     elseif isa(sv, InferenceState) && !isempty(sv.pclimitations)
                         # conservatively express uncertainty of this result
                         # in two ways: both as being a subtype of this, and
                         # because of LimitedAccuracy causes
-                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+                        return CallMeta(Type{<:rt}, info)
                     elseif (isa(tt, Const) || isconstType(tt)) &&
                         (isa(aft, Const) || isconstType(aft))
                         # input arguments were known for certain
                         # XXX: this doesn't imply we know anything about rt
-                        return CallMeta(Const(rt), EFFECTS_TOTAL, info)
+                        return CallMeta(Const(rt), info)
                     elseif isType(rt)
-                        return CallMeta(Type{rt}, EFFECTS_TOTAL, info)
+                        return CallMeta(Type{rt}, info)
                     else
-                        return CallMeta(Type{<:rt}, EFFECTS_TOTAL, info)
+                        return CallMeta(Type{<:rt}, info)
                     end
                 end
             end
         end
     end
-    return CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
+    return CallMeta(Type, NoCallInfo(EFFECTS_THROWS))
 end
 
 # N.B.: typename maps type equivalence classes to a single value

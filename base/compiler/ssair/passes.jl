@@ -872,7 +872,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             3 <= length(stmt.args) <= 5 || continue
             info = compact[SSAValue(idx)][:info]
             if isa(info, FinalizerInfo)
-                is_finalizer_inlineable(info.effects) || continue
+                is_finalizer_inlineable(info.finalizer_effects) || continue
             else
                 # Inlining performs legality checks on the finalizer to determine
                 # whether or not we may inline it. If so, it appends extra arguments
@@ -1212,7 +1212,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:inst]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flags = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
+    flags = info isa FinalizerInfo ? flags_for_effects(info.finalizer_effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing

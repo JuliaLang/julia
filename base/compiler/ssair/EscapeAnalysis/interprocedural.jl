@@ -3,7 +3,7 @@
 import Core.Compiler:
     MethodInstance, InferenceResult, Signature, ConstPropResult, ConcreteResult,
     SemiConcreteResult, CallInfo, NoCallInfo, MethodResultPure, MethodMatchInfo,
-    UnionSplitInfo, ConstCallInfo, InvokeCallInfo,
+    UnionSplitInfo, ConstCallInfo, InvokeCallInfo, MethodLookupResult,
     call_sig, argtypes_to_type, is_builtin, is_return_type, istopfunction,
     validate_sparams, specialize_method, invoke_rewrite
 
@@ -47,13 +47,13 @@ function resolve_call(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo))
     elseif isa(info, ConstCallInfo)
         return analyze_const_call(sig, info)
     elseif isa(info, MethodMatchInfo)
-        infos = MethodMatchInfo[info]
+        results = MethodLookupResult[info.results]
     elseif isa(info, UnionSplitInfo)
-        infos = info.matches
+        results = info.matches
     else # isa(info, ReturnTypeCallInfo), etc.
         return missing
     end
-    return analyze_call(sig, infos)
+    return analyze_call(sig, results)
 end
 
 function analyze_invoke_call(sig::Signature, info::InvokeCallInfo)
@@ -114,11 +114,11 @@ function analyze_const_call(sig::Signature, cinfo::ConstCallInfo)
     return EACallInfo(linfos, nothrow)
 end
 
-function analyze_call(sig::Signature, infos::Vector{MethodMatchInfo})
+function analyze_call(sig::Signature, results::Vector{MethodLookupResult})
     linfos = Linfo[]
     local nothrow = true # required to account for potential escape via MethodError
-    for i in 1:length(infos)
-        meth = infos[i].results
+    for i in 1:length(results)
+        meth = results[i]
         nothrow &= !meth.ambig
         nmatch = Core.Compiler.length(meth)
         if nmatch == 0 # No applicable methods
