@@ -2448,3 +2448,40 @@ end
     end
     @test contains(str, "%1 = \e[31m%7")
 end
+
+@testset "issue #46947: IncrementalCompact double display of just-compacted nodes" begin
+    # get some IR
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    instructions = length(ir.stmts)
+    lines_shown(obj) = length(findall('\n', sprint(io->show(io, obj))))
+    @test lines_shown(ir) == instructions
+
+    # insert a couple of instructions
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 1), Nothing)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 2), Nothing)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 3), Nothing)
+        Core.Compiler.insert_node!(ir, 4, inst)
+    end
+    instructions += 3
+    @test lines_shown(ir) == instructions
+
+    # compact the IR, ensuring we always show the same number of lines
+    # (the instructions + a separator line)
+    compact = Core.Compiler.IncrementalCompact(ir)
+    @test lines_shown(compact) == instructions + 1
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        @test lines_shown(compact) == instructions + 1
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+    @test lines_shown(compact) == instructions + 1
+
+    ir = Core.Compiler.complete(compact)
+    @test lines_shown(compact) == instructions + 1
+end
