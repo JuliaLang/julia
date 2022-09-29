@@ -806,11 +806,8 @@ end
 """
     issubnormal(f) -> Bool
 
-Test whether a floating point number is subnormal. A floating point number is recognized as
+Test whether a floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number). A floating point number is recognized as
 subnormal whenever its exponent is the least value possible and its significand is zero.
-
-# External link
-https://en.wikipedia.org/wiki/Subnormal_number
 
 # Examples
 ```jldoctest
