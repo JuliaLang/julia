@@ -117,7 +117,7 @@ function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
 end
 
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
-                                  arginfo::ArgInfo, @nospecialize(atype),
+                                  arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::IRCode, max_methods::Int)
     return CallMeta(Any, Effects(), false)
 end
