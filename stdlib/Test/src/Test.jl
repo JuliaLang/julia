@@ -1333,7 +1333,7 @@ when they all pass (the default is `false`).
 - `failfast`: if `true`, any test failure or error will cause the testset and any
 child testsets to return immediately (the default is `false`). This can also be set
 globally via the env var `JULIA_TEST_FAILFAST`.
-    
+
 !!! compat "Julia 1.8"
     `@testset foo()` requires at least Julia 1.8.
 
@@ -1387,7 +1387,7 @@ individual tests fail. Transparent test sets do not introduce additional levels
 of nesting in the test set hierarchy and are passed through directly to the
 parent test set (with the context object appended to any failing tests.)
 
-    !!! compat "Julia 1.9"
+!!! compat "Julia 1.9"
     `@testset let` requires at least Julia 1.9.
 
 ## Examples
