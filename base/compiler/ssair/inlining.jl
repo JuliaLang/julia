@@ -10,7 +10,7 @@ struct Signature
 end
 
 struct ResolvedInliningSpec
-    # The LineTable and IR of the inlinee
+    # The IR of the inlinee
     ir::IRCode
     # If the function being inlined is a single basic block we can use a
     # simpler inlining algorithm. This flag determines whether that's allowed
@@ -97,13 +97,13 @@ function add_inlining_backedge!((; et, invokesig)::InliningEdgeTracker, mi::Meth
     return nothing
 end
 
-function ssa_inlining_pass!(ir::IRCode, linetable::Vector{LineInfoNode}, state::InliningState, propagate_inbounds::Bool)
+function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
     @timeit "analysis" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @timeit "execution" ir = batch_inline!(todo, ir, linetable, propagate_inbounds, state.params)
+    @timeit "execution" ir = batch_inline!(todo, ir, propagate_inbounds, state.params)
     return ir
 end
 
@@ -656,7 +656,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
     return insert_node_here!(compact, NewInstruction(pn, typ, line))
 end
 
-function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vector{LineInfoNode}, propagate_inbounds::Bool, params::OptimizationParams)
+function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, propagate_inbounds::Bool, params::OptimizationParams)
     # Compute the new CFG first (modulo statement ranges, which will be computed below)
     state = CFGInliningState(ir)
     for (idx, item) in todo
@@ -696,6 +696,7 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                 if stmt.head === :invoke
                     argexprs = stmt.args[2:end]
                 else
+                    @assert stmt.head === :call
                     argexprs = copy(stmt.args)
                 end
                 refinish = false
@@ -716,9 +717,9 @@ function batch_inline!(todo::Vector{Pair{Int, Any}}, ir::IRCode, linetable::Vect
                     end
                 end
                 if isa(item, InliningTodo)
-                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs)
+                    compact.ssa_rename[old_idx] = ir_inline_item!(compact, idx, argexprs, ir.linetable, item, boundscheck, state.todo_bbs)
                 elseif isa(item, UnionSplit)
-                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, linetable, item, boundscheck, state.todo_bbs, params)
+                    compact.ssa_rename[old_idx] = ir_inline_unionsplit!(compact, idx, argexprs, ir.linetable, item, boundscheck, state.todo_bbs, params)
                 end
                 compact[idx] = nothing
                 refinish && finish_current_bb!(compact, 0)
@@ -851,6 +852,27 @@ end
 compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
     compileable_specialization(result.linfo, args...; kwargs...))
 
+struct CachedResult
+    src::Any
+    effects::Effects
+    CachedResult(@nospecialize(src), effects::Effects) = new(src, effects)
+end
+@inline function get_cached_result(state::InliningState, mi::MethodInstance)
+    code = get(state.mi_cache, mi, nothing)
+    if code isa CodeInstance
+        if use_const_api(code)
+            # in this case function can be inlined to a constant
+            return ConstantCase(quoted(code.rettype_const))
+        else
+            src = @atomic :monotonic code.inferred
+        end
+        effects = decode_effects(code.ipo_purity_bits)
+        return CachedResult(src, effects)
+    else # fallback pass for external AbstractInterpreter cache
+        return CachedResult(code, Effects())
+    end
+end
+
 function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
     mi = todo.mi
     (; match, argtypes, invokesig) = todo.spec::DelayedInliningSpec
@@ -868,20 +890,12 @@ function resolve_todo(todo::InliningTodo, state::InliningState, flag::UInt8)
         end
         effects = match.ipo_effects
     else
-        code = get(state.mi_cache, mi, nothing)
-        if code isa CodeInstance
-            if use_const_api(code)
-                # in this case function can be inlined to a constant
-                add_inlining_backedge!(et, mi)
-                return ConstantCase(quoted(code.rettype_const))
-            else
-                src = @atomic :monotonic code.inferred
-            end
-            effects = decode_effects(code.ipo_purity_bits)
-        else # fallback pass for external AbstractInterpreter cache
-            effects = Effects()
-            src = code
+        cached_result = get_cached_result(state, mi)
+        if cached_result isa ConstantCase
+            add_inlining_backedge!(et, mi)
+            return cached_result
         end
+        (; src, effects) = cached_result
     end
 
     # the duplicated check might have been done already within `analyze_method!`, but still
@@ -905,27 +919,20 @@ function resolve_todo(mi::MethodInstance, argtypes::Vector{Any}, state::Inlining
         return nothing
     end
 
-    et = state.et
-    code = get(state.mi_cache, mi, nothing)
-    if code isa CodeInstance
-        if use_const_api(code)
-            # in this case function can be inlined to a constant
-            et !== nothing && push!(et, mi)
-            return ConstantCase(quoted(code.rettype_const))
-        else
-            src = code.inferred
-        end
-        effects = decode_effects(code.ipo_purity_bits)
-    else # fallback pass for external AbstractInterpreter cache
-        effects = Effects()
-        src = code
+    et = InliningEdgeTracker(state.et, nothing)
+
+    cached_result = get_cached_result(state, mi)
+    if cached_result isa ConstantCase
+        add_inlining_backedge!(et, mi)
+        return cached_result
     end
+    (; src, effects) = cached_result
 
     src = inlining_policy(state.interp, src, flag, mi, argtypes)
 
     src === nothing && return nothing
 
-    et !== nothing && push!(et, mi)
+    add_inlining_backedge!(et, mi)
     return InliningTodo(mi, retrieve_ir_for_inlining(mi, src), effects)
 end
 
@@ -1048,7 +1055,7 @@ function handle_single_case!(
         isinvoke && rewrite_invoke_exprargs!(stmt)
         push!(todo, idx=>(case::InliningTodo))
     end
-    nothing
+    return nothing
 end
 
 rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); expr)
@@ -1637,6 +1644,16 @@ function handle_finalizer_call!(
     return nothing
 end
 
+function handle_invoke!(todo::Vector{Pair{Int,Any}},
+    idx::Int, stmt::Expr, flag::UInt8, sig::Signature, state::InliningState)
+    mi = stmt.args[1]::MethodInstance
+    case = resolve_todo(mi, sig.argtypes, state, flag)
+    if case !== nothing
+        push!(todo, idx=>(case::InliningTodo))
+    end
+    return nothing
+end
+
 function inline_const_if_inlineable!(inst::Instruction)
     rt = inst[:type]
     if rt isa Const && is_inlineable_constant(rt.val)
@@ -1655,6 +1672,15 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         simpleres === nothing && continue
         stmt, sig = simpleres
 
+        flag = ir.stmts[idx][:flag]
+
+        # `NativeInterpreter` won't need this, but provide a support for `:invoke` exprs here
+        # for external `AbstractInterpreter`s that may run the inlining pass multiple times
+        if isexpr(stmt, :invoke)
+            handle_invoke!(todo, idx, stmt, flag, sig, state)
+            continue
+        end
+
         info = ir.stmts[idx][:info]
 
         # Check whether this call was @pure and evaluates to a constant
@@ -1666,8 +1692,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             # Inference determined this couldn't be analyzed. Don't question it.
             continue
         end
-
-        flag = ir.stmts[idx][:flag]
 
         if isa(info, OpaqueClosureCallInfo)
             result = info.result
@@ -1703,14 +1727,6 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             handle_const_call!(
                 ir, idx, stmt, info, flag,
                 sig, state, todo)
-            continue
-        end
-
-        if isa(stmt, Expr) && stmt.head === :invoke
-            case = resolve_todo(stmt.args[1], sig.argtypes, state, flag)
-            if case !== nothing
-                push!(todo, idx=>(case::InliningTodo))
-            end
             continue
         end
 
