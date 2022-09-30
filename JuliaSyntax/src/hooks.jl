@@ -157,7 +157,7 @@ function _core_parser_hook(code, filename, lineno, offset, options)
                 return Core.svec(nothing, last_byte(stream))
             end
         end
-        JuliaSyntax.parse(stream; rule=rule)
+        parse(stream; rule=rule)
         if rule === :statement
             bump_trivia(stream)
         end
