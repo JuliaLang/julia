@@ -508,64 +508,57 @@ end
 #
 # flisp: parse-eq
 function parse_eq(ps::ParseState)
-    parse_assignment(ps, parse_comma, false)
+    parse_assignment(ps, parse_comma)
 end
 
 # parse_eq_star is used where commas are special, for example in an argument list
 #
-# If an `(= x y)` node was emitted, returns the position of that node in the
-# output list so that it can be changed to `(kw x y)` later if necessary.
-#
 # flisp: parse-eq*
-function parse_eq_star(ps::ParseState, equals_is_kw=false)
+function parse_eq_star(ps::ParseState)
     k = peek(ps)
     k2 = peek(ps,2)
     if (is_literal(k) || k == K"Identifier") && k2 in KSet", ) } ]"
         # optimization: skip checking the whole precedence stack if we have a
         # simple token followed by a common closing token
         bump(ps)
-        return NO_POSITION
     else
-        return parse_assignment(ps, parse_pair, equals_is_kw)
+        parse_assignment(ps, parse_pair)
     end
 end
 
 # a = b  ==>  (= a b)
 #
 # flisp: parse-assignment
-function parse_assignment(ps::ParseState, down, equals_is_kw::Bool)
+function parse_assignment(ps::ParseState, down)
     mark = position(ps)
     down(ps)
-    parse_assignment_with_initial_ex(ps, mark, down, equals_is_kw)
+    parse_assignment_with_initial_ex(ps, mark, down)
 end
 
-function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T, equals_is_kw::Bool) where {T} # where => specialize on `down`
+function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {T} # where => specialize on `down`
     t = peek_token(ps)
     k = kind(t)
     if !is_prec_assignment(k)
-        return NO_POSITION
+        return
     end
     if k == K"~"
         if ps.space_sensitive && !preceding_whitespace(peek_token(ps, 2))
             # Unary ~ in space sensitive context is not assignment precedence
             # [a ~b]  ==>  (hcat a (call ~ b))
-            return NO_POSITION
+            return
         end
         # ~ is the only non-syntactic assignment-precedence operator.
         # a ~ b      ==>  (call-i a ~ b)
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
         bump(ps)
-        parse_assignment(ps, down, equals_is_kw)
+        parse_assignment(ps, down)
         emit(ps, mark, K"call", INFIX_FLAG)
-        return NO_POSITION
     else
         # a += b  ==>  (+= a b)
         # a .= b  ==>  (.= a b)
         bump(ps, TRIVIA_FLAG)
-        parse_assignment(ps, down, equals_is_kw)
-        plain_eq = is_plain_equals(t)
-        equals_pos = emit(ps, mark, plain_eq && equals_is_kw ? K"kw" : k, flags(t))
-        return plain_eq ? equals_pos : NO_POSITION
+        parse_assignment(ps, down)
+        emit(ps, mark, k, flags(t))
     end
 end
 
@@ -1186,8 +1179,6 @@ function parse_unary_call(ps::ParseState)
         opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
             is_call = had_commas || had_splat || initial_semi
             return (needs_parameters=is_call,
-                    eq_is_kw_before_semi=is_call,
-                    eq_is_kw_after_semi=is_call,
                     is_call=is_call,
                     is_block=!is_call && num_semis > 0)
         end
@@ -1204,7 +1195,7 @@ function parse_unary_call(ps::ParseState)
             end
             # Prefix function calls for operators which are both binary and unary
             # +(a,b)    ==>  (call + a b)
-            # +(a=1,)   ==>  (call + (kw a 1))
+            # +(a=1,)   ==>  (call + (= a 1))
             # +(a...)   ==>  (call + (... a))
             # +(a;b,c)  ==>  (call + a (parameters b c))
             # +(;a)     ==>  (call + (parameters a))
@@ -1445,10 +1436,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # f (a)  ==>  (call f (error-t) a b)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            # Keyword arguments depends on call vs macrocall
-            #  foo(a=1)  ==>  (call foo (kw a 1))
-            # @foo(a=1)  ==>  (macrocall @foo (= a 1))
-            parse_call_arglist(ps, K")", is_macrocall)
+            parse_call_arglist(ps, K")")
             emit(ps, mark, is_macrocall ? K"macrocall" : K"call")
             if peek(ps) == K"do"
                 # f(x) do y body end  ==>  (do (call :f :x) (tuple :y) (block :body))
@@ -1517,14 +1505,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                     emit_diagnostic(ps, mark,
                                     error="dot call syntax not supported for macros")
                 end
-                # Keyword params always use kw inside tuple in dot calls
                 # f.(a,b)   ==>  (. f (tuple a b))
-                # f.(a=1)   ==>  (. f (tuple (kw a 1)))
                 # f. (x)    ==>  (. f (error-t) (tuple x))
                 bump_disallowed_space(ps)
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
-                parse_call_arglist(ps, K")", is_macrocall)
+                parse_call_arglist(ps, K")")
                 emit(ps, m, K"tuple")
                 emit(ps, mark, K".")
             elseif k == K":"
@@ -1595,7 +1581,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # S {a} ==> (curly S (error-t) a)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            parse_call_arglist(ps, K"}", is_macrocall)
+            parse_call_arglist(ps, K"}")
             if is_macrocall
                 # @S{a,b} ==> (macrocall S (braces a b))
                 emit(ps, m, K"braces")
@@ -1944,7 +1930,7 @@ function parse_const_local_global(ps)
         # const x = 1   ==>  (const (= x 1))
         # global x ~ 1  ==>  (global (call-i x ~ 1))
         # global x += 1 ==>  (global (+= x 1))
-        parse_assignment_with_initial_ex(ps, beforevar_mark, parse_comma, false)
+        parse_assignment_with_initial_ex(ps, beforevar_mark, parse_comma)
     else
         # global x    ==>  (global x)
         # local x     ==>  (local x)
@@ -2008,17 +1994,15 @@ function parse_function(ps::ParseState)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do _, _, _, _
                 _is_anon_func = peek(ps, 2) != K"("
-                return (needs_parameters     = _is_anon_func,
-                        eq_is_kw_before_semi = _is_anon_func,
-                        eq_is_kw_after_semi  = _is_anon_func,
-                        is_anon_func=_is_anon_func)
+                return (needs_parameters = _is_anon_func,
+                        is_anon_func     = _is_anon_func)
             end
             is_anon_func = opts.is_anon_func
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
                 # function (x,y) end    ==>  (function (tuple x y) (block))
-                # function (x=1) end    ==>  (function (tuple (kw x 1)) (block))
-                # function (;x=1) end   ==>  (function (tuple (parameters (kw x 1))) (block))
+                # function (x=1) end    ==>  (function (tuple (= x 1)) (block))
+                # function (;x=1) end   ==>  (function (tuple (parameters (= x 1))) (block))
                 emit(ps, def_mark, K"tuple")
             elseif is_empty_tuple
                 # Weird case which is consistent with parse_paren but will be
@@ -2491,13 +2475,11 @@ end
 # like parse-arglist, but with `for` parsed as a generator
 #
 # flisp: parse-call-arglist
-function parse_call_arglist(ps::ParseState, closer, is_macrocall)
+function parse_call_arglist(ps::ParseState, closer)
     ps = ParseState(ps, for_generator=true)
 
     parse_brackets(ps, closer) do _, _, _, _
-        return (needs_parameters=true,
-                eq_is_kw_before_semi=!is_macrocall,
-                eq_is_kw_after_semi=true)
+        return (needs_parameters=true,)
     end
 end
 
@@ -2513,9 +2495,7 @@ function parse_vect(ps::ParseState, closer)
     # [x=1, y=2]    ==>  (vect (= x 1) (= y 2))
     # [x=1, ; y=2]  ==>  (vect (= x 1) (parameters (= y 2)))
     parse_brackets(ps, closer) do _, _, _, _
-        return (needs_parameters=true,
-                eq_is_kw_before_semi=false,
-                eq_is_kw_after_semi=false)
+        return (needs_parameters=true,)
     end
     return (K"vect", EMPTY_FLAGS)
 end
@@ -2875,8 +2855,6 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0))
             return (needs_parameters=is_tuple,
-                    eq_is_kw_before_semi=false,
-                    eq_is_kw_after_semi=is_tuple,
                     is_tuple=is_tuple,
                     is_block=num_semis > 0)
         end
@@ -2888,14 +2866,14 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             #
             # Named tuple with initial semicolon
             # (;)         ==>  (tuple (parameters))
-            # (; a=1)     ==>  (tuple (parameters (kw a 1)))
+            # (; a=1)     ==>  (tuple (parameters (= a 1)))
             #
             # Extra credit: nested parameters and frankentuples
             # (x...;)         ==> (tuple (... x) (parameters))
             # (x...; y)       ==> (tuple (... x) (parameters y))
-            # (; a=1; b=2)    ==> (tuple (parameters (kw a 1) (parameters (kw b 2))))
+            # (; a=1; b=2)    ==> (tuple (parameters (= a 1) (parameters (= b 2))))
             # (a; b; c,d)     ==> (tuple a (parameters b (parameters c d)))
-            # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (kw c 3)))
+            # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (= c 3)))
             emit(ps, mark, K"tuple")
         elseif opts.is_block
             # Blocks
@@ -2917,28 +2895,17 @@ end
 # Handle bracketed syntax inside any of () [] or {} where there's a mixture
 # of commas and semicolon delimiters.
 #
-# For parentheses this is hard because there's various ambiguities depending on
-# context. In general (X; Y) is difficult when X and Y are subexpressions
-# possibly containing `,` and `=`.
-#
-# For example, (a=1; b=2) could be seen to parse four different ways!
-#
-# Function args:   (kw a 1) (parameters (kw b 2))
-# Tuple-like:      (=  a 1) (parameters (kw b 2))
-# Block:           (=  a 1)             (=  b 2)
-# [] vect-like:    (=  a 1) (parameters (=  b 2))
+# For parentheses this is tricky because there's various cases to disambiguate,
+# depending on outside context and the content of the brackets (number of
+# semicolons, presence of commas or splats). The `after_parse` function must be
+# provided by the caller to disambiguate these cases.
 #
 # Expressions (X; Y; Z) with more semicolons are also allowed by the flisp
 # parser and generally parse as nested parameters blocks. This is invalid Julia
 # syntax so the parse tree is pretty strange in these cases!  Some macros
 # probably use it though.  Example:
 #
-# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (kw d 2) (parameters e (kw f 3))))
-#
-# Deciding which of these representations to use depends on both the prefix
-# context and the contained expressions. To distinguish between blocks vs
-# tuples we use the presence of `,` within the `;`-delimited sections: If
-# there's commas, it's a tuple, otherwise a block.
+# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (= d 2) (parameters e (= f 3))))
 #
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::Function,
@@ -2948,7 +2915,6 @@ function parse_brackets(after_parse::Function,
                     where_enabled=true,
                     whitespace_newline=true)
     params_marks = acquire_positions(ps.stream)
-    eq_positions = acquire_positions(ps.stream)
     last_eq_before_semi = 0
     num_subexprs = 0
     num_semis = 0
@@ -2963,9 +2929,6 @@ function parse_brackets(after_parse::Function,
             # Start of parameters list
             # a, b; c d  ==>  a b (parameters c d)
             push!(params_marks, position(ps))
-            if num_semis == 0
-                last_eq_before_semi = length(eq_positions)
-            end
             num_semis += 1
             bump(ps, TRIVIA_FLAG)
             bump_trivia(ps)
@@ -2974,13 +2937,10 @@ function parse_brackets(after_parse::Function,
             break
         else
             mark = position(ps)
-            eq_pos = parse_eq_star(ps)
+            parse_eq_star(ps)
             num_subexprs += 1
             if num_subexprs == 1
                 had_splat = peek_behind(ps).kind == K"..."
-            end
-            if eq_pos != NO_POSITION
-                push!(eq_positions, eq_pos)
             end
             t = peek_token(ps, skip_newlines=true)
             k = kind(t)
@@ -3002,32 +2962,16 @@ function parse_brackets(after_parse::Function,
             end
         end
     end
-    actions = after_parse(had_commas, had_splat, num_semis, num_subexprs)
-    if num_semis == 0
-        last_eq_before_semi = length(eq_positions)
-    end
-    # Turn any K"=" into K"kw" as necessary
-    if actions.eq_is_kw_before_semi
-        # f(a=1)   ==>   (call f (kw a 1))
-        for i=1:last_eq_before_semi
-            reset_node!(ps, eq_positions[i], kind=K"kw")
-        end
-    end
-    if actions.eq_is_kw_after_semi
-        for i = last_eq_before_semi+1:length(eq_positions)
-            reset_node!(ps, eq_positions[i], kind=K"kw")
-        end
-    end
+    opts = after_parse(had_commas, had_splat, num_semis, num_subexprs)
     # Emit nested parameter nodes if necessary
-    if actions.needs_parameters
+    if opts.needs_parameters
         for mark in Iterators.reverse(params_marks)
             emit(ps, mark, K"parameters")
         end
     end
     release_positions(ps.stream, params_marks)
-    release_positions(ps.stream, eq_positions)
     bump_closing_token(ps, closing_kind)
-    return actions
+    return opts
 end
 
 is_indentation(b::UInt8) = (b == UInt8(' ') || b == UInt8('\t'))

@@ -1,3 +1,6 @@
+function parse_Expr(str)
+    parseall(Expr, str, rule=:statement)
+end
 
 @testset "Expr conversion" begin
     @testset "Quote nodes" begin
@@ -11,7 +14,7 @@
 
     @testset "Line numbers" begin
         @testset "Blocks" begin
-            @test parseall(Expr, "begin a\nb\n\nc\nend", rule=:statement) ==
+            @test parse_Expr("begin a\nb\n\nc\nend") ==
                 Expr(:block,
                      LineNumberNode(1),
                      :a,
@@ -20,7 +23,7 @@
                      LineNumberNode(4),
                      :c,
                 )
-            @test parseall(Expr, "begin end", rule=:statement) ==
+            @test parse_Expr("begin end") ==
                 Expr(:block,
                      LineNumberNode(1)
                 )
@@ -33,7 +36,7 @@
                      :b,
                 )
 
-            @test parseall(Expr, "module A\n\nbody\nend", rule=:statement) ==
+            @test parse_Expr("module A\n\nbody\nend") ==
                 Expr(:module,
                      true,
                      :A,
@@ -46,7 +49,7 @@
         end
 
         @testset "Function definition lines" begin
-            @test parseall(Expr, "function f()\na\n\nb\nend", rule=:statement) ==
+            @test parse_Expr("function f()\na\n\nb\nend") ==
                 Expr(:function,
                      Expr(:call, :f),
                      Expr(:block,
@@ -57,7 +60,7 @@
                          :b,
                      )
                 )
-            @test parseall(Expr, "f() = 1", rule=:statement) ==
+            @test parse_Expr("f() = 1") ==
                 Expr(:(=),
                      Expr(:call, :f),
                      Expr(:block,
@@ -67,14 +70,14 @@
                 )
 
             # function/macro without methods
-            @test parseall(Expr, "function f end", rule=:statement) ==
+            @test parse_Expr("function f end") ==
                 Expr(:function, :f)
-            @test parseall(Expr, "macro f end", rule=:statement) ==
+            @test parse_Expr("macro f end") ==
                 Expr(:macro, :f)
         end
 
         @testset "elseif" begin
-            @test parseall(Expr, "if a\nb\nelseif c\n d\nend", rule=:statement) ==
+            @test parse_Expr("if a\nb\nelseif c\n d\nend") ==
                 Expr(:if,
                      :a,
                      Expr(:block,
@@ -92,7 +95,7 @@
         end
 
         @testset "No line numbers in for/let bindings" begin
-            @test parseall(Expr, "for i=is, j=js\nbody\nend", rule=:statement) ==
+            @test parse_Expr("for i=is, j=js\nbody\nend") ==
                 Expr(:for,
                      Expr(:block,
                          Expr(:(=), :i, :is),
@@ -103,7 +106,7 @@
                          :body
                      )
                 )
-            @test parseall(Expr, "let i=is, j=js\nbody\nend", rule=:statement) ==
+            @test parse_Expr("let i=is, j=js\nbody\nend") ==
                 Expr(:let,
                      Expr(:block,
                          Expr(:(=), :i, :is),
@@ -119,7 +122,7 @@
 
     @testset "Short form function line numbers" begin
         # A block is added to hold the line number node
-        @test parseall(Expr, "f() = xs", rule=:statement) ==
+        @test parse_Expr("f() = xs") ==
             Expr(:(=),
                  Expr(:call, :f),
                  Expr(:block,
@@ -127,7 +130,7 @@
                       :xs))
         # flisp parser quirk: In a for loop the block is not added, despite
         # this defining a short-form function.
-        @test parseall(Expr, "for f() = xs\nend", rule=:statement) ==
+        @test parse_Expr("for f() = xs\nend") ==
             Expr(:for,
                  Expr(:(=), Expr(:call, :f), :xs),
                  Expr(:block,
@@ -136,7 +139,7 @@
     end
 
     @testset "Long form anonymous functions" begin
-        @test parseall(Expr, "function (xs...)\nbody end", rule=:statement) ==
+        @test parse_Expr("function (xs...)\nbody end") ==
             Expr(:function,
                  Expr(:..., :xs),
                  Expr(:block,
@@ -147,14 +150,73 @@
 
     @testset "String conversions" begin
         # String unwrapping / wrapping
-        @test parseall(Expr, "\"str\"", rule=:statement) == "str"
-        @test parseall(Expr, "\"\$(\"str\")\"", rule=:statement) ==
+        @test parse_Expr("\"str\"") == "str"
+        @test parse_Expr("\"\$(\"str\")\"") ==
             Expr(:string, Expr(:string, "str"))
         # Concatenation of string chunks in triple quoted cases
-        @test parseall(Expr, "```\n  a\n  b```", rule=:statement) ==
+        @test parse_Expr("```\n  a\n  b```") ==
             Expr(:macrocall, GlobalRef(Core, Symbol("@cmd")), LineNumberNode(1),
                  "a\nb")
-        @test parseall(Expr, "\"\"\"\n  a\n  \$x\n  b\n  c\"\"\"", rule=:statement) ==
+        @test parse_Expr("\"\"\"\n  a\n  \$x\n  b\n  c\"\"\"") ==
             Expr(:string, "a\n", :x, "\nb\nc")
+    end
+
+    @testset "do block conversion" begin
+        @test parse_Expr("f(x) do y\n body end") ==
+            Expr(:do, Expr(:call, :f, :x),
+                 Expr(:->, Expr(:tuple, :y),
+                      Expr(:block,
+                           LineNumberNode(2),
+                           :body)))
+    end
+
+    @testset "= to Expr(:kw) conversion" begin
+        # Call
+        @test parse_Expr("f(a=1)") ==
+            Expr(:call, :f, Expr(:kw, :a, 1))
+        @test parse_Expr("f(; b=2)") ==
+            Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)))
+        @test parse_Expr("f(a=1; b=2)") ==
+            Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
+
+        # Infix call = is not :kw
+        @test parse_Expr("(x=1) != 2") ==
+            Expr(:call, :!=, Expr(:(=), :x, 1), 2)
+
+        # Dotcall
+        @test parse_Expr("f.(a=1; b=2)") ==
+            Expr(:., :f, Expr(:tuple,
+                              Expr(:parameters, Expr(:kw, :b, 2)),
+                              Expr(:kw, :a, 1)))
+
+        # Named tuples
+        @test parse_Expr("(a=1,)") ==
+            Expr(:tuple, Expr(:(=), :a, 1))
+        @test parse_Expr("(a=1,; b=2)") ==
+            Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:(=), :a, 1))
+        @test parse_Expr("(a=1,; b=2; c=3)") ==
+            Expr(:tuple,
+                 Expr(:parameters,
+                      Expr(:parameters, Expr(:kw, :c, 3)),
+                      Expr(:kw, :b, 2)),
+                 Expr(:(=), :a, 1))
+
+        # ref
+        @test parse_Expr("x[i=j]") ==
+            Expr(:ref, :x, Expr(:kw, :i, :j))
+
+        # vect/braces
+        @test parse_Expr("[a=1,; b=2]") ==
+            Expr(:vect,
+                 Expr(:parameters, Expr(:(=), :b, 2)),
+                 Expr(:(=), :a, 1))
+        @test parse_Expr("{a=1,; b=2}") ==
+            Expr(:braces,
+                 Expr(:parameters, Expr(:(=), :b, 2)),
+                 Expr(:(=), :a, 1))
+
+        # dotted = is not :kw
+        @test parse_Expr("f(a .= 1)") ==
+            Expr(:call, :f, Expr(:.=, :a, 1))
     end
 end
