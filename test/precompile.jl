@@ -1563,5 +1563,117 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
+mktempdir() do tmp
+    pushfirst!(LOAD_PATH, joinpath(tmp, "Project.toml"))
+    try
+    hasweakdeps_uuid = "4fb077e3-46c0-4120-9d5b-6bc23e71d465"
+    weakdep_uuid = "8d869e7d-fc4f-4eaa-842c-91e0ba37d632"
+
+    # HasWeakDep
+    mkpath(joinpath(tmp, "HasWeakDeps", "src"))
+    write(joinpath(tmp, "HasWeakDeps", "src", "HasWeakDeps.jl"),
+        """
+        module HasWeakDeps
+        if Base.@hasdep WeakDep
+            const weakdep_available = true
+            using WeakDep
+        else
+            const weakdep_available = false
+        end
+        end # module
+        """)
+
+    write(joinpath(tmp, "HasWeakDeps", "Project.toml"),
+        """
+        name = "HasWeakDeps"
+        uuid = "$hasweakdeps_uuid"
+        version = "0.1.0
+
+        [weakdeps]
+        WeakDep = "$weakdep_uuid"
+        """)
+
+    write(joinpath(tmp, "Project.toml"),
+        """
+        [deps]
+        HasWeakDeps = "$hasweakdeps_uuid"
+        """)
+
+    # WeakDep
+    mkpath(joinpath(tmp, "WeakDep", "src"))
+    write(joinpath(tmp, "WeakDep", "src", "WeakDep.jl"),
+        """
+        module WeakDep
+
+        end
+        """)
+
+    write(joinpath(tmp, "WeakDep", "Project.toml"),
+        """
+        name = "WeakDep"
+        uuid = "$weakdep_uuid"
+        version = "0.1.0
+        """)
+
+    # Project
+    write(joinpath(tmp, "Project.toml"),
+        """
+        [deps]
+        HasWeakDeps = "$hasweakdeps_uuid"
+        """)
+
+    write(joinpath(tmp, "Manifest.toml"),
+        """
+        julia_version = "1.9.0-DEV"
+        manifest_format = "2.0"
+
+        [[deps.HasWeakDeps]]
+        path = "HasWeakDeps"
+        uuid = "$hasweakdeps_uuid"
+        version = "0.1.0"
+
+            [deps.HasWeakDeps.weakdeps]
+            WeakDep = "$weakdep_uuid"
+        """)
+
+    # Check weak dependency disabled
+    pkg = Base.PkgId(Base.UUID(hasweakdeps_uuid), "HasWeakDeps")
+    ji_file = Base.compilecache(pkg)
+    @test Base.stale_cachefile(joinpath(tmp, "HasWeakDeps", "src", "HasWeakDeps.jl"), ji_file) isa Vector
+
+    # Enable weak dependency
+    # Project
+    write(joinpath(tmp, "Project.toml"),
+    """
+    [deps]
+    HasWeakDeps = "$hasweakdeps_uuid"
+    WeakDep = "$weakdep_uuid"
+    """)
+
+    write(joinpath(tmp, "Manifest.toml"),
+        """
+        julia_version = "1.9.0-DEV"
+        manifest_format = "2.0"
+
+        [[deps.HasWeakDeps]]
+        path = "HasWeakDeps"
+        uuid = "$hasweakdeps_uuid"
+        version = "0.1.0"
+        weakdeps = ["WeakDep"]
+
+        [[deps.WeakDep]]
+        path = "WeakDep"
+        uuid = "$weakdep_uuid"
+        version = "0.1.0"
+        """)
+
+    @test Base.stale_cachefile(joinpath(tmp, "HasWeakDeps", "src", "HasWeakDeps.jl"), ji_file)
+    Base.compilecache(pkg)
+    @test_nowarn @eval using HasWeakDeps
+    finally
+        popfirst!(LOAD_PATH)
+    end
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)

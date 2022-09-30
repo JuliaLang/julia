@@ -3,7 +3,6 @@
 struct PkgId
     uuid::Union{UUID,Nothing}
     name::String
-
     PkgId(u::UUID, name::AbstractString) = new(UInt128(u) == 0 ? nothing : u, name)
     PkgId(::Nothing, name::AbstractString) = new(nothing, name)
 end

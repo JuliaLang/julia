@@ -675,7 +675,7 @@ end
 
 ## explicit project & manifest API ##
 
-# find project file root or deps `name => uuid` mapping
+# find project file root or deps `name => uuid` mapping and if it is a weak dep
 # return `nothing` if `name` is not found
 function explicit_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
     d = parsed_toml(project_file)
@@ -687,6 +687,11 @@ function explicit_project_deps_get(project_file::String, name::String)::Union{No
     deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
     if deps !== nothing
         uuid = get(deps, name, nothing)::Union{String, Nothing}
+        uuid === nothing || return UUID(uuid)
+    end
+    weak_deps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+    if weak_deps !== nothing
+        uuid = get(weak_deps, name, nothing)::Union{String, Nothing}
         uuid === nothing || return UUID(uuid)
     end
     return nothing
@@ -731,28 +736,31 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
             uuid === nothing && continue
             if UUID(uuid) === where
                 found_where = true
-                # deps is either a list of names (deps = ["DepA", "DepB"]) or
+                # deps and weakdeps are either a list of names (deps = ["DepA", "DepB"]) or
                 # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
-                deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                deps === nothing && continue
-                if deps isa Vector{String}
-                    found_name = name in deps
-                    break
-                else
-                    deps = deps::Dict{String, Any}
-                    for (dep, uuid) in deps
-                        uuid::String
-                        if dep === name
-                            return PkgId(UUID(uuid), name)
+                for (depname, isweak) in [("deps", false), ("weakdeps", true)]
+                    deps = get(entry, depname, nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                    deps === nothing && continue
+                    if deps isa Vector{String}
+                        found_name = name in deps
+                        found_name && break
+                    else
+                        deps = deps::Dict{String, Any}
+                        for (dep, uuid) in deps
+                            uuid::String
+                            if dep === name
+                                return PkgId(UUID(uuid), name)
+                            end
                         end
                     end
                 end
+                break
             end
         end
     end
     found_where || return nothing
     found_name || return PkgId(name)
-    # Only reach here if deps was not a dict which mean we have a unique name for the dep
+    # Only reach here if deps was not a dict which means we have a unique name for the dep
     name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
     if name_deps === nothing || length(name_deps) != 1
         error("expected a single entry for $(repr(name)) in $(repr(project_file))")
@@ -884,6 +892,139 @@ end
 
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
+
+collect_installed_weak_deps(where::Module) = collect_installed_weak_deps(PkgId(where))
+function collect_installed_weak_deps(where::PkgId)
+    weak_deps, stopenv = collect_weak_deps(where)
+    # Now filter only those that are installed.
+    weak_deps_installed = Dict{String, UUID}()
+    isempty(weak_deps) && return weak_deps_installed
+    for env in Base.load_path()
+        project_file = env_project_file(env)
+        project_file isa String || continue
+        manifest_file = project_file_manifest_path(project_file)
+        manifest_file === nothing && return weak_deps_installed
+        d = get_deps(parsed_toml(manifest_file))
+        for (dep_name, entries) in d
+            entries::Vector{Any}
+            for entry in entries
+                entry = entry::Dict{String, Any}
+                uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                uuid === nothing && continue
+                uuid = Base.UUID(uuid)
+                if uuid in values(weak_deps)
+                    weak_deps_installed[dep_name] = uuid
+                end
+            end
+        end
+        env == stopenv && break
+    end
+    return weak_deps_installed
+end
+function collect_weak_deps(where::PkgId)
+    # Check if this is the project
+    for env in Base.load_path()
+        project_file = env_project_file(env)
+        project_file isa String || continue
+        proj = project_file_name_uuid(project_file, where.name)
+        if proj == where
+            d = parsed_toml(project_file)
+            weak_deps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+            weak_deps === nothing && return Dict{String, UUID}(), env
+            return Dict{String, UUID}(k => UUID(v::String) for (k,v) in weak_deps), env
+        else
+            manifest_file = project_file_manifest_path(project_file)
+            manifest_file === nothing && return Dict{String, UUID}()
+            d = get_deps(parsed_toml(manifest_file))
+            for (dep_name, entries) in d
+                entries::Vector{Any}
+                for entry in entries
+                    entry = entry::Dict{String, Any}
+                    uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                    uuid === nothing && continue
+                    if UUID(uuid) === where.uuid
+                        deps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                        if deps isa Vector{String}
+                            # Now we need to collect the UUIDs for all these
+                            d_weak = Dict{String, UUID}()
+                            for name in deps
+                                name_deps = get(d, name, nothing)::Union{Nothing, Vector{Any}}
+                                if name_deps === nothing || length(name_deps) != 1
+                                    error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+                                end
+                                entry = first(name_deps::Vector{Any})::Dict{String, Any}
+                                uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                                if uuid !== nothing
+                                    d_weak[name] = UUID(uuid)
+                                end
+                            end
+                            return d_weak, env
+                        elseif deps isa Dict{String, Any}
+                            return Dict{String, UUID}(k => UUID(v::String) for (k,v) in deps), env
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return Dict{String, UUID}(), nothing
+end
+
+hasdep(m::Module, deps::Symbol...) = hasdep(PkgId(m), deps...)
+
+"""
+    hasdep(mod::Module, A::Symbol, B::Symbol, ...)
+
+Check if a packages `A` and `B`, ... are loadable into `mod`.
+This should be used to guard loading weak dependencies (which might
+not be avaiable for loading), for example:
+
+```jl
+if hasdep(@__MODULE__, :A)
+    import A
+    foo(x::A.T) = ...
+end
+```
+"""
+function hasdep(pkg::PkgId, deps::Symbol...)
+    for dep in deps
+        wpkg_env = identify_package_env(pkg, String(dep))
+        wpkg_env === nothing && return false
+        wpkg, env = wpkg_env
+        locate_package(wpkg, env) === nothing && return false
+    end
+    return true
+end
+
+"""
+    @hasdep(A, B, ...)
+
+Check if a packages `A` and `B`, ... are loadable.
+This should be used to guard loading weak dependencies (which might
+not be avaiable for loading), for example:
+
+```jl
+if @hasdep A
+    import A
+    foo(x::A.T) = ...
+end
+```
+"""
+macro hasdep(weakdeps::Symbol...)
+    :(hasdep($__module__, $(weakdeps)...))
+end
+
+function _get_weakdeps_uint64_vec(m::Module)
+    vals = UInt64[]
+    weak_deps = collect_installed_weak_deps(m)
+    for uuid in values(weak_deps)
+        v = UInt128(uuid)
+        push!(vals, (v >> 64) % UInt64)
+        push!(vals, (v >> 0 ) % UInt64)
+    end
+    return vals
+end
+
 
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
@@ -1278,6 +1419,7 @@ function require(into::Module, mod::Symbol)
         LOADING_CACHE[] = nothing
     end
     end
+    return
 end
 
 mutable struct PkgOrigin
@@ -1863,6 +2005,13 @@ function parse_cache_header(f::IO)
             push!(includes, CacheHeaderIncludes(modkey, depname, mtime, modpath))
         end
     end
+    n_weak_deps = read(f, Int32)
+    totbytes -= 4
+    weak_deps = Set{UUID}()
+    for _ in 1:n_weak_deps
+        push!(weak_deps, UUID((read(f, UInt64), read(f, UInt64))))
+        totbytes -= 16
+    end
     prefs = String[]
     while true
         n2 = read(f, Int32)
@@ -1888,7 +2037,7 @@ function parse_cache_header(f::IO)
         build_id = read(f, UInt64) # build id
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
-    return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash
+    return modules, (includes, requires), required_modules, srctextpos, weak_deps, prefs, prefs_hash
 end
 
 function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
@@ -1927,7 +2076,7 @@ end
 
 
 function cache_dependencies(f::IO)
-    defs, (includes, requires), modules, srctextpos, prefs, prefs_hash = parse_cache_header(f)
+    defs, (includes, requires), modules, srctextpos, weak_deps, prefs, prefs_hash = parse_cache_header(f)
     return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
 end
 
@@ -1942,7 +2091,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = parse_cache_header(io)
+    modules, (includes, requires), required_modules, srctextpos, weak_deps, prefs, prefs_hash = parse_cache_header(io)
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename)
@@ -2164,7 +2313,7 @@ end
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, weak_deps, prefs, prefs_hash = parse_cache_header(io)
         if isempty(modules)
             return true # ignore empty file
         end
@@ -2254,6 +2403,15 @@ end
 
         if !isvalid_file_crc(io)
             @debug "Rejecting cache file $cachefile because it has an invalid checksum"
+            return true
+        end
+
+        curr_weak_deps = collect_installed_weak_deps(id)
+
+        if Set(values(curr_weak_deps)) != weak_deps
+            wd_str = join(weak_deps, ", ")
+            cwd_str = join(values(curr_weak_deps), ", ")
+            @debug "Rejecting cache file $cachefile because weak dependency UUIDs: $wd_str does not match $cwd_str"
             return true
         end
 
