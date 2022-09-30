@@ -690,7 +690,7 @@ end
 
 @eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
-    return unsafe_load(Ptr{Int}(pointer_from_objref(v)))
+    return @GC.preserve v unsafe_load(Ptr{Int}(pointer_from_objref(v)))
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
