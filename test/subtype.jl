@@ -2192,3 +2192,6 @@ end
 abstract type C38497{e,g<:Tuple,i} end
 struct Q38497{o,e<:NTuple{o},g} <: C38497{e,g,Array{o}} end
 @testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{1, Tuple{Int}, <:Tuple})
+
+#issue #33138
+@test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
