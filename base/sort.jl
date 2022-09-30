@@ -1002,7 +1002,7 @@ function sort(v; kws...)
     sort!(copymutable(v); kws...)
 end
 sort(::AbstractString; kws...) =
-    throw(ArgumentError("sort(x::AbstractString) is ambiguous. Use sort!(collect(x)) or String(sort!(collect(x))) instead."))
+    throw(ArgumentError("sort(::AbstractString) is not supported"))
 sort(v::AbstractVector; kws...) = sort!(copymutable(v); kws...) # for method disambiguation
 
 ## partialsortperm: the permutation to sort the first k elements of an array ##
