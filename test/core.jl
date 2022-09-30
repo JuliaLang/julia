@@ -784,7 +784,7 @@ end
 mutable struct Type11167{T,N} end
 function count11167()
     let cache = Type11167.body.body.name.cache
-        return count(e->e !== nothing, cache)
+        return count(!isnothing, cache)
     end
 end
 @test count11167() == 0
