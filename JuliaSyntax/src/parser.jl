@@ -2154,7 +2154,12 @@ function parse_catch(ps::ParseState)
     else
         # try x catch e y end   ==>  (try (block x) e (block y) false false)
         # try x catch $e y end  ==>  (try (block x) ($ e) (block y) false false)
-        parse_identifier_or_interpolate(ps)
+        mark = position(ps)
+        parse_eq_star(ps)
+        if !(peek_behind(ps).kind in KSet"Identifier $")
+            # try x catch e+3 y end  ==>  (try (block x) (error (call-i e + 3)) (block y) false false)
+            emit(ps, mark, K"error", error="a variable name is expected after `catch`")
+        end
     end
     parse_block(ps)
 end

@@ -475,6 +475,7 @@ tests = [
         "try x catch \n y end"  =>  "(try (block x) false (block y) false false)"
         "try x catch e y end"   =>  "(try (block x) e (block y) false false)"
         "try x catch \$e y end" =>  "(try (block x) (\$ e) (block y) false false)"
+        "try x catch e+3 y end" =>  "(try (block x) (error (call-i e + 3)) (block y) false false)"
         "try x finally y end"   =>  "(try (block x) false false false (block y))"
         # v1.8 only
         ((v=v"1.8",), "try catch ; else end") => "(try (block) false (block) (block) false)"
