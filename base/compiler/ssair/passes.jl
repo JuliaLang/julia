@@ -43,7 +43,7 @@ function compute_live_ins(cfg::CFG, du::SSADefUse)
         use.kind === :isdefined && continue # filter out `isdefined` usages
         push!(uses, use.idx)
     end
-    compute_live_ins(cfg, du.defs, uses)
+    compute_live_ins(cfg, sort!(du.defs), uses)
 end
 
 # assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`

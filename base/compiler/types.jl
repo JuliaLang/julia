@@ -23,6 +23,14 @@ struct ArgInfo
     argtypes::Vector{Any}
 end
 
+struct StmtInfo
+    """
+    If `used` is false, we know that the return value is statically unused and
+    need thus not be computed.
+    """
+    used::Bool
+end
+
 """
     InferenceResult
 

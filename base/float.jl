@@ -806,7 +806,19 @@ end
 """
     issubnormal(f) -> Bool
 
-Test whether a floating point number is subnormal.
+Test whether a floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number). A floating point number is recognized as
+subnormal whenever its exponent is the least value possible and its significand is zero.
+
+# Examples
+```jldoctest
+julia> floatmin(Float32)
+1.1754944f-38
+
+julia> issubnormal(1.0f-37)
+false
+
+julia> issubnormal(1.0f-38)
+true
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)

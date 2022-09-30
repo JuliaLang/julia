@@ -197,7 +197,17 @@ object type.
 """
 struct FinalizerInfo
     info::Any
-    effects::Effects
+    effects::Effects # the effects for the finalizer call
+end
+
+"""
+    info::ModifyFieldInfo
+
+Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
+`info.info` wraps the call information of `op(getfield(obj, name), x)`.
+"""
+struct ModifyFieldInfo
+    info::Any # the callinfo for the `op(getfield(obj, name), x)` call
 end
 
 @specialize
