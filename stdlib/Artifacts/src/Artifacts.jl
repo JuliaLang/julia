@@ -659,10 +659,10 @@ macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
         srcfile = pwd()
     end
     # Sometimes we know the exact path to the Artifacts.toml file, so we can save some lookups
-    local artifacts_toml = if artifacts_toml_path === nothing
+    local artifacts_toml = if artifacts_toml_path === nothing || artifacts_toml_path == :(nothing)
         find_artifacts_toml(srcfile)
     else
-        artifacts_toml_path
+        eval(artifacts_toml_path)
     end
     if artifacts_toml === nothing
         error(string(
@@ -693,7 +693,7 @@ macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
-    if isa(name, AbstractString) && platform === nothing
+    if isa(name, AbstractString) && (platform === nothing || platform == :(nothing))
         # To support slash-indexing, we need to split the artifact name from the path tail:
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)
