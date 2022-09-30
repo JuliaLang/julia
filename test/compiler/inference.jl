@@ -4222,3 +4222,14 @@ end |> Core.Compiler.is_foldable
     Base.Experimental.@force_compile
     @invoke invoke_concretized2(42::Integer)
 end === :integer
+
+# Test that abstract_apply doesn't fail to fully infer if the result is unused
+struct FiniteIteration
+    n::Int
+end
+Base.iterate(f::FiniteIteration, i::Int = 0) = i < f.n ? (i, i+1) : nothing
+function unused_apply_iterate()
+    tuple(FiniteIteration(4)...)
+    return nothing
+end
+@test fully_eliminated(unused_apply_iterate, ())
