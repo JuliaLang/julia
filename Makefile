@@ -306,6 +306,9 @@ endif
 	# Install `7z` into libexec/
 	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(libexecdir)/
 
+	# Install `lld` into libexec/
+	$(INSTALL_M) $(build_depsbindir)/lld$(EXE) $(DESTDIR)$(libexecdir)/
+
 	# Copy public headers
 	cp -R -L $(build_includedir)/julia/* $(DESTDIR)$(includedir)/julia
 	# Copy system image
