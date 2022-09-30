@@ -1685,6 +1685,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     io = open(pipeline(addenv(`$(julia_cmd()::Cmd) -O0
                               --output-ji $output --output-incremental=yes
                               --startup-file=no --history-file=no --warn-overwrite=yes
+                              --heap-size-hint=1G                                  
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
                               -`,
