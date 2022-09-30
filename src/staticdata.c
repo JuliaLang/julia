@@ -1091,6 +1091,10 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&ccallable_list, (void*)3);
                 }
             }
+            else if (jl_is_method_instance(v)) {
+                jl_method_instance_t *newmi = (jl_method_instance_t*)&s->s->buf[reloc_offset];
+                newmi->precompiled = 0;
+            }
             else if (jl_is_code_instance(v)) {
                 // Handle the native-code pointers
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
