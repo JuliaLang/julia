@@ -43,7 +43,7 @@ function compute_live_ins(cfg::CFG, du::SSADefUse)
         use.kind === :isdefined && continue # filter out `isdefined` usages
         push!(uses, use.idx)
     end
-    compute_live_ins(cfg, du.defs, uses)
+    compute_live_ins(cfg, sort!(du.defs), uses)
 end
 
 # assume `stmt == getfield(obj, field, ...)` or `stmt == setfield!(obj, field, val, ...)`
@@ -595,15 +595,20 @@ function is_old(compact, @nospecialize(old_node_ssa))
         !already_inserted(compact, old_node_ssa)
 end
 
-mutable struct LazyDomtree
+mutable struct LazyGenericDomtree{IsPostDom}
     ir::IRCode
-    domtree::DomTree
-    LazyDomtree(ir::IRCode) = new(ir)
+    domtree::GenericDomTree{IsPostDom}
+    LazyGenericDomtree{IsPostDom}(ir::IRCode) where {IsPostDom} = new{IsPostDom}(ir)
 end
-function get!(x::LazyDomtree)
+function get!(x::LazyGenericDomtree{IsPostDom}) where {IsPostDom}
     isdefined(x, :domtree) && return x.domtree
-    return @timeit "domtree 2" x.domtree = construct_domtree(x.ir.cfg.blocks)
+    return @timeit "domtree 2" x.domtree = IsPostDom ?
+        construct_postdomtree(x.ir.cfg.blocks) :
+        construct_domtree(x.ir.cfg.blocks)
 end
+
+const LazyDomtree = LazyGenericDomtree{false}
+const LazyPostDomtree = LazyGenericDomtree{true}
 
 function perform_lifting!(compact::IncrementalCompact,
         visited_phinodes::Vector{AnySSAValue}, @nospecialize(cache_key),
@@ -723,40 +728,31 @@ function perform_lifting!(compact::IncrementalCompact,
 end
 
 function lift_svec_ref!(compact::IncrementalCompact, idx::Int, stmt::Expr)
-    if length(stmt.args) != 4
-        return
-    end
+    length(stmt.args) != 4 && return
 
     vec = stmt.args[3]
     val = stmt.args[4]
     valT = argextype(val, compact)
     (isa(valT, Const) && isa(valT.val, Int)) || return
     valI = valT.val::Int
-    (1 <= valI) || return
+    valI >= 1 || return
 
     if isa(vec, SimpleVector)
-        if valI <= length(val)
-            compact[idx] = vec[valI]
-        end
-        return
-    end
-
-    if isa(vec, SSAValue)
+        valI <= length(vec) || return
+        compact[idx] = quoted(vec[valI])
+    elseif isa(vec, SSAValue)
         def = compact[vec][:inst]
         if is_known_call(def, Core.svec, compact)
-            nargs = length(def.args)
-            if valI <= nargs-1
-                compact[idx] = def.args[valI+1]
-            end
-            return
+            valI <= length(def.args) - 1 || return
+            compact[idx] = def.args[valI+1]
         elseif is_known_call(def, Core._compute_sparams, compact)
+            valI != 1 && return # TODO generalize this for more values of valI
             res = _lift_svec_ref(def, compact)
-            if res !== nothing
-                compact[idx] = res.val
-            end
-            return
+            res === nothing && return
+            compact[idx] = res.val
         end
     end
+    return
 end
 
 # TODO: We could do the whole lifing machinery here, but really all
@@ -764,12 +760,13 @@ end
 # which always targets simple `svec` call or `_compute_sparams`,
 # so this specialized lifting would be enough
 @inline function _lift_svec_ref(def::Expr, compact::IncrementalCompact)
+    length(def.args) >= 3 || return nothing
     m = argextype(def.args[2], compact)
     isa(m, Const) || return nothing
     m = m.val
     isa(m, Method) || return nothing
+
     # TODO: More general structural analysis of the intersection
-    length(def.args) >= 3 || return nothing
     sig = m.sig
     isa(sig, UnionAll) || return nothing
     tvar = sig.var
@@ -1051,7 +1048,7 @@ end
 
 # NOTE we resolve the inlining source here as we don't want to serialize `Core.Compiler`
 # data structure into the global cache (see the comment in `handle_finalizer_call!`)
-function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::MethodInstance, inlining::InliningState)
+function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::MethodInstance, inlining::InliningState, attach_after::Bool)
     code = get(inlining.mi_cache, mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
@@ -1091,7 +1088,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, argexprs, mi.specTypes, mi.sparam_vals, sp_ssa, :default)
-        ssa_rename[idx′] = insert_node!(ir, idx, NewInstruction(stmt′, inst; line = inst[:line] + linetable_offset), true)
+        ssa_rename[idx′] = insert_node!(ir, idx, NewInstruction(stmt′, inst; line = inst[:line] + linetable_offset), attach_after)
     end
 
     return true
@@ -1099,39 +1096,120 @@ end
 
 is_nothrow(ir::IRCode, pc::Int) = (ir.stmts[pc][:flag] & IR_FLAG_NOTHROW) ≠ 0
 
-function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse, inlining::InliningState, info::Union{FinalizerInfo, Nothing})
-    # For now: Require that all uses and defs are in the same basic block,
-    # so that live range calculations are easy.
-    bb = ir.cfg.blocks[block_for_inst(ir.cfg, first(defuse.uses).idx)]
-    minval::Int = typemax(Int)
-    maxval::Int = 0
+function reachable_blocks(cfg::CFG, from_bb::Int, to_bb::Union{Nothing,Int} = nothing)
+    worklist = Int[from_bb]
+    visited = BitSet(from_bb)
+    if to_bb !== nothing
+        push!(visited, to_bb)
+    end
+    function visit!(bb::Int)
+        if bb ∉ visited
+            push!(visited, bb)
+            push!(worklist, bb)
+        end
+    end
+    while !isempty(worklist)
+        foreach(visit!, cfg.blocks[pop!(worklist)].succs)
+    end
+    return visited
+end
 
-    function check_in_range(x::Union{Int,SSAUse})
-        if isa(x, SSAUse)
-            didx = x.idx
+function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse,
+        inlining::InliningState, lazydomtree::LazyDomtree,
+        lazypostdomtree::LazyPostDomtree, info::Union{FinalizerInfo, Nothing})
+    # For now, require that:
+    # 1. The allocation dominates the finalizer registration
+    # 2. The finalizer registration dominates all uses reachable from the
+    #    finalizer registration.
+    # 3. The insertion block for the finalizer is the post-dominator of all
+    #    uses and the finalizer registration block. The insertion block must
+    #    be dominated by the finalizer registration block.
+    # 4. The path from the finalizer registration to the finalizer inlining
+    #    location is nothrow
+    #
+    # TODO: We could relax item 3, by inlining the finalizer multiple times.
+
+    # Check #1: The allocation dominates the finalizer registration
+    domtree = get!(lazydomtree)
+    finalizer_bb = block_for_inst(ir, finalizer_idx)
+    alloc_bb = block_for_inst(ir, idx)
+    dominates(domtree, alloc_bb, finalizer_bb) || return nothing
+
+    bb_insert_block::Int = finalizer_bb
+    bb_insert_idx::Union{Int,Nothing} = finalizer_idx
+    function note_block_use!(usebb::Int, useidx::Int)
+        new_bb_insert_block = nearest_common_dominator(get!(lazypostdomtree),
+            bb_insert_block, usebb)
+        if new_bb_insert_block == bb_insert_block == usebb
+            if bb_insert_idx !== nothing
+                bb_insert_idx = max(bb_insert_idx, useidx)
+            else
+                bb_insert_idx = useidx
+            end
         else
-            didx = x
+            bb_insert_idx = nothing
         end
-        didx in bb.stmts || return false
-        if didx < minval
-            minval = didx
-        end
-        if didx > maxval
-            maxval = didx
-        end
-        return true
+        bb_insert_block = new_bb_insert_block
+        nothing
     end
 
-    check_in_range(idx) || return nothing
-    all(check_in_range, defuse.uses) || return nothing
-    all(check_in_range, defuse.defs) || return nothing
+    # Collect all reachable blocks between the finalizer registration and the
+    # insertion point
+    blocks = reachable_blocks(ir.cfg, finalizer_bb, alloc_bb)
 
-    # For now: Require all statements in the basic block range to be nothrow.
-    all(minval:maxval) do sidx::Int
-        return is_nothrow(ir, idx) || sidx == finalizer_idx || sidx == idx
-    end || return nothing
+    # Check #2
+    function check_defuse(x::Union{Int,SSAUse})
+        duidx = x isa SSAUse ? x.idx : x
+        duidx == finalizer_idx && return true
+        bb = block_for_inst(ir, duidx)
+        # Not reachable from finalizer registration - we're ok
+        bb ∉ blocks && return true
+        note_block_use!(bb, duidx)
+        if dominates(domtree, finalizer_bb, bb)
+            return true
+        else
+            return false
+        end
+    end
+    all(check_defuse, defuse.uses) || return nothing
+    all(check_defuse, defuse.defs) || return nothing
 
-    # Ok, `finalizer` rewrite is legal.
+    # Check #3
+    dominates(domtree, finalizer_bb, bb_insert_block) || return nothing
+
+    if !inlining.params.assume_fatal_throw
+        # Collect all reachable blocks between the finalizer registration and the
+        # insertion point
+        blocks = finalizer_bb == bb_insert_block ? Int[finalizer_bb] :
+            reachable_blocks(ir.cfg, finalizer_bb, bb_insert_block)
+
+        # Check #4
+        function check_range_nothrow(ir::IRCode, s::Int, e::Int)
+            return all(s:e) do sidx::Int
+                sidx == finalizer_idx && return true
+                sidx == idx && return true
+                return is_nothrow(ir, sidx)
+            end
+        end
+        for bb in blocks
+            range = ir.cfg.blocks[bb].stmts
+            s, e = first(range), last(range)
+            if bb == bb_insert_block
+                bb_insert_idx === nothing && continue
+                e = bb_insert_idx
+            end
+            if bb == finalizer_bb
+                s = finalizer_idx
+            end
+            check_range_nothrow(ir, s, e) || return nothing
+        end
+    end
+
+    # Ok, legality check complete. Figure out the exact statement where we're
+    # gonna inline the finalizer.
+    loc = bb_insert_idx === nothing ? first(ir.cfg.blocks[bb_insert_block].stmts) : bb_insert_idx::Int
+    attach_after = bb_insert_idx !== nothing
+
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:inst]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
     flags = info === nothing ? UInt8(0) : flags_for_effects(info.effects)
@@ -1141,14 +1219,14 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             # No code in the function - Nothing to do
         else
             mi = finalizer_stmt.args[5]::MethodInstance
-            if inline::Bool && try_inline_finalizer!(ir, argexprs, maxval, mi, inlining)
+            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                insert_node!(ir, maxval, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), true)
+                insert_node!(ir, loc, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), attach_after)
             end
         end
     else
-        insert_node!(ir, maxval, with_flags(NewInstruction(Expr(:call, argexprs...), Nothing), flags), true)
+        insert_node!(ir, loc, with_flags(NewInstruction(Expr(:call, argexprs...), Nothing), flags), attach_after)
     end
     # Erase the call to `finalizer`
     ir[SSAValue(finalizer_idx)][:inst] = nothing
@@ -1156,6 +1234,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 end
 
 function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse}}, used_ssas::Vector{Int}, lazydomtree::LazyDomtree, inlining::Union{Nothing, InliningState})
+    lazypostdomtree = LazyPostDomtree(ir)
     for (idx, (intermediaries, defuse)) in defuses
         intermediaries = collect(intermediaries)
         # Check if there are any uses we did not account for. If so, the variable
@@ -1188,7 +1267,8 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             end
         end
         if finalizer_idx !== nothing && inlining !== nothing
-            try_resolve_finalizer!(ir, idx, finalizer_idx, defuse, inlining, ir[SSAValue(finalizer_idx)][:info])
+            try_resolve_finalizer!(ir, idx, finalizer_idx, defuse, inlining,
+                lazydomtree, lazypostdomtree, ir[SSAValue(finalizer_idx)][:info])
             continue
         end
         # Partition defuses by field

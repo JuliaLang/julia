@@ -2144,12 +2144,7 @@ static void jl_init_function(Function *F)
 
 static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig)
 {
-    size_t nreq = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
-    int va = 0;
-    if (nreq > 0 && lam->def.method->isva) {
-        nreq--;
-        va = 1;
-    }
+    int va = lam->def.method->isva;
     jl_value_t *sig = lam->specTypes;
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
@@ -4258,26 +4253,6 @@ static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i)
     return mark_julia_type(ctx, sp, true, jl_any_type);
 }
 
-static jl_cgval_t emit_global(jl_codectx_t &ctx, jl_sym_t *sym)
-{
-    jl_binding_t *jbp = NULL;
-    Value *bp = global_binding_pointer(ctx, ctx.module, sym, &jbp, false);
-    if (bp == NULL)
-        return jl_cgval_t();
-    if (jbp && jbp->value != NULL) {
-        if (jbp->constp)
-            return mark_julia_const(ctx, jbp->value);
-        // double-check that a global variable is actually defined. this
-        // can be a problem in parallel when a definition is missing on
-        // one machine.
-        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-        v->setOrdering(AtomicOrdering::Unordered);
-        tbaa_decorate(ctx.tbaa().tbaa_binding, v);
-        return mark_julia_type(ctx, v, true, jl_any_type);
-    }
-    return emit_checked_var(ctx, bp, sym, false, ctx.tbaa().tbaa_binding);
-}
-
 static jl_cgval_t emit_isdefined(jl_codectx_t &ctx, jl_value_t *sym)
 {
     Value *isnull = NULL;
@@ -4928,7 +4903,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
 {
     if (jl_is_symbol(expr)) {
         jl_sym_t *sym = (jl_sym_t*)expr;
-        return emit_global(ctx, sym);
+        return emit_globalref(ctx, ctx.module, sym, AtomicOrdering::Unordered);
     }
     if (jl_is_slot(expr) || jl_is_argument(expr)) {
         return emit_local(ctx, expr);
@@ -6614,6 +6589,7 @@ get_specsig_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *rt, jl
     return dbuilder.createSubroutineType(dbuilder.getOrCreateTypeArray(ditypes));
 }
 
+/* aka Core.Compiler.tuple_tfunc */
 static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
 {
     size_t nvargs = jl_nparams(lam->specTypes)-nreq;
@@ -6621,6 +6597,12 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
     JL_GC_PUSH1(&tupargs);
     for (size_t i = nreq; i < jl_nparams(lam->specTypes); ++i) {
         jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+        if (is_uniquerep_Type(argType))
+            argType = jl_typeof(jl_tparam0(argType));
+        else if (jl_has_intersect_type_not_kind(argType)) {
+            jl_value_t *ts[2] = {argType, (jl_value_t*)jl_type_type};
+            argType = jl_type_union(ts, 2);
+        }
         jl_svecset(tupargs, i-nreq, argType);
     }
     jl_datatype_t *typ = jl_apply_tuple_type(tupargs);

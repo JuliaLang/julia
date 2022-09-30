@@ -205,6 +205,7 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
             if isconcretetype(t)
                 fields = fieldnames(t)
                 for field in fields
+                    isa(field, Symbol) || continue # Tuple type has ::Int field name
                     s = string(field)
                     if startswith(s, name)
                         push!(suggestions, FieldCompletion(t, field))

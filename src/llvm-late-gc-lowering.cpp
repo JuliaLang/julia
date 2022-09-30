@@ -781,6 +781,9 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
                             assert(isa<Instruction>(BaseElem) && "Unknown value type detected!");
                             InsertBefore = cast<Instruction>(BaseElem)->getNextNonDebugInstruction();
                         }
+                        while (isa<PHINode>(InsertBefore)) {
+                            InsertBefore = InsertBefore->getNextNonDebugInstruction();
+                        }
                         remap = new BitCastInst(BaseElem, T_prjlvalue, "", InsertBefore);
                     }
                 }

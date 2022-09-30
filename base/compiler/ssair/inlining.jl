@@ -1262,23 +1262,6 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         ir.stmts[idx][:inst] = earlyres.val
         return nothing
     end
-    if (sig.f === modifyfield! || sig.ft ⊑ₒ typeof(modifyfield!)) && 5 <= length(stmt.args) <= 6
-        let info = ir.stmts[idx][:info]
-            info isa MethodResultPure && (info = info.info)
-            info isa ConstCallInfo && (info = info.call)
-            info isa MethodMatchInfo || return nothing
-            length(info.results) == 1 || return nothing
-            match = info.results[1]::MethodMatch
-            match.fully_covers || return nothing
-            case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et);
-                compilesig_invokes=state.params.compilesig_invokes)
-            case === nothing && return nothing
-            stmt.head = :invoke_modify
-            pushfirst!(stmt.args, case.invoke)
-            ir.stmts[idx][:inst] = stmt
-        end
-        return nothing
-    end
 
     if check_effect_free!(ir, idx, stmt, rt)
         if sig.f === typeassert || sig.ft ⊑ₒ typeof(typeassert)
@@ -1288,7 +1271,7 @@ function process_simple!(ir::IRCode, idx::Int, state::InliningState, todo::Vecto
         end
     end
 
-    if sig.f !== Core.invoke && sig.f !== Core.finalizer && is_builtin(sig)
+    if (sig.f !== Core.invoke && sig.f !== Core.finalizer && sig.f !== modifyfield!) && is_builtin(sig)
         # No inlining for builtins (other invoke/apply/typeassert/finalizer)
         return nothing
     end
@@ -1536,6 +1519,23 @@ function handle_const_opaque_closure_call!(
     return nothing
 end
 
+function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyFieldInfo, state::InliningState)
+    info = info.info
+    info isa MethodResultPure && (info = info.info)
+    info isa ConstCallInfo && (info = info.call)
+    info isa MethodMatchInfo || return nothing
+    length(info.results) == 1 || return nothing
+    match = info.results[1]::MethodMatch
+    match.fully_covers || return nothing
+    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et);
+        compilesig_invokes=state.params.compilesig_invokes)
+    case === nothing && return nothing
+    stmt.head = :invoke_modify
+    pushfirst!(stmt.args, case.invoke)
+    ir.stmts[idx][:inst] = stmt
+    return nothing
+end
+
 function handle_finalizer_call!(
     ir::IRCode, idx::Int, stmt::Expr, info::FinalizerInfo, state::InliningState)
 
@@ -1642,16 +1642,15 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             continue
         end
 
-        # Handle invoke
-        if isa(info, InvokeCallInfo)
+        # handle special cased builtins
+        if isa(info, ModifyFieldInfo)
+            handle_modifyfield!_call!(ir, idx, stmt, info, state)
+            continue
+        elseif isa(info, InvokeCallInfo)
             inline_invoke!(ir, idx, stmt, info, flag, sig, state, todo)
             continue
-        end
-
-        # Handle finalizer
-        if isa(info, FinalizerInfo)
+        elseif isa(info, FinalizerInfo)
             handle_finalizer_call!(ir, idx, stmt, info, state)
-            continue
         end
 
         # if inference arrived here with constant-prop'ed result(s),

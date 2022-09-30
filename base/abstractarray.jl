@@ -3473,8 +3473,9 @@ function circshift!(a::AbstractVector, shift::Integer)
     n == 0 && return
     shift = mod(shift, n)
     shift == 0 && return
-    reverse!(a, 1, shift)
-    reverse!(a, shift+1, length(a))
+    l = lastindex(a)
+    reverse!(a, firstindex(a), l-shift)
+    reverse!(a, l-shift+1, lastindex(a))
     reverse!(a)
     return a
 end

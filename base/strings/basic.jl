@@ -715,7 +715,7 @@ julia> repeat("ha", 3)
 repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
-    ^(s::Union{AbstractString,AbstractChar}, n::Integer)
+    ^(s::Union{AbstractString,AbstractChar}, n::Integer) -> AbstractString
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 

@@ -1376,8 +1376,16 @@ mutable struct DoAllocWithField
     x::Int
     function DoAllocWithField(x::Int)
         finalizer(new(x)) do this
-            add_finalization_count!(x)
+            add_finalization_count!(this.x)
         end
+    end
+end
+mutable struct DoAllocWithFieldInter
+    x::Int
+end
+function register_finalizer!(obj::DoAllocWithFieldInter)
+    finalizer(obj) do this
+        add_finalization_count!(this.x)
     end
 end
 
@@ -1408,6 +1416,154 @@ let src = code_typed1(useless_finalizer, ())
     @test count(iscall((src, Core.finalizer)), src.code) == 0
     @test length(src.code) == 2
 end
+
+# tests finalizer inlining when def/uses involve control flow
+function cfg_finalization1(io)
+    for i = -999:1000
+        o = DoAllocWithField(i)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization1, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization1(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization2(io)
+    for i = -999:1000
+        o = DoAllocWithField(1)
+        o.x = i # with `setfield!`
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization2, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization2(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization3(io)
+    for i = -999:1000
+        o = DoAllocWithFieldInter(i)
+        register_finalizer!(o)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization3, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization3(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization4(io)
+    for i = -999:1000
+        o = DoAllocWithFieldInter(1)
+        o.x = i # with `setfield!`
+        register_finalizer!(o)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization4, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization4(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization5(io)
+    for i = -999:1000
+        o = DoAllocWithFieldInter(i)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+        register_finalizer!(o)
+    end
+end
+let src = code_typed1(cfg_finalization5, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization5(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization6(io)
+    for i = -999:1000
+        o = DoAllocWithField(0)
+        if i == 1000
+            o.x = i # with `setfield!`
+        elseif i > 0
+            safeprint(io, o.x, '\n')
+        end
+    end
+end
+let src = code_typed1(cfg_finalization6, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization6(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+
+function cfg_finalization7(io)
+    for i = -999:1000
+        o = DoAllocWithField(0)
+        o.x = 0
+        if i == 1000
+            o.x = i # with `setfield!`
+        end
+        o.x = i
+        if i == 999
+            o.x = i
+        end
+        o.x = 0
+        if i == 1000
+            o.x = i
+        end
+    end
+end
+let src = code_typed1(cfg_finalization7, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization7(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
 
 # optimize `[push!|pushfirst!](::Vector{Any}, x...)`
 @testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
@@ -1552,4 +1708,38 @@ let src = code_typed1((Any,)) do x
         nothing
     end
     @test count(iscall((src, f_union_unmatched)), src.code) == 0
+end
+
+# modifyfield! handling
+# =====================
+
+isinvokemodify(y) = @nospecialize(x) -> isinvokemodify(y, x)
+isinvokemodify(sym::Symbol, @nospecialize(x)) = isinvokemodify(mi->mi.def.name===sym, x)
+isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred(x.args[1]::MethodInstance)
+
+mutable struct Atomic{T}
+    @atomic x::T
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x + 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x max 10
+    end
+    @test count(isinvokemodify(:max), src.code) == 1
+end
+# simple union split handling
+mymax(x::T, y::T) where T<:Real = max(x, y)
+mymax(x::T, y::Real) where T<:Real = convert(T, max(x, y))::T
+let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
+        @atomic a.x mymax b
+    end
+    @test count(isinvokemodify(:mymax), src.code) == 2
 end

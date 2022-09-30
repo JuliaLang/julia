@@ -818,7 +818,8 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
-    let io = IOContext(io, :maxssaid=>length(ir.stmts))
+    maxssaid = length(ir.stmts) + Core.Compiler.length(ir.new_nodes)
+    let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
@@ -850,19 +851,22 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
         end
     end
     pop_new_node! = new_nodes_iter(compact)
-    bb_idx = let io = IOContext(io, :maxssaid=>length(compact.result))
+    maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
+    bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
     end
 
     # Print uncompacted nodes from the original IR
+
+    # print a separator
     stmts = compact.ir.stmts
+    indent = length(string(length(stmts)))
+    # config.line_info_preprinter(io, "", compact.idx)
+    printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+
     pop_new_node! = new_nodes_iter(compact.ir)
-    if compact.idx < length(stmts)
-        indent = length(string(length(stmts)))
-        # config.line_info_preprinter(io, "", compact.idx)
-        printstyled(io, "─"^(width-indent-1), '\n', color=:red)
-    end
-    let io = IOContext(io, :maxssaid=>length(compact.ir.stmts))
+    maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
+    let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
     end
 
