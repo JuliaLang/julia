@@ -330,6 +330,23 @@ paths = Dict(
 
 Since all packages in a package directory environment are, by definition, subdirectories with the expected entry-point files, their `paths` map entries always have this form.
 
+### Weak dependencies
+
+A dependency can either be a strong dependency (which is the default) or a *weak* dependency.
+A strong dependency is always loadable by the package while a weak dependency can only be loaded
+*if another package in the environment has that weak dependency as a strong dependency*. To check if a
+weak dependency is loadable, a package uses the `@hasdep` macro, for example:
+
+```jl
+if @hasdep WeakDep
+    using WeakDep
+    ...
+end
+```
+
+Weak dependencies in a project and manifest are listed in a `[weakdeps]` section and has the same format as
+the `[deps]` section.
+
 ### Environment stacks
 
 The third and final kind of environment is one that combines other environments by overlaying several of them, making the packages in each available in a single composite environment. These composite environments are called *environment stacks*. The Julia `LOAD_PATH` global defines an environment stack—the environment in which the Julia process operates. If you want your Julia process to have access only to the packages in one project or package directory, make it the only entry in `LOAD_PATH`. It is often quite useful, however, to have access to some of your favorite tools—standard libraries, profilers, debuggers, personal utilities, etc.—even if they are not dependencies of the project you're working on. By adding an environment containing these tools to the load path, you immediately have access to them in top-level code without needing to add them to your project.

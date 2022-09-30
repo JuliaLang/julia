@@ -804,6 +804,8 @@ export
     evalfile,
     include_string,
     include_dependency,
+    @hasdep,
+    hasdep,
 
 # RTS internals
     GC,
