@@ -175,7 +175,7 @@ tests = [
         "*(x)"        =>  "(call * x)"
         # Prefix function calls for operators which are both binary and unary
         "+(a,b)"   =>  "(call + a b)"
-        "+(a=1,)"  =>  "(call + (kw a 1))"
+        "+(a=1,)"  =>  "(call + (= a 1))"
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
         "+(;a)"    =>  "(call + (parameters a))"
@@ -246,9 +246,6 @@ tests = [
         "f() do ; body end"   =>  "(do (call f) (tuple) (block body))"
         "f() do x, y\n body end"  =>  "(do (call f) (tuple x y) (block body))"
         "f(x) do y body end"  =>  "(do (call f x) (tuple y) (block body))"
-        # Keyword arguments depend on call vs macrocall
-        "foo(a=1)"  =>  "(call foo (kw a 1))"
-        "@foo(a=1)" =>  "(macrocall @foo (= a 1))"
         "@foo a b"     =>  "(macrocall @foo a b)"
         "@foo (x)"     =>  "(macrocall @foo x)"
         "@foo (x,y)"   =>  "(macrocall @foo (tuple x y))"
@@ -288,9 +285,7 @@ tests = [
         "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
         "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (= x xs)))"
         ((v=v"1.8",), "T[a ; b ;; c ; d]") => "(typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))"
-        # Keyword params always use kw inside tuple in dot calls
         "f.(a,b)"   =>  "(. f (tuple a b))"
-        "f.(a=1)"   =>  "(. f (tuple (kw a 1)))"
         "f. (x)"    =>  "(. f (error-t) (tuple x))"
         # Other dotted syntax
         "A.:+"      =>  "(. A (quote +))"
@@ -438,8 +433,8 @@ tests = [
         "macro (\$f)()  end"   =>  "(macro (call (\$ f)) (block))"
         "function (x) body end"=>  "(function (tuple x) (block body))"
         "function (x,y) end"   =>  "(function (tuple x y) (block))"
-        "function (x=1) end"   =>  "(function (tuple (kw x 1)) (block))"
-        "function (;x=1) end"  =>  "(function (tuple (parameters (kw x 1))) (block))"
+        "function (x=1) end"   =>  "(function (tuple (= x 1)) (block))"
+        "function (;x=1) end"  =>  "(function (tuple (parameters (= x 1))) (block))"
         "function ()(x) end"   =>  "(function (call (tuple) x) (block))"
         "function (:)() end"   =>  "(function (call :) (block))"
         "function (x::T)() end"=>  "(function (call (:: x T)) (block))"
@@ -546,13 +541,13 @@ tests = [
         "(x=1, y=2)"  =>  "(tuple (= x 1) (= y 2))"
         # Named tuples with initial semicolon
         "(;)"         =>  "(tuple (parameters))"
-        "(; a=1)"     =>  "(tuple (parameters (kw a 1)))"
+        "(; a=1)"     =>  "(tuple (parameters (= a 1)))"
         # Extra credit: nested parameters and frankentuples
         "(x...; y)"       => "(tuple (... x) (parameters y))"
         "(x...;)"         => "(tuple (... x) (parameters))"
-        "(; a=1; b=2)"    => "(tuple (parameters (kw a 1) (parameters (kw b 2))))"
+        "(; a=1; b=2)"    => "(tuple (parameters (= a 1) (parameters (= b 2))))"
         "(a; b; c,d)"     => "(tuple a (parameters b (parameters c d)))"
-        "(a=1, b=2; c=3)" => "(tuple (= a 1) (= b 2) (parameters (kw c 3)))"
+        "(a=1, b=2; c=3)" => "(tuple (= a 1) (= b 2) (parameters (= c 3)))"
         # Block syntax
         "(;;)"        =>  "(block)"
         "(a=1;)"      =>  "(block (= a 1))"
@@ -797,10 +792,6 @@ broken_tests = [
         "'\\xff'"  => "(error '\\xff')"
         "'\\x80'"  => "(error '\\x80')"
         "'ab'"     => "(error 'ab')"
-    ]
-    JuliaSyntax.parse_call => [
-        # kw's in ref
-        "x[i=y]" => "(ref x (kw i y))"
     ]
     JuliaSyntax.parse_juxtapose => [
         # Want: "numeric constant \"10.\" cannot be implicitly multiplied because it ends with \".\""

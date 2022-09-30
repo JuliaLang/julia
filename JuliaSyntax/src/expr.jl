@@ -11,7 +11,8 @@ function is_stringchunk(node)
     return k == K"String" || k == K"CmdString"
 end
 
-function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
+function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
+                  eq_to_kw=false, inside_dot_expr=false, inside_vect_or_braces=false)
     if !haschildren(node)
         val = node.val
         if val isa Union{Int128,UInt128,BigInt}
@@ -20,7 +21,6 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
             # representation of these.
             str = replace(sourcetext(node), '_'=>"")
             headsym = :macrocall
-            k = kind(node)
             macname = val isa Int128  ? Symbol("@int128_str")  :
                       val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
@@ -29,12 +29,15 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
             return val
         end
     end
-    if kind(node) == K"?"
+    nodekind = kind(node)
+    if nodekind == K"?"
         headsym = :if
+    elseif nodekind == K"=" && !is_decorated(node) && eq_to_kw
+        headsym = :kw
     else
         headstr = untokenize(head(node), include_flag_suff=false)
         headsym = !isnothing(headstr) ? Symbol(headstr) :
-            error("Can't untokenize head of kind $(kind(node))")
+            error("Can't untokenize head of kind $(nodekind)")
     end
     node_args = children(node)
     if headsym == :string || headsym == :cmdstring
@@ -89,13 +92,19 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
     args = Vector{Any}(undef, length(node_args)*(insert_linenums ? 2 : 1))
     if headsym == :for && length(node_args) == 2
         # No line numbers in for loop iteration spec
-        args[1] = _to_expr(node_args[1], true, false)
+        args[1] = _to_expr(node_args[1], iteration_spec=true, need_linenodes=false)
         args[2] = _to_expr(node_args[2])
     elseif headsym == :let && length(node_args) == 2
         # No line numbers in let statement binding list
-        args[1] = _to_expr(node_args[1], false, false)
+        args[1] = _to_expr(node_args[1], need_linenodes=false)
         args[2] = _to_expr(node_args[2])
     else
+        eq_to_kw =  headsym == :call && !has_flags(node, INFIX_FLAG)  ||
+                    headsym == :ref                                   ||
+                   (headsym == :parameters && !inside_vect_or_braces) ||
+                   (headsym == :tuple && inside_dot_expr)
+        in_dot = headsym == :.
+        in_vb = headsym == :vect || headsym == :braces
         if insert_linenums
             if isempty(node_args)
                 push!(args, source_location(LineNumberNode, node.source, node.position))
@@ -103,12 +112,18 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
                 for i in 1:length(node_args)
                     n = node_args[i]
                     args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
-                    args[2*i] = _to_expr(n)
+                    args[2*i] = _to_expr(n,
+                                         eq_to_kw=eq_to_kw,
+                                         inside_dot_expr=in_dot,
+                                         inside_vect_or_braces=in_vb)
                 end
             end
         else
             for i in 1:length(node_args)
-                args[i] = _to_expr(node_args[i])
+                args[i] = _to_expr(node_args[i],
+                                   eq_to_kw=eq_to_kw,
+                                   inside_dot_expr=in_dot,
+                                   inside_vect_or_braces=in_vb)
             end
         end
     end
@@ -118,8 +133,9 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
     if is_infix(node.raw)
         args[2], args[1] = args[1], args[2]
     end
+
+    # Special cases for various expression heads
     loc = source_location(LineNumberNode, node.source, node.position)
-    # Convert elements
     if headsym == :macrocall
         insert!(args, 2, loc)
     elseif headsym in (:call, :ref)
@@ -128,7 +144,7 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
             insert!(args, 2, args[end])
             pop!(args)
         end
-    elseif headsym in (:tuple, :parameters, :vect)
+    elseif headsym in (:tuple, :parameters, :vect, :braces)
         # Move parameters blocks to args[1]
         if length(args) > 1 && Meta.isexpr(args[end], :parameters)
             pushfirst!(args, args[end])
@@ -181,7 +197,7 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
     # elseif headsym == :string && length(args) == 1 && version <= (1,5)
     #   Strip string from interpolations in 1.5 and lower to preserve
     #   "hi$("ho")" ==>  (string "hi" "ho")
-    elseif headsym == :(=)
+    elseif headsym == :(=) && !is_decorated(node)
         if is_eventually_call(args[1]) && !iteration_spec && !Meta.isexpr(args[2], :block)
             # Add block for short form function locations
             args[2] = Expr(:block, loc, args[2])
@@ -191,10 +207,7 @@ function _to_expr(node::SyntaxNode, iteration_spec=false, need_linenodes=true)
         args[1] = Expr(:block, loc, args[1])
     elseif headsym == :(->)
         if Meta.isexpr(args[2], :block)
-            parent = node.parent
-            if parent isa SyntaxNode && kind(parent) != K"do"
-                pushfirst!(args[2].args, loc)
-            end
+            pushfirst!(args[2].args, loc)
         else
             # Add block for source locations
             args[2] = Expr(:block, loc, args[2])
