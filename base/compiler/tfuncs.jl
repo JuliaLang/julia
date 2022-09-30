@@ -1170,7 +1170,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         elseif isconcretetype(RT) && has_nontrivial_const_info(typeinf_lattice(interp), TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
-        info = callinfo.info
+        info = ModifyFieldInfo(callinfo.info)
     end
     return CallMeta(RT, Effects(), info)
 end
