@@ -461,3 +461,38 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
         end
     end
 end
+
+@testset "issue #46967: undef stmts introduced by compaction" begin
+    # generate some IR
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    instructions = length(ir.stmts)
+
+    # get the addition instruction
+    add_stmt = ir.stmts[1]
+    @test Meta.isexpr(add_stmt[:inst], :call) && add_stmt[:inst].args[3] == 42
+
+    # replace the addition with a slightly different one
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    node = Core.Compiler.insert_node!(ir, 1, inst)
+    Core.Compiler.setindex!(add_stmt, node, :inst)
+
+    # perform compaction (not by calling compact! because with DCE the bug doesn't trigger)
+    compact = Core.Compiler.IncrementalCompact(ir)
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+    ir = Core.Compiler.complete(compact)
+
+    # test that the inserted node was compacted
+    @test Core.Compiler.length(ir.new_nodes) == 0
+
+    # test that we performed copy propagation, but that the undef node was trimmed
+    @test length(ir.stmts) == instructions
+
+    @test show(devnull, ir) === nothing
+end
