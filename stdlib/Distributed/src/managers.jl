@@ -565,7 +565,11 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
 
     # master connecting to workers
     if config.io !== nothing
-        (bind_addr, port::Int) = read_worker_host_port(config.io)
+        (bind_addr, port::Int) = if config.io isa TCPSocket 
+            getpeername(config.io) 
+        else
+            read_worker_host_port(config.io)
+        end
         pubhost = something(config.host, bind_addr)
         config.host = pubhost
         config.port = port
