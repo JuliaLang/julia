@@ -1,11 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module SortingTests
-
 using Base.Order
 using Random
 using Test
-using OffsetArrays
+
+const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
 
 @testset "Order" begin
     @test Forward == ForwardOrdering()
@@ -874,5 +875,3 @@ end
     println("TESTS ACTUALLY RAN 2") # TODO: deleteme
 end
 # The "searchsorted" testset is at the end of the file because it is slow.
-
-end
