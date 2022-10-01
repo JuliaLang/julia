@@ -298,6 +298,7 @@ end
 
 Base.showerror(io::IO, e::LaunchWorkerError) = print(io, e.msg)
 
+read_worker_host_port(io::TCPSocket) = getpeername(io)
 # The default TCP transport relies on the worker listening on a free
 # port available and printing its bind address and port.
 # The master process uses this to connect to the worker and subsequently
