@@ -265,7 +265,8 @@ multiples of [`oneunit`](@ref), and `T` should be a "discrete"
 type, which cannot have values smaller than `oneunit`. For example,
 `Integer` or `Date` types would qualify, whereas `Float64` would not (since this
 type can represent values smaller than `oneunit(Float64)`.
-[`UnitRange`](@ref), [`StepRange`](@ref), and other types are subtypes of this.
+[`UnitRange`](@ref), [`
+            `](@ref), and other types are subtypes of this.
 """
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
 
@@ -283,7 +284,7 @@ abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 Ranges with elements of type `T` with spacing of type `S`. The step
 between each element is constant, and the range is defined in terms
 of a `start` and `stop` of type `T` and a `step` of type `S`. Neither
-`T` nor `S` should be floating point types. The syntax `a:b:c` with `b > 1`
+`T` nor `S` should be floating point types. The syntax `a:b:c` with `b != 0`
 and `a`, `b`, and `c` all integers creates a `StepRange`.
 
 # Examples
