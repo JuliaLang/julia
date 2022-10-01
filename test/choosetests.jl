@@ -14,7 +14,7 @@ const TESTNAMES = [
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
         "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
-        "sorting", "spawn", "backtrace", "exceptions",
+        "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",

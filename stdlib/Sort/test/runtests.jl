@@ -870,6 +870,8 @@ end
             @test searchsorted(v, 0.1, rev=true) === 4:3
         end
     end
+
+    println("TESTS ACTUALLY RAN 2") # TODO: deleteme
 end
 # The "searchsorted" testset is at the end of the file because it is slow.
 
