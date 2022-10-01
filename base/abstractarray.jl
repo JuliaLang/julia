@@ -3225,7 +3225,7 @@ mapany(f, itr) = Any[f(x) for x in itr]
     map(f, c...) -> collection
 
 Transform collection `c` by applying `f` to each element. For multiple collection arguments,
-apply `f` elementwise, and stop when when any of them is exhausted.
+apply `f` elementwise, and stop when any of them is exhausted.
 
 See also [`map!`](@ref), [`foreach`](@ref), [`mapreduce`](@ref), [`mapslices`](@ref), [`zip`](@ref), [`Iterators.map`](@ref).
 
@@ -3279,10 +3279,15 @@ function map_n!(f::F, dest::AbstractArray, As) where F
 end
 
 """
-    map!(function, destination, collection...)
+    map!(f, destination, collection...)
 
-Like [`map`](@ref), but stores the result in `destination` rather than a new
-collection. `destination` must be at least as large as the smallest collection.
+Iteratively apply `f` to `collection`s. At each iteration, store the return value of `f` at
+the corresponding location in `destination`. For multiple collection arguments, apply `f`
+elementwise, and stop when any of them is exhausted. `destination` must be at least as
+large as the smallest collection.
+
+If `destination` is aliased with any of the input collections, then the result of `map!`
+might be different from the result of `map`.
 
 See also: [`map`](@ref), [`foreach`](@ref), [`zip`](@ref), [`copyto!`](@ref).
 
@@ -3305,6 +3310,22 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
  105
    0
    0
+
+julia> b = [1, 2, 3, 4];
+
+julia> v = @view b[end:-1:begin]
+4-element view(::Vector{Int64}, 4:-1:1) with eltype Int64:
+ 4
+ 3
+ 2
+ 1
+
+julia> map!(x -> x + 1, b, v)
+4-element Vector{Int64}:
+ 5
+ 4
+ 5
+ 6
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
