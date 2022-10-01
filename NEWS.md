@@ -132,6 +132,9 @@ Standard library changes
 * An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
   activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
+#### Sort
+* `Sort` has moved out of base and is now a standard library. ([#46679])
+
 #### SparseArrays
 
 #### Test
