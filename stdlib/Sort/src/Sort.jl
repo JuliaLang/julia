@@ -55,7 +55,7 @@ end
     issorted(v, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Test whether a vector is in sorted order. The `lt`, `by` and `rev` keywords modify what
-order is considered to be sorted just as they do for [`sort`](@ref).
+order is considered to be sorted just as they do for `sort`.
 
 # Examples
 ```jldoctest
@@ -144,7 +144,7 @@ partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
 """
     partialsort(v, k, by=<transform>, lt=<comparison>, rev=false)
 
-Variant of [`partialsort!`](@ref) which copies `v` before partially sorting it, thereby returning the
+Variant of `partialsort!` which copies `v` before partially sorting it, thereby returning the
 same thing as `partialsort!` but leaving `v` unmodified.
 """
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
@@ -289,7 +289,7 @@ according to the order specified by the `by`, `lt` and `rev` keywords, assuming 
 is already sorted in that order. Return an empty range located at the insertion point
 if `a` does not contain values equal to `x`.
 
-See also: [`insorted`](@ref), [`searchsortedfirst`](@ref), [`sort`](@ref), [`findall`](@ref).
+See also: `insorted`, `searchsortedfirst`, `sort`, [`findall`](@ref).
 
 # Examples
 ```jldoctest
@@ -319,7 +319,7 @@ specified order. Return `lastindex(a) + 1` if `x` is greater than all values in 
 
 `insert!`ing `x` at this index will maintain sorted order.
 
-See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
+See also: `searchsortedlast`, `searchsorted`, [`findfirst`](@ref).
 
 # Examples
 ```jldoctest
@@ -372,7 +372,7 @@ julia> searchsortedlast([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Determine whether an item `x` is in the sorted collection `a`, in the sense that
 it is [`==`](@ref) to one of the values of the collection according to the order
 specified by the `by`, `lt` and `rev` keywords, assuming that `a` is already
-sorted in that order, see [`sort`](@ref) for the keywords.
+sorted in that order, see `sort` for the keywords.
 
 See also [`in`](@ref).
 
@@ -430,14 +430,14 @@ end
 
 Indicate that a sorting function should use the partial quick sort
 algorithm. Partial quick sort returns the smallest `k` elements sorted from smallest
-to largest, finding them and sorting them using [`QuickSort`](@ref).
+to largest, finding them and sorting them using `QuickSort`.
 
 Characteristics:
   * *not stable*: does not preserve the ordering of elements which
     compare equal (e.g. "a" and "A" in a sort of letters which
     ignores case).
   * *in-place* in memory.
-  * *divide-and-conquer*: sort strategy similar to [`MergeSort`](@ref).
+  * *divide-and-conquer*: sort strategy similar to `MergeSort`.
 """
 struct PartialQuickSort{T <: Union{Integer,OrdinalRange}} <: Algorithm
     k::T
@@ -960,7 +960,7 @@ end
 """
     sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
+Variant of `sort!` that returns a sorted copy of `v` leaving `v` itself unmodified.
 
 # Examples
 ```jldoctest
@@ -1020,7 +1020,7 @@ partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
 """
     partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
 
-Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
+Like `partialsortperm`, but accepts a preallocated index vector `ix` the same size as
 `v`, which is used to store (a permutation of) the indices of `v`.
 
 If the index vector `ix` is initialized with the indices of `v` (or a permutation thereof), `initialized` should be set to
@@ -1092,11 +1092,11 @@ end
 
 Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
 If `A` has more than one dimension, then the `dims` keyword argument must be specified. The order is specified
-using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
+using the same keywords as `sort!`. The permutation is guaranteed to be stable even
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
 
-See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
+See also `sortperm!`, `partialsortperm`, [`invperm`](@ref), [`indexin`](@ref).
 To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
@@ -1159,7 +1159,7 @@ end
 """
     sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
 
-Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.  If `initialized` is `false`
+Like `sortperm`, but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.  If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `LinearIndices(A)`.
 
 # Examples
@@ -1241,7 +1241,7 @@ end
     sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
-See [`sort!`](@ref) for a description of possible
+See `sort!` for a description of possible
 keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
@@ -1300,7 +1300,7 @@ end
     sort!(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
-See [`sort!`](@ref) for a description of possible keyword arguments.
+See `sort!` for a description of possible keyword arguments.
 
 To sort slices of an array, refer to [`sortslices`](@ref).
 
