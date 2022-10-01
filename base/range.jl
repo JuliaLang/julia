@@ -265,8 +265,7 @@ multiples of [`oneunit`](@ref), and `T` should be a "discrete"
 type, which cannot have values smaller than `oneunit`. For example,
 `Integer` or `Date` types would qualify, whereas `Float64` would not (since this
 type can represent values smaller than `oneunit(Float64)`.
-[`UnitRange`](@ref), [`
-            `](@ref), and other types are subtypes of this.
+[`UnitRange`](@ref), [`StepRange`](@ref), and other types are subtypes of this.
 """
 abstract type OrdinalRange{T,S} <: AbstractRange{T} end
 
