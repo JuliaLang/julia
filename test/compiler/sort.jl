@@ -41,6 +41,4 @@ end
             @test sort(v; by, lt) == Core.Compiler.sort!(copy(v); by, < = lt)
         end
     end
-
-    println("THE TESTS ACTUALLY RAN") # TODO: deleteme
 end
