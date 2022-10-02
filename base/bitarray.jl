@@ -1787,7 +1787,6 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     for i = 1:(len_destc-1)
         destc[i] = f(Ac[i])
     end
-    
     dest_last = destc[len_destc]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
@@ -1806,7 +1805,6 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     for i = 1:(length(destc)-1)
         destc[i] = f(Ac[i], Bc[i])
     end
-
     dest_last = destc[len_destc]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
