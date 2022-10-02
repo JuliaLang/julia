@@ -889,8 +889,6 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 
 Infix operator which applies function `f` to the argument `x`.
 This allows `f(g(x))` to be written `x |> g |> f`.
-Such a pipe, or function chain, is often useful in interactive use.
-
 When used with anonymous functions, parentheses are typically required around
 the definition to get the intended chain.
 
