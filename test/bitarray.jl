@@ -1494,6 +1494,17 @@ timesofar("reductions")
         C17970 = map(x -> x ? false : true, A17970)
         @test C17970::BitArray{1} == map(~, A17970)
     end
+
+    @testset "Issue #47011, map! over unequal length bitarray" begin
+        for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
+            b1 = bitrand(l+10)
+            b2 = bitrand(l)
+            for op in (!, ~)
+                map!(op, b1, b2)
+                @test first(b1,l) == map(op, b2)
+            end
+        end
+    end
 end
 
 ## Filter ##
