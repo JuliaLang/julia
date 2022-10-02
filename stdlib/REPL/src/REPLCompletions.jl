@@ -205,6 +205,7 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
             if isconcretetype(t)
                 fields = fieldnames(t)
                 for field in fields
+                    isa(field, Symbol) || continue # Tuple type has ::Int field name
                     s = string(field)
                     if startswith(s, name)
                         push!(suggestions, FieldCompletion(t, field))
@@ -409,9 +410,9 @@ function get_value(sym::Expr, fn)
     end
     sym.head !== :. && return (nothing, false)
     for ex in sym.args
-        ex, found = get_value(ex, fn)
+        ex, found = get_value(ex, fn)::Tuple{Any, Bool}
         !found && return (nothing, false)
-        fn, found = get_value(ex, fn)
+        fn, found = get_value(ex, fn)::Tuple{Any, Bool}
         !found && return (nothing, false)
     end
     return (fn, true)

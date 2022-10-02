@@ -185,7 +185,7 @@ Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
 a fixed total order compatible with `min`.
 
 Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
-[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+[`missing`](@ref) are ordered as smaller than any regular value with `missing`
 smaller than `NaN`.
 
 So `isless` defines an ascending total order with `NaN` and `missing` as the
@@ -1306,7 +1306,7 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
-To determine whether an item is not in a given collection, see [`:∉`](@ref).
+To determine whether an item is not in a given collection, see [`∉`](@ref).
 You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both

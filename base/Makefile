@@ -195,6 +195,18 @@ $(build_bindir)/7z$(EXE):
 	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
 
+symlink_lld: $(build_bindir)/lld$(EXE)
+
+ifneq ($(USE_SYSTEM_LLD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+LLD_PATH := $(shell which lld$(EXE))
+endif
+
+$(build_bindir)/lld$(EXE):
+	[ -e "$(LLD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(LLD_PATH)" "$@"
+
 # the following excludes: libuv.a, libutf8proc.a
 
 ifneq ($(USE_SYSTEM_LIBM),0)

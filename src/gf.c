@@ -281,8 +281,6 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
-    if (jl_is_method(mi->def.method) && jl_atomic_load_relaxed(&mi->def.method->unspecialized) == mi)
-        return NULL; // avoid inferring the unspecialized method
     static int in_inference;
     if (in_inference > 2)
         return NULL;
@@ -1867,14 +1865,14 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
                                     // invoke-dispatch, check invokeTypes for validity
                                     struct jl_typemap_assoc search = {invokeTypes, method->primary_world, NULL, 0, ~(size_t)0};
                                     oldentry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->defs), &search, /*offs*/0, /*subtype*/0);
-                                    assert(oldentry);
-                                    if (oldentry->func.method == mi->def.method) {
+                                    if (oldentry && oldentry->func.method == mi->def.method) {
+                                        // We can safely keep this method
                                         jl_array_ptr_set(backedges, insb++, invokeTypes);
                                         jl_array_ptr_set(backedges, insb++, caller);
-                                        continue;
+                                    } else {
+                                        invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
+                                        invalidated = 1;
                                     }
-                                    invalidate_method_instance(&do_nothing_with_codeinst, caller, max_world, 1);
-                                    invalidated = 1;
                                 }
                             }
                             jl_array_del_end(backedges, nb - insb);
@@ -2004,7 +2002,7 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *
     if (ambig != NULL)
         *ambig = 0;
     jl_value_t *unw = jl_unwrap_unionall((jl_value_t*)types);
-    if (jl_is_tuple_type(unw) && jl_tparam0(unw) == jl_bottom_type)
+    if (jl_is_tuple_type(unw) && (unw == (jl_value_t*)jl_emptytuple_type || jl_tparam0(unw) == jl_bottom_type))
         return (jl_value_t*)jl_an_empty_vec_any;
     if (mt == jl_nothing)
         mt = (jl_value_t*)jl_method_table_for(unw);
@@ -2137,7 +2135,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
         jl_code_info_t *src = jl_code_for_interpreter(mi);
-        if (!jl_code_requires_compiler(src)) {
+        if (!jl_code_requires_compiler(src, 0)) {
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                 (jl_value_t*)jl_any_type, NULL, NULL,
                 0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
@@ -3314,12 +3312,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                                 if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
                                     !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
                                     ambig1 = 1;
+                                    break;
                                 }
-                            }
-                            else {
-                                // otherwise some aspect of m is not ambiguous
-                                ambig1 = 0;
-                                break;
                             }
                         }
                     }
@@ -3382,24 +3376,37 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 //static jl_mutex_t typeinf_lock;
 #define typeinf_lock jl_codegen_lock
 
+static jl_mutex_t inference_timing_mutex;
 static uint64_t inference_start_time = 0;
 static uint8_t inference_is_measuring_compile_time = 0;
 
-JL_DLLEXPORT void jl_typeinf_begin(void)
+JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
-    JL_LOCK(&typeinf_lock);
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
-        inference_start_time = jl_hrtime();
-        inference_is_measuring_compile_time = 1;
+        JL_LOCK_NOGC(&inference_timing_mutex);
+        if (inference_is_measuring_compile_time++ == 0) {
+            inference_start_time = jl_hrtime();
+        }
+        JL_UNLOCK_NOGC(&inference_timing_mutex);
     }
 }
 
-JL_DLLEXPORT void jl_typeinf_end(void)
+JL_DLLEXPORT void jl_typeinf_timing_end(void)
 {
-    if (typeinf_lock.count == 1 && inference_is_measuring_compile_time) {
+    JL_LOCK_NOGC(&inference_timing_mutex);
+    if (--inference_is_measuring_compile_time == 0) {
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - inference_start_time));
-        inference_is_measuring_compile_time = 0;
     }
+    JL_UNLOCK_NOGC(&inference_timing_mutex);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_begin(void)
+{
+    JL_LOCK(&typeinf_lock);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_end(void)
+{
     JL_UNLOCK(&typeinf_lock);
 }
 

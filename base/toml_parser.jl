@@ -326,7 +326,7 @@ function Base.showerror(io::IO, err::ParserError)
     str1, err1 = point_to_line(err.str::String, pos, pos, io)
     @static if VERSION <= v"1.6.0-DEV.121"
         # See https://github.com/JuliaLang/julia/issues/36015
-        format_fixer = get(io, :color, false) == true ? "\e[0m" : ""
+        format_fixer = get(io, :color, false)::Bool == true ? "\e[0m" : ""
         println(io, "$format_fixer  ", str1)
         print(io, "$format_fixer  ", err1)
     else

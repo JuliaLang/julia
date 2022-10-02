@@ -1043,7 +1043,12 @@ function test_intersection()
                    Type{Tuple{Int,T}} where T<:Integer)
     @testintersect(Type{<:Tuple{Any,Vararg{Any}}},
                    Type{Tuple{Vararg{Int,N}}} where N,
-                   Type{Tuple{Int,Vararg{Int,N}}} where N)
+                   !Union{})
+
+    @test typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{Tuple{Int,Vararg{Int}}}
+    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) == Type{Tuple{Int,Vararg{Int,N}}} where N
+    @test_broken typeintersect(Type{<:Tuple{Any,Vararg{Any}}}, Type{Tuple{Vararg{Int,N}}} where N) != Type{<:Tuple{Int,Vararg{Int}}}
+
     @testintersect(Type{<:Array},
                    Type{AbstractArray{T}} where T,
                    Bottom)
@@ -2020,3 +2025,167 @@ end
 #issue #43082
 struct X43082{A, I, B<:Union{Ref{I},I}}; end
 @testintersect(Tuple{X43082{T}, Int} where T, Tuple{X43082{Int}, Any}, Tuple{X43082{Int}, Int})
+
+#issue #36443
+let C = Tuple{Val{3},Int,Int,Int},
+    As = (Tuple{Val{N},Vararg{T,N}} where {T,N},
+          Tuple{Val{N},Vararg{T,N}} where {N,T}),
+    Bs = (Tuple{Val{3},Int,Vararg{T,N}} where {T,N},
+          Tuple{Val{3},Int,Vararg{T,N}} where {N,T},
+          Tuple{Val{3},Int,Vararg{T}} where {T},
+          Tuple{Val{3},Int,Vararg{T,2}} where {T})
+    for A in As, B in Bs
+        @testintersect(A, B, C)
+    end
+end
+
+let A = Tuple{Type{Val{N}},Tuple{Vararg{T,N}} where T} where N,
+    C = Tuple{Type{Val{2}},Tuple{T,T} where T}
+    @testintersect(A, Tuple{Type{Val{2}},Tuple{Vararg{T,N}} where T} where N, C)
+    @testintersect(A, Tuple{Type{Val{2}},Tuple{T,Vararg{T,N}} where T} where N, C)
+    @testintersect(A, Tuple{Type{Val{2}},Tuple{T,T,Vararg{T,N}} where T} where N, C)
+end
+
+let f36443(::NTuple{N}=[(f36443,),(1,2)][2],::Val{N}=Val(2)) where{N} = 0
+    @test f36443() == 0;
+end
+
+let C = Tuple{Val{3},Int,Int,Int,Int},
+    As = (Tuple{Val{N},Int,Vararg{T,N}} where {T,N},
+          Tuple{Val{N},Int,Vararg{T,N}} where {N,T}),
+    Bs = (Tuple{Val{3},Vararg{T,N}} where {T,N},
+          Tuple{Val{3},Vararg{T,N}} where {N,T},
+          Tuple{Val{3},Vararg{T}} where {T})
+    for A in As, B in Bs
+        @testintersect(A, B, C)
+    end
+end
+
+#issue #37257
+let T = Tuple{Val{N}, Any, Any, Vararg{Any,N}} where N,
+    C = Tuple{Val{1}, Any, Any, Any}
+    @testintersect(T, Tuple{Val{1}, Vararg{Any}}, C)
+    @testintersect(T, Tuple{Val{1}, Any, Vararg{Any}}, C)
+    @testintersect(T, Tuple{Val{1}, Any, Any, Vararg{Any}}, C)
+    @testintersect(T, Tuple{Val{1}, Any, Any, Any, Vararg{Any}}, C)
+    @testintersect(T, Tuple{Val{1}, Any, Any, Any, Any, Vararg{Any}}, Union{})
+end
+
+let A = Tuple{NTuple{N,Any},Val{N}} where {N},
+    C = Tuple{NTuple{4,Any},Val{4}}
+    @testintersect(A, Tuple{Tuple{Vararg{Any,N}},Val{4}} where {N}, C)
+    @testintersect(A, Tuple{Tuple{Vararg{Any}},Val{4}}, C)
+    @testintersect(A, Tuple{Tuple{Vararg{Any,N}} where {N},Val{4}}, C)
+
+    @testintersect(A, Tuple{Tuple{Any,Vararg{Any,N}},Val{4}} where {N}, C)
+    @testintersect(A, Tuple{Tuple{Any,Vararg{Any}},Val{4}}, C)
+    @testintersect(A, Tuple{Tuple{Any,Vararg{Any,N}} where {N},Val{4}}, C)
+
+    @testintersect(A, Tuple{Tuple{Any,Any,Any,Any,Any,Vararg{Any,N}},Val{4}} where {N}, Union{})
+    @testintersect(A, Tuple{Tuple{Any,Any,Any,Any,Any,Vararg{Any}},Val{4}}, Union{})
+    @testintersect(A, Tuple{Tuple{Any,Any,Any,Any,Any,Vararg{Any,N}} where {N},Val{4}}, Union{})
+end
+
+#issue #39088
+let
+    a() = c((1,), (1,1,1,1))
+    c(d::NTuple{T}, ::NTuple{T}) where T = d
+    c(d::NTuple{f}, b) where f = c((d..., f), b)
+    j(h::NTuple{T}, ::NTuple{T} = a()) where T = nothing
+    @test j((1,1,1,1)) === nothing
+end
+
+let A = Tuple{NTuple{N, Int}, NTuple{N, Int}} where N,
+    C = Tuple{NTuple{4, Int}, NTuple{4, Int}}
+    @testintersect(A, Tuple{Tuple{Int, Vararg{Any}}, NTuple{4, Int}}, C)
+    @testintersect(A, Tuple{Tuple{Int, Vararg{Any, N}} where {N}, NTuple{4, Int}}, C)
+    @testintersect(A, Tuple{Tuple{Int, Vararg{Any, N}}, NTuple{4, Int}} where {N}, C)
+
+    Bs = (Tuple{Tuple{Int, Vararg{Any}}, Tuple{Int, Int, Vararg{Any}}},
+          Tuple{Tuple{Int, Vararg{Any,N1}}, Tuple{Int, Int, Vararg{Any,N2}}} where {N1,N2},
+          Tuple{Tuple{Int, Vararg{Any,N}} where {N}, Tuple{Int, Int, Vararg{Any,N}} where {N}})
+    Cerr = Tuple{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        C = typeintersect(A, B)
+        @test C == typeintersect(B, A) != Union{}
+        @test C != Cerr
+        # TODO: The ideal result is Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+        @test_broken C != Tuple{Tuple{Int, Vararg{Int}}, Tuple{Int, Int, Vararg{Int}}}
+    end
+end
+
+let A = Pair{NTuple{N, Int}, NTuple{N, Int}} where N,
+    C = Pair{NTuple{4, Int}, NTuple{4, Int}}
+    @testintersect(A, Pair{<:Tuple{Int, Vararg{Any}}, NTuple{4, Int}}, C)
+    @testintersect(A, Pair{<:Tuple{Int, Vararg{Any, N}} where {N}, NTuple{4, Int}}, C)
+    @testintersect(A, Pair{<:Tuple{Int, Vararg{Any, N}}, NTuple{4, Int}} where {N}, C)
+
+    Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Tuple{Int, Int, Vararg{Int}}},
+          Pair{Tuple{Int, Vararg{Int,N1}}, Tuple{Int, Int, Vararg{Int,N2}}} where {N1,N2},
+          Pair{<:Tuple{Int, Vararg{Int,N}} where {N}, <:Tuple{Int, Int, Vararg{Int,N}} where {N}})
+    Cerr = Pair{Tuple{Int, Vararg{Int, N}}, Tuple{Int, Int, Vararg{Int, N}}} where {N}
+    for B in Bs
+        C = typeintersect(A, B)
+        @test C == typeintersect(B, A) != Union{}
+        @test C != Cerr
+        @test_broken C != B
+    end
+end
+
+# Example from pr#39098
+@testintersect(NTuple, Tuple{Any,Vararg}, Tuple{T, Vararg{T}} where {T})
+
+let A = Pair{NTuple{N, Int}, Val{N}} where N,
+    Bs = (Pair{<:Tuple{Int, Vararg{Int}}, <:Val},
+          Pair{Tuple{Int, Vararg{Int,N1}}, Val{N2}} where {N1,N2})
+    Cerr = Pair{Tuple{Int, Vararg{Int,N}}, Val{N}} where N
+    for B in Bs
+        @testintersect(A, B, !Cerr)
+        @testintersect(A, B, !Union{})
+    end
+end
+
+# issue #43064
+let
+    env_tuple(@nospecialize(x), @nospecialize(y)) = (intersection_env(x, y)[2]...,)
+    all_var(x::UnionAll) = (x.var, all_var(x.body)...)
+    all_var(x::DataType) = ()
+    TT0 = Tuple{Type{T},Union{Real,Missing,Nothing}} where {T}
+    TT1 = Union{Type{Int8},Type{Int16}}
+    @test env_tuple(Tuple{TT1,Missing}, TT0) ===
+          env_tuple(Tuple{TT1,Nothing}, TT0) ===
+          env_tuple(Tuple{TT1,Int}, TT0) === all_var(TT0)
+
+    TT0 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T1,T2}
+    TT1 = Tuple{T1,T2,Union{Real,Missing,Nothing}} where {T2,T1}
+    TT2 = Tuple{Union{Int,Int8},Union{Int,Int8},Int}
+    TT3 = Tuple{Int,Union{Int,Int8},Int}
+    @test env_tuple(TT2, TT0) === all_var(TT0)
+    @test env_tuple(TT2, TT1) === all_var(TT1)
+    @test env_tuple(TT3, TT0) === Base.setindex(all_var(TT0), Int, 1)
+    @test env_tuple(TT3, TT1) === Base.setindex(all_var(TT1), Int, 2)
+
+    TT0 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T1,T2}
+    TT1 = Tuple{T1,T2,T1,Union{Real,Missing,Nothing}} where {T2,T1}
+    TT2 = Tuple{Int,Union{Int,Int8},Int,Int}
+    @test env_tuple(TT2, TT0) === Base.setindex(all_var(TT0), Int, 1)
+    @test env_tuple(TT2, TT1) === Base.setindex(all_var(TT1), Int, 2)
+end
+
+#issue #46735
+T46735{B<:Real} = Pair{<:Union{B, Val{<:B}}, <:Union{AbstractMatrix{B}, AbstractMatrix{Vector{B}}}}
+@testintersect(T46735{B} where {B}, T46735, !Union{})
+@testintersect(T46735{B} where {B<:Integer}, T46735, !Union{})
+S46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,<:(Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}})}
+@testintersect(S46735{B} where {B}, S46735, !Union{})
+@testintersect(S46735{B, M} where {B, M}, S46735, !Union{})
+A46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
+@testintersect(A46735{B} where {B}, A46735, !Union{})
+@testintersect(A46735{B, M} where {B, M}, A46735, !Union{})
+
+#issue #46871
+struct A46871{T, N, M} <: AbstractArray{T, N} end
+struct B46871{T, N} <: Ref{A46871{T, N, N}} end
+for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
+    @testintersect(T, Ref{<:AbstractArray{<:Real, 3}}, B46871{Int, 3})
+end

@@ -795,7 +795,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -3088,7 +3088,7 @@ unused and delete the entire benchmark code).
 ```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)
@@ -3167,11 +3167,11 @@ but there are a number of small differences. They are documented here for
 completeness only and (unlike `Base.finalizer`) have no stability guarantees.
 
 The current differences are:
-    - `Core.finalizer` does not check for mutability of `o`. Attempting to register
-      a finalizer for an immutable object is undefined behavior.
-    - The value `f` must be a Julia object. `Core.finalizer` does not support a
-      raw C function pointer.
-    - `Core.finalizer` returns `nothing` rather than `o`.
+- `Core.finalizer` does not check for mutability of `o`. Attempting to register
+  a finalizer for an immutable object is undefined behavior.
+- The value `f` must be a Julia object. `Core.finalizer` does not support a
+  raw C function pointer.
+- `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
 

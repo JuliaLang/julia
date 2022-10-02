@@ -1062,7 +1062,7 @@ See also: [`hardlink`](@ref).
 
 !!! compat "Julia 1.6"
     The `dir_target` keyword argument was added in Julia 1.6.  Prior to this,
-    symlinks to nonexistant paths on windows would always be file symlinks, and
+    symlinks to nonexistent paths on windows would always be file symlinks, and
     relative symlinks to directories were not supported.
 """
 function symlink(target::AbstractString, link::AbstractString;
