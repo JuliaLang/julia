@@ -821,6 +821,35 @@ include("generic_map_tests.jl")
 generic_map_tests(map, map!)
 @test_throws ArgumentError map!(-, [1])
 
+@testset "iterative application of f in map!" begin
+    # Issue #46352.
+    # These tests are outside of the generic_map_tests() function, because the
+    # "iteratively apply f" interface does not apply to aysncmap!.
+
+    # Ensure that f is applied iteratively to the source collections, and at each
+    # iteration the return value is stored at the corresponding location in the
+    # destination collection. (These tests should verify that SIMD is not happening.)
+    for T in (Int32, Int64, Float32, Float64)
+        a = T[1:8...]
+        v = view(a, 8:-1:1)
+        @test map!(x -> x + 1, a, v) == [9, 8, 7, 6, 7, 8, 9, 10]
+
+        a = T[1:8...]
+        v = view(a, 8:-1:1)
+        @test map!(+, a, T[1:8...], v) == [9, 9, 9, 9, 14, 15, 16, 17]
+
+        a = T[1:8...]
+        v = view(a, 8:-1:1)
+        @test map!(+, a, T[1:8...], ones(T, 8), v) == [10, 10, 10, 10, 16, 17, 18, 19]
+    end
+
+    # If you give map! a view of a BitVector, then the AbstractArray method is called
+    # rather than the BitArray method.
+    a = BitVector((true, true))
+    v = view(a, 2:-1:1)
+    @test map!(!, a, v) == BitVector((false, true))
+end
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
