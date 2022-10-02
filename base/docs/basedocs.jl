@@ -687,7 +687,7 @@ Expr
 """
     :expr
 
-quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
 `:identifier` will evaluate to a `Symbol`, but the type of other usages is an
 implementation detail.
