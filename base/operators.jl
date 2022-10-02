@@ -897,7 +897,7 @@ the definition to get the intended chain.
 julia> 4 |> inv
 0.25
 
-julia> [2,3,5] |> sum |> inv
+julia> [2, 3, 5] |> sum |> inv
 0.1
 
 julia> [0 1; 2 3] .|> (x -> x^2) |> sum
