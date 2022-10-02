@@ -2193,6 +2193,12 @@ struct Q38497{o,e<:NTuple{o},g} <: C38497{e,g,Array{o}} end
 #issue #33138
 @test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
 
+#issue #46970
+@test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa TypeVar
+T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
+@testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
+@test_broken T46784 <: T46784{T,S} where {T,S}
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
