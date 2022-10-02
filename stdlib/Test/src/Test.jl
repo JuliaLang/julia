@@ -1268,6 +1268,9 @@ when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
 (the default is `true`).
 
+!!! compat "Julia 1.8"
+    `@testset foo()` requires at least Julia 1.8.
+
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
 If a function call is provided, its name will be used. Explicit description strings override this behavior.
