@@ -658,9 +658,9 @@ end
     >>(x, n)
 
 Right bit shift operator, `x >> n`. For `n >= 0`, the result is `x` shifted
-right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
-0`, preserving the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n <
-0`, this is equivalent to `x << -n`.
+right by `n` bits, filling with `0`s if `x >= 0`, `1`s if `x < 0`, preserving
+the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n < 0`, this is
+equivalent to `x << -n`.
 
 # Examples
 ```jldoctest
@@ -699,8 +699,8 @@ end
     >>>(x, n)
 
 Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
-shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
-is equivalent to `x << -n`.
+shifted right by `n` bits, filling with `0`s. For `n < 0`, this is equivalent
+to `x << -n`.
 
 For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 [`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.

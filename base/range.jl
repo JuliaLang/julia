@@ -283,7 +283,7 @@ abstract type AbstractUnitRange{T} <: OrdinalRange{T,T} end
 Ranges with elements of type `T` with spacing of type `S`. The step
 between each element is constant, and the range is defined in terms
 of a `start` and `stop` of type `T` and a `step` of type `S`. Neither
-`T` nor `S` should be floating point types. The syntax `a:b:c` with `b > 1`
+`T` nor `S` should be floating point types. The syntax `a:b:c` with `b != 0`
 and `a`, `b`, and `c` all integers creates a `StepRange`.
 
 # Examples
