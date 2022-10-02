@@ -1249,7 +1249,7 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-struct CanonicalIndexError
+struct CanonicalIndexError <: Exception
     func::String
     type::Any
     CanonicalIndexError(func::String, @nospecialize(type)) = new(func, type)
