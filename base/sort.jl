@@ -1160,9 +1160,9 @@ function sortperm(A::AbstractArray;
         n = length(A)
         if n > 1
             min, max = extrema(A)
-            (diff, o1) = sub_with_overflow(max, min)::Tuple{Any, Bool}
-            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))::Tuple{Any, Bool}
-            if !o1 && !o2 && rangelen < div(n,2)
+            (diff, o1) = sub_with_overflow(max, min)
+            (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
+            if !(o1 || o2)::Bool && rangelen < div(n,2)
                 return sortperm_int_range(A, rangelen, min)
             end
         end
