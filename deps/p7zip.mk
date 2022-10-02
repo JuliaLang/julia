@@ -1,4 +1,5 @@
 ## p7zip ##
+include $(SRCDIR)/p7zip.version
 
 ifneq ($(USE_BINARYBUILDER_P7ZIP),1)
 

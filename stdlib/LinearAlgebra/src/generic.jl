@@ -978,7 +978,7 @@ function rank(A::AbstractMatrix; atol::Real = 0.0, rtol::Real = (min(size(A)...)
     tol = max(atol, rtol*s[1])
     count(x -> x > tol, s)
 end
-rank(x::Number) = iszero(x) ? 0 : 1
+rank(x::Union{Number,AbstractVector}) = iszero(x) ? 0 : 1
 
 """
     tr(M)
@@ -1501,7 +1501,7 @@ function axpy!(α::Number,
     y::StridedVecLike{T}, ry::AbstractRange{<:Integer},
 ) where {T<:BlasFloat}
     if Base.has_offset_axes(rx, ry)
-        return Base.@invoke axpy!(α,
+        return @invoke axpy!(α,
             x::AbstractArray, rx::AbstractArray{<:Integer},
             y::AbstractArray, ry::AbstractArray{<:Integer},
         )
@@ -1774,7 +1774,8 @@ function isapprox(x::AbstractArray, y::AbstractArray;
         return d <= max(atol, rtol*max(norm(x), norm(y)))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
+        # (mapreduce instead of all for greater generality [#44893])
+        return mapreduce((a, b) -> isapprox(a, b; rtol=rtol, atol=atol, nans=nans), &, x, y)
     end
 end
 

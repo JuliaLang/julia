@@ -9,18 +9,36 @@ Julia dynamically links against LLVM by default. Build with `USE_LLVM_SHLIB=0` t
 
 The code for lowering Julia AST to LLVM IR or interpreting it directly is in directory `src/`.
 
-| File                | Description                                                |
-|:------------------- |:---------------------------------------------------------- |
-| `builtins.c`        | Builtin functions                                          |
-| `ccall.cpp`         | Lowering [`ccall`](@ref)                                   |
-| `cgutils.cpp`       | Lowering utilities, notably for array and tuple accesses   |
-| `codegen.cpp`       | Top-level of code generation, pass list, lowering builtins |
-| `debuginfo.cpp`     | Tracks debug information for JIT code                      |
-| `disasm.cpp`        | Handles native object file and JIT code diassembly         |
-| `gf.c`              | Generic functions                                          |
-| `intrinsics.cpp`    | Lowering intrinsics                                        |
-| `llvm-simdloop.cpp` | Custom LLVM pass for [`@simd`](@ref)                       |
-| `sys.c`             | I/O and operating system utility functions                 |
+| File                             | Description                                                        |
+|:-------------------------------- |:------------------------------------------------------------------ |
+| `aotcompile.cpp`                 | Legacy pass manager pipeline, compiler C-interface entry           |
+| `builtins.c`                     | Builtin functions                                                  |
+| `ccall.cpp`                      | Lowering [`ccall`](@ref)                                           |
+| `cgutils.cpp`                    | Lowering utilities, notably for array and tuple accesses           |
+| `codegen.cpp`                    | Top-level of code generation, pass list, lowering builtins         |
+| `debuginfo.cpp`                  | Tracks debug information for JIT code                              |
+| `disasm.cpp`                     | Handles native object file and JIT code diassembly                 |
+| `gf.c`                           | Generic functions                                                  |
+| `intrinsics.cpp`                 | Lowering intrinsics                                                |
+| `jitlayers.cpp`                  | JIT-specific code, ORC compilation layers/utilities                |
+| `llvm-alloc-helpers.cpp`         | Julia-specific escape analysis                                     |
+| `llvm-alloc-opt.cpp`             | Custom LLVM pass to demote heap allocations to the stack           |
+| `llvm-cpufeatures.cpp`           | Custom LLVM pass to lower CPU-based functions (e.g. haveFMA)       |
+| `llvm-demote-float16.cpp`        | Custom LLVM pass to lower 16b float ops to 32b float ops           |
+| `llvm-final-gc-lowering.cpp`     | Custom LLVM pass to lower GC calls to their final form             |
+| `llvm-gc-invariant-verifier.cpp` | Custom LLVM pass to verify Julia GC invariants                     |
+| `llvm-julia-licm.cpp`            | Custom LLVM pass to hoist/sink Julia-specific intrinsics           |
+| `llvm-late-gc-lowering.cpp`      | Custom LLVM pass to root GC-tracked values                         |
+| `llvm-lower-handlers.cpp`        | Custom LLVM pass to lower try-catch blocks                         |
+| `llvm-muladd.cpp`                | Custom LLVM pass for fast-match FMA                                |
+| `llvm-multiversioning.cpp`       | Custom LLVM pass to generate sysimg code on multiple architectures |
+| `llvm-propagate-addrspaces.cpp`  | Custom LLVM pass to canonicalize addrspaces                        |
+| `llvm-ptls.cpp`                  | Custom LLVM pass to lower TLS operations                           |
+| `llvm-remove-addrspaces.cpp`     | Custom LLVM pass to remove Julia addrspaces                        |
+| `llvm-remove-ni.cpp`             | Custom LLVM pass to remove Julia non-integral addrspaces           |
+| `llvm-simdloop.cpp`              | Custom LLVM pass for [`@simd`](@ref)                               |
+| `pipeline.cpp`                   | New pass manager pipeline, pass pipeline parsing                   |
+| `sys.c`                          | I/O and operating system utility functions                         |
 
 Some of the `.cpp` files form a group that compile to a single object.
 
@@ -38,7 +56,7 @@ The `-O` option enables LLVM's [Basic Alias Analysis](https://llvm.org/docs/Alia
 
 ## Building Julia with a different version of LLVM
 
-The default version of LLVM is specified in `deps/Versions.make`. You can override it by creating
+The default version of LLVM is specified in `deps/llvm.version`. You can override it by creating
 a file called `Make.user` in the top-level directory and adding a line to it such as:
 
 ```
@@ -77,9 +95,15 @@ LLVM tools as usual. `libjulia` can function as an LLVM pass plugin and can be
 loaded into LLVM tools, to make julia-specific passes available in this
 environment. In addition, it exposes the `-julia` meta-pass, which runs the
 entire Julia pass-pipeline over the IR. As an example, to generate a system
-image, one could do:
+image with the old pass manager, one could do:
 ```
 opt -enable-new-pm=0 -load libjulia-codegen.so -julia -o opt.bc unopt.bc
+llc -o sys.o opt.bc
+cc -shared -o sys.so sys.o
+```
+To generate a system image with the new pass manager, one could do:
+```
+opt -load-pass-plugin=libjulia-codegen.so --passes='julia' -o opt.bc unopt.bc
 llc -o sys.o opt.bc
 cc -shared -o sys.so sys.o
 ```

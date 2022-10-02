@@ -263,7 +263,6 @@ let x = [4,3,5,2]
     @test maximum(x) == 5
     @test minimum(x) == 2
     @test extrema(x) == (2, 5)
-    @test Core.Compiler.extrema(x) == (2, 5)
 
     @test maximum(abs2, x) == 25
     @test minimum(abs2, x) == 4
@@ -676,4 +675,17 @@ end
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+# issue #45748
+@testset "foldl's stability for nested Iterators" begin
+    a = Iterators.flatten((1:3, 1:3))
+    b = (2i for i in a if i > 0)
+    c = Base.Generator(Float64, b)
+    d = (sin(i) for i in c if i > 0)
+    @test @inferred(sum(d)) == sum(collect(d))
+    @test @inferred(extrema(d)) == extrema(collect(d))
+    @test @inferred(maximum(c)) == maximum(collect(c))
+    @test @inferred(prod(b)) == prod(collect(b))
+    @test @inferred(minimum(a)) == minimum(collect(a))
 end

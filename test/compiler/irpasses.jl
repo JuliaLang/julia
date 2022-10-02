@@ -933,8 +933,8 @@ let
         end |> only |> first
     end
 
-    refs = map(Core.SSAValue, findall(x->x isa Expr && x.head == :new, src.code))
-    some_ccall = findfirst(x -> x isa Expr && x.head == :foreigncall && x.args[1] == :(:some_ccall), src.code)
+    refs = map(Core.SSAValue, findall(@nospecialize(x)->Meta.isexpr(x, :new), src.code))
+    some_ccall = findfirst(@nospecialize(x) -> Meta.isexpr(x, :foreigncall) && x.args[1] == :(:some_ccall), src.code)
     @assert some_ccall !== nothing
     stmt = src.code[some_ccall]
     nccallargs = length(stmt.args[3]::Core.SimpleVector)
@@ -950,36 +950,40 @@ end
 let # effect-freeness computation for array allocation
 
     # should eliminate dead allocations
-    good_dims = (0, 2)
-    for dim in good_dims, N in 0:10
+    good_dims = @static Int === Int64 ? (1:10) : (1:8)
+    Ns = @static Int === Int64 ? (1:10) : (1:8)
+    for dim = good_dims, N = Ns
         dims = ntuple(i->dim, N)
-        @eval @test fully_eliminated(()) do
+        @test @eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
             nothing
         end
     end
 
-    # shouldn't eliminate errorneous dead allocations
-    bad_dims = [-1,           # should keep "invalid Array dimensions"
-                typemax(Int)] # should keep "invalid Array size"
+    # shouldn't eliminate erroneous dead allocations
+    bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
         dims = ntuple(i->dim, N)
-        @eval @test !fully_eliminated(()) do
+        @test @eval !fully_eliminated() do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+        @test_throws "invalid Array" @eval let
             Array{Int,$N}(undef, $(dims...))
             nothing
         end
     end
 
     # some high-level examples
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         Int[]
         nothing
     end
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         Matrix{Tuple{String,String}}(undef, 4, 4)
         nothing
     end
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         IdDict{Any,Any}()
         nothing
     end

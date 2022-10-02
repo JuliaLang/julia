@@ -707,6 +707,11 @@ fake_repl() do stdin_write, stdout_read, repl
     wait(c)
     @test Main.A == 2
 
+    # Test removal of prefix in single statement paste
+    sendrepl2("\e[200~In [12]: A = 2.2\e[201~\n")
+    wait(c)
+    @test Main.A == 2.2
+
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
             julia> mutable struct T17599; a::Int; end
@@ -1323,7 +1328,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # necessary to read at least some part of the buffer,
     # for the "region_active" to have time to be updated
 
-    @test LineEdit.state(repl.mistate).region_active == :off
+    @test LineEdit.state(repl.mistate).region_active === :off
     @test s4 == "anything" # no control characters between the last two occurrences of "anything"
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
@@ -1547,4 +1552,38 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     LineEdit.edit_input(s, input_f)
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
+end
+
+# Non standard output_prefix, tested via `ipython_mode!`
+fake_repl() do stdin_write, stdout_read, repl
+    repl.interface = REPL.setup_interface(repl)
+
+    backend = REPL.REPLBackend()
+    repltask = @async begin
+        REPL.run_repl(repl; backend)
+    end
+
+    REPL.ipython_mode!(repl, backend)
+
+    global c = Condition()
+    sendrepl2(cmd) = write(stdin_write, "$cmd\n notify($(curmod_prefix)c)\n")
+
+    sendrepl2("\"z\" * \"z\"\n")
+    wait(c)
+    s = String(readuntil(stdout_read, "\"zz\""; keep=true))
+    @test contains(s, "In [1]")
+    @test contains(s, "Out[1]: \"zz\"")
+
+    sendrepl2("\"y\" * \"y\"\n")
+    wait(c)
+    s = String(readuntil(stdout_read, "\"yy\""; keep=true))
+    @test contains(s, "Out[3]: \"yy\"")
+
+    sendrepl2("Out[1] * Out[3]\n")
+    wait(c)
+    s = String(readuntil(stdout_read, "\"zzyy\""; keep=true))
+    @test contains(s, "Out[5]: \"zzyy\"")
+
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
 end

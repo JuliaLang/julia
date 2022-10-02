@@ -98,6 +98,9 @@ typedef struct {
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
+#if defined(_COMPILER_ASAN_ENABLED_)
+    void *asan_fake_stack;
+#endif
 } jl_ucontext_t;
 
 
@@ -362,7 +365,6 @@ int8_t jl_gc_safe_leave(jl_ptls_t ptls, int8_t state); // Can be a safepoint
 #define jl_gc_safe_enter(ptls) jl_gc_state_save_and_set(ptls, JL_GC_STATE_SAFE)
 #define jl_gc_safe_leave(ptls, state) ((void)jl_gc_state_set(ptls, (state), JL_GC_STATE_SAFE))
 #endif
-JL_DLLEXPORT void (jl_gc_safepoint)(void);
 
 JL_DLLEXPORT void jl_gc_enable_finalizers(struct _jl_task_t *ct, int on);
 JL_DLLEXPORT void jl_gc_disable_finalizers_internal(void);

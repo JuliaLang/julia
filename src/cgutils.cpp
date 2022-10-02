@@ -121,7 +121,10 @@ static Value *stringConstPtr(
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, "_j_str", *M);
     Value *zero = ConstantInt::get(Type::getInt32Ty(irbuilder.getContext()), 0);
     Value *Args[] = { zero, zero };
-    return irbuilder.CreateInBoundsGEP(gv->getValueType(), gv, Args);
+    return irbuilder.CreateInBoundsGEP(gv->getValueType(),
+                                       // Addrspacecast in case globals are in non-0 AS
+                                       irbuilder.CreateAddrSpaceCast(gv, gv->getValueType()->getPointerTo(0)),
+                                       Args);
 }
 
 
@@ -424,21 +427,16 @@ static unsigned julia_alignment(jl_value_t *jt)
     return alignment;
 }
 
-static inline void maybe_mark_argument_dereferenceable(Argument *A, jl_value_t *jt)
+static inline void maybe_mark_argument_dereferenceable(AttrBuilder &B, jl_value_t *jt)
 {
-#if JL_LLVM_VERSION >= 140000
-    AttrBuilder B(A->getContext());
-#else
-    AttrBuilder B;
-#endif
     B.addAttribute(Attribute::NonNull);
-    // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+    B.addAttribute(Attribute::NoUndef);
+    // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
     size_t size = dereferenceable_size(jt);
     if (size) {
         B.addDereferenceableAttr(size);
         B.addAlignmentAttr(julia_alignment(jt));
     }
-    A->addAttrs(B);
 }
 
 static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool can_be_null,
@@ -446,7 +444,7 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
 {
     if (isa<PointerType>(LI->getType())) {
         if (!can_be_null)
-            // The `dereferencable` below does not imply `nonnull` for non addrspace(0) pointers.
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(LI->getContext(), None));
         if (size) {
             Metadata *OP = ConstantAsMetadata::get(ConstantInt::get(getInt64Ty(LI->getContext()), size));
@@ -1007,7 +1005,7 @@ static LoadInst *emit_nthptr_recast(jl_codectx_t &ctx, Value *v, ssize_t n, MDNo
         emit_bitcast(ctx, vptr, PointerType::get(type, 0)))));
  }
 
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v);
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &v,  bool is_promotable=false);
 static Value *emit_typeof(jl_codectx_t &ctx, Value *v, bool maybenull);
 
 static jl_cgval_t emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull)
@@ -1358,6 +1356,8 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter)
         return (_can_optimize_isa(((jl_uniontype_t*)type)->a, counter) &&
                 _can_optimize_isa(((jl_uniontype_t*)type)->b, counter));
     }
+    if (type == (jl_value_t*)jl_type_type)
+        return true;
     if (jl_is_type_type(type) && jl_pointer_egal(type))
         return true;
     if (jl_has_intersect_type_not_kind(type))
@@ -1440,6 +1440,22 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         // has unique pointer value.
         auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_tparam0(intersected_type)));
         return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
+    }
+    if (intersected_type == (jl_value_t*)jl_type_type) {
+        // Inline jl_is_kind(jl_typeof(x))
+        // N.B. We do the comparison with untracked pointers, because that gives
+        // LLVM more optimization opportunities. That means it is poosible for
+        // `typ` to get GC'ed, but we don't actually care, because we don't ever
+        // dereference it.
+        Value *typ = emit_pointer_from_objref(ctx, emit_typeof_boxed(ctx, x));
+        auto val = ctx.builder.CreateOr(
+            ctx.builder.CreateOr(
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_uniontype_type)),
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_datatype_type))),
+            ctx.builder.CreateOr(
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_unionall_type)),
+                ctx.builder.CreateICmpEQ(typ, literal_pointer_val(ctx, (jl_value_t*)jl_typeofbottom_type))));
+        return std::make_pair(val, false);
     }
     // intersection with Type needs to be handled specially
     if (jl_has_intersect_type_not_kind(type) || jl_has_intersect_type_not_kind(intersected_type)) {
@@ -2980,7 +2996,7 @@ static Value *call_with_attrs(jl_codectx_t &ctx, JuliaFunction *intr, Value *v)
     return Call;
 }
 
-static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val);
+static jl_value_t *jl_ensure_rooted(jl_codectx_t &ctx, jl_value_t *val);
 
 static Value *as_value(jl_codectx_t &ctx, Type *to, const jl_cgval_t &v)
 {
@@ -3013,7 +3029,7 @@ static Value *_boxed_special(jl_codectx_t &ctx, const jl_cgval_t &vinfo, Type *t
         if (Constant *c = dyn_cast<Constant>(vinfo.V)) {
             jl_value_t *s = static_constant_instance(jl_Module->getDataLayout(), c, jt);
             if (s) {
-                jl_add_method_root(ctx, s);
+                s = jl_ensure_rooted(ctx, s);
                 return track_pjlvalue(ctx, literal_pointer_val(ctx, s));
             }
         }
@@ -3209,6 +3225,44 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
+static Function *mangleIntrinsic(IntrinsicInst *call) //mangling based on replaceIntrinsicUseWith
+{
+    Intrinsic::ID ID = call->getIntrinsicID();
+    auto nargs = call->arg_size();
+    SmallVector<Type*, 8> argTys(nargs);
+    auto oldfType = call->getFunctionType();
+    for (unsigned i = 0; i < oldfType->getNumParams(); i++) {
+        auto argi = call->getArgOperand(i);
+        argTys[i] = argi->getType();
+    }
+
+    auto newfType = FunctionType::get(
+            oldfType->getReturnType(),
+            makeArrayRef(argTys).slice(0, oldfType->getNumParams()),
+            oldfType->isVarArg());
+
+    // Accumulate an array of overloaded types for the given intrinsic
+    // and compute the new name mangling schema
+    SmallVector<Type*, 4> overloadTys;
+    {
+        SmallVector<Intrinsic::IITDescriptor, 8> Table;
+        getIntrinsicInfoTableEntries(ID, Table);
+        ArrayRef<Intrinsic::IITDescriptor> TableRef = Table;
+        auto res = Intrinsic::matchIntrinsicSignature(newfType, TableRef, overloadTys);
+        assert(res == Intrinsic::MatchIntrinsicTypes_Match);
+        (void)res;
+        bool matchvararg = !Intrinsic::matchIntrinsicVarArg(newfType->isVarArg(), TableRef);
+        assert(matchvararg);
+        (void)matchvararg;
+    }
+    auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+    assert(newF->getFunctionType() == newfType);
+    newF->setCallingConv(call->getCallingConv());
+    return newF;
+}
+
+
+//Used for allocation hoisting in *boxed
 static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsigned ToAS)
 {
     for (auto *User : Val->users()) {
@@ -3218,13 +3272,8 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
-            IntrinsicInst *II = cast<IntrinsicInst>(User);
-            SmallVector<Type*, 3> ArgTys;
-            Intrinsic::getIntrinsicSignature(II->getCalledFunction(), ArgTys);
-            assert(ArgTys.size() <= II->arg_size());
-            for (size_t i = 0; i < ArgTys.size(); ++i)
-                ArgTys[i] = II->getArgOperand(i)->getType();
-            II->setCalledFunction(Intrinsic::getDeclaration(II->getModule(), II->getIntrinsicID(), ArgTys));
+            IntrinsicInst *call = cast<IntrinsicInst>(User);
+            call->setCalledFunction(mangleIntrinsic(call));
         }
 #ifndef JL_LLVM_OPAQUE_POINTERS
         else if (isa<BitCastInst>(User)) {
@@ -3240,7 +3289,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
 // Returns ctx.types().T_prjlvalue
-static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
+static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotable)
 {
     jl_value_t *jt = vinfo.typ;
     if (jt == jl_bottom_type || jt == NULL)
@@ -3270,7 +3319,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
         box = _boxed_special(ctx, vinfo, t);
         if (!box) {
             bool do_promote = vinfo.promotion_point;
-            if (do_promote) {
+            if (do_promote && is_promotable) {
                 auto IP = ctx.builder.saveIP();
                 ctx.builder.SetInsertPoint(vinfo.promotion_point);
                 box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
@@ -3284,7 +3333,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
                 recursively_adjust_ptr_type(originalAlloca, 0, AddressSpace::Derived);
                 originalAlloca->replaceAllUsesWith(decayed);
                 // end illegal IR
-                cast<Instruction>(vinfo.V)->eraseFromParent();
+                originalAlloca->eraseFromParent();
                 ctx.builder.restoreIP(IP);
             } else {
                 box = emit_allocobj(ctx, jl_datatype_size(jt), literal_pointer_val(ctx, (jl_value_t*)jt));
@@ -3299,7 +3348,7 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo)
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
 {
     if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
-        // TODO: make this a lifetime_end & dereferencable annotation?
+        // TODO: make this a lifetime_end & dereferenceable annotation?
         ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
     if (jl_is_concrete_type(src.typ) || src.constant) {
         jl_value_t *typ = src.constant ? jl_typeof(src.constant) : src.typ;
@@ -3653,7 +3702,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (fval_info.typ == jl_bottom_type)
                     return jl_cgval_t();
                 // TODO: Use (post-)domination instead.
-                bool field_promotable = !init_as_value && fval_info.promotion_ssa != -1 &&
+                bool field_promotable = !jl_is_uniontype(jtype) && !init_as_value && fval_info.promotion_ssa != -1 &&
                     fval_info.promotion_point && fval_info.promotion_point->getParent() == ctx.builder.GetInsertBlock();
                 if (field_promotable) {
                     savedIP = ctx.builder.saveIP();
@@ -3686,20 +3735,20 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                             promotion_point = inst;
                             promotion_ssa = fval_info.promotion_ssa;
                         }
-                    } else if (!promotion_point) {
+                    }
+                    else if (!promotion_point) {
                         promotion_point = inst;
                     }
                 }
                 Value *fval = NULL;
                 if (jl_field_isptr(sty, i)) {
-                    fval = boxed(ctx, fval_info);
+                    fval = boxed(ctx, fval_info, field_promotable);
                     if (!init_as_value)
                         cast<StoreInst>(tbaa_decorate(ctx.tbaa().tbaa_stack,
                                     ctx.builder.CreateAlignedStore(fval, dest, Align(jl_field_align(sty, i)))))
                                 ->setOrdering(AtomicOrdering::Unordered);
                 }
                 else if (jl_is_uniontype(jtype)) {
-                    assert(!field_promotable);
                     // compute tindex from rhs
                     jl_cgval_t rhs_union = convert_julia_type(ctx, fval_info, jtype);
                     if (rhs_union.typ == jl_bottom_type)

@@ -66,6 +66,7 @@ USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_LLD:=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -347,6 +348,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 BUILD_LIBCXX := 0
+BUILD_LLD := 1
 
 # Options to enable Polly and its code-generation options
 USE_POLLY := 0
@@ -689,7 +691,7 @@ SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-fra
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
 endif
 ifeq ($(SANITIZE_ADDRESS),1)
-SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
 endif
 ifeq ($(SANITIZE_THREAD),1)
@@ -705,7 +707,7 @@ JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
-TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
+TAR_TEST := $(shell $(TAR) --help 2>&1  | grep -E 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
@@ -772,6 +774,8 @@ else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
 $(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
 else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
 $(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
+else ifneq (,$(findstring MSYS,$(shell uname)))
+$(error "cannot build julia from a msys shell. please launch a mingw shell instead by setting MSYSTEM=MINGW64")
 endif
 
 ifeq ($(BUILD_OS),Darwin)
@@ -1149,7 +1153,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1223,6 +1227,9 @@ else
   NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
 endif
 
+# Initialize these once, then add to them in OS-specific blocks
+JLIBLDFLAGS :=
+
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -latomic -Wl,--export-dynamic,--as-needed,--no-whole-archive
 # Detect if ifunc is supported
@@ -1236,14 +1243,14 @@ ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
 endif
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
-JLIBLDFLAGS := -Wl,-Bsymbolic-functions
-else
-JLIBLDFLAGS :=
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
 endif
+ifeq (--enable-new-dtags, $(shell $(LD) --help | grep -o -e "--enable-new-dtags"))
+JLIBLDFLAGS += -Wl,--enable-new-dtags
+endif
+
 # Linker doesn't detect automatically that Julia doesn't need executable stack
 JLIBLDFLAGS += -Wl,-z,noexecstack
-else ifneq ($(OS), Darwin)
-JLIBLDFLAGS :=
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -1266,7 +1273,7 @@ OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
-JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
 
 ifeq ($(OS), WINNT)
@@ -1279,7 +1286,13 @@ JLDFLAGS += -Wl,--large-address-aware
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
-endif
+# Use hard links for files on windows, rather than soft links
+#   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
+# Usage: $(WIN_MAKE_HARD_LINK) <source> <target>
+WIN_MAKE_HARD_LINK := cp --dereference --link --force
+else
+WIN_MAKE_HARD_LINK := true -ignore
+endif # $(OS) == WINNT
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
@@ -1362,7 +1375,6 @@ CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
 CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-CLANGSA_CXXFLAGS += -isystem $(shell xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
@@ -1388,13 +1400,13 @@ define symlink_target # (from, to-dir, to-name)
 CLEAN_TARGETS += clean-$$(abspath $(2)/$(3))
 clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
+	-cmd //C rmdir $$(call cygpath_w,$(2)/$(3))
 else
 	rm -rf $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+	@cmd //C mklink //J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
@@ -1412,7 +1424,7 @@ WINE ?= wine
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
-cygpath_w = $(1)
+cygpath_w = `cygpath -w $(1)`
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`

@@ -11,9 +11,10 @@ using .Base: copymutable, LinearIndices, length, (:), iterate, OneTo,
     AbstractMatrix, AbstractUnitRange, isless, identity, eltype, >, <, <=, >=, |, +, -, *, !,
     extrema, sub_with_overflow, add_with_overflow, oneunit, div, getindex, setindex!,
     length, resize!, fill, Missing, require_one_based_indexing, keytype, UnitRange,
-    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned
+    min, max, reinterpret, signed, unsigned, Signed, Unsigned, typemin, xor, Type, BitSigned, Val,
+    midpoint, @boundscheck, checkbounds
 
-using .Base: >>>, !==
+using .Base: >>>, !==, !=
 
 import .Base:
     sort,
@@ -165,29 +166,26 @@ same thing as `partialsort!` but leaving `v` unmodified.
 partialsort(v::AbstractVector, k::Union{Integer,OrdinalRange}; kws...) =
     partialsort!(copymutable(v), k; kws...)
 
-# This implementation of `midpoint` is performance-optimized but safe
-# only if `lo <= hi`.
-midpoint(lo::T, hi::T) where T<:Integer = lo + ((hi - lo) >>> 0x01)
-midpoint(lo::Integer, hi::Integer) = midpoint(promote(lo, hi)...)
-
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
 
 # index of the first value of vector a that is greater than or equal to x;
 # returns lastindex(v)+1 if x is greater than all values in v.
 function searchsortedfirst(v::AbstractVector, x, lo::T, hi::T, o::Ordering)::keytype(v) where T<:Integer
-    u = T(1)
-    lo = lo - u
-    hi = hi + u
-    @inbounds while lo < hi - u
-        m = midpoint(lo, hi)
+    hi = hi + T(1)
+    len = hi - lo
+    @inbounds while len != 0
+        half_len = len >>> 0x01
+        m = lo + half_len
         if lt(o, v[m], x)
-            lo = m
+            lo = m + 1
+            len -= half_len + 1
         else
             hi = m
+            len = half_len
         end
     end
-    return hi
+    return lo
 end
 
 # index of the last value of vector a that is less than or equal to x;
@@ -334,6 +332,8 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
 Return the index of the first value in `a` greater than or equal to `x`, according to the
 specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
+
+`insert!`ing `x` at this index will maintain sorted order.
 
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
@@ -516,11 +516,16 @@ const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, o::Ordering)
-    @inbounds for i = lo+1:hi
+    lo_plus_1 = (lo + 1)::Integer
+    @inbounds for i = lo_plus_1:hi
         j = i
         x = v[i]
-        while j > lo && lt(o, x, v[j-1])
-            v[j] = v[j-1]
+        while j > lo
+            y = v[j-1]
+            if !(lt(o, x, y)::Bool)
+                break
+            end
+            v[j] = y
             j -= 1
         end
         v[j] = x
@@ -735,9 +740,9 @@ end
 
 # For AbstractVector{Bool}, counting sort is always best.
 # This is an implementation of counting sort specialized for Bools.
-# Accepts unused workspace to avoid method ambiguity.
-function sort!(v::AbstractVector{B}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering,
-        t::Union{AbstractVector{B}, Nothing}=nothing) where {B <: Bool}
+# Accepts unused buffer to avoid method ambiguity.
+function sort!(v::AbstractVector{Bool}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering,
+        t::Union{AbstractVector{Bool}, Nothing}=nothing)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
     count = 0
     @inbounds for i in lo:hi
@@ -761,6 +766,13 @@ function _extrema(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     end
     mn, mx
 end
+function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
+    @boundscheck checkbounds(v, lo:hi)
+    @inbounds for i in (lo+1):hi
+        lt(o, v[i], v[i-1]) && return false
+    end
+    true
+end
 function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, o::Ordering,
             t::Union{AbstractVector{T}, Nothing}=nothing) where T
     # if the sorting task is not UIntMappable, then we can't radix sort or sort_int_range!
@@ -779,11 +791,11 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
     # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
     # arrays it is essentially free (<1%). Insertion sort runs in a fast O(n) on presorted
     # input and this guarantees presorted input will always be efficiently handled
-    issorted(view(v, lo:hi), o) && return v
+    _issorted(v, lo, hi, o) && return v
 
     # For large arrays, a reverse-sorted check is essentially free (overhead < 1%)
-    if lenm1 >= 500 && issorted(view(v, lo:hi), ReverseOrdering(o))
-        reverse!(view(v, lo:hi))
+    if lenm1 >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
+        reverse!(v, lo, hi)
         return v
     end
 
@@ -856,15 +868,16 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::AdaptiveSort, 
         u[i] -= u_min
     end
 
-    if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned workspace
+    len = lenm1 + 1
+    if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned buffer
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, t))
         uint_unmap!(v, u2, lo, hi, o, u_min)
-    elseif t !== nothing && (applicable(resize!, t) || length(t) >= hi-lo+1) # Viable workspace
-        length(t) >= hi-lo+1 || resize!(t, hi-lo+1)
+    elseif t !== nothing && (applicable(resize!, t, len) || length(t) >= len) # Viable buffer
+        length(t) >= len || resize!(t, len)
         t1 = axes(t, 1) isa OneTo ? t : view(t, firstindex(t):lastindex(t))
-        u2 = radix_sort!(view(u, lo:hi), 1, hi-lo+1, bits, reinterpret(U, t1))
-        uint_unmap!(view(v, lo:hi), u2, 1, hi-lo+1, o, u_min)
-    else # No viable workspace
+        u2 = radix_sort!(view(u, lo:hi), 1, len, bits, reinterpret(U, t1))
+        uint_unmap!(view(v, lo:hi), u2, 1, len, o, u_min)
+    else # No viable buffer
         u2 = radix_sort!(u, lo, hi, bits, similar(u))
         uint_unmap!(v, u2, lo, hi, o, u_min)
     end
@@ -933,8 +946,8 @@ function sort!(v::AbstractVector{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               workspace::Union{AbstractVector{T}, Nothing}=nothing) where T
-    sort!(v, alg, ord(lt,by,rev,order), workspace)
+               buffer::Union{AbstractVector{T}, Nothing}=nothing) where T
+    sort!(v, alg, ord(lt,by,rev,order), buffer)
 end
 
 # sort! for vectors of few unique integers
@@ -1073,7 +1086,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           order::Ordering=Forward,
                           initialized::Bool=false)
     if axes(ix,1) != axes(v,1)
-        throw(ArgumentError("The index vector is used as a workspace and must have the " *
+        throw(ArgumentError("The index vector is used as a buffer and must have the " *
                             "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
     end
     if !initialized
@@ -1091,14 +1104,16 @@ end
 ## sortperm: the permutation to sort an array ##
 
 """
-    sortperm(v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sortperm(A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, [dims::Integer])
 
-Return a permutation vector `I` that puts `v[I]` in sorted order. The order is specified
+Return a permutation vector or array `I` that puts `A[I]` in sorted order along the given dimension.
+If `A` has more than one dimension, then the `dims` keyword argument must be specified. The order is specified
 using the same keywords as [`sort!`](@ref). The permutation is guaranteed to be stable even
 if the sorting algorithm is unstable, meaning that indices of equal elements appear in
 ascending order.
 
 See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
+To sort slices of an array, refer to [`sortslices`](@ref).
 
 # Examples
 ```jldoctest
@@ -1115,37 +1130,53 @@ julia> v[p]
  1
  2
  3
+
+julia> A = [8 7; 5 6]
+2×2 Matrix{Int64}:
+ 8  7
+ 5  6
+
+julia> sortperm(A, dims = 1)
+2×2 Matrix{Int64}:
+ 2  4
+ 1  3
+
+julia> sortperm(A, dims = 2)
+2×2 Matrix{Int64}:
+ 3  1
+ 2  4
 ```
 """
-function sortperm(v::AbstractVector;
+function sortperm(A::AbstractArray;
                   alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward,
-                  workspace::Union{AbstractVector{<:Integer}, Nothing}=nothing)
+                  buffer::Union{AbstractVector{<:Integer}, Nothing}=nothing,
+                  dims...) #to optionally specify dims argument
     ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(v,Vector) && eltype(v)<:Integer
-        n = length(v)
+    if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
+        n = length(A)
         if n > 1
-            min, max = extrema(v)
+            min, max = extrema(A)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
             if !o1 && !o2 && rangelen < div(n,2)
-                return sortperm_int_range(v, rangelen, min)
+                return sortperm_int_range(A, rangelen, min)
             end
         end
     end
-    p = copymutable(eachindex(v))
-    sort!(p, alg, Perm(ordr,v), workspace)
+    ix = copymutable(LinearIndices(A))
+    sort!(ix; alg, order = Perm(ordr, vec(A)), buffer, dims...)
 end
 
 
 """
-    sortperm!(ix, v; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false)
+    sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
 
-Like [`sortperm`](@ref), but accepts a preallocated index vector `ix`.  If `initialized` is `false`
-(the default), `ix` is initialized to contain the values `1:length(v)`.
+Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.  If `initialized` is `false`
+(the default), `ix` is initialized to contain the values `LinearIndices(A)`.
 
 # Examples
 ```jldoctest
@@ -1162,25 +1193,36 @@ julia> v[p]
  1
  2
  3
+
+julia> A = [8 7; 5 6]; p = zeros(Int,2, 2);
+
+julia> sortperm!(p, A; dims=1); p
+2×2 Matrix{Int64}:
+ 2  4
+ 1  3
+
+julia> sortperm!(p, A; dims=2); p
+2×2 Matrix{Int64}:
+ 3  1
+ 2  4
 ```
 """
-function sortperm!(x::AbstractVector{T}, v::AbstractVector;
+function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false,
-                   workspace::Union{AbstractVector{T}, Nothing}=nothing) where T <: Integer
-    if axes(x,1) != axes(v,1)
-        throw(ArgumentError("index vector must have the same length/indices as the source vector, $(axes(x,1)) != $(axes(v,1))"))
-    end
+                   buffer::Union{AbstractVector{T}, Nothing}=nothing,
+                   dims...) where T <: Integer #to optionally specify dims argument
+    (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
+    axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
+
     if !initialized
-        @inbounds for i in eachindex(v)
-            x[i] = i
-        end
+        ix .= LinearIndices(A)
     end
-    sort!(x, alg, Perm(ord(lt,by,rev,order),v), workspace)
+    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), buffer, dims...)
 end
 
 # sortperm for vectors of few unique integers
@@ -1245,7 +1287,7 @@ function sort(A::AbstractArray{T};
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+              buffer::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
     dim = dims
     order = ord(lt,by,rev,order)
     n = length(axes(A, dim))
@@ -1253,11 +1295,11 @@ function sort(A::AbstractArray{T};
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
-        sort_chunks!(Av, n, alg, order, workspace)
+        sort_chunks!(Av, n, alg, order, buffer)
         permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
-        sort_chunks!(Av, n, alg, order, workspace)
+        sort_chunks!(Av, n, alg, order, buffer)
         reshape(Av, axes(A))
     end
 end
@@ -1306,17 +1348,21 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               workspace::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
-    ordr = ord(lt, by, rev, order)
+               buffer::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), buffer)
+end
+function _sort!(A::AbstractArray{T}, ::Val{K},
+                alg::Algorithm,
+                order::Ordering,
+                buffer::Union{AbstractVector{T}, Nothing}) where {K,T}
     nd = ndims(A)
-    k = dims
 
-    1 <= k <= nd || throw(ArgumentError("dimension out of range"))
+    1 <= K <= nd || throw(ArgumentError("dimension out of range"))
 
-    remdims = ntuple(i -> i == k ? 1 : axes(A, i), nd)
+    remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
-        Av = view(A, ntuple(i -> i == k ? Colon() : idx[i], nd)...)
-        sort!(Av, alg, ordr, workspace)
+        Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
+        sort!(Av, alg, order, buffer)
     end
     A
 end
@@ -1372,7 +1418,7 @@ uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
 
 # unsigned(Int) is not available during bootstrapping.
 for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
-    @eval UIntMappable(::Type{<:Union{$U, $S}}, ::ForwardOrdering) = $U
+    @eval UIntMappable(::Union{Type{$U}, Type{$S}}, ::ForwardOrdering) = $U
 end
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
@@ -1421,10 +1467,15 @@ import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-const Floats = Union{Float32,Float64}
-const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+# IEEEFloat is not available in Core.Compiler
+const Floats = Union{Float16, Float32, Float64}
+# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
+# This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
+const FPSortable = Union{
+    AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
     AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float16},
     AbstractVector{Float32},
     AbstractVector{Float64},
     AbstractVector{Missing}}
@@ -1440,6 +1491,12 @@ right(o::Perm) = Perm(right(o.order), o.data)
 
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+
+uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
+uint_map(x::Float16, ::Right) = reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Right) = reinterpret(Float16, u)
+UIntMappable(::Type{Float16}, ::Union{Left, Right}) = UInt16
 
 uint_map(x::Float32, ::Left) = ~reinterpret(UInt32, x)
 uint_unmap(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, ~u)

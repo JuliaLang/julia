@@ -31,10 +31,10 @@ struct Irrational{sym} <: AbstractIrrational end
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
 function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, sym)
     else
-        print(io, sym, " = ", string(float(x))[1:15], "...")
+        print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")
     end
 end
 
@@ -170,6 +170,28 @@ round(x::Irrational, r::RoundingMode) = round(float(x), r)
 
 Define a new `Irrational` value, `sym`, with pre-computed `Float64` value `val`,
 and arbitrary-precision definition in terms of `BigFloat`s given by the expression `def`.
+
+An `AssertionError` is thrown when either `big(def) isa BigFloat` or `Float64(val) == Float64(def)`
+returns `false`.
+
+# Examples
+```jldoctest
+julia> Base.@irrational(twoπ, 6.2831853071795864769, 2*big(π))
+
+julia> twoπ
+twoπ = 6.2831853071795...
+
+julia> Base.@irrational sqrt2  1.4142135623730950488  √big(2)
+
+julia> sqrt2
+sqrt2 = 1.4142135623730...
+
+julia> Base.@irrational sqrt2  1.4142135623730950488  big(2)
+ERROR: AssertionError: big($(Expr(:escape, :sqrt2))) isa BigFloat
+
+julia> Base.@irrational sqrt2  1.41421356237309  √big(2)
+ERROR: AssertionError: Float64($(Expr(:escape, :sqrt2))) == Float64(big($(Expr(:escape, :sqrt2))))
+```
 """
 macro irrational(sym, val, def)
     esym = esc(sym)

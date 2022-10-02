@@ -72,16 +72,20 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)&stacksize;
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+        *stack_hi = (void*)__builtin_frame_address(0);
+#pragma GCC diagnostic pop
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
-        size_t stacksize = pthread_get_stacksize_np(thread);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)&stacksize;
+        *stack_hi = (void*)__builtin_frame_address(0);
         return;
 #  elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
@@ -92,7 +96,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)&stacksize;
+        *stack_hi = (void*)__builtin_frame_address(0);
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."
@@ -101,14 +105,8 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     size_t stacksize = rl.rlim_cur;
-// We intentionally leak a stack address here core.StackAddressEscape
-#  ifndef __clang_analyzer__
-    *stack_hi = (void*)&stacksize;
+    *stack_hi = __builtin_frame_address(0);
     *stack_lo = (void*)((char*)*stack_hi - stacksize);
-#  else
-    *stack_hi = 0;
-    *stack_lo = 0;
-#  endif
 #endif
 }
 
@@ -722,8 +720,13 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+#pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
     _finish_julia_init(rel, ptls, ct);
 }
@@ -741,6 +744,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
+        jl_global_roots_table = jl_alloc_vec_any(16);
         jl_init_codegen();
     }
 

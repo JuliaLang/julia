@@ -1,5 +1,5 @@
 import Core: CodeInfo, ReturnNode, MethodInstance
-import Core.Compiler: argextype, singleton_type
+import Core.Compiler: IRCode, IncrementalCompact, argextype, singleton_type
 import Base.Meta: isexpr
 
 argextype(@nospecialize args...) = argextype(args..., Any[])
@@ -12,12 +12,17 @@ isreturn(@nospecialize x) = isa(x, ReturnNode)
 
 # check if `x` is a dynamic call of a given function
 iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{CodeInfo,Base.Callable}, @nospecialize(x))
+function iscall((src, f)::Tuple{IR,Base.Callable}, @nospecialize(x)) where IR<:Union{CodeInfo,IRCode,IncrementalCompact}
     return iscall(x) do @nospecialize x
         singleton_type(argextype(x, src)) === f
     end
 end
-iscall(pred::Base.Callable, @nospecialize(x)) = isexpr(x, :call) && pred(x.args[1])
+function iscall(pred::Base.Callable, @nospecialize(x))
+    if isexpr(x, :(=))
+        x = x.args[2]
+    end
+    return isexpr(x, :call) && pred(x.args[1])
+end
 
 # check if `x` is a statically-resolved call of a function whose name is `sym`
 isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
@@ -27,7 +32,14 @@ isinvoke(pred::Function, @nospecialize(x)) = isexpr(x, :invoke) && pred(x.args[1
 function fully_eliminated(@nospecialize args...; retval=(@__FILE__), kwargs...)
     code = code_typed1(args...; kwargs...).code
     if retval !== (@__FILE__)
-        return length(code) == 1 && isreturn(code[1]) && code[1].val == retval
+        length(code) == 1 || return false
+        code1 = code[1]
+        isreturn(code1) || return false
+        val = code1.val
+        if val isa QuoteNode
+            val = val.value
+        end
+        return val == retval
     else
         return length(code) == 1 && isreturn(code[1])
     end

@@ -39,15 +39,11 @@ let err = try
           end
     io = IOBuffer()
     Base.showerror(io, err)
-    lines = split(String(take!(io)), '\n')
-    ambig_checkline(str) = startswith(str, "  ambig(x, y::Integer) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Integer, y) in $curmod_str at") ||
-                           startswith(str, "  ambig(x::Number, y) in $curmod_str at")
-    @test ambig_checkline(lines[2])
-    @test ambig_checkline(lines[3])
-    @test ambig_checkline(lines[4])
-    @test lines[5] == "Possible fix, define"
-    @test lines[6] == "  ambig(::Integer, ::Integer)"
+    errstr = String(take!(io))
+    @test occursin("  ambig(x, y::Integer)\n    @ $curmod_str", errstr)
+    @test occursin("  ambig(x::Integer, y)\n    @ $curmod_str", errstr)
+    @test occursin("  ambig(x::Number, y)\n    @ $curmod_str", errstr)
+    @test occursin("Possible fix, define\n  ambig(::Integer, ::Integer)", errstr)
 end
 
 ambig_with_bounds(x, ::Int, ::T) where {T<:Integer,S} = 0
@@ -60,7 +56,7 @@ let err = try
     io = IOBuffer()
     Base.showerror(io, err)
     lines = split(String(take!(io)), '\n')
-    @test lines[end] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
+    @test lines[end-1] == "  ambig_with_bounds(::$Int, ::$Int, ::T) where T<:Integer"
 end
 
 ## Other ways of accessing functions
@@ -104,10 +100,6 @@ ambig(x::Union{Char, Int16}) = 's'
 const allowed_undefineds = Set([
     GlobalRef(Base, :active_repl),
     GlobalRef(Base, :active_repl_backend),
-    GlobalRef(Base.Filesystem, :JL_O_TEMPORARY),
-    GlobalRef(Base.Filesystem, :JL_O_SHORT_LIVED),
-    GlobalRef(Base.Filesystem, :JL_O_SEQUENTIAL),
-    GlobalRef(Base.Filesystem, :JL_O_RANDOM),
 ])
 
 let Distributed = get(Base.loaded_modules,
@@ -165,13 +157,10 @@ end
 ambs = detect_ambiguities(Ambig5)
 @test length(ambs) == 2
 
-
-using LinearAlgebra, SparseArrays, SuiteSparse
-
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails
 @testset "detect_ambiguities" begin
-    let ambig = Set{Any}(((m1.sig, m2.sig) for (m1, m2) in detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds)))
+    let ambig = Set(detect_ambiguities(Core, Base; recursive=true, ambiguous_bottom=false, allowed_undefineds))
         good = true
         for (sig1, sig2) in ambig
             @test sig1 === sig2 # print this ambiguity
@@ -182,6 +171,9 @@ using LinearAlgebra, SparseArrays, SuiteSparse
 
     # some ambiguities involving Union{} type parameters are expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
+        m1 = which(Core.Compiler.convert, Tuple{Type{<:Core.IntrinsicFunction}, Any})
+        m2 = which(Core.Compiler.convert, Tuple{Type{<:Nothing}, Any})
+        pop!(ambig, (m1, m2))
         @test !isempty(ambig)
     end
 
@@ -363,7 +355,7 @@ let ambig = Ref{Int32}(0)
 end
 f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
-@test length(Base.methods(f35983, (Type, Type))) == 2
+@test length(Base.methods(f35983, (Type, Type))) == 1
 let ambig = Ref{Int32}(0)
     ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, typemax(UInt), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test length(ms) == 2
@@ -402,5 +394,17 @@ module M43040
 end
 
 @test isempty(detect_ambiguities(M43040; recursive=true))
+
+cc46601(T::Type{<:Core.IntrinsicFunction}, x) = 1
+cc46601(::Type{T}, x::Number) where {T<:AbstractChar} = 2
+cc46601(T::Type{<:Nothing}, x) = 3
+cc46601(::Type{T}, x::T) where {T<:Number} = 4
+cc46601(::Type{T}, arg) where {T<:VecElement} = 5
+cc46601(::Type{T}, x::Number) where {T<:Number} = 6
+@test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
+@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 6
+cc46601(::Type{T}, x::Int) where {T<:AbstractString} = 7
+@test length(methods(cc46601, Tuple{Type{<:Integer}, Integer})) == 2
+@test length(Base.methods_including_ambiguous(cc46601, Tuple{Type{<:Integer}, Integer})) == 7
 
 nothing

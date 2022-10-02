@@ -26,9 +26,9 @@ function nthreads end
 
 nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
 function nthreads(pool::Symbol)
-    if pool == :default
+    if pool === :default
         tpid = Int8(0)
-    elseif pool == :interactive
+    elseif pool === :interactive
         tpid = Int8(1)
     else
         error("invalid threadpool specified")
@@ -69,12 +69,13 @@ function threading_run(fun, static)
         tasks[i] = t
         schedule(t)
     end
-    try
-        for i = 1:n
-            wait(tasks[i])
-        end
-    finally
-        ccall(:jl_exit_threaded_region, Cvoid, ())
+    for i = 1:n
+        Base._wait(tasks[i])
+    end
+    ccall(:jl_exit_threaded_region, Cvoid, ())
+    failed_tasks = filter(istaskfailed, tasks)
+    if !isempty(failed_tasks)
+        throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
 end
 
@@ -198,7 +199,7 @@ microseconds).
 
 `:static` scheduler creates one task per thread and divides the iterations equally among
 them, assigning each task specifically to each thread. In particular, the value of
-[`threadid()`](@ref Threads.threadid) is guranteed to be constant within one iteration.
+[`threadid()`](@ref Threads.threadid) is guaranteed to be constant within one iteration.
 Specifying `:static` is an error if used from inside another `@threads` loop or from a
 thread other than 1.
 

@@ -252,7 +252,7 @@ abstract type AbstractRange{T} <: AbstractArray{T,1} end
 RangeStepStyle(::Type{<:AbstractRange}) = RangeStepIrregular()
 RangeStepStyle(::Type{<:AbstractRange{<:Integer}}) = RangeStepRegular()
 
-convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)
+convert(::Type{T}, r::AbstractRange) where {T<:AbstractRange} = r isa T ? r : T(r)::T
 
 ## ordinal ranges
 
@@ -467,6 +467,9 @@ value `r[1]`, but alternatively you can supply it as the value of
 `r[offset]` for some other index `1 <= offset <= len`. In conjunction
 with `TwicePrecision` this can be used to implement ranges that are
 free of roundoff error.
+
+!!! compat "Julia 1.7"
+    The 4th type parameter `L` requires at least Julia 1.7.
 """
 struct StepRangeLen{T,R,S,L<:Integer} <: AbstractRange{T}
     ref::R       # reference value (might be smallest-magnitude value in the range)
@@ -686,6 +689,9 @@ step_hp(r::AbstractRange) = step(r)
 
 axes(r::AbstractRange) = (oneto(length(r)),)
 
+# Needed to ensure `has_offset_axes` can constant-fold.
+has_offset_axes(::StepRange) = false
+
 # n.b. checked_length for these is defined iff checked_add and checked_sub are
 # defined between the relevant types
 function checked_length(r::OrdinalRange{T}) where T
@@ -747,64 +753,66 @@ length(r::OneTo) = Integer(r.stop - zero(r.stop))
 length(r::StepRangeLen) = r.len
 length(r::LinRange) = r.len
 
-let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128}
-    global length, checked_length
+let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
+    smallints = (Int === Int64 ?
+                Union{Int8, UInt8, Int16, UInt16, Int32, UInt32} :
+                Union{Int8, UInt8, Int16, UInt16}),
+    bitints = Union{bigints, smallints}
+    global length, checked_length, firstindex
     # compile optimization for which promote_type(T, Int) == T
     length(r::OneTo{T}) where {T<:bigints} = r.stop
     # slightly more accurate length and checked_length in extreme cases
     # (near typemax) for types with known `unsigned` functions
     function length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
-        isempty(r) && return zero(T)
         diff = last(r) - first(r)
+        isempty(r) && return zero(diff)
         # if |s| > 1, diff might have overflowed, but unsigned(diff)÷s should
         # therefore still be valid (if the result is representable at all)
         # n.b. !(s isa T)
         if s isa Unsigned || -1 <= s <= 1 || s == -s
-            a = div(diff, s) % T
+            a = div(diff, s) % typeof(diff)
         elseif s < 0
-            a = div(unsigned(-diff), -s) % T
+            a = div(unsigned(-diff), -s) % typeof(diff)
         else
-            a = div(unsigned(diff), s) % T
+            a = div(unsigned(diff), s) % typeof(diff)
         end
-        return a + oneunit(T)
+        return a + oneunit(a)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
-        isempty(r) && return zero(T)
         stop, start = last(r), first(r)
+        ET = promote_type(typeof(stop), typeof(start))
+        isempty(r) && return zero(ET)
         # n.b. !(s isa T)
         if s > 1
             diff = stop - start
-            a = convert(T, div(unsigned(diff), s))
+            a = convert(ET, div(unsigned(diff), s))
         elseif s < -1
             diff = start - stop
-            a = convert(T, div(unsigned(diff), -s))
+            a = convert(ET, div(unsigned(diff), -s))
         elseif s > 0
-            a = div(checked_sub(stop, start), s)
+            a = convert(ET, div(checked_sub(stop, start), s))
         else
-            a = div(checked_sub(start, stop), -s)
+            a = convert(ET, div(checked_sub(start, stop), -s))
         end
-        return checked_add(convert(T, a), oneunit(T))
+        return checked_add(a, oneunit(a))
     end
-end
+    firstindex(r::StepRange{<:bigints,<:bitints}) = one(last(r)-first(r))
 
-# some special cases to favor default Int type
-let smallints = (Int === Int64 ?
-                Union{Int8, UInt8, Int16, UInt16, Int32, UInt32} :
-                Union{Int8, UInt8, Int16, UInt16})
-    global length, checked_length
-    # n.b. !(step isa T)
+    # some special cases to favor default Int type
     function length(r::OrdinalRange{<:smallints})
         s = step(r)
         isempty(r) && return 0
-        return div(Int(last(r)) - Int(first(r)), s) + 1
+        # n.b. !(step isa T)
+        return Int(div(Int(last(r)) - Int(first(r)), s)) + 1
     end
     length(r::AbstractUnitRange{<:smallints}) = Int(last(r)) - Int(first(r)) + 1
     length(r::OneTo{<:smallints}) = Int(r.stop)
     checked_length(r::OrdinalRange{<:smallints}) = length(r)
     checked_length(r::AbstractUnitRange{<:smallints}) = length(r)
     checked_length(r::OneTo{<:smallints}) = length(r)
+    firstindex(::StepRange{<:smallints,<:bitints}) = 1
 end
 
 first(r::OrdinalRange{T}) where {T} = convert(T, r.start)

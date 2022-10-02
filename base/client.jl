@@ -66,7 +66,15 @@ function repl_cmd(cmd, out)
             end
             cmd = `$shell -c $shell_escape_cmd`
         end
-        run(ignorestatus(cmd))
+        try
+            run(ignorestatus(cmd))
+        catch
+            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            lasterr = current_exceptions()
+            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
+            invokelatest(display_error, lasterr)
+        end
     end
     nothing
 end
@@ -370,9 +378,6 @@ function __atreplinit(repl)
 end
 _atreplinit(repl) = invokelatest(__atreplinit, repl)
 
-# The REPL stdlib hooks into Base using this Ref
-const REPL_MODULE_REF = Ref{Module}()
-
 function load_InteractiveUtils(mod::Module=Main)
     # load interactive-only libraries
     if !isdefined(mod, :InteractiveUtils)
@@ -390,10 +395,10 @@ function load_InteractiveUtils(mod::Module=Main)
     return getfield(mod, :InteractiveUtils)
 end
 
+global active_repl
+
 # run the requested sort of evaluation loop on stdio
 function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_file::Bool, color_set::Bool)
-    global active_repl
-
     load_InteractiveUtils()
 
     if interactive && isassigned(REPL_MODULE_REF)
@@ -402,17 +407,18 @@ function run_main_repl(interactive::Bool, quiet::Bool, banner::Bool, history_fil
             term = REPL.Terminals.TTYTerminal(term_env, stdin, stdout, stderr)
             banner && Base.banner(term)
             if term.term_type == "dumb"
-                active_repl = REPL.BasicREPL(term)
+                repl = REPL.BasicREPL(term)
                 quiet || @warn "Terminal not fully functional"
             else
-                active_repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
-                active_repl.history_file = history_file
+                repl = REPL.LineEditREPL(term, get(stdout, :color, false), true)
+                repl.history_file = history_file
             end
+            global active_repl = repl
             # Make sure any displays pushed in .julia/config/startup.jl ends up above the
             # REPLDisplay
-            pushdisplay(REPL.REPLDisplay(active_repl))
-            _atreplinit(active_repl)
-            REPL.run_repl(active_repl, backend->(global active_repl_backend = backend))
+            pushdisplay(REPL.REPLDisplay(repl))
+            _atreplinit(repl)
+            REPL.run_repl(repl, backend->(global active_repl_backend = backend))
         end
     else
         # otherwise provide a simple fallback

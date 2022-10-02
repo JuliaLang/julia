@@ -109,31 +109,6 @@ void jl_safepoint_init(void)
     jl_safepoint_pages = addr;
 }
 
-void jl_gc_wait_for_the_world(void)
-{
-    assert(jl_n_threads);
-    if (jl_n_threads > 1)
-        jl_wake_libuv();
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        // This acquire load pairs with the release stores
-        // in the signal handler of safepoint so we are sure that
-        // all the stores on those threads are visible.
-        // We're currently also using atomic store release in mutator threads
-        // (in jl_gc_state_set), but we may want to use signals to flush the
-        // memory operations on those threads lazily instead.
-        while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state)) {
-            // Use system mutexes rather than spin locking to minimize wasted CPU time
-            // while we wait for other threads reach a safepoint.
-            // This is particularly important when run under rr.
-            uv_mutex_lock(&safepoint_lock);
-            if (!jl_atomic_load_relaxed(&ptls2->gc_state))
-                uv_cond_wait(&safepoint_cond, &safepoint_lock);
-            uv_mutex_unlock(&safepoint_lock);
-        }
-    }
-}
-
 int jl_safepoint_start_gc(void)
 {
     if (jl_n_threads == 1) {
@@ -185,7 +160,6 @@ void jl_safepoint_wait_gc(void)
 {
     // The thread should have set this is already
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) != 0);
-    uv_cond_broadcast(&safepoint_cond);
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
