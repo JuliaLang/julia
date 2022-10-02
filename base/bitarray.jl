@@ -1812,7 +1812,7 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     # first zero out the bits mask is going to change
     destc[len_destc] = (dest_last & ~(_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_destc] |= f(Ac[len_destc]) & _msk
+    destc[len_destc] |= f(Ac[len_destc], Bc[len_destc]) & _msk
     dest
 end
 
