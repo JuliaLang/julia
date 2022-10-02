@@ -136,10 +136,10 @@ partialsortperm!
 
 There are currently four sorting algorithms available in base Julia:
 
-  * `InsertionSort`
-  * `QuickSort`
-  * `PartialQuickSort(k)`
-  * `MergeSort`
+  * [`InsertionSort`](@ref Sort.InsertionSort)
+  * [`QuickSort`](@ref Sort.QuickSort)
+  * [`PartialQuickSort(k)`](@ref Sort.PartialQuickSort)
+  * [`MergeSort`](@ref Sort.MergeSort)
 
 `InsertionSort` is an O(n^2) stable sorting algorithm. It is efficient for very small `n`, and
 is used internally by `QuickSort`.
