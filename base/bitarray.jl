@@ -1779,11 +1779,11 @@ end
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
-    size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
+    size(A) > size(dest) || throw(DimensionMismatch("size of dest must be >= that of the source"))
     isempty(A) && return dest
     destc = dest.chunks
     Ac = A.chunks
-    for i = 1:(length(Ac)-1)
+    for i = 1:(length(destc)-1)
         destc[i] = f(Ac[i])
     end
     destc[end] = f(Ac[end]) & _msk_end(A)
