@@ -1400,6 +1400,7 @@ function _in_range(x, r::AbstractRange)
     f, l = first(r), last(r)
     # check for NaN, Inf, and large x that may overflow in the next calculation
     f <= x <= l || l <= x <= f || return false
+    iszero(step(r)) && return true
     n = round(Integer, (x - f) / step(r)) + 1
     n >= 1 && n <= length(r) && r[n] == x
 end
