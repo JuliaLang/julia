@@ -1783,10 +1783,17 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     isempty(A) && return dest
     destc = dest.chunks
     Ac = A.chunks
-    for i = 1:(length(destc)-1)
+    len_destc = length(destc)
+    for i = 1:(len_destc-1)
         destc[i] = f(Ac[i])
     end
-    destc[end] = f(Ac[end]) & _msk_end(A)
+    
+    dest_last = destc[len_destc]
+    _msk = _msk_end(A)
+    # first zero out the bits mask is going to change
+    destc[len_destc] = (dest_last & ~(_msk))
+    # then update bits by `or`ing with a masked RHS
+    destc[len_destc] |= f(Ac[len_destc]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
@@ -1799,7 +1806,13 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     for i = 1:(length(destc)-1)
         destc[i] = f(Ac[i], Bc[i])
     end
-    destc[end] = f(Ac[end], Bc[end]) & _msk_end(A)
+
+    dest_last = destc[len_destc]
+    _msk = _msk_end(A)
+    # first zero out the bits mask is going to change
+    destc[len_destc] = (dest_last & ~(_msk))
+    # then update bits by `or`ing with a masked RHS
+    destc[len_destc] |= f(Ac[len_destc]) & _msk
     dest
 end
 
