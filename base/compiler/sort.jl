@@ -70,7 +70,7 @@ for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     end
 end
 
-# An unstable sorting algorithm for constructing IncrementalCompact.
+# An unstable sorting algorithm for internal use
 function sort!(v::Vector; by::Function=identity, (<)::Function=<)
     isempty(v) && return v # This branch is hit 95% of the time
 
