@@ -1396,14 +1396,13 @@ function sum(r::AbstractRange{<:Real})
 end
 
 function _in_range(x, r::AbstractRange)
-    if !isfinite(x)
-        return false
-    elseif iszero(step(r))
-        return !isempty(r) && first(r) == x
-    else
-        n = round(Integer, (x - first(r)) / step(r)) + 1
-        return n >= 1 && n <= length(r) && r[n] == x
-    end
+    isempty(r) && return false
+    f, l = first(r), last(r)
+    # check for NaN, Inf, and large x that may overflow in the next calculation
+    f <= x <= l || l <= x <= f || return false
+    iszero(step(r)) && return true
+    n = round(Integer, (x - f) / step(r)) + 1
+    n >= 1 && n <= length(r) && r[n] == x
 end
 in(x::Real, r::AbstractRange{<:Real}) = _in_range(x, r)
 # This method needs to be defined separately since -(::T, ::T) can be implemented
