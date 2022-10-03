@@ -105,12 +105,9 @@ end
         if mod ∉ visited
             push!(visited, mod)
             for name in names(mod, all=true)
+                isdefined(mod, name) || continue
                 joined_expr = Expr(:., mod_exp, QuoteNode(name))
-                value = try
-                    eval(joined_expr)
-                catch
-                    @test joined_expr ∈ [:(Base.Sys.physical_free_memory), :(Base.Sys.physical_total_memory)]
-                end
+                value = eval(joined_expr)
                 value isa Module && test_exceptions(value, visited, joined_expr)
 
                 if value isa Type
