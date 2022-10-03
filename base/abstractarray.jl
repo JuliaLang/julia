@@ -138,13 +138,29 @@ axes1(iter) = oneto(length(iter))
 
 Return an efficient array describing all valid indices for `a` arranged in the shape of `a` itself.
 
-They keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
+The keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
 arrays use [`CartesianIndex`](@ref) to describe their locations.  Often the special array
 types [`LinearIndices`](@ref) and [`CartesianIndices`](@ref) are used to efficiently
 represent these arrays of integers and `CartesianIndex`es, respectively.
 
 Note that the `keys` of an array might not be the most efficient index type; for maximum
 performance use  [`eachindex`](@ref) instead.
+
+# Examples
+```jldoctest
+julia> a = [4, 5, 6];
+
+julia> keys(a)
+3-element LinearIndices{1, Tuple{Base.OneTo{Int64}}}:
+ 1
+ 2
+ 3
+
+julia> a = [4 5; 6 7];
+
+julia> keys(a)
+CartesianIndices((2, 2))
+```
 """
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -154,7 +170,7 @@ keys(a::AbstractVector) = LinearIndices(a)
     keytype(A::AbstractArray)
 
 Return the key type of an array. This is equal to the
-`eltype` of the result of `keys(...)`, and is provided
+[`eltype`](@ref) of the result of `keys(...)`, and is provided
 mainly for compatibility with the dictionary interface.
 
 # Examples
@@ -180,7 +196,7 @@ valtype(a::AbstractArray) = valtype(typeof(a))
     valtype(T::Type{<:AbstractArray})
     valtype(A::AbstractArray)
 
-Return the value type of an array. This is identical to `eltype` and is
+Return the value type of an array. This is identical to [`eltype`](@ref) and is
 provided mainly for compatibility with the dictionary interface.
 
 # Examples
@@ -226,7 +242,7 @@ eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 """
     elsize(type)
 
-Compute the memory stride in bytes between consecutive elements of `eltype`
+Compute the memory stride in bytes between consecutive elements of [`eltype`](@ref)
 stored inside the given `type`, if the array elements are stored densely with a
 uniform linear stride.
 
