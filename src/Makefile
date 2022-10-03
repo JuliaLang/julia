@@ -14,7 +14,7 @@ JLDFLAGS += $(LDFLAGS)
 #  #include_next <options.h>
 #  #define ARGUMENT_TO_OVERRIDE 1
 FLAGS := \
-	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
+	-D_GNU_SOURCE -I$(MIMALLOC_INC) -I$(BUILDDIR) -I$(SRCDIR) \
 	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
@@ -357,7 +357,7 @@ $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 CXXLD = $(CXX) -shared
 
 $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(SRCDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_LIB) -o $@ \
+	@$(call PRINT_LINK, $(CXXLD) $(call IMPLIB_FLAGS,$@) $(JCXXFLAGS) $(JL_CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(MIMALLOC_STATIC) $(RPATH_LIB) -o $@ \
 		$(JLDFLAGS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(call SONAME_FLAGS,libjulia-internal.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@

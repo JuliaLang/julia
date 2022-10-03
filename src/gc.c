@@ -3,10 +3,11 @@
 #include "gc.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
+#include <stdlib.h>
 #ifdef __GLIBC__
 #include <malloc.h> // for malloc_trim
 #endif
-
+#include "mimalloc.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -229,10 +230,10 @@ STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
-        return malloc(sz);
+        return mi_malloc(sz);
 #endif
     void *ptr;
-    if (posix_memalign(&ptr, align, sz))
+    if (mi_posix_memalign(&ptr, align, sz))
         return NULL;
     return ptr;
 }
@@ -241,18 +242,18 @@ STATIC_INLINE void *jl_realloc_aligned(void *d, size_t sz, size_t oldsz,
 {
 #if defined(_P64) || defined(__APPLE__)
     if (align <= 16)
-        return realloc(d, sz);
+        return mi_realloc(d, sz);
 #endif
     void *b = jl_malloc_aligned(sz, align);
     if (b != NULL) {
         memcpy(b, d, oldsz > sz ? sz : oldsz);
-        free(d);
+        mi_free(d);
     }
     return b;
 }
 STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 {
-    free(p);
+    mi_free(p);
 }
 #endif
 #define malloc_cache_align(sz) jl_malloc_aligned(sz, JL_CACHE_BYTE_ALIGNMENT)
@@ -1159,10 +1160,12 @@ size_t jl_array_nbytes(jl_array_t *a) JL_NOTSAFEPOINT
 
 static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
 {
-    if (a->flags.how == 2) {
+    if (a->flags.how == 2 || __unlikely(a->flags.how == 4)) {
         char *d = (char*)a->data - a->offset*a->elsize;
         if (a->flags.isaligned)
             jl_free_aligned(d);
+        else if (a->flags.how == 2)
+            mi_free(d);
         else
             free(d);
         gc_num.freed += jl_array_nbytes(a);
@@ -3533,7 +3536,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
     }
-    return malloc(sz);
+    return mi_malloc(sz);
 }
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
@@ -3548,14 +3551,14 @@ JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
         jl_atomic_store_relaxed(&ptls->gc_num.malloc,
             jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
     }
-    return calloc(nm, sz);
+    return mi_calloc(nm, sz);
 }
 
 JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
 {
     jl_gcframe_t **pgcstack = jl_get_pgcstack();
     jl_task_t *ct = jl_current_task;
-    free(p);
+    mi_free(p);
     if (pgcstack && ct->world_age) {
         jl_ptls_t ptls = ct->ptls;
         jl_atomic_store_relaxed(&ptls->gc_num.freed,
@@ -3581,7 +3584,7 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
         jl_atomic_store_relaxed(&ptls->gc_num.realloc,
             jl_atomic_load_relaxed(&ptls->gc_num.realloc) + 1);
     }
-    return realloc(p, sz);
+    return mi_realloc(p, sz);
 }
 
 // allocation wrappers that save the size of allocations, to allow using
@@ -3701,7 +3704,7 @@ static void *gc_managed_realloc_(jl_ptls_t ptls, void *d, size_t sz, size_t olds
     if (isaligned)
         b = realloc_cache_align(d, allocsz, oldsz);
     else
-        b = realloc(d, allocsz);
+        b = mi_realloc(d, allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
 #ifdef _OS_WINDOWS_

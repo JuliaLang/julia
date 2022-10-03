@@ -157,9 +157,10 @@ typedef struct {
       1 = julia-allocated buffer that needs to be marked
       2 = malloc-allocated pointer this array object manages
       3 = has a pointer to the object that owns the data
+      4 = We own it but it was allocated externally
     */
-    uint16_t how:2;
-    uint16_t ndims:9;
+    uint16_t how:3;
+    uint16_t ndims:8;
     uint16_t pooled:1;
     uint16_t ptrarray:1; // representation is pointer array
     uint16_t hasptr:1; // representation has embedded pointers

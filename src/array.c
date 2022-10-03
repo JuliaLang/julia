@@ -343,7 +343,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,
     a->flags.isshared = 1;
     a->flags.isaligned = 0;  // TODO: allow passing memalign'd buffers
     if (own_buffer) {
-        a->flags.how = 2;
+        a->flags.how = 4;
         jl_gc_track_malloced_array(ct->ptls, a);
         jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
@@ -409,7 +409,7 @@ JL_DLLEXPORT jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data,
     a->flags.isshared = 1;
     a->flags.isaligned = 0;
     if (own_buffer) {
-        a->flags.how = 2;
+        a->flags.how = 4;
         jl_gc_track_malloced_array(ct->ptls, a);
         jl_gc_count_allocd(nel*elsz + (elsz == 1 ? 1 : 0));
     }
@@ -1001,7 +1001,7 @@ STATIC_INLINE void jl_array_shrink(jl_array_t *a, size_t dec)
         memcpy(newdata, originaldata, newbytes);
         a->data = newdata + a->offset * elsz;
     }
-    else if (a->flags.how == 2) {
+    else if (a->flags.how == 2||a->flags.how == 4) {
         //malloc-allocated pointer this array object manages
         char *typetagdata;
         char *newtypetagdata;
