@@ -858,7 +858,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     end
     pop_new_node! = new_nodes_iter(compact)
     maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
-    bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
+    bb_idx = let io = IOContext(io, :maxssaid=>maxssaid, :compacted=>true)
         show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
     end
 
@@ -872,7 +872,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
 
     pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
     maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
-    let io = IOContext(io, :maxssaid=>maxssaid)
+    let io = IOContext(io, :maxssaid=>maxssaid, :compacted=>false)
         show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
     end
 

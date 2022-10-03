@@ -1699,10 +1699,37 @@ function show_unquoted(io::IO, val::SSAValue, ::Int, ::Int)
     if get(io, :maxssaid, typemax(Int))::Int < val.id
         # invalid SSAValue, print this in red for better recognition
         printstyled(io, "%", val.id; color=:red)
+    elseif haskey(io, :compacted) && !io[:compacted]
+        # in the uncompacted part of IncrementalCompact, SSAValues refer to old values
+        printstyled(io, "%", val.id; color=:yellow)
     else
         print(io, "%", val.id)
     end
 end
+
+function show_unquoted(io::IO, val::Core.Compiler.OldSSAValue, ::Int, ::Int)
+    if haskey(io, :compacted) && io[:compacted]
+        # in the compacted part of IncrementalCompact, OldSSAValues refer to old values
+        printstyled(io, "%", val.id; color=:yellow)
+    else
+        print(io, "OldSSAValue(%", val.id, ")")
+    end
+end
+
+function show_unquoted(io::IO, val::Core.Compiler.NewSSAValue, ::Int, ::Int)
+    if haskey(io, :compacted)
+        if io[:compacted]
+            # render like pending statements in uncompacted IR
+            print(io, "%", val.id)
+        else
+            # render like regular statements
+            print(io, "%", val.id)
+        end
+    else
+        print(io, "NewSSAValue(%", val.id, ")")
+    end
+end
+
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = show_sym(io, sym, allow_macroname=false)
 show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto %", ex.label)
