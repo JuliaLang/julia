@@ -111,6 +111,7 @@ New library features
 * `extrema` now accepts an `init` keyword argument ([#36265], [#43604]).
 * `Iterators.countfrom` now accepts any type that defines `+` ([#37747]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
+* An issue with order of operations in `fld1` is now fixed ([#28973]).
 
 Standard library changes
 ------------------------
