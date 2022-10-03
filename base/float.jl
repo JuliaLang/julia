@@ -846,7 +846,7 @@ end
 
 Return the smallest positive non-subnormal number representable by the floating-point type T.
 
-This is not the opposite of `floatmax`! See the Extended help section for more info.
+This is not the negation of `floatmax`. See the Extended help section for more info.
 
 # Examples
 ```jldoctest
