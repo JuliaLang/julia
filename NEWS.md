@@ -147,6 +147,7 @@ Library changes
 * `RegexMatch` objects can now be probed for whether a named capture group exists within it through `haskey()` ([#36717]).
 * For consistency `haskey(r::RegexMatch, i::Integer)` has also been added and returns if the capture group
   for `i` exists ([#37300]).
+* An issue with order of operations in `fld1` is now fixed ([#28973]).
 
 Standard library changes
 ------------------------
