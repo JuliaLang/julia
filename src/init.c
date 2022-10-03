@@ -197,12 +197,18 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
+void jl_task_frame_noreturn(jl_task_t *ct);
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
     if (jl_all_tls_states == NULL)
         return;
 
     jl_task_t *ct = jl_current_task;
+
+    // we are about to start tearing everything down, so lets try not to get
+    // upset by the local mess of things when we run the user's _atexit hooks
+    jl_task_frame_noreturn(ct);
 
     if (exitcode == 0)
         jl_write_compiler_output();
