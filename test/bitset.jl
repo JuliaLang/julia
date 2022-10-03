@@ -351,8 +351,10 @@ end
     @test union!(x, BitSet(a:b)) == union!(y, BitSet(a:1:b))
     @test_throws ArgumentError BitSet(Int128(typemin(Int))-1:typemin(Int))
     @test_throws ArgumentError BitSet(typemax(Int):Int128(typemax(Int))+1)
-    # union! with an empty range doesn't modify the BitSet
+    # union! with an empty collection doesn't modify the BitSet
     @test union!(x, b:a) == y
+    @test union!(x, Int[]) == y
+    @test union!(x, Set{Int}()) == y
 end
 
 @testset "union!(::BitSet, ::AbstractUnitRange) when two ranges do not overlap" begin

@@ -14,32 +14,8 @@ mutable struct BitSet <: AbstractSet{Int}
     const bits::Vector{UInt64}
     # 1st stored Int equals 64*offset
     offset::Int
-
-    BitSet() = new(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
-    function BitSet(v::AbstractVector)
-        isempty(v) && return new(zeros(UInt64, 0), NO_OFFSET)
-
-        # This is equivalent to
-        # lo, hi = extrema(_check_bitset_bounds, v)
-        # but extrema(::Function, ::AbstractVector) is not available to the compiler
-        lo = hi = _check_bitset_bounds(first(v))
-        for i in firstindex(v)+1:lastindex(v)
-            x = _check_bitset_bounds(@inbounds v[i])
-            lo = min(lo, x)
-            hi = max(hi, x)
-        end
-
-        offset = _div64(lo)
-        bits = zeros(UInt64, _div64(hi)-offset+1)
-        for x in v
-            intx = Int(x)
-            i1 = _div64(intx) - offset + 1
-            i2 = _mod64(intx)
-            @inbounds bits[i1] |= 1 << i2
-        end
-        new(bits, offset)
-    end
 end
+BitSet() = BitSet(sizehint!(zeros(UInt64, 0), 4), NO_OFFSET)
 
 """
     BitSet([itr])
@@ -144,6 +120,84 @@ end
     for i in 1:nchunks
         @inbounds b[i] = CHK0
     end
+end
+
+# This is equivalent to
+# extrema(_check_bitset_bounds, v)
+# but extrema(::Function, ::AbstractVector) is not available to the compiler
+function _bitset_extrema(itr)
+    x, i = iterate(itr)
+    lo = hi = _check_bitset_bounds(x)
+    while true
+        xi = iterate(itr, i)
+        xi === nothing && break
+        x, i = xi
+        y = _check_bitset_bounds(@inbounds x)
+        lo = min(lo, y)
+        hi = max(hi, y)
+    end
+    lo, hi
+end
+
+# assumes that x falls within the allocated bits of s
+function unsafe_push!(s::BitSet, x)
+    intx = Int(x)
+    i1 = _div64(intx) - s.offset + 1
+    i2 = _mod64(intx)
+    @inbounds s.bits[i1] |= 1 << i2
+    s
+end
+
+# assumes that every element of itr falls within the allocated bits of s
+function unsafe_union!(s::BitSet, itr)
+    for x in itr
+        unsafe_push!(s, x)
+    end
+    s
+end
+
+function BitSet(v::AbstractVector)
+    isempty(v) && return BitSet(zeros(UInt64, 0), NO_OFFSET)
+
+    lo, hi = _bitset_extrema(v)
+
+    offset = _div64(lo)
+    s = BitSet(zeros(UInt64, _div64(hi)-offset+1), offset)
+
+    unsafe_union!(s, v)
+end
+
+function union!(s::BitSet, v::Union{AbstractVector, AbstractSet})
+    isempty(v) && return s
+
+    lo, hi = _bitset_extrema(v)
+
+    # Ensure adequate space
+    clo = _div64(lo)
+    chi = _div64(hi)
+    len = length(s.bits)
+
+    if s.offset + len <= chi
+        # we put the following test within one of the branches,
+        # with the NO_OFFSET trick, to avoid having to perform it at
+        # each and every call to union!
+        if s.offset == NO_OFFSET # initialize the offset
+            # we assume isempty(s.bits)
+            s.offset = clo
+            _growend0!(s.bits, chi-clo+1)
+            return unsafe_union!(s, v)
+        end
+
+        _growend0!(s.bits, chi - s.offset - len + 1)
+    end
+
+    if clo < s.offset
+        diff = s.offset-clo
+        _growbeg0!(s.bits, diff)
+        s.offset -= diff
+    end
+
+    unsafe_union!(s, v)
 end
 
 function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
