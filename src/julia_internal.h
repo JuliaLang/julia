@@ -685,6 +685,7 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n);
 void jl_reinstantiate_inner_types(jl_datatype_t *t);
 jl_datatype_t *jl_lookup_cache_type_(jl_datatype_t *type);
 void jl_cache_type_(jl_datatype_t *type);
+jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz);
 void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic) JL_NOTSAFEPOINT;
 jl_value_t *swap_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, int isatomic);
 jl_value_t *modify_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *op, jl_value_t *rhs, int isatomic);
@@ -1430,7 +1431,6 @@ int jl_typemap_intersection_visitor(jl_typemap_t *a, int offs, struct typemap_in
 
 // For codegen only.
 JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int8_t jl_svec_isassigned(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i);
 
 

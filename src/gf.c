@@ -1151,6 +1151,7 @@ static jl_method_instance_t *cache_method(
                     //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), other->min_world, other->max_world);
                 }
             }
+            assert(guards == jl_svec_len(guardsigs));
         }
         if (!cache_with_orig) {
             // determined above that there's no ambiguity in also using compilationsig as the cacheablesig
