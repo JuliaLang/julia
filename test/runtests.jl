@@ -257,7 +257,11 @@ cd(@__DIR__) do
                         wrkr = p
                         before = time()
                         resp, duration = try
-                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r = if Sys.isfreebsd()
+                                    invokelatest(runtests, test, test_path(test); seed)
+                                else
+                                    remotecall_fetch(runtests, wrkr, test, test_path(test); seed)
+                                end
                                 r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
