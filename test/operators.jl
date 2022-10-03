@@ -261,6 +261,9 @@ end
     end
 
     @test fldmod1(4.0, 3) == fldmod1(4, 3)
+
+    # issue 28973
+    @test fld1(0.4, 0.9) == fld1(nextfloat(0.4), 0.9) == 1.0
 end
 
 @testset "Fix12" begin
