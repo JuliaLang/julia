@@ -157,8 +157,7 @@ Approximate floating point number `x` as a [`Rational`](@ref) number with compon
 of the given integer type. The result will differ from `x` by no more than `tol`.
 
 !!! note
-    `rationalize` does inexact conversion; it produces a `Rational` value equal to the
-     decimal value `x`. Use the `Rational` constructor or `convert` for exact conversion.
+    `rationalize` does inexact conversion; for exact conversion use `convert` or the `Rational` constructor.
 
 # Examples
 ```jldoctest
