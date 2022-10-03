@@ -326,8 +326,6 @@ function map(f, t1::Any32, t2::Any32, ts::Any32...)
     (A...,)
 end
 
-_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
-
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
 fill_to_length(t::Tuple{}, val, ::Val{1}) = (val,)

@@ -338,3 +338,14 @@ end
 
 # issue #44086
 @test NamedTuple{(:x, :y, :z), Tuple{Int8, Int16, Int32}}((z=1, x=2, y=3)) === (x = Int8(2), y = Int16(3), z = Int32(1))
+
+@testset "mapfoldl" begin
+    A1 = (;a=1, b=2, c=3, d=4)
+    A2 = (;a=-1, b=-2, c=-3, d=-4)
+    @test (((1=>2)=>3)=>4) == foldl(=>, A1) ==
+          mapfoldl(identity, =>, A1) == mapfoldl(abs, =>, A2)
+    @test mapfoldl(abs, =>, A2, init=-10) == ((((-10=>1)=>2)=>3)=>4)
+    @test mapfoldl(abs, =>, (;), init=-10) == -10
+    @test mapfoldl(abs, Pair{Any,Any}, NamedTuple(Symbol(:x,i) => i for i in 1:30)) == mapfoldl(abs, Pair{Any,Any}, [1:30;])
+    @test_throws "reducing over an empty collection" mapfoldl(abs, =>, (;))
+end
