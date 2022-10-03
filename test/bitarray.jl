@@ -1498,12 +1498,21 @@ timesofar("reductions")
     @testset "Issue #47011, map! over unequal length bitarray" begin
         for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
             for extra_l = [10, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
+
                 b1 = bitrand(l+extra_l)
                 b2 = bitrand(l)
+                original_tail = last(b1, extra_l)
                 for op in (!, ~)
-                    original_tail = last(b1, extra_l)
                     map!(op, b1, b2)
                     @test first(b1, l) == map(op, b2)
+                    # check we didn't change bits we're not suppose to
+                    @test last(b1, extra_l) == original_tail
+                end
+
+                b3 = bitrand(l)
+                for op in (|, ⊻)
+                    map!(op, b1, b2)
+                    @test first(b1, l) == map(op, b2, b3)
                     # check we didn't change bits we're not suppose to
                     @test last(b1, extra_l) == original_tail
                 end
