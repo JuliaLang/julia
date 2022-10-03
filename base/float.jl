@@ -845,8 +845,9 @@ end
     floatmin(T = Float64)
 
 Return the smallest positive non-subnormal number representable by the floating-point type T.
-
 This is not the negation of `floatmax`. See the Extended help section for more info.
+
+See also: [`typemin`](@ref), [`floatmax`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -872,8 +873,6 @@ and [`typemin`](@ref)`(T)`, for a floating-point type `T`, would return.
 
 The smallest finite number representable by a floating-point type `T`
 is gotten by negating `floatmax` i.e. `-`[`floatmax`](@ref)`(T)`.
-
-See also: [`eps`](@ref), [`prevfloat`](@ref), [`nextfloat`](@ref).
 """
 floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
