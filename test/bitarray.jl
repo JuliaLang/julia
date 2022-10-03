@@ -1503,9 +1503,9 @@ timesofar("reductions")
                 for op in (!, ~)
                     original_tail = last(b1, extra_l)
                     map!(op, b1, b2)
-                    @test first(b1,l) == map(op, b2)
+                    @test first(b1, l) == map(op, b2)
                     # check we didn't change bits we're not suppose to
-                    @test last(b1,extra_l) == original_tail
+                    @test last(b1, extra_l) == original_tail
                 end
             end
         end
