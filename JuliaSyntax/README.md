@@ -42,23 +42,24 @@ A talk from JuliaCon 2022 covered some aspects of this package.
 # Examples
 
 Here's what parsing of a small piece of code currently looks like in various
-forms.  We'll use the `parseall` convenience function to demonstrate, but
-there's also a more flexible parsing interface with `JuliaSyntax.parse()`.
+forms. We'll use the `JuliaSyntax.parse` function to demonstrate, there's also
+`JuliaSyntax.parse!` offering more fine-grained control.
 
 First, a source-ordered AST with `SyntaxNode` (`call-i` in the dump here means
 the `call` has the infix `-i` flag):
 
 ```julia
-julia> parseall(SyntaxNode, "(x + y)*z", filename="foo.jl")
+julia> using JuliaSyntax: JuliaSyntax, SyntaxNode, GreenNode
+
+julia> JuliaSyntax.parse(SyntaxNode, "(x + y)*z", filename="foo.jl")
 line:col│ byte_range  │ tree                                   │ file_name
-   1:1  │     1:9     │[toplevel]                              │foo.jl
-   1:1  │     1:9     │  [call-i]
-   1:2  │     2:6     │    [call-i]
-   1:2  │     2:2     │      x
-   1:4  │     4:4     │      +
-   1:6  │     6:6     │      y
-   1:8  │     8:8     │    *
-   1:9  │     9:9     │    z
+   1:1  │     1:9     │[call-i]                                │foo.jl
+   1:2  │     2:6     │  [call-i]
+   1:2  │     2:2     │    x
+   1:4  │     4:4     │    +
+   1:6  │     6:6     │    y
+   1:8  │     8:8     │  *
+   1:9  │     9:9     │  z
 ```
 
 Internally this has a full representation of all syntax trivia (whitespace and
@@ -69,19 +70,18 @@ despite being important for parsing.
 
 ```julia
 julia> text = "(x + y)*z"
-       greentree = parseall(GreenNode, text)
-     1:9      │[toplevel]
-     1:9      │  [call]
-     1:1      │    (
-     2:6      │    [call]
-     2:2      │      Identifier         ✔
-     3:3      │      Whitespace
-     4:4      │      +                  ✔
-     5:5      │      Whitespace
-     6:6      │      Identifier         ✔
-     7:7      │    )
-     8:8      │    *                    ✔
-     9:9      │    Identifier           ✔
+       greentree = JuliaSyntax.parse(GreenNode, text)
+     1:9      │[call]
+     1:1      │  (
+     2:6      │  [call]
+     2:2      │    Identifier           ✔
+     3:3      │    Whitespace
+     4:4      │    +                    ✔
+     5:5      │    Whitespace
+     6:6      │    Identifier           ✔
+     7:7      │  )
+     8:8      │  *                      ✔
+     9:9      │  Identifier             ✔
 ```
 
 `GreenNode` stores only byte ranges, but the token strings can be shown by
@@ -89,25 +89,24 @@ supplying the source text string:
 
 ```julia
 julia> show(stdout, MIME"text/plain"(), greentree, text)
-     1:9      │[toplevel]
-     1:9      │  [call]
-     1:1      │    (                        "("
-     2:6      │    [call]
-     2:2      │      Identifier         ✔   "x"
-     3:3      │      Whitespace             " "
-     4:4      │      +                  ✔   "+"
-     5:5      │      Whitespace             " "
-     6:6      │      Identifier         ✔   "y"
-     7:7      │    )                        ")"
-     8:8      │    *                    ✔   "*"
-     9:9      │    Identifier           ✔   "z"
+     1:9      │[call]
+     1:1      │  (                          "("
+     2:6      │  [call]
+     2:2      │    Identifier           ✔   "x"
+     3:3      │    Whitespace               " "
+     4:4      │    +                    ✔   "+"
+     5:5      │    Whitespace               " "
+     6:6      │    Identifier           ✔   "y"
+     7:7      │  )                          ")"
+     8:8      │  *                      ✔   "*"
+     9:9      │  Identifier             ✔   "z"
 ```
 
 Julia `Expr` can also be produced:
 
 ```julia
-julia> parseall(Expr, "(x + y)*z")
-:($(Expr(:toplevel, :((x + y) * z))))
+julia> JuliaSyntax.parse(Expr, "(x + y)*z")
+:((x + y) * z)
 ```
 
 # Using JuliaSyntax as the default parser
