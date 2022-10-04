@@ -116,14 +116,16 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
 #include "support/htable.h"
 #include "support/htable.inc"
 
-static uint32_t _hash_djb2(uint32_t hash, const char* mem, size_t s) {
+static uint32_t _hash_djb2(uint32_t hash, const char *mem, size_t s) JL_NOTSAFEPOINT
+{
     for (size_t i = 0; i < s; i++)
         hash = ((hash << 5) + hash) + mem[i];
     return hash;
 }
 
-static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT {
-    jl_datatype_layout_t* layout = (jl_datatype_layout_t*)_layout;
+static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT
+{
+    jl_datatype_layout_t* layout = (jl_datatype_layout_t *)_layout;
     size_t own_size = sizeof(jl_datatype_layout_t);
     const char* fields = jl_dt_layout_fields(layout);
     size_t fields_size = layout->nfields * jl_fielddesc_size(layout->fielddesc_type);
@@ -137,24 +139,22 @@ static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT {
     return hash;
 }
 
-static int layout_eq(void* _l1, void* _l2) {
-    jl_datatype_layout_t* l1 = (jl_datatype_layout_t*)_l1;
-    jl_datatype_layout_t* l2 = (jl_datatype_layout_t*)_l2;
+static int layout_eq(void *_l1, void *_l2) JL_NOTSAFEPOINT
+{
+    jl_datatype_layout_t *l1 = (jl_datatype_layout_t *)_l1;
+    jl_datatype_layout_t *l2 = (jl_datatype_layout_t *)_l2;
     if (memcmp(l1, l2, sizeof(jl_datatype_layout_t)))
         return 0;
-
-    const char* f1 = jl_dt_layout_fields(l1);
-    const char* f2 = jl_dt_layout_fields(l2);
+    const char *f1 = jl_dt_layout_fields(l1);
+    const char *f2 = jl_dt_layout_fields(l2);
     size_t fields_size = l1->nfields * jl_fielddesc_size(l1->fielddesc_type);
     if (memcmp(f1, f2, fields_size))
         return 0;
-
-    const char* p1 = jl_dt_layout_ptrs(l1);
-    const char* p2 = jl_dt_layout_ptrs(l2);
+    const char *p1 = jl_dt_layout_ptrs(l1);
+    const char *p2 = jl_dt_layout_ptrs(l2);
     size_t pointers_size = (l1->npointers << l1->fielddesc_type);
     if (memcmp(p1, p2, pointers_size))
         return 0;
-
     return 1;
 }
 
@@ -201,8 +201,8 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     size_t pointers_size = (npointers << fielddesc_type);
     size_t flddesc_sz = sizeof(jl_datatype_layout_t) + fields_size + pointers_size;
     int should_malloc = flddesc_sz >= jl_page_size;
-    jl_datatype_layout_t* mallocmem = (jl_datatype_layout_t*)(should_malloc ? malloc(flddesc_sz) : NULL);
-    jl_datatype_layout_t* allocamem = (jl_datatype_layout_t*)(should_malloc ? NULL : alloca(flddesc_sz));
+    jl_datatype_layout_t *mallocmem = (jl_datatype_layout_t *)(should_malloc ? malloc(flddesc_sz) : NULL);
+    jl_datatype_layout_t *allocamem = (jl_datatype_layout_t *)(should_malloc ? NULL : alloca(flddesc_sz));
     jl_datatype_layout_t *flddesc = should_malloc ? mallocmem : allocamem;
     assert(flddesc);
     flddesc->nfields = nfields;
@@ -213,9 +213,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     flddesc->first_ptr = (npointers > 0 ? pointers[0] : -1);
 
     // fill out the fields of the new descriptor
-    jl_fielddesc8_t* desc8 = (jl_fielddesc8_t*)jl_dt_layout_fields(flddesc);
-    jl_fielddesc16_t* desc16 = (jl_fielddesc16_t*)jl_dt_layout_fields(flddesc);
-    jl_fielddesc32_t* desc32 = (jl_fielddesc32_t*)jl_dt_layout_fields(flddesc);
+    jl_fielddesc8_t *desc8 = (jl_fielddesc8_t *)jl_dt_layout_fields(flddesc);
+    jl_fielddesc16_t *desc16 = (jl_fielddesc16_t *)jl_dt_layout_fields(flddesc);
+    jl_fielddesc32_t *desc32 = (jl_fielddesc32_t *)jl_dt_layout_fields(flddesc);
     for (size_t i = 0; i < nfields; i++) {
         if (fielddesc_type == 0) {
             desc8[i].offset = desc[i].offset;
@@ -233,9 +233,9 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
             desc32[i].isptr = desc[i].isptr;
         }
     }
-    uint8_t* ptrs8 = (uint8_t*)jl_dt_layout_ptrs(flddesc);
-    uint16_t* ptrs16 = (uint16_t*)jl_dt_layout_ptrs(flddesc);
-    uint32_t* ptrs32 = (uint32_t*)jl_dt_layout_ptrs(flddesc);
+    uint8_t *ptrs8 = (uint8_t *)jl_dt_layout_ptrs(flddesc);
+    uint16_t *ptrs16 = (uint16_t *)jl_dt_layout_ptrs(flddesc);
+    uint32_t *ptrs32 = (uint32_t *)jl_dt_layout_ptrs(flddesc);
     for (size_t i = 0; i < npointers; i++) {
         if (fielddesc_type == 0) {
             ptrs8[i] = pointers[i];
@@ -255,13 +255,13 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
 
     // Check the cache to see if this object already exists.
     // Add to cache if not present, free temp buffer, return.
-    jl_datatype_layout_t* ret =
-            (jl_datatype_layout_t*)layoutcache_get(&layoutcache, flddesc);
+    jl_datatype_layout_t *ret =
+            (jl_datatype_layout_t *)layoutcache_get(&layoutcache, flddesc);
     if (ret == HT_NOTFOUND) {
         if (!should_malloc) {
-            char* perm_mem = (char*)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
+            char *perm_mem = (char *)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
             assert(perm_mem);
-            ret = (jl_datatype_layout_t*)perm_mem;
+            ret = (jl_datatype_layout_t *)perm_mem;
             memcpy(perm_mem, flddesc, flddesc_sz);
         }
         else {
