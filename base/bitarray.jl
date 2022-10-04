@@ -1803,7 +1803,8 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     destc = dest.chunks
     Ac = A.chunks
     Bc = B.chunks
-    for i = 1:(length(destc)-1)
+    len_Ac = length(Ac)
+    for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
     # the last effected UInt64's original content
