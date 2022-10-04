@@ -524,20 +524,8 @@ scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> pu
 
 function insert_node!(ir::IRCode, pos::SSAValue, inst::NewInstruction, attach_after::Bool=false)
     node = add_inst!(ir.new_nodes, pos.id, attach_after)
-    node[:line] = something(inst.line, ir[pos][:line])
-    flag = inst.flag
-    if !inst.effect_free_computed
-        (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, ir)
-        if consistent
-            flag |= IR_FLAG_CONSISTENT
-        end
-        if effect_free_and_nothrow
-            flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-        elseif nothrow
-            flag |= IR_FLAG_NOTHROW
-        end
-    end
-    node[:inst], node[:type], node[:flag], node[:info] = inst.stmt, inst.type, flag, inst.info
+    node = inst_from_newinst!(node, inst, something(inst.line, ir[pos][:line]))
+    inst.effect_free_computed || (node[:flag] = recompute_inst_flag(inst, ir))
     return SSAValue(length(ir.stmts) + node.idx)
 end
 insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false) =
@@ -785,20 +773,44 @@ function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     return node
 end
 
+function inst_from_newinst!(node::Instruction, inst::NewInstruction, line::Int32=inst.line::Int32)
+    node[:inst] = inst.stmt
+    node[:type] = inst.type
+    node[:info] = inst.info
+    node[:line] = line
+    node[:flag] = inst.flag
+    return node
+end
+
+function recompute_inst_flag(inst::NewInstruction, src::Union{IRCode,IncrementalCompact})
+    flag = inst.flag
+    (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(
+        fallback_lattice, inst.stmt, inst.type, src)
+    if consistent
+        flag |= IR_FLAG_CONSISTENT
+    end
+    if effect_free_and_nothrow
+        flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
+    elseif nothrow
+        flag |= IR_FLAG_NOTHROW
+    end
+    return flag
+end
+
 function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction, attach_after::Bool=false)
     @assert inst.effect_free_computed
     if isa(before, SSAValue)
         if before.id < compact.result_idx
             count_added_node!(compact, inst.stmt)
-            line = something(inst.line, compact.result[before.id][:line])
+            newline = something(inst.line, compact.result[before.id][:line])
             node = add_inst!(compact.new_new_nodes, before.id, attach_after)
+            node = inst_from_newinst!(node, inst, newline)
             push!(compact.new_new_used_ssas, 0)
-            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
             return NewSSAValue(-node.idx)
         else
-            line = something(inst.line, compact.ir.stmts[before.id][:line])
+            newline = something(inst.line, compact.ir.stmts[before.id][:line])
             node = add_pending!(compact, before.id, attach_after)
-            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            node = inst_from_newinst!(node, inst, newline)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -809,10 +821,10 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
         if pos < compact.idx
             renamed = compact.ssa_rename[pos]::AnySSAValue
             count_added_node!(compact, inst.stmt)
-            line = something(inst.line, compact.result[renamed.id][:line])
+            newline = something(inst.line, compact.result[renamed.id][:line])
             node = add_inst!(compact.new_new_nodes, renamed.id, attach_after)
+            node = inst_from_newinst!(node, inst, newline)
             push!(compact.new_new_used_ssas, 0)
-            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
             return NewSSAValue(-node.idx)
         else
             if pos > length(compact.ir.stmts)
@@ -820,9 +832,9 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
                 info = compact.pending_nodes.info[pos - length(compact.ir.stmts) - length(compact.ir.new_nodes)]
                 pos, attach_after = info.pos, info.attach_after
             end
-            line = something(inst.line, compact.ir.stmts[pos][:line])
+            newline = something(inst.line, compact.ir.stmts[pos][:line])
             node = add_pending!(compact, pos, attach_after)
-            node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
+            node = inst_from_newinst!(node, inst, newline)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -831,9 +843,9 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
     elseif isa(before, NewSSAValue)
         # TODO: This is incorrect and does not maintain ordering among the new nodes
         before_entry = compact.new_new_nodes.info[-before.id]
-        line = something(inst.line, compact.new_new_nodes.stmts[-before.id][:line])
+        newline = something(inst.line, compact.new_new_nodes.stmts[-before.id][:line])
         new_entry = add_inst!(compact.new_new_nodes, before_entry.pos, attach_after)
-        new_entry[:inst], new_entry[:type], new_entry[:line], new_entry[:flag] = inst.stmt, inst.type, line, inst.flag
+        new_entry = inst_from_newinst!(new_entry, inst, newline)
         push!(compact.new_new_used_ssas, 0)
         return NewSSAValue(-new_entry.idx)
     else
@@ -855,20 +867,8 @@ function insert_node_here!(compact::IncrementalCompact, inst::NewInstruction, re
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
-    flag = inst.flag
-    if !inst.effect_free_computed
-        (consistent, effect_free_and_nothrow, nothrow) = stmt_effect_flags(fallback_lattice, inst.stmt, inst.type, compact)
-        if consistent
-            flag |= IR_FLAG_CONSISTENT
-        end
-        if effect_free_and_nothrow
-            flag |= IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
-        elseif nothrow
-            flag |= IR_FLAG_NOTHROW
-        end
-    end
-    node = compact.result[result_idx]
-    node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, inst.line, flag
+    node = inst_from_newinst!(compact.result[result_idx], inst)
+    inst.effect_free_computed || (node[:flag] = recompute_inst_flag(inst, compact))
     count_added_node!(compact, inst.stmt) && push!(compact.late_fixup, result_idx)
     compact.result_idx = result_idx + 1
     inst = SSAValue(result_idx)
@@ -1573,7 +1573,6 @@ function fixup_phinode_values!(compact::IncrementalCompact, old_values::Vector{A
     end
     return (values, fixup)
 end
-
 
 function fixup_node(compact::IncrementalCompact, @nospecialize(stmt), reify_new_nodes::Bool)
     if isa(stmt, PhiNode)
