@@ -292,6 +292,7 @@ extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced_mi, size_t max_world, const char *why);
 extern arraylist_t jl_linkage_blobs;                        // external linkage: sysimg/pkgimages
 extern jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED;         // external linkage: corresponding build_ids
+extern arraylist_t jl_image_relocs;                        // external linkage: sysimg/pkgimages
 extern uint64_t jl_worklist_key(jl_array_t *worklist);
 
 extern JL_DLLEXPORT size_t jl_page_size;
@@ -924,7 +925,37 @@ static inline void jl_set_gc_and_wait(void)
     jl_atomic_store_release(&ct->ptls->gc_state, state);
 }
 #endif
-void jl_gc_set_permalloc_region(void *start, void *end);
+
+// Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
+STATIC_INLINE size_t n_linkage_blobs(void)
+{
+    if (!jl_build_ids)
+        return 0;
+    assert(jl_is_array(jl_build_ids));
+    return jl_array_len(jl_build_ids);
+}
+
+STATIC_INLINE size_t external_blob_index(jl_value_t *v) {
+    size_t nblobs = n_linkage_blobs();
+    if (nblobs == 0)
+        return nblobs;
+    assert(jl_linkage_blobs.len == 2*nblobs);
+    for (size_t i = 0; i < 2*nblobs; i+=2) {
+        uintptr_t left = (uintptr_t)jl_linkage_blobs.items[i], right = (uintptr_t)jl_linkage_blobs.items[i+1];
+        if (left <= (uintptr_t)v && (uintptr_t)v < right) {
+            return i>>1;
+        }
+    }
+    return nblobs;
+}
+
+STATIC_INLINE uint8_t jl_object_in_image(jl_value_t* v) {
+    size_t blob = external_blob_index(v);
+    if (blob == n_linkage_blobs()) {
+        return 0;
+    }
+    return 1;
+}
 
 typedef struct {
     LLVMOrcThreadSafeModuleRef TSM;
