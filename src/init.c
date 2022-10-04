@@ -767,7 +767,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
-        jl_global_roots_table = jl_alloc_vec_any(16);
+        jl_global_roots_table = jl_alloc_vec_any(0);
         jl_init_codegen();
     }
 

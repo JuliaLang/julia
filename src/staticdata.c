@@ -49,6 +49,13 @@
     one of the corresponding categorical list, then `index = t << RELOC_TAG_OFFSET + i`. The simplest source for the
     details of this encoding can be found in the pair of functions `get_reloc_for_item` and `get_item_for_reloc`.
 
+    `uniquing_list` also holds the serialized location of external DataTypes, MethodInstances, and singletons
+    in the serialized blob (i.e., new-at-the-time-of-serialization specializations). The target item must
+    be checked against the running system to see whether such an object already exists (i.e., whether some other
+    previously-loaded package or workload has created such types/MethodInstances previously). If so,
+    then the pointer at `location` must be updated to the one in the running system.
+    `uniquing_target` is a hash table for which `uniquing_target[targetpos] -> chosen_target`.
+
     Most of step 2 is handled by `jl_write_values`, followed by special handling of the dedicated parallel streams.
 
   - step 3 combines the different sections (fields of `jl_serializer_state`) into one
@@ -354,6 +361,9 @@ typedef struct {
     ios_t *fptr_record;         // serialized array mapping fptrid => spos
     arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
+    arraylist_t uniquing_list;  // a list of locations that reference objects that must be de-duplicated
+    arraylist_t recaching_list; // a list of locations of objects requiring (re)caching
+    jl_array_t *method_roots_list; // a list of (method, newroots) referencing external methods that need new roots
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), jl_build_ids)
@@ -481,6 +491,37 @@ static void jl_load_sysimg_so(void)
     jl_restore_system_image_data(sysimg_data, *plen);
 }
 
+static int caching_tag(jl_value_t *v)
+{
+    if (jl_is_method_instance(v)) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        jl_value_t *m = mi->def.value;
+        if (jl_is_method(m) && jl_object_in_image(m))
+            return 1 + type_in_worklist(mi->specTypes);
+    }
+    if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars)
+            return 0;
+        if (jl_object_in_image(dt->name))
+            return 1 + type_in_worklist(dt);
+    }
+    jl_datatype_t *dtv = (jl_datatype_t*)jl_typeof(v);
+    if (jl_is_datatype_singleton(dtv)) {
+        return 1 - type_in_worklist(dtv); // these are already recached in the image
+    }
+    return 0;
+}
+
+static int needs_recaching(jl_value_t* v)
+{
+    return caching_tag(v) == 2;
+}
+
+static int needs_uniquing(jl_value_t* v)
+{
+    return caching_tag(v) == 1;
+}
 
 // --- serializer ---
 
@@ -561,15 +602,55 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recur
     arraylist_push(&object_worklist, (void*)((uintptr_t)v | recursive));
 }
 
+// Because of recaching, we visit types in a depth-first postorder, so that the dependencies
+// are recached before the objects that wrap them.
+static void jl_serialize_postorder_as_needed(jl_serializer_state *s, jl_value_t *v, int recursive)
+{
+    if (jl_object_in_image(v))
+        return;
+
+    jl_serialize_postorder_as_needed(s, jl_typeof(v), recursive);
+
+    if (jl_is_uniontype(v)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)v;
+        jl_serialize_postorder_as_needed(s, u->a, recursive);
+        jl_serialize_postorder_as_needed(s, u->b, recursive);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        jl_serialize_postorder_as_needed(s, ua->var, recursive);
+        jl_serialize_postorder_as_needed(s, ua->body, recursive);
+    }
+    else if (jl_is_typevar(v)) {
+        jl_tvar_t *tv = (jl_tvar_t*)v;
+        jl_serialize_postorder_as_needed(s, tv->name, recursive);
+        jl_serialize_postorder_as_needed(s, tv->ub, recursive);
+        jl_serialize_postorder_as_needed(s, tv->lb, recursive);
+    }
+    else if (jl_is_vararg(v)) {
+        jl_vararg_t *tv = (jl_vararg_t*)v;
+        if (tv->T)
+            jl_serialize_postorder_as_needed(s, tv->T, recursive);
+        if (tv->N)
+            jl_serialize_postorder_as_needed(s, tv->N, recursive);
+    }
+    else if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        jl_svec_t *tt = dt->parameters;
+        // ensure all type parameters are recached
+        size_t i, l = jl_svec_len(tt);
+        for (i = 0; i < l; i++)
+            jl_serialize_postorder_as_needed(s, jl_svecref(tt, i), recursive);
+    }
+    jl_serialize_value__(s, v, recursive);
+}
+
 static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
     void **bp = ptrhash_bp(&backref_table, v);
     if (*bp != HT_NOTFOUND) {
         return;
     }
-
-    if (jl_object_in_image(v))
-        return;
 
     // We've encountered an item we need to cache
     size_t item = ++backref_table_numel;
@@ -581,12 +662,31 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_serialize_value(s, t);
 
+    if (needs_uniquing(v)) {
+        if (jl_is_method_instance(v)) {
+            jl_method_instance_t *mi = (jl_method_instance_t*)v;
+            jl_serialize_value(s, mi->def.value);
+            jl_serialize_value(s, mi->specTypes);
+            jl_serialize_value(s, mi->sparam_vals);
+        }
+        else if (jl_is_datatype(v)) {
+            jl_datatype_t *dt = (jl_datatype_t*)v;
+            jl_serialize_value(s, dt->name);
+            jl_serialize_value(s, dt->parameters);
+        }
+        else {
+            assert(jl_is_datatype_singleton(t) && "unreachable");
+        }
+        return;
+    }
+
+    if (!recursive)
+        return;
+
     if (t->layout->npointers == 0) {
         // bitstypes do not require recursion
     }
     else if (jl_is_svec(v)) {
-        if (!recursive)
-            return;
         size_t i, l = jl_svec_len(v);
         jl_value_t **data = jl_svec_data(v);
         for (i = 0; i < l; i++) {
@@ -668,7 +768,7 @@ static void jl_serialize_reachable(jl_serializer_state *s)
         uintptr_t v = (uintptr_t)object_worklist.items[prevlen];
         int recursive = v & 1;
         v &= ~(uintptr_t)1; // untag v
-        jl_serialize_value__(s, (jl_value_t*)v, recursive);
+        jl_serialize_postorder_as_needed(s, v, recursive);
     }
 }
 
@@ -713,7 +813,8 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
     write_uint(s, 0);
 }
 
-static uintptr_t external_linkage(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) {
+// Records the buildid holding `v` and returns the tagged offset within the corresponding image
+static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) {
     size_t i = external_blob_index(v);
     if (i < n_linkage_blobs()) {
         assert(link_ids && jl_is_array(link_ids));
@@ -778,7 +879,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
     }
     else if (jl_object_in_image(v)) {
         assert(link_ids);
-        uintptr_t item = external_linkage(s, v, link_ids);
+        uintptr_t item = add_external_linkage(s, v, link_ids);
         if (!item) {
             // If we got here, we failed to find the expected external linkage. Print debugging info.
             for (size_t i = 0; i < jl_linkage_blobs.len; i+=2) {
@@ -805,6 +906,8 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSA
     if (fld != NULL) {
         arraylist_push(&s->relocs_list, (void*)(uintptr_t)ios_pos(s->s));
         arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs));
+        if (needs_uniquing(fld))
+            arraylist_push(&s->uniquing_list, (void*)(uintptr_t)ios_pos(s->s));
     }
     write_pointer(s->s);
 }
@@ -950,6 +1053,8 @@ static void jl_write_values(jl_serializer_state *s)
     memset(layout_table.items, 0, backref_table_numel * sizeof(void*));
 
     // Order `backref_table` by `id`
+    // n.b. the recaching order is dependent on maintaining of this order
+    // for anything that appeared in a type, so it cannot easily be resorted
     size_t i, len = backref_table.size;
     void **p = backref_table.table;
     for (i = 0; i < len; i += 2) {
@@ -983,6 +1088,8 @@ static void jl_write_values(jl_serializer_state *s)
         // realign stream to expected gc alignment (16 bytes)
         uintptr_t skip_header_pos = ios_pos(s->s) + sizeof(jl_taggedvalue_t);
         write_padding(s->s, LLT_ALIGN(skip_header_pos, 16) - skip_header_pos);
+
+
         // write header
         write_gctaggedfield(s, backref_id(s, t, s->link_ids_gctags));
         size_t reloc_offset = ios_pos(s->s);
@@ -994,6 +1101,27 @@ static void jl_write_values(jl_serializer_state *s)
         // }
         int GV = jl_get_llvm_gv(native_functions, v);
         record_gvar(s, GV, ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
+
+        if (needs_uniquing(v)) {
+            if (jl_is_method_instance(v)) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)v;
+                write_pointerfield(s, mi->def.value);
+                write_pointerfield(s, mi->specTypes);
+                write_pointerfield(s, mi->sparam_vals);
+            }
+            else if (jl_is_datatype(v)) {
+                jl_datatype_t *dt = (jl_datatype_t*)v;
+                write_pointerfield(s, dt->name);
+                write_pointerfield(s, dt->parameters);
+            }
+            else {
+                assert(jl_is_datatype_singleton(t) && "unreachable");
+            }
+            continue;
+        }
+        if (needs_recaching(v)) {
+            arraylist_push(&(s->recaching_list), reloc_offset);
+        }
 
         // write data
         if (jl_is_cpointer(v)) {
@@ -1076,13 +1204,16 @@ static void jl_write_values(jl_serializer_state *s)
                         for (j = 0; j < np; j++) {
                             size_t offset = i * elsz + jl_ptr_offset(((jl_datatype_t*)et), j) * sizeof(jl_value_t*);
                             jl_value_t *fld = *(jl_value_t**)&data[offset];
+                            size_t fld_pos = reloc_offset + headersize + offset;
                             if (fld != NULL) {
-                                arraylist_push(&s->relocs_list, (void*)(uintptr_t)(reloc_offset + headersize + offset)); // relocation location
+                                arraylist_push(&s->relocs_list, (void*)(uintptr_t)fld_pos); // relocation location
                                 arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
-                                memset(&s->s->buf[reloc_offset + headersize + offset], 0, sizeof(fld)); // relocation offset (none)
+                                if (needs_uniquing(fld))
+                                    arraylist_push(&s->uniquing_list, (void*)(uintptr_t)fld_pos);
+                                memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                             }
                             else {
-                                assert(*(jl_value_t**)&s->s->buf[reloc_offset + headersize + offset] == NULL);
+                                assert(*(jl_value_t**)&s->s->buf[fld_pos] == NULL);
                             }
                         }
                     }
@@ -1167,10 +1298,13 @@ static void jl_write_values(jl_serializer_state *s)
             for (i = 0; i < np; i++) {
                 size_t offset = jl_ptr_offset(t, i) * sizeof(jl_value_t*);
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset]);
+                size_t fld_pos = offset + reloc_offset;
                 if (fld != NULL) {
-                    arraylist_push(&s->relocs_list, (void*)(uintptr_t)(offset + reloc_offset)); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
-                    memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
+                    if (needs_uniquing(fld))
+                        arraylist_push(&s->uniquing_list, (void*)(uintptr_t)fld_pos);
+                    memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                 }
                 memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
             }
@@ -1255,6 +1389,7 @@ static void jl_write_values(jl_serializer_state *s)
             else if (jl_is_datatype(v)) {
                 jl_datatype_t *dt = (jl_datatype_t*)v;
                 jl_datatype_t *newdt = (jl_datatype_t*)&s->s->buf[reloc_offset];
+
                 newdt->imgcache = 1;
                 if (dt->layout != NULL) {
                     newdt->layout = NULL;
@@ -1326,7 +1461,7 @@ static void jl_ensure_extern(void* ctx, int32_t GV, void* v) {
     // externally_linked is insufficient as a check because it doesn't visit
     // everything needed by LLVM and can't efficiently identify whether a
     // global variable is external.
-    uintptr_t item = external_linkage(s, (jl_value_t*)v, s->link_ids_gvars);
+    uintptr_t item = add_external_linkage(s, (jl_value_t*)v, s->link_ids_gvars);
     if (item == 0)
         return;
 
@@ -1558,11 +1693,19 @@ static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *li
 }
 
 
+static void jl_write_arraylist(ios_t *s, arraylist_t *list)
+{
+    write_uint(s, list->len);
+    ios_write(s, list->items, list->len * sizeof(void*));
+}
+
 static void jl_write_relocations(jl_serializer_state *s)
 {
     char *base = &s->s->buf[0];
     jl_write_skiplist(s->relocs, base, s->s->size, &s->gctags_list);
     jl_write_skiplist(s->relocs, base, s->s->size, &s->relocs_list);
+    jl_write_arraylist(s->relocs, &s->uniquing_list);
+    jl_write_arraylist(s->relocs, &s->recaching_list);
 }
 
 
@@ -1582,6 +1725,13 @@ static void jl_read_relocations(jl_serializer_state *s, jl_array_t *link_ids, ui
         *pv = v | bits;
     }
     assert(!link_ids || link_index == jl_array_len(link_ids));
+}
+
+static void jl_read_arraylist(ios_t *s, arraylist_t *list)
+{
+    size_t list_len = read_uint(s);
+    arraylist_new(list, list_len);
+    ios_read(s, list->items, list_len * sizeof(void*));
 }
 
 void gc_sweep_sysimg(void)
@@ -1701,12 +1851,61 @@ static void jl_update_all_gvars(jl_serializer_state *s)
         uintptr_t offset = *gvars;
         if (offset) {
             uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &link_index);
-            *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
+            *sysimg_gvars(sysimg_gvars_base, gvname_index) = (uintptr_t)jl_as_global_root((jl_value_t*)v);
         }
         gvname_index += 1;
         gvars++;
     }
     assert(!s->link_ids_gvars || link_index == jl_array_len(s->link_ids_gvars));
+}
+
+// New roots for external methods
+static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
+{
+    size_t i;
+    jl_value_t *v;
+    jl_method_t *m;
+    for (i = 0; i < jl_array_len(new_specializations); i++) {
+        v = jl_array_ptr_ref(new_specializations, i);
+        assert(jl_is_method_instance(v));
+        m = ((jl_method_instance_t*)v)->def.value;
+        assert(jl_is_method(m));
+        ptrhash_put(mset, m, m);
+    }
+}
+
+static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset)
+{
+    size_t i, j, sz = mset->size, offset;
+    uint64_t key;
+    int nwithkey;
+    jl_method_t *m;
+    void **table = mset->table;
+    uint64_t *buildids = jl_build_ids->data;
+    for (i = 0; i < sz; i+=2) {
+        if (table[i+1] != HT_NOTFOUND) {
+            m = (jl_method_t*)table[i];
+            j = external_blob_index((jl_value_t*)m);
+            assert(j);
+            key = buildids[j];
+            nwithkey = nroots_with_key(m, key);
+            if (nwithkey) {
+                jl_array_ptr_1d_push(roots, m);
+                jl_array_t *newroots = jl_alloc_vec_any(nwithkey);
+                jl_array_ptr_1d_push(roots, newroots);
+                rle_iter_state rootiter = rle_iter_init(0);
+                uint64_t *rletable = NULL;
+                size_t nblocks2 = 0, nroots = jl_array_len(m->roots);
+                if (m->root_blocks) {
+                    rletable = (uint64_t*)jl_array_data(m->root_blocks);
+                    nblocks2 = jl_array_len(m->root_blocks);
+                }
+                while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
+                    if (rootiter.key == key)
+                        jl_array_ptr_1d_push(newroots, jl_array_ptr_ref(m->roots, rootiter.i));
+            }
+        }
+    }
 }
 
 // Reinitialization
@@ -2037,7 +2236,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
 }
 
 // In addtion to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
-static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC_DISABLED
+static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist, jl_array_t *new_specializations) JL_GC_DISABLED
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -2075,6 +2274,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
     s.ptls = jl_current_task->ptls;
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
+    arraylist_new(&s.uniquing_list, 0);
+    arraylist_new(&s.recaching_list, 0);
+    htable_t methods_with_newspecs;
+    htable_new(&methods_with_newspecs, new_specializations ? jl_array_len(new_specializations) : 0);
+    s.method_roots_list = jl_alloc_vec_any(0);
     s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
@@ -2111,7 +2315,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
                 jl_value_t *tag = *tags[i];
                 jl_serialize_value(&s, tag);
             }
-            jl_serialize_value(&s, jl_global_roots_table);
         } else {
             // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
             // judged to be externally-linked
@@ -2139,8 +2342,17 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
             jl_scan_type_cache_gv(&s, tn->cache);
             jl_scan_type_cache_gv(&s, tn->linearcache);
         }
+        // step 1.2: if needed, serialize the new method specializations and the roots they require
+        if (new_specializations) {
+            // Queue the new specializations
+            jl_serialize_value(&s, new_specializations);
+            // Collect the new method roots and queue them
+            jl_collect_methods(&methods_with_newspecs, new_specializations);
+            jl_collect_new_roots(&s.method_roots_list, &methods_with_newspecs);
+            jl_serialize_value(&s, &s.method_roots_list);
+        }
         jl_serialize_reachable(&s);
-        // step 1.2: prune (garbage collect) some special weak references from
+        // step 1.3: prune (garbage collect) some special weak references from
         // built-in type caches
         for (i = 0; i < typenames.len; i++) {
             jl_typename_t *tn = (jl_typename_t*)typenames.items[i];
@@ -2226,11 +2438,13 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
                 jl_value_t *tag = *tags[i];
                 jl_write_value(&s, tag);
             }
-            jl_write_value(&s, jl_global_roots_table);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
             write_uint(f, jl_typeinf_world);
+        } else {
+            jl_write_value(&s, new_specializations);
+            jl_write_value(&s, s.method_roots_list);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags)*sizeof(uint64_t));
@@ -2256,6 +2470,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
     arraylist_free(&s.relocs_list);
     arraylist_free(&s.gctags_list);
     htable_free(&field_replace);
+    htable_free(&methods_with_newspecs);
     if (worklist)
         htable_free(&external_objects);
     jl_cleanup_serializer2();
@@ -2313,6 +2528,8 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
     sysimg_fptrs = jl_init_processor_sysimg(handle);
 }
 
+jl_value_t *jl_apply_typename_params(jl_typename_t *tn, jl_svec_t *params);
+
 static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
 {
     JL_TIMING(SYSIMG_LOAD);
@@ -2331,6 +2548,8 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     arraylist_new(&s.gctags_list, 0);
     s.link_ids_relocs = s.link_ids_gctags = s.link_ids_gvars = NULL;
     jl_value_t **const*const tags = get_tags();
+    htable_t uniquing_target;
+    htable_new(&uniquing_target, 0);
 
     int incremental = jl_linkage_blobs.len > 0;
 
@@ -2379,7 +2598,6 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
             jl_value_t **tag = tags[i];
             *tag = jl_read_value(&s);
         }
-        jl_global_roots_table = (jl_array_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
@@ -2387,6 +2605,7 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
         jl_gc_wb(s.ptls->root_task, s.ptls->root_task->tls);
         jl_init_int32_int64_cache();
         jl_init_box_caches();
+        jl_global_roots_table = jl_alloc_vec_any(0);
 
         uint32_t gs_ctr = read_uint32(f);
         jl_atomic_store_release(&jl_world_counter, read_uint(f));
@@ -2415,7 +2634,7 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_read_symbols(&s);
     ios_close(&symbols);
 
-    jl_value_t *image_base = (jl_value_t*)&sysimg.buf[0];
+    char *image_base = (char*)&sysimg.buf[0];
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
     s.s = &sysimg;
@@ -2423,6 +2642,58 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_relocations(&s, s.link_ids_relocs, 0);
+    jl_read_arraylist(&s.relocs, &s.uniquing_list);
+    jl_read_arraylist(&s.relocs, &s.recaching_list);
+    for (size_t i = 0; i < s.uniquing_list.len; i++) {
+        uintptr_t item = s.uniquing_list.items[i];
+        jl_value_t ***pfld = (jl_value_t***)(image_base + item);
+        jl_value_t *otyp = (*pfld)[-1];   // the original type of the object that was written here
+        jl_value_t *fld;
+        if (otyp == jl_method_instance_type) {
+            jl_value_t *m = (*pfld)[0];
+            if (jl_is_method_instance(m)) {
+                fld = m; // already done
+            }
+            else {
+                jl_value_t *specTypes = (*pfld)[1];
+                jl_value_t *sparams = (*pfld)[2];
+                fld = (jl_value_t*)jl_specializations_get_linfo((jl_method_t*)m, specTypes, (jl_svec_t*)sparams);
+                (*pfld)[0] = fld;
+            }
+        }
+        else if (otyp == jl_datatype_type) {
+            jl_value_t *typ = (*pfld)[0];
+            if (jl_is_datatype(typ)) {
+                fld = typ; // already done
+            }
+            else {
+                jl_value_t *params = (*pfld)[1];
+                fld = jl_apply_typename_params((jl_typename_t*)typ, (jl_svec_t*)params);
+                (*pfld)[0] = fld;
+            }
+        }
+        else {
+            assert(jl_is_datatype_singleton(otyp) && "unreachable");
+            fld = ((jl_datatype_t*)otyp)->instance;
+        }
+        *pfld = fld;
+        assert(jl_typeis(fld, otyp));
+    }
+    for (size_t i = 0; i < s.recaching_list.len; i++) {
+        uintptr_t item = s.recaching_list.items[i];
+        jl_value_t *obj = (jl_value_t*)(image_base + item);
+        if (jl_is_method_instance(obj)) {
+            jl_method_instance_t *newobj = jl_specializations_get_or_insert((jl_method_instance_t*)obj);
+            assert(newobj == (jl_method_instance_t*)obj);
+        }
+        else if (jl_is_datatype(obj)) {
+            jl_cache_type_((jl_datatype_t*)obj);
+        }
+        else {
+            assert(0 && "unreachable");
+        }
+    }
+
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
     ios_close(&relocs);
     ios_close(&const_data);
