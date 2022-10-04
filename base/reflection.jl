@@ -1840,7 +1840,7 @@ as well to get the properties of an instance of the type.
 
 `propertynames(x)` may return only "public" property names that are part
 of the documented interface of `x`.   If you want it to also return "private"
-fieldnames intended for internal use, pass `true` for the optional second argument.
+property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also: [`hasproperty`](@ref), [`hasfield`](@ref).

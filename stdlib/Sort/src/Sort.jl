@@ -1146,7 +1146,7 @@ function sortperm(A::AbstractArray;
             min, max = extrema(A)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
+            if !(o1 || o2)::Bool && rangelen < div(n,2)
                 return sortperm_int_range(A, rangelen, min)
             end
         end

@@ -675,14 +675,20 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
     return bb_idx
 end
 
-function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
     new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
     perm_idx = Ref(1)
 
-    return function (idx::Int)
+    return function get_new_node(idx::Int)
         perm_idx[] <= length(new_nodes_perm) || return nothing
         node_idx = new_nodes_perm[perm_idx[]]
+        if node_idx < new_nodes_idx
+            # skip new nodes that have already been processed by incremental compact
+            # (but don't just return nothing because there may be multiple at this pos)
+            perm_idx[] += 1
+            return get_new_node(idx)
+        end
         if new_nodes_info[node_idx].pos != idx
             return nothing
         end
@@ -695,18 +701,18 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
     end
 end
 
-function new_nodes_iter(ir::IRCode)
+function new_nodes_iter(ir::IRCode, new_nodes_idx=1)
     stmts = ir.stmts
     new_nodes = ir.new_nodes.stmts
     new_nodes_info = ir.new_nodes.info
-    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
 end
 
 function new_nodes_iter(compact::IncrementalCompact)
     stmts = compact.result
     new_nodes = compact.new_new_nodes.stmts
     new_nodes_info = compact.new_new_nodes.info
-    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info, 1)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
@@ -864,7 +870,7 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
     # config.line_info_preprinter(io, "", compact.idx)
     printstyled(io, "─"^(width-indent-1), '\n', color=:red)
 
-    pop_new_node! = new_nodes_iter(compact.ir)
+    pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
     maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
