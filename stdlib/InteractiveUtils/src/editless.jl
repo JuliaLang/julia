@@ -126,7 +126,7 @@ function define_default_editors()
     # vim family
     for (editors, wait) in [
         [["vim", "vi", "nvim", "mvim"], true],
-        [["\bgvim"], false],
+        [[r"\bgvim"], false],
     ]
         define_editor(editors; wait) do cmd, path, line, column
             cmd = line == 0 ? `$cmd $path` :
