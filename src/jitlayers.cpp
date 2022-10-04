@@ -296,6 +296,8 @@ extern "C" JL_DLLEXPORT
 int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     JL_LOCK(&jl_codegen_lock);
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -330,11 +332,12 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (success && llvmmod == NULL)
             jl_ExecutionEngine->addModule(std::move(*into));
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
+    if (ct->reentrant_codegen == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
+    ct->reentrant_codegen--;
     JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
@@ -387,6 +390,8 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
@@ -437,12 +442,13 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else {
         codeinst = NULL;
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled) {
+    if (ct->reentrant_codegen == 1 && measure_compile_time_enabled) {
         uint64_t t_comp = jl_hrtime() - compiler_start_time;
         if (is_recompile)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
     }
+    ct->reentrant_codegen--;
     JL_UNLOCK(&jl_codegen_lock);
     JL_GC_POP();
     return codeinst;
@@ -455,6 +461,8 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -486,8 +494,9 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
+    if (ct->reentrant_codegen == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    ct->reentrant_codegen--;
     JL_UNLOCK(&jl_codegen_lock); // Might GC
 }
 
@@ -509,6 +518,8 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            auto ct = jl_current_task;
+            ct->reentrant_codegen--;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -536,8 +547,9 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
-            if (measure_compile_time_enabled)
+            if (ct->reentrant_codegen == 1 && measure_compile_time_enabled)
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+            ct->reentrant_codegen--;
             JL_UNLOCK(&jl_codegen_lock);
         }
         if (specfptr != 0)
