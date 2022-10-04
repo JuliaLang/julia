@@ -1495,32 +1495,46 @@ timesofar("reductions")
         @test C17970::BitArray{1} == map(~, A17970)
     end
 
+    #=
+    |<----------------dest----------(original_tail)->|
+    |<------------------b2(l)------>|    extra_l     |
+    |<------------------b3(l)------>|
+    |<------------------b4(l+extra_l)--------------->|
+    |<--------------desk_inbetween-------->| extra÷2 |
+    =#
     @testset "Issue #47011, map! over unequal length bitarray" begin
         for l = [0, 1, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
             for extra_l = [10, 63, 64, 65, 127, 128, 129, 255, 256, 257, 6399, 6400, 6401]
 
-                b1 = bitrand(l+extra_l)
+                dest = bitrand(l+extra_l)
                 b2 = bitrand(l)
-                original_tail = last(b1, extra_l)
+                original_tail = last(dest, extra_l)
                 for op in (!, ~)
-                    map!(op, b1, b2)
-                    @test first(b1, l) == map(op, b2)
+                    map!(op, dest, b2)
+                    @test first(dest, l) == map(op, b2)
                     # check we didn't change bits we're not suppose to
-                    @test last(b1, extra_l) == original_tail
+                    @test last(dest, extra_l) == original_tail
                 end
 
                 b3 = bitrand(l)
                 b4 = bitrand(l+extra_l)
+                # when dest is longer than one source but shorter than the other
+                dest_inbewteen = bitrand(l + extra_l÷2)
+                original_tail_inbetween = last(dest_inbewteen, extra_l÷2)
                 for op in (|, ⊻)
-                    map!(op, b1, b2, b3)
-                    @test first(b1, l) == map(op, b2, b3)
+                    map!(op, dest, b2, b3)
+                    @test first(dest, l) == map(op, b2, b3)
                     # check we didn't change bits we're not suppose to
-                    @test last(b1, extra_l) == original_tail
+                    @test last(dest, extra_l) == original_tail
 
-                    map!(op, b1, b2, b4)
-                    @test first(b1, l) == map(op, b2, b4)
+                    map!(op, dest, b2, b4)
+                    @test first(dest, l) == map(op, b2, b4)
                     # check we didn't change bits we're not suppose to
-                    @test last(b1, extra_l) == original_tail
+                    @test last(dest, extra_l) == original_tail
+                    
+                    map!(op, dest_inbewteen, b2, b4)
+                    @test first(dest_inbetween, l) == map(op, b2, b4)
+                    @test last(dest_inbetween, extra_l÷2) == original_tail_inbetween
                 end
             end
         end
