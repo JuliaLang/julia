@@ -512,7 +512,7 @@ function __init__()
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])
     end
-    if get(ENV, "JULIA_USE_NEW_PARSER", "false") == "true"
+    if get(ENV, "JULIA_USE_NEW_PARSER", "true") == "true"
         JuliaSyntax = require(PkgId(
             UUID((0x70703baa_626e_46a2, 0xa12c_08ffd08c73b4)), "JuliaSyntax"))
         JuliaSyntax.enable_in_core!()
