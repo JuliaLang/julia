@@ -939,6 +939,7 @@ STATIC_INLINE size_t n_linkage_blobs(void)
     return jl_array_len(jl_build_ids);
 }
 
+// TODO: Makes this a binary search
 STATIC_INLINE size_t external_blob_index(jl_value_t *v) {
     size_t nblobs = n_linkage_blobs();
     if (nblobs == 0)

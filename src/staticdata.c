@@ -323,6 +323,7 @@ static arraylist_t ccallable_list;
 // Permanent list of void* (begin, end+1) pairs of system/package images we've loaded previously
 // togther with their module build_ids (used for external linkage)
 // jl_linkage_blobs.items[2i:2i+1] correspond to jl_build_ids[i]   (0-offset indexing)
+// TODO: Keep this sorted so that we can use binary-search
 arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
 jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED = NULL;
