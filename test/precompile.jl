@@ -1634,7 +1634,7 @@ end
 
 import LLD_jll
 
-function ld(f)
+function ld()
     @static if Sys.iswindows()
         flavor = "link"
     elseif Sys.isapple()
@@ -1642,7 +1642,7 @@ function ld(f)
     else
         flavor = "gnu"
     end
-    f(`$(LLD_jll.lld()) -flavor $flavor`)
+    `$(LLD_jll.lld()) -flavor $flavor`
 end
 
 is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
@@ -1650,9 +1650,10 @@ is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
 function link_jilib(path, out, args=``)
     LIBDIR = joinpath(Sys.BINDIR, "..", "lib")
     LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
-    ld() do ld
-        run(`$ld --shared --output=$out --whole-archive $path --no-whole-archive -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
-    end
+    WHOLE_ARCHIVE = Sys.isapple() ? `-all_load` : `--whole-archive`
+    NO_WHOLE_ARCHIVE = Sys.isapple() `` : `--no-whole-archive`
+
+    run(`$ld() --shared --output=$out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
 end
 
 @testset "empty module" begin
