@@ -671,7 +671,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
         remaining > 0 || return
     end
     buf = IOBuffer()
-    stream = logger.stream
+    stream::IO = logger.stream
     if !(isopen(stream)::Bool)
         stream = stderr
     end

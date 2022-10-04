@@ -89,6 +89,7 @@ Library changes
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 * `@kwdef` is now exported and added to the public API ([#46273])
+* An issue with order of operations in `fld1` is now fixed ([#28973]).
 
 Standard library changes
 ------------------------
@@ -128,6 +129,9 @@ Standard library changes
 * The contextual module which is active at the REPL can be changed (it is `Main` by default),
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
+
+* An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
+  activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
 #### SparseArrays
 

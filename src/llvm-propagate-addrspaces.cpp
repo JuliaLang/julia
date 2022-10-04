@@ -22,9 +22,8 @@
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 
-#include "codegen_shared.h"
-#include "julia.h"
 #include "passes.h"
+#include "codegen_shared.h"
 
 #define DEBUG_TYPE "propagate_julia_addrspaces"
 

@@ -54,9 +54,9 @@ function det(F::Factorization)
 end
 
 convert(::Type{T}, f::T) where {T<:Factorization} = f
-convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)::T
 
-convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)::T
 
 ### General promotion rules
 Factorization{T}(F::Factorization{T}) where {T} = F

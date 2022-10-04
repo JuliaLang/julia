@@ -657,9 +657,9 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
     size_t iter = 0;
     do {
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
-        if (val == NULL)
+        if ((jl_value_t*)val == jl_nothing)
             return NULL;
-        if ((jl_value_t*)val != jl_nothing && val->hash == hv && typekey_eq(val, key, n))
+        if (val->hash == hv && typekey_eq(val, key, n))
             return val;
         index = (index + 1) & (sz - 1);
         iter++;
@@ -680,9 +680,9 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
     size_t iter = 0;
     do {
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
-        if (val == NULL)
+        if ((jl_value_t*)val == jl_nothing)
             return NULL;
-        if ((jl_value_t*)val != jl_nothing && val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
+        if (val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
             return val;
         index = (index + 1) & (sz - 1);
         iter++;
@@ -702,7 +702,7 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
     ssize_t i;
     for (i = 0; i < cl; i++) {
         jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
-        if (tt == NULL)
+        if ((jl_value_t*)tt == jl_nothing)
             return ~i;
         if (typekey_eq(tt, key, n))
             return i;
@@ -719,7 +719,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
     ssize_t i;
     for (i = 0; i < cl; i++) {
         jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
-        if (tt == NULL)
+        if ((jl_value_t*)tt == jl_nothing)
             return ~i;
         if (typekeyvalue_eq(tt, key1, key, n, 1))
             return i;
@@ -777,7 +777,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     size_t maxprobe = max_probe(sz);
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
-        if (tab_i == NULL || tab_i == jl_nothing) {
+        if (tab_i == jl_nothing) {
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
@@ -791,8 +791,6 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
 
     return 0;
 }
-
-static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz);
 
 static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
 {
@@ -820,17 +818,17 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
     }
 }
 
-static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
+jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
 {
     jl_value_t **ol = jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     while (1) {
         size_t i;
-        jl_svec_t *newa = jl_alloc_svec(newsz);
+        jl_svec_t *newa = jl_svec_fill(newsz, jl_nothing);
         JL_GC_PUSH1(&newa);
         for (i = 0; i < sz; i += 1) {
             jl_value_t *val = ol[i];
-            if (val != NULL && val != jl_nothing) {
+            if (val != jl_nothing) {
                 uint_t hv = ((jl_datatype_t*)val)->hash;
                 if (!cache_insert_type_set_(newa, (jl_datatype_t*)val, hv, 0)) {
                     break;
@@ -849,15 +847,15 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
     jl_svec_t *cache = jl_atomic_load_relaxed(&type->name->linearcache);
     assert(jl_is_svec(cache));
     size_t n = jl_svec_len(cache);
-    if (n == 0 || jl_svecref(cache, n - 1) != NULL) {
-        jl_svec_t *nc = jl_alloc_svec(n < 8 ? 8 : (n*3)>>1);
+    if (n == 0 || jl_svecref(cache, n - 1) != jl_nothing) {
+        jl_svec_t *nc = jl_svec_fill(n < 4 ? 4 : n * 2, jl_nothing);
         memcpy(jl_svec_data(nc), jl_svec_data(cache), sizeof(void*) * n);
         jl_atomic_store_release(&type->name->linearcache, nc);
         jl_gc_wb(type->name, nc);
         cache = nc;
         n = jl_svec_len(nc);
     }
-    assert(jl_svecref(cache, insert_at) == NULL);
+    assert(jl_svecref(cache, insert_at) == jl_nothing);
     jl_svecset(cache, insert_at, (jl_value_t*)type); // todo: make this an atomic-store
 }
 
@@ -2392,12 +2390,6 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(1, jl_slotnumber_type),
                         jl_emptysvec, 0, 0, 1);
 
-    jl_globalref_type =
-        jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "mod", "name"),
-                        jl_svec(2, jl_module_type, jl_symbol_type),
-                        jl_emptysvec, 0, 0, 2);
-
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
@@ -2693,6 +2685,12 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
+
+    jl_globalref_type =
+        jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(3, "mod", "name", "binding"),
+                        jl_svec(3, jl_module_type, jl_symbol_type, pointer_void),
+                        jl_emptysvec, 0, 0, 3);
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,

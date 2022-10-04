@@ -391,8 +391,10 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
-            if isa(m, Method)
-                m.module != Core && push!(newly_inferred, linfo)
+            if isa(m, Method) && m.module != Core
+                ccall(:jl_typeinf_lock_begin, Cvoid, ())
+                push!(newly_inferred, linfo)
+                ccall(:jl_typeinf_lock_end, Cvoid, ())
             end
         end
     end
@@ -565,13 +567,13 @@ function store_backedges(frame::InferenceResult, edges::Vector{Any})
     nothing
 end
 
-function store_backedges(caller::MethodInstance, edges::Vector{Any})
-    for (typ, to) in BackedgeIterator(edges)
-        if isa(to, MethodInstance)
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+function store_backedges(frame::MethodInstance, edges::Vector{Any})
+    for (; sig, caller) in BackedgeIterator(edges)
+        if isa(caller, MethodInstance)
+            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         else
-            typeassert(to, Core.MethodTable)
-            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), to, typ, caller)
+            typeassert(caller, Core.MethodTable)
+            ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         end
     end
 end
@@ -651,7 +653,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             @assert typ !== NOT_FOUND "active slot in unreached region"
         end
         # add type annotations where needed
-        if !(sv.slottypes[id] ⊑ typ)
+        if !⊑(typeinf_lattice(sv.interp), sv.slottypes[id], typ)
             return TypedSlot(id, typ)
         end
         return x
@@ -680,7 +682,7 @@ end
 # returns `nothing` otherwise
 function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
     block = block_for_inst(sv.cfg, idx)
-    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignement is dominating this block
+    for pc in reverse(sv.cfg.blocks[block].stmts) # N.B. reverse since the last assignment is dominating this block
         pc < idx || continue # N.B. needs pc ≠ idx as `id` can be assigned at `idx`
         stmt = sv.src.code[pc]
         isexpr(stmt, :(=)) || continue
@@ -804,7 +806,7 @@ function merge_call_chain!(interp::AbstractInterpreter, parent::InferenceState, 
     # of recursion.
     merge_effects!(interp, parent, Effects(EFFECTS_TOTAL; terminates=false))
     while true
-        add_cycle_backedge!(child, parent, parent.currpc)
+        add_cycle_backedge!(parent, child, parent.currpc)
         union_caller_cycle!(ancestor, child)
         merge_effects!(interp, child, Effects(EFFECTS_TOTAL; terminates=false))
         child = parent
@@ -976,10 +978,10 @@ function typeinf_ircode(
     sparams::SimpleVector,
     optimize_until::Union{Integer,AbstractString,Nothing},
 )
-    ccall(:jl_typeinf_begin, Cvoid, ())
+    ccall(:jl_typeinf_timing_begin, Cvoid, ())
     frame = typeinf_frame(interp, method, atype, sparams, false)
     if frame === nothing
-        ccall(:jl_typeinf_end, Cvoid, ())
+        ccall(:jl_typeinf_timing_end, Cvoid, ())
         return nothing, Any
     end
     (; result) = frame
@@ -987,19 +989,19 @@ function typeinf_ircode(
     opt = OptimizationState(frame, opt_params, interp)
     ir = run_passes(opt.src, opt, result, optimize_until)
     rt = widenconst(ignorelimited(result.result))
-    ccall(:jl_typeinf_end, Cvoid, ())
+    ccall(:jl_typeinf_timing_end, Cvoid, ())
     return ir, rt
 end
 
 # compute an inferred frame
 function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecialize(atype), sparams::SimpleVector, run_optimizer::Bool)
     mi = specialize_method(method, atype, sparams)::MethodInstance
-    ccall(:jl_typeinf_begin, Cvoid, ())
+    ccall(:jl_typeinf_timing_begin, Cvoid, ())
     result = InferenceResult(mi)
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
-    ccall(:jl_typeinf_end, Cvoid, ())
+    ccall(:jl_typeinf_timing_end, Cvoid, ())
     return frame
 end
 
@@ -1007,13 +1009,13 @@ end
 function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     method = mi.def::Method
     for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
+        i == 2 && ccall(:jl_typeinf_timing_begin, Cvoid, ())
         code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
             inf = @atomic :monotonic code.inferred
             if use_const_api(code)
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+                i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, ())
                 tree = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
                 rettype_const = code.rettype_const
                 tree.code = Any[ ReturnNode(quoted(rettype_const)) ]
@@ -1033,7 +1035,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 tree.max_world = code.max_world
                 return tree
             elseif isa(inf, CodeInfo)
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+                i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, ())
                 if !(inf.min_world == code.min_world &&
                      inf.max_world == code.max_world &&
                      inf.rettype === code.rettype)
@@ -1044,7 +1046,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
                 end
                 return inf
             elseif isa(inf, Vector{UInt8})
-                i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+                i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, ())
                 inf = _uncompressed_ir(code, inf)
                 return inf
             end
@@ -1057,7 +1059,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     frame = InferenceState(InferenceResult(mi), #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
-    ccall(:jl_typeinf_end, Cvoid, ())
+    ccall(:jl_typeinf_timing_end, Cvoid, ())
     frame.src.inferred || return nothing
     return frame.src
 end
@@ -1069,17 +1071,17 @@ function typeinf_type(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     mi = specialize_method(method, atype, sparams)::MethodInstance
     for i = 1:2 # test-and-lock-and-test
-        i == 2 && ccall(:jl_typeinf_begin, Cvoid, ())
+        i == 2 && ccall(:jl_typeinf_timing_begin, Cvoid, ())
         code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this rettype already exists in the cache
-            i == 2 && ccall(:jl_typeinf_end, Cvoid, ())
+            i == 2 && ccall(:jl_typeinf_timing_end, Cvoid, ())
             return code.rettype
         end
     end
     result = InferenceResult(mi)
     typeinf(interp, result, :global)
-    ccall(:jl_typeinf_end, Cvoid, ())
+    ccall(:jl_typeinf_timing_end, Cvoid, ())
     result.result isa InferenceState && return nothing
     return widenconst(ignorelimited(result.result))
 end
@@ -1094,7 +1096,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
         src = linfo.uninferred::CodeInfo
         if !src.inferred
             # toplevel lambda - infer directly
-            ccall(:jl_typeinf_begin, Cvoid, ())
+            ccall(:jl_typeinf_timing_begin, Cvoid, ())
             if !src.inferred
                 result = InferenceResult(linfo)
                 frame = InferenceState(result, src, #=cache=#:global, interp)
@@ -1102,7 +1104,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
                 @assert frame.inferred # TODO: deal with this better
                 src = frame.src
             end
-            ccall(:jl_typeinf_end, Cvoid, ())
+            ccall(:jl_typeinf_timing_end, Cvoid, ())
         end
     end
     return src

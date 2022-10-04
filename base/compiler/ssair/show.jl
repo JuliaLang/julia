@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# This file is not loaded into `Core.Compiler` but rather loaded into the context of
+# `Base.IRShow` and thus does not participate in bootstrapping.
+
 @nospecialize
 
 if Pair != Base.Pair
@@ -154,9 +157,10 @@ function should_print_ssa_type(@nospecialize node)
            !isa(node, QuoteNode)
 end
 
-function default_expr_type_printer(io::IO, @nospecialize(typ), used::Bool)
-    printstyled(io, "::", typ, color=(used ? :cyan : :light_black))
-    nothing
+function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
+    show_type || return nothing
+    printstyled(io, "::", type, color=(used ? :cyan : :light_black))
+    return nothing
 end
 
 normalize_method_name(m::Method) = m.name
@@ -494,14 +498,18 @@ function DILineInfoPrinter(linetable::Vector, showtypes::Bool=false)
     return emit_lineinfo_update
 end
 
-# line_info_preprinter(io::IO, indent::String, idx::Int) may print relevant info
-#   at the beginning of the line, and should at least print `indent`. It returns a
-#   string that will be printed after the final basic-block annotation.
-# line_info_postprinter(io::IO, typ, used::Bool) prints the type-annotation at the end
-#   of the statement
-# should_print_stmt(idx::Int) -> Bool: whether the statement at index `idx` should be
-#   printed as part of the IR or not
-# bb_color: color used for printing the basic block brackets on the left
+"""
+    IRShowConfig
+
+- `line_info_preprinter(io::IO, indent::String, idx::Int)`` may print relevant info
+  at the beginning of the line, and should at least print `indent`. It returns a
+  string that will be printed after the final basic-block annotation.
+- `line_info_postprinter(io::IO; type, used::Bool, show_type::Bool, idx::Int)` prints
+  relevant information like type-annotation at the end of the statement
+- `should_print_stmt(idx::Int) -> Bool`: whether the statement at index `idx` should be
+  printed as part of the IR or not
+- `bb_color`: color used for printing the basic block brackets on the left
+"""
 struct IRShowConfig
     line_info_preprinter
     line_info_postprinter
@@ -644,8 +652,8 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
 
         if new_node_type === UNDEF # try to be robust against errors
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => node_idx), new_node_type, node_idx in used)
+        else
+            line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
         end
         println(io)
         i += 1
@@ -659,22 +667,28 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
         if type === UNDEF
             # This is an error, but can happen if passes don't update their type information
             printstyled(io, "::#UNDEF", color=:red)
-        elseif show_type
-            line_info_postprinter(IOContext(io, :idx => idx), type, idx in used)
+        else
+            line_info_postprinter(io; type, used = idx in used, show_type, idx)
         end
     end
     println(io)
     return bb_idx
 end
 
-function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
     new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
     perm_idx = Ref(1)
 
-    return function (idx::Int)
+    return function get_new_node(idx::Int)
         perm_idx[] <= length(new_nodes_perm) || return nothing
         node_idx = new_nodes_perm[perm_idx[]]
+        if node_idx < new_nodes_idx
+            # skip new nodes that have already been processed by incremental compact
+            # (but don't just return nothing because there may be multiple at this pos)
+            perm_idx[] += 1
+            return get_new_node(idx)
+        end
         if new_nodes_info[node_idx].pos != idx
             return nothing
         end
@@ -687,18 +701,18 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
     end
 end
 
-function new_nodes_iter(ir::IRCode)
+function new_nodes_iter(ir::IRCode, new_nodes_idx=1)
     stmts = ir.stmts
     new_nodes = ir.new_nodes.stmts
     new_nodes_info = ir.new_nodes.info
-    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
 end
 
 function new_nodes_iter(compact::IncrementalCompact)
     stmts = compact.result
     new_nodes = compact.new_new_nodes.stmts
     new_nodes_info = compact.new_new_nodes.info
-    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info, 1)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
@@ -728,7 +742,7 @@ function inline_linfo_printer(code::IRCode)
         end
         # Print location information right aligned. If the line below is too long, it'll overwrite this,
         # but that's what we want.
-        if get(io, :color, false)
+        if get(io, :color, false)::Bool
             method_start_column = cols - max_method_width - max_loc_width - 2
             filler = " "^(max_loc_width-length(annotation))
             printstyled(io, "\e[$(method_start_column)G$(annotation)$(filler)$(loc_method)\e[1G", color = :light_black)
@@ -810,7 +824,8 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
-    let io = IOContext(io, :maxssaid=>length(ir.stmts))
+    maxssaid = length(ir.stmts) + Core.Compiler.length(ir.new_nodes)
+    let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
@@ -827,6 +842,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
 end
 
 function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+    compact_cfg = CFG(compact.result_bbs, Int[first(compact.result_bbs[i].stmts) for i in 2:length(compact.result_bbs)])
     cfg = compact.ir.cfg
     (_, width) = displaysize(io)
 
@@ -841,19 +857,22 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
         end
     end
     pop_new_node! = new_nodes_iter(compact)
-    bb_idx = let io = IOContext(io, :maxssaid=>length(compact.result))
-        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, cfg, 1; pop_new_node!)
+    maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
+    bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
     end
 
     # Print uncompacted nodes from the original IR
+
+    # print a separator
     stmts = compact.ir.stmts
-    pop_new_node! = new_nodes_iter(compact.ir)
-    if compact.idx < length(stmts)
-        indent = length(string(length(stmts)))
-        # config.line_info_preprinter(io, "", compact.idx)
-        printstyled(io, "─"^(width-indent-1), '\n', color=:red)
-    end
-    let io = IOContext(io, :maxssaid=>length(compact.ir.stmts))
+    indent = length(string(length(stmts)))
+    # config.line_info_preprinter(io, "", compact.idx)
+    printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+
+    pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
+    maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
+    let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
     end
 

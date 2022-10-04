@@ -55,7 +55,7 @@ Base.show(io::IO, ::MIME"text/plain", t::Time) = print(io, t)
 Base.print(io::IO, t::Time) = print(io, string(t))
 
 function Base.show(io::IO, t::Time)
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, t)
     else
         values = [

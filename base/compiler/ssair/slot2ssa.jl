@@ -216,7 +216,7 @@ function typ_for_val(@nospecialize(x), ci::CodeInfo, sptypes::Vector{Any}, idx::
         end
         return (ci.ssavaluetypes::Vector{Any})[idx]
     end
-    isa(x, GlobalRef) && return abstract_eval_global(x.mod, x.name)
+    isa(x, GlobalRef) && return abstract_eval_globalref(x)
     isa(x, SSAValue) && return (ci.ssavaluetypes::Vector{Any})[x.id]
     isa(x, Argument) && return slottypes[x.n]
     isa(x, NewSSAValue) && return DelayedTyp(x)
@@ -575,7 +575,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         while isa(typ, DelayedTyp)
             typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
         end
-        new_typ = tmerge(new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
+        new_typ = tmerge(OptimizerLattice(), new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
     return new_typ
 end
@@ -585,6 +585,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
     code = ir.stmts.inst
     cfg = ir.cfg
     catch_entry_blocks = Tuple{Int, Int}[]
+    lattice = OptimizerLattice()
+    ⊑ₒ = ⊑(lattice)
     for idx in 1:length(code)
         stmt = code[idx]
         if isexpr(stmt, :enter)
@@ -718,7 +720,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(old_entry[:type], typ)
+            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(lattice, old_entry[:type], typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -852,7 +854,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 while isa(typ, DelayedTyp)
                     typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
                 end
-                new_typ = tmerge(new_typ, typ)
+                new_typ = tmerge(lattice, new_typ, typ)
             end
             node[:type] = new_typ
         end
@@ -866,7 +868,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
             new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts)
-            if !(node[:type] ⊑ new_typ) || !(new_typ ⊑ node[:type])
+            if !(node[:type] ⊑ₒ new_typ) || !(new_typ ⊑ₒ node[:type])
                 node[:type] = new_typ
                 changed = true
             end
