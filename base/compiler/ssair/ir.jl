@@ -204,7 +204,7 @@ end
 InstructionStream() = InstructionStream(0)
 length(is::InstructionStream) = length(is.inst)
 isempty(is::InstructionStream) = isempty(is.inst)
-function add!(is::InstructionStream)
+function add_new_idx!(is::InstructionStream)
     ninst = length(is) + 1
     resize!(is, ninst)
     return ninst
@@ -236,7 +236,7 @@ struct Instruction
     data::InstructionStream
     idx::Int
 end
-Instruction(is::InstructionStream) = Instruction(is, add!(is))
+Instruction(is::InstructionStream) = Instruction(is, add_new_idx!(is))
 
 @inline function getindex(node::Instruction, fld::Symbol)
     isdefined(node, fld) && return getfield(node, fld)
@@ -278,7 +278,7 @@ end
 NewNodeStream(len::Int=0) = NewNodeStream(InstructionStream(len), fill(NewNodeInfo(0, false), len))
 length(new::NewNodeStream) = length(new.stmts)
 isempty(new::NewNodeStream) = isempty(new.stmts)
-function add!(new::NewNodeStream, pos::Int, attach_after::Bool)
+function add_inst!(new::NewNodeStream, pos::Int, attach_after::Bool)
     push!(new.info, NewNodeInfo(pos, attach_after))
     return Instruction(new.stmts)
 end
@@ -523,7 +523,7 @@ scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::S
 scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 function insert_node!(ir::IRCode, pos::SSAValue, inst::NewInstruction, attach_after::Bool=false)
-    node = add!(ir.new_nodes, pos.id, attach_after)
+    node = add_inst!(ir.new_nodes, pos.id, attach_after)
     node[:line] = something(inst.line, ir[pos][:line])
     flag = inst.flag
     if !inst.effect_free_computed
@@ -777,7 +777,7 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
-    node = add!(compact.pending_nodes, pos, attach_after)
+    node = add_inst!(compact.pending_nodes, pos, attach_after)
     # TODO: switch this to `l = length(pending_nodes); splice!(pending_perm, searchsorted(pending_perm, l), l)`
     push!(compact.pending_perm, length(compact.pending_nodes))
     sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes.info[x].pos, Order.Forward))
@@ -790,7 +790,7 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
         if before.id < compact.result_idx
             count_added_node!(compact, inst.stmt)
             line = something(inst.line, compact.result[before.id][:line])
-            node = add!(compact.new_new_nodes, before.id, attach_after)
+            node = add_inst!(compact.new_new_nodes, before.id, attach_after)
             push!(compact.new_new_used_ssas, 0)
             node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
             return NewSSAValue(-node.idx)
@@ -809,7 +809,7 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
             renamed = compact.ssa_rename[pos]::AnySSAValue
             count_added_node!(compact, inst.stmt)
             line = something(inst.line, compact.result[renamed.id][:line])
-            node = add!(compact.new_new_nodes, renamed.id, attach_after)
+            node = add_inst!(compact.new_new_nodes, renamed.id, attach_after)
             push!(compact.new_new_used_ssas, 0)
             node[:inst], node[:type], node[:line], node[:flag] = inst.stmt, inst.type, line, inst.flag
             return NewSSAValue(-node.idx)
@@ -831,7 +831,7 @@ function insert_node!(compact::IncrementalCompact, before, inst::NewInstruction,
         # TODO: This is incorrect and does not maintain ordering among the new nodes
         before_entry = compact.new_new_nodes.info[-before.id]
         line = something(inst.line, compact.new_new_nodes.stmts[-before.id][:line])
-        new_entry = add!(compact.new_new_nodes, before_entry.pos, attach_after)
+        new_entry = add_inst!(compact.new_new_nodes, before_entry.pos, attach_after)
         new_entry[:inst], new_entry[:type], new_entry[:line], new_entry[:flag] = inst.stmt, inst.type, line, inst.flag
         push!(compact.new_new_used_ssas, 0)
         return NewSSAValue(-new_entry.idx)
