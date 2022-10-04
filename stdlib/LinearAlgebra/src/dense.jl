@@ -722,7 +722,7 @@ function exp!(A::StridedMatrix{T}) where T<:BlasFloat
         V = mul!(tmp2, A6, tmp1, true, true)
 
         tmp1 .= V .+ U
-        tmp2 .= V .- U # tmp2 aleady contained V but this seems more readable
+        tmp2 .= V .- U # tmp2 already contained V but this seems more readable
         X = LAPACK.gesv!(tmp2, tmp1)[1] # X now contains r_13 in Higham 2008
 
         if s > 0

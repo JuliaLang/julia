@@ -28,7 +28,7 @@ end
     return nothing
 end
 
-# Test that ambigous calls don't accidentally get nothrow effect
+# Test that ambiguous calls don't accidentally get nothrow effect
 ambig_effects_test(a::Int, b) = 1
 ambig_effects_test(a, b::Int) = 1
 ambig_effects_test(a, b) = 1
@@ -204,6 +204,9 @@ function compare_inconsistent(x::T) where T
 end
 @test !compare_inconsistent(3)
 
+# Effect modeling for Core.compilerbarrier
+@test Base.infer_effects(Base.inferencebarrier, Tuple{Any}) |> Core.Compiler.is_removable_if_unused
+
 # allocation/access of uninitialized fields should taint the :consistent-cy
 struct Maybe{T}
     x::T
@@ -348,7 +351,7 @@ end |> !Core.Compiler.is_foldable
     entry_to_be_invalidated('a')
 end
 
-@test !Core.Compiler.builtin_nothrow(Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
+@test !Core.Compiler.builtin_nothrow(Core.Compiler.fallback_lattice, Core.get_binding_type, Any[Rational{Int}, Core.Const(:foo)], Any)
 
 # Nothrow for assignment to globals
 global glob_assign_int::Int = 0
@@ -367,7 +370,7 @@ end
 
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
 # as the cached effects can be easily wrong otherwise
-# since the inference curently doesn't track "world-age" of global variables
+# since the inference currently doesn't track "world-age" of global variables
 @eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
 setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
 let effects = Base.infer_effects() do
@@ -654,4 +657,14 @@ end # @testset "effects analysis on array construction" begin
 end # @testset "effects analysis on array ops" begin
 
 # Test that builtin_effects handles vararg correctly
-@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.isdefined, Any[String, Vararg{Any}], Bool))
+@test !Core.Compiler.is_nothrow(Core.Compiler.builtin_effects(Core.Compiler.fallback_lattice, Core.isdefined, Any[String, Vararg{Any}], Bool))
+
+# Test that :new can be eliminated even if an sparam is unknown
+struct SparamUnused{T}
+    x
+    SparamUnused(x::T) where {T} = new{T}(x)
+end
+mksparamunused(x) = (SparamUnused(x); nothing)
+let src = code_typed1(mksparamunused, (Any,))
+    @test count(isnew, src.code) == 0
+end

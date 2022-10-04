@@ -769,6 +769,12 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+# Just check it doesn't error
+f46594(::Vararg{T, 2}) where T = 1
+let repr = sprint(show, "text/html", first(methods(f46594)))
+    @test occursin("f46594(::Vararg{T, 2}) where T", replace(repr, r"</?[A-Za-z]>"=>""))
+end
+
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
 end
 let repr = sprint(show, "text/plain", methods(triangular_methodshow))
@@ -1269,12 +1275,6 @@ end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
 end
-let sv = Core.svec(:a, :b, :c)
-    # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
-    repr = sprint(dump, sv)
-    @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
-end
 let repr = sprint(dump, sin)
     @test repr == "sin (function of type typeof(sin))\n"
 end
@@ -1438,7 +1438,7 @@ struct var"#X#" end
 var"#f#"() = 2
 struct var"%X%" end  # Invalid name without '#'
 
-# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# (Just to make this test more sustainable,) we don't necessarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
 @test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
 @test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
@@ -2299,6 +2299,8 @@ end
     @eval f1(var"a.b") = 3
     @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
 
+    @test sprint(_show, Method[]) == "0-element Vector{Method}"
+
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 
     @eval f2(; var"123") = 5
@@ -2409,4 +2411,71 @@ end
         close(io)
         @test isempty(read(f, String)) # make sure we don't unnecessarily lean anything into `stdout`
     end
+end
+
+@testset "IRCode: fix coloring of invalid SSA values" begin
+    # get some ir
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # replace an instruction
+    add_stmt = ir.stmts[1]
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    node = Core.Compiler.insert_node!(ir, 1, inst)
+    Core.Compiler.setindex!(add_stmt, node, :inst)
+
+    # the new node should be colored green (as it's uncompacted IR),
+    # and its uses shouldn't be colored at all (since they're just plain valid references)
+    str = sprint(; context=:color=>true) do io
+        show(io, ir)
+    end
+    @test contains(str, "\e[32m%6 =")
+    @test contains(str, "%1 = %6")
+
+    # if we insert an invalid node, it should be colored appropriately
+    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :inst)
+    str = sprint(; context=:color=>true) do io
+        show(io, ir)
+    end
+    @test contains(str, "%1 = \e[31m%7")
+end
+
+@testset "issue #46947: IncrementalCompact double display of just-compacted nodes" begin
+    # get some IR
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    instructions = length(ir.stmts)
+    lines_shown(obj) = length(findall('\n', sprint(io->show(io, obj))))
+    @test lines_shown(ir) == instructions
+
+    # insert a couple of instructions
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 1), Nothing)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 2), Nothing)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 3), Nothing)
+        Core.Compiler.insert_node!(ir, 4, inst)
+    end
+    instructions += 3
+    @test lines_shown(ir) == instructions
+
+    # compact the IR, ensuring we always show the same number of lines
+    # (the instructions + a separator line)
+    compact = Core.Compiler.IncrementalCompact(ir)
+    @test lines_shown(compact) == instructions + 1
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        @test lines_shown(compact) == instructions + 1
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+    @test lines_shown(compact) == instructions + 1
+
+    ir = Core.Compiler.complete(compact)
+    @test lines_shown(compact) == instructions + 1
 end

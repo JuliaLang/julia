@@ -88,7 +88,7 @@ function load_overrides(;force::Bool = false)::Dict{Symbol, Any}
     #
     # Overrides per UUID/bound name are intercepted upon Artifacts.toml load, and new
     # entries within the "hash" overrides are generated on-the-fly.  Thus, all redirects
-    # mechanisticly happen through the "hash" overrides.
+    # mechanistically happen through the "hash" overrides.
     overrides = Dict{Symbol,Any}(
         # Overrides by UUID
         :UUID => Dict{Base.UUID,Dict{String,Union{String,SHA1}}}(),
@@ -267,7 +267,7 @@ function unpack_platform(entry::Dict{String,Any}, name::String,
     end
 
     if !haskey(entry, "arch")
-        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entrty '$name' missing 'arch' key")
+        @error("Invalid artifacts file at '$(artifacts_toml)': platform-specific artifact entry '$name' missing 'arch' key")
         return nothing
     end
 
@@ -325,7 +325,7 @@ function process_overrides(artifact_dict::Dict, pkg_uuid::Base.UUID)
     # override for this UUID, and inserting new overrides for those hashes.
     overrides = load_overrides()
     if haskey(overrides[:UUID], pkg_uuid)
-        pkg_overrides = overrides[:UUID][pkg_uuid]
+        pkg_overrides = overrides[:UUID][pkg_uuid]::Dict{String, <:Any}
 
         for name in keys(artifact_dict)
             # Skip names that we're not overriding
@@ -570,7 +570,7 @@ end
 raw"""
     split_artifact_slash(name::String)
 
-Splits an artifact indexing string by path deliminters, isolates the first path element,
+Splits an artifact indexing string by path delimiters, isolates the first path element,
 returning that and the `joinpath()` of the remaining arguments.  This normalizes all path
 separators to the native path separator for the current platform.  Examples:
 
@@ -652,13 +652,18 @@ access a single file/directory within an artifact.  Example:
 !!! compat "Julia 1.6"
     Slash-indexing requires at least Julia 1.6.
 """
-macro artifact_str(name, platform=nothing)
+macro artifact_str(name, platform=nothing, artifacts_toml_path=nothing)
     # Find Artifacts.toml file we're going to load from
     srcfile = string(__source__.file)
     if ((isinteractive() && startswith(srcfile, "REPL[")) || (!isinteractive() && srcfile == "none")) && !isfile(srcfile)
         srcfile = pwd()
     end
-    local artifacts_toml = find_artifacts_toml(srcfile)
+    # Sometimes we know the exact path to the Artifacts.toml file, so we can save some lookups
+    local artifacts_toml = if artifacts_toml_path === nothing || artifacts_toml_path == :(nothing)
+        find_artifacts_toml(srcfile)
+    else
+        eval(artifacts_toml_path)
+    end
     if artifacts_toml === nothing
         error(string(
             "Cannot locate '(Julia)Artifacts.toml' file when attempting to use artifact '",
@@ -688,7 +693,7 @@ macro artifact_str(name, platform=nothing)
 
     # If `name` is a constant, (and we're using the default `Platform`) we can actually load
     # and parse the `Artifacts.toml` file now, saving the work from runtime.
-    if isa(name, AbstractString) && platform === nothing
+    if isa(name, AbstractString) && (platform === nothing || platform == :(nothing))
         # To support slash-indexing, we need to split the artifact name from the path tail:
         platform = HostPlatform()
         artifact_name, artifact_path_tail, hash = artifact_slash_lookup(name, artifact_dict, artifacts_toml, platform)

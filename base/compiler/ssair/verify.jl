@@ -1,13 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function maybe_show_ir(ir::IRCode)
+    if isdefined(Core, :Main)
+        Core.Main.Base.display(ir)
+    end
+end
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(print && println(stderr, $arg)))
-        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        isexpr(arg, :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
-        return esc(arg)
+        return esc(quote
+            $arg
+            maybe_show_ir(ir)
+        end)
     end
 end
 

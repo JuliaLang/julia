@@ -265,6 +265,11 @@ Determine whether a global is declared `const` in a given module `m`.
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
+function isconst(g::GlobalRef)
+    g.binding != C_NULL && return ccall(:jl_binding_is_const, Cint, (Ptr{Cvoid},), g.binding) != 0
+    return isconst(g.mod, g.name)
+end
+
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
 
@@ -547,7 +552,7 @@ end
     isprimitivetype(T) -> Bool
 
 Determine whether type `T` was declared as a primitive type
-(i.e. using the `primitive` keyword).
+(i.e. using the `primitive type` syntax).
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -648,7 +653,7 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
     isabstracttype(T)
 
 Determine whether type `T` was declared as an abstract type
-(i.e. using the `abstract` keyword).
+(i.e. using the `abstract type` syntax).
 
 # Examples
 ```jldoctest
@@ -1413,7 +1418,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.Builtin)
         argtypes = Any[types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(f, argtypes, rt)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
     end
     tt = signature_type(f, types)
     result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
@@ -1833,7 +1838,7 @@ as well to get the properties of an instance of the type.
 
 `propertynames(x)` may return only "public" property names that are part
 of the documented interface of `x`.   If you want it to also return "private"
-fieldnames intended for internal use, pass `true` for the optional second argument.
+property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also: [`hasproperty`](@ref), [`hasfield`](@ref).

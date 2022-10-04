@@ -25,6 +25,7 @@ function find_tfunc(@nospecialize f)
 end
 
 const DATATYPE_TYPES_FIELDINDEX = fieldindex(DataType, :types)
+const DATATYPE_NAME_FIELDINDEX = fieldindex(DataType, :name)
 
 ##########
 # tfuncs #
@@ -823,7 +824,10 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     if isa(s, Union)
         return getfield_nothrow(rewrap_unionall(s.a, s00), name, boundscheck) &&
                getfield_nothrow(rewrap_unionall(s.b, s00), name, boundscheck)
-    elseif isa(s, DataType)
+    elseif isType(s) && isTypeDataType(s.parameters[1])
+        s = s0 = DataType
+    end
+    if isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
         s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
@@ -863,15 +867,40 @@ function getfield_tfunc(s00, name, order, boundscheck)
     return getfield_tfunc(s00, name)
 end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, name, false)
+
+function _getfield_fieldindex(@nospecialize(s), name::Const)
+    nv = name.val
+    if isa(nv, Symbol)
+        nv = fieldindex(s, nv, false)
+    end
+    if isa(nv, Int)
+        return nv
+    end
+    return nothing
+end
+
+function _getfield_tfunc_const(@nospecialize(sv), name::Const, setfield::Bool)
+    if isa(name, Const)
+        nv = _getfield_fieldindex(typeof(sv), name)
+        nv === nothing && return Bottom
+        if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+            return Const(getfield(sv, nv))
+        end
+        if isconst(typeof(sv), nv)
+            if isdefined(sv, nv)
+                return Const(getfield(sv, nv))
+            end
+            return Union{}
+        end
+    end
+    return nothing
+end
+
 function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
     if isa(s00, Conditional)
         return Bottom # Bool has no fields
-    elseif isa(s00, Const) || isconstType(s00)
-        if !isa(s00, Const)
-            sv = s00.parameters[1]
-        else
-            sv = s00.val
-        end
+    elseif isa(s00, Const)
+        sv = s00.val
         if isa(name, Const)
             nv = name.val
             if isa(sv, Module)
@@ -881,31 +910,15 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
                 end
                 return Bottom
             end
-            if isa(nv, Symbol)
-                nv = fieldindex(typeof(sv), nv, false)
-            end
-            if !isa(nv, Int)
-                return Bottom
-            end
-            if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
-                return Const(getfield(sv, nv))
-            end
-            if isconst(typeof(sv), nv)
-                if isdefined(sv, nv)
-                    return Const(getfield(sv, nv))
-                end
-                return Union{}
-            end
+            r = _getfield_tfunc_const(sv, name, setfield)
+            r !== nothing && return r
         end
         s = typeof(sv)
     elseif isa(s00, PartialStruct)
         s = widenconst(s00)
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
-            nv = name.val
-            if isa(nv, Symbol)
-                nv = fieldindex(sty, nv, false)
-            end
+            nv = _getfield_fieldindex(sty, name)
             if isa(nv, Int) && 1 <= nv <= length(s00.fields)
                 return unwrapva(s00.fields[nv])
             end
@@ -916,6 +929,27 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
     if isa(s, Union)
         return tmerge(_getfield_tfunc(rewrap_unionall(s.a, s00), name, setfield),
                       _getfield_tfunc(rewrap_unionall(s.b, s00), name, setfield))
+    end
+    if isType(s)
+        if isconstType(s)
+            sv = s00.parameters[1]
+	    if isa(name, Const)
+                r = _getfield_tfunc_const(sv, name, setfield)
+                r !== nothing && return r
+	    end
+            s = typeof(sv)
+        else
+            sv = s.parameters[1]
+            if isTypeDataType(sv) && isa(name, Const)
+                nv = _getfield_fieldindex(DataType, name)
+                if nv == DATATYPE_NAME_FIELDINDEX
+                    # N.B. This only works for fields that do not depend on type
+                    # parameters (which we do not know here).
+                    return Const(sv.name)
+                end
+                s = DataType
+            end
+        end
     end
     isa(s, DataType) || return Any
     isabstracttype(s) && return Any
@@ -972,13 +1006,8 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         end
         return t
     end
-    fld = name.val
-    if isa(fld, Symbol)
-        fld = fieldindex(s, fld, false)
-    end
-    if !isa(fld, Int)
-        return Bottom
-    end
+    fld = _getfield_fieldindex(s, name)
+    fld === nothing && return Bottom
     if s <: Tuple && fld >= nf && isvarargtype(ftypes[nf])
         return rewrap_unionall(unwrapva(ftypes[nf]), s00)
     end
@@ -1116,7 +1145,7 @@ function modifyfield!_tfunc(o, f, op, v)
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
 end
-function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::InferenceState)
+function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::InferenceState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
         nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
@@ -1134,16 +1163,14 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         op = unwrapva(argtypes[4])
         v = unwrapva(argtypes[5])
         TF = getfield_tfunc(o, f)
-        push!(sv.ssavalue_uses[sv.currpc], sv.currpc) # temporarily disable `call_result_unused` check for this call
-        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), sv, #=max_methods=# 1)
-        pop!(sv.ssavalue_uses[sv.currpc], sv.currpc)
+        callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=# 1)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
         elseif isconcretetype(RT) && has_nontrivial_const_info(typeinf_lattice(interp), TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
-        info = callinfo.info
+        info = ModifyFieldInfo(callinfo.info)
     end
     return CallMeta(RT, Effects(), info)
 end
@@ -1754,7 +1781,7 @@ function arrayset_typecheck(@nospecialize(arytype), @nospecialize(elmtype))
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt), @specialize(lattice::AbstractLattice))
+function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
     ⊑ₗ = ⊑(lattice)
     if f === arrayset
         array_builtin_common_nothrow(argtypes, 4) || return false
@@ -1827,6 +1854,10 @@ function _builtin_nothrow(@nospecialize(f), argtypes::Array{Any,1}, @nospecializ
         2 <= length(argtypes) <= 4 || return false
         # Core.finalizer does no error checking - that's done in Base.finalizer
         return true
+    elseif f === Core.compilerbarrier
+        length(argtypes) == 2 || return false
+        a1 = argtypes[1]
+        return isa(a1, Const) && contains_is((:type, :const, :conditional), a1.val)
     end
     return false
 end
@@ -1839,7 +1870,7 @@ const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
     Core.kwfunc, Core.ifelse, Core._typevar, (<:),
-    typeassert, throw, arraysize, getglobal,
+    typeassert, throw, arraysize, getglobal, compilerbarrier
 ]
 
 const _CONSISTENT_BUILTINS = Any[
@@ -1858,7 +1889,7 @@ const _CONSISTENT_BUILTINS = Any[
     (<:),
     typeassert,
     throw,
-    setfield!,
+    setfield!
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -1877,6 +1908,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     tuple,
     typeassert,
     typeof,
+    compilerbarrier,
 ]
 
 const _ARGMEM_BUILTINS = Any[
@@ -1981,7 +2013,7 @@ function getglobal_effects(argtypes::Vector{Any}, @nospecialize(rt))
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly)
 end
 
-function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_effects(@specialize(lattice::AbstractLattice), f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_effects(f, argtypes)
     end
@@ -1994,6 +2026,10 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         return getfield_effects(argtypes, rt)
     elseif f === getglobal
         return getglobal_effects(argtypes, rt)
+    elseif f === Core.get_binding_type
+        length(argtypes) == 2 || return EFFECTS_THROWS
+        effect_free = get_binding_type_effect_free(argtypes[1], argtypes[2]) ? ALWAYS_TRUE : ALWAYS_FALSE
+        return Effects(EFFECTS_TOTAL; effect_free)
     else
         consistent = contains_is(_CONSISTENT_BUILTINS, f) ? ALWAYS_TRUE : ALWAYS_FALSE
         if f === setfield! || f === arrayset
@@ -2003,7 +2039,7 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
         else
             effect_free = ALWAYS_FALSE
         end
-        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(f, argtypes, rt))
+        nothrow = (!(!isempty(argtypes) && isvarargtype(argtypes[end])) && builtin_nothrow(lattice, f, argtypes, rt))
         if contains_is(_INACCESSIBLEMEM_BUILTINS, f)
             inaccessiblememonly = ALWAYS_TRUE
         elseif contains_is(_ARGMEM_BUILTINS, f)
@@ -2015,10 +2051,10 @@ function builtin_effects(f::Builtin, argtypes::Vector{Any}, @nospecialize(rt))
     end
 end
 
-function builtin_nothrow(@nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
+function builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Bottom && return false
     contains_is(_PURE_BUILTINS, f) && return true
-    return _builtin_nothrow(f, argtypes, rt, fallback_lattice)
+    return _builtin_nothrow(lattice, f, argtypes, rt)
 end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
@@ -2188,7 +2224,7 @@ end
 # TODO: this function is a very buggy and poor model of the return_type function
 # since abstract_call_gf_by_type is a very inaccurate model of _method and of typeinf_type,
 # while this assumes that it is an absolutely precise and accurate and exact model of both
-function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv::Union{InferenceState, IRCode})
+function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::Union{InferenceState, IRCode})
     if length(argtypes) == 3
         tt = argtypes[3]
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
@@ -2201,16 +2237,17 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                     if contains_is(argtypes_vec, Union{})
                         return CallMeta(Const(Union{}), EFFECTS_TOTAL, false)
                     end
+                    #
                     # Run the abstract_call without restricting abstract call
                     # sites. Otherwise, our behavior model of abstract_call
                     # below will be wrong.
                     if isa(sv, InferenceState)
                         old_restrict = sv.restrict_abstract_call_sites
                         sv.restrict_abstract_call_sites = false
-                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
                         sv.restrict_abstract_call_sites = old_restrict
                     else
-                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), sv, -1)
+                        call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
                     end
                     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
                     rt = widenconditional(call.rt)

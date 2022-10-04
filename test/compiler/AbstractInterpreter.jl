@@ -127,14 +127,14 @@ import .CC:
 struct TaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
-CC.widen(𝕃::TaintLattice) = 𝕃.parent
+CC.widenlattice(𝕃::TaintLattice) = 𝕃.parent
 CC.is_valid_lattice(𝕃::TaintLattice, @nospecialize(elm)) =
     is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, Taint)
 
 struct InterTaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
-CC.widen(𝕃::InterTaintLattice) = 𝕃.parent
+CC.widenlattice(𝕃::InterTaintLattice) = 𝕃.parent
 CC.is_valid_lattice(𝕃::InterTaintLattice, @nospecialize(elm)) =
     is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, InterTaint)
 
@@ -156,6 +156,9 @@ struct Taint
     end
 end
 Taint(@nospecialize(typ), id::Int) = Taint(typ, push!(BitSet(), id))
+function Base.:(==)(a::Taint, b::Taint)
+    return a.typ == b.typ && a.slots == b.slots
+end
 
 struct InterTaint
     typ
@@ -169,6 +172,9 @@ struct InterTaint
     end
 end
 InterTaint(@nospecialize(typ), id::Int) = InterTaint(typ, push!(BitSet(), id))
+function Base.:(==)(a::InterTaint, b::InterTaint)
+    return a.typ == b.typ && a.slots == b.slots
+end
 
 const AnyTaint = Union{Taint, InterTaint}
 
@@ -228,5 +234,7 @@ function CC.widenreturn(𝕃::InferenceLattice{<:InterTaintLattice}, @nospeciali
     end
     return CC.widenreturn(widenlattice(𝕃), rt, bestguess, nargs, slottypes, changes)
 end
+
+@test CC.tmerge(typeinf_lattice(TaintInterpreter()), Taint(Int, 1), Taint(Int, 2)) == Taint(Int, BitSet(1:2))
 
 # code_typed(ifelse, (Bool, Int, Int); interp=TaintInterpreter())

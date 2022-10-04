@@ -801,7 +801,7 @@ end
 
 
 """
-    ^(s::Regex, n::Integer)
+    ^(s::Regex, n::Integer) -> Regex
 
 Repeat a regex `n` times.
 

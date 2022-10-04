@@ -23,6 +23,29 @@ function hasuniquerep(@nospecialize t)
     return false
 end
 
+"""
+    isTypeDataType(@nospecialize t)
+
+For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
+we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
+(potentially wrapped in some UnionAll), then we are guaranteed that this statement
+will be a DataType at runtime (and not e.g. a Union or UnionAll typeequal to it).
+"""
+function isTypeDataType(@nospecialize t)
+    isa(t, DataType) || return false
+    isType(t) && return false
+    # Could be Union{} at runtime
+    t === Core.TypeofBottom && return false
+    if t.name === Tuple.name
+        # If we have a Union parameter, could have been redistributed at runtime,
+        # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
+        # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
+        # is not.
+        return _all(isTypeDataType, t.parameters)
+    end
+    return true
+end
+
 function has_nontrivial_const_info(lattice::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
