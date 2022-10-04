@@ -154,9 +154,7 @@ julia> keys([4, 5, 6])
  2
  3
 
-julia> a = [4 5; 6 7];
-
-julia> keys(a)
+julia> keys([4 5; 6 7])
 CartesianIndices((2, 2))
 ```
 """
