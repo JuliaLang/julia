@@ -1510,7 +1510,7 @@ timesofar("reductions")
                 end
 
                 b3 = bitrand(l)
-                b4 = bitrand(l+extra_len)
+                b4 = bitrand(l+extra_l)
                 for op in (|, ⊻)
                     map!(op, b1, b2, b3)
                     @test first(b1, l) == map(op, b2, b3)
