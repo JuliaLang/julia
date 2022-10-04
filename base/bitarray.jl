@@ -1797,19 +1797,20 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
-    length(A) == length(B) || throw(DimensionMismatch("size of A and B must be equal"))
     length(A) <= length(dest) || throw(DimensionMismatch("size of dest must be >= than size of A and B"))
+    length(B) <= length(dest) || throw(DimensionMismatch("size of dest must be >= than size of A and B"))
     isempty(A) && return dest
+    isempty(B) && return dest
     destc = dest.chunks
     Ac = A.chunks
     Bc = B.chunks
-    len_Ac = length(Ac)
+    len_Ac = min(length(Ac), length(Bc))
     for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
     # the last effected UInt64's original content
     dest_last = destc[len_Ac]
-    _msk = _msk_end(A)
+    _msk = _msk_end(len_Ac)
     # first zero out the bits mask is going to change
     destc[len_Ac] = (dest_last & ~(_msk))
     # then update bits by `or`ing with a masked RHS
