@@ -1651,9 +1651,9 @@ function link_jilib(path, out, args=``)
     LIBDIR = joinpath(Sys.BINDIR, "..", "lib")
     LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
     WHOLE_ARCHIVE = Sys.isapple() ? `-all_load` : `--whole-archive`
-    NO_WHOLE_ARCHIVE = Sys.isapple() `` : `--no-whole-archive`
+    NO_WHOLE_ARCHIVE = Sys.isapple() ? `` : `--no-whole-archive`
 
-    run(`$ld() --shared --output=$out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
+    run(`$(ld()) --shared --output=$out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
 end
 
 @testset "empty module" begin
