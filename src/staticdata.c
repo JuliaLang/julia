@@ -314,6 +314,7 @@ static arraylist_t ccallable_list;
 // togther with their module build_ids (used for external linkage)
 // jl_linkage_blobs.items[2i:2i+1] correspond to jl_build_ids[i]   (0-offset indexing)
 arraylist_t jl_linkage_blobs;
+arraylist_t jl_image_relocs;
 jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED = NULL;
 
 // hash of definitions for predefined function pointers
@@ -735,28 +736,6 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 {
     assert((ios_pos(s) & (sizeof(void*) - 1)) == 0 && "stream misaligned for writing a word-sized value");
     write_uint(s, 0);
-}
-
-static size_t n_linkage_blobs(void)
-{
-    if (!jl_build_ids)
-        return 0;
-    assert(jl_is_array(jl_build_ids));
-    return jl_array_len(jl_build_ids);
-}
-
-static size_t external_blob_index(jl_value_t *v) {
-    size_t nblobs = n_linkage_blobs();
-    if (nblobs == 0)
-        return nblobs;
-    assert(jl_linkage_blobs.len == 2*nblobs);
-    for (size_t i = 0; i < 2*nblobs; i+=2) {
-        uintptr_t left = (uintptr_t)jl_linkage_blobs.items[i], right = (uintptr_t)jl_linkage_blobs.items[i+1];
-        if (left <= (uintptr_t)v && (uintptr_t)v < right) {
-            return i>>1;
-        }
-    }
-    return nblobs;
 }
 
 static uintptr_t external_linkage(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) {
@@ -1622,21 +1601,26 @@ static void jl_read_relocations(jl_serializer_state *s, jl_array_t *link_ids, ui
     assert(!link_ids || link_index == jl_array_len(link_ids));
 }
 
-static char *sysimg_base;
-static char *sysimg_relocs;
 void gc_sweep_sysimg(void)
 {
-    char *base = sysimg_base;
-    reloc_t *relocs = (reloc_t*)sysimg_relocs;
-    if (relocs == NULL)
+    size_t nblobs = n_linkage_blobs();
+    if (nblobs == 0)
         return;
-    while (1) {
-        uintptr_t offset = *relocs;
-        relocs++;
-        if (offset == 0)
-            break;
-        jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + offset);
-        o->bits.gc = GC_OLD;
+    assert(jl_linkage_blobs.len == 2*nblobs);
+    assert(jl_image_relocs.len == nblobs);
+    for (size_t i = 0; i < 2*nblobs; i+=2) {
+        char* base = (char*)jl_linkage_blobs.items[i];
+        reloc_t *relocs = (reloc_t*)jl_image_relocs.items[i>>1];
+        if (relocs == NULL)
+            continue;
+        while (1) {
+            uintptr_t offset = *relocs;
+            relocs++;
+            if (offset == 0)
+                break;
+            jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + offset);
+            o->bits.gc = GC_OLD;
+        }
     }
 }
 
@@ -2438,14 +2422,8 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     ios_close(&symbols);
 
     jl_value_t *image_base = (jl_value_t*)&sysimg.buf[0];
-    if (!incremental) {
-        sysimg_base = (char*)image_base;
-        sysimg_relocs = &relocs.buf[0];
-        jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
-    }
+    reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
 
-    //if (incremental)
-    //    jl_printf(JL_STDOUT, "Pointer location of Base: %p; at offset 0x%lx\n", jl_base_module, ((uintptr_t)jl_base_module - (uintptr_t)jl_linkage_blobs.items[0])/sizeof(void*));
     s.s = &sysimg;
     jl_read_relocations(&s, s.link_ids_gctags, GC_OLD_MARKED);
     size_t sizeof_tags = ios_pos(&relocs);
@@ -2499,6 +2477,8 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     // Prepare for later external linkage against the sysimg
     arraylist_push(&jl_linkage_blobs, image_base);
     arraylist_push(&jl_linkage_blobs, (char*)image_base + sizeof_sysimg);
+    arraylist_push(&jl_image_relocs, relocs_base);
+
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
     uint64_t buildid = (((uint64_t)read_uint32(f)) << 32) | read_uint32(f);
     if (!jl_build_ids)
