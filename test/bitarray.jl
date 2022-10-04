@@ -1510,9 +1510,15 @@ timesofar("reductions")
                 end
 
                 b3 = bitrand(l)
+                b4 = bitrand(l+extra_len)
                 for op in (|, ⊻)
-                    map!(op, b1, b2)
+                    map!(op, b1, b2, b3)
                     @test first(b1, l) == map(op, b2, b3)
+                    # check we didn't change bits we're not suppose to
+                    @test last(b1, extra_l) == original_tail
+
+                    map!(op, b1, b2, b4)
+                    @test first(b1, l) == map(op, b2, b4)
                     # check we didn't change bits we're not suppose to
                     @test last(b1, extra_l) == original_tail
                 end
