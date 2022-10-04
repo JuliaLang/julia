@@ -12,6 +12,8 @@
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/ExecutionEngine/Orc/CompileUtils.h>
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
+#include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
+#include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
@@ -1536,13 +1538,13 @@ llvm_orc_registerJITLoaderGDBAllocAction(const char *Data, size_t Size);
 
 void JuliaOJIT::enableJITDebuggingSupport()
 {
-    // We do not use GDBJITDebugInfoRegistrationPlugin::Create, as the runtime name
-    // lookup is unnecessarily involved/fragile for our in-process JIT use case
-    // (with the llvm_orc_registerJITLoaderGDBAllocAction symbol being in either
-    // libjulia-codegen or yet another shared library for LLVM depending on the build
-    // flags, etc.).
-    const auto Addr = ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBAllocAction);
-    ObjectLayer.addPlugin(std::make_unique<orc::GDBJITDebugInfoRegistrationPlugin>(Addr));
+    orc::SymbolMap GDBFunctions;
+    GDBFunctions[mangle("llvm_orc_registerJITLoaderGDBAllocAction")] = JITEvaluatedSymbol::fromPointer(&llvm_orc_registerJITLoaderGDBAllocAction, JITSymbolFlags::Exported | JITSymbolFlags::Callable);
+    GDBFunctions[mangle("llvm_orc_registerJITLoaderGDBWrapper")] = JITEvaluatedSymbol::fromPointer(&llvm_orc_registerJITLoaderGDBWrapper, JITSymbolFlags::Exported | JITSymbolFlags::Callable);
+    cantFail(JD.define(orc::absoluteSymbols(GDBFunctions)));
+    ObjectLayer.addPlugin(cantFail(orc::GDBJITDebugInfoRegistrationPlugin::Create(ES, JD, TM->getTargetTriple())));
+    //EPCDebugObjectRegistrar doesn't take a JITDylib, so we have to directly provide the call address
+    ObjectLayer.addPlugin(std::make_unique<orc::DebugObjectManagerPlugin>(ES, std::make_unique<orc::EPCDebugObjectRegistrar>(ES, orc::ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBWrapper))));
 }
 #else
 void JuliaOJIT::enableJITDebuggingSupport()
