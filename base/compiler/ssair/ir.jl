@@ -288,9 +288,7 @@ struct NewInstruction
     stmt::Any
     type::Any
     info::CallInfo
-    # If nothing, copy the line from previous statement
-    # in the insertion location
-    line::Union{Int32, Nothing}
+    line::Union{Int32,Nothing} # if nothing, copy the line from previous statement in the insertion location
     flag::UInt8
 
     ## Insertion options
@@ -298,24 +296,36 @@ struct NewInstruction
     # The IR_FLAG_EFFECT_FREE flag has already been computed (or forced).
     # Don't bother redoing so on insertion.
     effect_free_computed::Bool
-    NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
-            line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool) =
-        new(stmt, type, info, line, flag, effect_free_computed)
+
+    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+                            line::Union{Int32,Nothing}, flag::UInt8, effect_free_computed::Bool)
+        return new(stmt, type, info, line, flag, effect_free_computed)
+    end
 end
-NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
-    NewInstruction(stmt, type, nothing)
-NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
-    NewInstruction(stmt, type, NoCallInfo(), line, IR_FLAG_NULL, false)
-NewInstruction(@nospecialize(stmt), meta::Instruction; line::Union{Int32, Nothing}=nothing) =
-    NewInstruction(stmt, meta[:type], meta[:info], line === nothing ? meta[:line] : line, meta[:flag], true)
-
-effect_free(inst::NewInstruction) =
-    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | IR_FLAG_EFFECT_FREE, true)
-non_effect_free(inst::NewInstruction) =
-    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag & ~IR_FLAG_EFFECT_FREE, true)
-with_flags(inst::NewInstruction, flags::UInt8) =
-    NewInstruction(inst.stmt, inst.type, inst.info, inst.line, inst.flag | flags, true)
-
+function NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Int32,Nothing}=nothing)
+    return NewInstruction(stmt, type, NoCallInfo(), line, IR_FLAG_NULL, false)
+end
+function NewInstruction(inst::NewInstruction;
+    @nospecialize(stmt=inst.stmt),
+    @nospecialize(type=inst.type),
+    @nospecialize(info=inst.info),
+    line::Union{Int32,Nothing}=inst.line,
+    flag::UInt8=inst.flag,
+    effect_free_computed::Bool=inst.effect_free_computed)
+    return NewInstruction(stmt, type, info, line, flag, effect_free_computed)
+end
+function NewInstruction(inst::Instruction;
+    @nospecialize(stmt=inst[:inst]),
+    @nospecialize(type=inst[:type]),
+    @nospecialize(info=inst[:info]),
+    line::Union{Int32,Nothing}=inst[:line],
+    flag::UInt8=inst[:flag],
+    effect_free_computed::Bool=true)
+    return NewInstruction(stmt, type, info, line, flag, effect_free_computed)
+end
+effect_free(inst::NewInstruction) = NewInstruction(inst; flag=(inst.flag | IR_FLAG_EFFECT_FREE), effect_free_computed=true)
+non_effect_free(inst::NewInstruction) = NewInstruction(inst; flag=(inst.flag & ~IR_FLAG_EFFECT_FREE), effect_free_computed=true)
+with_flags(inst::NewInstruction, flags::UInt8) = NewInstruction(inst; flag=(inst.flag | flags), effect_free_computed=true)
 
 struct IRCode
     stmts::InstructionStream
@@ -332,8 +342,7 @@ struct IRCode
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         return new(stmts, ir.argtypes, ir.sptypes, ir.linetable, cfg, new_nodes, ir.meta)
     end
-    global copy
-    copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
+    global copy(ir::IRCode) = new(copy(ir.stmts), copy(ir.argtypes), copy(ir.sptypes),
         copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
 end
 
