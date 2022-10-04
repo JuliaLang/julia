@@ -418,34 +418,6 @@ static void write_reloc_t(ios_t *s, uintptr_t reloc_id) JL_NOTSAFEPOINT
     }
 }
 
-static int externally_linked(jl_value_t *v)
-{
-    if (!serializer_worklist)   // disabled when writing sysimg
-        return 0;
-    if (jl_is_datatype(v) && ((jl_datatype_t*)v)->imgcache)
-        return 1;
-
-    // The special handling for a few items here represents a downpayment on a
-    // more extensive mirroring/porting of functionality from dump.c.
-    // To be continued in a future PR.
-    if (jl_is_method_instance(v))
-        return externally_linked(((jl_method_instance_t*)v)->def.value);
-    else if (jl_is_code_instance(v))
-        return externally_linked(((jl_code_instance_t*)v)->def->def.value);
-
-    jl_module_t *vmod = NULL;
-    if (jl_is_module(v))
-        vmod = (jl_module_t*)v;
-    else if (jl_is_typename(v))
-        vmod = ((jl_typename_t*)v)->module;
-    else if (jl_is_method(v))
-        vmod = ((jl_method_t*)v)->module;
-    if (vmod && !module_in_worklist(vmod))
-        return 1;
-
-    return ptrhash_get(&external_objects, v) != HT_NOTFOUND;
-}
-
 // --- Static Compile ---
 
 static void *jl_sysimg_handle = NULL;
@@ -593,21 +565,21 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         return;
     }
 
+    if (jl_object_in_image(v))
+        return;
+
+    // We've encountered an item we need to cache
     size_t item = ++backref_table_numel;
     assert(item < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
     char *pos = (char*)HT_NOTFOUND + item;
     *bp = (void*)pos;
-
-    // Don't recurse into things we already cached in an earlier sysimg/pkgimg
-    if (externally_linked(v))
-        return;
 
     // some values have special representations
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_serialize_value(s, t);
 
     if (t->layout->npointers == 0) {
-        // skip it
+        // bitstypes do not require recursion
     }
     else if (jl_is_svec(v)) {
         if (!recursive)
@@ -801,7 +773,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
-    else if (externally_linked(v)) {
+    else if (jl_object_in_image(v)) {
         assert(link_ids);
         uintptr_t item = external_linkage(s, v, link_ids);
         if (!item) {
@@ -1001,6 +973,7 @@ static void jl_write_values(jl_serializer_state *s)
     for (i = 0, len = backref_table_numel * 2; i < len; i += 2) {
         jl_value_t *v = (jl_value_t*)objects_list.items[i];           // the object
         JL_GC_PROMISE_ROOTED(v);
+        assert(!jl_object_in_image(v));
         uintptr_t item = (uintptr_t)objects_list.items[i + 1];        // the id
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((t->instance == NULL || t->instance == v) && "detected singleton construction corruption");
@@ -1018,12 +991,6 @@ static void jl_write_values(jl_serializer_state *s)
         // }
         int GV = jl_get_llvm_gv(native_functions, v);
         record_gvar(s, GV, ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
-
-        if (externally_linked(v)) {
-            assert(!GV);
-            write_pointerfield(s, v);
-            continue;
-        }
 
         // write data
         if (jl_is_cpointer(v)) {
@@ -2129,7 +2096,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist) JL_GC
             htable_new(&external_objects, NUM_TAGS);
             for (size_t i = 0; tags[i] != NULL; i++) {
                 jl_value_t *tag = *tags[i];
-                if (!externally_linked(tag))
+                // if (!externally_linked(tag))
                     ptrhash_put(&external_objects, tag, tag);
             }
             // Queue the worklist itself as the first item we serialize
