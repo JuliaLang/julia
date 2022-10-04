@@ -101,16 +101,16 @@ end
 end
 
 @testset "All types ending with Exception or Error subtype Exception" begin
-    function test_exceptions(mod, visited=Set{Module}(), mod_exp=Symbol(mod))
+    function test_exceptions(mod, visited=Set{Module}())
         if mod ∉ visited
             push!(visited, mod)
             for name in names(mod, all=true)
                 isdefined(mod, name) || continue
-                joined_expr = Expr(:., mod_exp, QuoteNode(name))
-                value = eval(joined_expr)
-                value isa Module && test_exceptions(value, visited, joined_expr)
+                value = getfield(mod, name)
 
-                if value isa Type
+                if value isa Module
+                    test_exceptions(value, visited)
+                elseif value isa Type
                     str = string(value)
                     if endswith(str, "Exception") || endswith(str, "Error")
                         @test value <: Exception
