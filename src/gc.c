@@ -2880,7 +2880,7 @@ mark: {
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
 {
-    jl_value_t* current_task = jl_atomic_load_relaxed(&ptls2->current_task);
+    jl_value_t *current_task = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
     gc_mark_queue_obj(gc_cache, sp, current_task);
     gc_heap_snapshot_record_root(current_task, "current task");
     gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
