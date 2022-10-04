@@ -1632,12 +1632,17 @@ function compilecache(pkg::Base.PkgId, path::String, cachedir::String, internal_
     return create_expr_cache(pkg, path, tmppath, concrete_deps, internal_stderr, internal_stdout), tmppath
 end
 
-using LLD_jll
+import LLD_jll
 
 function ld(f)
-    LLD_jll.lld() do lld
-        f(`$lld -flavor gnu`)
+    @static if Sys.iswindows()
+        flavor = "link"
+    elseif Sys.isapple()
+        flavor = "darwin"
+    else
+        flavor = "gnu"
     end
+    f(`$(LLD_jll.lld()) -flavor $flavor`)
 end
 
 is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
