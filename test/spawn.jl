@@ -26,7 +26,7 @@ function _tryonce_download_from_cache(desired_url::AbstractString)
     cache_output_filename = joinpath(mktempdir(), "myfile")
     cache_response = Downloads.request(
         cache_url;
-        output = cache_output,
+        output = cache_output_filename,
         throw = false,
         timeout = 60,
     )
