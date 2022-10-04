@@ -3,43 +3,6 @@
 # This is defined separately from parser.jl so that:
 # * parser.jl doesn't need to refer to any tree data structures
 # * It's clear which parts are the public API
-#
-# What should the general parsing API look like? Some points to consider:
-#
-# * After parsing atoms or statements or most other internal rules, it's
-#   usual to start in the middle of the input text and end somewhere else in
-#   the middle of the input text. So we should taken an index for the start of
-#   parsing and supply an index back to the caller after parsing.
-#
-# * `parseall` is a special case where we expect to consume all the input.
-#   Perhaps this is the API which throws an error if we don't consume it all,
-#   and doesn't accept an index as input?
-#
-# * The ParseStream is the fundamental interface which wraps the code string
-#   and index up together for input and contains the output events, diagnostics
-#   and current stream position after parsing. The user should potentially be
-#   able to use this directly. It does, however assume a Julia-compatible token
-#   stream.
-#
-# * It could be useful to support an IO-based interface so that users can parse
-#   Julia code intermixed with other DSLs. Documenter.jl and string macros come
-#   to mind as examples which could use this. A tricky part is deciding where
-#   the input ends: For string macros this is done by the parser, but for
-#   Documenter it's probably just done beforehand according to the Markdown
-#   code block rules.
-#
-# * The API should have an interface where a simple string is passed in. How
-#   does SourceFile relate to this?
-#
-# * It's neat for `parse` to be overloadable to produce various output data
-#   structures; GreenNode, SyntaxNode, Expr, (etc?) in the same way that
-#   Base.parse can be used for non-Julia code.  (Heh... though
-#   `Base.parse(Expr, "...")` would also make a certain amount of sense.)
-#
-# * What's the no-copy API look like? A String can be put into an IOBuffer via
-#   unsafe_wrap(Vector{UInt8}, str) ... A SubString likewise. Also there's the
-#   `codeunits` function to hold a GC-safe view of string data as an array (but
-#   we can't use a Vector{UInt8})
 
 struct ParseError <: Exception
     source::SourceFile
@@ -65,39 +28,19 @@ Base.display_error(io::IO, err::ParseError, bt) = Base.showerror(io, err, bt)
 
 
 """
-    # Input and output:
-    stream = parse(stream::ParseStream; kws...)
-    (tree, diagnostics)        = parse(TreeType, io::IOBuffer; kws...)
-    (tree, diagnostics, index) = parse(TreeType, str::AbstractString, [index::Integer]; kws...)
-    # Keywords
-    parse(...; rule=:toplevel, version=VERSION, ignore_trivia=true)
+    parse!(stream::ParseStream; rule=:toplevel)
 
-Parse Julia source code from `input`, returning the output in a format
-compatible with `input`:
-
-* When `input` is a `ParseStream`, the stream itself is returned and the
-  `ParseStream` interface can be used to process the output.
-* When `input` is a seekable `IO` subtype, the output is `(tree, diagnostics)`.
-  The buffer `position` will be set to the next byte of input.
-* When `input` is an `AbstractString, Integer`, or `Vector{UInt8}, Integer` the
-  output is `(tree, diagnostics, index)`, where `index` (default 1) is the next
-  byte of input.
+Parse Julia source code from a [`ParseStream`](@ref) object. Output tree data
+structures may be extracted from `stream` with the [`build_tree`](@ref) function.
 
 `rule` may be any of
-* `toplevel` (default) — parse a whole "file" of top level statements. In this
+* `:toplevel` (default) — parse a whole "file" of top level statements. In this
   mode, the parser expects to fully consume the input.
-* `statement` — parse a single statement, or statements separated by semicolons.
-* `atom` — parse a single syntax "atom": a literal, identifier, or
+* `:statement` — parse a single statement, or statements separated by semicolons.
+* `:atom` — parse a single syntax "atom": a literal, identifier, or
   parenthesized expression.
-
-`version` (default `VERSION`) may be used to set the syntax version to
-any Julia version `>= v"1.0"`. We aim to parse all Julia syntax which has been
-added after v"1.0", emitting an error if it's not compatible with the requested
-`version`.
-
-See also [`parseall`](@ref) for a simpler but less powerful interface.
 """
-function parse(stream::ParseStream; rule::Symbol=:toplevel)
+function parse!(stream::ParseStream; rule::Symbol=:toplevel)
     ps = ParseState(stream)
     if rule === :toplevel
         parse_toplevel(ps)
@@ -111,56 +54,37 @@ function parse(stream::ParseStream; rule::Symbol=:toplevel)
     stream
 end
 
-function parse(::Type{T}, io::IO;
-               rule::Symbol=:toplevel, version=VERSION, kws...) where {T}
+"""
+    parse!(TreeType, io::IO; rule=:toplevel, version=VERSION)
+
+Parse Julia source code from a seekable `IO` object. The output is a tuple
+`(tree, diagnostics)`. When `parse!` returns, the stream `io` is positioned
+directly after the last byte which was consumed during parsing.
+"""
+function parse!(::Type{TreeType}, io::IO;
+                rule::Symbol=:toplevel, version=VERSION, kws...) where {TreeType}
     stream = ParseStream(io; version=version)
-    parse(stream; rule=rule)
-    tree = build_tree(T, stream; kws...)
+    parse!(stream; rule=rule)
+    tree = build_tree(TreeType, stream; kws...)
     seek(io, last_byte(stream))
     tree, stream.diagnostics
 end
 
-# Generic version of parse for all other cases where an index must be passed
-# back - ie strings and buffers
-function parse(::Type{T}, input...;
-               rule::Symbol=:toplevel, version=VERSION, kws...) where {T}
-    stream = ParseStream(input...; version=version)
-    parse(stream; rule=rule)
-    tree = build_tree(T, stream; kws...)
-    tree, stream.diagnostics, last_byte(stream) + 1
-end
-
-
-"""
-    parseall(TreeType, input...;
-             rule=:toplevel,
-             version=VERSION,
-             ignore_trivia=true)
-
-Experimental convenience interface to parse `input` as Julia code, emitting an
-error if the entire input is not consumed. `input` can be a string or any other
-valid input to the `ParseStream` constructor. By default `parseall` will ignore
-whitespace and comments before and after valid code but you can turn this off
-by setting `ignore_trivia=false`.
-
-A `ParseError` will be thrown if any errors occurred during parsing.
-
-See [`parse`](@ref) for a more complete and powerful interface to the parser,
-as well as a description of the `version` and `rule` keywords.
-"""
-function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
-                  ignore_trivia=true, filename=nothing) where {T}
-    stream = ParseStream(input...; version=version)
+function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=VERSION,
+                ignore_trivia=true, filename=nothing, ignore_warnings=false) where {T}
+    stream = ParseStream(text, index; version=version)
     if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
         empty!(stream)
     end
-    parse(stream; rule=rule)
-    if (ignore_trivia  && peek(stream, skip_newlines=true) != K"EndMarker") ||
-       (!ignore_trivia && (peek(stream, skip_newlines=false, skip_whitespace=false) != K"EndMarker"))
-        emit_diagnostic(stream, error="unexpected text after parsing $rule")
+    parse!(stream; rule=rule)
+    if need_eof
+        if (ignore_trivia  && peek(stream, skip_newlines=true) != K"EndMarker") ||
+           (!ignore_trivia && (peek(stream, skip_newlines=false, skip_whitespace=false) != K"EndMarker"))
+            emit_diagnostic(stream, error="unexpected text after parsing $rule")
+        end
     end
-    if any_error(stream.diagnostics)
+    if any_error(stream.diagnostics) || (!ignore_warnings && !isempty(stream.diagnostics))
         throw(ParseError(stream, filename=filename))
     end
     # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
@@ -169,13 +93,51 @@ function parseall(::Type{T}, input...; rule=:toplevel, version=VERSION,
     #   not absolute positions.
     # * Dropping it would be ok for SyntaxNode and Expr...
     tree = build_tree(T, stream; wrap_toplevel_as_kind=K"toplevel", filename=filename)
-    if !isempty(stream.diagnostics)
-        # Crudely format any warnings to the current logger.
-        buf = IOBuffer()
-        show_diagnostics(IOContext(buf, stdout), stream,
-                         SourceFile(sourcetext(stream, steal_textbuf=true), filename=filename))
-        @warn Text(String(take!(buf)))
-    end
-    tree
+    tree, last_byte(stream) + 1
 end
+
+"""
+    parse(TreeType, text, [index];
+          version=VERSION,
+          ignore_trivia=true,
+          filename=nothing,
+          ignore_warnings=false)
+
+    # Or, with the same arguments
+    parseall(...)
+    parseatom(...)
+
+Parse Julia source code string `text` into a data structure of type `TreeType`.
+`parse` parses a single Julia statement, `parseall` parses top level statements
+at file scope and `parseatom` parses a single Julia identifier or other "syntax
+atom".
+
+If `text` is passed without `index`, all the input text must be consumed and a
+tree data structure is returned. When an integer byte `index` is passed, a
+tuple `(tree, next_index)` will be returned containing the next index in `text`
+to resume parsing. By default whitespace and comments before and after valid
+code are ignored but you can turn this off by setting `ignore_trivia=false`.
+
+`version` (default `VERSION`) may be used to set the syntax version to
+any Julia version `>= v"1.0"`. We aim to parse all Julia syntax which has been
+added after v"1.0", emitting an error if it's not compatible with the requested
+`version`.
+
+Pass `filename` to set any file name information embedded within the output
+tree, if applicable. This will also annotate errors and warnings with the
+source file name.
+
+A `ParseError` will be thrown if any errors or warnings occurred during
+parsing. To avoid exceptions due to warnings, use `ignore_warnings=true`.
+"""
+parse(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:statement, true, T, text; kws...)[1]
+parseall(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:toplevel, true, T, text; kws...)[1]
+parseatom(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:atom, true, T, text; kws...)[1]
+
+@eval @doc $(@doc parse) parseall
+@eval @doc $(@doc parse) parseatom
+
+parse(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:statement, false, T, text, index; kws...)
+parseall(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:toplevel, false, T, text, index; kws...)
+parseatom(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:atom, false, T, text, index; kws...)
 

@@ -7,8 +7,11 @@ using JuliaSyntax:
     # Parsing
     ParseStream,
     SourceFile,
+    parse!,
     parse,
     parseall,
+    parseatom,
+    build_tree,
     @K_str,
     # Nodes
     GreenNode,
@@ -72,11 +75,13 @@ function parsers_agree_on_file(filename; show_diff=false)
         return true
     end
     try
-        ex, diagnostics, _ = parse(Expr, text, filename=filename)
+        stream = ParseStream(text)
+        parse!(stream)
+        ex = build_tree(Expr, stream, filename=filename)
         if show_diff && ex != fl_ex
             show_expr_text_diff(show, ex, fl_ex)
         end
-        return !JuliaSyntax.any_error(diagnostics) &&
+        return !JuliaSyntax.any_error(stream) &&
             JuliaSyntax.remove_linenums!(ex) ==
             JuliaSyntax.remove_linenums!(fl_ex)
     catch exc
@@ -111,7 +116,7 @@ function equals_flisp_parse(tree)
     node_text = sourcetext(tree)
     # Reparse with JuliaSyntax. This is a crude way to ensure we're not missing
     # some context from the parent node.
-    ex,_,_ = parse(Expr, node_text)
+    ex = parseall(Expr, node_text)
     fl_ex = fl_parseall(node_text)
     if Meta.isexpr(fl_ex, :error)
         return true  # Something went wrong in reduction; ignore these cases 😬
@@ -156,7 +161,7 @@ function reduce_test(tree::SyntaxNode)
 end
 
 function reduce_test(text::AbstractString)
-    tree, _, _ = parse(SyntaxNode, text)
+    tree, = parseall(SyntaxNode, text)
     reduce_test(tree)
 end
 

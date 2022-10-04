@@ -71,16 +71,34 @@ st = ParseStream(code)
     @test peek(st) == K"NewlineWs"
     bump(st, TRIVIA_FLAG)
     emit(st, p1, K"toplevel")
+
+    @test build_tree(GreenNode, st) isa JuliaSyntax.GreenNode
 end
 
-@test JuliaSyntax.build_tree(GreenNode, st) isa JuliaSyntax.GreenNode
-
-# ## Input code
-#=
-println("-----------------------")
-print(code)
-println()
-
-# ## Output tree
-show(stdout, MIME"text/plain"(), t, code, show_trivia=true)
-=#
+@testset "ParseStream constructors" begin
+    @testset "Byte buffer inputs" begin
+        # Vector{UInt8}
+        let
+            st = ParseStream(Vector{UInt8}("x+y"))
+            bump(st)
+            @test build_tree(Expr, st) == :x
+            @test JuliaSyntax.last_byte(st) == 1
+        end
+        let
+            st = ParseStream(Vector{UInt8}("x+y"), 3)
+            bump(st)
+            @test build_tree(Expr, st) == :y
+            @test JuliaSyntax.last_byte(st) == 3
+        end
+        # Ptr{UInt8}, len
+        code = "x+y"
+        GC.@preserve code begin
+            let
+                st = ParseStream(pointer(code), 3)
+                bump(st)
+                @test build_tree(Expr, st) == :x
+                @test JuliaSyntax.last_byte(st) == 1
+            end
+        end
+    end
+end
