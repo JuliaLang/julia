@@ -148,9 +148,7 @@ performance use  [`eachindex`](@ref) instead.
 
 # Examples
 ```jldoctest
-julia> a = [4, 5, 6];
-
-julia> keys(a)
+julia> keys([4, 5, 6])
 3-element LinearIndices{1, Tuple{Base.OneTo{Int64}}}:
  1
  2
