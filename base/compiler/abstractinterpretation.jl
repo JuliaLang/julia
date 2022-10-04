@@ -823,7 +823,7 @@ end
 
 function concrete_eval_call(interp::AbstractInterpreter,
     @nospecialize(f), result::MethodCallResult, arginfo::ArgInfo, si::StmtInfo,
-    invokecall::Union{Nothing,InvokeCall}=nothing)
+    sv::InferenceState, invokecall::Union{Nothing,InvokeCall}=nothing)
     eligible = concrete_eval_eligible(interp, f, result, arginfo)
     eligible === nothing && return false
     if eligible
@@ -886,7 +886,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     if !const_prop_enabled(interp, sv, match)
         return nothing
     end
-    res = concrete_eval_call(interp, f, result, arginfo, si, invokecall)
+    res = concrete_eval_call(interp, f, result, arginfo, si, sv, invokecall)
     isa(res, ConstCallResults) && return res
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, si, match, sv)
     mi === nothing && return nothing
