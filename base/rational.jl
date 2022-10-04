@@ -4,7 +4,27 @@
     Rational{T<:Integer} <: Real
 
 Rational number type, with numerator and denominator of type `T`.
-Rationals are checked for overflow.
+
+The preferred way of creating `Rational` numbers is using the
+`//` operator. `Rational`s are also checked for overflow.
+
+`Rational(x)` where `x` is a subtype of `AbstractFloat` returns
+the exact conversion of `x` to a `Rational` number.
+
+# Examples
+```jldoctest
+julia> Rational(Int8(127))
+127//1
+
+julia> Rational(Int8(1))
+1//1
+
+julia> Rational(Int8(127)) + Rational(Int8(1))
+ERROR: OverflowError: 127 + 1 overflowed for type Int8
+
+julia> Rational(1.29)
+1452410879826985//1125899906842624
+```
 """
 struct Rational{T<:Integer} <: Real
     num::T
