@@ -1797,7 +1797,7 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
-    min(length(A), length(B)) <= length(dest) || throw(DimensionMismatch("size of dest must be >= than size of A or B"))
+    min(length(A), length(B)) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of smallest input collection"))
     isempty(A) && return dest
     isempty(B) && return dest
     destc = dest.chunks
