@@ -112,7 +112,7 @@ struct HeapSnapshot {
     StringTable names;
     StringTable node_types;
     StringTable edge_types;
-    DenseMap<void*, size_t> node_ptr_to_index_map;
+    DenseMap<void *, size_t> node_ptr_to_index_map;
 
     size_t num_edges = 0; // For metadata, updated as you add each edge. Needed because edges owned by nodes.
 };
@@ -188,7 +188,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     StringRef name = "<missing>";
     StringRef node_type = "object";
 
-    jl_datatype_t* type = (jl_datatype_t*)jl_typeof(a);
+    jl_datatype_t *type = (jl_datatype_t*)jl_typeof(a);
 
     if (jl_is_string(a)) {
         node_type = "string";
@@ -368,7 +368,7 @@ void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_
     _record_gc_edge("array", "element", from, to, index);
 }
 
-void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void* slot) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
     string path = _fieldpath_for_slot(from, slot);
     _record_gc_edge("object", "property", from, to,
