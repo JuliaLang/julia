@@ -1646,7 +1646,7 @@ static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
     size_t l = jl_svec_len(cache), i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL || ti == jl_nothing)
+        if (ti == jl_nothing)
             continue;
         if (jl_get_llvm_gv(native_functions, ti)) {
             jl_serialize_value(s, ti);
@@ -1660,16 +1660,21 @@ static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
 }
 
 // remove cached types not referenced in the stream
-static void jl_prune_type_cache_hash(jl_svec_t *cache)
+static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL || ti == jl_nothing)
+        if (ti == jl_nothing)
             continue;
         if (ptrhash_get(&backref_table, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
     }
+    void *idx = ptrhash_get(&backref_table, cache);
+    ptrhash_remove(&backref_table, cache);
+    cache = cache_rehash_set(cache, l);
+    ptrhash_put(&backref_table, cache, idx);
+    return cache;
 }
 
 static void jl_prune_type_cache_linear(jl_svec_t *cache)
@@ -1677,14 +1682,13 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
     size_t l = jl_svec_len(cache), ins = 0, i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL)
+        if (ti == jl_nothing)
             break;
         if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND)
             jl_svecset(cache, ins++, ti);
     }
-    if (i > ins) {
-        memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
-    }
+    while (ins < l)
+        jl_svecset(cache, ins++, jl_nothing);
 }
 
 static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
@@ -1958,7 +1962,8 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         // built-in type caches
         for (i = 0; i < typenames.len; i++) {
             jl_typename_t *tn = (jl_typename_t*)typenames.items[i];
-            jl_prune_type_cache_hash(tn->cache);
+            tn->cache = jl_prune_type_cache_hash(tn->cache);
+            jl_gc_wb(tn, tn->cache);
             jl_prune_type_cache_linear(tn->linearcache);
         }
         arraylist_free(&typenames);
