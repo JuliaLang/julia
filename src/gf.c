@@ -3416,6 +3416,8 @@ int jl_has_concrete_subtype(jl_value_t *typ)
     return ((jl_datatype_t*)typ)->has_concrete_subtype;
 }
 
+#define typeinf_lock jl_codegen_lock
+
 static jl_mutex_t inference_timing_mutex;
 static uint64_t inference_start_time = 0;
 static uint8_t inference_is_measuring_compile_time = 0;
@@ -3438,6 +3440,16 @@ JL_DLLEXPORT void jl_typeinf_timing_end(void)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - inference_start_time));
     }
     JL_UNLOCK_NOGC(&inference_timing_mutex);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_begin(void)
+{
+    JL_LOCK(&typeinf_lock);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_end(void)
+{
+    JL_UNLOCK(&typeinf_lock);
 }
 
 #ifdef __cplusplus
