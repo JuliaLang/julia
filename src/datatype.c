@@ -257,7 +257,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     // Add to cache if not present, free temp buffer, return.
     jl_datatype_layout_t *ret =
             (jl_datatype_layout_t *)layoutcache_get(&layoutcache, flddesc);
-    if (ret == HT_NOTFOUND) {
+    if ((void*)ret == HT_NOTFOUND) {
         if (!should_malloc) {
             char *perm_mem = (char *)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
             assert(perm_mem);
