@@ -65,6 +65,7 @@ already work:
 - nano
 - micro
 - kak
+- helix
 - textmate
 - mate
 - kate
@@ -147,6 +148,9 @@ function define_default_editors()
     end
     define_editor(Any["micro", "kak"]; wait=true) do cmd, path, line, column
         `$cmd +$line $path`
+    end
+    define_editor(Any["hx", "helix"]; wait=true) do cmd, path, line, column
+        `$cmd $path:$line:$column`
     end
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line, column
         `$cmd $path -l $line`
