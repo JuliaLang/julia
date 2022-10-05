@@ -502,6 +502,26 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
 
+It's important to note that the `mutable struct` keyword does not declare a new type that is
+different from the one defined with the `struct` keyword and vice-versa, if both types have
+the same name and the declaration was done in the same namespace.
+
+As an example, declaring a type with name as `Point` using `struct` is also equivalent to the
+type declared with name as `Point` using `mutable struct`. Trying to declare these both in one
+namespace will throw an error:
+```jldoctest
+julia> struct Point
+           x
+           y
+       end
+
+julia> mutable struct Point
+           x
+           y
+       end
+ERROR: invalid redefinition of constant Point
+```
+
 ## [Declared Types](@id man-declared-types)
 
 The three kinds of types (abstract, primitive, composite) discussed in the previous
