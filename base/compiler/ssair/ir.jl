@@ -1422,7 +1422,8 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
 end
 
 # This Union{Nothing, Pair{Pair{Int,Int},Any}} cannot be stack allocated, so we inline it
-@inline function iterate(compact::IncrementalCompact, st::Tuple{Int, Int}=(compact.idx, 1))
+@inline function iterate(compact::IncrementalCompact,
+                         st::Tuple{Int, Int}=(compact.idx, compact.active_bb))
     st = iterate_compact(compact, st)
     st === nothing && return nothing
     old_result_idx = st[1][2]
