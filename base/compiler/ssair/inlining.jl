@@ -769,7 +769,7 @@ function rewrite_apply_exprargs!(
                     end
                 else
                     ti = widenconst(def_type)::DataType # checked by `is_valid_type_for_apply_rewrite`
-                    if ti.name === NamedTuple_typename
+                    if ti.name === _NAMEDTUPLE_NAME
                         ti = ti.parameters[2]::DataType # checked by `is_valid_type_for_apply_rewrite`
                     end
                     for p in ti.parameters
@@ -1069,7 +1069,7 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
         return true
     end
     typ = widenconst(typ)
-    if isa(typ, DataType) && typ.name === NamedTuple_typename
+    if isa(typ, DataType) && typ.name === _NAMEDTUPLE_NAME
         typ = typ.parameters[2]
         typ = unwraptv(typ)
     end

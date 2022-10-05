@@ -80,7 +80,7 @@ end
 # (therefore also a lower bound on the number of fields)
 function datatype_min_ninitialized(t::DataType)
     isabstracttype(t) && return 0
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
