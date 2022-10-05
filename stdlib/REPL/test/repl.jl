@@ -478,6 +478,7 @@ for prompt = ["TestΠ", () -> randstring(rand(1:10))]
 
         # Some manual setup
         s = LineEdit.init_state(repl.t, repl.interface)
+        repl.mistate = s
         LineEdit.edit_insert(s, "wip")
 
         # LineEdit functions related to history
@@ -705,6 +706,11 @@ fake_repl() do stdin_write, stdout_read, repl
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
     wait(c)
     @test Main.A == 2
+
+    # Test removal of prefix in single statement paste
+    sendrepl2("\e[200~In [12]: A = 2.2\e[201~\n")
+    wait(c)
+    @test Main.A == 2.2
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
@@ -1096,7 +1102,34 @@ fake_repl() do stdin_write, stdout_read, repl
     Base.wait(repltask)
 end
 
-help_result(line) = Base.eval(REPL._helpmode(IOBuffer(), line))
+# test activate_module
+fake_repl() do stdin_write, stdout_read, repl
+    repl.history_file = false
+    repl.interface = REPL.setup_interface(repl)
+    repl.mistate = LineEdit.init_state(repl.t, repl.interface)
+
+    repltask = @async begin
+        REPL.run_repl(repl)
+    end
+
+    write(stdin_write, "(123, Base.Fix1)\n")
+    @test occursin("julia> ", split(readline(stdout_read), "Base.Fix1")[2])
+    @test occursin("(123, Base.Fix1)", readline(stdout_read))
+    readline(stdout_read)
+
+    repl.mistate.active_module = Base # simulate activate_module(Base)
+    write(stdin_write, "(456, Base.Fix2)\n")
+    @test occursin("(Base) julia> ", split(readline(stdout_read), "Base.Fix2")[2])
+    # ".Base" prefix not shown here
+    @test occursin("(456, Fix2)", readline(stdout_read))
+    readline(stdout_read)
+
+    # Close REPL ^D
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
+end
+
+help_result(line, mod::Module=Base) = mod.eval(REPL._helpmode(IOBuffer(), line))
 
 # Docs.helpmode tests: we test whether the correct expressions are being generated here,
 # rather than complete integration with Julia's REPL mode system.
@@ -1139,6 +1172,13 @@ end
 
 # Issue #40563
 @test occursin("does not exist", sprint(show, help_result("..")))
+# test that helpmode is sensitive to contextual module
+@test occursin("No documentation found", sprint(show, help_result("Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Base.Fix2", Main)))
+@test occursin("A type representing a partially-applied version", # exact string may change
+               sprint(show, help_result("Fix2", Base)))
+
 
 # Issue #25930
 
@@ -1288,7 +1328,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # necessary to read at least some part of the buffer,
     # for the "region_active" to have time to be updated
 
-    @test LineEdit.state(repl.mistate).region_active == :off
+    @test LineEdit.state(repl.mistate).region_active === :off
     @test s4 == "anything" # no control characters between the last two occurrences of "anything"
     write(stdin_write, "\x15\x04")
     Base.wait(repltask)
@@ -1512,4 +1552,38 @@ fake_repl() do stdin_write, stdout_read, repl
     end
     LineEdit.edit_input(s, input_f)
     @test buffercontents(LineEdit.buffer(s)) == "1234αβ56γ"
+end
+
+# Non standard output_prefix, tested via `ipython_mode!`
+fake_repl() do stdin_write, stdout_read, repl
+    repl.interface = REPL.setup_interface(repl)
+
+    backend = REPL.REPLBackend()
+    repltask = @async begin
+        REPL.run_repl(repl; backend)
+    end
+
+    REPL.ipython_mode!(repl, backend)
+
+    global c = Condition()
+    sendrepl2(cmd) = write(stdin_write, "$cmd\n notify($(curmod_prefix)c)\n")
+
+    sendrepl2("\"z\" * \"z\"\n")
+    wait(c)
+    s = String(readuntil(stdout_read, "\"zz\""; keep=true))
+    @test contains(s, "In [1]")
+    @test contains(s, "Out[1]: \"zz\"")
+
+    sendrepl2("\"y\" * \"y\"\n")
+    wait(c)
+    s = String(readuntil(stdout_read, "\"yy\""; keep=true))
+    @test contains(s, "Out[3]: \"yy\"")
+
+    sendrepl2("Out[1] * Out[3]\n")
+    wait(c)
+    s = String(readuntil(stdout_read, "\"zzyy\""; keep=true))
+    @test contains(s, "Out[5]: \"zzyy\"")
+
+    write(stdin_write, '\x04')
+    Base.wait(repltask)
 end

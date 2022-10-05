@@ -388,6 +388,7 @@ end
 
 function __init__()
     seed!(GLOBAL_RNG)
+    ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
 end
 
 
@@ -465,7 +466,7 @@ end
 
 ##### Array : internal functions
 
-# internal array-like type to circumevent the lack of flexibility with reinterpret
+# internal array-like type to circumvent the lack of flexibility with reinterpret
 struct UnsafeView{T} <: DenseArray{T,1}
     ptr::Ptr{T}
     len::Int

@@ -3,10 +3,19 @@
 ## type join (closest common ancestor, or least upper bound) ##
 
 """
-    typejoin(T, S)
+    typejoin(T, S, ...)
 
-Return the closest common ancestor of `T` and `S`, i.e. the narrowest type from which
-they both inherit.
+Return the closest common ancestor of types `T` and `S`, i.e. the narrowest type from which
+they both inherit. Recurses on additional varargs.
+
+# Examples
+```jldoctest
+julia> typejoin(Int, Float64)
+Real
+
+julia> typejoin(Int, Float64, ComplexF32)
+Number
+```
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = t
@@ -128,7 +137,7 @@ end
 # WARNING: this is wrong for some objects for which subtyping is broken
 #          (Core.Compiler.isnotbrokensubtype), use only simple types for `b`
 function typesplit(@nospecialize(a), @nospecialize(b))
-    @_total_may_throw_meta
+    @_foldable_meta
     if a <: b
         return Bottom
     end
@@ -180,7 +189,7 @@ function promote_typejoin_union(::Type{T}) where T
 end
 
 function typejoin_union_tuple(T::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     u = Base.unwrap_unionall(T)
     p = (u::DataType).parameters
     lr = length(p)::Int
@@ -320,12 +329,25 @@ promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = 
 Convert all arguments to a common type, and return them all (as a tuple).
 If no arguments can be converted, an error is raised.
 
-See also: [`promote_type`], [`promote_rule`].
+See also: [`promote_type`](@ref), [`promote_rule`](@ref).
 
 # Examples
 ```jldoctest
 julia> promote(Int8(1), Float16(4.5), Float32(4.1))
 (1.0f0, 4.5f0, 4.1f0)
+
+julia> promote_type(Int8, Float16, Float32)
+Float32
+
+julia> reduce(Base.promote_typejoin, (Int8, Float16, Float32))
+Real
+
+julia> promote(1, "x")
+ERROR: promotion of types Int64 and String failed to change any arguments
+[...]
+
+julia> promote_type(Int, String)
+Any
 ```
 """
 function promote end
@@ -476,7 +498,7 @@ xor(x::T, y::T) where {T<:Integer} = no_op_err("xor", T)
 
 (==)(x::T, y::T) where {T<:Number} = x === y
 (< )(x::T, y::T) where {T<:Real} = no_op_err("<" , T)
-(<=)(x::T, y::T) where {T<:Real} = no_op_err("<=", T)
+(<=)(x::T, y::T) where {T<:Real} = (x == y) | (x < y)
 
 rem(x::T, y::T) where {T<:Real} = no_op_err("rem", T)
 mod(x::T, y::T) where {T<:Real} = no_op_err("mod", T)

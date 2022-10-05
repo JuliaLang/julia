@@ -57,8 +57,6 @@ let
         # 3-depth packages
         :REPL,
         :SharedArrays,
-        :Statistics,
-        :SuiteSparse,
         :TOML,
         :Test,
 
@@ -74,7 +72,8 @@ let
         # 7-depth packages
         :LazyArtifacts,
     ]
-    maxlen = reduce(max, textwidth.(string.(stdlibs)); init=0)
+    # PackageCompiler can filter out stdlibs so it can be empty
+    maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main

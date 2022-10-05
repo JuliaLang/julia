@@ -135,6 +135,17 @@ i.e. the maximum integer value representable by [`exponent_bits(T)`](@ref) bits.
 """
 function exponent_raw_max end
 
+"""
+    uabs(x::Integer)
+
+Return the absolute value of `x`, possibly returning a different type should the
+operation be susceptible to overflow. This typically arises when `x` is a two's complement
+signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
+`uabs(x)` will be an unsigned integer of the same size.
+"""
+uabs(x::Integer) = abs(x)
+uabs(x::BitSigned) = unsigned(abs(x))
+
 ## conversions to floating-point ##
 
 # TODO: deprecate in 2.0
@@ -165,33 +176,45 @@ promote_rule(::Type{Float16}, ::Type{UInt128}) = Float16
 promote_rule(::Type{Float16}, ::Type{Int128}) = Float16
 
 function Float64(x::UInt128)
-    x == 0 && return 0.0
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
-    else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+    if x < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+        low_exp = 0x1p52
+        high_exp = 0x1p104
+        low_bits = (x % UInt64) & Base.significand_mask(Float64)
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((x >> 52) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        low_value + high_value
+    else # Large enough that low bits only affect rounding, pack low bits
+        low_exp = 0x1p76
+        high_exp = 0x1p128
+        low_bits = ((x >> 12) % UInt64) >> 12 | (x % UInt64) & 0xFFFFFF
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((x >> 76) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        low_value + high_value
     end
-    d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, d + y)
 end
 
 function Float64(x::Int128)
-    x == 0 && return 0.0
-    s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
-    x = abs(x) % UInt128
-    n = 128-leading_zeros(x) # ndigits0z(x,2)
-    if n <= 53
-        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
-    else
-        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
-        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
-        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+    sign_bit = ((x >> 127) % UInt64) << 63
+    ux = uabs(x)
+    if ux < UInt128(1) << 104 # Can fit it in two 52 bits mantissas
+        low_exp = 0x1p52
+        high_exp = 0x1p104
+        low_bits = (ux % UInt64) & Base.significand_mask(Float64)
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((ux >> 52) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
+    else # Large enough that low bits only affect rounding, pack low bits
+        low_exp = 0x1p76
+        high_exp = 0x1p128
+        low_bits = ((ux >> 12) % UInt64) >> 12 | (ux % UInt64) & 0xFFFFFF
+        low_value = reinterpret(Float64, reinterpret(UInt64, low_exp) | low_bits) - low_exp
+        high_bits = ((ux >> 76) % UInt64)
+        high_value = reinterpret(Float64, reinterpret(UInt64, high_exp) | high_bits) - high_exp
+        reinterpret(Float64, sign_bit | reinterpret(UInt64, low_value + high_value))
     end
-    d = ((n+1022) % UInt64) << 52
-    reinterpret(Float64, s | d + y)
 end
 
 function Float32(x::UInt128)
@@ -225,8 +248,8 @@ function Float32(x::Int128)
 end
 
 # TODO: optimize
-Float16(x::UInt128) = convert(Float16, Float32(x))
-Float16(x::Int128)  = convert(Float16, Float32(x))
+Float16(x::UInt128) = convert(Float16, Float64(x))
+Float16(x::Int128)  = convert(Float16, Float64(x))
 
 Float16(x::Float32) = fptrunc(Float16, x)
 Float16(x::Float64) = fptrunc(Float16, x)
@@ -392,8 +415,6 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point mod?
 
 rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
-
-cld(x::T, y::T) where {T<:AbstractFloat} = -fld(-x,y)
 
 function mod(x::T, y::T) where T<:AbstractFloat
     r = rem(x,y)
@@ -664,17 +685,6 @@ end
 precision(::Type{T}; base::Integer=2) where {T<:AbstractFloat} = _precision(T, base)
 precision(::T; base::Integer=2) where {T<:AbstractFloat} = precision(T; base)
 
-"""
-    uabs(x::Integer)
-
-Return the absolute value of `x`, possibly returning a different type should the
-operation be susceptible to overflow. This typically arises when `x` is a two's complement
-signed integer, so that `abs(typemin(x)) == typemin(x) < 0`, in which case the result of
-`uabs(x)` will be an unsigned integer of the same size.
-"""
-uabs(x::Integer) = abs(x)
-uabs(x::BitSigned) = unsigned(abs(x))
-
 
 """
     nextfloat(x::AbstractFloat, n::Integer)
@@ -796,7 +806,19 @@ end
 """
     issubnormal(f) -> Bool
 
-Test whether a floating point number is subnormal.
+Test whether a floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number). A floating point number is recognized as
+subnormal whenever its exponent is the least value possible and its significand is zero.
+
+# Examples
+```jldoctest
+julia> floatmin(Float32)
+1.1754944f-38
+
+julia> issubnormal(1.0f-37)
+false
+
+julia> issubnormal(1.0f-38)
+true
 """
 function issubnormal(x::T) where {T<:IEEEFloat}
     y = reinterpret(Unsigned, x)

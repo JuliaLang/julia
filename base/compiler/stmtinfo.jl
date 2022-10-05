@@ -60,7 +60,13 @@ struct ConcreteResult
     ConcreteResult(mi::MethodInstance, effects::Effects, @nospecialize val) = new(mi, effects, val)
 end
 
-const ConstResult = Union{ConstPropResult,ConcreteResult}
+struct SemiConcreteResult
+    mi::MethodInstance
+    ir::IRCode
+    effects::Effects
+end
+
+const ConstResult = Union{ConstPropResult,ConcreteResult, SemiConcreteResult}
 
 """
     info::ConstCallInfo
@@ -181,6 +187,27 @@ was supposed to analyze.
 """
 struct ReturnTypeCallInfo
     info::Any
+end
+
+"""
+    info::FinalizerInfo
+
+Represents the information of a potential (later) call to the finalizer on the given
+object type.
+"""
+struct FinalizerInfo
+    info::Any
+    effects::Effects # the effects for the finalizer call
+end
+
+"""
+    info::ModifyFieldInfo
+
+Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
+`info.info` wraps the call information of `op(getfield(obj, name), x)`.
+"""
+struct ModifyFieldInfo
+    info::Any # the callinfo for the `op(getfield(obj, name), x)` call
 end
 
 @specialize

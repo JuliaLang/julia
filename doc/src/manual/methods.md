@@ -76,18 +76,33 @@ Applying it to any other types of arguments will result in a [`MethodError`](@re
 ```jldoctest fofxy
 julia> f(2.0, 3)
 ERROR: MethodError: no method matching f(::Float64, ::Int64)
+
 Closest candidates are:
-  f(::Float64, !Matched::Float64) at none:1
+  f(::Float64, !Matched::Float64)
+   @ Main none:1
+
+Stacktrace:
+[...]
 
 julia> f(Float32(2.0), 3.0)
 ERROR: MethodError: no method matching f(::Float32, ::Float64)
+
 Closest candidates are:
-  f(!Matched::Float64, ::Float64) at none:1
+  f(!Matched::Float64, ::Float64)
+   @ Main none:1
+
+Stacktrace:
+[...]
 
 julia> f(2.0, "3.0")
 ERROR: MethodError: no method matching f(::Float64, ::String)
+
 Closest candidates are:
-  f(::Float64, !Matched::Float64) at none:1
+  f(::Float64, !Matched::Float64)
+   @ Main none:1
+
+Stacktrace:
+[...]
 
 julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
@@ -149,14 +164,25 @@ and applying it will still result in a [`MethodError`](@ref):
 ```jldoctest fofxy
 julia> f("foo", 3)
 ERROR: MethodError: no method matching f(::String, ::Int64)
+
 Closest candidates are:
-  f(!Matched::Number, ::Number) at none:1
+  f(!Matched::Number, ::Number)
+   @ Main none:1
+
+Stacktrace:
+[...]
 
 julia> f()
 ERROR: MethodError: no method matching f()
+
 Closest candidates are:
-  f(!Matched::Float64, !Matched::Float64) at none:1
-  f(!Matched::Number, !Matched::Number) at none:1
+  f(!Matched::Float64, !Matched::Float64)
+   @ Main none:1
+  f(!Matched::Number, !Matched::Number)
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 You can easily see which methods exist for a function by entering the function object itself in
@@ -172,9 +198,11 @@ of those methods are, use the [`methods`](@ref) function:
 
 ```jldoctest fofxy
 julia> methods(f)
-# 2 methods for generic function "f":
-[1] f(x::Float64, y::Float64) in Main at none:1
-[2] f(x::Number, y::Number) in Main at none:1
+# 2 methods for generic function "f" from Main:
+ [1] f(x::Float64, y::Float64)
+     @ none:1
+ [2] f(x::Number, y::Number)
+     @ none:1
 ```
 
 which shows that `f` has two methods, one taking two `Float64` arguments and one taking arguments
@@ -190,10 +218,13 @@ julia> f(x,y) = println("Whoa there, Nelly.")
 f (generic function with 3 methods)
 
 julia> methods(f)
-# 3 methods for generic function "f":
-[1] f(x::Float64, y::Float64) in Main at none:1
-[2] f(x::Number, y::Number) in Main at none:1
-[3] f(x, y) in Main at none:1
+# 3 methods for generic function "f" from Main:
+ [1] f(x::Float64, y::Float64)
+     @ none:1
+ [2] f(x::Number, y::Number)
+     @ none:1
+ [3] f(x, y)
+     @ none:1
 
 julia> f("foo", 1)
 Whoa there, Nelly.
@@ -256,11 +287,19 @@ julia> g(2, 3.0)
 8.0
 
 julia> g(2.0, 3.0)
-ERROR: MethodError: g(::Float64, ::Float64) is ambiguous. Candidates:
-  g(x::Float64, y) in Main at none:1
-  g(x, y::Float64) in Main at none:1
+ERROR: MethodError: g(::Float64, ::Float64) is ambiguous.
+
+Candidates:
+  g(x::Float64, y)
+    @ Main none:1
+  g(x, y::Float64)
+    @ Main none:1
+
 Possible fix, define
   g(::Float64, ::Float64)
+
+Stacktrace:
+[...]
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
@@ -347,8 +386,11 @@ julia> myappend([1,2,3],4)
 
 julia> myappend([1,2,3],2.5)
 ERROR: MethodError: no method matching myappend(::Vector{Int64}, ::Float64)
+
 Closest candidates are:
-  myappend(::Vector{T}, !Matched::T) where T at none:1
+  myappend(::Vector{T}, !Matched::T) where T
+   @ Main none:1
+
 Stacktrace:
 [...]
 
@@ -361,8 +403,11 @@ julia> myappend([1.0,2.0,3.0],4.0)
 
 julia> myappend([1.0,2.0,3.0],4)
 ERROR: MethodError: no method matching myappend(::Vector{Float64}, ::Int64)
+
 Closest candidates are:
-  myappend(::Vector{T}, !Matched::T) where T at none:1
+  myappend(::Vector{T}, !Matched::T) where T
+   @ Main none:1
+
 Stacktrace:
 [...]
 ```
@@ -403,9 +448,15 @@ true
 
 julia> same_type_numeric("foo", 2.0)
 ERROR: MethodError: no method matching same_type_numeric(::String, ::Float64)
+
 Closest candidates are:
-  same_type_numeric(!Matched::T, ::T) where T<:Number at none:1
-  same_type_numeric(!Matched::Number, ::Number) at none:1
+  same_type_numeric(!Matched::T, ::T) where T<:Number
+   @ Main none:1
+  same_type_numeric(!Matched::Number, ::Number)
+   @ Main none:1
+
+Stacktrace:
+[...]
 
 julia> same_type_numeric("foo", "bar")
 ERROR: MethodError: no method matching same_type_numeric(::String, ::String)
@@ -791,16 +842,26 @@ bar (generic function with 1 method)
 
 julia> bar(1,2,3)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64)
+
 Closest candidates are:
-  bar(::Any, ::Any, ::Any, !Matched::Any) at none:1
+  bar(::Any, ::Any, ::Any, !Matched::Any)
+   @ Main none:1
+
+Stacktrace:
+[...]
 
 julia> bar(1,2,3,4)
 (1, 2, (3, 4))
 
 julia> bar(1,2,3,4,5)
 ERROR: MethodError: no method matching bar(::Int64, ::Int64, ::Int64, ::Int64, ::Int64)
+
 Closest candidates are:
-  bar(::Any, ::Any, ::Any, ::Any) at none:1
+  bar(::Any, ::Any, ::Any, ::Any)
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 More usefully, it is possible to constrain varargs methods by a parameter. For example:

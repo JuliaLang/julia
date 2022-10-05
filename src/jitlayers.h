@@ -13,9 +13,14 @@
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 
+#include <llvm/Passes/PassBuilder.h>
+#include <llvm/Passes/PassPlugin.h>
+#include <llvm/Passes/StandardInstrumentations.h>
+
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
 #include "debug-registry.h"
+#include "platform.h"
 
 #include <stack>
 #include <queue>
@@ -36,7 +41,9 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64.
-#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
+// #define JL_FORCE_JITLINK
+
+#if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK)
 # if JL_LLVM_VERSION < 130000
 #  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
@@ -68,6 +75,46 @@ DataLayout jl_create_datalayout(TargetMachine &TM);
 static inline bool imaging_default() {
     return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
 }
+
+struct OptimizationOptions {
+    bool lower_intrinsics;
+    bool dump_native;
+    bool external_use;
+    bool llvm_only;
+
+    static constexpr OptimizationOptions defaults(
+        bool lower_intrinsics=true,
+        bool dump_native=false,
+        bool external_use=false,
+        bool llvm_only=false) {
+        return {lower_intrinsics, dump_native, external_use, llvm_only};
+    }
+};
+
+struct NewPM {
+    std::unique_ptr<TargetMachine> TM;
+    StandardInstrumentations SI;
+    std::unique_ptr<PassInstrumentationCallbacks> PIC;
+    PassBuilder PB;
+    ModulePassManager MPM;
+    OptimizationLevel O;
+
+    NewPM(std::unique_ptr<TargetMachine> TM, OptimizationLevel O, OptimizationOptions options = OptimizationOptions::defaults());
+
+    void run(Module &M);
+};
+
+struct AnalysisManagers {
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    AnalysisManagers(PassBuilder &PB);
+    AnalysisManagers(TargetMachine &TM, PassBuilder &PB, OptimizationLevel O);
+};
+
+OptimizationLevel getOptLevel(int optlevel);
 
 struct jl_locked_stream {
     JL_STREAM *stream = nullptr;
@@ -115,11 +162,6 @@ struct jl_returninfo_t {
     size_t union_align;
     size_t union_minalign;
     unsigned return_roots;
-};
-
-struct jl_llvmf_dump_t {
-    LLVMOrcThreadSafeModuleRef TSM;
-    LLVMValueRef F;
 };
 
 typedef std::tuple<jl_returninfo_t::CallingConv, unsigned, llvm::Function*, bool> jl_codegen_call_target_t;
@@ -374,6 +416,7 @@ public:
     void RegisterJITEventListener(JITEventListener *L);
 #endif
 
+    orc::SymbolStringPtr mangle(StringRef Name);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(orc::ThreadSafeModule M);
 
@@ -445,6 +488,9 @@ private:
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
+#else
+    std::atomic<size_t> total_size;
+    const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;

@@ -23,10 +23,7 @@ appended to an internal buffer of backtraces.
 macro profile(ex)
     return quote
         try
-            status = start_timer()
-            if status < 0
-                error(error_codes[status])
-            end
+            start_timer()
             $(esc(ex))
         finally
             stop_timer()
@@ -98,6 +95,11 @@ using keywords or in the order `(n, delay)`.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    if n_cur == 0 && isnothing(n) && isnothing(delay)
+        # indicates that the buffer hasn't been initialized at all, so set the default
+        default_init()
+        n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
         nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
@@ -126,7 +128,7 @@ function init(n::Integer, delay::Real; limitwarn::Bool = true)
     end
 end
 
-function __init__()
+function default_init()
     # init with default values
     # Use a max size of 10M profile samples, and fire timer every 1ms
     # (that should typically give around 100 seconds of record)
@@ -136,10 +138,25 @@ function __init__()
         n = 1_000_000
         delay = 0.01
     else
+        # Keep these values synchronized with trigger_profile_peek
         n = 10_000_000
         delay = 0.001
     end
     init(n, delay, limitwarn = false)
+end
+
+# Checks whether the profile buffer has been initialized. If not, initializes it with the default size.
+function check_init()
+    buffer_size = @ccall jl_profile_maxlen_data()::Int
+    if buffer_size == 0
+        default_init()
+    end
+end
+
+function __init__()
+    # Note: The profile buffer is no longer initialized during __init__ because Profile is in the sysimage,
+    # thus __init__ is called every startup. The buffer is lazily initialized the first time `@profile` is
+    # used, if not manually initialized before that.
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
         PROFILE_PRINT_COND[] = Base.AsyncCondition()
@@ -220,7 +237,7 @@ The keyword arguments can be any combination of:
     `:flatc` does the same but also includes collapsing of C frames (may do odd things around `jl_apply`).
 
  - `threads::Union{Int,AbstractVector{Int}}` -- Specify which threads to include snapshots from in the report. Note that
-    this does not control which threads samples are collected on.
+    this does not control which threads samples are collected on (which may also have been collected on another machine).
 
  - `tasks::Union{Int,AbstractVector{Int}}` -- Specify which tasks to include snapshots from in the report. Note that this
     does not control which tasks samples are collected within.
@@ -238,11 +255,11 @@ function print(io::IO,
         sortedby::Symbol = :filefuncline,
         groupby::Union{Symbol,AbstractVector{Symbol}} = :none,
         recur::Symbol = :off,
-        threads::Union{Int,AbstractVector{Int}} = 1:Threads.nthreads(),
+        threads::Union{Int,AbstractVector{Int}} = 1:typemax(Int),
         tasks::Union{UInt,AbstractVector{UInt}} = typemin(UInt):typemax(UInt))
 
     pf = ProfileFormat(;C, combine, maxdepth, mincount, noisefloor, sortedby, recur)
-    if groupby == :none
+    if groupby === :none
         print(io, data, lidict, pf, format, threads, tasks, false)
     else
         if !in(groupby, [:thread, :task, [:task, :thread], [:thread, :task]])
@@ -285,7 +302,7 @@ function print(io::IO,
                     end
                 end
             end
-        elseif groupby == :task
+        elseif groupby === :task
             threads = 1:typemax(Int)
             for taskid in intersect(get_task_ids(data), tasks)
                 printstyled(io, "Task $(Base.repr(taskid)) "; bold=true, color=Base.debug_color())
@@ -293,7 +310,7 @@ function print(io::IO,
                 nosamples && (any_nosamples = true)
                 println(io)
             end
-        elseif groupby == :thread
+        elseif groupby === :thread
             tasks = 1:typemax(UInt)
             for threadid in intersect(get_thread_ids(data), threads)
                 printstyled(io, "Thread $threadid "; bold=true, color=Base.info_color())
@@ -567,7 +584,14 @@ Julia, and examine the resulting `*.mem` files.
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
-start_timer() = ccall(:jl_profile_start_timer, Cint, ())
+function start_timer()
+    check_init() # if the profile buffer hasn't been initialized, initialize with default size
+    status = ccall(:jl_profile_start_timer, Cint, ())
+    if status < 0
+        error(error_codes[status])
+    end
+end
+
 
 stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
@@ -599,6 +623,9 @@ By default metadata such as threadid and taskid is included. Set `include_meta` 
 """
 function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
+    if maxlen == 0
+        error("The profiling data buffer is not initialized. A profile has not been requested this session.")
+    end
     len = len_data()
     if limitwarn && is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
@@ -965,8 +992,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             root.count += 1
             startframe = i
         elseif !skip
-            pushfirst!(build, parent)
             if recur === :flat || recur === :flatc
+                pushfirst!(build, parent)
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
                 found = false
                 for j in 1:(startframe - i)

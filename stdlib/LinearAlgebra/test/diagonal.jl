@@ -9,7 +9,10 @@ const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "Furlongs.jl"))
 using .Main.Furlongs
 
-n=12 #Size of matrix problem to test
+isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
+using .Main.OffsetArrays
+
+const n=12 # Size of matrix problem to test
 Random.seed!(1)
 
 @testset for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
@@ -459,6 +462,43 @@ end
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
+# Define a vector type that does not support `deleteat!`, to ensure that `kron` handles this
+struct SimpleVector{T} <: AbstractVector{T}
+    vec::Vector{T}
+end
+SimpleVector(x::SimpleVector) = SimpleVector(Vector(x.vec))
+SimpleVector{T}(::UndefInitializer, n::Integer) where {T} = SimpleVector(Vector{T}(undef, n))
+Base.:(==)(x::SimpleVector, y::SimpleVector) = x == y
+Base.axes(x::SimpleVector) = axes(x.vec)
+Base.convert(::Type{Vector{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x.vec)
+Base.convert(::Type{Vector}, x::SimpleVector{T}) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array}, x::SimpleVector) = convert(Vector, x)
+Base.copyto!(x::SimpleVector, y::SimpleVector) = (copyto!(x.vec, y.vec); x)
+Base.eltype(::Type{SimpleVector{T}}) where {T} = T
+Base.getindex(x::SimpleVector, ind...) = getindex(x.vec, ind...)
+Base.kron(x::SimpleVector, y::SimpleVector) = SimpleVector(kron(x.vec, y.vec))
+Base.promote_rule(::Type{<:AbstractVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = Vector{promote_type(T, U)}
+Base.promote_rule(::Type{SimpleVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = SimpleVector{promote_type(T, U)}
+Base.setindex!(x::SimpleVector, val, ind...) = (setindex!(x.vec, val, ind...), x)
+Base.similar(x::SimpleVector, ::Type{T}) where {T} = SimpleVector(similar(x.vec, T))
+Base.similar(x::SimpleVector, ::Type{T}, dims::Dims{1}) where {T} = SimpleVector(similar(x.vec, T, dims))
+Base.size(x::SimpleVector) = size(x.vec)
+
+@testset "kron (issue #46456)" for repr in Any[identity, SimpleVector]
+    A = Diagonal(repr(randn(10)))
+    BL = Bidiagonal(repr(randn(10)), repr(randn(9)), :L)
+    BU = Bidiagonal(repr(randn(10)), repr(randn(9)), :U)
+    C = SymTridiagonal(repr(randn(10)), repr(randn(9)))
+    Cl = SymTridiagonal(repr(randn(10)), repr(randn(10)))
+    D = Tridiagonal(repr(randn(9)), repr(randn(10)), repr(randn(9)))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
@@ -526,13 +566,21 @@ end
 end
 
 @testset "inverse" begin
-    for d in (randn(n), [1, 2, 3], [1im, 2im, 3im])
+    for d in Any[randn(n), Int[], [1, 2, 3], [1im, 2im, 3im], [1//1, 2//1, 3//1], [1+1im//1, 2//1, 3im//1]]
         D = Diagonal(d)
         @test inv(D) ≈ inv(Array(D))
     end
     @test_throws SingularException inv(Diagonal(zeros(n)))
     @test_throws SingularException inv(Diagonal([0, 1, 2]))
     @test_throws SingularException inv(Diagonal([0im, 1im, 2im]))
+end
+
+@testset "pseudoinverse" begin
+    for d in Any[randn(n), zeros(n), Int[], [0, 2, 0.003], [0im, 1+2im, 0.003im], [0//1, 2//1, 3//100], [0//1, 1//1+2im, 3im//100]]
+        D = Diagonal(d)
+        @test pinv(D) ≈ pinv(Array(D))
+        @test pinv(D, 1.0e-2) ≈ pinv(Array(D), 1.0e-2)
+    end
 end
 
 # allow construct from range
@@ -640,6 +688,16 @@ end
     copyto!(D2, D)
     rmul!(D2, D)
     @test D2 == D * D
+end
+
+@testset "multiplication of 2 Diagonal and a Matix (#46400)" begin
+    A = randn(10, 10)
+    D = Diagonal(randn(10))
+    D2 = Diagonal(randn(10))
+    @test D * A * D2 ≈ D * (A * D2)
+    @test D * A * D2 ≈ (D * A) * D2
+    @test_throws DimensionMismatch Diagonal(ones(9)) * A * D2
+    @test_throws DimensionMismatch D * A * Diagonal(ones(9))
 end
 
 @testset "multiplication of QR Q-factor and Diagonal (#16615 spot test)" begin
@@ -785,14 +843,24 @@ end
     @test_throws DimensionMismatch lmul!(Diagonal([1]), [1,2,3]) # nearby
 end
 
+@testset "Multiplication of a Diagonal with an OffsetArray" begin
+    # Offset indices should throw
+    D = Diagonal(1:4)
+    A = OffsetArray(rand(4,4), 2, 2)
+    @test_throws ArgumentError D * A
+    @test_throws ArgumentError A * D
+    @test_throws ArgumentError mul!(similar(A, size(A)), A, D)
+    @test_throws ArgumentError mul!(similar(A, size(A)), D, A)
+end
+
 @testset "Triangular division by Diagonal #27989" begin
     K = 5
     for elty in (Float32, Float64, ComplexF32, ComplexF64)
         U = UpperTriangular(randn(elty, K, K))
         L = LowerTriangular(randn(elty, K, K))
         D = Diagonal(randn(elty, K))
-        @test (U / D)::UpperTriangular{elty} ≈ UpperTriangular(Matrix(U) / Matrix(D)) rtol=2eps(real(elty))
-        @test (L / D)::LowerTriangular{elty} ≈ LowerTriangular(Matrix(L) / Matrix(D)) rtol=2eps(real(elty))
+        @test (U / D)::UpperTriangular{elty} == UpperTriangular(Matrix(U) / Matrix(D))
+        @test (L / D)::LowerTriangular{elty} == LowerTriangular(Matrix(L) / Matrix(D))
         @test (D \ U)::UpperTriangular{elty} == UpperTriangular(Matrix(D) \ Matrix(U))
         @test (D \ L)::LowerTriangular{elty} == LowerTriangular(Matrix(D) \ Matrix(L))
     end
@@ -806,8 +874,8 @@ end
         D0 = Diagonal(zeros(elty, K))
         @test (D \ S)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(S))
         @test (D \ T)::Tridiagonal{elty} == Tridiagonal(Matrix(D) \ Matrix(T))
-        @test (S / D)::Tridiagonal{elty} ≈ Tridiagonal(Matrix(S) / Matrix(D)) rtol=2eps(real(elty))
-        @test (T / D)::Tridiagonal{elty} ≈ Tridiagonal(Matrix(T) / Matrix(D)) rtol=2eps(real(elty))
+        @test (S / D)::Tridiagonal{elty} == Tridiagonal(Matrix(S) / Matrix(D))
+        @test (T / D)::Tridiagonal{elty} == Tridiagonal(Matrix(T) / Matrix(D))
         @test_throws SingularException D0 \ S
         @test_throws SingularException D0 \ T
         @test_throws SingularException S / D0
@@ -851,8 +919,8 @@ end
     D = Diagonal(rand(1:20, K))
     @test (D \ S)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(S))
     @test (D \ T)::Tridiagonal{Float64} == Tridiagonal(Matrix(D) \ Matrix(T))
-    @test (S / D)::Tridiagonal{Float64} ≈ Tridiagonal(Matrix(S) / Matrix(D)) rtol=2eps()
-    @test (T / D)::Tridiagonal{Float64} ≈ Tridiagonal(Matrix(T) / Matrix(D)) rtol=2eps()
+    @test (S / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(S) / Matrix(D))
+    @test (T / D)::Tridiagonal{Float64} == Tridiagonal(Matrix(T) / Matrix(D))
 end
 
 @testset "eigenvalue sorting" begin
@@ -960,7 +1028,7 @@ end
 @testset "divisions functionality" for elty in (Int, Float64, ComplexF64)
     B = Diagonal(rand(elty,5,5))
     x = rand(elty)
-    @test \(x, B) ≈ /(B, x) rtol=2eps()
+    @test \(x, B) == /(B, x)
 end
 
 @testset "promotion" begin
@@ -1036,6 +1104,29 @@ end
     @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+end
+
+struct SMatrix1{T} <: AbstractArray{T,2}
+    elt::T
+end
+Base.:(==)(A::SMatrix1, B::SMatrix1) = A.elt == B.elt
+Base.zero(::Type{SMatrix1{T}}) where {T} = SMatrix1(zero(T))
+Base.iszero(A::SMatrix1) = iszero(A.elt)
+Base.getindex(A::SMatrix1, inds...) = A.elt
+Base.size(::SMatrix1) = (1, 1)
+@testset "map for Diagonal matrices (#46292)" begin
+    A = Diagonal([1])
+    @test A isa Diagonal{Int,Vector{Int}}
+    @test 2*A isa Diagonal{Int,Vector{Int}}
+    @test A.+1 isa Matrix{Int}
+    # Numeric element types remain diagonal
+    B = map(SMatrix1, A)
+    @test B == fill(SMatrix1(1), 1, 1)
+    @test B isa Diagonal{SMatrix1{Int},Vector{SMatrix1{Int}}}
+    # Non-numeric element types become dense
+    C = map(a -> SMatrix1(string(a)), A)
+    @test C == fill(SMatrix1(string(1)), 1, 1)
+    @test C isa Matrix{SMatrix1{String}}
 end
 
 end # module TestDiagonal

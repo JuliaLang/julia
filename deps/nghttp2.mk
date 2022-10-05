@@ -1,4 +1,5 @@
 ## nghttp2
+include $(SRCDIR)/nghttp2.version
 
 ifneq ($(USE_BINARYBUILDER_NGHTTP2), 1)
 
@@ -8,7 +9,6 @@ $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2: | $(SRCCACHE)
 $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/source-extracted: $(SRCCACHE)/nghttp2-$(NGHTTP2_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	cd $(dir $<) && $(TAR) -jxf $<
-	cp $(SRCDIR)/patches/config.sub $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/config.sub
 	touch -c $(SRCCACHE)/nghttp2-$(NGHTTP2_VER)/configure # old target
 	echo 1 > $@
 

@@ -128,8 +128,8 @@ end
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
     exf19122 = @macroexpand(@inline f19122()::Bool = true)
     exg19122 = @macroexpand(@noinline g19122()::Bool = true)
-    @test exf19122.args[2].args[1].args[1] == :inline
-    @test exg19122.args[2].args[1].args[1] == :noinline
+    @test exf19122.args[2].args[1].args[1] === :inline
+    @test exg19122.args[2].args[1].args[1] === :noinline
 
     @inline f19122()::Bool = true
     @noinline g19122()::Bool = true
@@ -275,15 +275,28 @@ f34900(x, y::Int) = y
 f34900(x::Int, y::Int) = invoke(f34900, Tuple{Int, Any}, x, y)
 @test fully_eliminated(f34900, Tuple{Int, Int}; retval=Core.Argument(2))
 
-@testset "check jl_ir_flag_inlineable for inline macro" begin
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> (@inline; x))).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(x -> x)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(@inline function f(x) x end)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) @inline; x end)).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods(function f(x) x end)).source)
-    @test ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x @inline; x end).source)
-    @test !ccall(:jl_ir_flag_inlineable, Bool, (Any,), only(methods() do x x end).source)
+using Core.Compiler: is_inlineable, set_inlineable!
+
+@testset "check jl_ir_inlining_cost for inline macro" begin
+    @test is_inlineable(only(methods(@inline x -> x)).source)
+    @test is_inlineable(only(methods(x -> (@inline; x))).source)
+    @test !is_inlineable(only(methods(x -> x)).source)
+    @test is_inlineable(only(methods(@inline function f(x) x end)).source)
+    @test is_inlineable(only(methods(function f(x) @inline; x end)).source)
+    @test !is_inlineable(only(methods(function f(x) x end)).source)
+    @test is_inlineable(only(methods() do x @inline; x end).source)
+    @test !is_inlineable(only(methods() do x x end).source)
+end
+
+@testset "basic set_inlineable! functionality" begin
+    ci = code_typed1() do
+        x -> x
+    end
+    set_inlineable!(ci, true)
+    @test is_inlineable(ci)
+    set_inlineable!(ci, false)
+    @test !is_inlineable(ci)
+    @test_throws MethodError set_inlineable!(ci, 5)
 end
 
 const _a_global_array = [1]
@@ -317,7 +330,7 @@ struct NonIsBitsDims
     dims::NTuple{N, Int} where N
 end
 NonIsBitsDims() = NonIsBitsDims(())
-@test fully_eliminated(NonIsBitsDims, (); retval=QuoteNode(NonIsBitsDims()))
+@test fully_eliminated(NonIsBitsDims, (); retval=NonIsBitsDims())
 
 struct NonIsBitsDimsUndef
     dims::NTuple{N, Int} where N
@@ -370,26 +383,6 @@ end
 using Base.Experimental: @opaque
 f_oc_getfield(x) = (@opaque ()->x)()
 @test fully_eliminated(f_oc_getfield, Tuple{Int})
-
-import Core.Compiler: argextype, singleton_type
-const EMPTY_SPTYPES = Any[]
-
-code_typed1(args...; kwargs...) = first(only(code_typed(args...; kwargs...)))::Core.CodeInfo
-get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
-
-# check if `x` is a dynamic call of a given function
-iscall(y) = @nospecialize(x) -> iscall(y, x)
-function iscall((src, f)::Tuple{Core.CodeInfo,Base.Callable}, @nospecialize(x))
-    return iscall(x) do @nospecialize x
-        singleton_type(argextype(x, src, EMPTY_SPTYPES)) === f
-    end
-end
-iscall(pred::Base.Callable, @nospecialize(x)) = Meta.isexpr(x, :call) && pred(x.args[1])
-
-# check if `x` is a statically-resolved call of a function whose name is `sym`
-isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)
-isinvoke(sym::Symbol, @nospecialize(x)) = isinvoke(mi->mi.def.name===sym, x)
-isinvoke(pred::Function, @nospecialize(x)) = Meta.isexpr(x, :invoke) && pred(x.args[1]::Core.MethodInstance)
 
 @testset "@inline/@noinline annotation before definition" begin
     M = Module()
@@ -608,7 +601,7 @@ g41299(f::Tf, args::Vararg{Any,N}) where {Tf,N} = f(args...)
 @test_throws TypeError g41299(>:, 1, 2)
 
 # https://github.com/JuliaLang/julia/issues/42078
-# idempotency of callsite inling
+# idempotency of callsite inlining
 function getcache(mi::Core.MethodInstance)
     cache = Core.Compiler.code_cache(Core.Compiler.NativeInterpreter())
     codeinf = Core.Compiler.get(cache, mi, nothing)
@@ -632,7 +625,7 @@ let
         specs = collect(only(methods(f42078)).specializations)
         mi = specs[findfirst(!isnothing, specs)]::Core.MethodInstance
         codeinf = getcache(mi)::Core.CodeInstance
-        codeinf.inferred = nothing
+        @atomic codeinf.inferred = nothing
     end
 
     let # inference should re-infer `f42078(::Int)` and we should get the same code
@@ -645,7 +638,7 @@ let
 end
 
 begin
-    # more idempotency of callsite inling
+    # more idempotency of callsite inlining
     # -----------------------------------
     # this test case requires forced constant propagation for callsite inlined function call,
     # particularly, in the following example, the inlinear will look up `+ₚ(::Point, ::Const(Point(2.25, 4.75)))`
@@ -934,7 +927,7 @@ let # aggressive inlining of single, abstract method match (with constant-prop'e
     # both callsite should be inlined with constant-prop'ed result
     @test count(isinvoke(:isType), src.code) == 2
     @test count(isinvoke(:has_free_typevars), src.code) == 0
-    # `isGoodType(y::Any)` isn't fully convered, thus a runtime type check and fallback dynamic dispatch should be inserted
+    # `isGoodType(y::Any)` isn't fully covered, thus a runtime type check and fallback dynamic dispatch should be inserted
     @test count(iscall((src,isGoodType2)), src.code) == 1
 end
 
@@ -992,14 +985,7 @@ Base.@constprop :aggressive function conditional_escape!(cnd, x)
     return nothing
 end
 @test fully_eliminated((String,)) do x
-    Base.@invoke conditional_escape!(false::Any, x::Any)
-end
-
-@testset "strides for ReshapedArray (PR#44027)" begin
-    # Type-based contiguous check
-    a = vec(reinterpret(reshape,Int16,reshape(view(reinterpret(Int32,randn(10)),2:11),5,:)))
-    f(a) = only(strides(a));
-    @test fully_eliminated(f, Tuple{typeof(a)}) && f(a) == 1
+    @invoke conditional_escape!(false::Any, x::Any)
 end
 
 @testset "elimination of `get_binding_type`" begin
@@ -1066,12 +1052,12 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(nothing::Any)
+        @invoke FooTheRef(nothing::Any)
     end
     @test count(isnew, src.code) == 1
 end
 let src = code_typed1() do
-        Base.@invoke FooTheRef(0::Any)
+        @invoke FooTheRef(0::Any)
     end
     @test count(isnew, src.code) == 1
 end
@@ -1084,24 +1070,13 @@ end
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(nothing::Any)
+    @invoke FooTheRef(nothing::Any)
     nothing
 end
 @test fully_eliminated() do
-    Base.@invoke FooTheRef(0::Any)
+    @invoke FooTheRef(0::Any)
     nothing
 end
-
-# Test that the Core._apply_iterate bail path taints effects
-function f_apply_bail(f)
-    f(()...)
-    return nothing
-end
-f_call_apply_bail(f) = f_apply_bail(f)
-@test !fully_eliminated(f_call_apply_bail, Tuple{Function})
-
-# Test that arraysize has proper effect modeling
-@test fully_eliminated(M->(size(M, 2); nothing), Tuple{Matrix{Float64}})
 
 # DCE of non-inlined callees
 @noinline noninlined_dce_simple(a) = identity(a)
@@ -1128,72 +1103,6 @@ end
 @test_broken fully_eliminated((Union{Symbol,String},)) do s
     noninlined_dce_new(s)
     nothing
-end
-
-# Test that ambigous calls don't accidentally get nothrow effect
-ambig_effect_test(a::Int, b) = 1
-ambig_effect_test(a, b::Int) = 1
-ambig_effect_test(a, b) = 1
-global ambig_unknown_type_global=1
-@noinline function conditionally_call_ambig(b::Bool, a)
-    if b
-        ambig_effect_test(a, ambig_unknown_type_global)
-    end
-    return 0
-end
-function call_call_ambig(b::Bool)
-    conditionally_call_ambig(b, 1)
-    return 1
-end
-@test !fully_eliminated(call_call_ambig, Tuple{Bool})
-
-# Test that a missing methtable identification gets tainted
-# appropriately
-struct FCallback; f::Union{Nothing, Function}; end
-f_invoke_callback(fc) = let f=fc.f; (f !== nothing && f(); nothing); end
-function f_call_invoke_callback(f::FCallback)
-    f_invoke_callback(f)
-    return nothing
-end
-@test !fully_eliminated(f_call_invoke_callback, Tuple{FCallback})
-
-# https://github.com/JuliaLang/julia/issues/41694
-Base.@assume_effects :terminates_globally function issue41694(x)
-    res = 1
-    1 < x < 20 || throw("bad")
-    while x > 1
-        res *= x
-        x -= 1
-    end
-    return res
-end
-@test fully_eliminated() do
-    issue41694(2)
-end
-
-Base.@assume_effects :terminates_globally function recur_termination1(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
-    return x * recur_termination1(x-1)
-end
-@test fully_eliminated() do
-    recur_termination1(12)
-end
-Base.@assume_effects :terminates_globally function recur_termination21(x)
-    x == 1 && return 1
-    1 < x < 20 || throw("bad")
-    return recur_termination22(x)
-end
-recur_termination22(x) = x * recur_termination21(x-1)
-@test fully_eliminated() do
-    recur_termination21(12) + recur_termination22(12)
-end
-
-const ___CONST_DICT___ = Dict{Any,Any}(Symbol(c) => i for (i, c) in enumerate('a':'z'))
-Base.@assume_effects :total_may_throw concrete_eval(
-    f, args...; kwargs...) = f(args...; kwargs...)
-@test fully_eliminated() do
-    concrete_eval(getindex, ___CONST_DICT___, :a)
 end
 
 # https://github.com/JuliaLang/julia/issues/44732
@@ -1240,7 +1149,7 @@ let src = code_typed1(g_call_peel, Tuple{Any})
 end
 
 const my_defined_var = 42
-@test fully_eliminated((); retval=42) do
+@test fully_eliminated(; retval=42) do
     getglobal(@__MODULE__, :my_defined_var, :monotonic)
 end
 @test !fully_eliminated() do
@@ -1260,22 +1169,595 @@ end
     return maybe_error_int(1)
 end
 
-# Test that effect modeling for return_type doesn't incorrectly pick
-# up the effects of the function being analyzed
-function f_throws()
-    error()
-end
-
-@noinline function return_type_unused(x)
-    Core.Compiler.return_type(f_throws, Tuple{})
-    return x+1
-end
-
-@test fully_eliminated(Tuple{Int}) do x
-    return_type_unused(x)
-    return nothing
-end
-
 # Test that inlining doesn't accidentally delete a bad return_type call
 f_bad_return_type() = Core.Compiler.return_type(+, 1, 2)
 @test_throws MethodError f_bad_return_type()
+
+# Test that inlining doesn't leave useless globalrefs around
+f_ret_nothing(x) = (Base.donotdelete(x); return nothing)
+let src = code_typed1(Tuple{Int}) do x
+        f_ret_nothing(x)
+        return 1
+    end
+    @test count(x -> isa(x, Core.GlobalRef) && x.name === :nothing, src.code) == 0
+end
+
+# Test that we can inline a finalizer for a struct that does not otherwise escape
+@noinline nothrow_side_effect(x) =
+    Base.@assume_effects :total !:effect_free @ccall jl_(x::Any)::Cvoid
+@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(nothrow_side_effect, (Nothing,)))
+
+mutable struct DoAllocNoEscape
+    function DoAllocNoEscape()
+        finalizer(new()) do this
+            nothrow_side_effect(nothing)
+        end
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscape()
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that a case when `Core.finalizer` is registered interprocedurally,
+# but still eligible for SROA after inlining
+mutable struct DoAllocNoEscapeInter end
+
+let src = code_typed1() do
+        for i = 1:1000
+            obj = DoAllocNoEscapeInter()
+            finalizer(obj) do this
+                nothrow_side_effect(nothing)
+            end
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+function register_finalizer!(obj)
+    finalizer(obj) do this
+        nothrow_side_effect(nothing)
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            obj = DoAllocNoEscapeInter()
+            register_finalizer!(obj)
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+function genfinalizer(val)
+    return function (this)
+        nothrow_side_effect(val)
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            obj = DoAllocNoEscapeInter()
+            finalizer(genfinalizer(nothing), obj)
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that we can inline a finalizer that just returns a constant value
+mutable struct DoAllocConst
+    function DoAllocConst()
+        finalizer(new()) do this
+            return nothing
+        end
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocConst()
+        end
+    end
+    @test count(isnew, src.code) == 0
+end
+
+# Test that finalizer elision doesn't cause a throw to be inlined into a function
+# that shouldn't have it
+const finalizer_should_throw = Ref{Bool}(true)
+mutable struct DoAllocFinalizerThrows
+    function DoAllocFinalizerThrows()
+        finalizer(new()) do this
+            finalizer_should_throw[] && error("Unexpected finalizer throw")
+        end
+    end
+end
+
+function f_finalizer_throws()
+    prev = GC.enable(false)
+    for i = 1:100
+        DoAllocFinalizerThrows()
+    end
+    finalizer_should_throw[] = false
+    GC.enable(prev)
+    GC.gc()
+    return true
+end
+
+@test f_finalizer_throws()
+
+# Test finalizers with static parameters
+mutable struct DoAllocNoEscapeSparam{T}
+    x
+    @inline function finalizer_sparam(d::DoAllocNoEscapeSparam{T}) where {T}
+        nothrow_side_effect(nothing)
+        nothrow_side_effect(T)
+    end
+    @inline function DoAllocNoEscapeSparam(x::T) where {T}
+        finalizer(finalizer_sparam, new{T}(x))
+    end
+end
+let src = code_typed1(Tuple{Any}) do x
+        for i = 1:1000
+            DoAllocNoEscapeSparam(x)
+        end
+    end
+    @test count(x->isexpr(x, :static_parameter), src.code) == 0 # A bad inline might leave left-over :static_parameter
+    nnothrow_invokes = count(isinvoke(:nothrow_side_effect), src.code)
+    @test count(iscall(f->!isa(singleton_type(argextype(f, src)), Core.Builtin)), src.code) ==
+          count(iscall((src, nothrow_side_effect)), src.code) == 2 - nnothrow_invokes
+    # TODO: Our effect modeling is not yet strong enough to fully eliminate this
+    @test_broken count(isnew, src.code) == 0
+end
+
+# Test finalizer varargs
+function varargs_finalizer(args...)
+    nothrow_side_effect(args[1])
+end
+mutable struct DoAllocNoEscapeNoVarargs
+    function DoAllocNoEscapeNoInline()
+        finalizer(noinline_finalizer, new())
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeNoInline()
+        end
+    end
+end
+
+# Test noinline finalizer
+@noinline function noinline_finalizer(d)
+    nothrow_side_effect(nothing)
+end
+mutable struct DoAllocNoEscapeNoInline
+    function DoAllocNoEscapeNoInline()
+        finalizer(noinline_finalizer, new())
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeNoInline()
+        end
+    end
+    @test count(isnew, src.code) == 1
+    @test count(isinvoke(:noinline_finalizer), src.code) == 1
+end
+
+# Test that we resolve a `finalizer` call that we don't handle currently
+mutable struct DoAllocNoEscapeBranch
+    val::Int
+    function DoAllocNoEscapeBranch(val::Int)
+        finalizer(new(val)) do this
+            if this.val > 500
+                nothrow_side_effect(this.val)
+            else
+                nothrow_side_effect(nothing)
+            end
+        end
+    end
+end
+let src = code_typed1() do
+        for i = 1:1000
+            DoAllocNoEscapeBranch(i)
+        end
+    end
+    @test !any(iscall((src, Core.finalizer)), src.code)
+    @test !any(isinvoke(:finalizer), src.code)
+end
+
+const FINALIZATION_COUNT = Ref(0)
+init_finalization_count!() = FINALIZATION_COUNT[] = 0
+get_finalization_count() = FINALIZATION_COUNT[]
+@noinline add_finalization_count!(x) = FINALIZATION_COUNT[] += x
+@noinline Base.@assume_effects :nothrow safeprint(io::IO, x...) = (@nospecialize; print(io, x...))
+@test Core.Compiler.is_finalizer_inlineable(Base.infer_effects(add_finalization_count!, (Int,)))
+
+mutable struct DoAllocWithField
+    x::Int
+    function DoAllocWithField(x::Int)
+        finalizer(new(x)) do this
+            add_finalization_count!(this.x)
+        end
+    end
+end
+mutable struct DoAllocWithFieldInter
+    x::Int
+end
+function register_finalizer!(obj::DoAllocWithFieldInter)
+    finalizer(obj) do this
+        add_finalization_count!(this.x)
+    end
+end
+
+function const_finalization(io)
+    for i = 1:1000
+        o = DoAllocWithField(1)
+        safeprint(io, o.x)
+    end
+end
+let src = code_typed1(const_finalization, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    const_finalization(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+# Test that finalizers that don't do anything are just erased from the IR
+function useless_finalizer()
+    x = Ref(1)
+    finalizer(x) do x
+        nothing
+    end
+    return x
+end
+let src = code_typed1(useless_finalizer, ())
+    @test count(iscall((src, Core.finalizer)), src.code) == 0
+    @test length(src.code) == 2
+end
+
+# tests finalizer inlining when def/uses involve control flow
+function cfg_finalization1(io)
+    for i = -999:1000
+        o = DoAllocWithField(i)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization1, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization1(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization2(io)
+    for i = -999:1000
+        o = DoAllocWithField(1)
+        o.x = i # with `setfield!`
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization2, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization2(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization3(io)
+    for i = -999:1000
+        o = DoAllocWithFieldInter(i)
+        register_finalizer!(o)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization3, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization3(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization4(io)
+    for i = -999:1000
+        o = DoAllocWithFieldInter(1)
+        o.x = i # with `setfield!`
+        register_finalizer!(o)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+    end
+end
+let src = code_typed1(cfg_finalization4, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization4(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization5(io)
+    for i = -999:1000
+        o = DoAllocWithFieldInter(i)
+        if i == 1000
+            safeprint(io, o.x, '\n')
+        elseif i > 0
+            safeprint(io, o.x)
+        end
+        register_finalizer!(o)
+    end
+end
+let src = code_typed1(cfg_finalization5, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization5(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+function cfg_finalization6(io)
+    for i = -999:1000
+        o = DoAllocWithField(0)
+        if i == 1000
+            o.x = i # with `setfield!`
+        elseif i > 0
+            safeprint(io, o.x, '\n')
+        end
+    end
+end
+let src = code_typed1(cfg_finalization6, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization6(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+
+function cfg_finalization7(io)
+    for i = -999:1000
+        o = DoAllocWithField(0)
+        o.x = 0
+        if i == 1000
+            o.x = i # with `setfield!`
+        end
+        o.x = i
+        if i == 999
+            o.x = i
+        end
+        o.x = 0
+        if i == 1000
+            o.x = i
+        end
+    end
+end
+let src = code_typed1(cfg_finalization7, (IO,))
+    @test count(isinvoke(:add_finalization_count!), src.code) == 1
+end
+let
+    init_finalization_count!()
+    cfg_finalization7(IOBuffer())
+    @test get_finalization_count() == 1000
+end
+
+
+# optimize `[push!|pushfirst!](::Vector{Any}, x...)`
+@testset "optimize `$f(::Vector{Any}, x...)`" for f = Any[push!, pushfirst!]
+    @eval begin
+        let src = code_typed1((Vector{Any}, Any)) do xs, x
+                $f(xs, x)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+            @test count(src.code) do @nospecialize x
+                isa(x, Core.GotoNode) ||
+                isa(x, Core.GotoIfNot) ||
+                iscall((src, getfield))(x)
+            end == 0 # no loop should be involved for the common single arg case
+        end
+        let src = code_typed1((Vector{Any}, Any, Any)) do xs, x, y
+                $f(xs, x, y)
+            end
+            @test count(iscall((src, $f)), src.code) == 0
+        end
+        let xs = Any[]
+            $f(xs, :x, "y", 'z')
+            @test xs[1] === :x
+            @test xs[2] == "y"
+            @test xs[3] === 'z'
+        end
+    end
+end
+
+# https://github.com/JuliaLang/julia/issues/45050
+@testset "propagate :meta annotations to keyword sorter methods" begin
+    # @inline, @noinline, @constprop
+    let @inline f(::Any; x::Int=1) = 2x
+        @test is_inlineable(only(methods(f)).source)
+        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
+    end
+    let @noinline f(::Any; x::Int=1) = 2x
+        @test !is_inlineable(only(methods(f)).source)
+        @test !is_inlineable(only(methods(Core.kwfunc(f))).source)
+    end
+    let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+    end
+    let Base.@constprop :none f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.is_no_constprop(only(methods(f)))
+        @test Core.Compiler.is_no_constprop(only(methods(Core.kwfunc(f))))
+    end
+    # @nospecialize
+    let f(@nospecialize(A::Any); x::Int=1) = 2x
+        @test only(methods(f)).nospecialize == 1
+        @test only(methods(Core.kwfunc(f))).nospecialize == 4
+    end
+    let f(::Any; x::Int=1) = (@nospecialize; 2x)
+        @test only(methods(f)).nospecialize == -1
+        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+    end
+    # Base.@assume_effects
+    let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
+        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+    end
+    # propagate multiple metadata also
+    let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
+        @test is_inlineable(only(methods(f)).source)
+        @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
+        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+        @test only(methods(f)).nospecialize == -1
+        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+        @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+    end
+end
+
+# Test that one opaque closure capturing another gets inlined properly.
+function oc_capture_oc(z)
+    oc1 = @opaque x->x
+    oc2 = @opaque y->oc1(y)
+    return oc2(z)
+end
+@test fully_eliminated(oc_capture_oc, (Int,))
+
+@eval struct OldVal{T}
+    x::T
+    (OV::Type{OldVal{T}})() where T = $(Expr(:new, :OV))
+end
+with_unmatched_typeparam1(x::OldVal{i}) where {i} = i
+with_unmatched_typeparam2() = [ Base.donotdelete(OldVal{i}()) for i in 1:10000 ]
+function with_unmatched_typeparam3()
+    f(x::OldVal{i}) where {i} = i
+    r = 0
+    for i = 1:10000
+        r += f(OldVal{i}())
+    end
+    return r
+end
+
+@testset "Inlining with unmatched type parameters" begin
+    let src = code_typed1(with_unmatched_typeparam1, (Any,))
+        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+    end
+    let src = code_typed1(with_unmatched_typeparam2)
+        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+    end
+    let src = code_typed1(with_unmatched_typeparam3)
+        @test !any(@nospecialize(x) -> isexpr(x, :call) && length(x.args) == 1, src.code)
+    end
+end
+
+# Test that semi-concrete eval can inline constant results
+function twice_sitofp(x::Int, y::Int)
+    x = Base.sitofp(Float64, x)
+    y = Base.sitofp(Float64, y)
+    return (x, y)
+end
+call_twice_sitofp(x::Int) = twice_sitofp(x, 2)
+
+let src = code_typed1(call_twice_sitofp, (Int,))
+    @test count(iscall((src, Base.sitofp)), src.code) == 1
+end
+
+# Test getfield modeling of Type{Ref{_A}} where _A
+@test Core.Compiler.getfield_tfunc(Type, Core.Compiler.Const(:parameters)) !== Union{}
+@test !isa(Core.Compiler.getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Compiler.Const(:name)), Core.Compiler.Const)
+@test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
+
+# TODO: Remove compute sparams for vararg_retrival
+fvarargN_inline(x::Tuple{Vararg{Int, N}}) where {N} = N
+fvarargN_inline(args...) = fvarargN_inline(args)
+let src = code_typed1(fvarargN_inline, (Tuple{Vararg{Int}},))
+    @test_broken count(iscall((src, Core._compute_sparams)), src.code) == 0 &&
+                 count(iscall((src, Core._svec_ref)), src.code) == 0 &&
+                 count(iscall((src, Core.nfields)), src.code) == 1
+end
+
+# Test effect annotation of declined inline unionsplit
+f_union_unmatched(x::Union{Nothing, Type{T}}) where {T} = nothing
+let src = code_typed1((Any,)) do x
+        if isa(x, Union{Nothing, Type})
+            f_union_unmatched(x)
+        end
+        nothing
+    end
+    @test count(iscall((src, f_union_unmatched)), src.code) == 0
+end
+
+# modifyfield! handling
+# =====================
+
+isinvokemodify(y) = @nospecialize(x) -> isinvokemodify(y, x)
+isinvokemodify(sym::Symbol, @nospecialize(x)) = isinvokemodify(mi->mi.def.name===sym, x)
+isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred(x.args[1]::MethodInstance)
+
+mutable struct Atomic{T}
+    @atomic x::T
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x + 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x max 10
+    end
+    @test count(isinvokemodify(:max), src.code) == 1
+end
+# simple union split handling
+mymax(x::T, y::T) where T<:Real = max(x, y)
+mymax(x::T, y::Real) where T<:Real = convert(T, max(x, y))::T
+let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
+        @atomic a.x mymax b
+    end
+    @test count(isinvokemodify(:mymax), src.code) == 2
+end
+
+# apply `ssa_inlining_pass` multiple times
+let interp = Core.Compiler.NativeInterpreter()
+    # check if callsite `@noinline` annotation works
+    ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
+        @noinline a*b
+    end |> only
+    i = findfirst(isinvoke(:*), ir.stmts.inst)
+    @test i !== nothing
+
+    # ok, now delete the callsite flag, and see the second inlining pass can inline the call
+    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    inlining = Core.Compiler.InliningState(Core.Compiler.OptimizationParams(interp), nothing,
+        Core.Compiler.code_cache(interp), interp)
+    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
+    @test count(isinvoke(:*), ir.stmts.inst) == 0
+    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
+end

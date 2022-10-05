@@ -111,8 +111,6 @@
 
 #include <llvm-c/Disassembler.h>
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "jitlayers.h"
 #include "processor.h"
 
@@ -482,22 +480,22 @@ void jl_strip_llvm_debug(Module *m)
 
 void jl_strip_llvm_addrspaces(Module *m)
 {
-    legacy::PassManager PM;
-    PM.add(createRemoveJuliaAddrspacesPass());
-    PM.run(*m);
+    PassBuilder PB;
+    AnalysisManagers AM(PB);
+    ModulePassManager MPM;
+    MPM.addPass(RemoveJuliaAddrspacesPass());
+    MPM.run(*m, AM.MAM);
 }
 
 // print an llvm IR acquired from jl_get_llvmf
-// warning: this takes ownership of, and destroys, f->getParent()
+// warning: this takes ownership of, and destroys, dump->TSM
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_ir_impl(void *f, char strip_ir_metadata, char dump_module, const char *debuginfo)
+jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo)
 {
     std::string code;
     raw_string_ostream stream(code);
 
     {
-        //RAII will release the struct itself
-        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(f));
         //RAII will release the module
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
@@ -796,7 +794,13 @@ static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t
     return NULL;
 }
 
-static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Size,
+static int OpInfoLookup(void *DisInfo, uint64_t PC,
+                        uint64_t Offset,
+#if JL_LLVM_VERSION < 150000
+                        uint64_t Size,
+#else
+                        uint64_t OpSize, uint64_t InstSize,
+#endif
                         int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
@@ -1050,10 +1054,14 @@ static void jl_dump_asm_internal(
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
+#if JL_LLVM_VERSION < 150000
+#define getCommentOS() GetCommentOS()
+#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-                                      /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
-            if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
-                Streamer->GetCommentOS() << '\n';
+                                      /*CStream*/ pass != 0 ? Streamer->getCommentOS () : nulls());
+            if (pass != 0 && Streamer->getCommentOS ().tell() > 0)
+                Streamer->getCommentOS () << '\n';
+#undef GetCommentOS
             switch (S) {
             case MCDisassembler::Fail:
                 if (insSize == 0) // skip illegible bytes
@@ -1203,12 +1211,11 @@ public:
 
 // get a native assembly for llvm::Function
 extern "C" JL_DLLEXPORT
-jl_value_t *jl_dump_function_asm_impl(void *F, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
+jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary)
 {
     // precise printing via IR assembler
     SmallVector<char, 4096> ObjBufferSV;
     { // scope block
-        std::unique_ptr<jl_llvmf_dump_t> dump(static_cast<jl_llvmf_dump_t*>(F));
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         llvm::raw_svector_ostream asmfile(ObjBufferSV);
         TSM->withModuleDo([&](Module &m) {

@@ -363,6 +363,20 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
     return b;
 }
 
+JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var)
+{
+    JL_LOCK(&m->lock);
+    jl_binding_t *b = _jl_get_module_binding(m, var);
+    JL_UNLOCK(&m->lock);
+    if (b == HT_NOTFOUND || b->owner == NULL) {
+        return NULL;
+    }
+    if (b->owner != m || b->name != var)
+        return jl_get_binding_if_bound(b->owner, b->name);
+    return b;
+}
+
+
 // get owner of binding when accessing m.var, without resolving the binding
 JL_DLLEXPORT jl_value_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 {
@@ -410,17 +424,29 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
     return b;
 }
 
+JL_DLLEXPORT jl_globalref_t *jl_new_globalref(jl_module_t *mod, jl_sym_t *name, jl_binding_t *b)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_globalref_t *g = (jl_globalref_t *)jl_gc_alloc(ct->ptls, sizeof(jl_globalref_t), jl_globalref_type);
+    g->mod = mod;
+    jl_gc_wb(g, g->mod);
+    g->name = name;
+    g->bnd_cache = b;
+    return g;
+}
+
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
 {
     JL_LOCK(&m->lock);
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    jl_binding_t *b = _jl_get_module_binding(m, var);
     if (b == HT_NOTFOUND) {
         JL_UNLOCK(&m->lock);
-        return jl_new_struct(jl_globalref_type, m, var);
+        return (jl_value_t *)jl_new_globalref(m, var, NULL);
     }
     jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
     if (globalref == NULL) {
-        jl_value_t *newref = jl_new_struct(jl_globalref_type, m, var);
+        jl_value_t *newref = (jl_value_t *)jl_new_globalref(m, var,
+            !b->owner ? NULL : b->owner == m ? b : _jl_get_module_binding(b->owner, b->name));
         if (jl_atomic_cmpswap_relaxed(&b->globalref, &globalref, newref)) {
             JL_GC_PROMISE_ROOTED(newref);
             globalref = newref;
@@ -662,12 +688,24 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_RO
     return b == HT_NOTFOUND ? NULL : b;
 }
 
+
+JL_DLLEXPORT jl_value_t *jl_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT)
+{
+    return jl_atomic_load_relaxed(&b->value);
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
     if (b == NULL) return NULL;
     if (b->deprecated) jl_binding_deprecation_warning(m, b);
-    return b->value;
+    return jl_binding_value(b);
+}
+
+JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
+{
+    jl_binding_t *bp = jl_get_binding_wr(m, var, 1);
+    jl_checked_assignment(bp, val);
 }
 
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
@@ -690,10 +728,22 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
               jl_symbol_name(bp->name));
 }
 
+JL_DLLEXPORT int jl_binding_is_const(jl_binding_t *b)
+{
+    assert(b);
+    return b->constp;
+}
+
+JL_DLLEXPORT int jl_binding_boundp(jl_binding_t *b)
+{
+    assert(b);
+    return b->value != 0;
+}
+
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
-    return b && b->constp;
+    return b && jl_binding_is_const(b);
 }
 
 // set the deprecated flag for a binding:
@@ -830,7 +880,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         jl_safe_printf("WARNING: redefinition of constant %s. This may fail, cause incorrect answers, or produce other errors.\n",
                        jl_symbol_name(b->name));
     }
-    jl_atomic_store_relaxed(&b->value, rhs);
+    jl_atomic_store_release(&b->value, rhs);
     jl_gc_wb_binding(b, rhs);
 }
 

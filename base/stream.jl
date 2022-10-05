@@ -409,7 +409,7 @@ function wait_readnb(x::LibuvStream, nb::Int)
         while bytesavailable(x.buffer) < nb
             x.readerror === nothing || throw(x.readerror)
             isopen(x) || break
-            x.status != StatusEOF || break
+            x.status == StatusEOF && break
             x.throttle = max(nb, x.throttle)
             start_reading(x) # ensure we are reading
             iolock_end()
@@ -665,9 +665,11 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
             elseif nread == UV_EOF # libuv called uv_stop_reading already
                 if stream.status != StatusClosing
                     stream.status = StatusEOF
-                    if stream isa TTY # TODO: || ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
-                        # stream can still be used either by reseteof # TODO: or write
-                        notify(stream.cond)
+                    notify(stream.cond)
+                    if stream isa TTY
+                        # stream can still be used by reseteof (or possibly write)
+                    elseif !(stream isa PipeEndpoint) && ccall(:uv_is_writable, Cint, (Ptr{Cvoid},), stream.handle) != 0
+                        # stream can still be used by write
                     else
                         # underlying stream is no longer useful: begin finalization
                         ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
@@ -676,6 +678,7 @@ function uv_readcb(handle::Ptr{Cvoid}, nread::Cssize_t, buf::Ptr{Cvoid})
                 end
             else
                 stream.readerror = _UVError("read", nread)
+                notify(stream.cond)
                 # This is a fatal connection error
                 ccall(:jl_close_uv, Cvoid, (Ptr{Cvoid},), stream.handle)
                 stream.status = StatusClosing
@@ -1358,7 +1361,7 @@ julia> io1 = open("same/path", "w")
 
 julia> io2 = open("same/path", "w")
 
-julia> redirect_stdio(f, stdout=io1, stderr=io2) # not suppored
+julia> redirect_stdio(f, stdout=io1, stderr=io2) # not supported
 ```
 Also the `stdin` argument may not be the same descriptor as `stdout` or `stderr`.
 ```julia-repl

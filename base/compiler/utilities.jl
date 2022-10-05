@@ -128,7 +128,10 @@ function retrieve_code_info(linfo::MethodInstance)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
-        if isa(src, Array{UInt8,1})
+        if src === nothing
+            # can happen in images built with --strip-ir
+            return nothing
+        elseif isa(src, Array{UInt8,1})
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
@@ -173,6 +176,8 @@ function subst_trivial_bounds(@nospecialize(atype))
     return UnionAll(v, subst_trivial_bounds(atype.body))
 end
 
+has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
+
 # If removing trivial vars from atype results in an equivalent type, use that
 # instead. Otherwise we can get a case like issue #38888, where a signature like
 #   f(x::S) where S<:Int
@@ -184,7 +189,7 @@ function normalize_typevars(method::Method, @nospecialize(atype), sparams::Simpl
         sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), at2, method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
     end
-    return atype, sparams
+    return Pair{Any,SimpleVector}(atype, sparams)
 end
 
 # get a handle to the unique specialization object representing a particular instantiation of a call
@@ -209,6 +214,78 @@ function specialize_method(match::MethodMatch; kwargs...)
     return specialize_method(match.method, match.spec_types, match.sparams; kwargs...)
 end
 
+"""
+    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :aggressive`.
+"""
+is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
+
+"""
+    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+
+Check if `method` is declared as `Base.@constprop :none`.
+"""
+is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
+
+#############
+# backedges #
+#############
+
+"""
+    BackedgeIterator(backedges::Vector{Any})
+
+Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
+which will be one of the following:
+
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
+
+# Examples
+
+```julia
+julia> callme(x) = x+1
+callme (generic function with 1 method)
+
+julia> callyou(x) = callme(x)
+callyou (generic function with 1 method)
+
+julia> callyou(2.0)
+3.0
+
+julia> mi = first(which(callme, (Any,)).specializations)
+MethodInstance for callme(::Float64)
+
+julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
+           println(sig)
+           println(caller)
+       end
+nothing
+callyou(Float64) from callyou(Any)
+```
+"""
+struct BackedgeIterator
+    backedges::Vector{Any}
+end
+
+const empty_backedge_iter = BackedgeIterator(Any[])
+
+struct BackedgePair
+    sig # ::Union{Nothing,Type}
+    caller::Union{MethodInstance,Core.MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+end
+
+function iterate(iter::BackedgeIterator, i::Int=1)
+    backedges = iter.backedges
+    i > length(backedges) && return nothing
+    item = backedges[i]
+    isa(item, MethodInstance) && return BackedgePair(nothing, item), i+1           # regular dispatch
+    isa(item, Core.MethodTable) && return BackedgePair(backedges[i+1], item), i+2  # abstract dispatch
+    return BackedgePair(item, backedges[i+1]::MethodInstance), i+2                 # `invoke` calls
+end
+
 #########
 # types #
 #########
@@ -222,6 +299,17 @@ function singleton_type(@nospecialize(ft))
         return ft.instance
     end
     return nothing
+end
+
+function maybe_singleton_const(@nospecialize(t))
+    if isa(t, DataType)
+        if isdefined(t, :instance)
+            return Const(t.instance)
+        elseif isconstType(t)
+            return Const(t.parameters[1])
+        end
+    end
+    return t
 end
 
 ###################
@@ -239,7 +327,7 @@ function ssamap(f, @nospecialize(stmt))
     return urs[]
 end
 
-function foreachssa(f, @nospecialize(stmt))
+function foreachssa(@specialize(f), @nospecialize(stmt))
     urs = userefs(stmt)
     for op in urs
         val = op[]
@@ -296,7 +384,7 @@ function is_throw_call(e::Expr)
     if e.head === :call
         f = e.args[1]
         if isa(f, GlobalRef)
-            ff = abstract_eval_global(f.mod, f.name)
+            ff = abstract_eval_globalref(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end

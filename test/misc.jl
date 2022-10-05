@@ -191,7 +191,7 @@ end
                 sleep(rand(0:0.01:0.1))
                 history[Threads.atomic_add!(clock, 1)] = Threads.atomic_sub!(occupied, 1) - 1
                 return :resultvalue
-            end == :resultvalue
+            end === :resultvalue
         end
     end
     @test all(<=(sem_size), history)
@@ -237,14 +237,16 @@ end
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)
-do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+const c27164 = Base.Event()
+do_something_async_27164() = @async(begin wait(c27164); x27164[] = 2; end)
 
 let t = nothing
     @sync begin
+        @async (sleep(0.1); x27164[] = 1)
         t = do_something_async_27164()
-        @async (sleep(0.05); x27164[] = 1)
     end
     @test x27164[] == 1
+    notify(c27164)
     fetch(t)
     @test x27164[] == 2
 end
@@ -366,7 +368,7 @@ macro capture_stdout(ex)
     end
 end
 
-# compilation reports in @time
+# compilation reports in @time, @timev
 let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
     @eval begin
         $f(::Real) = 1
@@ -393,6 +395,36 @@ let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
 
         $f(::Float64) = 2
         out = @capture_stdout @time $call2f(c64)
+        @test occursin("% compilation time:", out)
+        @test occursin("% of which was recompilation", out)
+    end
+end
+let f = gensym("f"), callf = gensym("callf"), call2f = gensym("call2f")
+    @eval begin
+        $f(::Real) = 1
+        $callf(container) = $f(container[1])
+        $call2f(container) = $callf(container)
+        c64 = [1.0]
+        c32 = [1.0f0]
+        cabs = AbstractFloat[1.0]
+
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c64)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(c32)
+        @test occursin("% compilation time", out) == false
+
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out)
+        out = @capture_stdout @timev $call2f(cabs)
+        @test occursin("% compilation time", out) == false
+
+        $f(::Float64) = 2
+        out = @capture_stdout @timev $call2f(c64)
         @test occursin("% compilation time:", out)
         @test occursin("% of which was recompilation", out)
     end
@@ -896,7 +928,7 @@ end
     # test against `invoke` doc example
     let
         f(x::Real) = x^2
-        f(x::Integer) = 1 + Base.@invoke f(x::Real)
+        f(x::Integer) = 1 + @invoke f(x::Real)
         @test f(2) == 5
     end
 
@@ -908,17 +940,22 @@ end
         _f2(_) = Real
         @test f1(1) === Integer
         @test f2(1) === Integer
-        @test Base.@invoke(f1(1::Real)) === Real
-        @test Base.@invoke(f2(1::Real)) === Integer
+        @test @invoke(f1(1::Real)) === Real
+        @test @invoke(f2(1::Real)) === Integer
     end
 
-    # when argment's type annotation is omitted, it should be specified as `Any`
+    # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
     let
         f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
-        @test Base.@invoke(f(1::Any)) === Any
-        @test Base.@invoke(f(1)) === Any
+        @test @invoke(f(1::Any)) === Any
+        @test @invoke(f(1)) === Integer
+
+        😎(x, y) = 1
+        😎(x, ::Type{Int}) = 2
+        # Without `Core.Typeof`, the first method would be called
+        @test @invoke(😎(1, Int)) == 2
     end
 
     # handle keyword arguments correctly
@@ -927,8 +964,7 @@ end
         f(::Integer; kwargs...) = error("don't call me")
 
         @test_throws Exception f(1; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1::Any; kw1 = 1, kw2 = 2)
-        @test 3 == Base.@invoke f(1; kw1 = 1, kw2 = 2)
+        @test 3 == @invoke f(1::Any; kw1 = 1, kw2 = 2)
     end
 end
 
@@ -982,19 +1018,28 @@ end
 @test_nowarn Core.eval(Main, :(import ....Main))
 
 # issue #27239
+using Base.BinaryPlatforms: HostPlatform, libc
 @testset "strftime tests issue #27239" begin
-    # change to non-Unicode Korean
+    # change to non-Unicode Korean to test that it is properly transcoded into valid UTF-8
     korloc = ["ko_KR.EUC-KR", "ko_KR.CP949", "ko_KR.949", "Korean_Korea.949"]
-    timestrs = String[]
-    withlocales(korloc) do
-        # system dependent formats
-        push!(timestrs, Libc.strftime(0.0))
-        push!(timestrs, Libc.strftime("%a %A %b %B %p %Z", 0))
+    at_least_one_locale_found = false
+    withlocales(korloc) do locale
+        at_least_one_locale_found = true
+        # Test both the default format and a custom formatting string
+        for s in (Libc.strftime(0.0), Libc.strftime("%a %A %b %B %p %Z", 0))
+            # Ensure that we always get valid UTF-8 back
+            @test isvalid(s)
+
+            # On `musl` it is impossible for `setlocale` to fail, it just falls back to
+            # the default system locale, which on our buildbots is en_US.UTF-8.  We'll
+            # assert that what we get does _not_ start with `Thu`, as that's what all
+            # en_US.UTF-8 encodings would start with.
+            # X-ref: https://musl.openwall.narkive.com/kO1vpTWJ/setlocale-behavior-with-missing-locales
+            @test !startswith(s, "Thu") broken=(libc(HostPlatform()) == "musl")
+        end
     end
-    # tests
-    isempty(timestrs) && @warn "skipping stftime tests: no locale found for testing"
-    for s in timestrs
-        @test isvalid(s)
+    if !at_least_one_locale_found
+        @warn "skipping stftime tests: no locale found for testing"
     end
 end
 
@@ -1060,6 +1105,37 @@ const outsidevar = 7
 end
 @test TestOutsideVar() == TestOutsideVar(7)
 
+@kwdef mutable struct Test_kwdef_const_atomic
+    a
+    b::Int
+    c::Int = 1
+    const d
+    const e::Int
+    const f = 1
+    const g::Int = 1
+    @atomic h::Int
+end
+
+@testset "const and @atomic fields in @kwdef" begin
+    x = Test_kwdef_const_atomic(a = 1, b = 1, d = 1, e = 1, h = 1)
+    for f in fieldnames(Test_kwdef_const_atomic)
+        @test getfield(x, f) == 1
+    end
+    @testset "const fields" begin
+        @test_throws ErrorException x.d = 2
+        @test_throws ErrorException x.e = 2
+        @test_throws MethodError x.e = "2"
+        @test_throws ErrorException x.f = 2
+        @test_throws ErrorException x.g = 2
+    end
+    @testset "atomic fields" begin
+        @test_throws ConcurrencyViolationError x.h = 1
+        @atomic x.h = 1
+        @test @atomic(x.h) == 1
+        @atomic x.h = 2
+        @test @atomic(x.h) == 2
+    end
+end
 
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules

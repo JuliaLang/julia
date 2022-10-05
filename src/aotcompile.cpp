@@ -5,6 +5,7 @@
 
 // target support
 #include <llvm/ADT/Triple.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/IR/DataLayout.h>
@@ -20,18 +21,22 @@
 #include <llvm/Analysis/BasicAliasAnalysis.h>
 #include <llvm/Analysis/TypeBasedAliasAnalysis.h>
 #include <llvm/Analysis/ScopedNoAliasAA.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/IPO.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Vectorize.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
+#include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
+#include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 #if defined(USE_POLLY)
@@ -55,10 +60,16 @@
 
 using namespace llvm;
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "julia_aotcompile"
+
+STATISTIC(CICacheLookups, "Number of codeinst cache lookups");
+STATISTIC(CreateNativeCalls, "Number of jl_create_native calls made");
+STATISTIC(CreateNativeMethods, "Number of methods compiled for jl_create_native");
+STATISTIC(CreateNativeMax, "Max number of methods compiled at once for jl_create_native");
+STATISTIC(CreateNativeGlobals, "Number of globals compiled for jl_create_native");
 
 template<class T> // for GlobalObject's
 static T *addComdat(T *G)
@@ -212,12 +223,13 @@ static void makeSafeName(GlobalObject &G)
 
 static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance_t *mi, size_t world, jl_code_instance_t **ci_out, jl_code_info_t **src_out)
 {
+    ++CICacheLookups;
     jl_value_t *ci = cgparams.lookup(mi, world, world);
     JL_GC_PROMISE_ROOTED(ci);
     jl_code_instance_t *codeinst = NULL;
     if (ci != jl_nothing) {
         codeinst = (jl_code_instance_t*)ci;
-        *src_out = (jl_code_info_t*)codeinst->inferred;
+        *src_out = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
         jl_method_t *def = codeinst->def->def.method;
         if ((jl_value_t*)*src_out == jl_nothing)
             *src_out = NULL;
@@ -232,8 +244,10 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
             *src_out = jl_type_infer(mi, world, 0);
             if (*src_out) {
                 codeinst = jl_get_method_inferred(mi, (*src_out)->rettype, (*src_out)->min_world, (*src_out)->max_world);
-                if ((*src_out)->inferred && !codeinst->inferred)
-                    codeinst->inferred = jl_nothing;
+                if ((*src_out)->inferred) {
+                    jl_value_t *null = nullptr;
+                    jl_atomic_cmpswap_relaxed(&codeinst->inferred, &null, jl_nothing);
+                }
             }
         }
     }
@@ -248,6 +262,8 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 extern "C" JL_DLLEXPORT
 void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy)
 {
+    ++CreateNativeCalls;
+    CreateNativeMax.updateMax(jl_array_len(methods));
     if (cgparams == NULL)
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
@@ -329,6 +345,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         gvars.push_back(std::string(global.second->getName()));
         data->jl_value_to_llvm[global.first] = gvars.size();
     }
+    CreateNativeMethods += emitted.size();
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
@@ -371,6 +388,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         G->setLinkage(GlobalVariable::InternalLinkage);
         data->jl_sysimg_gvars.push_back(G);
     }
+    CreateNativeGlobals += gvars.size();
 
     //Safe b/c context is locked by params
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -432,6 +450,23 @@ static void reportWriterError(const ErrorInfoBase &E)
 {
     std::string err = E.message();
     jl_safe_printf("ERROR: failed to emit output file %s\n", err.c_str());
+}
+
+static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
+{
+    Function *target = M.getFunction(alias);
+    if (!target) {
+        target = Function::Create(FT, Function::ExternalLinkage, alias, M);
+    }
+    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+    appendToCompilerUsed(M, {interposer});
+
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
+    SmallVector<Value *, 4> CallArgs;
+    for (auto &arg : interposer->args())
+        CallArgs.push_back(&arg);
+    auto val = builder.CreateCall(target, CallArgs);
+    builder.CreateRet(val);
 }
 
 
@@ -496,33 +531,39 @@ void jl_dump_native_impl(void *native_code,
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
-    legacy::PassManager preopt, postopt;
+    PassBuilder emptyPB;
+    AnalysisManagers empty(emptyPB);
+    ModulePassManager preopt, postopt;
+    legacy::PassManager emitter; // MC emission is only supported on legacy PM
 
     if (unopt_bc_fname)
-        preopt.add(createBitcodeWriterPass(unopt_bc_OS));
+        preopt.addPass(BitcodeWriterPass(unopt_bc_OS));
 
-    //Is this necessary for TM?
-    // addTargetPasses(&postopt, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (bc_fname)
-        postopt.add(createBitcodeWriterPass(bc_OS));
+        postopt.addPass(BitcodeWriterPass(bc_OS));
+    //Is this necessary for TM?
+    addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
     if (obj_fname)
-        if (TM->addPassesToEmitFile(postopt, obj_OS, nullptr, CGFT_ObjectFile, false))
+        if (TM->addPassesToEmitFile(emitter, obj_OS, nullptr, CGFT_ObjectFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
     if (asm_fname)
-        if (TM->addPassesToEmitFile(postopt, asm_OS, nullptr, CGFT_AssemblyFile, false))
+        if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
             jl_safe_printf("ERROR: target does not support generation of object files\n");
-
-    legacy::PassManager optimizer;
-    if (bc_fname || obj_fname || asm_fname) {
-        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-        addMachinePasses(&optimizer, jl_options.opt_level);
-    }
 
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
     dataM->setTargetTriple(TM->getTargetTriple().str());
     dataM->setDataLayout(jl_create_datalayout(*TM));
+
+#ifndef JL_USE_NEW_PM
+    legacy::PassManager optimizer;
+    addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+    addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+    addMachinePasses(&optimizer, jl_options.opt_level);
+#else
+    NewPM optimizer{std::move(TM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
+#endif
+
     Type *T_size;
     if (sizeof(size_t) == 8)
         T_size = Type::getInt64Ty(Context);
@@ -548,9 +589,27 @@ void jl_dump_native_impl(void *native_code,
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
-        preopt.run(M);
-        optimizer.run(M);
-        postopt.run(M);
+        preopt.run(M, empty.MAM);
+        if (bc_fname || obj_fname || asm_fname) optimizer.run(M);
+
+        // We would like to emit an alias or an weakref alias to redirect these symbols
+        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+        // So for now we inject a definition of these functions that calls our runtime
+        // functions. We do so after optimization to avoid cloning these functions.
+        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+        postopt.run(M, empty.MAM);
+        emitter.run(M);
+
         if (unopt_bc_fname)
             emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
         if (bc_fname)
@@ -631,7 +690,19 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     //       to merge allocations and sometimes eliminate them,
     //       since AllocOpt does not handle PhiNodes.
     //       Enable this instruction hoisting because of this and Union benchmarks.
-    auto simplifyCFGOptions = SimplifyCFGOptions().hoistCommonInsts(true);
+    auto basicSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true);
+    auto aggressiveSimplifyCFGOptions = SimplifyCFGOptions()
+        .convertSwitchRangeToICmp(true)
+        .convertSwitchToLookupTable(true)
+        .forwardSwitchCondToPhi(true)
+        //These mess with loop rotation, so only do them after that
+        .hoistCommonInsts(true)
+        // Causes an SRET assertion error in late-gc-lowering
+        // .sinkCommonInsts(true)
+        ;
 #ifdef JL_DEBUG_BUILD
     PM->add(createGCInvariantVerifierPass(true));
     PM->add(createVerifierPass());
@@ -646,7 +717,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             if (opt_level == 1)
                 PM->add(createInstSimplifyLegacyPass());
         }
-        PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+        PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
         if (opt_level == 1) {
             PM->add(createSROAPass());
             PM->add(createInstructionCombiningPass());
@@ -676,14 +747,14 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
             // minimal clean-up to get rid of CPU feature checks
             if (opt_level == 1) {
                 PM->add(createInstSimplifyLegacyPass());
-                PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+                PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
             }
         }
 #if defined(_COMPILER_ASAN_ENABLED_)
         PM->add(createAddressSanitizerFunctionPass());
 #endif
 #if defined(_COMPILER_MSAN_ENABLED_)
-        PM->add(createMemorySanitizerPass(true));
+        PM->add(createMemorySanitizerLegacyPassPass());
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
         PM->add(createThreadSanitizerLegacyPassPass());
@@ -697,7 +768,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createBasicAAWrapperPass());
     }
 
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     PM->add(createDeadCodeEliminationPass());
     PM->add(createSROAPass());
 
@@ -711,7 +782,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAllocOptPass());
     // consider AggressiveInstCombinePass at optlevel > 2
     PM->add(createInstructionCombiningPass());
-    PM->add(createCFGSimplificationPass(simplifyCFGOptions));
+    PM->add(createCFGSimplificationPass(basicSimplifyCFGOptions));
     if (dump_native)
         PM->add(createMultiVersioningPass(external_use));
     PM->add(createCPUFeaturesPass());
@@ -742,7 +813,11 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createLowerSimdLoopPass()); // Annotate loop marked with "loopinfo" as LLVM parallel loop
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
+#if JL_LLVM_VERSION >= 150000
+    PM->add(createSimpleLoopUnswitchLegacyPass());
+#else
     PM->add(createLoopUnswitchPass());
+#endif
     PM->add(createLICMPass());
     PM->add(createJuliaLICMPass());
     PM->add(createInductiveRangeCheckEliminationPass()); // Must come before indvars
@@ -781,14 +856,15 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
         PM->add(createGVNPass()); // Must come after JumpThreading and before LoopVectorize
     }
     PM->add(createDeadStoreEliminationPass());
-
-    // More dead allocation (store) deletion before loop optimization
-    // consider removing this:
-    PM->add(createAllocOptPass());
     // see if all of the constant folding has exposed more loops
     // to simplification and deletion
     // this helps significantly with cleaning up iteration
-    PM->add(createCFGSimplificationPass()); // See note above, don't hoist instructions before LV
+    PM->add(createCFGSimplificationPass(aggressiveSimplifyCFGOptions));
+
+    // More dead allocation (store) deletion before loop optimization
+    // consider removing this:
+    // Moving this after aggressive CFG simplification helps deallocate when allocations are hoisted
+    PM->add(createAllocOptPass());
     PM->add(createLoopDeletionPass());
     PM->add(createInstructionCombiningPass());
     PM->add(createLoopVectorizePass());
@@ -796,12 +872,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     // Cleanup after LV pass
     PM->add(createInstructionCombiningPass());
     PM->add(createCFGSimplificationPass( // Aggressive CFG simplification
-        SimplifyCFGOptions()
-            .forwardSwitchCondToPhi(true)
-            .convertSwitchToLookupTable(true)
-            .needCanonicalLoops(false)
-            .hoistCommonInsts(true)
-            // .sinkCommonInsts(true) // FIXME: Causes assertion in llvm-late-lowering
+        aggressiveSimplifyCFGOptions
     ));
     PM->add(createSLPVectorizerPass());
     // might need this after LLVM 11:
@@ -812,7 +883,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     if (lower_intrinsics) {
         // LowerPTLS removes an indirect call. As a result, it is likely to trigger
         // LLVM's devirtualization heuristics, which would result in the entire
-        // pass pipeline being re-exectuted. Prevent this by inserting a barrier.
+        // pass pipeline being re-executed. Prevent this by inserting a barrier.
         PM->add(createBarrierNoopPass());
         PM->add(createLowerExcHandlersPass());
         PM->add(createGCInvariantVerifierPass(false));
@@ -842,7 +913,7 @@ void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
     PM->add(createAddressSanitizerFunctionPass());
 #endif
 #if defined(_COMPILER_MSAN_ENABLED_)
-    PM->add(createMemorySanitizerPass(true));
+    PM->add(createMemorySanitizerLegacyPassPass());
 #endif
 #if defined(_COMPILER_TSAN_ENABLED_)
     PM->add(createThreadSanitizerLegacyPassPass());
@@ -893,109 +964,19 @@ void jl_add_optimization_passes_impl(LLVMPassManagerRef PM, int opt_level, int l
     addOptimizationPasses(unwrap(PM), opt_level, lower_intrinsics);
 }
 
-// new pass manager plugin
-
-// NOTE: Instead of exporting all the constructors in passes.h we could
-// forward the callbacks to the respective passes. LLVM seems to prefer this,
-// and when we add the full pass builder having them directly will be helpful.
-static void registerCallbacks(PassBuilder &PB) {
-    PB.registerPipelineParsingCallback(
-        [](StringRef Name, FunctionPassManager &PM,
-           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "DemoteFloat16") {
-                PM.addPass(DemoteFloat16());
-                return true;
-            }
-            if (Name == "CombineMulAdd") {
-              PM.addPass(CombineMulAdd());
-              return true;
-            }
-            if (Name == "LateLowerGCFrame") {
-                PM.addPass(LateLowerGC());
-                return true;
-            }
-            if (Name == "AllocOpt") {
-                PM.addPass(AllocOptPass());
-                return true;
-            }
-            if (Name == "PropagateJuliaAddrspaces") {
-                PM.addPass(PropagateJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "LowerExcHandlers") {
-                PM.addPass(LowerExcHandlers());
-                return true;
-            }
-            if (Name == "GCInvariantVerifier") {
-                // TODO: Parse option and allow users to set `Strong`
-                PM.addPass(GCInvariantVerifierPass());
-                return true;
-            }
-            return false;
-        });
-
-    PB.registerPipelineParsingCallback(
-        [](StringRef Name, ModulePassManager &PM,
-           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "CPUFeatures") {
-              PM.addPass(CPUFeatures());
-              return true;
-            }
-            if (Name == "RemoveNI") {
-              PM.addPass(RemoveNI());
-              return true;
-            }
-            if (Name == "LowerSIMDLoop") {
-              PM.addPass(LowerSIMDLoop());
-              return true;
-            }
-            if (Name == "FinalLowerGC") {
-                PM.addPass(FinalLowerGCPass());
-                return true;
-            }
-            if (Name == "RemoveJuliaAddrspaces") {
-                PM.addPass(RemoveJuliaAddrspacesPass());
-                return true;
-            }
-            if (Name == "MultiVersioning") {
-                PM.addPass(MultiVersioning());
-                return true;
-            }
-            if (Name == "LowerPTLS") {
-                PM.addPass(LowerPTLSPass());
-                return true;
-            }
-            return false;
-        });
-
-    PB.registerPipelineParsingCallback(
-        [](StringRef Name, LoopPassManager &PM,
-           ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-            if (Name == "JuliaLICM") {
-                PM.addPass(JuliaLICMPass());
-                return true;
-            }
-            return false;
-        });
-}
-
-extern "C" JL_DLLEXPORT ::llvm::PassPluginLibraryInfo
-llvmGetPassPluginInfo() {
-      return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
-}
-
 // --- native code info, and dump function to IR and ASM ---
 // Get pointer to llvm::Function instance, compiling if necessary
 // for use in reflection from Julia.
 // this is paired with jl_dump_function_ir, jl_dump_function_asm, jl_dump_method_asm in particular ways:
 // misuse will leak memory or cause read-after-free
 extern "C" JL_DLLEXPORT
-void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, size_t world, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     if (jl_is_method(mi->def.method) && mi->def.method->source == NULL &&
             mi->def.method->generator == NULL) {
         // not a generic function
-        return NULL;
+        dump->F = NULL;
+        return;
     }
 
     // get the source code for this function
@@ -1010,7 +991,7 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         jl_value_t *ci = jl_rettype_inferred(mi, world, world);
         if (ci != jl_nothing) {
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-            src = (jl_code_info_t*)codeinst->inferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
             if ((jl_value_t*)src != jl_nothing && !jl_is_code_info(src) && jl_is_method(mi->def.method))
                 src = jl_uncompress_ir(mi->def.method, codeinst, (jl_array_t*)src);
             jlrettype = codeinst->rettype;
@@ -1051,10 +1032,14 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
             if (optimize) {
+#ifndef JL_USE_NEW_PM
                 legacy::PassManager PM;
                 addTargetPasses(&PM, jl_ExecutionEngine->getTargetTriple(), jl_ExecutionEngine->getTargetIRAnalysis());
                 addOptimizationPasses(&PM, jl_options.opt_level);
                 addMachinePasses(&PM, jl_options.opt_level);
+#else
+                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+#endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
             }
@@ -1071,8 +1056,11 @@ void *jl_get_llvmf_defn_impl(jl_method_instance_t *mi, size_t world, char getwra
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
-        if (F)
-            return new jl_llvmf_dump_t{wrap(new orc::ThreadSafeModule(std::move(m))), wrap(F)};
+        if (F) {
+            dump->TSM = wrap(new orc::ThreadSafeModule(std::move(m)));
+            dump->F = wrap(F);
+            return;
+        }
     }
 
     const char *mname = name_from_method_instance(mi);

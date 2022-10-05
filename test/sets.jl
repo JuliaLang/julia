@@ -115,7 +115,7 @@ end
     @test in(2,s)
     @test length(s) == 2
     @test_throws KeyError pop!(s,1)
-    @test pop!(s,1,:foo) == :foo
+    @test pop!(s,1,:foo) === :foo
     @test length(delete!(s,2)) == 1
     @test !in(1,s)
     @test !in(2,s)
@@ -393,9 +393,10 @@ end
     @test symdiff(Set([1]), BitSet()) isa Set{Int}
     @test symdiff(BitSet([1]), Set{Int}()) isa BitSet
     @test symdiff([1], BitSet()) isa Vector{Int}
-    # symdiff must NOT uniquify
-    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
-    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+    #symdiff does uniquify
+    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [1,2]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
 
     # Base.hasfastin
     @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,

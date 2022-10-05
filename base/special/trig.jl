@@ -255,7 +255,7 @@ end
     #
     #       Note: tan(y+z) = tan(y) + tan'(y)*z
     #                  ~ tan(y) + (1+y*y)*z
-    #       Therefore, for better accuracz in computing tan(y+z), let
+    #       Therefore, for better accuracy in computing tan(y+z), let
     #             3      2      2       2       2
     #        r = y *(T2+y *(T3+y *(...+y *(T12+y *T13))))
     #       then

@@ -27,19 +27,31 @@ end
 
 # displaying type warnings
 
-function warntype_type_printer(io::IO, @nospecialize(ty), used::Bool)
-    used || return
-    str = "::$ty"
+function warntype_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
+    (show_type && used) || return nothing
+    str = "::$type"
     if !highlighting[:warntype]
         print(io, str)
-    elseif ty isa Union && Base.is_expected_union(ty)
+    elseif type isa Union && is_expected_union(type)
         Base.emphasize(io, str, Base.warn_color()) # more mild user notification
-    elseif ty isa Type && (!Base.isdispatchelem(ty) || ty == Core.Box)
+    elseif type isa Type && (!Base.isdispatchelem(type) || type == Core.Box)
         Base.emphasize(io, str)
     else
         Base.printstyled(io, str, color=:cyan) # show the "good" type
     end
-    nothing
+    return nothing
+end
+
+# True if one can be pretty certain that the compiler handles this union well,
+# i.e. must be small with concrete types.
+function is_expected_union(u::Union)
+    Base.unionlen(u) < 4 || return false
+    for x in Base.uniontypes(u)
+        if !Base.isdispatchelem(x) || x == Core.Box
+            return false
+        end
+    end
+    return true
 end
 
 """
@@ -47,11 +59,14 @@ end
 
 Prints lowered and type-inferred ASTs for the methods matching the given generic function
 and type signature to `io` which defaults to `stdout`. The ASTs are annotated in such a way
-as to cause "non-leaf" types to be emphasized (if color is available, displayed in red).
-This serves as a warning of potential type instability. Not all non-leaf types are particularly
-problematic for performance, so the results need to be used judiciously.
-In particular, unions containing either [`missing`](@ref) or [`nothing`](@ref) are displayed in yellow, since
-these are often intentional.
+as to cause "non-leaf" types which may be problematic for performance to be emphasized
+(if color is available, displayed in red). This serves as a warning of potential type instability.
+
+Not all non-leaf types are particularly problematic for performance, and the performance
+characteristics of a particular type is an implementation detail of the compiler.
+`code_warntype` will err on the side of coloring types red if they might be a performance
+concern, so some types may be colored red even if they do not impact performance.
+Small unions of concrete types are usually not a concern, so these are highlighted in yellow.
 
 Keyword argument `debuginfo` may be one of `:source` or `:none` (default), to specify the verbosity of code comments.
 
@@ -125,13 +140,13 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(t=Base.default_tt
                 end
                 print(io, "  ", slotnames[i])
                 if isa(slottypes, Vector{Any})
-                    warntype_type_printer(io, slottypes[i], true)
+                    warntype_type_printer(io; type=slottypes[i], used=true)
                 end
                 println(io)
             end
         end
         print(io, "Body")
-        warntype_type_printer(io, rettype, true)
+        warntype_type_printer(io; type=rettype, used=true)
         println(io)
         irshow_config = Base.IRShow.IRShowConfig(lineprinter(src), warntype_type_printer)
         Base.IRShow.show_ir(lambda_io, src, irshow_config)
@@ -211,12 +226,18 @@ function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wr
     return str
 end
 
+struct LLVMFDump
+    tsm::Ptr{Cvoid} # opaque
+    f::Ptr{Cvoid} # opaque
+end
+
 function _dump_function_linfo_native(linfo::Core.MethodInstance, world::UInt, wrapper::Bool, syntax::Symbol, debuginfo::Symbol, binary::Bool, params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, true, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, true, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_asm, Ref{String},
-                (Ptr{Cvoid}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
-                llvmf, false, syntax, debuginfo, binary)
+                (Ptr{LLVMFDump}, Bool, Ptr{UInt8}, Ptr{UInt8}, Bool),
+                llvmf_dump, false, syntax, debuginfo, binary)
     return str
 end
 
@@ -225,11 +246,12 @@ function _dump_function_linfo_llvm(
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
-    llvmf = ccall(:jl_get_llvmf_defn, Ptr{Cvoid}, (Any, UInt, Bool, Bool, CodegenParams), linfo, world, wrapper, optimize, params)
-    llvmf == C_NULL && error("could not compile the specified method")
+    llvmf_dump = Ref{LLVMFDump}()
+    ccall(:jl_get_llvmf_defn, Cvoid, (Ptr{LLVMFDump}, Any, UInt, Bool, Bool, CodegenParams), llvmf_dump, linfo, world, wrapper, optimize, params)
+    llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = ccall(:jl_dump_function_ir, Ref{String},
-                (Ptr{Cvoid}, Bool, Bool, Ptr{UInt8}),
-                llvmf, strip_ir_metadata, dump_module, debuginfo)
+                (Ptr{LLVMFDump}, Bool, Bool, Ptr{UInt8}),
+                llvmf_dump, strip_ir_metadata, dump_module, debuginfo)
     return str
 end
 
@@ -247,7 +269,7 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
     d = _dump_function(f, types, false, false, !raw, dump_module, :att, optimize, debuginfo, false)
-    if highlighting[:llvm] && get(io, :color, false)
+    if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
         print(io, d)
@@ -274,7 +296,7 @@ See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and 
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
-    if highlighting[:native] && get(io, :color, false)
+    if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)

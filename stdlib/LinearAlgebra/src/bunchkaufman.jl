@@ -80,8 +80,8 @@ BunchKaufman(A::AbstractMatrix{T}, ipiv::AbstractVector{<:Integer}, uplo::Abstra
              symmetric::Bool, rook::Bool, info::BlasInt) where {T} =
         BunchKaufman{T,typeof(A),typeof(ipiv)}(A, ipiv, uplo, symmetric, rook, info)
 # backwards-compatible constructors (remove with Julia 2.0)
-@deprecate(BunchKaufman(LD, ipiv, uplo, symmetric, rook, info) where {T,S},
-           BunchKaufman{T,S,typeof(ipiv)}(LD, ipiv, uplo, symmetric, rook, info))
+@deprecate(BunchKaufman{T,S}(LD, ipiv, uplo, symmetric, rook, info) where {T,S},
+           BunchKaufman{T,S,typeof(ipiv)}(LD, ipiv, uplo, symmetric, rook, info), false)
 
 # iteration for destructuring into components
 Base.iterate(S::BunchKaufman) = (S.D, Val(:UL))
@@ -197,7 +197,7 @@ julia> S.L*S.D*S.L' - A[S.p, S.p]
 ```
 """
 bunchkaufman(A::AbstractMatrix{T}, rook::Bool=false; check::Bool = true) where {T} =
-    bunchkaufman!(copymutable_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
+    bunchkaufman!(eigencopy_oftype(A, typeof(sqrt(oneunit(T)))), rook; check = check)
 
 BunchKaufman{T}(B::BunchKaufman) where {T} =
     BunchKaufman(convert(Matrix{T}, B.LD), B.ipiv, B.uplo, B.symmetric, B.rook, B.info)

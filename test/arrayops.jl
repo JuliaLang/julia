@@ -545,9 +545,17 @@ end
 
 @testset "findall, findfirst, findnext, findlast, findprev" begin
     a = [0,1,2,3,0,1,2,3]
+    m = [false false; true false]
     @test findall(!iszero, a) == [2,3,4,6,7,8]
     @test findall(a.==2) == [3,7]
     @test findall(isodd,a) == [2,4,6,8]
+    @test findall(Bool[]) == Int[]
+    @test findall([false, false]) == Int[]
+    @test findall(m) == [k for (k,v) in pairs(m) if v]
+    @test findall(!, [false, true, true]) == [1]
+    @test findall(i -> true, [false, true, false]) == [1, 2, 3]
+    @test findall(i -> false, rand(2, 2)) == Int[]
+    @test findall(!, m) == [k for (k,v) in pairs(m) if !v]
     @test findfirst(!iszero, a) == 2
     @test findfirst(a.==0) == 1
     @test findfirst(a.==5) == nothing
@@ -700,7 +708,7 @@ end
     ap = PermutedDimsArray(Array(a), (2,1,3))
     @test strides(ap) == (3,1,12)
 
-    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
+    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1), [rand(ComplexF64, 2,2) for _ in 1:2, _ in 1:3, _ in 1:2, _ in 1:4]]
         perm = randperm(4)
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
@@ -708,6 +716,10 @@ end
         @test sum(permutedims(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
         @test sum(permutedims(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
         @test sum(permutedims(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
+
+        @test prod(permutedims(A,perm)) ≈ prod(PermutedDimsArray(A,perm))
+        @test prod(permutedims(A,perm), dims=2) ≈ prod(PermutedDimsArray(A,perm), dims=2)
+        @test prod(permutedims(A,perm), dims=(2,4)) ≈ prod(PermutedDimsArray(A,perm), dims=(2,4))
     end
 
     m = [1 2; 3 4]
@@ -757,6 +769,18 @@ end
     @test circshift(src, 1) == src
     src = zeros(Bool, (4,0))
     @test circshift(src, 1) == src
+
+    # 1d circshift! (https://github.com/JuliaLang/julia/issues/46533)
+    a = [1:5;]
+    @test circshift!(a, 1) === a
+    @test a == circshift([1:5;], 1) == [5, 1, 2, 3, 4]
+    a = [1:5;]
+    @test circshift!(a, -2) === a
+    @test a == circshift([1:5;], -2) == [3, 4, 5, 1, 2]
+    a = [1:5;]
+    oa = OffsetVector(copy(a), -1)
+    @test circshift!(oa, 1) === oa
+    @test oa == circshift(OffsetVector(a, -1), 1)
 end
 
 @testset "circcopy" begin
@@ -1128,7 +1152,7 @@ end
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
     @test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
-    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2])
+    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
     @test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
     @test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
     @test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
@@ -1173,7 +1197,6 @@ end
     @test mapslices(prod,["1"],dims=1) == ["1"]
 
     # issue #5177
-
     c = fill(1,2,3,4)
     m1 = mapslices(_ -> fill(1,2,3), c, dims=[1,2])
     m2 = mapslices(_ -> fill(1,2,4), c, dims=[1,3])
@@ -1196,9 +1219,26 @@ end
     @test o == fill(1, 3, 4)
 
     # issue #18524
-    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1)
+    m = mapslices(x->tuple(x), [1 2; 3 4], dims=1) # see variations of this below
     @test m[1,1] == ([1,3],)
     @test m[1,2] == ([2,4],)
+
+    r = rand(Int8, 4,5,2)
+    @test vec(mapslices(repr, r, dims=(2,1))) == map(repr, eachslice(r, dims=3))
+    @test mapslices(tuple, [1 2; 3 4], dims=1) == [([1, 3],)  ([2, 4],)]
+    @test mapslices(transpose, r, dims=(1,3)) == permutedims(r, (3,2,1))
+
+    # failures
+    @test_broken @inferred(mapslices(tuple, [1 2; 3 4], dims=1)) == [([1, 3],)  ([2, 4],)]
+    @test_broken @inferred(mapslices(transpose, r, dims=(1,3))) == permutedims(r, (3,2,1))
+
+    # re-write, #40996
+    @test_throws ArgumentError mapslices(identity, rand(2,3), dims=0) # previously BoundsError
+    @test_throws ArgumentError mapslices(identity, rand(2,3), dims=(1,3)) # previously BoundsError
+    @test_throws DimensionMismatch mapslices(x -> x * x', rand(2,3), dims=1) # explicitly caught
+    @test @inferred(mapslices(hcat, [1 2; 3 4], dims=1)) == [1 2; 3 4] # previously an error, now allowed
+    @test mapslices(identity, [1 2; 3 4], dims=(2,2)) == [1 2; 3 4] # previously an error
+    @test_broken @inferred(mapslices(identity, [1 2; 3 4], dims=(2,2))) == [1 2; 3 4]
 end
 
 @testset "single multidimensional index" begin
@@ -1461,6 +1501,9 @@ end
     @test isempty(eoa)
 end
 
+@testset "filter curried #41173" begin
+    @test -5:5 |> filter(iseven) == -4:2:4
+end
 @testset "logical keepat!" begin
     # Vector
     a = Vector(1:10)
@@ -1634,15 +1677,32 @@ end
 end
 
 @testset "isdiag, istril, istriu" begin
+    # Scalar
     @test isdiag(3)
     @test istril(4)
     @test istriu(5)
+
+    # Square matrix
     @test !isdiag([1 2; 3 4])
     @test !istril([1 2; 3 4])
     @test !istriu([1 2; 3 4])
     @test isdiag([1 0; 0 4])
     @test istril([1 0; 3 4])
     @test istriu([1 2; 0 4])
+
+    # Non-square matrix
+    @test !isdiag([1 2 0; 3 4 0])
+    @test !istril([1 2 0; 3 4 0])
+    @test !istriu([1 2 0; 3 4 0])
+    @test isdiag([1 0 0; 0 4 0])
+    @test istril([1 0 0; 3 4 0])
+    @test istriu([1 2 0; 0 4 0])
+    @test !isdiag([1 2 0; 3 4 1])
+    @test !istril([1 2 0; 3 4 1])
+    @test !istriu([1 2 0; 3 4 1])
+    @test !isdiag([1 0 0; 0 4 1])
+    @test !istril([1 0 0; 3 4 1])
+    @test istriu([1 2 0; 0 4 1])
 end
 
 # issue 4228
@@ -2225,6 +2285,14 @@ end
     @test S32K isa AbstractSlices{<:AbstractArray{Int, 2}, 4}
     @test size(S32K) == (1,2,2,1)
     @test S32K[1,2,1,1] == M[:,2,1,:]
+
+    @testset "eachslice inference (#45923)" begin
+        a = [1 2; 3 4]
+        f1(a) = eachslice(a, dims=1)
+        @test (@inferred f1(a)) == eachrow(a)
+        f2(a) = eachslice(a, dims=2)
+        @test (@inferred f2(a)) == eachcol(a)
+    end
 end
 
 ###

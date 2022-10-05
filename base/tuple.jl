@@ -55,9 +55,9 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, args...)
+function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
 end
 
 
@@ -345,7 +345,7 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 if nameof(@__MODULE__) === :Base
 
 function tuple_type_tail(T::Type)
-    @_total_may_throw_meta # TODO: this method is wrong (and not :total_may_throw)
+    @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
@@ -383,7 +383,7 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
-    return (t1, ts...)
+    return (t1, ts...)::T
 end
 
 # use iterative algorithm for long tuples
@@ -580,15 +580,6 @@ any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
-
-# equivalent to any(f, t), to be used only in bootstrap
-_tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
-function _tuple_any(f::Function, tf::Bool, a, b...)
-    @inline
-    _tuple_any(f, tf | f(a), b...)
-end
-_tuple_any(f::Function, tf::Bool) = tf
-
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})

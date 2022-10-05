@@ -113,7 +113,9 @@
 
 // When not using COPY_STACKS the task-system is less memory efficient so
 // you probably want to choose a smaller default stack size (factor of 8-10)
-#ifdef _P64
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+#define JL_STACK_SIZE (64*1024*1024)
+#elif defined(_P64)
 #define JL_STACK_SIZE (4*1024*1024)
 #else
 #define JL_STACK_SIZE (2*1024*1024)
@@ -126,7 +128,7 @@
 
 // controls for when threads sleep
 #define THREAD_SLEEP_THRESHOLD_NAME     "JULIA_THREAD_SLEEP_THRESHOLD"
-#define DEFAULT_THREAD_SLEEP_THRESHOLD  16*1000 // nanoseconds (16us)
+#define DEFAULT_THREAD_SLEEP_THRESHOLD  100*1000 // nanoseconds (100us)
 
 // defaults for # threads
 #define NUM_THREADS_NAME                "JULIA_NUM_THREADS"
@@ -164,8 +166,12 @@
 // sanitizer defaults ---------------------------------------------------------
 
 // Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
-#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
+#if defined(_COMPILER_ASAN_ENABLED_)
+// No MEMDEBUG for msan - we just poison allocated memory directly.
 #define MEMDEBUG
+#endif
+
+#if defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_MSAN_ENABLED_)
 #define KEEP_BODIES
 #endif
 

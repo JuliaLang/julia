@@ -5,8 +5,8 @@ using .Main.OffsetArrays
 import .Main.OffsetArrays: IdOffsetRange
 using Random
 using LinearAlgebra
-using Statistics
 using Base: IdentityUnitRange
+using Test
 
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
@@ -243,7 +243,7 @@ targets2 = ["(fill(1.0), fill(1.0))",
 end
 P = OffsetArray(rand(8,8), (1,1))
 PV = view(P, 2:3, :)
-@test endswith(summary(PV), "with indices Base.OneTo(2)×OffsetArrays.IdOffsetRange(2:9)")
+@test endswith(summary(PV), "with indices Base.OneTo(2)×$(repr(axes(P,2)))")
 
 # Similar
 B = similar(A, Float32)
@@ -414,6 +414,23 @@ rv = reverse(v)
 cv = copy(v)
 @test reverse!(cv) == rv
 
+@testset "reverse! (issue #45870)" begin
+    @testset for n in [4,5]
+        offset = typemax(Int)-n
+        vo = OffsetArray([1:n;], offset)
+        vo2 = OffsetArray([1:n;], offset)
+        @test reverse!(vo) == OffsetArray(n:-1:1, offset)
+        @test reverse!(vo) == vo2
+        @test_throws BoundsError reverse!(vo, firstindex(vo)-1, firstindex(vo))
+        @test reverse!(vo, firstindex(vo), firstindex(vo)-1) == vo2
+        @test reverse!(vo, firstindex(vo), firstindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)+1) == vo2 # overflow in stop
+        @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
+        @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
+    end
+end
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A) == 16
 @test lastindex(A, 1) == 1
@@ -457,13 +474,10 @@ I = findall(!iszero, z)
 @test findall(x->x>0, h) == [-1,1]
 @test findall(x->x<0, h) == [-2,0]
 @test findall(x->x==0, h) == [2]
-@test mean(A_3_3) == median(A_3_3) == 5
-@test mean(x->2x, A_3_3) == 10
-@test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], A_3_3.offsets)
-@test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), A_3_3.offsets)
-@test var(A_3_3) == 7.5
-@test std(A_3_3, dims=1) == OffsetArray([1 1 1], A_3_3.offsets)
-@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
+@test sum(A_3_3) == 45
+@test sum(x->2x, A_3_3) == 90
+@test sum(A_3_3, dims=1) == OffsetArray([6 15 24], A_3_3.offsets)
+@test sum(A_3_3, dims=2) == OffsetArray(reshape([12,15,18],(3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
@@ -794,6 +808,22 @@ end
     a = OffsetArray(4:5, 5:6)
     @test reshape(a, :) === a
     @test reshape(a, (:,)) === a
+end
+
+@testset "stack" begin
+    nought = OffsetArray([0, 0.1, 0.01], 0:2)
+    ten = OffsetArray([1,10,100,1000], 10:13)
+
+    @test stack(ten) == ten
+    @test stack(ten .+ nought') == ten .+ nought'
+    @test stack(x^2 for x in ten) == ten.^2
+
+    @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
+    @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
+    @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
+    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
+    @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
+    @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
 end
 
 @testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin

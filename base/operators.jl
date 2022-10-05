@@ -185,7 +185,7 @@ Not the inverse of `isless`! Test whether `x` is greater than `y`, according to
 a fixed total order compatible with `min`.
 
 Defined with `isless`, this function is usually `isless(y, x)`, but `NaN` and
-[`missing`](@ref) are ordered as smaller than any ordinary value with `missing`
+[`missing`](@ref) are ordered as smaller than any regular value with `missing`
 smaller than `NaN`.
 
 So `isless` defines an ascending total order with `NaN` and `missing` as the
@@ -324,7 +324,7 @@ Because of the behavior of floating-point NaN values, this operator implements
 a partial order.
 
 # Implementation
-New numeric types with a canonical partial order should implement this function for
+New types with a canonical partial order should implement this function for
 two arguments of the new type.
 Types with a canonical total order should implement [`isless`](@ref) instead.
 
@@ -513,8 +513,6 @@ julia> identity("Well, what did you expect?")
 identity(@nospecialize x) = x
 
 +(x::Number) = x
--(x) = Int8(-1)*x
--(x, y) = x + (-y)
 *(x::Number) = x
 (&)(x::Integer) = x
 (|)(x::Integer) = x
@@ -615,9 +613,7 @@ julia> inv(A) * x
  -7.0
 ```
 """
-\(x, y) = inv(x) * y
-
-/(x, y) = x * inv(y)
+\(x,y) = adjoint(adjoint(y)/adjoint(x))
 
 # Core <<, >>, and >>> take either Int or UInt as second arg. Signed shift
 # counts can shift in either direction, and are translated here to unsigned
@@ -662,9 +658,9 @@ end
     >>(x, n)
 
 Right bit shift operator, `x >> n`. For `n >= 0`, the result is `x` shifted
-right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
-0`, preserving the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n <
-0`, this is equivalent to `x << -n`.
+right by `n` bits, filling with `0`s if `x >= 0`, `1`s if `x < 0`, preserving
+the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n < 0`, this is
+equivalent to `x << -n`.
 
 # Examples
 ```jldoctest
@@ -703,8 +699,8 @@ end
     >>>(x, n)
 
 Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
-shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
-is equivalent to `x << -n`.
+shifted right by `n` bits, filling with `0`s. For `n < 0`, this is equivalent
+to `x << -n`.
 
 For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 [`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.
@@ -846,7 +842,7 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld((x - m) + y, y))
 function fld1(x::T, y::T) where T<:Integer
     d = div(x, y)
     return d + (!signbit(x ⊻ y) & (d * y != x))
@@ -891,16 +887,27 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 """
     |>(x, f)
 
-Applies a function to the preceding argument. This allows for easy function chaining.
-When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
+Infix operator which applies function `f` to the argument `x`.
+This allows `f(g(x))` to be written `x |> g |> f`.
+When used with anonymous functions, parentheses are typically required around
+the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] .|> (x -> x^2) |> sum |> inv
-0.01818181818181818
+julia> 4 |> inv
+0.25
+
+julia> [2, 3, 5] |> sum |> inv
+0.1
+
+julia> [0 1; 2 3] .|> (x -> x^2) |> sum
+14
 ```
 """
 |>(x, f) = f(x)
+
+_stable_typeof(x) = typeof(x)
+_stable_typeof(::Type{T}) where {T} = @isdefined(T) ? Type{T} : DataType
 
 """
     f = Returns(value)
@@ -928,7 +935,7 @@ julia> f.value
 struct Returns{V} <: Function
     value::V
     Returns{V}(value) where {V} = new{V}(value)
-    Returns(value) = new{Core.Typeof(value)}(value)
+    Returns(value) = new{_stable_typeof(value)}(value)
 end
 
 (obj::Returns)(@nospecialize(args...); @nospecialize(kw...)) = obj.value
@@ -1014,7 +1021,16 @@ struct ComposedFunction{O,I} <: Function
     ComposedFunction(outer, inner) = new{Core.Typeof(outer),Core.Typeof(inner)}(outer, inner)
 end
 
-(c::ComposedFunction)(x...; kw...) = c.outer(c.inner(x...; kw...))
+(c::ComposedFunction)(x...; kw...) = call_composed(unwrap_composed(c), x, kw)
+unwrap_composed(c::ComposedFunction) = (unwrap_composed(c.outer)..., unwrap_composed(c.inner)...)
+unwrap_composed(c) = (maybeconstructor(c),)
+call_composed(fs, x, kw) = (@inline; fs[1](call_composed(tail(fs), x, kw)))
+call_composed(fs::Tuple{Any}, x, kw) = fs[1](x...; kw...)
+
+struct Constructor{F} <: Function end
+(::Constructor{F})(args...; kw...) where {F} = (@inline; F(args...; kw...))
+maybeconstructor(::Type{F}) where {F} = Constructor{F}()
+maybeconstructor(f) = f
 
 ∘(f) = f
 ∘(f, g) = ComposedFunction(f, g)
@@ -1078,8 +1094,8 @@ struct Fix1{F,T} <: Function
     f::F
     x::T
 
-    Fix1(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix1(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix1(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix1(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix1)(y) = f.f(f.x, y)
@@ -1095,8 +1111,8 @@ struct Fix2{F,T} <: Function
     f::F
     x::T
 
-    Fix2(f::F, x::T) where {F,T} = new{F,T}(f, x)
-    Fix2(f::Type{F}, x::T) where {F,T} = new{Type{F},T}(f, x)
+    Fix2(f::F, x) where {F} = new{F,_stable_typeof(x)}(f, x)
+    Fix2(f::Type{F}, x) where {F} = new{Type{F},_stable_typeof(x)}(f, x)
 end
 
 (f::Fix2)(y) = f.f(y, f.x)
@@ -1200,6 +1216,9 @@ its argument into the original function. This is useful as an adaptor to pass
 a multi-argument function in a context that expects a single argument, but
 passes a tuple as that single argument. Additionally has pretty printing.
 
+!!! compat "Julia 1.9"
+    This function was introduced in Julia 1.9, replacing `Base.splat(f)`.
+
 # Example usage:
 ```jldoctest
 julia> map(Base.Splat(+), zip(1:3,4:6))
@@ -1295,7 +1314,7 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
-To determine whether an item is not in a given collection, see [`:∉`](@ref).
+To determine whether an item is not in a given collection, see [`∉`](@ref).
 You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both

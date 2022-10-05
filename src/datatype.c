@@ -74,6 +74,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->linearcache, jl_emptysvec);
     tn->names = NULL;
     tn->hash = bitmix(bitmix(module ? module->build_id : 0, name->hash), 0xa1ada1da);
+    tn->_reserved = 0;
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
@@ -1491,7 +1492,7 @@ void set_nth_field(jl_datatype_t *st, jl_value_t *v, size_t i, jl_value_t *rhs, 
         return;
     }
     if (jl_field_isptr(st, i)) {
-        jl_atomic_store_relaxed((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
+        jl_atomic_store_release((_Atomic(jl_value_t*)*)((char*)v + offs), rhs);
         jl_gc_wb(v, rhs);
     }
     else {
@@ -1788,6 +1789,17 @@ JL_DLLEXPORT int jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT
     jl_value_t *fval = jl_atomic_load_relaxed(fld);
     return fval != NULL ? 1 : 0;
 }
+
+JL_DLLEXPORT int jl_field_isdefined_checked(jl_value_t *v, size_t i)
+{
+    if (jl_is_module(v)) {
+        jl_type_error("isdefined", (jl_value_t*)jl_symbol_type, jl_box_long(i + 1));
+    }
+    if (i >= jl_nfields(v))
+        return 0;
+    return !!jl_field_isdefined(v, i);
+}
+
 
 JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
 {

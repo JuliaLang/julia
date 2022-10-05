@@ -183,7 +183,7 @@ julia> gcdx(240, 46)
     their `typemax`, and the identity then holds only via the unsigned
     integers' modulo arithmetic.
 """
-function gcdx(a::Integer, b::Integer)
+Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     T = promote_type(typeof(a), typeof(b))
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
@@ -192,8 +192,8 @@ function gcdx(a::Integer, b::Integer)
     x = a % T
     y = b % T
     while y != 0
-        q = div(x, y)
-        x, y = y, rem(x, y)
+        q, r = divrem(x, y)
+        x, y = y, r
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
@@ -233,7 +233,7 @@ function invmod(n::Integer, m::Integer)
         n == typeof(n)(-1) && m == typemin(typeof(n)) && return T(-1)
     end
     g, x, y = gcdx(n, m)
-    g != 1 && throw(DomainError((n, m), "Greatest common divisor is $g."))
+    g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
     # Note that m might be negative here.
     if n isa Unsigned && hastypemax(typeof(n)) && x > typemax(n)>>1
         # x might have wrapped if it would have been negative
@@ -246,20 +246,20 @@ end
 
 # ^ for any x supporting *
 to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
-@noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p,
-    string("Cannot raise an integer x to a negative power ", p, '.',
-           "\nConvert input to float.")))
-@noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p,
-   string("Cannot raise an integer x to a negative power ", p, '.',
-          "\nMake x or $p a float by adding a zero decimal ",
-          "(e.g., 2.0^$p or 2^$(float(p)) instead of 2^$p), ",
-          "or write 1/x^$(-p), float(x)^$p, x^float($p) or (x//1)^$p")))
-@noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p,
-   string("Cannot raise an integer matrix x to a negative power ", p, '.',
-          "\nMake x a float matrix by adding a zero decimal ",
-          "(e.g., [2.0 1.0;1.0 0.0]^$p instead ",
-          "of [2 1;1 0]^$p), or write float(x)^$p or Rational.(x)^$p")))
-function power_by_squaring(x_, p::Integer)
+@noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
+    "Cannot raise an integer x to a negative power ", p, ".",
+    "\nConvert input to float.")))
+@noinline throw_domerr_powbysq(::Integer, p) = throw(DomainError(p, LazyString(
+    "Cannot raise an integer x to a negative power ", p, ".",
+    "\nMake x or ", p, " a float by adding a zero decimal ",
+    "(e.g., 2.0^", p, " or 2^", float(p), " instead of 2^", p, ")",
+    "or write 1/x^", -p, ", float(x)^", p, ", x^float(", p, ") or (x//1)^", p, ".")))
+@noinline throw_domerr_powbysq(::AbstractMatrix, p) = throw(DomainError(p, LazyString(
+    "Cannot raise an integer matrix x to a negative power ", p, ".",
+    "\nMake x a float matrix by adding a zero decimal ",
+    "(e.g., [2.0 1.0;1.0 0.0]^", p, " instead of [2 1;1 0]^", p, ")",
+    "or write float(x)^", p, " or Rational.(x)^", p, ".")))
+@assume_effects :terminates_locally function power_by_squaring(x_, p::Integer)
     x = to_power_type(x_)
     if p == 1
         return copy(x)
@@ -649,6 +649,9 @@ See also [`digits`](@ref), [`count_ones`](@ref).
 
 # Examples
 ```jldoctest
+julia> ndigits(0)
+1
+
 julia> ndigits(12345)
 5
 
@@ -1057,7 +1060,7 @@ julia> binomial(-5, 3)
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
-function binomial(n::T, k::T) where T<:Integer
+Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k
     k < 0 && return zero(T)
     sgn = one(T)
@@ -1079,7 +1082,7 @@ function binomial(n::T, k::T) where T<:Integer
     while rr <= k
         xt = div(widemul(x, nn), rr)
         x = xt % T
-        x == xt || throw(OverflowError("binomial($n0, $k0) overflows"))
+        x == xt || throw(OverflowError(LazyString("binomial(", n0, ", ", k0, " overflows")))
         rr += one(T)
         nn += one(T)
     end

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, arrayref
+import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
 
 const Callable = Union{Function,Type}
 
@@ -12,6 +12,8 @@ length(a::Array) = arraylen(a)
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
 eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
+
+==(a::GlobalRef, b::GlobalRef) = a.mod === b.mod && a.name === b.name
 
 """
     AbstractSet{T}
@@ -209,16 +211,20 @@ macro _total_meta()
         #=:effect_free=#true,
         #=:nothrow=#true,
         #=:terminates_globally=#true,
-        #=:terminates_locally=#false))
+        #=:terminates_locally=#false,
+        #=:notaskstate=#true,
+        #=:inaccessiblememonly=#true))
 end
-# can be used in place of `@assume_effects :total_may_throw` (supposed to be used for bootstrapping)
-macro _total_may_throw_meta()
+# can be used in place of `@assume_effects :foldable` (supposed to be used for bootstrapping)
+macro _foldable_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#true,
         #=:effect_free=#true,
         #=:nothrow=#false,
         #=:terminates_globally=#true,
-        #=:terminates_locally=#false))
+        #=:terminates_locally=#false,
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#true))
 end
 
 # another version of inlining that propagates an inbounds context
@@ -277,7 +283,14 @@ See also: [`round`](@ref), [`trunc`](@ref), [`oftype`](@ref), [`reinterpret`](@r
 """
 function convert end
 
-convert(::Type{Union{}}, @nospecialize x) = throw(MethodError(convert, (Union{}, x)))
+# make convert(::Type{<:Union{}}, x::T) intentionally ambiguous for all T
+# so it will never get called or invalidated by loading packages
+# with carefully chosen types that won't have any other convert methods defined
+convert(T::Type{<:Core.IntrinsicFunction}, x) = throw(MethodError(convert, (T, x)))
+convert(T::Type{<:Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
+convert(::Type{T}, x::T) where {T<:Core.IntrinsicFunction} = x
+convert(::Type{T}, x::T) where {T<:Nothing} = x
+
 convert(::Type{Type}, x::Type) = x # the ssair optimizer is strongly dependent on this method existing to avoid over-specialization
                                    # in the absence of inlining-enabled
                                    # (due to fields typed as `Type`, which is generally a bad idea)
@@ -440,7 +453,7 @@ end
 """
     oftype(x, y)
 
-Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+Convert `y` to the type of `x` i.e. `convert(typeof(x), y)`.
 
 # Examples
 ```jldoctest
@@ -511,7 +524,7 @@ reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 Size, in bytes, of the canonical binary representation of the given `DataType` `T`, if any.
 Or the size, in bytes, of object `obj` if it is not a `DataType`.
 
-See also [`summarysize`](@ref).
+See also [`Base.summarysize`](@ref).
 
 # Examples
 ```jldoctest
@@ -675,15 +688,12 @@ end
 
 # SimpleVector
 
-function getindex(v::SimpleVector, i::Int)
-    @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
-    end
-    return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
-end
-
+@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
-    return ccall(:jl_svec_len, Int, (Any,), v)
+    t = @_gc_preserve_begin v
+    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return len
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -738,7 +748,7 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    return ccall(:jl_svec_isassigned, Bool, (Any, Int), v, i - 1)
+    return true
 end
 
 
@@ -757,6 +767,7 @@ see [`:`](@ref).
 struct Colon <: Function
 end
 const (:) = Colon()
+
 
 """
     Val(c)
@@ -835,8 +846,7 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
 end
 
-# TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
+inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
     isempty(collection) -> Bool

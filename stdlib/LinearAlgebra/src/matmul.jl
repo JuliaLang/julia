@@ -66,7 +66,7 @@ end
     gemv!(y, 'N', A, x, alpha, beta)
 
 # Complex matrix times real vector.
-# Reinterpret the matrix as a real matrix and do real matvec compuation.
+# Reinterpret the matrix as a real matrix and do real matvec computation.
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
         alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, 'N', A, x, alpha, beta)
@@ -315,9 +315,9 @@ see [`QR`](@ref).
 ```jldoctest
 julia> A = [0 1; 1 0];
 
-julia> B = LinearAlgebra.UpperTriangular([1 2; 0 3]);
+julia> B = UpperTriangular([1 2; 0 3]);
 
-julia> LinearAlgebra.rmul!(A, B);
+julia> rmul!(A, B);
 
 julia> A
 2×2 Matrix{Int64}:
@@ -348,9 +348,9 @@ see [`QR`](@ref).
 ```jldoctest
 julia> B = [0 1; 1 0];
 
-julia> A = LinearAlgebra.UpperTriangular([1 2; 0 3]);
+julia> A = UpperTriangular([1 2; 0 3]);
 
-julia> LinearAlgebra.lmul!(A, B);
+julia> lmul!(A, B);
 
 julia> B
 2×2 Matrix{Int64}:
@@ -469,7 +469,7 @@ end
 
 # Supporting functions for matrix multiplication
 
-# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+# copy transposed(adjoint) of upper(lower) side-diagonals. Optionally include diagonal.
 @inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
     off = diag ? 0 : 1

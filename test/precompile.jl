@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test, Distributed, Random
 
 Foo_module = :Foo4b3a94a1a081a8cb
@@ -106,16 +108,18 @@ precompile_test_harness(false) do dir
     write(Foo2_file,
           """
           module $Foo2_module
-              export override
+              export override, overridenc
               override(x::Integer) = 2
               override(x::AbstractFloat) = Float64(override(1))
+              overridenc(x::Integer) = rand()+1
+              overridenc(x::AbstractFloat) = Float64(overridenc(1))
           end
           """)
     write(Foo_file,
           """
           module $Foo_module
               import $FooBase_module, $FooBase_module.typeA
-              import $Foo2_module: $Foo2_module, override
+              import $Foo2_module: $Foo2_module, override, overridenc
               import $FooBase_module.hash
               import Test
               module Inner
@@ -221,6 +225,8 @@ precompile_test_harness(false) do dir
 
               g() = override(1.0)
               Test.@test g() === 2.0 # compile this
+              gnc() = overridenc(1.0)
+              Test.@test 1 < gnc() < 5 # compile this
 
               const abigfloat_f() = big"12.34"
               const abigfloat_x = big"43.21"
@@ -257,6 +263,8 @@ precompile_test_harness(false) do dir
     Foo2 = Base.require(Main, Foo2_module)
     @eval $Foo2.override(::Int) = 'a'
     @eval $Foo2.override(::Float32) = 'b'
+    @eval $Foo2.overridenc(::Int) = rand() + 97.0
+    @eval $Foo2.overridenc(::Float32) = rand() + 100.0
 
     Foo = Base.require(Main, Foo_module)
     Base.invokelatest() do # use invokelatest to see the results of loading the compile
@@ -265,9 +273,13 @@ precompile_test_harness(false) do dir
 
         # Issue #21307
         @test Foo.g() === 97.0
+        @test 96 < Foo.gnc() < 99
         @test Foo.override(1.0e0) == Float64('a')
         @test Foo.override(1.0f0) == 'b'
         @test Foo.override(UInt(1)) == 2
+        @test 96 < Foo.overridenc(1.0e0) < 99
+        @test 99 < Foo.overridenc(1.0f0) < 102
+        @test 0 < Foo.overridenc(UInt(1)) < 3
 
         # Issue #15722
         @test Foo.abigfloat_f()::BigFloat == big"12.34"
@@ -313,8 +325,8 @@ precompile_test_harness(false) do dir
     # the module doesn't reload from the image:
     @test_warn "@ccallable was already defined for this method name" begin
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            ms = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
-            @test isa(ms, Array{Any,1})
+            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
+            @test isa(m, Module)
         end
     end
 
@@ -364,7 +376,7 @@ precompile_test_harness(false) do dir
                  :LazyArtifacts, :LibCURL, :LibCURL_jll, :LibGit2, :Libdl, :LinearAlgebra,
                  :Logging, :Markdown, :Mmap, :MozillaCACerts_jll, :NetworkOptions, :OpenBLAS_jll, :Pkg, :Printf,
                  :Profile, :p7zip_jll, :REPL, :Random, :SHA, :Serialization, :SharedArrays, :Sockets,
-                 :SparseArrays, :Statistics, :SuiteSparse, :TOML, :Tar, :Test, :UUIDs, :Unicode,
+                 :SparseArrays, :TOML, :Tar, :Test, :UUIDs, :Unicode,
                  :nghttp2_jll]
             ),
         )
@@ -805,6 +817,10 @@ precompile_test_harness("code caching") do dir
         build_stale(37)
         stale('c')
 
+        ## Reporting tests (unrelated to the above)
+        nbits(::Int8) = 8
+        nbits(::Int16) = 16
+
         end
         """
     )
@@ -822,6 +838,11 @@ precompile_test_harness("code caching") do dir
 
         # force precompilation
         useA()
+
+        ## Reporting tests
+        call_nbits(x::Integer) = $StaleA.nbits(x)
+        map_nbits() = map(call_nbits, Integer[Int8(1), Int16(1)])
+        map_nbits()
 
         end
         """
@@ -844,9 +865,12 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    @eval using $StaleC
-    @eval using $StaleB
     MA = getfield(@__MODULE__, StaleA)
+    Base.eval(MA, :(nbits(::UInt8) = 8))
+    @eval using $StaleC
+    invalidations = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    @eval using $StaleB
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     MB = getfield(@__MODULE__, StaleB)
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
@@ -871,6 +895,198 @@ precompile_test_harness("code caching") do dir
     m = only(methods(MC.call_buildstale))
     mi = m.specializations[1]
     @test hasvalid(mi, world)       # was compiled with the new method
+
+    # Reporting test
+    @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
+    idxs = findall(==("insert_backedges"), invalidations)
+    m = only(methods(MB.call_nbits))
+    idxsbits = filter(idxs) do i
+        mi = invalidations[i-1]
+        mi.def == m
+    end
+    idx = only(idxsbits)
+    for mi in m.specializations
+        mi === nothing && continue
+        hv = hasvalid(mi, world)
+        @test mi.specTypes.parameters[end] === Integer ? !hv : hv
+    end
+
+    tagbad = invalidations[idx+1]
+    buildid = invalidations[idx+2]
+    @test isa(buildid, UInt64)
+    j = findfirst(==(tagbad), invalidations)
+    @test invalidations[j+1] == buildid
+    @test isa(invalidations[j-2], Type)
+    @test invalidations[j-1] == "insert_backedges_callee"
+
+    m = only(methods(MB.map_nbits))
+    @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
+end
+
+precompile_test_harness("invoke") do dir
+    InvokeModule = :Invoke0x030e7e97c2365aad
+    CallerModule = :Caller0x030e7e97c2365aad
+    write(joinpath(dir, "$InvokeModule.jl"),
+          """
+          module $InvokeModule
+              export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
+              export f44320, g44320
+              export getlast
+              # f is for testing invoke that occurs within a dependency
+              f(x::Real) = 0
+              f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
+              fnc(x::Real) = rand()-1
+              fnc(x::Int) = x < 5 ? rand()+1 : invoke(fnc, Tuple{Real}, x)
+              # g is for testing invoke that occurs from a dependent
+              g(x::Real) = 0
+              g(x::Int) = 1
+              gnc(x::Real) = rand()-1
+              gnc(x::Int) = rand()+1
+              # h will be entirely superseded by a new method (full invalidation)
+              h(x::Real) = 0
+              h(x::Int) = x < 5 ? 1 : invoke(h, Tuple{Integer}, x)
+              hnc(x::Real) = rand()-1
+              hnc(x::Int) = x < 5 ? rand()+1 : invoke(hnc, Tuple{Integer}, x)
+              # q will have some callers invalidated
+              q(x::Integer) = 0
+              qnc(x::Integer) = rand()-1
+              # Issue #44320
+              f44320(::Int) = 1
+              f44320(::Any) = 2
+              g44320() = invoke(f44320, Tuple{Any}, 0)
+              g44320()
+
+              # Adding new specializations should not invalidate `invoke`s
+              function getlast(itr)
+                  x = nothing
+                  for y in itr
+                      x = y
+                  end
+                  return x
+              end
+              getlast(a::AbstractArray) = invoke(getlast, Tuple{Any}, a)
+          end
+          """)
+          write(joinpath(dir, "$CallerModule.jl"),
+          """
+          module $CallerModule
+              using $InvokeModule
+              # involving external modules
+              callf(x) = f(x)
+              callg(x) = x < 5 ? g(x) : invoke(g, Tuple{Real}, x)
+              callh(x) = h(x)
+              callq(x) = q(x)
+              callqi(x) = invoke(q, Tuple{Integer}, x)
+              callfnc(x) = fnc(x)
+              callgnc(x) = x < 5 ? gnc(x) : invoke(gnc, Tuple{Real}, x)
+              callhnc(x) = hnc(x)
+              callqnc(x) = qnc(x)
+              callqnci(x) = invoke(qnc, Tuple{Integer}, x)
+
+              # Purely internal
+              internal(x::Real) = 0
+              internal(x::Int) = x < 5 ? 1 : invoke(internal, Tuple{Real}, x)
+              internalnc(x::Real) = rand()-1
+              internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
+
+              # Issue #44320
+              f44320(::Real) = 3
+
+              call_getlast(x) = getlast(x)
+
+              # force precompilation
+              begin
+                  Base.Experimental.@force_compile
+                  callf(3)
+                  callg(3)
+                  callh(3)
+                  callq(3)
+                  callqi(3)
+                  callfnc(3)
+                  callgnc(3)
+                  callhnc(3)
+                  callqnc(3)
+                  callqnci(3)
+                  internal(3)
+                  internalnc(3)
+                  call_getlast([1,2,3])
+              end
+
+              # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
+              $InvokeModule.h(x::Integer) = -1
+              $InvokeModule.hnc(x::Integer) = rand() - 20
+              # ...and for q, override with a more specialized method that should leave only the invoked version still valid
+              $InvokeModule.q(x::Int) = -1
+              $InvokeModule.qnc(x::Int) = rand()+1
+          end
+          """)
+    Base.compilecache(Base.PkgId(string(CallerModule)))
+    @eval using $InvokeModule: $InvokeModule
+    MI = getfield(@__MODULE__, InvokeModule)
+    @eval $MI.getlast(a::UnitRange) = a.stop
+    @eval using $CallerModule
+    M = getfield(@__MODULE__, CallerModule)
+
+    function get_method_for_type(func, @nospecialize(T))   # return the method func(::T)
+        for m in methods(func)
+            m.sig.parameters[end] === T && return m
+        end
+        error("no ::Real method found for $func")
+    end
+    function nvalid(mi::Core.MethodInstance)
+        isdefined(mi, :cache) || return 0
+        ci = mi.cache
+        n = Int(ci.max_world == typemax(UInt))
+        while isdefined(ci, :next)
+            ci = ci.next
+            n += ci.max_world == typemax(UInt)
+        end
+        return n
+    end
+
+    for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
+        m = get_method_for_type(func, Real)
+        mi = m.specializations[1]
+        @test length(mi.backedges) == 2
+        @test mi.backedges[1] === Tuple{typeof(func), Real}
+        @test isa(mi.backedges[2], Core.MethodInstance)
+        @test mi.cache.max_world == typemax(mi.cache.max_world)
+    end
+    for func in (M.q, M.qnc)
+        m = get_method_for_type(func, Integer)
+        mi = m.specializations[1]
+        @test length(mi.backedges) == 2
+        @test mi.backedges[1] === Tuple{typeof(func), Integer}
+        @test isa(mi.backedges[2], Core.MethodInstance)
+        @test mi.cache.max_world == typemax(mi.cache.max_world)
+    end
+
+    m = get_method_for_type(M.h, Real)
+    @test isempty(m.specializations)
+    m = get_method_for_type(M.hnc, Real)
+    @test isempty(m.specializations)
+    m = only(methods(M.callq))
+    @test isempty(m.specializations) || nvalid(m.specializations[1]) == 0
+    m = only(methods(M.callqnc))
+    @test isempty(m.specializations) || nvalid(m.specializations[1]) == 0
+    m = only(methods(M.callqi))
+    @test m.specializations[1].specTypes == Tuple{typeof(M.callqi), Int}
+    m = only(methods(M.callqnci))
+    @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
+
+    m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
+
+    m = which(MI.getlast, (Any,))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
+
+    # Precompile specific methods for arbitrary arg types
+    invokeme(x) = 1
+    invokeme(::Int) = 2
+    m_any, m_int = sort(collect(methods(invokeme)); by=m->(m.file,m.line))
+    @test precompile(invokeme, (Int,), m_any)
+    @test m_any.specializations[1].specTypes === Tuple{typeof(invokeme), Int}
+    @test isempty(m_int.specializations)
 end
 
 # test --compiled-modules=no command line option
@@ -1069,13 +1285,21 @@ precompile_test_harness("delete_method") do dir
           """
           module $A_module
 
-          export apc, anopc
+          export apc, anopc, apcnc, anopcnc
 
+          # Infer to a const
           apc(::Int, ::Int) = 1
           apc(::Any, ::Any) = 2
 
           anopc(::Int, ::Int) = 1
           anopc(::Any, ::Any) = 2
+
+          # Do not infer to a const
+          apcnc(::Int, ::Int) = rand() - 1
+          apcnc(::Any, ::Any) = rand() + 1
+
+          anopcnc(::Int, ::Int) = rand() - 1
+          anopcnc(::Any, ::Any) = rand() + 1
 
           end
           """)
@@ -1087,19 +1311,26 @@ precompile_test_harness("delete_method") do dir
 
           bpc(x) = apc(x, x)
           bnopc(x) = anopc(x, x)
+          bpcnc(x) = apcnc(x, x)
+          bnopcnc(x) = anopcnc(x, x)
 
           precompile(bpc, (Int,))
           precompile(bpc, (Float64,))
+          precompile(bpcnc, (Int,))
+          precompile(bpcnc, (Float64,))
 
           end
           """)
     A = Base.require(Main, A_module)
-    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)))
-        Base.delete_method(mths[1])
+    for mths in (collect(methods(A.apc)), collect(methods(A.anopc)), collect(methods(A.apcnc)), collect(methods(A.anopcnc)))
+        idx = findfirst(m -> m.sig.parameters[end] === Int, mths)
+        Base.delete_method(mths[idx])
     end
     B = Base.require(Main, B_module)
-    @test Base.invokelatest(B.bpc, 1) == Base.invokelatest(B.bpc, 1.0) == 2
-    @test Base.invokelatest(B.bnopc, 1) == Base.invokelatest(B.bnopc, 1.0) == 2
+    for f in (B.bpc, B.bnopc, B.bpcnc, B.bnopcnc)
+        @test Base.invokelatest(f, 1) > 1
+        @test Base.invokelatest(f, 1.0) > 1
+    end
 end
 
 precompile_test_harness("Issues #19030 and #25279") do load_path
@@ -1290,3 +1521,47 @@ precompile_test_harness("__init__ cachepath") do load_path
           """)
     @test isa((@eval (using InitCachePath; InitCachePath)), Module)
 end
+
+# Test that precompilation can handle invalidated methods created from `precompile`,
+# not via backedges.
+precompile_test_harness("Issue #46558") do load_path
+    write(joinpath(load_path, "Foo46558.jl"),
+        """
+        module Foo46558
+        foo(x::Real) = 1
+        end
+        """)
+    write(joinpath(load_path, "Bar46558.jl"),
+        """
+        module Bar46558
+        using Foo46558
+        precompile(Foo46558.foo, (Int,))
+        end
+        """)
+    Base.compilecache(Base.PkgId("Foo46558"))
+    Base.compilecache(Base.PkgId("Bar46558"))
+    Foo = (@eval (using Foo46558; Foo46558))
+    @eval ($Foo.foo)(x::Int) = 2
+    Bar = (@eval (using Bar46558; Bar46558))
+    @test (@eval $Foo.foo(1)) == 2
+end
+
+precompile_test_harness("issue #46296") do load_path
+    write(joinpath(load_path, "CodeInstancePrecompile.jl"),
+        """
+        module CodeInstancePrecompile
+
+        mi = first(methods(identity)).specializations[1]
+        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+                               typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
+
+        __init__() = @assert ci isa Core.CodeInstance
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("CodeInstancePrecompile"))
+    (@eval (using CodeInstancePrecompile))
+end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)
