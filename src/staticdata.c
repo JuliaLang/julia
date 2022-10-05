@@ -1740,7 +1740,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
-                record_field_change(&inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
@@ -1753,6 +1753,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
     }
     if (jl_options.strip_ir) {
         record_field_change(&mi->uninferred, NULL);
+        record_field_change((jl_value_t**)&mi->backedges, NULL);
+        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 
@@ -1793,11 +1795,15 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     }
     if (m->unspecialized)
         strip_specializations_(m->unspecialized);
+    if (jl_options.strip_ir && m->root_blocks)
+        record_field_change((jl_value_t**)&m->root_blocks, NULL);
     return 1;
 }
 
 static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
+    if (jl_options.strip_ir && mt->backedges)
+        record_field_change((jl_value_t**)&mt->backedges, NULL);
     return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
