@@ -1421,14 +1421,13 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     return (compact.ir.stmts[idx][:inst], (idx + 1, aidx, bidx))
 end
 
-struct IncrementalCompactState end
-@inline function iterate(compact::IncrementalCompact, st=IncrementalCompactState())
-    # this Union{Nothing, Pair{Pair{Int,Int},Any}} cannot be stack allocated, so we inline it
-    st = iterate_compact(compact)
-    st === nothing && return nothing
-    old_result_idx = st[2]
-    return Pair{Pair{Int,Int},Any}(st, compact.result[old_result_idx][:inst]),
-           IncrementalCompactState() # stateful iterator, so we don't have actual state
+# the returned Union{Nothing, Pair{Pair{Int,Int},Any}} cannot be stack allocated,
+# so we inline this function into the caller
+@inline function iterate(compact::IncrementalCompact, state=nothing)
+    idxs = iterate_compact(compact)
+    idxs === nothing && return nothing
+    old_result_idx = idxs[2]
+    return Pair{Pair{Int,Int},Any}(idxs, compact.result[old_result_idx][:inst]), nothing
 end
 
 function iterate_compact(compact::IncrementalCompact)
