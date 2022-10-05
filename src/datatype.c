@@ -131,7 +131,7 @@ static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT
     size_t fields_size = layout->nfields * jl_fielddesc_size(layout->fielddesc_type);
     const char *pointers = jl_dt_layout_ptrs(layout);
     size_t pointers_size = (layout->npointers << layout->fielddesc_type);
-    
+
     uint_t hash = 5381;
     hash = _hash_djb2(hash, (char *)layout, own_size);
     hash = _hash_djb2(hash, fields, fields_size);
