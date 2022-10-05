@@ -390,9 +390,9 @@ end
 
     # complex
     D = complex(D)
-    CD = cholesky(D)
-    CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{ComplexF64}
+    CD = cholesky(Hermitian(D))
+    CM = cholesky(Matrix(Hermitian(D)))
+    @test CD isa Cholesky{ComplexF64,<:Diagonal}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
