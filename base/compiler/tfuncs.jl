@@ -6,8 +6,6 @@
 
 @nospecialize
 
-const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
-
 const INT_INF = typemax(Int) # integer infinity
 
 const N_IFUNC = reinterpret(Int32, have_fma) + 1
