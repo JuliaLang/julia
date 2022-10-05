@@ -95,6 +95,8 @@ External links:
 #include "valgrind.h"
 #include "julia_assert.h"
 
+#include "staticdata_utils.c"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -2235,8 +2237,39 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
     return val;
 }
 
+static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred,
+                           /* outputs */  jl_array_t *extext_methods, jl_array_t* ext_targets, jl_array_t *edges)
+{
+    // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+    // ext_targets: [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
+    //              ordinary dispatch: invokesig=NULL, callee is MethodInstance
+    //              `invoke` dispatch: invokesig is signature, callee is MethodInstance
+    //              abstract call: callee is signature
+    // edges: [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
+
+    // Save the inferred code from newly inferred, external methods
+    jl_array_t *mi_list = queue_external_mis(newly_inferred);
+
+    // int en = jl_gc_enable(0); // edges map is not gc-safe  FIXME
+    size_t i, len = jl_array_len(mod_array);
+    for (i = 0; i < len; i++) {
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
+        assert(jl_is_module(m));
+        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
+            jl_collect_extext_methods_from_mod(extext_methods, m);
+    }
+    jl_collect_methtable_from_mod(extext_methods, jl_type_type_mt);
+    jl_collect_missing_backedges(jl_type_type_mt);
+    jl_collect_methtable_from_mod(extext_methods, jl_nonfunction_mt);
+    jl_collect_missing_backedges(jl_nonfunction_mt);
+    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in edges_map.
+    // Process this to extract `edges` and `ext_targets`.
+    jl_collect_edges(edges, ext_targets);
+}
+
 // In addtion to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
-static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist, jl_array_t *new_specializations) JL_GC_DISABLED
+static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist, jl_array_t *new_specializations,
+                                           jl_array_t *extext_methods, jl_array_t* ext_targets, jl_array_t *edges) JL_GC_DISABLED
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -2342,14 +2375,22 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist, jl_ar
             jl_scan_type_cache_gv(&s, tn->cache);
             jl_scan_type_cache_gv(&s, tn->linearcache);
         }
-        // step 1.2: if needed, serialize the new method specializations and the roots they require
-        if (new_specializations) {
+        // step 1.2: as needed, serialize the data needed for insertion into the running system
+        if (extext_methods) {
+            assert(new_specializations);
+            assert(ext_targets);
+            assert(edges);
+            // Queue method extensions
+            jl_serialize_value(&s, extext_methods);
             // Queue the new specializations
             jl_serialize_value(&s, new_specializations);
             // Collect the new method roots and queue them
             jl_collect_methods(&methods_with_newspecs, new_specializations);
             jl_collect_new_roots(&s.method_roots_list, &methods_with_newspecs);
             jl_serialize_value(&s, &s.method_roots_list);
+            // Queue the edges
+            jl_serialize_value(&s, ext_targets);
+            jl_serialize_value(&s, edges);
         }
         jl_serialize_reachable(&s);
         // step 1.3: prune (garbage collect) some special weak references from
@@ -2443,8 +2484,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *worklist, jl_ar
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
             write_uint(f, jl_typeinf_world);
         } else {
+            jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_specializations);
             jl_write_value(&s, s.method_roots_list);
+            jl_write_value(&s, ext_targets);
+            jl_write_value(&s, edges);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags), jl_array_len(s.link_ids_gctags)*sizeof(uint64_t));
@@ -2550,6 +2594,7 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_value_t **const*const tags = get_tags();
     htable_t uniquing_target;
     htable_new(&uniquing_target, 0);
+    jl_array_t *extext_methods = NULL, *new_specializations = NULL, *ext_targets = NULL, *edges = NULL;
 
     int incremental = jl_linkage_blobs.len > 0;
 
@@ -2611,6 +2656,12 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
         jl_atomic_store_release(&jl_world_counter, read_uint(f));
         jl_typeinf_world = read_uint(f);
         jl_set_gs_ctr(gs_ctr);
+    } else {
+        extext_methods = (jl_array_t*)jl_read_value(&s);
+        new_specializations = (jl_array_t*)jl_read_value(&s);
+        s.methods_root_list = (jl_array_t*)jl_read_value(&s);
+        ext_targets = (jl_array_t*)jl_read_value(&s);
+        edges = (jl_array_t*)jl_read_value(&s);
     }
     size_t nlinks_gctags = read_uint32(f);
     if (nlinks_gctags > 0) {
@@ -2693,6 +2744,19 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
             assert(0 && "unreachable");
         }
     }
+
+    // Get the worklist
+    jl_value_t *worklist = incremental ? (jl_value_t*)((char*)jl_valueof(image_base) + sizeof(void*)) : NULL;
+
+    // Insert method extensions
+    jl_insert_methods(extext_methods);
+    // No special processing of `new_specializations` is required because recaching handled it
+    // Add roots to methods
+    jl_copy_roots(s.methods_root_list, jl_worklist_key(worklist));
+    // Handle edges
+    jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)mi_list); // restore external backedges (needs to be last)
+    // check new CodeInstances and validate any that lack external backedges
+    validate_new_code_instances();
 
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
     ios_close(&relocs);
