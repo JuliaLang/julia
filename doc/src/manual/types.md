@@ -506,9 +506,9 @@ It's important to note that the `mutable struct` keyword does not declare a new 
 different from the one defined with the `struct` keyword and vice-versa, if both types have
 the same name and the declaration was done in the same namespace.
 
-As an example, declaring a type with name as `Point` using `struct` is also equivalent to the
-type declared with name as `Point` using `mutable struct`. Trying to declare these both in one
-namespace will throw an error:
+As an example, declaring a type with name as `Point` using `mutable struct` does not
+distinguish it from the type declared with name as `Point` using `struct`. Trying to declare
+these both in one namespace will throw an error:
 ```jldoctest
 julia> struct Point
            x
