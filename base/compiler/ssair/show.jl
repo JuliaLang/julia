@@ -16,10 +16,18 @@ import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
 
 function Base.show(io::IO, cfg::CFG)
+    print(io, "CFG with $(length(cfg.blocks)) blocks:")
     for (idx, block) in enumerate(cfg.blocks)
-        print(io, idx, "\t=>\t")
-        join(io, block.succs, ", ")
-        println(io)
+        print(io, "\n  bb ", idx)
+        if block.stmts.start == block.stmts.stop
+            print(io, " (stmt ", block.stmts.start, ")")
+        else
+            print(io, " (stmts ", block.stmts.start, ":", block.stmts.stop, ")")
+        end
+        if !isempty(block.succs)
+            print(io, " → bb ")
+            join(io, block.succs, ", ")
+        end
     end
 end
 
@@ -842,9 +850,8 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
 end
 
 function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
-    compact_cfg = CFG(compact.result_bbs, Int[first(compact.result_bbs[i].stmts) for i in 2:length(compact.result_bbs)])
     cfg = compact.ir.cfg
-    (_, width) = displaysize(io)
+
 
     # First print everything that has already been compacted
 
@@ -856,27 +863,66 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
             push!(used_compacted, i)
         end
     end
+
+    # while compacting, the end of the active result bb will not have been determined
+    # (this is done post-hoc by `finish_current_bb!`), so determine it here from scratch.
+    result_bbs = copy(compact.result_bbs)
+    if compact.active_result_bb <= length(result_bbs)
+        # count the total number of nodes we'll add to this block
+        input_bb_idx = block_for_inst(compact.ir.cfg, compact.idx)
+        input_bb = compact.ir.cfg.blocks[input_bb_idx]
+        count = 0
+        for input_idx in input_bb.stmts.start:input_bb.stmts.stop
+            pop_new_node! = new_nodes_iter(compact.ir)
+            while pop_new_node!(input_idx) !== nothing
+                count += 1
+            end
+        end
+
+        result_bb = result_bbs[compact.active_result_bb]
+        result_bbs[compact.active_result_bb] = Core.Compiler.BasicBlock(result_bb,
+            Core.Compiler.StmtRange(first(result_bb.stmts), last(result_bb.stmts)+count))
+    end
+    compact_cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
+
     pop_new_node! = new_nodes_iter(compact)
     maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
     bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
-        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted,
+                      compact_cfg, 1; pop_new_node!)
     end
+
 
     # Print uncompacted nodes from the original IR
 
     # print a separator
+    (_, width) = displaysize(io)
     stmts = compact.ir.stmts
     indent = length(string(length(stmts)))
     # config.line_info_preprinter(io, "", compact.idx)
     printstyled(io, "─"^(width-indent-1), '\n', color=:red)
 
+    # while compacting, the start of the active uncompacted bb will have been overwritten.
+    # this manifests as a stmt range end that is less than the start, so correct that.
+    inputs_bbs = copy(cfg.blocks)
+    for (i, bb) in enumerate(inputs_bbs)
+        if bb.stmts.stop < bb.stmts.start
+            inputs_bbs[i] = Core.Compiler.BasicBlock(bb,
+                Core.Compiler.StmtRange(last(bb.stmts), last(bb.stmts)))
+            # this is not entirely correct, and will result in the bb starting again,
+            # but is the best we can do without changing how `finish_current_bb!` works.
+        end
+    end
+    uncompacted_cfg = CFG(inputs_bbs, Int[first(inputs_bbs[i].stmts) for i in 2:length(inputs_bbs)])
+
     pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
     maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
     let io = IOContext(io, :maxssaid=>maxssaid)
-        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
+        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted,
+                      uncompacted_cfg, bb_idx; pop_new_node!)
     end
 
-    finish_show_ir(io, cfg, config)
+    finish_show_ir(io, uncompacted_cfg, config)
 end
 
 function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)

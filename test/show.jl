@@ -2479,3 +2479,54 @@ end
     ir = Core.Compiler.complete(compact)
     @test lines_shown(compact) == instructions + 1
 end
+
+@testset "#46424: IncrementalCompact displays wrong basic-block boundaries" begin
+    # get some cfg
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # at every point we should be able to observe these three basic blocks
+    function verify_display(ir)
+        str = sprint(io->show(io, ir))
+        @test contains(str, "1 ─ %1 = ")
+        @test contains(str, r"2 ─ \s+ return 1")
+        @test contains(str, r"3 ─ \s+ return 2")
+    end
+    verify_display(ir)
+
+    # insert some instructions
+    for i in 1:3
+        inst = Core.Compiler.NewInstruction(Expr(:call, :identity, i), Int)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+
+    # compact
+    compact = Core.Compiler.IncrementalCompact(ir)
+    verify_display(compact)
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        verify_display(compact)
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+
+    # complete
+    ir = Core.Compiler.complete(compact)
+    verify_display(ir)
+end
+
+@testset "IRCode: CFG display" begin
+    # get a cfg
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    cfg = ir.cfg
+
+    str = sprint(io->show(io, cfg))
+    @test contains(str, r"CFG with \d+ blocks")
+    @test contains(str, r"bb 1 \(stmt.+\) → bb.*")
+end

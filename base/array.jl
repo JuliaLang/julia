@@ -2653,8 +2653,8 @@ julia> map(filter(iseven), [1:3, 2:4, 3:5])
  [2, 4]
  [4]
 ```
-!!! compat "Julia 1.8"
-    This method requires at least Julia 1.8.
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
 """
 function filter(f)
     Fix1(filter, f)
