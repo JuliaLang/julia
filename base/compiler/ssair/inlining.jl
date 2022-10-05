@@ -619,7 +619,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         elseif isa(case, InvokeCase)
             inst = Expr(:invoke, case.invoke, argexprs′...)
             flag = flags_for_effects(case.effects)
-            val = insert_node_here!(compact, NewInstruction(inst, typ, NoCallInfo(), line, flag, true))
+            val = insert_node_here!(compact, NewInstruction(inst, typ, NoCallInfo(), line, flag))
         else
             case = case::ConstantCase
             val = case.val
