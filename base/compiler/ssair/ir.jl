@@ -567,6 +567,7 @@ mutable struct IncrementalCompact
     # State
     idx::Int
     result_idx::Int
+    active_bb::Int
     active_result_bb::Int
     renamed_new_nodes::Bool
     cfg_transforms_enabled::Bool
@@ -624,7 +625,7 @@ mutable struct IncrementalCompact
         pending_perm = Int[]
         return new(code, result, result_bbs, ssa_rename, bb_rename, bb_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
-            1, 1, 1, false, allow_cfg_transforms, allow_cfg_transforms)
+            1, 1, 1, 1, false, allow_cfg_transforms, allow_cfg_transforms)
     end
 
     # For inlining
@@ -639,7 +640,7 @@ mutable struct IncrementalCompact
             parent.result_bbs, ssa_rename, bb_rename, bb_rename, parent.used_ssas,
             parent.late_fixup, perm, 1,
             parent.new_new_nodes, parent.new_new_used_ssas, pending_nodes, pending_perm,
-            1, result_offset, parent.active_result_bb, false, false, false)
+            1, result_offset, 1, parent.active_result_bb, false, false, false)
     end
 end
 
@@ -1377,7 +1378,7 @@ function process_newnode!(compact::IncrementalCompact, new_idx::Int, new_node_en
         active_bb += 1
         finish_current_bb!(compact, active_bb, old_result_idx)
     end
-    return (new_idx, old_result_idx, result_idx, idx, active_bb)
+    return (old_result_idx, result_idx, active_bb)
 end
 
 struct CompactPeekIterator
@@ -1420,17 +1421,21 @@ function iterate(it::CompactPeekIterator, (idx, aidx, bidx)::NTuple{3, Int}=(it.
     return (compact.ir.stmts[idx][:inst], (idx + 1, aidx, bidx))
 end
 
-# This Union{Nothing, Pair{Pair{Int,Int},Any}} cannot be stack allocated, so we inline it
-@inline function iterate(compact::IncrementalCompact, st::Tuple{Int, Int}=(compact.idx, 1))
-    st = iterate_compact(compact, st)
-    st === nothing && return nothing
-    old_result_idx = st[1][2]
-    return Pair{Pair{Int,Int},Any}(st[1], compact.result[old_result_idx][:inst]), st[2]
+# the returned Union{Nothing, Pair{Pair{Int,Int},Any}} cannot be stack allocated,
+# so we inline this function into the caller
+@inline function iterate(compact::IncrementalCompact, state=nothing)
+    idxs = iterate_compact(compact)
+    idxs === nothing && return nothing
+    old_result_idx = idxs[2]
+    return Pair{Pair{Int,Int},Any}(idxs, compact.result[old_result_idx][:inst]), nothing
 end
 
-function iterate_compact(compact::IncrementalCompact, (idx, active_bb)::Tuple{Int, Int})
+function iterate_compact(compact::IncrementalCompact)
     # Create label to dodge recursion so that we don't stack overflow
     @label restart
+
+    idx = compact.idx
+    active_bb = compact.active_bb
 
     old_result_idx = compact.result_idx
     if idx > length(compact.ir.stmts) && (compact.new_nodes_idx > length(compact.perm))
@@ -1460,10 +1465,11 @@ function iterate_compact(compact::IncrementalCompact, (idx, active_bb)::Tuple{In
         end
         # Move to next block
         compact.idx += 1
+        compact.active_bb += 1
         if finish_current_bb!(compact, active_bb, old_result_idx, true)
-            return iterate_compact(compact, (compact.idx, active_bb + 1))
+            return iterate_compact(compact)
         else
-            return Pair{Int,Int}(compact.idx-1, old_result_idx), (compact.idx, active_bb + 1)
+            return Pair{Int,Int}(compact.idx-1, old_result_idx)
         end
     end
     if compact.new_nodes_idx <= length(compact.perm) &&
@@ -1474,10 +1480,11 @@ function iterate_compact(compact::IncrementalCompact, (idx, active_bb)::Tuple{In
         new_node_entry = compact.ir.new_nodes.stmts[new_idx]
         new_node_info = compact.ir.new_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts)
-        (new_idx, old_result_idx, result_idx, idx, active_bb) =
+        (old_result_idx, result_idx, active_bb) =
                 process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, true)
+        compact.active_bb = active_bb
         old_result_idx == result_idx && @goto restart
-        return Pair{Int,Int}(new_idx, old_result_idx), (idx, active_bb)
+        return Pair{Int,Int}(new_idx, old_result_idx)
     elseif !isempty(compact.pending_perm) &&
         (info = compact.pending_nodes.info[compact.pending_perm[1]];
          info.attach_after ? info.pos == idx - 1 : info.pos == idx)
@@ -1485,10 +1492,11 @@ function iterate_compact(compact::IncrementalCompact, (idx, active_bb)::Tuple{In
         new_node_entry = compact.pending_nodes.stmts[new_idx]
         new_node_info = compact.pending_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)
-        (new_idx, old_result_idx, result_idx, idx, active_bb) =
+        (old_result_idx, result_idx, active_bb) =
                 process_newnode!(compact, new_idx, new_node_entry, new_node_info, idx, active_bb, false)
+        compact.active_bb = active_bb
         old_result_idx == result_idx && @goto restart
-        return Pair{Int,Int}(new_idx, old_result_idx), (idx, active_bb)
+        return Pair{Int,Int}(new_idx, old_result_idx)
     end
     # This will get overwritten in future iterations if
     # result_idx is not, incremented, but that's ok and expected
@@ -1500,12 +1508,13 @@ function iterate_compact(compact::IncrementalCompact, (idx, active_bb)::Tuple{In
         active_bb += 1
     end
     compact.idx = idx + 1
+    compact.active_bb = active_bb
     if old_result_idx == compact.result_idx
         idx += 1
         @goto restart
     end
     @assert isassigned(compact.result.inst, old_result_idx)
-    return Pair{Int,Int}(compact.idx-1, old_result_idx), (compact.idx, active_bb)
+    return Pair{Int,Int}(compact.idx-1, old_result_idx)
 end
 
 function maybe_erase_unused!(
