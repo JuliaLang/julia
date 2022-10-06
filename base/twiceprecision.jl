@@ -164,7 +164,7 @@ div12(x, y) = div12(promote(x, y)...)
 A number with twice the precision of `T`, e.g., quad-precision if `T =
 Float64`.
 
-!!! warn
+!!! warning
     `TwicePrecision` is an internal type used to increase the
     precision of floating-point ranges, and not intended for external use.
     If you encounter them in real code, the most likely explanation is
@@ -268,10 +268,10 @@ TwicePrecision{T}(x::Number) where {T} = TwicePrecision{T}(T(x), zero(T))
 
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision{T}) where {T} = x
 convert(::Type{TwicePrecision{T}}, x::TwicePrecision) where {T} =
-    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))
+    TwicePrecision{T}(convert(T, x.hi), convert(T, x.lo))::TwicePrecision{T}
 
-convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)
-convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)
+convert(::Type{T}, x::TwicePrecision) where {T<:Number} = T(x)::T
+convert(::Type{TwicePrecision{T}}, x::Number) where {T} = TwicePrecision{T}(x)::TwicePrecision{T}
 
 float(x::TwicePrecision{<:AbstractFloat}) = x
 float(x::TwicePrecision) = TwicePrecision(float(x.hi), float(x.lo))

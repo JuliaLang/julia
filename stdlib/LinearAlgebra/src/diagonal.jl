@@ -596,7 +596,21 @@ end
     return C
 end
 
-kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
+kron(A::Diagonal, B::Diagonal) = Diagonal(kron(A.diag, B.diag))
+
+function kron(A::Diagonal, B::SymTridiagonal)
+    kdv = kron(diag(A), B.dv)
+    # We don't need to drop the last element
+    kev = kron(diag(A), _pushzero(_evview(B)))
+    SymTridiagonal(kdv, kev)
+end
+function kron(A::Diagonal, B::Tridiagonal)
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kd = _makevector(kron(diag(A), B.d))
+    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
+    Tridiagonal(kdl, kd, kdu)
+end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     require_one_based_indexing(B)
@@ -738,7 +752,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     λ = eigvals(D)
     if !isnothing(sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
-        λ = λ[p] # make a copy, otherwise this permutes D.diag
+        λ = λ[p]
         evecs = zeros(Td, size(D))
         @inbounds for i in eachindex(p)
             evecs[p[i],i] = one(Td)
@@ -747,6 +761,29 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         evecs = Matrix{Td}(I, size(D))
     end
     Eigen(λ, evecs)
+end
+function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(!isfinite, Da.diag) || any(!isfinite, Db.diag)
+        throw(ArgumentError("matrices contain Infs or NaNs"))
+    end
+    if any(iszero, Db.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    return GeneralizedEigen(eigen(Db \ Da; sortby)...)
+end
+function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(iszero, D.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    if size(A, 1) == size(A, 2) && isdiag(A)
+        return eigen(Diagonal(A), D; sortby)
+    elseif ishermitian(A)
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+    else
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+    end
 end
 
 #Singular system
@@ -813,6 +850,8 @@ function cholesky!(A::Diagonal, ::NoPivot = NoPivot(); check::Bool = true)
 end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
+
+inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
 
 @inline cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
 @inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copymutable_oftype(A, choltype(A))

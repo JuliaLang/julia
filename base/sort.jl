@@ -333,6 +333,8 @@ Return the index of the first value in `a` greater than or equal to `x`, accordi
 specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
 
+`insert!`ing `x` at this index will maintain sorted order.
+
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
@@ -518,12 +520,13 @@ const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, o::Ordering)
-    @inbounds for i = lo+1:hi
+    lo_plus_1 = (lo + 1)::Integer
+    @inbounds for i = lo_plus_1:hi
         j = i
         x = v[i]
         while j > lo
             y = v[j-1]
-            if !lt(o, x, y)
+            if !(lt(o, x, y)::Bool)
                 break
             end
             v[j] = y
@@ -1159,7 +1162,7 @@ function sortperm(A::AbstractArray;
             min, max = extrema(A)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
+            if !(o1 || o2)::Bool && rangelen < div(n,2)
                 return sortperm_int_range(A, rangelen, min)
             end
         end

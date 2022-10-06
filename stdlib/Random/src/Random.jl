@@ -215,7 +215,7 @@ end
 # TODO: make constraining constructors to enforce that those
 # types are <: Sampler{T}
 
-##### Adapter to generate a randome value in [0, n]
+##### Adapter to generate a random value in [0, n]
 
 struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T

@@ -795,7 +795,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -2899,7 +2899,7 @@ Base.setproperty!
     swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
 
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
-where there must be one getfield expression common to both sides.
+where there must be one `getproperty` expression common to both sides.
 
 See also [`swapfield!`](@ref Core.swapfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2909,9 +2909,9 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
-max, c, :sequentially_consistent))`, where the first argument must be a
-`getfield` expression and is modified atomically.
+The syntax `@atomic op(x.f, v)` (and its equivalent `@atomic x.f op v`) returns
+`modifyproperty!(x, :f, op, v, :sequentially_consistent)`, where the first argument
+must be a `getproperty` expression and is modified atomically.
 
 Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
 `f` of the object `x` by default.  In particular, unlike the default behavior of
@@ -3088,7 +3088,7 @@ unused and delete the entire benchmark code).
 ```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)
@@ -3167,11 +3167,11 @@ but there are a number of small differences. They are documented here for
 completeness only and (unlike `Base.finalizer`) have no stability guarantees.
 
 The current differences are:
-    - `Core.finalizer` does not check for mutability of `o`. Attempting to register
-      a finalizer for an immutable object is undefined behavior.
-    - The value `f` must be a Julia object. `Core.finalizer` does not support a
-      raw C function pointer.
-    - `Core.finalizer` returns `nothing` rather than `o`.
+- `Core.finalizer` does not check for mutability of `o`. Attempting to register
+  a finalizer for an immutable object is undefined behavior.
+- The value `f` must be a Julia object. `Core.finalizer` does not support a
+  raw C function pointer.
+- `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
 

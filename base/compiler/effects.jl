@@ -166,6 +166,10 @@ is_removable_if_unused(effects::Effects) =
     is_terminates(effects) &&
     is_nothrow(effects)
 
+is_finalizer_inlineable(effects::Effects) =
+    is_nothrow(effects) &&
+    is_notaskstate(effects)
+
 is_consistent_if_notreturned(effects::Effects)         = !iszero(effects.consistent & CONSISTENT_IF_NOTRETURNED)
 is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
 

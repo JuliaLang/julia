@@ -1,13 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function maybe_show_ir(ir::IRCode)
+    if isdefined(Core, :Main)
+        Core.Main.Base.display(ir)
+    end
+end
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(print && println(stderr, $arg)))
-        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        isexpr(arg, :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
-        return esc(arg)
+        return esc(quote
+            $arg
+            maybe_show_ir(ir)
+        end)
     end
 end
 
@@ -72,7 +81,8 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false)
+function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false,
+                   lattice = OptimizerLattice())
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -182,7 +192,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 val = stmt.values[i]
                 phiT = ir.stmts[idx][:type]
                 if isa(val, SSAValue)
-                    if !(types(ir)[val] ⊑ phiT)
+                    if !⊑(lattice, types(ir)[val], phiT)
                         #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT

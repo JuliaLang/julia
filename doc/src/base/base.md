@@ -88,6 +88,7 @@ outer
 const
 struct
 mutable struct
+@kwdef
 abstract type
 primitive type
 where
@@ -346,6 +347,8 @@ Base.Sys.iswindows
 Base.Sys.windows_version
 Base.Sys.free_memory
 Base.Sys.total_memory
+Base.Sys.free_physical_memory
+Base.Sys.total_physical_memory
 Base.Sys.uptime
 Base.Sys.isjsvm
 Base.Sys.loadavg
