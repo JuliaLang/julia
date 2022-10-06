@@ -1,11 +1,10 @@
 using Test
-using JuliaSyntax
 
-using Base.Meta: @dump
-
-using JuliaSyntax:
+# We need a relative include here as JuliaSyntax my come from Base.
+using .JuliaSyntax:
     # Parsing
     ParseStream,
+    ParseState,
     SourceFile,
     parse!,
     parse,
