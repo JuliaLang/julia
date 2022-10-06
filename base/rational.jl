@@ -4,27 +4,7 @@
     Rational{T<:Integer} <: Real
 
 Rational number type, with numerator and denominator of type `T`.
-
-The preferred way of creating `Rational` numbers is using the
-`//` operator. `Rational`s are also checked for overflow.
-
-`Rational(x)` where `x` is a subtype of `AbstractFloat` returns
-the exact conversion of `x` to a `Rational` number.
-
-# Examples
-```jldoctest
-julia> Rational(Int8(127))
-127//1
-
-julia> Rational(Int8(1))
-1//1
-
-julia> Rational(Int8(127)) + Rational(Int8(1))
-ERROR: OverflowError: 127 + 1 overflowed for type Int8
-
-julia> Rational(1.29)
-1452410879826985//1125899906842624
-```
+Rationals are checked for overflow.
 """
 struct Rational{T<:Integer} <: Real
     num::T
@@ -150,6 +130,20 @@ function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
 
+"""
+    Rational(x::AbstractFloat)
+
+Returns the exact conversion of `x` to a `Rational` number that is representable in `typeof(x)`.
+
+# Examples
+```jldoctest
+julia> Rational(5.6f0)
+11744051//2097152
+
+julia> Rational(5.6)
+3152519739159347//562949953421312
+```
+"""
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
     x == convert(typeof(x), r) || throw(InexactError(:Rational, Rational{T}, x))
@@ -177,7 +171,8 @@ Approximate floating point number `x` as a [`Rational`](@ref) number with compon
 of the given integer type. The result will differ from `x` by no more than `tol`.
 
 !!! note
-    `rationalize` may perform inexact conversion even when `tol = 0`; for exact conversion use the [`Rational`](@ref) constructor.
+    `rationalize` may perform inexact conversion, even when `tol = 0`;
+    for exact conversion use the [`Rational`](@ref) constructor.
 
 # Examples
 ```jldoctest
