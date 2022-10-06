@@ -506,7 +506,7 @@ In Julia two different objects can't have the same name, so defining an object, 
 with `mutable struct`, will not create a new object if it's already been declared
 with `struct` with name as `Point`, even if the fields are different; rather, an error will
 be thrown:
-```julia
+```jldoctest
 julia> struct Point
            x
        end
