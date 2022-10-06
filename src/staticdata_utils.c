@@ -1,4 +1,11 @@
 static htable_t new_code_instance_validate;
+static htable_t external_mis;
+static htable_t edges_map;
+
+static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
+{
+    write_uint64(s, *((uint64_t*)&x));
+}
 
 uint64_t jl_worklist_key(jl_array_t *worklist)
 {
@@ -20,15 +27,18 @@ static int method_instance_in_queue(jl_method_instance_t *mi)
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
-static int type_in_worklist(jl_datatype_t *dt) JL_NOTSAFEPOINT
+static int type_in_worklist(jl_value_t *typ) JL_NOTSAFEPOINT
 {
-    if (!jl_object_in_image(dt->name->module))
+    if (!jl_is_datatype(typ))
+        return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)typ;
+    if (!jl_object_in_image((jl_value_t*)dt->name->module))
         return 1;
     int i, l = jl_svec_len(dt->parameters);
     for (i = 0; i < l; i++) {
-        jl_value_t *p = jl_unwrap_unionall(jl_tparam(dt, i));
+        jl_value_t *p = jl_tparam(dt, i);
         // TODO: what about Union and TypeVar??
-        if (type_in_worklist((jl_datatype_t*)(jl_is_datatype(p) ? p : jl_typeof(p))))
+        if (type_in_worklist(p))
             return 1;
     }
     return 0;
@@ -65,7 +75,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (mi->precompiled || !jl_object_in_image(mod)) {
+    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -137,7 +147,7 @@ static jl_array_t *queue_external_mis(jl_array_t *list)
         assert(jl_is_method_instance(mi));
         if (jl_is_method(mi->def.value)) {
             jl_method_t *m = mi->def.method;
-            if (!!jl_object_in_image(m->module)) {
+            if (jl_object_in_image((jl_value_t*)m->module)) {
                 jl_code_instance_t *ci = mi->cache;
                 while (ci) {
                     if (ci->max_world == ~(size_t)0 && ci->relocatability && ci->inferred)
@@ -158,16 +168,16 @@ static jl_array_t *queue_external_mis(jl_array_t *list)
     htable_free(&visited);
     if (n == 0)
         return NULL;
-    jl_array_t *mi_list = jl_alloc_vec_any(n);
+    jl_array_t *ci_list = jl_alloc_vec_any(n);
     n = 0;
     for (size_t i = 0; i < external_mis.size; i += 2) {
         void *ci = external_mis.table[i+1];
         if (ci != HT_NOTFOUND) {
-            jl_array_ptr_set(mi_list, n++, (jl_value_t*)ci);
+            jl_array_ptr_set(ci_list, n++, (jl_value_t*)ci);
         }
     }
-    assert(n == jl_array_len(mi_list));
-    return mi_list;
+    assert(n == jl_array_len(ci_list));
+    return ci_list;
 }
 
 
@@ -222,7 +232,7 @@ static int jl_collect_methcache_from_mod(jl_typemap_entry_t *ml, void *closure) 
 {
     jl_array_t *s = (jl_array_t*)closure;
     jl_method_t *m = ml->func.method;
-    if (s && !jl_object_in_image(m->module)) {
+    if (s && !jl_object_in_image((jl_value_t*)m->module)) {
         jl_array_ptr_1d_push(s, (jl_value_t*)m);
     }
     jl_svec_t *specializations = m->specializations;
@@ -245,7 +255,7 @@ static void jl_collect_methtable_from_mod(jl_array_t *s, jl_methtable_t *mt) JL_
 // Also collect relevant backedges
 static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL_GC_DISABLED
 {
-    if (s && !jl_object_in_image(m))
+    if (s && !jl_object_in_image((jl_value_t*)m))
         s = NULL; // do not collect any methods
     size_t i;
     void **table = m->bindings.table;
@@ -326,7 +336,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
         if (callees == HT_NOTFOUND)
             continue;
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
-        if (!jl_object_in_image(caller->def.method->module) ||
+        if (!jl_object_in_image((jl_value_t*)caller->def.method->module) ||
             method_instance_in_queue(caller)) {
             jl_record_edges(caller, &wq, edges);
         }
@@ -361,7 +371,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
 
             if (jl_is_method_instance(callee)) {
                 jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
-                if (!jl_object_in_image(mt->module))
+                if (!jl_object_in_image((jl_value_t*)mt->module))
                     continue;
             }
 
@@ -446,7 +456,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(a, i);
         assert(jl_is_module(m));
-        if (!!jl_object_in_image(m)) {
+        if (jl_object_in_image((jl_value_t*)m)) {
             const char *modname = jl_symbol_name(m->name);
             size_t l = strlen(modname);
             write_int32(s, l);
@@ -644,8 +654,8 @@ static void jl_insert_methods(jl_array_t *list)
 
 static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
 {
-    size_t i, j, l;
-    for (i = 0; i < jl_array_len(method_roots_list); i+=2) {
+    size_t i, l = jl_array_len(method_roots_list);
+    for (i = 0; i < l; i+=2) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(method_roots_list, i);
         jl_array_t *roots = (jl_array_t*)jl_array_ptr_ref(method_roots_list, i+1);
         if (roots) {
