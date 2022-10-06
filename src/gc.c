@@ -2457,6 +2457,16 @@ module_binding: {
             void *vb = jl_astaggedvalue(b);
             verify_parent1("module", binding->parent, &vb, "binding_buff");
             (void)vb;
+            jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
+            if (ty && ty != (jl_value_t*)jl_any_type) {
+                verify_parent2("module", binding->parent,
+                               &b->ty, "binding(%s)", jl_symbol_name(b->name));
+                if (gc_try_setmark(ty, &binding->nptr, &tag, &bits)) {
+                    new_obj = ty;
+                    gc_repush_markdata(&sp, gc_mark_binding_t);
+                    goto mark;
+                }
+            }
             jl_value_t *value = jl_atomic_load_relaxed(&b->value);
             jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
             if (value) {
