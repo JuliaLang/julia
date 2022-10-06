@@ -364,7 +364,7 @@ typedef struct {
     arraylist_t relocs_list;    // a list of (location, target) pairs, see description at top
     arraylist_t gctags_list;    //      "
     arraylist_t uniquing_list;  // a list of locations that reference objects that must be de-duplicated
-    arraylist_t recaching_list; // a list of locations of objects requiring (re)caching
+    arraylist_t fixup_list; // a list of locations of objects requiring (re)caching
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), jl_build_ids)
@@ -374,6 +374,7 @@ typedef struct {
     jl_array_t *link_ids_gctags;
     jl_array_t *link_ids_gvars;
     jl_ptls_t ptls;
+    htable_t callers_with_edges;
 } jl_serializer_state;
 
 static jl_value_t *jl_idtable_type = NULL;
@@ -1121,7 +1122,7 @@ static void jl_write_values(jl_serializer_state *s)
             continue;
         }
         if (needs_recaching(v)) {
-            arraylist_push(&(s->recaching_list), reloc_offset);
+            arraylist_push(&(s->fixup_list), reloc_offset);
         }
 
         // write data
@@ -1311,9 +1312,31 @@ static void jl_write_values(jl_serializer_state *s)
             }
 
             // A few objects need additional handling beyond the generic serialization above
-            if (jl_is_method(v)) {
-                write_padding(s->s, sizeof(jl_method_t) - tot);
-                if (((jl_method_t*)v)->ccallable) {
+
+            if (jl_is_typemap_entry(v)) {
+                jl_typemap_entry_t *newentry = (jl_typemap_entry_t*)&s->s->buf[reloc_offset];
+                if (newentry->max_world == ~(size_t)0) {
+                    if (newentry->min_world > 1) {
+                        newentry->min_world = ~(size_t)0;
+                        arraylist_push(&(s->fixup_list), reloc_offset);
+                    }
+                }
+                else {
+                    // garbage newentry - delete it :(
+                    newentry->min_world = 1;
+                    newentry->max_world = 0;
+                }
+            }
+            else if (jl_is_method(v)) {
+                write_padding(s->s, sizeof(jl_method_t) - tot); // hidden fields
+                jl_method_t *newm = (jl_method_t*)&s->s->buf[reloc_offset];
+                if (newm->deleted_world != ~(size_t)0)
+                    newm->deleted_world = 1;
+                else
+                    arraylist_push(&(s->fixup_list), reloc_offset);
+                newm->primary_world = ~(size_t)0;
+                JL_MUTEX_INIT(&newm->writelock);
+                if (newm->ccallable) {
                     arraylist_push(&ccallable_list, (void*)item);
                     arraylist_push(&ccallable_list, (void*)3);
                 }
@@ -1326,6 +1349,19 @@ static void jl_write_values(jl_serializer_state *s)
                 // Handle the native-code pointers
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
                 jl_code_instance_t *newm = (jl_code_instance_t*)&s->s->buf[reloc_offset];
+
+                if (m->min_world > 1)
+                    newm->min_world = ~(size_t)0;     // checks that we reprocess this upon deserialization
+                if (m->max_world != ~(size_t)0)
+                    newm->max_world = 0;
+                else {
+                    if (m->inferred && ptrhash_has(&s->callers_with_edges, m->def))
+                        newm->max_world = 1;  // sentinel value indicating this will need validation
+                    if (m->min_world > 0 && m->inferred)
+                        // TODO: also check if this object is part of the codeinst cache
+                        // will check on deserialize if this cache entry is still valid
+                        arraylist_push(&(s->fixup_list), reloc_offset);
+                }
 
                 newm->invoke = NULL;
                 newm->isspecsig = 0;
@@ -1706,7 +1742,7 @@ static void jl_write_relocations(jl_serializer_state *s)
     jl_write_skiplist(s->relocs, base, s->s->size, &s->gctags_list);
     jl_write_skiplist(s->relocs, base, s->s->size, &s->relocs_list);
     jl_write_arraylist(s->relocs, &s->uniquing_list);
-    jl_write_arraylist(s->relocs, &s->recaching_list);
+    jl_write_arraylist(s->relocs, &s->fixup_list);
 }
 
 
@@ -2270,7 +2306,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     jl_collect_missing_backedges(jl_type_type_mt);
     jl_collect_methtable_from_mod(*extext_methods, jl_nonfunction_mt);
     jl_collect_missing_backedges(jl_nonfunction_mt);
-    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in edges_map.
+    // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
     // Process this to extract `edges` and `ext_targets`.
     jl_collect_edges(*edges, *ext_targets);
 }
@@ -2318,10 +2354,11 @@ static void jl_save_system_image_to_stream(ios_t *f,
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
     arraylist_new(&s.uniquing_list, 0);
-    arraylist_new(&s.recaching_list, 0);
+    arraylist_new(&s.fixup_list, 0);
     s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
+    htable_new(&s.callers_with_edges, 0);
     jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
 
     if (worklist == NULL) {
@@ -2362,11 +2399,12 @@ static void jl_save_system_image_to_stream(ios_t *f,
             htable_new(&external_objects, NUM_TAGS);
             for (size_t i = 0; tags[i] != NULL; i++) {
                 jl_value_t *tag = *tags[i];
-                // if (!externally_linked(tag))
-                    ptrhash_put(&external_objects, tag, tag);
+                ptrhash_put(&external_objects, tag, tag);
             }
             // Queue the worklist itself as the first item we serialize
             jl_serialize_value(&s, worklist);
+            // Classify the CodeInstances with respect to their need for validation
+            classify_callers(&s.callers_with_edges, edges);
         }
         jl_serialize_reachable(&s);
         // step 1.1: check for values only found in the generated code
@@ -2438,6 +2476,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
         );
         jl_exit(1);
     }
+    htable_free(&s.callers_with_edges);
 
     // step 3: combine all of the sections into one file
     write_uint(f, sysimg.size - sizeof(uintptr_t));
@@ -2705,7 +2744,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
     (void)sizeof_tags;
     jl_read_relocations(&s, s.link_ids_relocs, 0);
     jl_read_arraylist(&s.relocs, &s.uniquing_list);
-    jl_read_arraylist(&s.relocs, &s.recaching_list);
+    jl_read_arraylist(&s.relocs, &s.fixup_list);
     for (size_t i = 0; i < s.uniquing_list.len; i++) {
         uintptr_t item = s.uniquing_list.items[i];
         jl_value_t ***pfld = (jl_value_t***)(image_base + item);
@@ -2741,15 +2780,35 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
         *pfld = fld;
         assert(jl_typeis(fld, otyp));
     }
-    for (size_t i = 0; i < s.recaching_list.len; i++) {
-        uintptr_t item = s.recaching_list.items[i];
+    size_t world = jl_atomic_read_acquire(&jl_world_counter);
+    for (size_t i = 0; i < s.fixup_list.len; i++) {
+        uintptr_t item = s.fixup_list.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
-        if (jl_is_method_instance(obj)) {
+        if (jl_is_typemap_entry(obj)) {
+            jl_typemap_entry_t *entry = (jl_typemap_entry_t*)obj;
+            entry->min_world = world;
+        }
+        else if (jl_is_method(obj)) {
+            jl_method_t *m = (jl_method_t*)obj;
+            m->primary_world = world;
+        }
+        else if (jl_is_method_instance(obj)) {
             jl_method_instance_t *newobj = jl_specializations_get_or_insert((jl_method_instance_t*)obj);
             assert(newobj == (jl_method_instance_t*)obj);
         }
+        else if (jl_is_code_instance(obj)) {
+            jl_code_instance_t *ci = (jl_code_instance_t*)obj;
+            ci->min_world = world;
+            if (ci->max_world == 1) // sentinel value?
+                ptrhash_put(&new_code_instance_validate, ci, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
+        }
         else if (jl_is_datatype(obj)) {
             jl_cache_type_((jl_datatype_t*)obj);
+        }
+        else if (dt == jl_globalref_type) { TODO
+            jl_globalref_t *r = (jl_globalref_t*)obj;
+            jl_binding_t *b = jl_get_binding_if_bound(r->mod, r->name);
+            r->bnd_cache = b && b->value ? b : NULL;
         }
         else {
             assert(0 && "unreachable");
