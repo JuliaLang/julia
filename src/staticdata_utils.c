@@ -1,3 +1,5 @@
+static htable_t new_code_instance_validate;
+
 uint64_t jl_worklist_key(jl_array_t *worklist)
 {
     assert(jl_is_array(worklist));
@@ -1010,6 +1012,15 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
 
     htable_free(&visited);
     JL_GC_POP();
+}
+
+static void classify_callers(htable_t *callers_with_edges, jl_array_t *edges)
+{
+    size_t l = jl_array_len(edges) / 2;
+    for (size_t i = 0; i < l; i++) {
+        jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, 2 * i);
+        ptrhash_put(callers_with_edges, (void*)caller, (void*)caller);
+    }
 }
 
 static void validate_new_code_instances(void)
