@@ -960,7 +960,7 @@ jl_value_t *jl_apply_typename_params(jl_typename_t *tn, jl_svec_t *params)
     if (tn == jl_tuple_typename)
         return (jl_value_t*)jl_apply_tuple_type(params);
     assert(tn != (jl_value_t*)jl_uniontype_type);
-    return inst_datatype_env(jl_unwrap_unionall(tn->wrapper), params, jl_svec_data(params), jl_sveclen(params), NULL, NULL, 0);
+    return inst_datatype_env(jl_unwrap_unionall(tn->wrapper), params, jl_svec_data(params), jl_svec_len(params), NULL, NULL, 0);
 }
 
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_value_t **params, size_t n)
