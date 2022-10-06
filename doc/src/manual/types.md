@@ -248,7 +248,7 @@ has full control over whether the default or more specific method is used.
 
 An important point to note is that there is no loss in performance if the programmer relies on
 a function whose arguments are abstract types, because it is recompiled for each tuple of concrete
-types argument with which it is invoked. (There may be a performance issue, however, in the case
+argument types with which it is invoked. (There may be a performance issue, however, in the case
 of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
