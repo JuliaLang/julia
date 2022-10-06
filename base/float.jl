@@ -862,8 +862,7 @@ julia> floatmin()
 ```
 
 # Extended help
-
-The smallest positive number without this restriction is
+The smallest positive number without the "non-subnormal" restriction is
 [`nextfloat`](@ref)`(zero(T))`; see [`issubnormal`](@ref) for an explanation
 of sub-normal numbers.
 
@@ -871,7 +870,7 @@ Floating point numbers always include infinity, [`Inf`](@ref), and
 negative real infinity, `-Inf`, which is what [`typemax`](@ref)`(T)`
 and [`typemin`](@ref)`(T)`, for a floating-point type `T`, would return.
 
-The smallest finite number representable by a floating-point type `T`
+The lowest finite number representable by a floating-point type `T`
 is gotten by negating `floatmax` i.e. `-`[`floatmax`](@ref)`(T)`.
 """
 floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
@@ -879,7 +878,7 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 """
     floatmax(T = Float64)
 
-Return the largest finite number representable by the floating-point type `T`.
+Return the highest finite number representable by the floating-point type `T`.
 
 See also: [`typemax`](@ref), [`floatmin`](@ref), [`eps`](@ref).
 
