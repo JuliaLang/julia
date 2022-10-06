@@ -466,6 +466,18 @@ original string, otherwise they must be from disjoint character ranges.
 
 !!! compat "Julia 1.7"
       Using a character as the pattern requires at least Julia 1.7.
+
+# Examples
+```jldoctest
+julia> count('a', "JuliaLang")
+2
+
+julia> count(r"a(.)a", "cabacabac", overlap=true)
+3
+
+julia> count(r"a(.)a", "cabacabac")
+2
+```
 """
 function count(t::Union{AbstractChar,AbstractString,AbstractPattern}, s::AbstractString; overlap::Bool=false)
     n = 0
