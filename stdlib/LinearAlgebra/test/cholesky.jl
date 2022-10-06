@@ -407,6 +407,12 @@ end
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
 end
 
+@testset "Cholesky for AbstractMatrix" begin
+    S = SymTridiagonal(fill(2.0, 4), ones(3))
+    C = cholesky(S)
+    @test C.L * C.U ≈ S
+end
+
 @testset "constructor with non-BlasInt arguments" begin
 
     x = rand(5,5)
