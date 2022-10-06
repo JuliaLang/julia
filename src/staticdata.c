@@ -2355,6 +2355,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
                 jl_value_t *tag = *tags[i];
                 jl_serialize_value(&s, tag);
             }
+            jl_serialize_value(&s, jl_global_roots_table);
         } else {
             // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
             // judged to be externally-linked
@@ -2484,6 +2485,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
                 jl_value_t *tag = *tags[i];
                 jl_write_value(&s, tag);
             }
+            jl_write_value(&s, jl_global_roots_table);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
             write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
@@ -2651,6 +2653,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
             jl_value_t **tag = tags[i];
             *tag = jl_read_value(&s);
         }
+        jl_global_roots_table = (jl_array_t*)jl_read_value(&s);
         // set typeof extra-special values now that we have the type set by tags above
         jl_astaggedvalue(jl_current_task)->header = (uintptr_t)jl_task_type | jl_astaggedvalue(jl_current_task)->header;
         jl_astaggedvalue(jl_nothing)->header = (uintptr_t)jl_nothing_type | jl_astaggedvalue(jl_nothing)->header;
@@ -2658,7 +2661,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
         jl_gc_wb(s.ptls->root_task, s.ptls->root_task->tls);
         jl_init_int32_int64_cache();
         jl_init_box_caches();
-        jl_global_roots_table = jl_alloc_vec_any(0);
 
         uint32_t gs_ctr = read_uint32(f);
         jl_atomic_store_release(&jl_world_counter, read_uint(f));
