@@ -1,10 +1,10 @@
 function test_parse(production, code; v=v"1.6")
     stream = ParseStream(code, version=v)
-    production(JuliaSyntax.ParseState(stream))
-    t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
+    production(ParseState(stream))
+    t = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
-    if JuliaSyntax.kind(s) == K"None"
+    if kind(s) == K"None"
         join([sprint(show, MIME("text/x.sexpression"), c) for c in children(s)], ' ')
     else
         sprint(show, MIME("text/x.sexpression"), s)

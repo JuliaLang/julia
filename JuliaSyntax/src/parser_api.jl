@@ -96,7 +96,7 @@ function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=
     tree, last_byte(stream) + 1
 end
 
-"""
+_parse_docs = """
     parse(TreeType, text, [index];
           version=VERSION,
           ignore_trivia=true,
@@ -130,12 +130,14 @@ source file name.
 A `ParseError` will be thrown if any errors or warnings occurred during
 parsing. To avoid exceptions due to warnings, use `ignore_warnings=true`.
 """
+
 parse(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:statement, true, T, text; kws...)[1]
 parseall(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:toplevel, true, T, text; kws...)[1]
 parseatom(::Type{T}, text::AbstractString; kws...) where {T} = _parse(:atom, true, T, text; kws...)[1]
 
-@eval @doc $(@doc parse) parseall
-@eval @doc $(@doc parse) parseatom
+@eval @doc $_parse_docs parse
+@eval @doc $_parse_docs parseall
+@eval @doc $_parse_docs parseatom
 
 parse(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:statement, false, T, text, index; kws...)
 parseall(::Type{T}, text::AbstractString, index::Integer; kws...) where {T} = _parse(:toplevel, false, T, text, index; kws...)
