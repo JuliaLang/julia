@@ -58,14 +58,18 @@ and constructs `MulAddMul{isone(alpha), iszero(beta)}` explicitly in each branch
 
 For example, 'f(x, y, MulAddMul(alpha, beta))` is transformed into
 ```
-if isone(alpha) && iszero(beta)
-    f(x, y, MulAddMul{true, true, typeof(alpha), typeof(beta)}(alpha, beta))
-elseif isone(alpha)
-    f(x, y, MulAddMul{true, false, typeof(alpha), typeof(beta)}(alpha, beta))
-elseif iszero(beta)
-    f(x, y, MulAddMul{false, true, typeof(alpha), typeof(beta)}(alpha, beta))
+if isone(alpha)
+    if iszero(beta)
+        f(x, y, MulAddMul{true, true, typeof(alpha), typeof(beta)}(alpha, beta))
+    else
+        f(x, y, MulAddMul{true, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    end
 else
-    f(x, y, MulAddMul{false, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    if iszero(beta)
+        f(x, y, MulAddMul{false, true, typeof(alpha), typeof(beta)}(alpha, beta))
+    else
+        f(x, y, MulAddMul{false, false, typeof(alpha), typeof(beta)}(alpha, beta))
+    end
 end
 ```
 
@@ -76,7 +80,7 @@ macro stable_muladdmul(expr)
     expr.head == :call || throw(ArgumentError("Can only handle function calls."))
     for (i, e) in enumerate(expr.args)
         e isa Expr || continue
-        if e.head == :call && e.args[1] == :(MulAddMul) && length(e.args) == 3
+        if e.head == :call && e.args[1] == :MulAddMul && length(e.args) == 3
             e.args[2] isa Symbol || continue
             e.args[3] isa Symbol || continue
             local asym = e.args[2]
@@ -84,10 +88,10 @@ macro stable_muladdmul(expr)
 
             local e_sub11 = copy(expr)
             e_sub11.args[i] = :(MulAddMul{true, true, typeof($asym), typeof($bsym)}($asym, $bsym))
-            
+
             local e_sub10 = copy(expr)
             e_sub10.args[i] = :(MulAddMul{true, false, typeof($asym), typeof($bsym)}($asym, $bsym))
-            
+
             local e_sub01 = copy(expr)
             e_sub01.args[i] = :(MulAddMul{false, true, typeof($asym), typeof($bsym)}($asym, $bsym))
 
@@ -95,14 +99,18 @@ macro stable_muladdmul(expr)
             e_sub00.args[i] = :(MulAddMul{false, false, typeof($asym), typeof($bsym)}($asym, $bsym))
 
             local e_out = quote
-                if isone($asym) && iszero($bsym)
-                    $e_sub11
-                elseif isone($asym)
-                    $e_sub10
-                elseif iszero($bsym)
-                    $e_sub01
+                if isone($asym)
+                    if iszero($bsym)
+                        $e_sub11
+                    else
+                        $e_sub10
+                    end
                 else
-                    $e_sub00
+                    if iszero($bsym)
+                        $e_sub01
+                    else
+                        $e_sub00
+                    end
                 end
             end
             return esc(e_out)
