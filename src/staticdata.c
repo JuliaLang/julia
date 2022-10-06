@@ -2346,7 +2346,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     ios_mem(&fptr_record, 100000);
     serializer_worklist = worklist;   // NULL means "serialize everything"
     jl_serializer_state s;
-    s.incremental = (worklist == NULL);
+    s.incremental = !(worklist == NULL);
     s.s = &sysimg;
     s.const_data = &const_data;
     s.symbols = &symbols;
