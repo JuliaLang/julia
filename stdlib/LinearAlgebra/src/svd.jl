@@ -539,7 +539,6 @@ function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     a[1:k + l] ./ b[1:k + l]
 end
-svdvals(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = svdvals!(copy(A),copy(B))
 
 """
     svdvals(A, B)
