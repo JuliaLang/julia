@@ -42,7 +42,7 @@ its mark bit is set to indicate that a write barrier has already been triggered 
 There is no explicit flag to determine whether a marking pass will scan the
 entire heap or only through young objects and remebered set.
 The mark bits of the objects themselves are used to determine whether a full mark happens.
-The mark-sweep algorithms follows this sequence of steps:
+The mark-sweep algorithm follows this sequence of steps:
 
 - Objects in the remembered set have their GC mark bits reset
 (these are set once write barrier is triggered, as described above) and are enqueued.
