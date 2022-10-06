@@ -243,6 +243,10 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
                 nothrow = _builtin_nothrow(lattice, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
+            if f === Intrinsics.cglobal
+                # TODO: these are not yet linearized
+                return (false, false, false)
+            end
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
