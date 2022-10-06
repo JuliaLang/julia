@@ -132,6 +132,7 @@ aimg  = randn(n,n)/2
             asvd = svd(T, a)
             @test asvd.U*asvd.D1*asvd.R*asvd.Q' ≈ T
             @test asvd.V*asvd.D2*asvd.R*asvd.Q' ≈ a
+            @test all(≈(1), svdvals(T, T))
         end
     end
     @testset "singular value decomposition of AbstractMatrix" begin
