@@ -2096,7 +2096,12 @@ function cfg_simplify!(ir::IRCode)
                     # If we merged a basic block, we need remove the trailing GotoNode (if any)
                     compact.result[compact.result_idx][:inst] = nothing
                 else
-                    process_node!(compact, compact.result_idx, node, i, i, ms, true)
+                    ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
+                    if ri == compact.result_idx
+                        # process_node! wanted this statement dropped. We don't do this,
+                        # but we still need to erase the node
+                        compact.result[compact.result_idx][:inst] = nothing
+                    end
                 end
                 # We always increase the result index to ensure a predicatable
                 # placement of the resulting nodes.
