@@ -376,6 +376,7 @@ typedef struct {
     jl_array_t *link_ids_gvars;
     jl_ptls_t ptls;
     htable_t callers_with_edges;
+    int8_t incremental;
 } jl_serializer_state;
 
 static jl_value_t *jl_idtable_type = NULL;
@@ -609,7 +610,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int recur
 // are recached before the objects that wrap them.
 static void jl_serialize_postorder_as_needed(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
-    if (jl_object_in_image(v))
+    if (s->incremental && jl_object_in_image(v))
         return;
 
     jl_serialize_postorder_as_needed(s, jl_typeof(v), recursive);
@@ -880,7 +881,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
-    else if (jl_object_in_image(v)) {
+    else if (s->incremental && jl_object_in_image(v)) {
         assert(link_ids);
         uintptr_t item = add_external_linkage(s, v, link_ids);
         if (!item) {
@@ -1084,7 +1085,7 @@ static void jl_write_values(jl_serializer_state *s)
     for (i = 0, len = backref_table_numel * 2; i < len; i += 2) {
         jl_value_t *v = (jl_value_t*)objects_list.items[i];           // the object
         JL_GC_PROMISE_ROOTED(v);
-        assert(!jl_object_in_image(v));
+        assert(!(s->incremental && jl_object_in_image(v)));
         uintptr_t item = (uintptr_t)objects_list.items[i + 1];        // the id
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((t->instance == NULL || t->instance == v) && "detected singleton construction corruption");
@@ -2345,6 +2346,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     ios_mem(&fptr_record, 100000);
     serializer_worklist = worklist;   // NULL means "serialize everything"
     jl_serializer_state s;
+    s.incremental = (worklist == NULL);
     s.s = &sysimg;
     s.const_data = &const_data;
     s.symbols = &symbols;
@@ -2646,7 +2648,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
     htable_new(&uniquing_target, 0);
     jl_array_t *extext_methods = NULL, *new_specializations = NULL, *ext_targets = NULL, *edges = NULL;
 
-    int incremental = worklist == NULL; // jl_linkage_blobs.len > 0;
+    s.incremental = worklist != NULL; // jl_linkage_blobs.len > 0;
 
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
@@ -2686,7 +2688,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
     // step 2: get references to special values
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
-    if (!incremental) {
+    if (!s.incremental) {
         s.s = f;
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
