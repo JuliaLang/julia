@@ -502,17 +502,13 @@ ERROR: setfield!: const field .b of type Baz cannot be changed
 [...]
 ```
 
-It's important to note that the `mutable struct` keyword does not declare a new type that is
-different from the one defined with the `struct` keyword and vice-versa, if both types have
-the same name and the declaration was done in the same namespace.
-
-As an example, declaring a type with name as `Point` using `mutable struct` does not
-distinguish it from the type declared with name as `Point` using `struct`. Trying to declare
-these both in one namespace will throw an error:
-```jldoctest
+In Julia two different objects can't have the same name, so defining an object, say `Point`,
+with `mutable struct`, will not create a new object if it's already been declared
+with `struct` with name as `Point`, even if the fields are different; rather, an error will
+be thrown:
+```julia
 julia> struct Point
            x
-           y
        end
 
 julia> mutable struct Point
