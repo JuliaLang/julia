@@ -1582,7 +1582,7 @@ function adce_pass!(ir::IRCode)
         phi = unionphi[1]
         t = unionphi[2]
         if t === Union{}
-            compact.result[phi][:inst] = nothing
+            compact[SSAValue(phi)] = nothing
             continue
         elseif t === Any
             continue
@@ -1604,6 +1604,9 @@ function adce_pass!(ir::IRCode)
         end
         compact.result[phi][:type] = t
         isempty(to_drop) && continue
+        for d in to_drop
+            isassigned(stmt.values, d) && kill_current_use(compact, stmt.values[d])
+        end
         deleteat!(stmt.values, to_drop)
         deleteat!(stmt.edges, to_drop)
     end

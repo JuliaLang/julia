@@ -881,17 +881,20 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.pending_nodes.stmts[id][:type]
 end
 
+function kill_current_use(compact::IncrementalCompact, @nospecialize(val))
+    if isa(val, SSAValue)
+        @assert compact.used_ssas[val.id] >= 1
+        compact.used_ssas[val.id] -= 1
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0
+        @assert compact.new_new_used_ssas[-val.id] >= 1
+        compact.new_new_used_ssas[-val.id] -= 1
+    end
+end
+
 function kill_current_uses(compact::IncrementalCompact, @nospecialize(stmt))
     for ops in userefs(stmt)
-        val = ops[]
-        if isa(val, SSAValue)
-            @assert compact.used_ssas[val.id] >= 1
-            compact.used_ssas[val.id] -= 1
-        elseif isa(val, NewSSAValue)
-            @assert val.id < 0
-            @assert compact.new_new_used_ssas[-val.id] >= 1
-            compact.new_new_used_ssas[-val.id] -= 1
-        end
+        kill_current_use(compact, ops[])
     end
 end
 
