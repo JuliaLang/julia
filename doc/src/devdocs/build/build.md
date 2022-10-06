@@ -167,9 +167,9 @@ Julia uses the following external libraries, which are automatically
 downloaded (or in a few cases, included in the Julia source
 repository) and then compiled from source the first time you run
 `make`. The specific version numbers of these libraries that Julia
-uses are listed in [`deps/Versions.make`](https://github.com/JuliaLang/julia/blob/master/deps/Versions.make):
+uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/julia/blob/master/deps/):
 
-- **[LLVM]** (9.0 + [patches](https://github.com/JuliaLang/julia/tree/master/deps/patches)) — compiler infrastructure (see [note below](#llvm)).
+- **[LLVM]** (14.0 + [patches](https://github.com/JuliaLang/llvm-project)) — compiler infrastructure (see [note below](#llvm)).
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**  (custom fork) — portable, high-performance event-based I/O library.
 - **[OpenLibm]**             — portable libm library containing elementary math functions.
@@ -303,3 +303,50 @@ From this point, you should
 (Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
 
 Then add all the [build dependencies](@ref build-tools), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
+
+
+## Update the version number of a dependency
+
+There are two types of builds
+1. Build everything (`deps/` and `src/`) from source code.
+    (Add `USE_BINARYBUILDER=0` to `Make.user`, see [Building Julia](#building-julia))
+2. Build from source (`src/`) with pre-compiled dependencies (default)
+
+When you want to update the version number of a dependency in `deps/`,
+you may want to use the following checklist:
+
+```md
+### Check list
+
+Version numbers:
+- [ ] `deps/$(libname).version`: `LIBNAME_VER`, `LIBNAME_BRANCH`, `LIBNAME_SHA1` and `LIBNAME_JLL_VER`
+- [ ] `stdlib/$(LIBNAME_JLL_NAME)_jll/Project.toml`: `version`
+
+Checksum:
+- [ ] `deps/checksums/$(libname)`
+- [ ] `deps/checksums/$(LIBNAME_JLL_NAME)-*/`: `md5` and `sha512`
+
+Patches:
+- [ ] `deps/$(libname).mk`
+- [ ] `deps/patches/$(libname)-*.patch`
+```
+
+Note:
+- For specific dependencies, some items in the checklist may not exist.
+- For checksum file, it may be **a single file** without a suffix, or **a folder** containing two files.
+
+
+### Example: `OpenLibm`
+
+1. Update Version numbers in `deps/openlibm.version`
+    - `OPENLIBM_VER := 0.X.Y`
+    - `OPENLIBM_BRANCH = v0.X.Y`
+    - `OPENLIBM_SHA1 = new-sha1-hash`
+2. Update Version number in `stdlib/OpenLibm_jll/Project.toml`
+    - `version = "0.X.Y+0"`
+3. Update checksums in `deps/checksums/openlibm`
+    - `make -f contrib/refresh_checksums.mk openlibm`
+4. Check if the patch files `deps/patches/openlibm-*.patch` exist
+    - if patches don't exist, skip.
+    - if patches exist, check if they have been merged into the new version and need to be removed.
+        When deleting a patch, remember to modify the corresponding Makefile file (`deps/openlibm.mk`).

@@ -26,7 +26,6 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
 
-#include "julia.h"
 #include "jitlayers.h"
 
 #define DEBUG_TYPE "cpufeatures"
@@ -61,7 +60,7 @@ bool have_fma(Function &intr, Function &caller) {
 
     Attribute FSAttr = caller.getFnAttribute("target-features");
     StringRef FS =
-        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetMachine().getTargetFeatureString();
+        FSAttr.isValid() ? FSAttr.getValueAsString() : jl_ExecutionEngine->getTargetFeatureString();
 
     SmallVector<StringRef, 6> Features;
     FS.split(Features, ',');
@@ -111,7 +110,7 @@ bool lowerCPUFeatures(Module &M)
         for (auto I: Materialized) {
             I->eraseFromParent();
         }
-        assert(!verifyModule(M));
+        assert(!verifyModule(M, &errs()));
         return true;
     } else {
         return false;

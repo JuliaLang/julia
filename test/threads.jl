@@ -79,6 +79,23 @@ let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no thr
     end
 end
 
+# Timing-sensitive tests can fail on CI due to occasional unexpected delays,
+# so this test is disabled.
+#=
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_latency.jl`
+    for test_nthreads in (1, 2)
+        new_env = copy(ENV)
+        new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",1")
+        run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+    end
+end
+=#
+let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threadpool_use.jl`
+    new_env = copy(ENV)
+    new_env["JULIA_NUM_THREADS"] = "1,1"
+    run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+end
+
 function run_with_affinity(cpus)
     script = joinpath(@__DIR__, "print_process_affinity.jl")
     return readchomp(setcpuaffinity(`$(Base.julia_cmd()) $script`, cpus))

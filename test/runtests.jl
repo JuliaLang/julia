@@ -77,9 +77,6 @@ move_to_node1("threads")
 move_to_node1("Distributed")
 # Ensure things like consuming all kernel pipe memory doesn't interfere with other tests
 move_to_node1("stress")
-# Move `Pkg` tests to node 1 to fix stdin-related woes
-# X-ref: https://github.com/JuliaLang/julia/pull/44828
-move_to_node1("Pkg")
 
 # In a constrained memory environment, run the "distributed" test after all other tests
 # since it starts a lot of workers and can easily exceed the maximum memory

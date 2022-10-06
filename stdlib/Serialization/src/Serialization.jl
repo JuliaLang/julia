@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 18 # do not make changes without bumping the version #!
+const ser_version = 20 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -364,7 +364,8 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     p = parentmodule(m)
     if p === m || m === Base
         key = Base.root_module_key(m)
-        serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
+        uuid = key.uuid
+        serialize(s, uuid === nothing ? nothing : uuid.value)
         serialize(s, Symbol(key.name))
     else
         serialize_mod_names(s, p)
@@ -1112,7 +1113,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::Union{Int32, Int}), Int32(deserialize(s)::Union{Int32, Int}))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})
@@ -1183,9 +1184,17 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    ci.inlineable = deserialize(s)
+    inlining = deserialize(s)
+    if isa(inlining, Bool)
+        Core.Compiler.set_inlineable!(ci, inlining)
+    else
+        ci.inlining_cost = inlining
+    end
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
+    if format_version(s) >= 20
+        ci.has_fcall = deserialize(s)
+    end
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
@@ -1565,5 +1574,7 @@ function deserialize(s::AbstractSerializer, ::Type{T}) where T<:Base.GenericCond
     return cond
 end
 
+serialize(s::AbstractSerializer, l::LazyString) =
+    invoke(serialize, Tuple{AbstractSerializer,Any}, s, Base._LazyString((), string(l)))
 
 end

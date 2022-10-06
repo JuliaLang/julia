@@ -278,7 +278,7 @@ show_nd(io::IO, a::AbstractArray, print_matrix::Function, show_full::Bool) =
     _show_nd(io, inferencebarrier(a), print_matrix, show_full, map(unitrange, axes(a)))
 
 function _show_nd(io::IO, @nospecialize(a::AbstractArray), print_matrix::Function, show_full::Bool, axs::Tuple{Vararg{AbstractUnitRange}})
-    limit::Bool = get(io, :limit, false)
+    limit = get(io, :limit, false)::Bool
     if isempty(a)
         return
     end
@@ -361,7 +361,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
-    if isempty(X) && (get(io, :compact, false) || X isa Vector)
+    if isempty(X) && (get(io, :compact, false)::Bool || X isa Vector)
         return show(io, X)
     end
     # 0) show summary before setting :compact
@@ -374,12 +374,12 @@ function show(io::IO, ::MIME"text/plain", X::AbstractArray)
     if !haskey(io, :compact) && length(axes(X, 2)) > 1
         io = IOContext(io, :compact => true)
     end
-    if get(io, :limit, false) && eltype(X) === Method
+    if get(io, :limit, false)::Bool && eltype(X) === Method
         # override usual show method for Vector{Method}: don't abbreviate long lists
         io = IOContext(io, :limit => false)
     end
 
-    if get(io, :limit, false) && displaysize(io)[1]-4 <= 0
+    if get(io, :limit, false)::Bool && displaysize(io)[1]-4 <= 0
         return print(io, " …")
     else
         println(io)
@@ -516,7 +516,7 @@ function show_vector(io::IO, v, opn='[', cls=']')
     if !implicit
         io = IOContext(io, :typeinfo => eltype(v))
     end
-    limited = get(io, :limit, false)
+    limited = get(io, :limit, false)::Bool
 
     if limited && length(v) > 20
         axs1 = axes1(v)
@@ -568,11 +568,11 @@ function typeinfo_prefix(io::IO, X)
 
     if X isa AbstractDict
         if eltype_X == eltype_ctx
-            sprint(show_type_name, typeof(X).name), false
+            sprint(show_type_name, typeof(X).name; context=io), false
         elseif !isempty(X) && typeinfo_implicit(keytype(X)) && typeinfo_implicit(valtype(X))
-            sprint(show_type_name, typeof(X).name), true
+            sprint(show_type_name, typeof(X).name; context=io), true
         else
-            string(typeof(X)), false
+            sprint(print, typeof(X); context=io), false
         end
     else
         # Types hard-coded here are those which are created by default for a given syntax
@@ -581,9 +581,9 @@ function typeinfo_prefix(io::IO, X)
         elseif !isempty(X) && typeinfo_implicit(eltype_X)
             "", true
         elseif print_without_params(eltype_X)
-            sprint(show_type_name, unwrap_unionall(eltype_X).name), false # Print "Array" rather than "Array{T,N}"
+            sprint(show_type_name, unwrap_unionall(eltype_X).name; context=io), false # Print "Array" rather than "Array{T,N}"
         else
-            string(eltype_X), false
+            sprint(print, eltype_X; context=io), false
         end
     end
 end

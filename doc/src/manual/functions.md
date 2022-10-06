@@ -475,6 +475,57 @@ Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.
 
 See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
 
+!!! compat "Julia 1.9"
+    `...` in non-final position of an assignment requires Julia 1.9
+
+Slurping in assignments can also occur in any other position. As opposed to slurping the end
+of a collection however, this will always be eager.
+
+```jldoctest
+julia> a, b..., c = 1:5
+1:5
+
+julia> a
+1
+
+julia> b
+3-element Vector{Int64}:
+ 2
+ 3
+ 4
+
+julia> c
+5
+
+julia> front..., tail = "Hi!"
+"Hi!"
+
+julia> front
+"Hi"
+
+julia> tail
+'!': ASCII/Unicode U+0021 (category Po: Punctuation, other)
+```
+
+This is implemented in terms of the function [`Base.split_rest`](@ref).
+
+Note that for variadic function definitions, slurping is still only allowed in final position.
+This does not apply to [single argument destructuring](@ref man-argument-destructuring) though,
+as that does not affect method dispatch:
+
+```jldoctest
+julia> f(x..., y) = x
+ERROR: syntax: invalid "..." on non-final argument
+Stacktrace:
+[...]
+
+julia> f((x..., y)) = x
+f (generic function with 1 method)
+
+julia> f((1, 2, 3))
+(1, 2)
+```
+
 ## Property destructuring
 
 Instead of destructuring based on iteration, the right side of assignments can also be destructured using property names.
@@ -492,7 +543,7 @@ julia> b
 2
 ```
 
-## Argument destructuring
+## [Argument destructuring](@id man-argument-destructuring)
 
 The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
@@ -644,8 +695,13 @@ julia> args = [1,2,3]
 
 julia> baz(args...)
 ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+
 Closest candidates are:
-  baz(::Any, ::Any) at none:1
+  baz(::Any, ::Any)
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 As you can see, if the wrong number of elements are in the splatted container, then the function
@@ -1041,7 +1097,7 @@ they are equivalent to `broadcast` calls and are fused with other nested "dot" c
 
 You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
 ```jldoctest
-julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
+julia> 1:5 .|> [x->x^2, inv, x->2*x, -, isodd]
 5-element Vector{Real}:
     1
     0.5

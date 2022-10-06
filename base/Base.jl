@@ -87,7 +87,7 @@ if false
 end
 
 """
-    time_ns()
+    time_ns() -> UInt64
 
 Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 """
@@ -107,9 +107,6 @@ include("options.jl")
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
-Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
-#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
-#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
@@ -124,8 +121,21 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 include("refpointer.jl")
+
+# now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
+delete_method(which(Pair{Any,Any}, (Any, Any)))
+@eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
+    @inline
+    return $(Expr(:new, :P, :(convert(A, a)), :(convert(B, b))))
+end
+
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 include("checked.jl")
 using .Checked
+function cld end
+function fld end
 
 # Lazy strings
 include("strings/lazy.jl")
@@ -181,9 +191,10 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+include("slicearray.jl")
 
 # SIMD loops
-@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
+sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -301,9 +312,6 @@ include("cmd.jl")
 include("process.jl")
 include("ttyhascolor.jl")
 include("secretbuffer.jl")
-
-# RandomDevice support
-include("randomdevice.jl")
 
 # core math functions
 include("floatfuncs.jl")
@@ -427,6 +435,7 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
@@ -494,8 +503,6 @@ end
 
 if is_primary_base_module
 function __init__()
-    # for the few uses of Libc.rand in Base:
-    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback

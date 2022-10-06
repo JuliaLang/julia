@@ -61,8 +61,11 @@ function preserve_handle(x)
 end
 function unpreserve_handle(x)
     lock(preserve_handle_lock)
-    v = uvhandles[x]::Int
-    if v == 1
+    v = get(uvhandles, x, 0)::Int
+    if v == 0
+        unlock(preserve_handle_lock)
+        error("unbalanced call to unpreserve_handle for $(typeof(x))")
+    elseif v == 1
         pop!(uvhandles, x)
     else
         uvhandles[x] = v - 1

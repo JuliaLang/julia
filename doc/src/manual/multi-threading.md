@@ -20,7 +20,7 @@ specified, then `-t`/`--threads` takes precedence.
 
 The number of threads can either be specified as an integer (`--threads=4`) or as `auto`
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
-(see [Command-line Options](@ref command-line-options) for more details).
+(see [Command-line Options](@ref command-line-interface) for more details).
 
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
@@ -72,7 +72,61 @@ julia> Threads.threadid()
     three processes have 2 threads enabled. For more fine grained control over worker
     threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
 
-## Data-race freedom
+## [Threadpools](@id man-threadpools)
+
+When a program's threads are busy with many tasks to run, tasks may experience
+delays which may negatively affect the responsiveness and interactivity of the
+program. To address this, you can specify that a task is interactive when you
+[`Threads.@spawn`](@ref) it:
+
+```julia
+using Base.Threads
+@spawn :interactive f()
+```
+
+Interactive tasks should avoid performing high latency operations, and if they
+are long duration tasks, should yield frequently.
+
+Julia may be started with one or more threads reserved to run interactive tasks:
+
+```bash
+$ julia --threads 3,1
+```
+
+The environment variable `JULIA_NUM_THREADS` can also be used similarly:
+```bash
+export JULIA_NUM_THREADS=3,1
+```
+
+This starts Julia with 3 threads in the `:default` threadpool and 1 thread in
+the `:interactive` threadpool:
+
+```julia-repl
+julia> using Base.Threads
+
+julia> nthreads()
+4
+
+julia> nthreadpools()
+2
+
+julia> threadpool()
+:default
+
+julia> nthreads(:interactive)
+1
+```
+
+Either or both numbers can be replaced with the word `auto`, which causes
+Julia to choose a reasonable default.
+
+## Communication and synchronization
+
+Although Julia's threads can communicate through shared memory, it is notoriously
+difficult to write correct and data-race free multi-threaded code. Julia's
+[`Channel`](@ref)s are thread-safe and may be used to communicate safely.
+
+### Data-race freedom
 
 You are entirely responsible for ensuring that your program is data-race free,
 and nothing promised here can be assumed if you do not observe that
@@ -307,9 +361,6 @@ threads in Julia:
     multiple threads where at least one thread modifies the collection
     (common examples include `push!` on arrays, or inserting
     items into a `Dict`).
-  * `@threads` currently uses a static schedule, using all threads and assigning
-    equal iteration counts to each. In the future the default schedule is likely
-    to change to be dynamic.
   * The schedule used by `@spawn` is nondeterministic and should not be relied on.
   * Compute-bound, non-memory-allocating tasks can prevent garbage collection from
     running in other threads that are allocating memory. In these cases it may

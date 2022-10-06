@@ -235,6 +235,8 @@ end
     @test norm(NaN, 0) === NaN
 end
 
+@test rank(zeros(4)) == 0
+@test rank(1:10) == 1
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
@@ -375,6 +377,13 @@ end
     @test typeof(normalize([1 2 3; 4 5 6])) == Array{Float64,2}
 end
 
+@testset "normalize for scalars" begin
+    @test normalize(8.0) == 1.0
+    @test normalize(-3.0) == -1.0
+    @test normalize(-3.0, 1) == -1.0
+    @test isnan(normalize(0.0))
+end
+
 @testset "Issue #30466" begin
     @test norm([typemin(Int), typemin(Int)], Inf) == -float(typemin(Int))
     @test norm([typemin(Int), typemin(Int)], 1) == -2float(typemin(Int))
@@ -441,6 +450,7 @@ Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 Base.conj(a::ModInt{n}) where {n} = a
+LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
@@ -450,13 +460,22 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
     @test A*(lu(A, NoPivot())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
+    @test_throws MethodError lu(A, RowMaximum())
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-
     @test A*(lu(A, RowMaximum())\b) == b
+
+    A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
 end
 
 @testset "Issue 18742" begin

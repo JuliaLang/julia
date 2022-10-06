@@ -96,6 +96,7 @@ Base.unique!
 Base.allunique
 Base.allequal
 Base.reduce(::Any, ::Any)
+Base.reduce(::Any, ::AbstractArray)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
@@ -140,6 +141,7 @@ Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
 Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections

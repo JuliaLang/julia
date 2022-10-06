@@ -104,7 +104,7 @@ UInt8
 
 See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
@@ -140,7 +140,7 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds isvalid(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
@@ -154,7 +154,7 @@ protocol may assume that `i` is the start of a character in `s`.
 
 See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds iterate(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
 
 ## basic generic definitions ##
@@ -229,7 +229,7 @@ Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
-convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
+convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)::T
 
 ## summary ##
 
@@ -715,7 +715,7 @@ julia> repeat("ha", 3)
 repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
-    ^(s::Union{AbstractString,AbstractChar}, n::Integer)
+    ^(s::Union{AbstractString,AbstractChar}, n::Integer) -> AbstractString
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 
@@ -780,3 +780,16 @@ julia> codeunits("Juλia")
 ```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
+
+function _split_rest(s::AbstractString, n::Int)
+    lastind = lastindex(s)
+    i = try
+        prevind(s, lastind, n)
+    catch e
+        e isa BoundsError || rethrow()
+        _check_length_split_rest(length(s), n)
+    end
+    last_n = SubString(s, nextind(s, i), lastind)
+    front = s[begin:i]
+    return front, last_n
+end

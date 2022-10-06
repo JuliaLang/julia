@@ -33,7 +33,7 @@ macro var(x)
 end
 
 function Base.show(io::IO, b::Binding)
-    if b.mod === Main
+    if b.mod === Base.active_module()
         print(io, b.var)
     else
         print(io, b.mod, '.', Base.isoperator(b.var) ? ":" : "", b.var)

@@ -17,10 +17,12 @@ function Base.showerror(io::IO, exc::StringIndexError)
     if firstindex(s) <= exc.index <= ncodeunits(s)
         iprev = thisind(s, exc.index)
         inext = nextind(s, iprev)
+        escprev = escape_string(s[iprev:iprev])
         if inext <= ncodeunits(s)
-            print(io, ", valid nearby indices [$iprev]=>'$(s[iprev])', [$inext]=>'$(s[inext])'")
+            escnext = escape_string(s[inext:inext])
+            print(io, ", valid nearby indices [$iprev]=>'$escprev', [$inext]=>'$escnext'")
         else
-            print(io, ", valid nearby index [$iprev]=>'$(s[iprev])'")
+            print(io, ", valid nearby index [$iprev]=>'$escprev'")
         end
     end
 end
@@ -93,7 +95,7 @@ end
 Create a new `String` from an existing `AbstractString`.
 """
 String(s::AbstractString) = print_to_string(s)
-@pure String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
+@assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
 

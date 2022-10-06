@@ -133,6 +133,9 @@ is true.
 julia> isreal(5.)
 true
 
+julia> isreal(1 - 3im)
+false
+
 julia> isreal(Inf + 0im)
 true
 
@@ -192,7 +195,7 @@ flipsign(x::Complex, y::Real) = ifelse(signbit(y), -x, x)
 
 function show(io::IO, z::Complex)
     r, i = reim(z)
-    compact = get(io, :compact, false)
+    compact = get(io, :compact, false)::Bool
     show(io, r)
     if signbit(i) && !isnan(i)
         print(io, compact ? "-" : " - ")
@@ -591,7 +594,7 @@ julia> cispi(10000)
 1.0 + 0.0im
 
 julia> cispi(0.25 + 1im)
-0.030556854645952924 + 0.030556854645952924im
+0.030556854645954562 + 0.030556854645954562im
 ```
 
 !!! compat "Julia 1.6"
@@ -601,8 +604,9 @@ function cispi end
 cispi(theta::Real) = Complex(reverse(sincospi(theta))...)
 
 function cispi(z::Complex)
-    sipi, copi = sincospi(z)
-    return complex(real(copi) - imag(sipi), imag(copi) + real(sipi))
+    v = exp(-(pi*imag(z)))
+    s, c = sincospi(real(z))
+    Complex(v * c, v * s)
 end
 
 """
@@ -1063,18 +1067,32 @@ end
 #Requires two different RoundingModes for the real and imaginary components
 """
     round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]])
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=, base=10)
-    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits=, base=10)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; digits=0, base=10)
+    round(z::Complex[, RoundingModeReal, [RoundingModeImaginary]]; sigdigits, base=10)
 
 Return the nearest integral value of the same type as the complex-valued `z` to `z`,
 breaking ties using the specified [`RoundingMode`](@ref)s. The first
 [`RoundingMode`](@ref) is used for rounding the real components while the
 second is used for rounding the imaginary components.
 
+
+`RoundingModeReal` and `RoundingModeImaginary` default to [`RoundNearest`](@ref),
+which rounds to the nearest integer, with ties (fractional values of 0.5)
+being rounded to the nearest even integer.
+
 # Example
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
+
+julia> round(3.14 + 4.5im, RoundUp, RoundNearestTiesUp)
+4.0 + 5.0im
+
+julia> round(3.14159 + 4.512im; digits = 1)
+3.1 + 4.5im
+
+julia> round(3.14159 + 4.512im; sigdigits = 3)
+3.14 + 4.51im
 ```
 """
 function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; kwargs...)

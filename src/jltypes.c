@@ -420,10 +420,8 @@ static int datatype_name_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 
 // sort singletons first, then DataTypes, then UnionAlls,
 // ties broken alphabetically including module name & type parameters
-static int union_sort_cmp(const void *ap, const void *bp) JL_NOTSAFEPOINT
+static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
 {
-    jl_value_t *a = *(jl_value_t**)ap;
-    jl_value_t *b = *(jl_value_t**)bp;
     if (a == NULL)
         return b == NULL ? 0 : 1;
     if (b == NULL)
@@ -458,16 +456,33 @@ static int union_sort_cmp(const void *ap, const void *bp) JL_NOTSAFEPOINT
     }
 }
 
+static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
+{
+    size_t i, j;
+    for (i = 1; i < len; i++) {
+        jl_value_t *x = a[i];
+        for (j = i; j > 0; j--) {
+            jl_value_t *y = a[j - 1];
+            if (!(union_sort_cmp(x, y) < 0))
+                break;
+            a[j] = y;
+        }
+        a[j] = x;
+    }
+}
+
 JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
 {
-    if (n == 0) return (jl_value_t*)jl_bottom_type;
+    if (n == 0)
+        return (jl_value_t*)jl_bottom_type;
     size_t i;
-    for(i=0; i < n; i++) {
+    for (i = 0; i < n; i++) {
         jl_value_t *pi = ts[i];
         if (!(jl_is_type(pi) || jl_is_typevar(pi)))
             jl_type_error("Union", (jl_value_t*)jl_type_type, pi);
     }
-    if (n == 1) return ts[0];
+    if (n == 1)
+        return ts[0];
 
     size_t nt = count_union_components(ts, n);
     jl_value_t **temp;
@@ -476,9 +491,9 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
     flatten_type_union(ts, n, temp, &count);
     assert(count == nt);
     size_t j;
-    for(i=0; i < nt; i++) {
-        int has_free = temp[i]!=NULL && jl_has_free_typevars(temp[i]);
-        for(j=0; j < nt; j++) {
+    for (i = 0; i < nt; i++) {
+        int has_free = temp[i] != NULL && jl_has_free_typevars(temp[i]);
+        for (j = 0; j < nt; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == jl_bottom_type ||
                     temp[j] == (jl_value_t*)jl_any_type ||
@@ -490,7 +505,7 @@ JL_DLLEXPORT jl_value_t *jl_type_union(jl_value_t **ts, size_t n)
             }
         }
     }
-    qsort(temp, nt, sizeof(jl_value_t*), union_sort_cmp);
+    isort_union(temp, nt);
     jl_value_t **ptu = &temp[nt];
     *ptu = jl_bottom_type;
     int k;
@@ -642,9 +657,9 @@ static jl_datatype_t *lookup_type_set(jl_svec_t *cache, jl_value_t **key, size_t
     size_t iter = 0;
     do {
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
-        if (val == NULL)
+        if ((jl_value_t*)val == jl_nothing)
             return NULL;
-        if ((jl_value_t*)val != jl_nothing && val->hash == hv && typekey_eq(val, key, n))
+        if (val->hash == hv && typekey_eq(val, key, n))
             return val;
         index = (index + 1) & (sz - 1);
         iter++;
@@ -665,9 +680,9 @@ static jl_datatype_t *lookup_type_setvalue(jl_svec_t *cache, jl_value_t *key1, j
     size_t iter = 0;
     do {
         jl_datatype_t *val = jl_atomic_load_relaxed(&tab[index]);
-        if (val == NULL)
+        if ((jl_value_t*)val == jl_nothing)
             return NULL;
-        if ((jl_value_t*)val != jl_nothing && val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
+        if (val->hash == hv && typekeyvalue_eq(val, key1, key, n, leaf))
             return val;
         index = (index + 1) & (sz - 1);
         iter++;
@@ -687,7 +702,7 @@ static ssize_t lookup_type_idx_linear(jl_svec_t *cache, jl_value_t **key, size_t
     ssize_t i;
     for (i = 0; i < cl; i++) {
         jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
-        if (tt == NULL)
+        if ((jl_value_t*)tt == jl_nothing)
             return ~i;
         if (typekey_eq(tt, key, n))
             return i;
@@ -704,7 +719,7 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
     ssize_t i;
     for (i = 0; i < cl; i++) {
         jl_datatype_t *tt = jl_atomic_load_relaxed(&data[i]);
-        if (tt == NULL)
+        if ((jl_value_t*)tt == jl_nothing)
             return ~i;
         if (typekeyvalue_eq(tt, key1, key, n, 1))
             return i;
@@ -715,6 +730,12 @@ static ssize_t lookup_type_idx_linearvalue(jl_svec_t *cache, jl_value_t *key1, j
 static jl_value_t *lookup_type(jl_typename_t *tn JL_PROPAGATES_ROOT, jl_value_t **key, size_t n)
 {
     JL_TIMING(TYPE_CACHE_LOOKUP);
+    if (tn == jl_type_typename) {
+        assert(n == 1);
+        jl_value_t *uw = jl_unwrap_unionall(key[0]);
+        if (jl_is_datatype(uw) && key[0] == ((jl_datatype_t*)uw)->name->wrapper)
+            return jl_atomic_load_acquire(&((jl_datatype_t*)uw)->name->Typeofwrapper);
+    }
     unsigned hv = typekey_hash(tn, key, n, 0);
     if (hv) {
         jl_svec_t *cache = jl_atomic_load_relaxed(&tn->cache);
@@ -756,7 +777,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
     size_t maxprobe = max_probe(sz);
     do {
         jl_value_t *tab_i = jl_atomic_load_relaxed(&tab[index]);
-        if (tab_i == NULL || tab_i == jl_nothing) {
+        if (tab_i == jl_nothing) {
             if (atomic)
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
@@ -770,8 +791,6 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
 
     return 0;
 }
-
-static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz);
 
 static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
 {
@@ -799,17 +818,17 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv)
     }
 }
 
-static jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
+jl_svec_t *cache_rehash_set(jl_svec_t *a, size_t newsz)
 {
     jl_value_t **ol = jl_svec_data(a);
     size_t sz = jl_svec_len(a);
     while (1) {
         size_t i;
-        jl_svec_t *newa = jl_alloc_svec(newsz);
+        jl_svec_t *newa = jl_svec_fill(newsz, jl_nothing);
         JL_GC_PUSH1(&newa);
         for (i = 0; i < sz; i += 1) {
             jl_value_t *val = ol[i];
-            if (val != NULL && val != jl_nothing) {
+            if (val != jl_nothing) {
                 uint_t hv = ((jl_datatype_t*)val)->hash;
                 if (!cache_insert_type_set_(newa, (jl_datatype_t*)val, hv, 0)) {
                     break;
@@ -828,15 +847,15 @@ static void cache_insert_type_linear(jl_datatype_t *type, ssize_t insert_at)
     jl_svec_t *cache = jl_atomic_load_relaxed(&type->name->linearcache);
     assert(jl_is_svec(cache));
     size_t n = jl_svec_len(cache);
-    if (n == 0 || jl_svecref(cache, n - 1) != NULL) {
-        jl_svec_t *nc = jl_alloc_svec(n < 8 ? 8 : (n*3)>>1);
+    if (n == 0 || jl_svecref(cache, n - 1) != jl_nothing) {
+        jl_svec_t *nc = jl_svec_fill(n < 4 ? 4 : n * 2, jl_nothing);
         memcpy(jl_svec_data(nc), jl_svec_data(cache), sizeof(void*) * n);
         jl_atomic_store_release(&type->name->linearcache, nc);
         jl_gc_wb(type->name, nc);
         cache = nc;
         n = jl_svec_len(nc);
     }
-    assert(jl_svecref(cache, insert_at) == NULL);
+    assert(jl_svecref(cache, insert_at) == jl_nothing);
     jl_svecset(cache, insert_at, (jl_value_t*)type); // todo: make this an atomic-store
 }
 
@@ -856,6 +875,16 @@ void jl_cache_type_(jl_datatype_t *type)
     assert(is_cacheable(type));
     jl_value_t **key = jl_svec_data(type->parameters);
     int n = jl_svec_len(type->parameters);
+    if (type->name == jl_type_typename) {
+        assert(n == 1);
+        jl_value_t *uw = jl_unwrap_unionall(key[0]);
+        if (jl_is_datatype(uw) && key[0] == ((jl_datatype_t*)uw)->name->wrapper) {
+            jl_typename_t *tn2 = ((jl_datatype_t*)uw)->name;
+            jl_atomic_store_release(&tn2->Typeofwrapper, (jl_value_t*)type);
+            jl_gc_wb(tn2, type);
+            return;
+        }
+    }
     unsigned hv = typekey_hash(type->name, key, n, 0);
     if (hv) {
         assert(hv == type->hash);
@@ -1199,6 +1228,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         if (dt->isdispatchtuple) {
             dt->isdispatchtuple = jl_is_datatype(p) &&
                 ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
+                 (p == (jl_value_t*)jl_typeofbottom_type) || // == Type{Union{}}, so needs to be consistent
                  (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
         }
         if (istuple && dt->has_concrete_subtype) {
@@ -1371,7 +1401,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
     jl_typename_t *tn = dt->name;
     int istuple = (tn == jl_tuple_typename);
     int isnamedtuple = (tn == jl_namedtuple_typename);
-    if (dt->name != jl_type_typename) {
+    if (tn != jl_type_typename) {
         size_t i;
         for (i = 0; i < ntp; i++)
             iparams[i] = normalize_unionalls(iparams[i]);
@@ -1414,6 +1444,11 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }
+        }
+        if (tn == jl_type_typename && jl_is_datatype(iparams[0]) && ((jl_datatype_t*)iparams[0])->name == jl_type_typename &&
+            jl_tparam0(iparams[0]) == jl_bottom_type) {
+            // normalize Type{Type{Union{}}} to Type{TypeofBottom}
+            iparams[0] = (jl_value_t*)jl_typeofbottom_type;
         }
         jl_value_t *lkup = (jl_value_t*)lookup_type(tn, iparams, ntp);
         if (lkup != NULL)
@@ -1934,7 +1969,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
         for (i = 0; i < n; i++)
             env[i].val = jl_svecref(ndt->parameters, i);
 
-        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, &top, 1);
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, &env[n - 1], &top, 1);
         jl_gc_wb(ndt, ndt->super);
     }
 
@@ -1944,7 +1979,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             for (i = 0; i < n; i++)
                 env[i].val = jl_svecref(ndt->parameters, i);
             assert(ndt->types == NULL);
-            ndt->types = inst_ftypes(t->types, env, &top);
+            ndt->types = inst_ftypes(t->types, &env[n - 1], &top);
             jl_gc_wb(ndt, ndt->types);
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
@@ -2025,22 +2060,22 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->name->mt = jl_nonfunction_mt;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
-    jl_typename_type->name->n_uninitialized = 14 - 2;
-    jl_typename_type->name->names = jl_perm_symsvec(14, "name", "module",
+    jl_typename_type->name->n_uninitialized = 15 - 2;
+    jl_typename_type->name->names = jl_perm_symsvec(15, "name", "module",
                                                     "names", "atomicfields", "constfields",
-                                                    "wrapper", "cache", "linearcache",
+                                                    "wrapper", "Typeofwrapper", "cache", "linearcache",
                                                     "mt", "partial",
                                                     "hash", "n_uninitialized",
                                                     "flags", // "abstract", "mutable", "mayinlinealloc",
                                                     "max_methods");
-    jl_typename_type->types = jl_svec(14, jl_symbol_type, jl_any_type /*jl_module_type*/,
+    jl_typename_type->types = jl_svec(15, jl_symbol_type, jl_any_type /*jl_module_type*/,
                                       jl_simplevector_type, jl_any_type/*jl_voidpointer_type*/, jl_any_type/*jl_voidpointer_type*/,
-                                      jl_type_type, jl_simplevector_type, jl_simplevector_type,
+                                      jl_type_type, jl_type_type, jl_simplevector_type, jl_simplevector_type,
                                       jl_methtable_type, jl_any_type,
                                       jl_any_type /*jl_long_type*/, jl_any_type /*jl_int32_type*/,
                                       jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/);
-    const static uint32_t typename_constfields[1] = { 0x00001d3f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<8)|(1<<10)|(1<<11)|(1<<12)
+    const static uint32_t typename_constfields[1] = { 0x00003a3f }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<9)|(1<<11)|(1<<12)|(1<<13)
     jl_typename_type->name->constfields = typename_constfields;
     jl_precompute_memoized_dt(jl_typename_type, 1);
 
@@ -2298,7 +2333,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_lineinfonode_type =
         jl_new_datatype(jl_symbol("LineInfoNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(5, "module", "method", "file", "line", "inlined_at"),
-                        jl_svec(5, jl_module_type, jl_any_type, jl_symbol_type, jl_long_type, jl_long_type),
+                        jl_svec(5, jl_module_type, jl_any_type, jl_symbol_type, jl_int32_type, jl_int32_type),
                         jl_emptysvec, 0, 0, 5);
 
     jl_gotonode_type =
@@ -2355,16 +2390,10 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(1, jl_slotnumber_type),
                         jl_emptysvec, 0, 0, 1);
 
-    jl_globalref_type =
-        jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "mod", "name"),
-                        jl_svec(2, jl_module_type, jl_symbol_type),
-                        jl_emptysvec, 0, 0, 2);
-
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(20,
+                        jl_perm_symsvec(21,
                             "code",
                             "codelocs",
                             "ssavaluetypes",
@@ -2380,12 +2409,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             "min_world",
                             "max_world",
                             "inferred",
-                            "inlineable",
+                            "inlining_cost",
                             "propagate_inbounds",
                             "pure",
+                            "has_fcall",
                             "constprop",
                             "purity"),
-                        jl_svec(20,
+                        jl_svec(21,
                             jl_array_any_type,
                             jl_array_int32_type,
                             jl_any_type,
@@ -2401,6 +2431,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_ulong_type,
                             jl_ulong_type,
                             jl_bool_type,
+                            jl_uint16_type,
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
@@ -2495,7 +2526,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_simplevector_type,
                             jl_any_type,
-                            jl_any_type,
+                            jl_array_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_bool_type,
@@ -2541,8 +2572,11 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1] = { 0x00000001 }; // (1<<1);
+    const static uint32_t code_instance_constfields[1] = { 0b000001010111101 }; // Set fields 1, 3-6, 8, 10 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b011100101000010 }; // Set fields 2, 7, 9, 12-14 as atomic
+    //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;
+    jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
 
     jl_const_type = jl_new_datatype(jl_symbol("Const"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(1, "val"),
@@ -2555,7 +2589,7 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_emptysvec, 0, 0, 2);
 
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
-                                          jl_perm_symsvec(3, "slot", "vtype", "elsetype"),
+                                          jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
                                           jl_svec(3, jl_long_type, jl_any_type, jl_any_type),
                                           jl_emptysvec, 0, 0, 3);
 
@@ -2652,6 +2686,12 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
+    jl_globalref_type =
+        jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(3, "mod", "name", "binding"),
+                        jl_svec(3, jl_module_type, jl_symbol_type, pointer_void),
+                        jl_emptysvec, 0, 0, 3);
+
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
         jl_perm_symsvec(5, "captures", "world", "source", "invoke", "specptr"),
@@ -2662,7 +2702,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_partial_opaque_type = jl_new_datatype(jl_symbol("PartialOpaque"), core, jl_any_type, jl_emptysvec,
         jl_perm_symsvec(4, "typ", "env", "parent", "source"),
-        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_method_type),
+        jl_svec(4, jl_type_type, jl_any_type, jl_method_instance_type, jl_any_type),
         jl_emptysvec, 0, 0, 4);
 
     // complete builtin type metadata
@@ -2676,10 +2716,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_typename_type->types, 3, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 4, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 5, jl_type_type);
-    jl_svecset(jl_typename_type->types, 10, jl_long_type);
-    jl_svecset(jl_typename_type->types, 11, jl_int32_type);
-    jl_svecset(jl_typename_type->types, 12, jl_uint8_type);
+    jl_svecset(jl_typename_type->types, 6, jl_type_type);
+    jl_svecset(jl_typename_type->types, 11, jl_long_type);
+    jl_svecset(jl_typename_type->types, 12, jl_int32_type);
     jl_svecset(jl_typename_type->types, 13, jl_uint8_type);
+    jl_svecset(jl_typename_type->types, 14, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
     jl_svecset(jl_methtable_type->types, 6, jl_module_type);
     jl_svecset(jl_methtable_type->types, 7, jl_array_any_type);

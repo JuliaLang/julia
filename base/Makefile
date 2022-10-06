@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
 TAGGED_RELEASE_BANNER := ""
@@ -195,6 +194,18 @@ $(build_bindir)/7z$(EXE):
 	[ -e "$(7Z_PATH)" ] && \
 	rm -f "$@" && \
 	ln -svf "$(7Z_PATH)" "$@"
+
+symlink_lld: $(build_bindir)/lld$(EXE)
+
+ifneq ($(USE_SYSTEM_LLD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+LLD_PATH := $(shell which lld$(EXE))
+endif
+
+$(build_bindir)/lld$(EXE):
+	[ -e "$(LLD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(LLD_PATH)" "$@"
 
 # the following excludes: libuv.a, libutf8proc.a
 

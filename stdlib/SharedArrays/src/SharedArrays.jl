@@ -374,7 +374,7 @@ function SharedArray{TS,N}(A::Array{TA,N}) where {TS,TA,N}
     copyto!(S, A)
 end
 
-convert(T::Type{<:SharedArray}, a::Array) = T(a)
+convert(T::Type{<:SharedArray}, a::Array) = T(a)::T
 
 function deepcopy_internal(S::SharedArray, stackdict::IdDict)
     haskey(stackdict, S) && return stackdict[S]

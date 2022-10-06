@@ -470,9 +470,6 @@
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
 (define (return? e) (and (pair? e) (eq? (car e) 'return)))
-(define (complex-return? e) (and (return? e)
-                                 (let ((x (cadr e)))
-                                   (not (simple-atom? x)))))
 
 (define (tuple-call? e)
   (and (length> e 1)
@@ -525,6 +522,21 @@
 (define (nospecialize-meta? e (one #f))
   (and (if one (length= e 3) (length> e 2))
        (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
+
+(define (meta? e)
+  (and (length> e 1) (eq? (car e) 'meta)))
+
+(define (method-meta-sym? x)
+  (memq x '(inline noinline aggressive_constprop no_constprop propagate_inbounds)))
+
+(define (propagate-method-meta e)
+  `(meta ,@(filter (lambda (x)
+                     (or (method-meta-sym? x)
+                         (and (pair? x) (eq? (car x) 'purity))))
+                   (cdr e))))
+
+(define (argwide-nospecialize-meta? e)
+  (and (length= e 2) (eq? (car e) 'meta) (memq (cadr e) '(nospecialize specialize))))
 
 (define (if-generated? e)
   (and (length= e 4) (eq? (car e) 'if) (equal? (cadr e) '(generated))))

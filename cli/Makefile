@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 BUILDDIR ?= .
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
@@ -29,6 +28,14 @@ endif
 # Build list of dependent libraries that must be opened
 SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
 DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+ifneq (,$(findstring MINGW,$(shell uname)))
+# In MSYS2, do not perform path conversion for `DEP_LIBS`.
+# https://www.msys2.org/wiki/Porting/#filesystem-namespaces
+# We define this environment variable for only these two object files,
+# as they're the only ones that require it at the time of writing.
+$(BUILDDIR)/loader_lib.o: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
+$(BUILDDIR)/loader_lib.dbg.obj: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
+endif # MSYS2
 
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj

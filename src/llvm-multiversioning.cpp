@@ -1,9 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Function multi-versioning
-#define DEBUG_TYPE "julia_multiversioning"
-#undef DEBUG
-
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
@@ -13,6 +10,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
@@ -24,6 +22,7 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/DebugInfoMetadata.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #include "julia.h"
@@ -38,6 +37,9 @@
 
 #include "codegen_shared.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "julia_multiversioning"
+#undef DEBUG
 
 using namespace llvm;
 
@@ -1133,6 +1135,8 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
 
+    assert(!verifyModule(M, &errs()));
+
     return true;
 }
 
@@ -1181,7 +1185,7 @@ PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
     auto GetCG = [&]() -> CallGraph & {
         return AM.getResult<CallGraphAnalysis>(M);
     };
-    if (runMultiVersioning(M, GetLI, GetCG, false)) {
+    if (runMultiVersioning(M, GetLI, GetCG, external_use)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<LoopAnalysis>();
         return preserved;

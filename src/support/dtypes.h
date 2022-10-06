@@ -27,6 +27,16 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#if defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED)
+
+/* See https://github.com/JuliaLang/julia/pull/44587 */
+typedef intptr_t ssize_t;
+#define SSIZE_MAX INTPTR_MAX
+#define _SSIZE_T_
+#define _SSIZE_T_DEFINED
+
+#endif /* defined(_COMPILER_MICROSOFT_) && !defined(_SSIZE_T_) && !defined(_SSIZE_T_DEFINED) */
+
 #if !defined(_COMPILER_GCC_)
 
 #define strtoull                                            _strtoui64
