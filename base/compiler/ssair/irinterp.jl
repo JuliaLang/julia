@@ -133,6 +133,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     code = get(mi_cache, mi, nothing)
     code === nothing && return nothing
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv.ir)
+    argtypes === nothing && return Union{}
     effects = decode_effects(code.ipo_purity_bits)
     if is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1)
         args = collect_const_args(argtypes, #=start=#1)
