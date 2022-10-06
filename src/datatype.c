@@ -123,8 +123,9 @@ static uint32_t _hash_djb2(uint32_t hash, const char *mem, size_t s) JL_NOTSAFEP
     return hash;
 }
 
-static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT
+static uint32_t _hash_layout_djb2(uintptr_t _layout, void *unused) JL_NOTSAFEPOINT
 {
+    (void)unused;
     jl_datatype_layout_t* layout = (jl_datatype_layout_t *)_layout;
     assert(layout);
     size_t own_size = sizeof(jl_datatype_layout_t);
@@ -142,8 +143,9 @@ static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT
     return hash;
 }
 
-static int layout_eq(void *_l1, void *_l2) JL_NOTSAFEPOINT
+static int layout_eq(void *_l1, void *_l2, void *unused) JL_NOTSAFEPOINT
 {
+    (void)unused;
     jl_datatype_layout_t *l1 = (jl_datatype_layout_t *)_l1;
     jl_datatype_layout_t *l2 = (jl_datatype_layout_t *)_l2;
     if (memcmp(l1, l2, sizeof(jl_datatype_layout_t)))
@@ -161,8 +163,11 @@ static int layout_eq(void *_l1, void *_l2) JL_NOTSAFEPOINT
     return 1;
 }
 
-HTPROT(layoutcache)
-HTIMPL(layoutcache, _hash_layout_djb2, layout_eq)
+//HTPROT(layoutcache)
+static void **layoutcache_lookup_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
+static void **layoutcache_peek_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
+HTPROT_R(layoutcache)
+HTIMPL_R(layoutcache, _hash_layout_djb2, layout_eq)
 static htable_t layoutcache;
 static int layoutcache_initialized = 0;
 
@@ -260,7 +265,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
     // Check the cache to see if this object already exists.
     // Add to cache if not present, free temp buffer, return.
     jl_datatype_layout_t *ret =
-            (jl_datatype_layout_t *)layoutcache_get(&layoutcache, flddesc);
+            (jl_datatype_layout_t *)layoutcache_get_r(&layoutcache, flddesc, NULL);
     if ((void*)ret == HT_NOTFOUND) {
         if (!should_malloc) {
             char *perm_mem = (char *)jl_gc_perm_alloc(flddesc_sz, 0, 4, 0);
@@ -271,7 +276,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t nfields,
         else {
             ret = mallocmem;
         }
-        layoutcache_put(&layoutcache, ret, ret);
+        layoutcache_put_r(&layoutcache, ret, ret, NULL);
         return ret;
     }
 
