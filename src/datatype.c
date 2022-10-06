@@ -126,10 +126,13 @@ static uint32_t _hash_djb2(uint32_t hash, const char *mem, size_t s) JL_NOTSAFEP
 static uint32_t _hash_layout_djb2(uintptr_t _layout) JL_NOTSAFEPOINT
 {
     jl_datatype_layout_t* layout = (jl_datatype_layout_t *)_layout;
+    assert(layout);
     size_t own_size = sizeof(jl_datatype_layout_t);
     const char *fields = jl_dt_layout_fields(layout);
+    assert(fields);
     size_t fields_size = layout->nfields * jl_fielddesc_size(layout->fielddesc_type);
     const char *pointers = jl_dt_layout_ptrs(layout);
+    assert(pointers);
     size_t pointers_size = (layout->npointers << layout->fielddesc_type);
 
     uint_t hash = 5381;
@@ -158,6 +161,7 @@ static int layout_eq(void *_l1, void *_l2) JL_NOTSAFEPOINT
     return 1;
 }
 
+HTPROT(layoutcache)
 HTIMPL(layoutcache, _hash_layout_djb2, layout_eq)
 static htable_t layoutcache;
 static int layoutcache_initialized = 0;
