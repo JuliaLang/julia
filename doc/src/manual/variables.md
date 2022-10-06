@@ -59,21 +59,7 @@ name `δ` can be entered by typing `\delta`-*tab*, or even `α̂⁽²⁾` by `\a
 that you don't know how to type, the REPL help will tell you: just type `?` and
 then paste the symbol.)
 
-Julia will even let you redefine built-in constants and functions if needed (although
-this is not recommended to avoid potential confusions):
-
-```jldoctest
-julia> pi = 3
-3
-
-julia> pi
-3
-
-julia> sqrt = 4
-4
-```
-
-However, if you try to redefine a built-in constant or function already in use, Julia will give
+If you try to redefine a built-in constant or function already in use, Julia will give
 you an error:
 
 ```jldoctest
