@@ -666,7 +666,7 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_serialize_value(s, t);
 
-    if (needs_uniquing(v)) {
+    if (s->incremental && needs_uniquing(v)) {
         if (jl_is_method_instance(v)) {
             jl_method_instance_t *mi = (jl_method_instance_t*)v;
             jl_serialize_value(s, mi->def.value);
@@ -910,7 +910,7 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSA
     if (fld != NULL) {
         arraylist_push(&s->relocs_list, (void*)(uintptr_t)ios_pos(s->s));
         arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs));
-        if (needs_uniquing(fld))
+        if (s->incremental && needs_uniquing(fld))
             arraylist_push(&s->uniquing_list, (void*)(uintptr_t)ios_pos(s->s));
     }
     write_pointer(s->s);
@@ -1106,7 +1106,7 @@ static void jl_write_values(jl_serializer_state *s)
         int GV = jl_get_llvm_gv(native_functions, v);
         record_gvar(s, GV, ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + reloc_offset);
 
-        if (needs_uniquing(v)) {
+        if (s->incremental && needs_uniquing(v)) {
             if (jl_is_method_instance(v)) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)v;
                 write_pointerfield(s, mi->def.value);
@@ -1123,7 +1123,7 @@ static void jl_write_values(jl_serializer_state *s)
             }
             continue;
         }
-        if (needs_recaching(v)) {
+        if (s->incremental && needs_recaching(v)) {
             arraylist_push(&(s->fixup_list), reloc_offset);
         }
 
@@ -1212,7 +1212,7 @@ static void jl_write_values(jl_serializer_state *s)
                             if (fld != NULL) {
                                 arraylist_push(&s->relocs_list, (void*)(uintptr_t)fld_pos); // relocation location
                                 arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
-                                if (needs_uniquing(fld))
+                                if (s->incremental && needs_uniquing(fld))
                                     arraylist_push(&s->uniquing_list, (void*)(uintptr_t)fld_pos);
                                 memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                             }
@@ -1306,7 +1306,7 @@ static void jl_write_values(jl_serializer_state *s)
                 if (fld != NULL) {
                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)(fld_pos)); // relocation location
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
-                    if (needs_uniquing(fld))
+                    if (s->incremental && needs_uniquing(fld))
                         arraylist_push(&s->uniquing_list, (void*)(uintptr_t)fld_pos);
                     memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                 }
@@ -1315,7 +1315,7 @@ static void jl_write_values(jl_serializer_state *s)
 
             // A few objects need additional handling beyond the generic serialization above
 
-            if (jl_is_typemap_entry(v)) {
+            if (s->incremental && jl_is_typemap_entry(v)) {
                 jl_typemap_entry_t *newentry = (jl_typemap_entry_t*)&s->s->buf[reloc_offset];
                 if (newentry->max_world == ~(size_t)0) {
                     if (newentry->min_world > 1) {
@@ -1332,12 +1332,13 @@ static void jl_write_values(jl_serializer_state *s)
             else if (jl_is_method(v)) {
                 write_padding(s->s, sizeof(jl_method_t) - tot); // hidden fields
                 jl_method_t *newm = (jl_method_t*)&s->s->buf[reloc_offset];
-                if (newm->deleted_world != ~(size_t)0)
-                    newm->deleted_world = 1;
-                else
-                    arraylist_push(&(s->fixup_list), reloc_offset);
-                newm->primary_world = ~(size_t)0;
-                JL_MUTEX_INIT(&newm->writelock);
+                if (s->incremental) {
+                    if (newm->deleted_world != ~(size_t)0)
+                        newm->deleted_world = 1;
+                    else
+                        arraylist_push(&(s->fixup_list), reloc_offset);
+                    newm->primary_world = ~(size_t)0;
+                }
                 if (newm->ccallable) {
                     arraylist_push(&ccallable_list, (void*)item);
                     arraylist_push(&ccallable_list, (void*)3);
@@ -1352,17 +1353,19 @@ static void jl_write_values(jl_serializer_state *s)
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
                 jl_code_instance_t *newm = (jl_code_instance_t*)&s->s->buf[reloc_offset];
 
-                if (m->min_world > 1)
-                    newm->min_world = ~(size_t)0;     // checks that we reprocess this upon deserialization
-                if (m->max_world != ~(size_t)0)
-                    newm->max_world = 0;
-                else {
-                    if (m->inferred && ptrhash_has(&s->callers_with_edges, m->def))
-                        newm->max_world = 1;  // sentinel value indicating this will need validation
-                    if (m->min_world > 0 && m->inferred)
-                        // TODO: also check if this object is part of the codeinst cache
-                        // will check on deserialize if this cache entry is still valid
-                        arraylist_push(&(s->fixup_list), reloc_offset);
+                if (s->incremental) {
+                    if (m->min_world > 1)
+                        newm->min_world = ~(size_t)0;     // checks that we reprocess this upon deserialization
+                    if (m->max_world != ~(size_t)0)
+                        newm->max_world = 0;
+                    else {
+                        if (m->inferred && ptrhash_has(&s->callers_with_edges, m->def))
+                            newm->max_world = 1;  // sentinel value indicating this will need validation
+                        if (m->min_world > 0 && m->inferred)
+                            // TODO: also check if this object is part of the codeinst cache
+                            // will check on deserialize if this cache entry is still valid
+                            arraylist_push(&(s->fixup_list), reloc_offset);
+                    }
                 }
 
                 newm->invoke = NULL;
