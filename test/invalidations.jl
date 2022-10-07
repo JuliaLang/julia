@@ -15,9 +15,9 @@ invs = @method_invalidations k(x) = x
 invs = @method_invalidations f(x::Int) = 2x
 @test invalidated(invs, g)
 
-struct A end
+struct X end
 
-invs = @method_invalidations Base.convert(::Type{String}, ::A) = A()
+invs = @method_invalidations Base.convert(::Type{String}, ::X) = X()
 @test !invalidated(invs, Base.show_unquoted)
 @test !invalidated(invs, REPL.REPLHistoryProvider)
 @test !invalidated(invs, Base.CoreLogging.handle_message)
