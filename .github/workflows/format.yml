@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@latest
+      - uses: julia-actions/setup-julia@19bd4db8c427e07d56602f1c432e1a26a55d6735 # v1.8.2
         with:
           version: 1
       - run: |
