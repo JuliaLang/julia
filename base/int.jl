@@ -578,8 +578,17 @@ if nameof(@__MODULE__) === :Base
 
         # Examples
         ```jldoctest
-        julia> 129 % Int8
+        julia> x = 129 % Int8
         -127
+
+        julia> typeof(x)
+        Int8
+
+        julia> x = 129 % BigInt
+        129
+
+        julia> typeof(x)
+        BigInt
         ```
         """ $fname(x::Integer, T::Type{<:Integer})
     end
@@ -772,13 +781,24 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
+See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
+julia> typemin(Int8)
+-128
+
+julia> typemin(UInt32)
+0x00000000
+
 julia> typemin(Float16)
 -Inf16
 
 julia> typemin(Float32)
 -Inf32
+
+julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
+-3.4028235f38
 ```
 """
 function typemin end
@@ -801,7 +821,10 @@ julia> typemax(UInt32)
 julia> typemax(Float64)
 Inf
 
-julia> floatmax(Float32)  # largest finite floating point number
+julia> typemax(Float32)
+Inf32
+
+julia> floatmax(Float32)  # largest finite Float32 floating point number
 3.4028235f38
 ```
 """

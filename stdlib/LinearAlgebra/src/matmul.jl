@@ -66,7 +66,7 @@ end
     gemv!(y, 'N', A, x, alpha, beta)
 
 # Complex matrix times real vector.
-# Reinterpret the matrix as a real matrix and do real matvec compuation.
+# Reinterpret the matrix as a real matrix and do real matvec computation.
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
         alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, 'N', A, x, alpha, beta)
@@ -469,7 +469,7 @@ end
 
 # Supporting functions for matrix multiplication
 
-# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+# copy transposed(adjoint) of upper(lower) side-diagonals. Optionally include diagonal.
 @inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
     off = diag ? 0 : 1

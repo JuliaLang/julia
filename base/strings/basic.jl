@@ -229,7 +229,7 @@ Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
-convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
+convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)::T
 
 ## summary ##
 
@@ -715,7 +715,7 @@ julia> repeat("ha", 3)
 repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
-    ^(s::Union{AbstractString,AbstractChar}, n::Integer)
+    ^(s::Union{AbstractString,AbstractChar}, n::Integer) -> AbstractString
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 

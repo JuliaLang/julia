@@ -163,7 +163,7 @@ tmerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Core.Compiler.tmerge(Vector{Int}, Core.Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
 @test Core.Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
 @test Core.Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
-@test Core.Compiler.tmerge(Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
+@test Core.Compiler.tmerge(Core.Compiler.fallback_ipo_lattice, Core.Compiler.InterConditional(1, Int, Union{}), Core.Compiler.InterConditional(2, String, Union{})) === Core.Compiler.Const(true)
 
 struct SomethingBits
     x::Base.BitIntegerType
@@ -379,7 +379,7 @@ struct A15259
     x
     y
 end
-# check that allocation was ellided
+# check that allocation was elided
 @eval f15259(x,y) = (a = $(Expr(:new, :A15259, :x, :y)); (a.x, a.y, getfield(a,1), getfield(a, 2)))
 @test isempty(filter(x -> isa(x,Expr) && x.head === :(=) &&
                           isa(x.args[2], Expr) && x.args[2].head === :new,
@@ -1160,6 +1160,9 @@ struct UnionIsdefinedB; x; end
 @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
 @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
 @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+# https://github.com/aviatesk/JET.jl/issues/379
+fJET379(x::Union{Complex{T}, T}) where T = isdefined(x, :im)
+@test only(Base.return_types(fJET379)) === Bool
 
 @noinline map3_22347(f, t::Tuple{}) = ()
 @noinline map3_22347(f, t::Tuple) = (f(t[1]), map3_22347(f, Base.tail(t))...)
@@ -1585,6 +1588,7 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test g23024((UInt8,)) === 2
 
 @test !Core.Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
+@test !isa(Core.Compiler.getfield_tfunc(Type{Core.TypeofBottom}, Core.Compiler.Const(:name)), Core.Compiler.Const)
 @test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
 
 # issue #23685
@@ -3324,7 +3328,8 @@ f_generator_splat(t::Tuple) = tuple((identity(l) for l in t)...)
 @test Core.Compiler.sizeof_tfunc(UnionAll) === Int
 @test !Core.Compiler.sizeof_nothrow(UnionAll)
 
-@test Base.return_types(Expr) == Any[Expr]
+@test only(Base.return_types(Core._expr)) === Expr
+@test only(Base.return_types(Core.svec, (Any,))) === Core.SimpleVector
 
 # Use a global constant to rely less on unrelated constant propagation
 const const_int32_typename = Int32.name
@@ -4073,16 +4078,6 @@ g_max_methods(x) = f_max_methods(x)
 @test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
 @test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
 
-# Unit tests for BitSetBoundedMinPrioritySet
-let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
-    Core.Compiler.push!(bsbmp, 2)
-    Core.Compiler.push!(bsbmp, 2)
-    @test Core.Compiler.popfirst!(bsbmp) == 2
-    Core.Compiler.push!(bsbmp, 1)
-    @test Core.Compiler.popfirst!(bsbmp) == 1
-    @test Core.Compiler.isempty(bsbmp)
-end
-
 # Make sure return_type_tfunc doesn't accidentally cause bad inference if used
 # at top level.
 @test let
@@ -4093,7 +4088,7 @@ end == Rational
 # vararg-tuple comparison within `PartialStruct`
 # https://github.com/JuliaLang/julia/issues/44965
 let t = Core.Compiler.tuple_tfunc(Any[Core.Const(42), Vararg{Any}])
-    @test Core.Compiler.issimplertype(t, t)
+    @test Core.Compiler.issimplertype(Core.Compiler.fallback_lattice, t, t)
 end
 
 # check the inference convergence with an empty vartable:
@@ -4166,8 +4161,8 @@ for setting = (:type, :const, :conditional)
 end
 
 # https://github.com/JuliaLang/julia/issues/46426
-@noinline Base.@assume_effects :nothrow typebarrier() = Base.inferencebarrier(0.0)
-@noinline Base.@assume_effects :nothrow constbarrier() = Base.compilerbarrier(:const, 0.0)
+@noinline typebarrier() = Base.inferencebarrier(0.0)
+@noinline constbarrier() = Base.compilerbarrier(:const, 0.0)
 let src = code_typed1() do
         typebarrier()
     end
@@ -4183,4 +4178,69 @@ let src = code_typed1() do
     @test Base.return_types() do
         constbarrier()
     end |> only === Float64
+end
+
+# Test that Const ⊑ PartialStruct respects vararg
+@test Const((1,2)) ⊑ PartialStruct(Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+
+# Test that semi-concrete interpretation doesn't break on functions with while loops in them.
+@Base.assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
+    for i = 1:2
+        x += y
+    end
+    return y
+end
+call_pure_annotated_loop(x) = Val{pure_annotated_loop(x, 1)}()
+@test only(Base.return_types(call_pure_annotated_loop, Tuple{Int})) === Val{1}
+
+function isa_kindtype(T::Type{<:AbstractVector})
+    if isa(T, DataType)
+        # `T` here should be inferred as `DataType` rather than `Type{<:AbstractVector}`
+        return T.name.name # should be inferred as ::Symbol
+    end
+    return nothing
+end
+@test only(Base.return_types(isa_kindtype)) === Union{Nothing,Symbol}
+
+invoke_concretized1(a::Int) = a > 0 ? :int : nothing
+invoke_concretized1(a::Integer) = a > 0 ? "integer" : nothing
+# check if `invoke(invoke_concretized1, Tuple{Integer}, ::Int)` is foldable
+@test Base.infer_effects((Int,)) do a
+    @invoke invoke_concretized1(a::Integer)
+end |> Core.Compiler.is_foldable
+@test Base.return_types() do
+    @invoke invoke_concretized1(42::Integer)
+end |> only === String
+
+invoke_concretized2(a::Int) = a > 0 ? :int : nothing
+invoke_concretized2(a::Integer) = a > 0 ? :integer : nothing
+# check if `invoke(invoke_concretized2, Tuple{Integer}, ::Int)` is foldable
+@test Base.infer_effects((Int,)) do a
+    @invoke invoke_concretized2(a::Integer)
+end |> Core.Compiler.is_foldable
+@test let
+    Base.Experimental.@force_compile
+    @invoke invoke_concretized2(42::Integer)
+end === :integer
+
+# Test that abstract_apply doesn't fail to fully infer if the result is unused
+struct FiniteIteration
+    n::Int
+end
+Base.iterate(f::FiniteIteration, i::Int = 0) = i < f.n ? (i, i+1) : nothing
+function unused_apply_iterate()
+    tuple(FiniteIteration(4)...)
+    return nothing
+end
+@test fully_eliminated(unused_apply_iterate, ())
+
+@testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
+    function foo()
+        cglobal((a, ))
+        ccall(0, Cvoid, (Nothing,), b)
+    end
+    @test only(code_typed() do
+        cglobal((a, ))
+        ccall(0, Cvoid, (Nothing,), b)
+    end)[2] === Nothing
 end

@@ -42,12 +42,12 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 
 # LLVM has several code generation bugs for checked integer arithmetic (see e.g.
 # #4905). We thus distinguish between operations that can be implemented via
-# intrinsics, and operations for which we have to provide work-arounds.
+# intrinsics, and operations for which we have to provide workarounds.
 
 # Note: As far as this code has been tested, most checked_* functions are
 # working fine in LLVM. (Note that division is still handled via `base/int.jl`,
 # which always checks for overflow, and which provides its own sets of
-# work-arounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
+# workarounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
 # and in issue #4905 are more pessimistic. For the time being, we thus retain
 # the ability to handle codegen bugs in LLVM, until the code here has been
 # tested on more systems and architectures. It also seems that things depend on

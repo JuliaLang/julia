@@ -118,7 +118,7 @@ function show(io::IO, ::MIME"text/plain", J::UniformScaling)
 end
 copy(J::UniformScaling) = UniformScaling(J.λ)
 
-Base.convert(::Type{UniformScaling{T}}, J::UniformScaling) where {T} = UniformScaling(convert(T, J.λ))
+Base.convert(::Type{UniformScaling{T}}, J::UniformScaling) where {T} = UniformScaling(convert(T, J.λ))::UniformScaling{T}
 
 conj(J::UniformScaling) = UniformScaling(conj(J.λ))
 real(J::UniformScaling) = UniformScaling(real(J.λ))

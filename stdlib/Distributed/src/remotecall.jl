@@ -321,7 +321,7 @@ function process_worker(rr)
     w = worker_from_id(rr.where)::Worker
     msg = (remoteref_id(rr), myid())
 
-    # Needs to aquire a lock on the del_msg queue
+    # Needs to acquire a lock on the del_msg queue
     T = Threads.@spawn begin
         publish_del_msg!($w, $msg)
     end

@@ -281,7 +281,7 @@ julia> using .A, .B
 
 julia> f
 WARNING: both B and A export "f"; uses of it in module Main must be qualified
-ERROR: UndefVarError: f not defined
+ERROR: UndefVarError: `f` not defined
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:
@@ -325,7 +325,17 @@ include(p) = Base.include(Mod, p)
 end
 ```
 
-If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref).
+If even `Core` is not wanted, a module that imports nothing and defines no names at all can be defined with `Module(:YourNameHere, false, false)` and code can be evaluated into it with [`@eval`](@ref) or [`Core.eval`](@ref):
+```jldoctest
+julia> arithmetic = Module(:arithmetic, false, false)
+Main.arithmetic
+
+julia> @eval arithmetic add(x, y) = $(+)(x, y)
+add (generic function with 1 method)
+
+julia> arithmetic.add(12, 13)
+25
+```
 
 ### Standard modules
 
@@ -387,7 +397,7 @@ x = 0
 
 module Sub
 using ..TestPackage
-z = y # ERROR: UndefVarError: y not defined
+z = y # ERROR: UndefVarError: `y` not defined
 end
 
 y = 1
@@ -403,7 +413,7 @@ For similar reasons, you cannot use a cyclic ordering:
 module A
 
 module B
-using ..C # ERROR: UndefVarError: C not defined
+using ..C # ERROR: UndefVarError: `C` not defined
 end
 
 module C

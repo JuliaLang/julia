@@ -80,7 +80,7 @@ static void jl_encode_as_indexed_root(jl_ircode_state *s, jl_value_t *v)
     assert(id >= 0);
     if (rr.key) {
         write_uint8(s->s, TAG_RELOC_METHODROOT);
-        write_int64(s->s, rr.key);
+        write_uint64(s->s, rr.key);
     }
     if (id < 256) {
         write_uint8(s->s, TAG_METHODROOT);
@@ -283,7 +283,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
         }
         else {
             write_uint8(s->s, TAG_INT64);
-            write_int64(s->s, *(int64_t*)data);
+            write_uint64(s->s, *(int64_t*)data);
         }
     }
     else if (jl_typeis(v, jl_int32_type)) {
@@ -797,6 +797,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
         ios_write(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
 
+    write_uint8(s.s, code->has_fcall);
     write_uint8(s.s, s.relocatability);
 
     ios_flush(s.s);
@@ -809,6 +810,7 @@ JL_DLLEXPORT jl_array_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     jl_gc_enable(en);
     JL_UNLOCK(&m->writelock); // Might GC
     JL_GC_POP();
+
     return v;
 }
 
@@ -878,6 +880,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         ios_readall(s.s, (char*)jl_array_data(code->codelocs), nstmt * sizeof(int32_t));
     }
 
+    code->has_fcall = read_uint8(s.s);
     (void) read_uint8(s.s);   // relocatability
 
     assert(ios_getc(s.s) == -1);
@@ -892,6 +895,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
         code->rettype = metadata->rettype;
         code->parent = metadata->def;
     }
+
     return code;
 }
 

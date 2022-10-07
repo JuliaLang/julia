@@ -192,8 +192,8 @@ for (S, H) in ((:Symmetric, :Hermitian), (:Hermitian, :Symmetric))
     end
 end
 
-convert(T::Type{<:Symmetric}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
-convert(T::Type{<:Hermitian}, m::Union{Symmetric,Hermitian}) = m isa T ? m : T(m)
+convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Symmetric} = m isa T ? m : T(m)::T
+convert(::Type{T}, m::Union{Symmetric,Hermitian}) where {T<:Hermitian} = m isa T ? m : T(m)::T
 
 const HermOrSym{T,        S} = Union{Hermitian{T,S}, Symmetric{T,S}}
 const RealHermSym{T<:Real,S} = Union{Hermitian{T,S}, Symmetric{T,S}}

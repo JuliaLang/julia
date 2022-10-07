@@ -97,6 +97,7 @@
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
+    XX(jl_compile_method_instance) \
     XX(jl_compress_argnames) \
     XX(jl_compress_ir) \
     XX(jl_compute_fieldtypes) \
@@ -452,7 +453,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_isassigned) \
     XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
@@ -478,8 +478,10 @@
     XX(jl_tty_set_mode) \
     XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
-    XX(jl_typeinf_begin) \
-    XX(jl_typeinf_end) \
+    XX(jl_typeinf_lock_begin) \
+    XX(jl_typeinf_lock_end) \
+    XX(jl_typeinf_timing_begin) \
+    XX(jl_typeinf_timing_end) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \

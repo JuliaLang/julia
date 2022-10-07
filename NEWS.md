@@ -9,6 +9,7 @@ New language features
   handled via `Base.split_rest`. ([#42902])
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
+* Nested combinations of tuples and named tuples of symbols are now allowed as type parameters ([#46300]).
 
 Language changes
 ----------------
@@ -35,6 +36,8 @@ Compiler/Runtime improvements
   `@nospecialize`-d call sites and avoiding excessive compilation. ([#44512])
 * All the previous usages of `@pure`-macro in `Base` has been replaced with the preferred
   `Base.@assume_effects`-based annotations. ([#44776])
+* `invoke(f, invokesig, args...)` calls to a less-specific method than would normally be chosen
+  for `f(args...)` are no longer spuriously invalidated when loading package precompile files. ([#46010])
 
 Command-line option changes
 ---------------------------
@@ -87,6 +90,8 @@ Library changes
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 * The non-mutationg `Base.setindex` function now has `AbstractDict` support ([#46453]).
+* `@kwdef` is now exported and added to the public API ([#46273])
+* An issue with order of operations in `fld1` is now fixed ([#28973]).
 
 Standard library changes
 ------------------------
@@ -126,6 +131,9 @@ Standard library changes
 * The contextual module which is active at the REPL can be changed (it is `Main` by default),
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
+
+* An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
+  activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
 #### SparseArrays
 

@@ -103,7 +103,7 @@ end
         min = Top(T,Base.min)
         max = Top(T,Base.max)
         (==) = Top(T,_compare)
-        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equalvient
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equivalent
         @test minmax(3., 5.) == (3., 5.)
         @test minmax(5., 3.) == (3., 5.)
         @test minmax(3., NaN) ≣ (NaN, NaN)
@@ -1071,6 +1071,15 @@ end
     @test Float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
     @test Float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
     @test Float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
+
+    # Test lsb/msb gaps of 54 (wont fit in 64 bit mantissa)
+    @test Float64(Int128(9007199254740993)) == 9.007199254740992e15
+    @test Float64(UInt128(9007199254740993)) == 9.007199254740992e15
+    # Test 2^104-1 and 2^104 (2^104 is cutoff for which case is run in the conversion algorithm)
+    @test Float64(Int128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(Int128(20282409603651670423947251286016)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286016)) == 2.028240960365167e31
 end
 @testset "Float vs Int128 comparisons" begin
     @test Int128(1e30) == 1e30
@@ -2345,12 +2354,6 @@ end
     end
 end
 @testset "getindex error throwing" begin
-    #getindex(x::Number,-1) throws BoundsError
-    #getindex(x::Number,0) throws BoundsError
-    #getindex(x::Number,2) throws BoundsError
-    #getindex(x::Array,-1) throws BoundsError
-    #getindex(x::Array,0 throws BoundsError
-    #getindex(x::Array,length(x::Array)+1) throws BoundsError
     for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
         @test_throws BoundsError getindex(x,-1)
         @test_throws BoundsError getindex(x,0)

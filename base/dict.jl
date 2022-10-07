@@ -205,7 +205,7 @@ end
         end
     end
 
-    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    @assert h.age == age0 "Muliple concurrent writes to Dict detected!"
     h.age += 1
     h.slots = slots
     h.keys = keys
@@ -359,7 +359,7 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
-    if !isequal(key, key0)
+    if !(isequal(key, key0)::Bool)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)

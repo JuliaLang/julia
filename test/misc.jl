@@ -237,14 +237,16 @@ end
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)
-do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+const c27164 = Base.Event()
+do_something_async_27164() = @async(begin wait(c27164); x27164[] = 2; end)
 
 let t = nothing
     @sync begin
+        @async (sleep(0.1); x27164[] = 1)
         t = do_something_async_27164()
-        @async (sleep(0.05); x27164[] = 1)
     end
     @test x27164[] == 1
+    notify(c27164)
     fetch(t)
     @test x27164[] == 2
 end

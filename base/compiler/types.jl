@@ -23,6 +23,14 @@ struct ArgInfo
     argtypes::Vector{Any}
 end
 
+struct StmtInfo
+    """
+    If `used` is false, we know that the return value is statically unused and
+    need thus not be computed.
+    """
+    used::Bool
+end
+
 """
     InferenceResult
 
@@ -60,13 +68,20 @@ struct OptimizationParams
     inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
     inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
 
+    compilesig_invokes::Bool
     trust_inference::Bool
 
-    # Duplicating for now because optimizer inlining requires it.
-    # Keno assures me this will be removed in the near future
-    MAX_METHODS::Int
+    """
+        assume_fatal_throw::Bool
+
+    If `true`, gives the optimizer license to assume that any `throw` is fatal
+    and thus the state after a `throw` is not externally observable. In particular,
+    this gives the optimizer license to move side effects (that are proven not observed
+    within a particular code path) across a throwing call. Defaults to `false`.
+    """
+    assume_fatal_throw::Bool
+
     MAX_TUPLE_SPLAT::Int
-    MAX_UNION_SPLITTING::Int
 
     function OptimizationParams(;
             inlining::Bool = inlining_enabled(),
@@ -74,10 +89,10 @@ struct OptimizationParams
             inline_nonleaf_penalty::Int = 1000,
             inline_tupleret_bonus::Int = 250,
             inline_error_path_cost::Int = 20,
-            max_methods::Int = 3,
             tuple_splat::Int = 32,
-            union_splitting::Int = 4,
-            trust_inference::Bool = false
+            compilesig_invokes::Bool = true,
+            trust_inference::Bool = false,
+            assume_fatal_throw::Bool = false
         )
         return new(
             inlining,
@@ -85,10 +100,10 @@ struct OptimizationParams
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            compilesig_invokes,
             trust_inference,
-            max_methods,
+            assume_fatal_throw,
             tuple_splat,
-            union_splitting
         )
     end
 end
@@ -158,6 +173,8 @@ struct NativeInterpreter <: AbstractInterpreter
     cache::Vector{InferenceResult}
     # The world age we're working inside of
     world::UInt
+    # method table to lookup for during inference on this world age
+    method_table::CachedMethodTable{InternalMethodTable}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
@@ -167,27 +184,21 @@ struct NativeInterpreter <: AbstractInterpreter
                                inf_params = InferenceParams(),
                                opt_params = OptimizationParams(),
                                )
+        cache = Vector{InferenceResult}() # Initially empty cache
+
         # Sometimes the caller is lazy and passes typemax(UInt).
         # we cap it to the current world age
         if world == typemax(UInt)
             world = get_world_counter()
         end
 
+        method_table = CachedMethodTable(InternalMethodTable(world))
+
         # If they didn't pass typemax(UInt) but passed something more subtly
         # incorrect, fail out loudly.
         @assert world <= get_world_counter()
 
-        return new(
-            # Initially empty cache
-            Vector{InferenceResult}(),
-
-            # world age counter
-            world,
-
-            # parameters for inference and optimization
-            inf_params,
-            opt_params,
-        )
+        return new(cache, world, method_table, inf_params, opt_params)
     end
 end
 
@@ -251,6 +262,7 @@ External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
 to incorporate customized dispatches for the overridden methods.
 """
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_world_counter(interp))
+method_table(interp::NativeInterpreter) = interp.method_table
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:
@@ -276,3 +288,21 @@ to the call site signature.
 """
 infer_compilation_signature(::AbstractInterpreter) = false
 infer_compilation_signature(::NativeInterpreter) = true
+
+typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
+ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
+
+abstract type CallInfo end
+
+@nospecialize
+
+nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
+getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
+
+nsplit_impl(::CallInfo) = nothing
+getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+getresult_impl(::CallInfo, ::Int) = nothing
+
+@specialize

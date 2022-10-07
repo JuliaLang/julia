@@ -610,7 +610,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
+convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -951,6 +951,18 @@ end
 
 Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
+
+# Examples
+```jldoctest
+julia> a = Dict("a"=>1)
+Dict{String, Int64} with 1 entry:
+  "a" => 1
+
+julia> setindex!(a, 2, "b")
+Dict{String, Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+```
 """
 function setindex! end
 
@@ -2551,7 +2563,7 @@ findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
 
 """
     findall(A)
@@ -2857,6 +2869,33 @@ function filter!(f, a::AbstractVector)
         deleteat!(a, j:lastindex(a))
     end
     return a
+end
+
+"""
+    filter(f)
+
+Create a function that filters its arguments with function `f` using [`filter`](@ref), i.e.
+a function equivalent to `x -> filter(f, x)`.
+
+The returned function is of type `Base.Fix1{typeof(filter)}`, which can be
+used to implement specialized methods.
+
+# Examples
+```jldoctest
+julia> (1, 2, Inf, 4, NaN, 6) |> filter(isfinite)
+(1, 2, 4, 6)
+
+julia> map(filter(iseven), [1:3, 2:4, 3:5])
+3-element Vector{Vector{Int64}}:
+ [2]
+ [2, 4]
+ [4]
+```
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+"""
+function filter(f)
+    Fix1(filter, f)
 end
 
 """

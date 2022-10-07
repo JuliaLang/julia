@@ -283,6 +283,7 @@ typedef struct _jl_code_info_t {
     uint16_t inlining_cost;
     uint8_t propagate_inbounds;
     uint8_t pure;
+    uint8_t has_fcall;
     // uint8 settings
     uint8_t constprop; // 0 = use heuristic; 1 = aggressive; 2 = none
     _jl_purity_overrides_t purity;
@@ -362,7 +363,7 @@ struct _jl_method_instance_t {
     jl_value_t *specTypes;  // argument types this was specialized for
     jl_svec_t *sparam_vals; // static parameter values, indexed by def.method->sparam_syms
     jl_value_t *uninferred; // cached uncompressed code, for generated functions, top-level thunks, or the interpreter
-    jl_array_t *backedges; // list of method-instances which contain a call into this method-instance
+    jl_array_t *backedges; // list of method-instances which call this method-instance; `invoke` records (invokesig, caller) pairs
     jl_array_t *callbacks; // list of callback functions to inform external caches about invalidations
     _Atomic(struct _jl_code_instance_t*) cache;
     uint8_t inInference; // flags to tell if inference is running on this object
@@ -602,6 +603,13 @@ typedef struct _jl_module_t {
     jl_mutex_t lock;
 } jl_module_t;
 
+typedef struct {
+    jl_module_t *mod;
+    jl_sym_t *name;
+    // Not serialized. Caches the value of jl_get_binding(mod, name).
+    jl_binding_t *bnd_cache;
+} jl_globalref_t;
+
 // one Type-to-Value entry
 typedef struct _jl_typemap_entry_t {
     JL_DATA_TYPE
@@ -650,7 +658,7 @@ typedef struct _jl_methtable_t {
     intptr_t max_args;  // max # of non-vararg arguments in a signature
     jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
-    jl_array_t *backedges;
+    jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
     uint8_t frozen; // whether this accepts adding new methods
@@ -1548,6 +1556,7 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_field_noalloc(jl_value_t *v JL_PROPAGATES_RO
 JL_DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 JL_DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int         jl_field_isdefined_checked(jl_value_t *v, size_t i);
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld);
 JL_DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 int jl_uniontype_size(jl_value_t *ty, size_t *sz);
@@ -1614,6 +1623,7 @@ JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
@@ -1624,6 +1634,8 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT int jl_binding_is_const(jl_binding_t *b);
+JL_DLLEXPORT int jl_binding_boundp(jl_binding_t *b);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
@@ -1826,6 +1838,7 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
+
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);

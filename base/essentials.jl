@@ -13,6 +13,8 @@ length(a::Array) = arraylen(a)
 eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
 eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
 
+==(a::GlobalRef, b::GlobalRef) = a.mod === b.mod && a.name === b.name
+
 """
     AbstractSet{T}
 
@@ -451,7 +453,7 @@ end
 """
     oftype(x, y)
 
-Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+Convert `y` to the type of `x` i.e. `convert(typeof(x), y)`.
 
 # Examples
 ```jldoctest
@@ -686,15 +688,12 @@ end
 
 # SimpleVector
 
-function getindex(v::SimpleVector, i::Int)
-    @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
-    end
-    return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
-end
-
+@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
-    return ccall(:jl_svec_len, Int, (Any,), v)
+    t = @_gc_preserve_begin v
+    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return len
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -749,7 +748,7 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    return ccall(:jl_svec_isassigned, Bool, (Any, Int), v, i - 1)
+    return true
 end
 
 
@@ -768,6 +767,7 @@ see [`:`](@ref).
 struct Colon <: Function
 end
 const (:) = Colon()
+
 
 """
     Val(c)
