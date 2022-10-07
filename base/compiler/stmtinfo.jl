@@ -27,6 +27,9 @@ not a call to a generic function.
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
 end
+nsplit_impl(info::MethodMatchInfo) = 1
+getsplit_impl(info::MethodMatchInfo, idx::Int) = (@assert idx == 1; info.results)
+getresult_impl(::MethodMatchInfo, ::Int) = nothing
 
 """
     info::UnionSplitInfo <: CallInfo
@@ -49,6 +52,9 @@ function nmatches(info::UnionSplitInfo)
     end
     return n
 end
+nsplit_impl(info::UnionSplitInfo) = length(info.matches)
+getsplit_impl(info::UnionSplitInfo, idx::Int) = getsplit_impl(info.matches[idx], 1)
+getresult_impl(::UnionSplitInfo, ::Int) = nothing
 
 struct ConstPropResult
     result::InferenceResult
@@ -81,6 +87,9 @@ struct ConstCallInfo <: CallInfo
     call::Union{MethodMatchInfo,UnionSplitInfo}
     results::Vector{Union{Nothing,ConstResult}}
 end
+nsplit_impl(info::ConstCallInfo) = nsplit(info.call)
+getsplit_impl(info::ConstCallInfo, idx::Int) = getsplit(info.call, idx)
+getresult_impl(info::ConstCallInfo, idx::Int) = info.results[idx]
 
 """
     info::MethodResultPure <: CallInfo
@@ -198,12 +207,12 @@ Represents the information of a potential (later) call to the finalizer on the g
 object type.
 """
 struct FinalizerInfo <: CallInfo
-    info::CallInfo
-    effects::Effects
+    info::CallInfo   # the callinfo for the finalizer call
+    effects::Effects # the effects for the finalizer call
 end
 
 """
-    info::ModifyFieldInfo
+    info::ModifyFieldInfo <: CallInfo
 
 Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
 `info.info` wraps the call information of `op(getfield(obj, name), x)`.
