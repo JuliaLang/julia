@@ -569,36 +569,33 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 
 #define NBOX_C 1024
 
-static jl_value_t *jl_get_obj_for_serialization(jl_serializer_state *s, jl_value_t *v)
+static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v)
 {
+    // ignore items that are given a special relocation representation
     if (s->incremental && jl_object_in_image(v))
-        return NULL;
+        return 0;
 
-    // ignore items that are given a special representation
     if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
-        return NULL;
+        return 0;
     }
     else if (jl_typeis(v, jl_int64_type)) {
         int64_t i64 = *(int64_t*)v + NBOX_C / 2;
         if ((uint64_t)i64 < NBOX_C)
-            return NULL;
+            return 0;
     }
     else if (jl_typeis(v, jl_int32_type)) {
         int32_t i32 = *(int32_t*)v + NBOX_C / 2;
         if ((uint32_t)i32 < NBOX_C)
-            return NULL;
+            return 0;
     }
     else if (jl_typeis(v, jl_uint8_type)) {
-        return NULL;
+        return 0;
     }
-    // other items get partial serialization
     else if (jl_typeis(v, jl_task_type)) {
-        if (v == (jl_value_t*)s->ptls->root_task) {
-            return ((jl_task_t*)v)->tls;
-        }
+        return 0;
     }
 
-    return v;
+    return 1;
 }
 
 
@@ -617,7 +614,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     // some values have special representations
     jl_value_t *t = jl_typeof(v);
     if (v != t) // t == jl_datatype_type
-        jl_queue_for_serialization_(s, t, 1, 1);
+        jl_queue_for_serialization_(s, t, 1, s->incremental);
     const jl_datatype_layout_t *layout = ((jl_datatype_t*)t)->layout;
 
     if (!recursive)
@@ -652,7 +649,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        jl_queue_for_serialization_(s, (jl_value_t*)dt->name, 1, 1);
         jl_svec_t *tt = dt->parameters;
         // ensure all type parameters are recached
         size_t i, l = jl_svec_len(tt);
@@ -748,25 +744,27 @@ done_fields:
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
 
     void **bp = ptrhash_bp(&visited, v);
-    assert(*bp == -1);
-    *bp = (void*) idx;
+    assert(*bp == (void*)(uintptr_t)-1);
+    *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
 }
 
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate)
 {
-    void **bp = ptrhash_bp(&visited, v);
-    if (*bp != HT_NOTFOUND) {
+    if (!jl_needs_serialization(s, v))
         return;
-    }
-    *bp = -1;
 
-    jl_value_t *queueobj = jl_get_obj_for_serialization(s, v);
-    if (queueobj) {
-        if (immediate)
-            jl_insert_into_serialization_queue(s, v, recursive);
-        else
-            arraylist_push(&object_worklist, (void*)queueobj);
-    }
+    void **bp = ptrhash_bp(&visited, v);
+    if (*bp == (void*)(uintptr_t)-1 && immediate)
+        // was queued but not yet handled
+        jl_insert_into_serialization_queue(s, v, recursive);
+    if (*bp != HT_NOTFOUND)
+        return;
+    *bp = (void*)(uintptr_t)-1;
+
+    if (immediate)
+        jl_insert_into_serialization_queue(s, v, recursive);
+    else
+        arraylist_push(&object_worklist, (void*)v);
 }
 
 // Do a pre-order traversal of the to-serialize worklist, in the identical order
@@ -786,9 +784,9 @@ static void jl_serialize_reachable(jl_serializer_state *s)
         }
         prevlen = --object_worklist.len;
         jl_value_t *v = (jl_value_t*)object_worklist.items[prevlen];
-        size_t idx = ptrhash_get(&visited, (void*)v);
+        void *idx = ptrhash_get(&visited, (void*)v);
         assert(idx != HT_NOTFOUND);
-        if (idx == -1) // might have been eagerly handled for post-order while in the lazy pre-order queue
+        if (idx == (void*)(uintptr_t)-1) // might have been eagerly handled for post-order while in the lazy pre-order queue
             jl_insert_into_serialization_queue(s, v, 1);
     }
 }
@@ -919,6 +917,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
             jl_(v);
         }
         assert(idx != HT_NOTFOUND && "object missed during jl_queue_for_serialization pass");
+        assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
     }
     return (char*)idx - 1 - (char*)HT_NOTFOUND;
 }
@@ -1866,7 +1865,8 @@ static void jl_update_all_gvars(jl_serializer_state *s)
         uintptr_t offset = *gvars;
         if (offset) {
             uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &link_index);
-            *sysimg_gvars(sysimg_gvars_base, gvname_index) = (uintptr_t)jl_as_global_root((jl_value_t*)v);
+            // TODO(required): if (incremental) v = jl_as_global_root((jl_value_t*)v);
+            *sysimg_gvars(sysimg_gvars_base, gvname_index) = (uintptr_t)v;
         }
         gvname_index += 1;
         gvars++;
@@ -2043,11 +2043,11 @@ static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
             jl_svecset(cache, i, jl_nothing);
     }
     void *idx = ptrhash_get(&visited, cache);
-    assert(idx != HT_NOTFOUND && idx != -1);
+    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
     ptrhash_remove(&visited, cache);
     cache = cache_rehash_set(cache, l);
     ptrhash_put(&visited, cache, idx);
-    serialization_queue.items[(size_t)idx] = cache;
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = cache;
     return cache;
 }
 
@@ -2379,6 +2379,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
                 jl_queue_for_serialization(&s, tag);
             }
             jl_queue_for_serialization(&s, jl_global_roots_table);
+            jl_queue_for_serialization(&s, s.ptls->root_task->tls);
         } else {
             // To ensure we don't have to manually update the list, go through all tags and queue any that are not otherwise
             // judged to be externally-linked
@@ -2441,6 +2442,8 @@ static void jl_save_system_image_to_stream(ios_t *f,
         jl_write_relocations(&s);
         jl_write_gv_syms(&s, jl_get_root_symbol());
         jl_write_gv_tagrefs(&s);
+        // TODO: if you want to use native code, you must write out
+        // relocation data for each gv in native_functions here
     }
 
     if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
