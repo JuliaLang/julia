@@ -62,6 +62,6 @@ end
         @test length(v) == len
         @test issorted(v)
         Core.Compiler.sort!(v, by=abs)
-        issorted(v, by=abs)
+        @test issorted(v, by=abs)
     end
 end
