@@ -1090,7 +1090,9 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, argexprs, mi.specTypes, mi.sparam_vals, sp_ssa, :default)
-        ssa_rename[idx′] = insert_node!(ir, idx, NewInstruction(stmt′, inst; line = inst[:line] + linetable_offset), attach_after)
+        ssa_rename[idx′] = insert_node!(ir, idx,
+            NewInstruction(inst; stmt=stmt′, line=inst[:line]+linetable_offset),
+            attach_after)
     end
 
     return true
@@ -1459,7 +1461,7 @@ function canonicalize_typeassert!(compact::IncrementalCompact, idx::Int, stmt::E
         NewInstruction(
             PiNode(stmt.args[2], compact.result[idx][:type]),
             compact.result[idx][:type],
-            compact.result[idx][:line]), true)
+            compact.result[idx][:line]), #=reverse_affinity=#true)
     compact.ssa_rename[compact.idx-1] = pi
 end
 
