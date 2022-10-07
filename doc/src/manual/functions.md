@@ -66,9 +66,16 @@ Python, Ruby and Perl, among other dynamic languages.
 ## Argument-type declarations
 
 You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref) in Julia.
-For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
+For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) and returns the `n`th fibonacci number:
 ```
-fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)
+julia> function fib(n::Integer)
+           a, b = 0, 1
+           while n > 1
+               a, b = b, a+b
+               n -= 1
+           end
+           a
+       end
 ```
 and the `::Integer` specification means that it will only be callable when `n` is a subtype of the [abstract](@ref man-abstract-types) `Integer` type.
 
