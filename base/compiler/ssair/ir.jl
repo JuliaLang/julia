@@ -949,17 +949,17 @@ function _oracle_check(compact::IncrementalCompact)
     observed_used_ssas = Core.Compiler.find_ssavalue_uses1(compact)
     for i = 1:length(observed_used_ssas)
         if observed_used_ssas[i] != compact.used_ssas[i]
-            return observed_used_ssas
+            return (observed_used_ssas, i)
         end
     end
-    return nothing
+    return (nothing, 0)
 end
 
 function oracle_check(compact::IncrementalCompact)
-    maybe_oracle_used_ssas = _oracle_check(compact)
+    (maybe_oracle_used_ssas, oracle_error_ssa) = _oracle_check(compact)
     if maybe_oracle_used_ssas !== nothing
-        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas)
-        error("Oracle check failed, inspect Main.compact and Main.oracle_used_ssas")
+        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas; oracle_error_ssa = $oracle_error_ssa)
+        error("Oracle check failed, inspect Main.{compact, oracle_used_ssas, oracle_error_ssa}")
     end
 end
 
@@ -1261,7 +1261,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             values = Vector{Any}(undef, length(stmt.values))
             new_index = 1
             for old_index in 1:length(stmt.edges)
-                if stmt.edges[old_index] != -1
+                if stmt.edges[old_index] > 0
                     edges[new_index] = stmt.edges[old_index]
                     if isassigned(stmt.values, old_index)
                         values[new_index] = stmt.values[old_index]
