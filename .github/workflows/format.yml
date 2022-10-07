@@ -17,9 +17,12 @@ jobs:
       - uses: julia-actions/setup-julia@19bd4db8c427e07d56602f1c432e1a26a55d6735 # v1.8.2
         with:
           version: 1
+      - shell: julia --color=yes {0}
       - run: |
-          julia  -e 'using Pkg; Pkg.add(PackageSpec(name="JuliaFormatter", version="1.0.10"))'
-          julia  -e 'using JuliaFormatter; format(".", MinimalStyle(); normalize_line_endings = "unix")'
+          using Pkg
+          Pkg.add(PackageSpec(name="JuliaFormatter", version="1.0.10"))
+          using JuliaFormatter
+          format(".", MinimalStyle(); normalize_line_endings = "unix")
       - uses: reviewdog/action-suggester@v1
         with:
           tool_name: JuliaFormatter
