@@ -973,6 +973,22 @@ JL_DLLEXPORT void jl_clear_implicit_imports(jl_module_t *m)
     JL_UNLOCK(&m->lock);
 }
 
+JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
+{
+    int i, l = jl_array_len(init_order);
+    for (i = 0; i < l; i++) {
+        jl_value_t *mod = jl_array_ptr_ref(init_order, i);
+        if (!jl_generating_output() || jl_options.incremental) {
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        else {
+            if (jl_module_init_order == NULL)
+                jl_module_init_order = jl_alloc_vec_any(0);
+            jl_array_ptr_1d_push(jl_module_init_order, mod);
+        }
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

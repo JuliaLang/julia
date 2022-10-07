@@ -7,7 +7,7 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
     write_uint64(s, *((uint64_t*)&x));
 }
 
-uint64_t jl_worklist_key(jl_array_t *worklist)
+static uint64_t jl_worklist_key(jl_array_t *worklist)
 {
     assert(jl_is_array(worklist));
     size_t len = jl_array_len(worklist);
@@ -17,6 +17,13 @@ uint64_t jl_worklist_key(jl_array_t *worklist)
         return topmod->build_id;
     }
     return 0;
+}
+
+static jl_array_t *newly_inferred;
+JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
+{
+    assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
+    newly_inferred = (jl_array_t*) _newly_inferred;
 }
 
 static int method_instance_in_queue(jl_method_instance_t *mi)
@@ -56,7 +63,7 @@ static void mark_backedges_in_worklist(jl_method_instance_t *mi, htable_t *visit
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    assert(!mi->precompiled && !!jl_object_in_image(mod));
+    assert(!mi->precompiled && jl_object_in_image((jl_value_t*)mod));
     assert(mi->backedges);
 #endif
     size_t i = 0, n = jl_array_len(mi->backedges);
@@ -166,18 +173,21 @@ static jl_array_t *queue_external_mis(jl_array_t *list)
         }
     }
     htable_free(&visited);
-    if (n == 0)
+    if (n == 0) {
         return NULL;
-    jl_array_t *ci_list = jl_alloc_vec_any(n);
+    }
+    jl_array_t *new_specializations = jl_alloc_vec_any(n);
+    JL_GC_PUSH1(&new_specializations);
     n = 0;
     for (size_t i = 0; i < external_mis.size; i += 2) {
         void *ci = external_mis.table[i+1];
         if (ci != HT_NOTFOUND) {
-            jl_array_ptr_set(ci_list, n++, (jl_value_t*)ci);
+            jl_array_ptr_set(new_specializations, n++, (jl_value_t*)ci);
         }
     }
-    assert(n == jl_array_len(ci_list));
-    return ci_list;
+    assert(n == jl_array_len(new_specializations));
+    JL_GC_POP();
+    return new_specializations;
 }
 
 
@@ -348,7 +358,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
     arraylist_free(&wq);
     htable_reset(&edges_map, 0);
     htable_t edges_ids;
-    size_t l = jl_array_len(edges);
+    size_t l = edges ? jl_array_len(edges) : 0;
     htable_new(&edges_ids, l);
     for (size_t i = 0; i < l / 2; i++) {
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, i * 2);
@@ -488,11 +498,11 @@ static void write_header(ios_t *s)
 }
 
 // serialize information about the result of deserializing this file
-static void write_worklist_for_header(ios_t *s)
+static void write_worklist_for_header(ios_t *s, jl_array_t *worklist)
 {
-    int i, l = jl_array_len(serializer_worklist);
+    int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
-        jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, i);
+        jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(worklist, i);
         if (workmod->parent == jl_main_module || workmod->parent == workmod) {
             size_t l = strlen(jl_symbol_name(workmod->name));
             write_int32(s, l);
@@ -520,7 +530,7 @@ static void write_module_path(ios_t *s, jl_module_t *depmod) JL_NOTSAFEPOINT
 // Serialize the global Base._require_dependencies array of pathnames that
 // are include dependencies. Also write Preferences and return
 // the location of the srctext "pointer" in the header index.
-static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
+static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t **udepsp)
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
@@ -558,9 +568,9 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
             while (depmod_top->parent != jl_main_module && depmod_top->parent != depmod_top)
                 depmod_top = depmod_top->parent;
             unsigned provides = 0;
-            size_t j, lj = jl_array_len(serializer_worklist);
+            size_t j, lj = jl_array_len(worklist);
             for (j = 0; j < lj; j++) {
-                jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(serializer_worklist, j);
+                jl_module_t *workmod = (jl_module_t*)jl_array_ptr_ref(worklist, j);
                 if (workmod->parent == jl_main_module || workmod->parent == workmod) {
                     ++provides;
                     if (workmod == depmod_top) {
@@ -665,7 +675,7 @@ static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
     }
 }
 
-int remove_code_instance_from_validation(jl_code_instance_t *codeinst)
+static int remove_code_instance_from_validation(jl_code_instance_t *codeinst)
 {
     return ptrhash_remove(&new_code_instance_validate, codeinst);
 }
@@ -761,7 +771,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
 }
 
 // Combine all edges relevant to a method into the visited table
-void jl_verify_methods(jl_array_t *edges, jl_array_t *valids, htable_t *visited)
+static void jl_verify_methods(jl_array_t *edges, jl_array_t *valids, htable_t *visited)
 {
     jl_value_t *loctag = NULL;
     JL_GC_PUSH1(&loctag);
@@ -1026,7 +1036,7 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
 
 static void classify_callers(htable_t *callers_with_edges, jl_array_t *edges)
 {
-    size_t l = jl_array_len(edges) / 2;
+    size_t l = edges ? jl_array_len(edges) / 2 : 0;
     for (size_t i = 0; i < l; i++) {
         jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(edges, 2 * i);
         ptrhash_put(callers_with_edges, (void*)caller, (void*)caller);
@@ -1053,13 +1063,13 @@ static void validate_new_code_instances(void)
     }
 }
 
-static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
+static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods)
 {
     if (!jl_main_module->build_id) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Main module uuid state is invalid for module deserialization.");
     }
-    size_t i, l = jl_array_len(mod_list);
+    size_t i, l = jl_array_len(depmods);
     for (i = 0; ; i++) {
         size_t len = read_int32(s);
         if (len == 0 && i == l)
@@ -1074,7 +1084,7 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *mod_list)
         uuid.lo = read_uint64(s);
         uint64_t build_id = read_uint64(s);
         jl_sym_t *sym = _jl_symbol(name, len);
-        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_list, i);
+        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(depmods, i);
         if (!m || !jl_is_module(m) || m->uuid.hi != uuid.hi || m->uuid.lo != uuid.lo || m->name != sym || m->build_id != build_id) {
             return jl_get_exceptionf(jl_errorexception_type,
                 "Invalid input in module list: expected %s.", name);

@@ -1651,148 +1651,148 @@ function link_jilib(path, out, args=``)
     run(`$(ld()) --shared --output=$out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
 end
 
-@testset "empty module" begin
-    srcdir   = mktempdir()
-    cachedir = mktempdir()
-    cnpath = joinpath(srcdir, "CacheNativeEmpty.jl")
-    open(cnpath, "w") do io
-        write(io, """
-        module CacheNativeEmpty
-        end
-        """)
-    end
-    p, arfile = compilecache(Base.PkgId("CacheNativeEmpty"), cnpath, cachedir)
-    @test success(p)
-    libfile = arfile * ".so"
-    link_jilib(arfile, libfile)
-    wl = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
-    CNE = wl[1]   # the CacheNativeEmpty module
-end
+# @testset "empty module" begin
+#     srcdir   = mktempdir()
+#     cachedir = mktempdir()
+#     cnpath = joinpath(srcdir, "CacheNativeEmpty.jl")
+#     open(cnpath, "w") do io
+#         write(io, """
+#         module CacheNativeEmpty
+#         end
+#         """)
+#     end
+#     p, arfile = compilecache(Base.PkgId("CacheNativeEmpty"), cnpath, cachedir)
+#     @test success(p)
+#     libfile = arfile * ".so"
+#     link_jilib(arfile, libfile)
+#     wl = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+#     CNE = wl[1]   # the CacheNativeEmpty module
+# end
 
-@testset "linking against sysimage" begin
-    srcdir   = mktempdir()
-    cachedir = mktempdir()
-    cnpath = joinpath(srcdir, "CacheNativeSysimg.jl")
-    open(cnpath, "w") do io
-        write(io, """
-        module CacheNativeSysimg
-        my_fce() = println("hello")
-        my_fce2() = println("result = ", 42)
-        my_alloc() = Ref(10)
-        my_alloc2(val) = Ref(val)
+# @testset "linking against sysimage" begin
+#     srcdir   = mktempdir()
+#     cachedir = mktempdir()
+#     cnpath = joinpath(srcdir, "CacheNativeSysimg.jl")
+#     open(cnpath, "w") do io
+#         write(io, """
+#         module CacheNativeSysimg
+#         my_fce() = println("hello")
+#         my_fce2() = println("result = ", 42)
+#         my_alloc() = Ref(10)
+#         my_alloc2(val) = Ref(val)
 
-        precompile(my_fce, ())
-        precompile(my_alloc, ())
-        precompile(my_alloc2, (Int,))
-        precompile(my_fce2, ())
-        end
-        """)
-    end
-    p, arfile = compilecache(Base.PkgId("CacheNativeSysimg"), cnpath, cachedir)
-    @test success(p)
-    libfile = arfile * ".so"
-    link_jilib(arfile, libfile)
-    wl = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
-    CNS = wl[1]   # the CacheNativeSysimg module
-    f = getfield(CNS, :my_fce)
-    f2 = getfield(CNS, :my_fce2)
-    let filename = tempname()
-        ret = open(filename, "w") do io
-            redirect_stdout(io) do
-                f()
-                f2()
-            end
-        end
-        @test ret === nothing
-        @test chomp(read(filename, String)) == "hello\nresult = 42"
-    end
+#         precompile(my_fce, ())
+#         precompile(my_alloc, ())
+#         precompile(my_alloc2, (Int,))
+#         precompile(my_fce2, ())
+#         end
+#         """)
+#     end
+#     p, arfile = compilecache(Base.PkgId("CacheNativeSysimg"), cnpath, cachedir)
+#     @test success(p)
+#     libfile = arfile * ".so"
+#     link_jilib(arfile, libfile)
+#     wl = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+#     CNS = wl[1]   # the CacheNativeSysimg module
+#     f = getfield(CNS, :my_fce)
+#     f2 = getfield(CNS, :my_fce2)
+#     let filename = tempname()
+#         ret = open(filename, "w") do io
+#             redirect_stdout(io) do
+#                 f()
+#                 f2()
+#             end
+#         end
+#         @test ret === nothing
+#         @test chomp(read(filename, String)) == "hello\nresult = 42"
+#     end
 
-    alloc =  getfield(CNS, :my_alloc)
-    alloc2 =  getfield(CNS, :my_alloc2)
+#     alloc =  getfield(CNS, :my_alloc)
+#     alloc2 =  getfield(CNS, :my_alloc2)
 
-    @test alloc()[] == 10
-    @test alloc2(5)[] == 5
-end
+#     @test alloc()[] == 10
+#     @test alloc2(5)[] == 5
+# end
 
-@testset "static compilation" begin
-    srcdir   = mktempdir()
-    cachedir = mktempdir()
-    cnpath = joinpath(srcdir, "CacheNative1.jl")
-    open(cnpath, "w") do io
-        write(io, """
-        module CacheNative1
-        const data1 = [11, 22, 33]
-        const data2 = [44, 55, 66]
-        @noinline uses_data1() = data1[2]
-        precompile(uses_data1, ())
-        end
-        """)
-    end
-    p, arfile = compilecache(Base.PkgId("CacheNative1"), cnpath, cachedir)
-    @test success(p)
-    libfile = arfile * ".so"
-    link_jilib(arfile, libfile)
-    wl1 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
-    CN1 = wl1[1]   # the CacheNative1 module
-    f = getfield(CN1, :uses_data1)
-    m = only(methods(f))
-    mi = m.specializations[1]
-    ci = mi.cache
-    @test ci.specptr != C_NULL
-    @test f() == 22
-    # Can we reference this first module from a second?
-    # In particular, test whether we can access `data2` from code.
-    # That's a global variable that wasn't code-referenced in CacheNative1,
-    # and thus wasn't inserted into the .data section of CacheNative1's .o file.
-    # Until this is hooked fully into `using CacheNative1` then it will not be
-    # fully obvious whether the dynamic linker can resolve such references,
-    # because we need to get it by an explicit GlobalRef.
-    push!(LOAD_PATH, srcdir)
-    cnpath = joinpath(srcdir, "CacheNative2.jl")
-    open(cnpath, "w") do io
-        write(io, """
-        module CacheNative2
-        const CacheNative1 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), $(repr(libfile)))[1]::Module
-        const data = CacheNative1.data1
-        @noinline uses_cn1_data1() = CacheNative1.data1[3]
-        @noinline uses_cn1_data2() = CacheNative1.data2[2]
-        @noinline      calls_cn1() = CacheNative1.uses_data1()       # not precompiled
-        @noinline also_calls_cn1() = CacheNative1.uses_data1()       # precompiled
-        uses_cn2_data() = data[3]
+# @testset "static compilation" begin
+#     srcdir   = mktempdir()
+#     cachedir = mktempdir()
+#     cnpath = joinpath(srcdir, "CacheNative1.jl")
+#     open(cnpath, "w") do io
+#         write(io, """
+#         module CacheNative1
+#         const data1 = [11, 22, 33]
+#         const data2 = [44, 55, 66]
+#         @noinline uses_data1() = data1[2]
+#         precompile(uses_data1, ())
+#         end
+#         """)
+#     end
+#     p, arfile = compilecache(Base.PkgId("CacheNative1"), cnpath, cachedir)
+#     @test success(p)
+#     libfile = arfile * ".so"
+#     link_jilib(arfile, libfile)
+#     wl1 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+#     CN1 = wl1[1]   # the CacheNative1 module
+#     f = getfield(CN1, :uses_data1)
+#     m = only(methods(f))
+#     mi = m.specializations[1]
+#     ci = mi.cache
+#     @test ci.specptr != C_NULL
+#     @test f() == 22
+#     # Can we reference this first module from a second?
+#     # In particular, test whether we can access `data2` from code.
+#     # That's a global variable that wasn't code-referenced in CacheNative1,
+#     # and thus wasn't inserted into the .data section of CacheNative1's .o file.
+#     # Until this is hooked fully into `using CacheNative1` then it will not be
+#     # fully obvious whether the dynamic linker can resolve such references,
+#     # because we need to get it by an explicit GlobalRef.
+#     push!(LOAD_PATH, srcdir)
+#     cnpath = joinpath(srcdir, "CacheNative2.jl")
+#     open(cnpath, "w") do io
+#         write(io, """
+#         module CacheNative2
+#         const CacheNative1 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), $(repr(libfile)))[1]::Module
+#         const data = CacheNative1.data1
+#         @noinline uses_cn1_data1() = CacheNative1.data1[3]
+#         @noinline uses_cn1_data2() = CacheNative1.data2[2]
+#         @noinline      calls_cn1() = CacheNative1.uses_data1()       # not precompiled
+#         @noinline also_calls_cn1() = CacheNative1.uses_data1()       # precompiled
+#         uses_cn2_data() = data[3]
 
-        precompile(uses_cn1_data1, ())
-        precompile(uses_cn1_data2, ())
-        precompile(also_calls_cn1, ())
-        precompile(uses_cn2_data, ())
-        end
-        """)
-    end
-    p, arfile = compilecache(Base.PkgId("CacheNative2"), cnpath, cachedir)
-    @test success(p)
-    libfile = arfile * ".so"
-    link_jilib(arfile, libfile)
-    wl2 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
-    CN2 = wl2[1]   # the CacheNative2 module
-    @test getfield(CN2, :Base) === Base
-    @test getfield(CN2, :CacheNative1) === CN1
-    f = getfield(CN2, :calls_cn1)
-    @test f() == 22
-    f = getfield(CN2, :also_calls_cn1)
-    @test f() == 22
-    # f1 (aka, uses_cn1_data1) uses an item stored in another package as an LLVM gvar
-    # f2 (aka, uses_cn1_data2) uses an item stored in another package that was never stored as an LLVM gvar
-    f1 = getfield(CN2, :uses_cn1_data1)
-    f2 = getfield(CN2, :uses_cn1_data2)
-    f3 = getfield(CN2, :uses_cn2_data)
-    m1 = only(methods(f1))
-    m2 = only(methods(f2))
-    @test f1() == 33
-    @test f2() == 55
-    @test f3() == f1()
+#         precompile(uses_cn1_data1, ())
+#         precompile(uses_cn1_data2, ())
+#         precompile(also_calls_cn1, ())
+#         precompile(uses_cn2_data, ())
+#         end
+#         """)
+#     end
+#     p, arfile = compilecache(Base.PkgId("CacheNative2"), cnpath, cachedir)
+#     @test success(p)
+#     libfile = arfile * ".so"
+#     link_jilib(arfile, libfile)
+#     wl2 = ccall(:jl_restore_package_image_from_file, Any, (Ptr{UInt8},), libfile)
+#     CN2 = wl2[1]   # the CacheNative2 module
+#     @test getfield(CN2, :Base) === Base
+#     @test getfield(CN2, :CacheNative1) === CN1
+#     f = getfield(CN2, :calls_cn1)
+#     @test f() == 22
+#     f = getfield(CN2, :also_calls_cn1)
+#     @test f() == 22
+#     # f1 (aka, uses_cn1_data1) uses an item stored in another package as an LLVM gvar
+#     # f2 (aka, uses_cn1_data2) uses an item stored in another package that was never stored as an LLVM gvar
+#     f1 = getfield(CN2, :uses_cn1_data1)
+#     f2 = getfield(CN2, :uses_cn1_data2)
+#     f3 = getfield(CN2, :uses_cn2_data)
+#     m1 = only(methods(f1))
+#     m2 = only(methods(f2))
+#     @test f1() == 33
+#     @test f2() == 55
+#     @test f3() == f1()
 
-    CN1.data1[3] = 77
-    @test f1() == 77
-end
+#     CN1.data1[3] = 77
+#     @test f1() == 77
+# end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
