@@ -11,23 +11,25 @@ and any additional information (`call.info`) for a given generic call.
 struct CallMeta
     rt::Any
     effects::Effects
-    info::Any
+    info::CallInfo
 end
 
+struct NoCallInfo <: CallInfo end
+
 """
-    info::MethodMatchInfo
+    info::MethodMatchInfo <: CallInfo
 
 Captures the result of a `:jl_matching_methods` lookup for the given call (`info.results`).
 This info may then be used by the optimizer to inline the matches, without having
 to re-consult the method table. This info is illegal on any statement that is
 not a call to a generic function.
 """
-struct MethodMatchInfo
+struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
 end
 
 """
-    info::UnionSplitInfo
+    info::UnionSplitInfo <: CallInfo
 
 If inference decides to partition the method search space by splitting unions,
 it will issue a method lookup query for each such partition. This info indicates
@@ -35,7 +37,7 @@ that such partitioning happened and wraps the corresponding `MethodMatchInfo` fo
 each partition (`info.matches::Vector{MethodMatchInfo}`).
 This info is illegal on any statement that is not a call to a generic function.
 """
-struct UnionSplitInfo
+struct UnionSplitInfo <: CallInfo
     matches::Vector{MethodMatchInfo}
 end
 
@@ -69,37 +71,37 @@ end
 const ConstResult = Union{ConstPropResult,ConcreteResult, SemiConcreteResult}
 
 """
-    info::ConstCallInfo
+    info::ConstCallInfo <: CallInfo
 
 The precision of this call was improved using constant information.
 In addition to the original call information `info.call`, this info also keeps the results
 of constant inference `info.results::Vector{Union{Nothing,ConstResult}}`.
 """
-struct ConstCallInfo
+struct ConstCallInfo <: CallInfo
     call::Union{MethodMatchInfo,UnionSplitInfo}
     results::Vector{Union{Nothing,ConstResult}}
 end
 
 """
-    info::MethodResultPure
+    info::MethodResultPure <: CallInfo
 
 This struct represents a method result constant was proven to be
 effect-free, including being no-throw (typically because the value was computed
 by calling an `@pure` function).
 """
-struct MethodResultPure
-    info::Any
+struct MethodResultPure <: CallInfo
+    info::CallInfo
 end
-let instance = MethodResultPure(false)
+let instance = MethodResultPure(NoCallInfo())
     global MethodResultPure
     MethodResultPure() = instance
 end
 
 """
-    info::AbstractIterationInfo
+    ainfo::AbstractIterationInfo
 
 Captures all the information for abstract iteration analysis of a single value.
-Each (abstract) call to `iterate`, corresponds to one entry in `info.each::Vector{CallMeta}`.
+Each (abstract) call to `iterate`, corresponds to one entry in `ainfo.each::Vector{CallMeta}`.
 """
 struct AbstractIterationInfo
     each::Vector{CallMeta}
@@ -108,7 +110,7 @@ end
 const MaybeAbstractIterationInfo = Union{Nothing, AbstractIterationInfo}
 
 """
-    info::ApplyCallInfo
+    info::ApplyCallInfo <: CallInfo
 
 This info applies to any call of `_apply_iterate(...)` and captures both the
 info of the actual call being applied and the info for any implicit call
@@ -117,7 +119,7 @@ to be yet another `_apply_iterate`, in which case the `info.call` field will
 be another `ApplyCallInfo`. This info is illegal on any statement that is
 not an `_apply_iterate` call.
 """
-struct ApplyCallInfo
+struct ApplyCallInfo <: CallInfo
     # The info for the call itself
     call::Any
     # AbstractIterationInfo for each argument, if applicable
@@ -125,12 +127,12 @@ struct ApplyCallInfo
 end
 
 """
-    info::UnionSplitApplyCallInfo
+    info::UnionSplitApplyCallInfo <: CallInfo
 
 Like `UnionSplitInfo`, but for `ApplyCallInfo` rather than `MethodMatchInfo`.
 This info is illegal on any statement that is not an `_apply_iterate` call.
 """
-struct UnionSplitApplyCallInfo
+struct UnionSplitApplyCallInfo <: CallInfo
     infos::Vector{ApplyCallInfo}
 end
 
@@ -141,7 +143,7 @@ Represents a resolved call to `Core.invoke`, carrying the `info.match::MethodMat
 the method that has been processed.
 Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
-struct InvokeCallInfo
+struct InvokeCallInfo <: CallInfo
     match::MethodMatch
     result::Union{Nothing,ConstResult}
 end
@@ -153,20 +155,20 @@ Represents a resolved call of opaque closure, carrying the `info.match::MethodMa
 the method that has been processed.
 Optionally keeps `info.result::InferenceResult` that keeps constant information.
 """
-struct OpaqueClosureCallInfo
+struct OpaqueClosureCallInfo <: CallInfo
     match::MethodMatch
     result::Union{Nothing,ConstResult}
 end
 
 """
-    info::OpaqueClosureCreateInfo
+    info::OpaqueClosureCreateInfo <: CallInfo
 
 This info may be constructed upon opaque closure construction, with `info.unspec::CallMeta`
 carrying out inference result of an unreal, partially specialized call (i.e. specialized on
 the closure environment, but not on the argument types of the opaque closure) in order to
 allow the optimizer to rewrite the return type parameter of the `OpaqueClosure` based on it.
 """
-struct OpaqueClosureCreateInfo
+struct OpaqueClosureCreateInfo <: CallInfo
     unspec::CallMeta
     function OpaqueClosureCreateInfo(unspec::CallMeta)
         @assert isa(unspec.info, OpaqueClosureCallInfo)
@@ -179,25 +181,25 @@ end
 # the AbstractInterpreter.
 
 """
-    info::ReturnTypeCallInfo
+    info::ReturnTypeCallInfo <: CallInfo
 
 Represents a resolved call of `Core.Compiler.return_type`.
 `info.call` wraps the info corresponding to the call that `Core.Compiler.return_type` call
 was supposed to analyze.
 """
-struct ReturnTypeCallInfo
-    info::Any
+struct ReturnTypeCallInfo <: CallInfo
+    info::CallInfo
 end
 
 """
-    info::FinalizerInfo
+    info::FinalizerInfo <: CallInfo
 
 Represents the information of a potential (later) call to the finalizer on the given
 object type.
 """
-struct FinalizerInfo
-    info::Any
-    effects::Effects # the effects for the finalizer call
+struct FinalizerInfo <: CallInfo
+    info::CallInfo
+    effects::Effects
 end
 
 """
@@ -206,8 +208,8 @@ end
 Represents a resolved all of `modifyfield!(obj, name, op, x, [order])`.
 `info.info` wraps the call information of `op(getfield(obj, name), x)`.
 """
-struct ModifyFieldInfo
-    info::Any # the callinfo for the `op(getfield(obj, name), x)` call
+struct ModifyFieldInfo <: CallInfo
+    info::CallInfo # the callinfo for the `op(getfield(obj, name), x)` call
 end
 
 @specialize

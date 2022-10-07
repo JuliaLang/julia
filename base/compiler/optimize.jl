@@ -113,7 +113,7 @@ mutable struct OptimizationState
     linfo::MethodInstance
     src::CodeInfo
     ir::Union{Nothing, IRCode}
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
@@ -146,7 +146,7 @@ mutable struct OptimizationState
         if slottypes === nothing
             slottypes = Any[ Any for i = 1:nslots ]
         end
-        stmt_info = Any[nothing for i = 1:nssavalues]
+        stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
         # cache some useful state computations
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
@@ -602,7 +602,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(code, idx, Expr(:code_coverage_effect))
             insert!(codelocs, idx, codeloc)
             insert!(ssavaluetypes, idx, Nothing)
-            insert!(stmtinfo, idx, nothing)
+            insert!(stmtinfo, idx, NoCallInfo())
             insert!(ssaflags, idx, IR_FLAG_NULL)
             if ssachangemap === nothing
                 ssachangemap = fill(0, nstmts)
@@ -623,7 +623,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
-                insert!(stmtinfo, idx + 1, nothing)
+                insert!(stmtinfo, idx + 1, NoCallInfo())
                 insert!(ssaflags, idx + 1, ssaflags[idx])
                 if ssachangemap === nothing
                     ssachangemap = fill(0, nstmts)

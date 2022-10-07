@@ -188,15 +188,15 @@ const AnySSAValue = Union{SSAValue, OldSSAValue, NewSSAValue}
 struct InstructionStream
     inst::Vector{Any}
     type::Vector{Any}
-    info::Vector{Any}
+    info::Vector{CallInfo}
     line::Vector{Int32}
     flag::Vector{UInt8}
 end
 function InstructionStream(len::Int)
-    insts = Array{Any}(undef, len)
-    types = Array{Any}(undef, len)
-    info = Array{Any}(undef, len)
-    fill!(info, nothing)
+    insts = Vector{Any}(undef, len)
+    types = Vector{Any}(undef, len)
+    info = Vector{CallInfo}(undef, len)
+    fill!(info, NoCallInfo())
     lines = fill(Int32(0), len)
     flags = fill(IR_FLAG_NULL, len)
     return InstructionStream(insts, types, info, lines, flags)
@@ -227,7 +227,7 @@ function resize!(stmts::InstructionStream, len)
     for i in (old_length + 1):len
         stmts.line[i] = 0
         stmts.flag[i] = IR_FLAG_NULL
-        stmts.info[i] = nothing
+        stmts.info[i] = NoCallInfo()
     end
     return stmts
 end
@@ -287,7 +287,7 @@ copy(nns::NewNodeStream) = NewNodeStream(copy(nns.stmts), copy(nns.info))
 struct NewInstruction
     stmt::Any
     type::Any
-    info::Any
+    info::CallInfo
     # If nothing, copy the line from previous statement
     # in the insertion location
     line::Union{Int32, Nothing}
@@ -298,14 +298,14 @@ struct NewInstruction
     # The IR_FLAG_EFFECT_FREE flag has already been computed (or forced).
     # Don't bother redoing so on insertion.
     effect_free_computed::Bool
-    NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info),
+    NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
             line::Union{Int32, Nothing}, flag::UInt8, effect_free_computed::Bool) =
         new(stmt, type, info, line, flag, effect_free_computed)
 end
 NewInstruction(@nospecialize(stmt), @nospecialize(type)) =
     NewInstruction(stmt, type, nothing)
 NewInstruction(@nospecialize(stmt), @nospecialize(type), line::Union{Nothing, Int32}) =
-    NewInstruction(stmt, type, nothing, line, IR_FLAG_NULL, false)
+    NewInstruction(stmt, type, NoCallInfo(), line, IR_FLAG_NULL, false)
 NewInstruction(@nospecialize(stmt), meta::Instruction; line::Union{Int32, Nothing}=nothing) =
     NewInstruction(stmt, meta[:type], meta[:info], line === nothing ? meta[:line] : line, meta[:flag], true)
 
@@ -528,7 +528,7 @@ function insert_node!(ir::IRCode, pos::SSAValue, inst::NewInstruction, attach_af
             flag |= IR_FLAG_NOTHROW
         end
     end
-    node[:inst], node[:type], node[:flag] = inst.stmt, inst.type, flag
+    node[:inst], node[:type], node[:flag], node[:info] = inst.stmt, inst.type, flag, inst.info
     return SSAValue(length(ir.stmts) + node.idx)
 end
 insert_node!(ir::IRCode, pos::Int, inst::NewInstruction, attach_after::Bool=false) =
