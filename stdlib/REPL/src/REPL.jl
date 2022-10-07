@@ -566,6 +566,33 @@ mutable struct REPLHistoryProvider <: HistoryProvider
     last_mode::Union{Nothing,Prompt}
     mode_mapping::Dict{Symbol,Prompt}
     modes::Vector{Symbol}
+
+    # Explicit constructor to avoid `convert` invalidations.
+    function REPLHistoryProvider(
+            history,
+            file_path::AbstractString,
+            history_file,
+            start_idx,
+            cur_idx,
+            last_idx,
+            last_buffer,
+            last_mode,
+            mode_mapping,
+            modes
+        )
+        new(
+            history,
+            file_path,
+            history_file,
+            start_idx,
+            cur_idx,
+            last_idx,
+            last_buffer,
+            last_mode,
+            mode_mapping,
+            modes
+        )
+    end
 end
 REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
     REPLHistoryProvider(String[], "", nothing, 0, 0, -1, IOBuffer(),

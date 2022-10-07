@@ -41,12 +41,12 @@ function uinvalidated(invlist; exclude_corecompiler::Bool=true)
 end
 
 """
-    invalidated(invs, f::Function)
+    invalidated(invs, f)
 
 Return whether one or more methods for `f` were invalidated according to the list of
 invalidations `invs`.
 """
-function invalidated(invs, f::Function)
+function invalidated(invs, f)
     unique_invs = uinvalidated(invs)
     unique_methods = getproperty.(unique_invs, :def)
     for m in methods(f)
