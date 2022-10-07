@@ -15,7 +15,5 @@ invs = @method_invalidations f(x::Int) = 2x
 import Base
 struct A end
 
-invs = @method_invalidations Base.tail(::A) = 1
-@show invs
-
-@show Base.tail(A())
+invs = @method_invalidations Base.convert(::Type{T}, ::A) where T<:Union{AbstractString,AbstractChar,Number} = 1
+@test !invalidated(invs, Base.show_unquoted)

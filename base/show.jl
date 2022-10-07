@@ -2006,7 +2006,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             na = length(func_args)
             if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " " * convert(String, string(func))::String * " "   # if func::Any, avoid string interpolation (invalidation)
+                sep = func === :(:) ? "$func" : " " * string(func)::String * " "   # if func::Any, avoid string interpolation (invalidation)
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
