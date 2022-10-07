@@ -5,3 +5,9 @@ repos:
     -   id: check-yaml
     -   id: end-of-file-fixer
     -   id: trailing-whitespace
+
+-   repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v15.0.0
+    hooks:
+    -   id: clang-format
+        types_or: [c++, c]
