@@ -1761,3 +1761,12 @@ let interp = Core.Compiler.NativeInterpreter()
     @test count(isinvoke(:*), ir.stmts.inst) == 0
     @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
 end
+
+# Test special purpose inliner for Core.ifelse
+f_ifelse_1(a, b) = Core.ifelse(true, a, b)
+f_ifelse_2(a, b) = Core.ifelse(false, a, b)
+f_ifelse_3(a, b) = Core.ifelse(a, true, b)
+
+@test fully_eliminated(f_ifelse_1, Tuple{Any, Any}; retval=Core.Argument(2))
+@test fully_eliminated(f_ifelse_2, Tuple{Any, Any}; retval=Core.Argument(3))
+@test !fully_eliminated(f_ifelse_3, Tuple{Any, Any})

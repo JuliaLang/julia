@@ -1745,6 +1745,15 @@ function early_inline_special_case(
         setting === :const || setting === :conditional || setting === :type || return nothing
         # barriered successfully already, eliminate it
         return SomeCase(stmt.args[3])
+    elseif f === Core.ifelse && length(argtypes) == 4
+        cond = argtypes[2]
+        if isa(cond, Const)
+            if cond.val === true
+                return SomeCase(stmt.args[3])
+            elseif cond.val === false
+                return SomeCase(stmt.args[4])
+            end
+        end
     end
     return nothing
 end
