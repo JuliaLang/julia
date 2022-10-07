@@ -157,10 +157,10 @@ showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
-    print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
+    print(io, "UndefKeywordError: keyword argument `$(ex.var)` not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    print(io, "UndefVarError: $(ex.var) not defined")
+    print(io, "UndefVarError: `$(ex.var)` not defined")
     Experimental.show_error_hints(io, ex)
 end
 

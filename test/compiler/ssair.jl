@@ -173,7 +173,17 @@ let ci = make_ci([
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+let ci = make_ci([
+        Expr(:call, GlobalRef(Main, :cglobal),
+                    Expr(:call, Core.tuple, :(:c)), Nothing),
+                    Core.Compiler.ReturnNode()
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
@@ -495,4 +505,25 @@ end
     @test length(ir.stmts) == instructions
 
     @test show(devnull, ir) === nothing
+end
+
+@testset "IncrementalCompact statefulness" begin
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    compact = Core.Compiler.IncrementalCompact(ir)
+
+    # set up first iterator
+    x = Core.Compiler.iterate(compact)
+    x = Core.Compiler.iterate(compact, x[2])
+
+    # set up second iterator
+    x = Core.Compiler.iterate(compact)
+
+    # consume remainder
+    while x !== nothing
+        x = Core.Compiler.iterate(compact, x[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end

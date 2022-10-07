@@ -461,18 +461,18 @@ end
 
 function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(A), eltype(F))
-    return adjoint(ldiv!(F.parent, copymutable_oftype(adjoint(A), T)))
+    return adjoint(ldiv!(F.parent, copy_similar(adjoint(A), T)))
 end
 # To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
 (/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 (/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
+    return adjoint(ldiv!(F.parent, conj!(copy_similar(trA.parent, T))))
 end
 function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
+    return adjoint(ldiv!(F.parent, conj!(copy_similar(trA.parent, T))))
 end
 
 function det(F::LU{T}) where T

@@ -1048,7 +1048,9 @@ end
 
 # NOTE we resolve the inlining source here as we don't want to serialize `Core.Compiler`
 # data structure into the global cache (see the comment in `handle_finalizer_call!`)
-function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::MethodInstance, inlining::InliningState, attach_after::Bool)
+function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
+    mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
+    attach_after::Bool)
     code = get(inlining.mi_cache, mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
@@ -1062,7 +1064,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
         src = code
     end
 
-    src = inlining_policy(inlining.interp, src, IR_FLAG_NULL, mi, Any[])
+    src = inlining_policy(inlining.interp, src, info, IR_FLAG_NULL, mi, Any[])
     src === nothing && return false
     src = retrieve_ir_for_inlining(mi, src)
 
@@ -1088,7 +1090,9 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int, mi::
             ssa_rename[ssa.id]
         end
         stmt′ = ssa_substitute_op!(InsertBefore(ir, SSAValue(idx)), inst, stmt′, argexprs, mi.specTypes, mi.sparam_vals, sp_ssa, :default)
-        ssa_rename[idx′] = insert_node!(ir, idx, NewInstruction(stmt′, inst; line = inst[:line] + linetable_offset), attach_after)
+        ssa_rename[idx′] = insert_node!(ir, idx,
+            NewInstruction(inst; stmt=stmt′, line=inst[:line]+linetable_offset),
+            attach_after)
     end
 
     return true
@@ -1116,7 +1120,7 @@ end
 
 function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse::SSADefUse,
         inlining::InliningState, lazydomtree::LazyDomtree,
-        lazypostdomtree::LazyPostDomtree, info::Union{FinalizerInfo, Nothing})
+        lazypostdomtree::LazyPostDomtree, @nospecialize(info::CallInfo))
     # For now, require that:
     # 1. The allocation dominates the finalizer registration
     # 2. The finalizer registration dominates all uses reachable from the
@@ -1212,14 +1216,14 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
 
     finalizer_stmt = ir[SSAValue(finalizer_idx)][:inst]
     argexprs = Any[finalizer_stmt.args[2], finalizer_stmt.args[3]]
-    flags = info === nothing ? UInt8(0) : flags_for_effects(info.effects)
+    flags = info isa FinalizerInfo ? flags_for_effects(info.effects) : IR_FLAG_NULL
     if length(finalizer_stmt.args) >= 4
         inline = finalizer_stmt.args[4]
         if inline === nothing
             # No code in the function - Nothing to do
         else
             mi = finalizer_stmt.args[5]::MethodInstance
-            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, inlining, attach_after)
+            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
                 insert_node!(ir, loc, with_flags(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flags), attach_after)
@@ -1457,7 +1461,7 @@ function canonicalize_typeassert!(compact::IncrementalCompact, idx::Int, stmt::E
         NewInstruction(
             PiNode(stmt.args[2], compact.result[idx][:type]),
             compact.result[idx][:type],
-            compact.result[idx][:line]), true)
+            compact.result[idx][:line]), #=reverse_affinity=#true)
     compact.ssa_rename[compact.idx-1] = pi
 end
 
@@ -1582,7 +1586,7 @@ function adce_pass!(ir::IRCode)
         phi = unionphi[1]
         t = unionphi[2]
         if t === Union{}
-            compact.result[phi][:inst] = nothing
+            compact[SSAValue(phi)] = nothing
             continue
         elseif t === Any
             continue
@@ -1604,6 +1608,9 @@ function adce_pass!(ir::IRCode)
         end
         compact.result[phi][:type] = t
         isempty(to_drop) && continue
+        for d in to_drop
+            isassigned(stmt.values, d) && kill_current_use(compact, stmt.values[d])
+        end
         deleteat!(stmt.values, to_drop)
         deleteat!(stmt.edges, to_drop)
     end
@@ -2096,7 +2103,12 @@ function cfg_simplify!(ir::IRCode)
                     # If we merged a basic block, we need remove the trailing GotoNode (if any)
                     compact.result[compact.result_idx][:inst] = nothing
                 else
-                    process_node!(compact, compact.result_idx, node, i, i, ms, true)
+                    ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
+                    if ri == compact.result_idx
+                        # process_node! wanted this statement dropped. We don't do this,
+                        # but we still need to erase the node
+                        compact.result[compact.result_idx][:inst] = nothing
+                    end
                 end
                 # We always increase the result index to ensure a predicatable
                 # placement of the resulting nodes.

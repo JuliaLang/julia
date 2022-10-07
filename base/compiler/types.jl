@@ -292,3 +292,17 @@ infer_compilation_signature(::NativeInterpreter) = true
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
 optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
+
+abstract type CallInfo end
+
+@nospecialize
+
+nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
+getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
+
+nsplit_impl(::CallInfo) = nothing
+getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+getresult_impl(::CallInfo, ::Int) = nothing
+
+@specialize

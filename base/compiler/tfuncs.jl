@@ -6,8 +6,6 @@
 
 @nospecialize
 
-const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
-
 const INT_INF = typemax(Int) # integer infinity
 
 const N_IFUNC = reinterpret(Int32, have_fma) + 1
@@ -1148,10 +1146,10 @@ end
 function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::InferenceState)
     nargs = length(argtypes)
     if !isempty(argtypes) && isvarargtype(argtypes[nargs])
-        nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
-        nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, false)
+        nargs - 1 <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+        nargs > 3 || return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
     else
-        5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, false)
+        5 <= nargs <= 6 || return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     end
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
@@ -2235,7 +2233,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                 if isa(af_argtype, DataType) && af_argtype <: Tuple
                     argtypes_vec = Any[aft, af_argtype.parameters...]
                     if contains_is(argtypes_vec, Union{})
-                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, false)
+                        return CallMeta(Const(Union{}), EFFECTS_TOTAL, NoCallInfo())
                     end
                     #
                     # Run the abstract_call without restricting abstract call
@@ -2278,7 +2276,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
             end
         end
     end
-    return CallMeta(Type, EFFECTS_THROWS, false)
+    return CallMeta(Type, EFFECTS_THROWS, NoCallInfo())
 end
 
 # N.B.: typename maps type equivalence classes to a single value

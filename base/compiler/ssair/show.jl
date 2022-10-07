@@ -16,10 +16,18 @@ import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
 
 function Base.show(io::IO, cfg::CFG)
+    print(io, "CFG with $(length(cfg.blocks)) blocks:")
     for (idx, block) in enumerate(cfg.blocks)
-        print(io, idx, "\t=>\t")
-        join(io, block.succs, ", ")
-        println(io)
+        print(io, "\n  bb ", idx)
+        if block.stmts.start == block.stmts.stop
+            print(io, " (stmt ", block.stmts.start, ")")
+        else
+            print(io, " (stmts ", block.stmts.start, ":", block.stmts.stop, ")")
+        end
+        if !isempty(block.succs)
+            print(io, " → bb ")
+            join(io, block.succs, ", ")
+        end
     end
 end
 

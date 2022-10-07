@@ -1347,7 +1347,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(offset < deser_sym.len && deser_sym.items[offset] && "corrupt relocation item id");
         return (uintptr_t)deser_sym.items[offset];
     case BindingRef:
-        return jl_buff_tag | GC_OLD_MARKED;
+        return jl_buff_tag | GC_OLD;
     case TagRef:
         if (offset == 0)
             return (uintptr_t)s->ptls->root_task;
@@ -1740,7 +1740,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
-                record_field_change(&inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
@@ -1753,6 +1753,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
     }
     if (jl_options.strip_ir) {
         record_field_change(&mi->uninferred, NULL);
+        record_field_change((jl_value_t**)&mi->backedges, NULL);
+        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 
@@ -1793,11 +1795,15 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     }
     if (m->unspecialized)
         strip_specializations_(m->unspecialized);
+    if (jl_options.strip_ir && m->root_blocks)
+        record_field_change((jl_value_t**)&m->root_blocks, NULL);
     return 1;
 }
 
 static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
+    if (jl_options.strip_ir && mt->backedges)
+        record_field_change((jl_value_t**)&mt->backedges, NULL);
     return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
@@ -2199,7 +2205,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
 
     s.s = &sysimg;
-    jl_read_relocations(&s, GC_OLD_MARKED); // gctags
+    jl_read_relocations(&s, GC_OLD); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_relocations(&s, 0); // general relocs
