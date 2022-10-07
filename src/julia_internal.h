@@ -293,7 +293,6 @@ extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 extern arraylist_t jl_linkage_blobs;                        // external linkage: sysimg/pkgimages
 extern jl_array_t *jl_build_ids JL_GLOBALLY_ROOTED;         // external linkage: corresponding build_ids
 extern arraylist_t jl_image_relocs;                        // external linkage: sysimg/pkgimages
-extern uint64_t jl_worklist_key(jl_array_t *worklist);
 
 extern JL_DLLEXPORT size_t jl_page_size;
 extern jl_function_t *jl_typeinf_func;
@@ -620,9 +619,6 @@ jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index);
 int nroots_with_key(jl_method_t *m, uint64_t key);
 
 int jl_valid_type_param(jl_value_t *v);
-
-extern jl_array_t *serializer_worklist;
-int module_in_worklist(jl_module_t *mod);
 
 JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t nargs);
 

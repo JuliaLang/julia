@@ -408,8 +408,6 @@
     XX(jl_rettype_inferred) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
-    XX(jl_save_incremental) \
-    XX(jl_save_system_image) \
     XX(jl_SC_CLK_TCK) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \

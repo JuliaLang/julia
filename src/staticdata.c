@@ -713,7 +713,8 @@ static void jl_serialize_postorder_as_needed(jl_serializer_state *s, jl_value_t 
     if (s->incremental && jl_object_in_image(v))
         return;
 
-    jl_serialize_postorder_as_needed(s, jl_typeof(v), recursive);
+    if (v != (jl_value_t*)jl_datatype_type)
+        jl_serialize_postorder_as_needed(s, jl_typeof(v), recursive);
 
     if (jl_is_uniontype(v)) {
         jl_uniontype_t *u = (jl_uniontype_t*)v;
@@ -1908,10 +1909,10 @@ static void jl_update_all_gvars(jl_serializer_state *s)
 // New roots for external methods
 static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
 {
-    size_t i;
+    size_t i, l = new_specializations ? jl_array_len(new_specializations) : 0;
     jl_value_t *v;
     jl_method_t *m;
-    for (i = 0; i < jl_array_len(new_specializations); i++) {
+    for (i = 0; i < l; i++) {
         v = jl_array_ptr_ref(new_specializations, i);
         assert(jl_is_code_instance(v));
         m = ((jl_code_instance_t*)v)->def->def.method;
@@ -2303,7 +2304,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 
     // Collect the new method roots
     htable_t methods_with_newspecs;
-    htable_new(&methods_with_newspecs, jl_array_len(*new_specializations));
+    htable_new(&methods_with_newspecs, 0);
     jl_collect_methods(&methods_with_newspecs, *new_specializations);
     jl_collect_new_roots(*method_roots_list, &methods_with_newspecs);
     htable_free(&methods_with_newspecs);
@@ -2358,7 +2359,6 @@ static void jl_save_system_image_to_stream(ios_t *f,
     ios_mem(&relocs,      100000);
     ios_mem(&gvar_record, 100000);
     ios_mem(&fptr_record, 100000);
-    serializer_worklist = worklist;   // NULL means "serialize everything"
     jl_serializer_state s;
     s.incremental = !(worklist == NULL);
     s.s = &sysimg;
@@ -2386,19 +2386,18 @@ static void jl_save_system_image_to_stream(ios_t *f,
                 jl_array_del_end(args, jl_array_len(args));
             }
         }
-
-        jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
-        jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
-        jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
-        if (jl_bigint_type) {
-            gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
-                                                        jl_symbol("BITS_PER_LIMB"))) / 8;
-        }
-        if (jl_base_module) {
-            jl_value_t *docs = jl_get_global(jl_base_module, jl_symbol("Docs"));
-            if (docs && jl_is_module(docs)) {
-                jl_docmeta_sym = (jl_sym_t*)jl_get_global((jl_module_t*)docs, jl_symbol("META"));
-            }
+    }
+    jl_idtable_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("IdDict")) : NULL;
+    jl_idtable_typename = jl_base_module ? ((jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_idtable_type))->name : NULL;
+    jl_bigint_type = jl_base_module ? jl_get_global(jl_base_module, jl_symbol("BigInt")) : NULL;
+    if (jl_bigint_type) {
+        gmp_limb_size = jl_unbox_long(jl_get_global((jl_module_t*)jl_get_global(jl_base_module, jl_symbol("GMP")),
+                                                    jl_symbol("BITS_PER_LIMB"))) / 8;
+    }
+    if (jl_base_module) {
+        jl_value_t *docs = jl_get_global(jl_base_module, jl_symbol("Docs"));
+        if (docs && jl_is_module(docs)) {
+            jl_docmeta_sym = (jl_sym_t*)jl_get_global((jl_module_t*)docs, jl_symbol("META"));
         }
     }
 
@@ -2580,39 +2579,98 @@ static void jl_save_system_image_to_stream(ios_t *f,
     if (worklist)
         htable_free(&external_objects);
     jl_cleanup_serializer2();
-    serializer_worklist = NULL;
 
     jl_gc_enable(en);
 }
 
-#if 0
-JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist)
+static int64_t jl_incremental_header_stuff(ios_t *f, jl_array_t *worklist, jl_array_t **mod_array, jl_array_t **udeps)
+{
+    *mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    assert(jl_precompile_toplevel_module == NULL);
+    jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
+
+    write_header(f);
+    // write description of contents (name, uuid, buildid)
+    write_worklist_for_header(f, worklist);
+    // Determine unique (module, abspath, mtime) dependencies for the files defining modules in the worklist
+    // (see Base._require_dependencies). These get stored in `udeps` and written to the ji-file header.
+    // Also write Preferences.
+    int64_t srctextpos = write_dependency_list(f, worklist, udeps);  // srctextpos: position of srctext entry in header index (update later)
+    // write description of requirements for loading (modules that must be pre-loaded if initialization is to succeed)
+    // this can return errors during deserialize,
+    // best to keep it early (before any actual initialization)
+    write_mod_list(f, *mod_array);
+    return srctextpos;
+}
+
+JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist, jl_array_t *_newly_inferred /*FIXME*/)
 {
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
     native_functions = _native_data;
-    jl_array_t *extext_methods = NULL, *new_specializations = NULL;
+    jl_array_t *mod_array = NULL, *udeps = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
-    JL_GC_PUSH5(&extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
-    jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+    JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+    int64_t srctextpos = 0;
+    if (worklist) {
+        srctextpos = jl_incremental_header_stuff(f, worklist, &mod_array, &udeps);
+        jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+    }
     jl_save_system_image_to_stream(f, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
+    if (worklist) {
+        // Write the source-text for the dependent files
+        if (udeps) {
+            // Go back and update the source-text position to point to the current position
+            int64_t posfile = ios_pos(f);
+            ios_seek(f, srctextpos);
+            write_uint64(f, posfile);
+            ios_seek_end(f);
+            // Each source-text file is written as
+            //   int32: length of abspath
+            //   char*: abspath
+            //   uint64: length of src text
+            //   char*: src text
+            // At the end we write int32(0) as a terminal sentinel.
+            size_t len = jl_array_len(udeps);
+            ios_t srctext;
+            for (size_t i = 0; i < len; i++) {
+                jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
+                jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
+                // Dependencies declared with `include_dependency` are excluded
+                // because these may not be Julia code (and could be huge)
+                if (depmod != (jl_value_t*)jl_main_module) {
+                    jl_value_t *dep = jl_fieldref(deptuple, 1);  // file abspath
+                    const char *depstr = jl_string_data(dep);
+                    if (!depstr[0])
+                        continue;
+                    ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
+                    if (!srctp) {
+                        jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
+                                jl_string_data(dep));
+                        continue;
+                    }
+                    size_t slen = jl_string_len(dep);
+                    write_int32(f, slen);
+                    ios_write(f, depstr, slen);
+                    posfile = ios_pos(f);
+                    write_uint64(f, 0);   // placeholder for length of this file in bytes
+                    uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);
+                    ios_close(&srctext);
+                    ios_seek(f, posfile);
+                    write_uint64(f, filelen);
+                    ios_seek_end(f);
+                }
+            }
+        }
+        write_int32(f, 0); // mark the end of the source text
+        jl_precompile_toplevel_module = NULL;
+    }
+
     JL_GC_POP();
     return f;
 }
-#endif
 
 JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
-JL_DLLEXPORT void jl_save_system_image(const char *fname)
-{
-    ios_t f;
-    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        jl_errorf("cannot open system image file \"%s\" for writing", fname);
-    }
-    JL_SIGATOMIC_BEGIN();
-    jl_save_system_image_to_stream(&f, NULL, NULL, NULL, NULL, NULL, NULL);
-    ios_close(&f);
-    JL_SIGATOMIC_END();
-}
 
 // Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
@@ -2904,10 +2962,30 @@ static void jl_restore_system_image_from_stream_(ios_t *f,
     jl_gc_enable(en);
 }
 
-static jl_value_t *jl_restore_package_image_from_stream(ios_t *f)
+static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *depmods)
 {
     jl_array_t *worklist = NULL, *extext_methods = NULL, *new_specializations = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     JL_GC_PUSH6(&worklist, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+
+    if (ios_eof(f) || !jl_read_verify_header(f)) {
+        return jl_get_exceptionf(jl_errorexception_type,
+                "Precompile file header verification checks failed.");
+    }
+    { // skip past the mod list
+        size_t len;
+        while ((len = read_int32(f)))
+            ios_skip(f, len + 3 * sizeof(uint64_t));
+    }
+    { // skip past the dependency list
+        size_t deplen = read_uint64(f);
+        ios_skip(f, deplen);
+    }
+
+    // verify that the system state is valid
+    jl_value_t *verify_fail = read_verify_mod_list(f, depmods);
+    if (verify_fail) {
+        return verify_fail;
+    }
 
     jl_restore_system_image_from_stream_(f, &worklist, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
 
@@ -2930,6 +3008,27 @@ static jl_value_t *jl_restore_system_image_from_stream(ios_t *f)
 {
     jl_restore_system_image_from_stream_(f, NULL, NULL, NULL, NULL, NULL, NULL);
     return (jl_value_t*)jl_nothing;
+}
+
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods)
+{
+    ios_t f;
+    ios_static_buffer(&f, (char*)buf, sz);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, depmods);
+    ios_close(&f);
+    return ret;
+}
+
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods)
+{
+    ios_t f;
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
+        return jl_get_exceptionf(jl_errorexception_type,
+            "Cache file \"%s\" not found.\n", fname);
+    }
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, depmods);
+    ios_close(&f);
+    return ret;
 }
 
 // TODO: need to enforce that the alignment of the buffer is suitable for vectors
@@ -2976,7 +3075,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_system_image_data(const char *buf, size_t le
     return worklist;
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname)
+JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods)
 {
     void *pkgimg_handle = jl_dlopen(fname, JL_RTLD_LAZY);
     if (!pkgimg_handle) {
@@ -3004,7 +3103,7 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname)
     }
     jl_dlsym(pkgimg_handle, "jl_sysimg_gvars_offsets", (void **)&sysimg_gvars_offsets, 1);
     sysimg_gvars_offsets += 1;
-    jl_value_t* mod = jl_restore_system_image_data(pkgimg_data, *plen);
+    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_data, *plen, depmods);
     sysimg_fptrs = old_sysimg_fptrs;
 
     void *pgcstack_func_slot;
