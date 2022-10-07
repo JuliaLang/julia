@@ -4,7 +4,6 @@ isdefined(Main, :MethodInvalidations) || @eval Main include(joinpath($(BASE_TEST
 import Base
 
 using .Main.MethodInvalidations
-using REPL: REPL
 
 f(x) = x
 g(x) = f(x)
@@ -18,6 +17,4 @@ invs = @method_invalidations f(x::Int) = 2x
 struct X end
 
 invs = @method_invalidations Base.convert(::Type{String}, ::X) = X()
-@test !invalidated(invs, Base.show_unquoted)
-@test !invalidated(invs, REPL.REPLHistoryProvider)
-@test !invalidated(invs, Base.CoreLogging.handle_message)
+@test length(uinvalidated(invs)) == 0
