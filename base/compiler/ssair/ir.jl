@@ -761,7 +761,7 @@ function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
 end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
-    node = add!(compact.pending_nodes, pos, attach_after)
+    node = add_inst!(compact.pending_nodes, pos, attach_after)
     heappush!(compact.pending_perm, length(compact.pending_nodes), By(x -> compact.pending_nodes.info[x].pos))
     return node
 end
