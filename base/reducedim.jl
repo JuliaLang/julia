@@ -1077,6 +1077,7 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     Rval, Rind
 end
 
+_error_findminmax_empty(f) = throw(ArgumentError("$f over an empty array is not allowed."))
 """
     findmin!(rval, rind, A) -> (minval, index)
 
@@ -1109,7 +1110,10 @@ julia> findmin(A, dims=2)
 ([1.0; 3.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
-findmin(A::AbstractArray; dims=:) = _findmin(A, dims)
+function findmin(A::AbstractArray; dims=:) 
+    isempty(A) && _error_findminmax_empty("findmin")
+    _findmin(A, dims)
+end
 _findmin(A, dims) = _findmin(identity, A, dims)
 
 """
@@ -1132,9 +1136,13 @@ julia> findmin(abs2, A, dims=2)
 ([1.0; 0.25;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
-findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
+function findmin(f, A::AbstractArray; dims=:)
+    isempty(A) && _error_findminmax_empty("findmin")
+    return _findmin(f, A, dims)
+end
 
 function _findmin(f, A, region)
+    isempty(A) && _error_findminmax_empty("findmin")
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
@@ -1180,7 +1188,10 @@ julia> findmax(A, dims=2)
 ([2.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 2); CartesianIndex(2, 2);;])
 ```
 """
-findmax(A::AbstractArray; dims=:) = _findmax(A, dims)
+function findmax(A::AbstractArray; dims=:)
+    isempty(A) && _error_findminmax_empty("findmax")
+    return _findmax(A, dims)
+end
 _findmax(A, dims) = _findmax(identity, A, dims)
 
 """
@@ -1203,7 +1214,10 @@ julia> findmax(abs2, A, dims=2)
 ([1.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 2);;])
 ```
 """
-findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
+function findmax(f, A::AbstractArray; dims=:) 
+    isempty(A) && _error_findminmax_empty("findmax")
+    return _findmax(f, A, dims)
+end
 
 function _findmax(f, A, region)
     ri = reduced_indices0(A, region)
@@ -1254,7 +1268,11 @@ julia> argmin(A, dims=2)
  CartesianIndex(2, 1)
 ```
 """
-argmin(A::AbstractArray; dims=:) = findmin(A; dims=dims)[2]
+function argmin(A::AbstractArray; dims=:)
+    isempty(A) && _error_findminmax_empty("argmin")
+    return findmin(A; dims=dims)[2]
+end
+
 
 """
     argmax(A; dims) -> indices
@@ -1279,4 +1297,7 @@ julia> argmax(A, dims=2)
  CartesianIndex(2, 2)
 ```
 """
-argmax(A::AbstractArray; dims=:) = findmax(A; dims=dims)[2]
+function argmax(A::AbstractArray; dims=:)
+    isempty(A) && _error_findminmax_empty("argmax")
+    return findmax(A; dims=dims)[2]
+end
