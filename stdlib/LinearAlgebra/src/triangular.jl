@@ -1374,19 +1374,9 @@ function *(A::AbstractMatrix, B::AbstractTriangular)
     AA = copy_similar(A, TAB)
     rmul!(AA, convert(AbstractArray{TAB}, B))
 end
-# ambiguity resolution with definitions in linalg/rowvector.jl
+# ambiguity resolution with definitions in matmul.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
 *(v::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) * v.parent)
-
-# If these are not defined, they will fallback to the versions in matmul.jl
-# and dispatch to generic_matmatmul! which is very costly to compile. The methods
-# below might compute an unnecessary copy. Eliminating the copy requires adding
-# all the promotion logic here once again. Since these methods are probably relatively
-# rare, we chose not to bother for now.
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::AbstractTriangular) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::AbstractTriangular) = copy(A) * B
-*(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
 
 # Complex matrix power for upper triangular factor, see:
 #   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",
