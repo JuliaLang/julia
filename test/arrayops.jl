@@ -1473,6 +1473,18 @@ end
     @test splice!([4,3,2,1], [2, 4]) == [3, 1]
 end
 
+@testset "#46399: don't modify `splice!` input if error" begin
+    a = [1:2, 3:4]
+    acopy = copy(a)
+    @test_throws MethodError splice!(acopy, 1, 10:11)
+    @test a == acopy
+
+    b = [1, 2]
+    bcopy = copy(b)
+    @test_throws MethodError splice!(bcopy, 1:2, [1:2])
+    @test b == bcopy
+end
+
 @testset "filter!" begin
     # base case w/ Vector
     a = Vector(1:10)

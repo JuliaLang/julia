@@ -1689,9 +1689,11 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
     elseif m == 1
         a[i] = ins[1]
     else
+        # Attempt conversion before modifying input.
+        newvalues = convert(typeof(a), ins)
         _growat!(a, i, m-1)
         k = 1
-        for x in ins
+        for x in newvalues
             a[i+k-1] = x
             k += 1
         end
@@ -1747,6 +1749,8 @@ function splice!(a::Vector, r::AbstractUnitRange{<:Integer}, ins=_default_splice
     l = last(r)
     d = length(r)
 
+    # Attempt conversion before modifying input.
+    newvalues = convert(typeof(a), ins)
     if m < d
         delta = d - m
         _deleteat!(a, (f - 1 < n - l) ? f : (l - delta + 1), delta)
@@ -1755,10 +1759,11 @@ function splice!(a::Vector, r::AbstractUnitRange{<:Integer}, ins=_default_splice
     end
 
     k = 1
-    for x in ins
+    for x in newvalues
         a[f+k-1] = x
         k += 1
     end
+
     return v
 end
 
