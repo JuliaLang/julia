@@ -179,7 +179,7 @@ returns `false`.
 
     The macro creates a new type `Irrational{:sym}` regardless of where it's invoked. This can
     leads to conflicting definitions if two pacakges defined an irrational number with same 
-    name but diffferent values.
+    name but different values.
 
 
 # Examples
