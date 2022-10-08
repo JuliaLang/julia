@@ -1750,7 +1750,7 @@ A symbol in the current scope is not defined.
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
 
 julia> a = 1;
 
@@ -1773,7 +1773,7 @@ julia> function my_func(;my_arg)
 my_func (generic function with 1 method)
 
 julia> my_func()
-ERROR: UndefKeywordError: keyword argument my_arg not assigned
+ERROR: UndefKeywordError: keyword argument `my_arg` not assigned
 Stacktrace:
  [1] my_func() at ./REPL[1]:2
  [2] top-level scope at REPL[2]:1
