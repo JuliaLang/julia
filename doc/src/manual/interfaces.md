@@ -157,10 +157,10 @@ julia> collect(Iterators.reverse(Squares(4)))
 
 | Methods to implement | Brief description                |
 |:-------------------- |:-------------------------------- |
-| `getindex(X, i)`     | `X[i]`, indexed element access   |
-| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment   |
+| `getindex(X, i)`     | `X[i]`, indexed access, shouldn't return a [`view`](@ref)  |
+| `setindex!(X, v, i)` | `X[i] = v`, indexed assignment         |
 | `firstindex(X)`         | The first index, used in `X[begin]` |
-| `lastindex(X)`           | The last index, used in `X[end]` |
+| `lastindex(X)`           | The last index, used in `X[end]`   |
 
 For the `Squares` iterable above, we can easily compute the `i`th element of the sequence by squaring
 it.  We can expose this as an indexing expression `S[i]`. To opt into this behavior, `Squares`
