@@ -146,6 +146,6 @@ end
 /(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
 /(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
 /(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
-/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = transpose(transpose(F) \ transpose(B))
 /(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
-/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization}) = transpose(transpose(F) \ transpose(B))

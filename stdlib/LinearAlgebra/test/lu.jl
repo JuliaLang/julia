@@ -440,4 +440,10 @@ end
     @test length(b) == 4
 end
 
+@testset "more generic ldiv! #35419" begin
+    A = rand(3, 3)
+    b = rand(3)
+    @test A * ldiv!(lu(A), Base.ReshapedArray(copy(b)', (3,), ())) ≈ b
+end
+
 end # module TestLU

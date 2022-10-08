@@ -213,11 +213,21 @@ end
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (_evview(A)==_evview(B))
 
-@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+@inline mul!(A::AbstractVector, B::SymTridiagonal, C::AbstractVector,
              alpha::Number, beta::Number) =
     _mul!(A, B, C, MulAddMul(alpha, beta))
+@inline mul!(A::AbstractMatrix, B::SymTridiagonal, C::AbstractVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
+# disambiguation
+@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
 
-@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+@inline function _mul!(C::AbstractVecOrMat, S::SymTridiagonal, B::AbstractVecOrMat,
                           _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
@@ -277,7 +287,7 @@ function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     return r
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
+(\)(T::SymTridiagonal, B::AbstractVecOrMat) = ldlt(T)\B
 
 # division with optional shift for use in shifted-Hessenberg solvers (hessenberg.jl):
 ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
@@ -617,7 +627,7 @@ Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(
 ishermitian(S::Tridiagonal) = all(ishermitian, S.d) && all(Iterators.map((x, y) -> x == y', S.du, S.dl))
 issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) -> x == transpose(y), S.du, S.dl))
 
-\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ B
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = copy(A) \ B
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
