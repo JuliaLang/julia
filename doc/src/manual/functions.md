@@ -755,7 +755,7 @@ easier to use and extend by allowing arguments to be identified by name instead 
 
 For example, consider a function `plot` that plots a line. This function might have many options,
 for controlling line style, width, color, and so on. If it accepts keyword arguments, a possible
-call might look like `plot(x, y, width=2)`, where we have chosen to specify only line width. Notice
+call might look like `plot(x1, y1, x2, y2, width=2)`, where we have chosen to specify only line width. Notice
 that this serves two purposes. The call is easier to read, since we can label an argument with
 its meaning. It also becomes possible to pass any subset of a large number of arguments, in any
 order.
@@ -763,13 +763,13 @@ order.
 Functions with keyword arguments are defined using a semicolon in the signature:
 
 ```julia
-function plot(x, y; style="solid", width=1, color="black")
+function plot(x1, y1, x2, y2; style="solid", width=1, color="black")
     ###
 end
 ```
 
-When the function is called, the semicolon is optional: one can either call `plot(x, y, width=2)`
-or `plot(x, y; width=2)`, but the former style is more common. An explicit semicolon is required
+When the function is called, the semicolon is optional: one can either call `plot(x1, y1, x2, y2, width=2)`
+or `plot(x1, y1, x2, y2; width=2)`, but the former style is more common. An explicit semicolon is required
 only for passing varargs or computed keywords as described below.
 
 Keyword argument default values are evaluated only when necessary (when a corresponding keyword
@@ -816,18 +816,18 @@ f(3)      # throws UndefKeywordError(:y)
 ```
 
 One can also pass `key => value` expressions after a semicolon. For example, `plot(x, y; :width => 2)`
-is equivalent to `plot(x, y, width=2)`. This is useful in situations where the keyword name is computed
+is equivalent to `plot(x1, y1, x2, y2, width=2)`. This is useful in situations where the keyword name is computed
 at runtime.
 
 When a bare identifier or dot expression occurs after a semicolon, the keyword argument name is
-implied by the identifier or field name. For example `plot(x, y; width)` is equivalent to
-`plot(x, y; width=width)` and `plot(x, y; options.width)` is equivalent to `plot(x, y; width=options.width)`.
+implied by the identifier or field name. For example `plot(x1, y1, x2, y2; width)` is equivalent to
+`plot(x1, y1, x2, y2; width=width)` and `plot(x1, y1, x2, y2; options.width)` is equivalent to `plot(x1, y1, x2, y2; width=options.width)`.
 
 The nature of keyword arguments makes it possible to specify the same argument more than once.
-For example, in the call `plot(x, y; options..., width=2)` it is possible that the `options` structure
+For example, in the call `plot(x1, y1, x2, y2; options..., width=2)` it is possible that the `options` structure
 also contains a value for `width`. In such a case the rightmost occurrence takes precedence; in
 this example, `width` is certain to have the value `2`. However, explicitly specifying the same keyword
-argument multiple times, for example `plot(x, y, width=2, width=3)`, is not allowed and results in
+argument multiple times, for example `plot(x1, y1, x2, y2, width=2, width=3)`, is not allowed and results in
 a syntax error.
 
 ## Evaluation Scope of Default Values
