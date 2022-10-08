@@ -536,15 +536,6 @@ end
 insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-# For bootstrapping
-function my_sortperm(v)
-    p = Vector{Int}(undef, length(v))
-    for i = 1:length(v)
-        p[i] = i
-    end
-    sort!(p, Sort.DEFAULT_UNSTABLE, Order.Perm(Sort.Forward,v))
-    p
-end
 
 mutable struct IncrementalCompact
     ir::IRCode
@@ -576,10 +567,9 @@ mutable struct IncrementalCompact
 
     function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes after regular ones
-        perm = my_sortperm(Int[let new_node = code.new_nodes.info[i]
-            (new_node.pos * 2 + Int(new_node.attach_after))
-            end for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
+        info = code.new_nodes.info
+        perm = sort!(collect(eachindex(info)); by=i->(2info[i].pos+info[i].attach_after, i))
+        new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
@@ -631,8 +621,9 @@ mutable struct IncrementalCompact
 
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
-        perm = my_sortperm(Int[code.new_nodes.info[i].pos for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
+        info = code.new_nodes.info
+        perm = sort!(collect(eachindex(info)); by=i->(info[i].pos, i))
+        new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
