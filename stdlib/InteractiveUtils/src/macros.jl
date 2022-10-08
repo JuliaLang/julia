@@ -240,7 +240,7 @@ macro time_imports(ex)
     quote
         try
             Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            @time "Total imports time" $(esc(ex))
+            @time "Total evaluation time" $(esc(ex))
         finally
             Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
         end
