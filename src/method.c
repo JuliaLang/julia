@@ -705,6 +705,24 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             else if (nargs >= 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_specialize_sym) {
                 if (nargs == 1) // bare `@specialize` is special: it causes specialization on all args
                     m->nospecialize = 0;
+                for (j = 1; j < nargs; j++) {
+                    jl_value_t *aj = jl_exprarg(st, j);
+                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                        continue;
+                    int sn = (int)jl_slot_number(aj) - 2;
+                    if (sn < 0) // @specialize on self is valid but currently ignored
+                        continue;
+                    if (sn > (m->nargs - 2)) {
+                        jl_error("@specialize annotation applied to a non-argument");
+                    }
+                    if (sn >= sizeof(m->nospecialize) * 8) {
+                        jl_printf(JL_STDERR,
+                                  "WARNING: @specialize annotation only supported on the first %d arguments.\n",
+                                  (int)(sizeof(m->nospecialize) * 8));
+                        continue;
+                    }
+                    m->nospecialize &= ~(1 << sn);
+                }
                 st = jl_nothing;
             }
             else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_sym) {
