@@ -723,8 +723,10 @@ julia> function date(year::Int, month::Int=1, day::Int=1)
            d = clamp(day,   1:31)
            
            if m == 2
-           leap_year = ((y%4 == 0) && (y%100 ≠ 0)) || (y%400 == 0) 
-           leap_year ? d = clamp(d, 1:29) : d = clamp(d, 1:28)
+               leap_year = ((y%4 == 0) && (y%100 ≠ 0)) || (y%400 == 0) 
+               leap_year ? d = clamp(d, 1:29) : d = clamp(d, 1:28)
+           elseif m in [4, 6, 9, 11]
+               d = clamp(d, 1:30)
            end
            
            yy = string(y, pad=4)
