@@ -718,7 +718,7 @@ concisely as:
 
 ```jldoctest
 julia> function date(year::Int, month::Int=1, day::Int=1)
-           y = clamp(year,  1:2023)
+           y = clamp(year,  1:typemax(Int))
            m = clamp(month, 1:12)
            d = clamp(day,   1:31)
            
