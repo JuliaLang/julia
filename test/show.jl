@@ -2036,21 +2036,17 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
-    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
         line2 = popfirst!(lines2)
         @test startswith(line1, "2  1 ── ")
         @test startswith(line2, "   │    ")
         @test line2[12:end] == line2[12:end]
     end
-    let line1 = pop!(lines1)
-        line2 = pop!(lines2)
-        @test startswith(line1, "17 ")
-        @test startswith(line2, "   ")
-        @test line1[3:end] == line2[3:end]
-    end
-    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
+    @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
+    @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
+    @test pop!(lines1) == "17 └───       return %18"
+    @test pop!(lines2) == "   │          return %18"
+    @test pop!(lines2) == "17 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
     # verbose linetable
@@ -2529,4 +2525,59 @@ end
     str = sprint(io->show(io, cfg))
     @test contains(str, r"CFG with \d+ blocks")
     @test contains(str, r"bb 1 \(stmt.+\) → bb.*")
+end
+
+@testset "IncrementalCompact: correctly display attach-after nodes" begin
+    # set some IR
+    function foo(i)
+        j = i+42
+        return j
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # insert a bunch of nodes, inserting both before and after instruction 1
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 1), Int)
+    Core.Compiler.insert_node!(ir, 1, inst)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 2), Int)
+    Core.Compiler.insert_node!(ir, 1, inst)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 3), Int)
+    Core.Compiler.insert_node!(ir, 1, inst, true)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 4), Int)
+    Core.Compiler.insert_node!(ir, 1, inst, true)
+
+    # at every point we should be able to observe these instructions (in order)
+    function verify_display(ir)
+        str = sprint(io->show(io, ir))
+        lines = split(str, '\n')
+        patterns = ["identity(1)",
+                    "identity(2)",
+                    "add_int",
+                    "identity(3)",
+                    "identity(4)",
+                    "return"]
+        line_idx = 1
+        pattern_idx = 1
+        while pattern_idx <= length(patterns) && line_idx <= length(lines)
+            # we test pattern-per-pattern, in order,
+            # so that we skip e.g. the compaction boundary
+            if contains(lines[line_idx], patterns[pattern_idx])
+                pattern_idx += 1
+            end
+            line_idx += 1
+        end
+        @test pattern_idx > length(patterns)
+    end
+    verify_display(ir)
+
+    compact = Core.Compiler.IncrementalCompact(ir)
+    verify_display(compact)
+
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        verify_display(compact)
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    verify_display(ir)
 end
