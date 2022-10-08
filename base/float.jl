@@ -808,8 +808,8 @@ end
 
 Test whether a floating point number is subnormal.
 
-An IEEE floating point number is recognized as [subnormal](https://en.wikipedia.org/wiki/Subnormal_number)
-whenever its exponent bits are zero and its significand is not zero.
+An IEEE floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number)
+when its exponent bits are zero and its significand is not zero.
 
 # Examples
 ```jldoctest
