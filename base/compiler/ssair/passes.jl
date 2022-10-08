@@ -401,6 +401,16 @@ function lift_leaves(compact::IncrementalCompact,
                 end
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
+            # NOTE we can enable this, but most `:splatnew` expressions are transformed into
+            #      `:new` expressions by the inlinear
+            # elseif isexpr(def, :splatnew) && length(def.args) == 2 && isa(def.args[2], AnySSAValue)
+            #     tplssa = def.args[2]::AnySSAValue
+            #     tplexpr = compact[tplssa][:inst]
+            #     if is_known_call(tplexpr, tuple, compact) && 1 ≤ field < length(tplexpr.args)
+            #         lift_arg!(compact, tplssa, cache_key, tplexpr, 1+field, lifted_leaves)
+            #         continue
+            #     end
+            #     return nothing
             elseif is_getfield_captures(def, compact)
                 # Walk to new_opaque_closure
                 ocleaf = def.args[2]
@@ -469,7 +479,7 @@ function lift_arg!(
         end
     end
     lifted_leaves[cache_key] = LiftedValue(lifted)
-    nothing
+    return nothing
 end
 
 function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
