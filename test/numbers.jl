@@ -1588,6 +1588,10 @@ end
         @test mod(x,UInt(y)) == mod(x,y)
         @test mod(UInt(x),-y) == mod(x,-y)
         @test mod(-x,UInt(y)) == mod(-x,y)
+        @test mod(x, Inf) == x
+        @test mod(x, -Inf) == x
+        @test mod(-x, Inf) == -x
+        @test mod(-x, -Inf) == -x
     end
 
     @test div(typemax(UInt64)  , 1) ==  typemax(UInt64)

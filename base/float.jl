@@ -417,6 +417,9 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
 
 function mod(x::T, y::T) where T<:AbstractFloat
+    if !isfinite(y) && isfinite(x)
+        return x
+    end
     r = rem(x,y)
     if r == 0
         copysign(r,y)
