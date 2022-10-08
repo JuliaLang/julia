@@ -257,7 +257,20 @@ This creates a function taking one argument `x` and returning the value of the p
 2x - 1` at that value. Notice that the result is a generic function, but with a compiler-generated
 name based on consecutive numbering.
 
-The primary use for anonymous functions is passing them to functions which take other functions
+And because they're first class objects, we can assign them to a variable and then call them using
+the variable assigned to as a function:
+```julia
+julia> A = x -> x^2 + 2x - 1
+#5 (generic function with 1 method)
+
+julia> A(10)
+119
+
+julia> A(-3)
+2
+```
+
+However, the primary use for anonymous functions is passing them to functions which take other functions
 as arguments. A classic example is [`map`](@ref), which applies a function to each value of
 an array and returns a new array containing the resulting values:
 
