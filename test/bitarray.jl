@@ -1519,8 +1519,8 @@ timesofar("reductions")
                 b3 = bitrand(l)
                 b4 = bitrand(l+extra_l)
                 # when dest is longer than one source but shorter than the other
-                dest_inbewteen = bitrand(l + extra_l÷2)
-                original_tail_inbetween = last(dest_inbewteen, extra_l÷2)
+                dest_inbetween = bitrand(l + extra_l÷2)
+                original_tail_inbetween = last(dest_inbetween, extra_l÷2)
                 for op in (|, ⊻)
                     map!(op, dest, b2, b3)
                     @test first(dest, l) == map(op, b2, b3)
@@ -1532,7 +1532,7 @@ timesofar("reductions")
                     # check we didn't change bits we're not suppose to
                     @test last(dest, extra_l) == original_tail
                     
-                    map!(op, dest_inbewteen, b2, b4)
+                    map!(op, dest_inbetween, b2, b4)
                     @test first(dest_inbetween, l) == map(op, b2, b4)
                     @test last(dest_inbetween, extra_l÷2) == original_tail_inbetween
                 end
