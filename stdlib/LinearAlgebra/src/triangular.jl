@@ -894,11 +894,12 @@ end
 
 ## Generic triangular multiplication
 function lmul!(A::UpperTriangular, B::AbstractVecOrMat)
+    require_one_based_indexing(A, B)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
-    for j = 1:n
+    @inbounds for j = 1:n
         for i = 1:m
             Bij = A.data[i,i]*B[i,j]
             for k = i + 1:m
@@ -909,13 +910,13 @@ function lmul!(A::UpperTriangular, B::AbstractVecOrMat)
     end
     B
 end
-
 function lmul!(A::UnitUpperTriangular, B::AbstractVecOrMat)
+    require_one_based_indexing(A, B)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
-    for j = 1:n
+    @inbounds for j = 1:n
         for i = 1:m
             Bij = B[i,j]
             for k = i + 1:m
@@ -926,13 +927,13 @@ function lmul!(A::UnitUpperTriangular, B::AbstractVecOrMat)
     end
     B
 end
-
 function lmul!(A::LowerTriangular, B::AbstractVecOrMat)
+    require_one_based_indexing(A, B)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
-    for j = 1:n
+    @inbounds for j = 1:n
         for i = m:-1:1
             Bij = A.data[i,i]*B[i,j]
             for k = 1:i - 1
@@ -944,11 +945,12 @@ function lmul!(A::LowerTriangular, B::AbstractVecOrMat)
     B
 end
 function lmul!(A::UnitLowerTriangular, B::AbstractVecOrMat)
+    require_one_based_indexing(A, B)
     m, n = size(B, 1), size(B, 2)
     if m != size(A, 1)
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
-    for j = 1:n
+    @inbounds for j = 1:n
         for i = m:-1:1
             Bij = B[i,j]
             for k = 1:i - 1
@@ -961,11 +963,12 @@ function lmul!(A::UnitLowerTriangular, B::AbstractVecOrMat)
 end
 
 function rmul!(A::AbstractVecOrMat, B::UpperTriangular)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
-    for i = 1:m
+    @inbounds for i = 1:m
         for j = n:-1:1
             Aij = A[i,j]*B.data[j,j]
             for k = 1:j - 1
@@ -977,11 +980,12 @@ function rmul!(A::AbstractVecOrMat, B::UpperTriangular)
     A
 end
 function rmul!(A::AbstractVecOrMat, B::UnitUpperTriangular)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
-    for i = 1:m
+    @inbounds for i = 1:m
         for j = n:-1:1
             Aij = A[i,j]
             for k = 1:j - 1
@@ -994,11 +998,12 @@ function rmul!(A::AbstractVecOrMat, B::UnitUpperTriangular)
 end
 
 function rmul!(A::AbstractVecOrMat, B::LowerTriangular)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
-    for i = 1:m
+    @inbounds for i = 1:m
         for j = 1:n
             Aij = A[i,j]*B.data[j,j]
             for k = j + 1:n
@@ -1010,11 +1015,12 @@ function rmul!(A::AbstractVecOrMat, B::LowerTriangular)
     A
 end
 function rmul!(A::AbstractVecOrMat, B::UnitLowerTriangular)
+    require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
-    for i = 1:m
+    @inbounds for i = 1:m
         for j = 1:n
             Aij = A[i,j]
             for k = j + 1:n
@@ -1124,7 +1130,7 @@ function rdiv!(A::AbstractMatrix, B::UpperTriangular)
     A
 end
 function rdiv!(A::AbstractMatrix, B::UnitUpperTriangular)
-    require_one_based_indexing(A, B)
+    require_one_based_indexing(B)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
@@ -1140,14 +1146,13 @@ function rdiv!(A::AbstractMatrix, B::UnitUpperTriangular)
     end
     A
 end
-
 function rdiv!(A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
     end
-    for i = 1:m
+    @inbounds for i = 1:m
         for j = n:-1:1
             Aij = A[i,j]
             for k = j + 1:n

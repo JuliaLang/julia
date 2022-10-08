@@ -437,6 +437,8 @@ function ldiv!(transA::Transpose{<:Any,<:LU}, B::AbstractVecOrMat)
     _apply_inverse_ipiv_rows!(A, B)
 end
 
+ldiv!(adjF::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:Real} =
+    (F = adjF.parent; ldiv!(transpose(F), B))
 ldiv!(adjA::Adjoint{T,<:LU{T,<:StridedMatrix}}, B::StridedVecOrMat{T}) where {T<:BlasComplex} =
     (A = adjA.parent; LAPACK.getrs!('C', A.factors, A.ipiv, B))
 
