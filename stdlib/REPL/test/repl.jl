@@ -1444,7 +1444,7 @@ fake_repl() do stdin_write, stdout_read, repl
     # generate top-level error
     write(stdin_write, "foobar\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
     @test readline(stdout_read) == ""
     readuntil(stdout_read, "julia> ", keep=true)
     # check that top-level error did not change `err`
@@ -1458,13 +1458,13 @@ fake_repl() do stdin_write, stdout_read, repl
     readuntil(stdout_read, "julia> ", keep=true)
     write(stdin_write, "foo()\n")
     readline(stdout_read)
-    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: foobar not defined"
+    @test readline(stdout_read) == "\e[0mERROR: UndefVarError: `foobar` not defined"
     readuntil(stdout_read, "julia> ", keep=true)
     # check that deeper error did set `err`
     write(stdin_write, "err\n")
     readline(stdout_read)
     @test readline(stdout_read) == "\e[0m1-element ExceptionStack:"
-    @test readline(stdout_read) == "UndefVarError: foobar not defined"
+    @test readline(stdout_read) == "UndefVarError: `foobar` not defined"
     @test readline(stdout_read) == "Stacktrace:"
     write(stdin_write, '\x04')
     Base.wait(repltask)

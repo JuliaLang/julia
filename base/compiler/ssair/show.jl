@@ -16,10 +16,18 @@ import Base: show_unquoted
 using Base: printstyled, with_output_color, prec_decl, @invoke
 
 function Base.show(io::IO, cfg::CFG)
+    print(io, "CFG with $(length(cfg.blocks)) blocks:")
     for (idx, block) in enumerate(cfg.blocks)
-        print(io, idx, "\t=>\t")
-        join(io, block.succs, ", ")
-        println(io)
+        print(io, "\n  bb ", idx)
+        if block.stmts.start == block.stmts.stop
+            print(io, " (stmt ", block.stmts.start, ")")
+        else
+            print(io, " (stmts ", block.stmts.start, ":", block.stmts.stop, ")")
+        end
+        if !isempty(block.succs)
+            print(io, " → bb ")
+            join(io, block.succs, ", ")
+        end
     end
 end
 
@@ -571,17 +579,18 @@ end
 
 # Show a single statement, code.stmts[idx]/code.code[idx], in the context of the whole IRCode/CodeInfo.
 # Returns the updated value of bb_idx.
-# pop_new_node!(idx::Int) -> (node_idx, new_node_inst, new_node_type) may return a new
-#   node at the current index `idx`, which is printed before the statement at index
-#   `idx`. This function is repeatedly called until it returns `nothing`
+# pop_new_node!(idx::Int; attach_after=false) -> (node_idx, new_node_inst, new_node_type)
+#   may return a new node at the current index `idx`, which is printed before the statement
+#   at index `idx`. This function is repeatedly called until it returns `nothing`.
+#   to iterate nodes that are to be inserted after the statement, set `attach_after=true`.
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, config::IRShowConfig,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
+                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false)
     return show_ir_stmt(io, code, idx, config.line_info_preprinter, config.line_info_postprinter,
-                        used, cfg, bb_idx; pop_new_node!, config.bb_color)
+                        used, cfg, bb_idx; pop_new_node!, only_after, config.bb_color)
 end
 
 function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact}, idx::Int, line_info_preprinter, line_info_postprinter,
-                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), bb_color=:light_black)
+                      used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing), only_after::Bool=false, bb_color=:light_black)
     stmt = _stmt(code, idx)
     type = _type(code, idx)
     max_bb_idx_size = length(string(length(cfg.blocks)))
@@ -601,8 +610,7 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
     end
 
     i = 1
-    while true
-        next = pop_new_node!(idx)
+    function print_indentation(final::Bool=true)
         # Compute BB guard rail
         if bb_idx > length(cfg.blocks)
             # If invariants are violated, print a special leader
@@ -611,7 +619,6 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             printstyled(io, "!!! ", "─"^max_bb_idx_size, color=bb_color)
         else
             bbrange = cfg.blocks[bb_idx].stmts
-            bbrange = bbrange.start:bbrange.stop
             # Print line info update
             linestart = idx == first(bbrange) ? "  " : sprint(io -> printstyled(io, "│ ", color=bb_color), context=io)
             linestart *= " "^max_bb_idx_size
@@ -624,24 +631,20 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
                 bb_pad = max_bb_idx_size - length(bb_idx_str)
                 bb_type = length(cfg.blocks[bb_idx].preds) <= 1 ? "─" : "┄"
                 printstyled(io, bb_idx_str, " ", bb_type, "─"^bb_pad, color=bb_color)
-            elseif next === nothing && idx == last(bbrange) # print separator
+            elseif final && idx == last(bbrange) # print separator
                 printstyled(io, "└", "─"^(1 + max_bb_idx_size), color=bb_color)
             else
                 printstyled(io, "│ ", " "^max_bb_idx_size, color=bb_color)
             end
         end
         print(io, inlining_indent, " ")
+    end
 
-        if next === nothing
-            if bb_idx <= length(cfg.blocks) && idx == last(bbrange)
-                bb_idx += 1
-            end
-            break
-        end
+    # first, print new nodes that are to be inserted before the current statement
+    function print_new_node(node; final::Bool=true)
+        print_indentation(final)
 
-        # print new nodes first in the right position
-        node_idx, new_node_inst, new_node_type = next
-
+        node_idx, new_node_inst, new_node_type = node
         @assert new_node_inst !== UNDEF # we filtered these out earlier
         show_type = should_print_ssa_type(new_node_inst)
         let maxlength_idx=maxlength_idx, show_type=show_type
@@ -656,37 +659,84 @@ function show_ir_stmt(io::IO, code::Union{IRCode, CodeInfo, IncrementalCompact},
             line_info_postprinter(io; type = new_node_type, used = node_idx in used, show_type, idx = node_idx)
         end
         println(io)
+    end
+    while (next = pop_new_node!(idx)) !== nothing
+        only_after || print_new_node(next; final=false)
         i += 1
     end
-    if code isa CodeInfo
-        stmt = statement_indices_to_labels(stmt, cfg)
+
+    # peek at the nodes to be inserted after the current statement
+    # (to determine of the statement itself is the final one)
+    next = pop_new_node!(idx; attach_after=true)
+
+    # then, print the current statement
+    # FIXME: `only_after` is hack so that we can call this function to print uncompacted
+    #        attach-after nodes when the current node has already been compated already
+    if !only_after
+        print_indentation(next===nothing)
+        if code isa CodeInfo
+            stmt = statement_indices_to_labels(stmt, cfg)
+        end
+        show_type = type !== nothing && should_print_ssa_type(stmt)
+        print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
+        if type !== nothing # ignore types for pre-inference code
+            if type === UNDEF
+                # This is an error, but can happen if passes don't update their type information
+                printstyled(io, "::#UNDEF", color=:red)
+            else
+                line_info_postprinter(io; type, used = idx in used, show_type, idx)
+            end
+        end
+        println(io)
     end
-    show_type = type !== nothing && should_print_ssa_type(stmt)
-    print_stmt(io, idx, stmt, used, maxlength_idx, true, show_type)
-    if type !== nothing # ignore types for pre-inference code
-        if type === UNDEF
-            # This is an error, but can happen if passes don't update their type information
-            printstyled(io, "::#UNDEF", color=:red)
-        else
-            line_info_postprinter(io; type, used = idx in used, show_type, idx)
+    i += 1
+
+    # finally, print new nodes that are to be inserted after the current statement
+    while next !== nothing
+        print_new_node(next)
+        i += 1
+        next = pop_new_node!(idx; attach_after=true)
+    end
+
+    # increment the basic block counter
+    if bb_idx <= length(cfg.blocks)
+        bbrange = cfg.blocks[bb_idx].stmts
+        if bb_idx <= length(cfg.blocks) && idx == last(bbrange)
+            bb_idx += 1
         end
     end
-    println(io)
+
     return bb_idx
 end
 
-function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
     new_nodes_perm = filter(i -> isassigned(new_nodes.inst, i), 1:length(new_nodes))
     sort!(new_nodes_perm, by = x -> (x = new_nodes_info[x]; (x.pos, x.attach_after)))
-    perm_idx = Ref(1)
 
-    return function (idx::Int)
-        perm_idx[] <= length(new_nodes_perm) || return nothing
-        node_idx = new_nodes_perm[perm_idx[]]
-        if new_nodes_info[node_idx].pos != idx
+    # separate iterators for the nodes that are inserted before resp. after each statement
+    before_iter = Ref(1)
+    after_iter = Ref(1)
+
+    return function get_new_node(idx::Int; attach_after=false)
+        iter = attach_after ? after_iter : before_iter
+        iter[] <= length(new_nodes_perm) || return nothing
+        node_idx = new_nodes_perm[iter[]]
+
+        # skip nodes
+        while node_idx < new_nodes_idx ||                           # already compacted
+              idx > new_nodes_info[node_idx].pos ||                 # not interested in
+              new_nodes_info[node_idx].attach_after != attach_after
+            iter[] += 1
+            iter[] > length(new_nodes_perm) && return nothing
+            node_idx = new_nodes_perm[iter[]]
+        end
+
+        if new_nodes_info[node_idx].pos != idx ||
+           new_nodes_info[node_idx].attach_after != attach_after
             return nothing
         end
-        perm_idx[] += 1
+
+        iter[] += 1
         new_node = new_nodes[node_idx]
         new_node_inst = isassigned(new_nodes.inst, node_idx) ? new_node[:inst] : UNDEF
         new_node_type = isassigned(new_nodes.type, node_idx) ? new_node[:type] : UNDEF
@@ -695,18 +745,18 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info)
     end
 end
 
-function new_nodes_iter(ir::IRCode)
+function new_nodes_iter(ir::IRCode, new_nodes_idx=1)
     stmts = ir.stmts
     new_nodes = ir.new_nodes.stmts
     new_nodes_info = ir.new_nodes.info
-    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
 end
 
 function new_nodes_iter(compact::IncrementalCompact)
     stmts = compact.result
     new_nodes = compact.new_new_nodes.stmts
     new_nodes_info = compact.new_new_nodes.info
-    return _new_nodes_iter(stmts, new_nodes, new_nodes_info)
+    return _new_nodes_iter(stmts, new_nodes, new_nodes_info, 1)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
@@ -818,7 +868,8 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
-    let io = IOContext(io, :maxssaid=>length(ir.stmts))
+    maxssaid = length(ir.stmts) + Core.Compiler.length(ir.new_nodes)
+    let io = IOContext(io, :maxssaid=>maxssaid)
         show_ir_stmts(io, ir, 1:length(ir.stmts), config, used, cfg, 1; pop_new_node!)
     end
     finish_show_ir(io, cfg, config)
@@ -835,9 +886,8 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
 end
 
 function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
-    compact_cfg = CFG(compact.result_bbs, Int[first(compact.result_bbs[i].stmts) for i in 2:length(compact.result_bbs)])
     cfg = compact.ir.cfg
-    (_, width) = displaysize(io)
+
 
     # First print everything that has already been compacted
 
@@ -849,24 +899,76 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
             push!(used_compacted, i)
         end
     end
-    pop_new_node! = new_nodes_iter(compact)
-    bb_idx = let io = IOContext(io, :maxssaid=>length(compact.result))
-        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted, compact_cfg, 1; pop_new_node!)
+
+    # while compacting, the end of the active result bb will not have been determined
+    # (this is done post-hoc by `finish_current_bb!`), so determine it here from scratch.
+    result_bbs = copy(compact.result_bbs)
+    if compact.active_result_bb <= length(result_bbs)
+        # count the total number of nodes we'll add to this block
+        input_bb_idx = block_for_inst(compact.ir.cfg, compact.idx)
+        input_bb = compact.ir.cfg.blocks[input_bb_idx]
+        count = 0
+        for input_idx in input_bb.stmts.start:input_bb.stmts.stop
+            pop_new_node! = new_nodes_iter(compact.ir)
+            while pop_new_node!(input_idx) !== nothing
+                count += 1
+            end
+            while pop_new_node!(input_idx; attach_after=true) !== nothing
+                count += 1
+            end
+        end
+
+        result_bb = result_bbs[compact.active_result_bb]
+        result_bbs[compact.active_result_bb] = Core.Compiler.BasicBlock(result_bb,
+            Core.Compiler.StmtRange(first(result_bb.stmts), last(result_bb.stmts)+count))
     end
+    compact_cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
+
+    pop_new_node! = new_nodes_iter(compact)
+    maxssaid = length(compact.result) + Core.Compiler.length(compact.new_new_nodes)
+    bb_idx = let io = IOContext(io, :maxssaid=>maxssaid)
+        show_ir_stmts(io, compact, 1:compact.result_idx-1, config, used_compacted,
+                      compact_cfg, 1; pop_new_node!)
+    end
+
 
     # Print uncompacted nodes from the original IR
+
+    # print a separator
+    (_, width) = displaysize(io)
     stmts = compact.ir.stmts
-    pop_new_node! = new_nodes_iter(compact.ir)
-    if compact.idx < length(stmts)
-        indent = length(string(length(stmts)))
-        # config.line_info_preprinter(io, "", compact.idx)
-        printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+    indent = length(string(length(stmts)))
+    # config.line_info_preprinter(io, "", compact.idx)
+    printstyled(io, "─"^(width-indent-1), '\n', color=:red)
+
+    # while compacting, the start of the active uncompacted bb will have been overwritten.
+    # this manifests as a stmt range end that is less than the start, so correct that.
+    inputs_bbs = copy(cfg.blocks)
+    for (i, bb) in enumerate(inputs_bbs)
+        if bb.stmts.stop < bb.stmts.start
+            inputs_bbs[i] = Core.Compiler.BasicBlock(bb,
+                Core.Compiler.StmtRange(last(bb.stmts), last(bb.stmts)))
+            # this is not entirely correct, and will result in the bb starting again,
+            # but is the best we can do without changing how `finish_current_bb!` works.
+        end
     end
-    let io = IOContext(io, :maxssaid=>length(compact.ir.stmts))
-        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted, cfg, bb_idx; pop_new_node!)
+    uncompacted_cfg = CFG(inputs_bbs, Int[first(inputs_bbs[i].stmts) for i in 2:length(inputs_bbs)])
+
+    pop_new_node! = new_nodes_iter(compact.ir, compact.new_nodes_idx)
+    maxssaid = length(compact.ir.stmts) + Core.Compiler.length(compact.ir.new_nodes)
+    let io = IOContext(io, :maxssaid=>maxssaid)
+        # first show any new nodes to be attached after the last compacted statement
+        if compact.idx > 1
+            show_ir_stmt(io, compact.ir, compact.idx-1, config, used_uncompacted,
+                        uncompacted_cfg, bb_idx; pop_new_node!, only_after=true)
+        end
+
+        # then show the actual uncompacted IR
+        show_ir_stmts(io, compact.ir, compact.idx:length(stmts), config, used_uncompacted,
+                      uncompacted_cfg, bb_idx; pop_new_node!)
     end
 
-    finish_show_ir(io, cfg, config)
+    finish_show_ir(io, uncompacted_cfg, config)
 end
 
 function effectbits_letter(effects::Effects, name::Symbol, suffix::Char)

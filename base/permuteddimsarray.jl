@@ -132,6 +132,7 @@ julia> size(B)
 
 julia> size(A)[perm] == ans
 true
+```
 """
 function permutedims(A::AbstractArray, perm)
     dest = similar(A, genperm(axes(A), perm))

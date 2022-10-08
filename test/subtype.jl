@@ -1834,9 +1834,6 @@ end
                Type{Some{T}} where T,
                Union{})
 
-# issue #24333
-@test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
-
 # issue #38423
 let
     Either{L, R} = Union{Ref{L}, Val{R}}
@@ -2182,3 +2179,73 @@ S46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,<:(Union{Abst
 A46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
 @testintersect(A46735{B} where {B}, A46735, !Union{})
 @testintersect(A46735{B, M} where {B, M}, A46735, !Union{})
+
+#issue #46871 #38497
+struct A46871{T, N, M} <: AbstractArray{T, N} end
+struct B46871{T, N} <: Ref{A46871{T, N, N}} end
+for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
+    @testintersect(T, Ref{<:AbstractArray{<:Real, 3}}, B46871{Int, 3})
+end
+abstract type C38497{e,g<:Tuple,i} end
+struct Q38497{o,e<:NTuple{o},g} <: C38497{e,g,Array{o}} end
+@testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{1, Tuple{Int}, <:Tuple})
+
+#issue #33138
+@test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
+
+#issue #46970
+@test only(intersection_env(Union{S, Matrix{Int}} where S<:Matrix, Matrix)[2]) isa TypeVar
+T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
+@testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
+@test_broken T46784 <: T46784{T,S} where {T,S}
+
+@testset "known subtype/intersect issue" begin
+    #issue 45874
+    let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
+        T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
+        @test_broken S <: T
+        @test_broken typeintersect(S,T) === S
+    end
+
+    #issue 44395
+    @test_broken typeintersect(
+        Tuple{Type{T}, T} where {T <: Vector{Union{T, R}} where {R<:Real, T<:Real}},
+        Tuple{Type{Vector{Union{T, R}}}, Matrix{Union{T, R}}} where {R<:Real, T<:Real},
+    ) === Union{}
+
+    #issue 41561
+    @test_broken typeintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
+                Tuple{Vector{VN} where {N, VN<:AbstractVector{N}}, Vector{Vector{Float64}}}) !== Union{}
+    #issue 40865
+    @test_broken Tuple{Set{Ref{Int}}, Set{Ref{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Ref{K}}}
+    @test_broken Tuple{Set{Val{Int}}, Set{Val{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Val{K}}}
+
+    #issue 39099
+    A = Tuple{Tuple{Int, Int, Vararg{Int, N}}, Tuple{Int, Vararg{Int, N}}, Tuple{Vararg{Int, N}}} where N
+    B = Tuple{NTuple{N, Int}, NTuple{N, Int}, NTuple{N, Int}} where N
+    @test_broken !(A <: B)
+
+    #issue 36185
+    @test_broken typeintersect((Tuple{Type{T},Array{Union{T,Missing},N}} where {T,N}),
+                               (Tuple{Type{T},Array{Union{T,Nothing},N}} where {T,N})) <: Any
+
+    #issue 35698
+    @test_broken typeintersect(Type{Tuple{Array{T,1} where T}}, UnionAll)
+
+    #issue 33137
+    @test_broken (Tuple{Q,Int} where Q<:Int) <: Tuple{T,T} where T
+
+    #issue 26487
+    @test_broken typeintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T, Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T) <: Any
+
+    # issue 24333
+    @test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
+
+    # issue 22123
+    t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
+    t2 = Ref{Ref{Ref{Union{T, S}}} where T} where S
+    @test_broken t1 <: t2
+
+    # issue 21153
+    @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
+end

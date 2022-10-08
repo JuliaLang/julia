@@ -106,7 +106,7 @@ mutable struct InferenceState
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
     stmt_edges::Vector{Union{Nothing,Vector{Any}}}
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
@@ -152,7 +152,7 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
         stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
-        stmt_info = Any[ nothing for i = 1:nstmts ]
+        stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)

@@ -1290,7 +1290,7 @@ function escape_call!(astate::AnalysisState, pc::Int, args::Vector{Any}, callinf
         # now cascade to the builtin handling
         escape_call!(astate, pc, args)
         return
-    elseif isa(info, CallInfo)
+    elseif isa(info, EACallInfo)
         for linfo in info.linfos
             escape_invoke!(astate, pc, args, linfo, 1)
         end

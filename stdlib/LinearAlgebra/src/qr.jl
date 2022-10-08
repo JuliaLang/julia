@@ -909,11 +909,12 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
         end
         rnk += 1
     end
-    C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(lmul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
+    C, τ = LAPACK.tzrzf!(A.factors[1:rnk, :])
+    lmul!(A.Q', view(B, 1:mA, :))
+    ldiv!(UpperTriangular(view(C, :, 1:rnk)), view(B, 1:rnk, :))
     B[rnk+1:end,:] .= zero(T)
-    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
-    B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
+    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B, 1:nA, :))
+    B[A.p,:] = B[1:nA,:]
     return B, rnk
 end
 ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =

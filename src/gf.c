@@ -222,8 +222,6 @@ JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
         int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t ipo_effects, uint32_t effects, jl_value_t *argescapes,
         uint8_t relocatability);
-JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
-                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
 
 jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
@@ -281,8 +279,6 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
-    if (jl_is_method(mi->def.method) && jl_atomic_load_relaxed(&mi->def.method->unspecialized) == mi)
-        return NULL; // avoid inferring the unspecialized method
     static int in_inference;
     if (in_inference > 2)
         return NULL;
@@ -438,7 +434,8 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
         JL_LOCK(&mi->def.method->writelock);
     jl_code_instance_t *oldci = jl_atomic_load_relaxed(&mi->cache);
     jl_atomic_store_relaxed(&ci->next, oldci);
-    jl_gc_wb(ci, oldci); // likely older, but just being careful
+    if (oldci)
+        jl_gc_wb(ci, oldci);
     jl_atomic_store_release(&mi->cache, ci);
     jl_gc_wb(mi, ci);
     if (jl_is_method(mi->def.method))
@@ -1153,6 +1150,7 @@ static jl_method_instance_t *cache_method(
                     //        NULL, jl_emptysvec, /*guard*/NULL, jl_cachearg_offset(mt), other->min_world, other->max_world);
                 }
             }
+            assert(guards == jl_svec_len(guardsigs));
         }
         if (!cache_with_orig) {
             // determined above that there's no ambiguity in also using compilationsig as the cacheablesig
@@ -1435,6 +1433,7 @@ static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, boxeddepth);
         JL_GC_POP();
     }
+    //jl_static_show(JL_STDERR, (jl_value_t*)replaced);
     if (!jl_is_method(replaced->def.method))
         return; // shouldn't happen, but better to be safe
     JL_LOCK(&replaced->def.method->writelock);
@@ -1467,10 +1466,11 @@ static void invalidate_method_instance(void (*f)(jl_code_instance_t*), jl_method
 }
 
 // invalidate cached methods that overlap this definition
-void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
+static void invalidate_backedges(void (*f)(jl_code_instance_t*), jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
     JL_LOCK(&replaced_mi->def.method->writelock);
     jl_array_t *backedges = replaced_mi->backedges;
+    //jl_static_show(JL_STDERR, (jl_value_t*)replaced_mi);
     if (backedges) {
         // invalidate callers (if any)
         replaced_mi->backedges = NULL;
@@ -2137,7 +2137,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
         jl_code_info_t *src = jl_code_for_interpreter(mi);
-        if (!jl_code_requires_compiler(src)) {
+        if (!jl_code_requires_compiler(src, 0)) {
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                 (jl_value_t*)jl_any_type, NULL, NULL,
                 0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
@@ -3314,12 +3314,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                                 if (!jl_type_morespecific((jl_value_t*)m->sig, (jl_value_t*)m2->sig) &&
                                     !jl_type_morespecific((jl_value_t*)m2->sig, (jl_value_t*)m->sig)) {
                                     ambig1 = 1;
+                                    break;
                                 }
-                            }
-                            else {
-                                // otherwise some aspect of m is not ambiguous
-                                ambig1 = 0;
-                                break;
                             }
                         }
                     }
