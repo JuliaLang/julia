@@ -758,10 +758,10 @@ This can be checked for our `date` function example by calling `methods` functio
 
 ```jldoctest datefunc
 julia> methods(date)
-# 3 methods for generic function "date":
-[1] date(year::Int64) in Main at REPL[1]:1
-[2] date(year::Int64, month::Int64) in Main at REPL[1]:1
-[3] date(year::Int64, month::Int64, day::Int64) in Main at REPL[1]:1
+# 3 methods for generic function "date" from Main:
+[1] date(year::Int64) @ none:1
+[2] date(year::Int64, month::Int64) @ none:1
+[3] date(year::Int64, month::Int64, day::Int64) @ none:1
 ```
 
 ## Keyword Arguments
