@@ -206,8 +206,9 @@ similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), simil
 similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 function kron(A::Diagonal, B::Bidiagonal)
-    kdv = kron(diag(A), B.dv)
-    kev = _droplast!(kron(diag(A), _pushzero(B.ev)))
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kdv = _makevector(kron(diag(A), B.dv))
+    kev = _droplast!(_makevector(kron(diag(A), _pushzero(B.ev))))
     Bidiagonal(kdv, kev, B.uplo)
 end
 

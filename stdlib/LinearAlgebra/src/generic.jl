@@ -1419,9 +1419,7 @@ isdiag(x::Number) = true
     axpy!(α, x::AbstractArray, y::AbstractArray)
 
 Overwrite `y` with `x * α + y` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
-
-See also [`BLAS.axpy!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`.
 
 # Examples
 ```jldoctest
@@ -1465,9 +1463,7 @@ end
     axpby!(α, x::AbstractArray, β, y::AbstractArray)
 
 Overwrite `y` with `x * α + y * β` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
-
-See also [`BLAS.axpby!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`.
 
 # Examples
 ```jldoctest
@@ -1774,7 +1770,8 @@ function isapprox(x::AbstractArray, y::AbstractArray;
         return d <= max(atol, rtol*max(norm(x), norm(y)))
     else
         # Fall back to a component-wise approximate comparison
-        return all(ab -> isapprox(ab[1], ab[2]; rtol=rtol, atol=atol, nans=nans), zip(x, y))
+        # (mapreduce instead of all for greater generality [#44893])
+        return mapreduce((a, b) -> isapprox(a, b; rtol=rtol, atol=atol, nans=nans), &, x, y)
     end
 end
 

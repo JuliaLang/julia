@@ -20,6 +20,7 @@ using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
     Splat
 using Base.Broadcast: Broadcasted, broadcasted
+using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
 using libblastrampoline_jll
 import Libdl
@@ -469,13 +470,17 @@ _evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
+# convert to Vector, if necessary
+_makevector(x::Vector) = x
+_makevector(x::AbstractVector) = Vector(x)
+
 # append a zero element / drop the last element
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
-# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
 # we restrict this method to only the LAPACK factorizations in LinearAlgebra.
 # The definition is put here since it explicitly references all the Factorizion structs so it has
 # to be located after all the files that define the structs.

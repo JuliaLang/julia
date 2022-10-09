@@ -2,13 +2,6 @@
 
 # Methods operating on different special matrix types
 
-
-# Usually, reducedim_initarray calls similar, which yields a sparse matrix for a
-# Diagonal/Bidiagonal/Tridiagonal/SymTridiagonal matrix. However, reducedim should
-# yield a dense vector to increase performance.
-Base.reducedim_initarray(A::Union{Diagonal,Bidiagonal,Tridiagonal,SymTridiagonal}, region, init, ::Type{R}) where {R} = fill(convert(R, init), Base.reduced_indices(A,region))
-
-
 # Interconversion between special matrix types
 
 # conversions from Diagonal to other special matrix types
@@ -50,8 +43,8 @@ Bidiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 
-_lucopy(A::Bidiagonal, T)     = copymutable_oftype(Tridiagonal(A), T)
-_lucopy(A::Diagonal, T)       = copymutable_oftype(Tridiagonal(A), T)
+_lucopy(A::Bidiagonal, T) = copymutable_oftype(Tridiagonal(A), T)
+_lucopy(A::Diagonal, T)   = copymutable_oftype(Tridiagonal(A), T)
 function _lucopy(A::SymTridiagonal, T)
     du = copy_similar(_evview(A), T)
     dl = copy.(transpose.(du))

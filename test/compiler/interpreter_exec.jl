@@ -106,3 +106,19 @@ let m = Meta.@lower 1 + 1
     global test29262 = false
     @test :b === @eval $m
 end
+
+@testset "many basic blocks" begin
+    n = 1000
+    ex = :(return 1)
+    for _ in 1:n
+        ex = :(if rand()<.1
+            $(ex) end)
+    end
+    @eval begin
+        function f_1000()
+            $ex
+            return 0
+         end
+    end
+    @test f_1000()===0
+end

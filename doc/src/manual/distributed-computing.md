@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: MyType not defined
+UndefVarError: `MyType` not defined
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))

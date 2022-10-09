@@ -138,13 +138,25 @@ axes1(iter) = oneto(length(iter))
 
 Return an efficient array describing all valid indices for `a` arranged in the shape of `a` itself.
 
-They keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
+The keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
 arrays use [`CartesianIndex`](@ref) to describe their locations.  Often the special array
 types [`LinearIndices`](@ref) and [`CartesianIndices`](@ref) are used to efficiently
 represent these arrays of integers and `CartesianIndex`es, respectively.
 
 Note that the `keys` of an array might not be the most efficient index type; for maximum
 performance use  [`eachindex`](@ref) instead.
+
+# Examples
+```jldoctest
+julia> keys([4, 5, 6])
+3-element LinearIndices{1, Tuple{Base.OneTo{Int64}}}:
+ 1
+ 2
+ 3
+
+julia> keys([4 5; 6 7])
+CartesianIndices((2, 2))
+```
 """
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -154,7 +166,7 @@ keys(a::AbstractVector) = LinearIndices(a)
     keytype(A::AbstractArray)
 
 Return the key type of an array. This is equal to the
-`eltype` of the result of `keys(...)`, and is provided
+[`eltype`](@ref) of the result of `keys(...)`, and is provided
 mainly for compatibility with the dictionary interface.
 
 # Examples
@@ -180,7 +192,7 @@ valtype(a::AbstractArray) = valtype(typeof(a))
     valtype(T::Type{<:AbstractArray})
     valtype(A::AbstractArray)
 
-Return the value type of an array. This is identical to `eltype` and is
+Return the value type of an array. This is identical to [`eltype`](@ref) and is
 provided mainly for compatibility with the dictionary interface.
 
 # Examples
@@ -226,7 +238,7 @@ eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 """
     elsize(type)
 
-Compute the memory stride in bytes between consecutive elements of `eltype`
+Compute the memory stride in bytes between consecutive elements of [`eltype`](@ref)
 stored inside the given `type`, if the array elements are stored densely with a
 uniform linear stride.
 
@@ -1282,7 +1294,7 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-struct CanonicalIndexError
+struct CanonicalIndexError <: Exception
     func::String
     type::Any
     CanonicalIndexError(func::String, @nospecialize(type)) = new(func, type)
@@ -2244,7 +2256,8 @@ _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one(
 _typed_hvncat_0d_only_one() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
-_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
+# `@constprop :aggressive` here to form constant `Val(dim)` type to get type stability
+@constprop :aggressive _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
@@ -3473,8 +3486,9 @@ function circshift!(a::AbstractVector, shift::Integer)
     n == 0 && return
     shift = mod(shift, n)
     shift == 0 && return
-    reverse!(a, 1, shift)
-    reverse!(a, shift+1, length(a))
+    l = lastindex(a)
+    reverse!(a, firstindex(a), l-shift)
+    reverse!(a, l-shift+1, lastindex(a))
     reverse!(a)
     return a
 end

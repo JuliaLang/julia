@@ -59,6 +59,7 @@ done by `get_item_for_reloc`.
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h> // printf
+#include <inttypes.h> // PRIxPTR
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -362,9 +363,28 @@ typedef enum {
 } jl_callingconv_t;
 
 
+//#ifdef _P64
+//#define RELOC_TAG_OFFSET 61
+//#else
 // this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
-// if a larger size is required, will need to add support for writing larger relocations in many cases below
 #define RELOC_TAG_OFFSET 29
+//#endif
+
+#if RELOC_TAG_OFFSET <= 32
+typedef uint32_t reloc_t;
+#else
+typedef uint64_t reloc_t;
+#endif
+static void write_reloc_t(ios_t *s, uintptr_t reloc_id) JL_NOTSAFEPOINT
+{
+    if (sizeof(reloc_t) <= sizeof(uint32_t)) {
+        assert(reloc_id < UINT32_MAX);
+        write_uint32(s, reloc_id);
+    }
+    else {
+        write_uint64(s, reloc_id);
+    }
+}
 
 // --- Static Compile ---
 
@@ -576,6 +596,10 @@ static void jl_serialize_value__(jl_serializer_state *s, jl_value_t *v, int recu
         jl_serialize_value(s, tn->partial);
     }
     else if (t->layout->nfields > 0) {
+        if (jl_typeis(v, jl_globalref_type)) {
+            // Don't save the cached binding reference in staticdata
+            ((jl_globalref_t*)v)->bnd_cache = NULL;
+        }
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = t->layout->npointers;
         for (i = 0; i < np; i++) {
@@ -626,10 +650,9 @@ static void record_gvar(jl_serializer_state *s, int gid, uintptr_t reloc_id) JL_
 {
     if (gid == 0)
         return;
-    ios_ensureroom(s->gvar_record, gid * sizeof(uint32_t));
-    ios_seek(s->gvar_record, (gid - 1) * sizeof(uint32_t));
-    assert(reloc_id < UINT32_MAX);
-    write_uint32(s->gvar_record, reloc_id);
+    ios_ensureroom(s->gvar_record, gid * sizeof(reloc_t));
+    ios_seek(s->gvar_record, (gid - 1) * sizeof(reloc_t));
+    write_reloc_t(s->gvar_record, reloc_id);
 }
 
 
@@ -648,7 +671,7 @@ static void write_padding(ios_t *s, size_t nb) JL_NOTSAFEPOINT
 static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 {
     assert((ios_pos(s) & (sizeof(void*) - 1)) == 0 && "stream misaligned for writing a word-sized value");
-    write_padding(s, sizeof(void*));
+    write_uint(s, 0);
 }
 
 // Return the integer `id` for `v`. Generically this is looked up in `backref_table`,
@@ -1068,6 +1091,10 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&ccallable_list, (void*)3);
                 }
             }
+            else if (jl_is_method_instance(v)) {
+                jl_method_instance_t *newmi = (jl_method_instance_t*)&s->s->buf[reloc_offset];
+                newmi->precompiled = 0;
+            }
             else if (jl_is_code_instance(v)) {
                 // Handle the native-code pointers
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
@@ -1103,18 +1130,20 @@ static void jl_write_values(jl_serializer_state *s)
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
                                     ios_seek(s->fptr_record, (invokeptr_id - 1) * sizeof(void*));
-                                    write_uint32(s->fptr_record, ~reloc_offset);
+                                    write_reloc_t(s->fptr_record, (uint32_t)~reloc_offset);
 #ifdef _P64
-                                    write_padding(s->fptr_record, 4);
+                                    if (sizeof(reloc_t) < 8)
+                                        write_padding(s->fptr_record, 8 - sizeof(reloc_t));
 #endif
                                 }
                                 if (specfptr_id) {
                                     assert(specfptr_id > invokeptr_id && specfptr_id > 0);
                                     ios_ensureroom(s->fptr_record, specfptr_id * sizeof(void*));
                                     ios_seek(s->fptr_record, (specfptr_id - 1) * sizeof(void*));
-                                    write_uint32(s->fptr_record, reloc_offset);
+                                    write_reloc_t(s->fptr_record, reloc_offset);
 #ifdef _P64
-                                    write_padding(s->fptr_record, 4);
+                                    if (sizeof(reloc_t) < 8)
+                                        write_padding(s->fptr_record, 8 - sizeof(reloc_t));
 #endif
                                 }
                             }
@@ -1237,14 +1266,6 @@ static void jl_write_gv_tagrefs(jl_serializer_state *s)
     }
 }
 
-static inline uint32_t load_uint32(uintptr_t *base)
-{
-    uint32_t v = jl_load_unaligned_i32((void*)*base);
-    *base += 4;
-    return v;
-}
-
-
 // In deserialization, create Symbols and set up the
 // index for backreferencing
 static void jl_read_symbols(jl_serializer_state *s)
@@ -1253,7 +1274,8 @@ static void jl_read_symbols(jl_serializer_state *s)
     uintptr_t base = (uintptr_t)&s->symbols->buf[0];
     uintptr_t end = base + s->symbols->size;
     while (base < end) {
-        uint32_t len = load_uint32(&base);
+        uint32_t len = jl_load_unaligned_i32((void*)base);
+        base += 4;
         const char *str = (const char*)base;
         base += len + 1;
         //printf("symbol %3d: %s\n", len, str);
@@ -1311,7 +1333,7 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
 }
 
 // Compute target location at deserialization
-static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t base, size_t size, uint32_t reloc_id)
+static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t base, size_t size, uintptr_t reloc_id)
 {
     enum RefTags tag = (enum RefTags)(reloc_id >> RELOC_TAG_OFFSET);
     size_t offset = (reloc_id & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1));
@@ -1325,7 +1347,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(offset < deser_sym.len && deser_sym.items[offset] && "corrupt relocation item id");
         return (uintptr_t)deser_sym.items[offset];
     case BindingRef:
-        return jl_buff_tag | GC_OLD_MARKED;
+        return jl_buff_tag | GC_OLD;
     case TagRef:
         if (offset == 0)
             return (uintptr_t)s->ptls->root_task;
@@ -1383,10 +1405,9 @@ static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *li
         *pv = get_reloc_for_item(item, *pv);
         // record pos in relocations list
         // TODO: save space by using delta-compression
-        assert(pos < UINT32_MAX);
-        write_uint32(s, pos);
+        write_reloc_t(s, pos);
     }
-    write_uint32(s, 0);
+    write_reloc_t(s, 0);
 }
 
 
@@ -1403,9 +1424,8 @@ static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     size_t size = s->s->size;
     while (1) {
-        uintptr_t val = (uintptr_t)&s->relocs->buf[s->relocs->bpos];
-        uint32_t offset = load_uint32(&val);
-        s->relocs->bpos += sizeof(uint32_t);
+        uintptr_t offset = *(reloc_t*)&s->relocs->buf[(uintptr_t)s->relocs->bpos];
+        s->relocs->bpos += sizeof(reloc_t);
         if (offset == 0)
             break;
         uintptr_t *pv = (uintptr_t*)(base + offset);
@@ -1415,16 +1435,17 @@ static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
     }
 }
 
-static char* sysimg_base;
-static char* sysimg_relocs;
+static char *sysimg_base;
+static char *sysimg_relocs;
 void gc_sweep_sysimg(void)
 {
-    uintptr_t base = (uintptr_t)sysimg_base;
-    uintptr_t relocs = (uintptr_t)sysimg_relocs;
-    if (relocs == 0)
+    char *base = sysimg_base;
+    reloc_t *relocs = (reloc_t*)sysimg_relocs;
+    if (relocs == NULL)
         return;
     while (1) {
-        uint32_t offset = load_uint32(&relocs);
+        uintptr_t offset = *relocs;
+        relocs++;
         if (offset == 0)
             break;
         jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + offset);
@@ -1436,13 +1457,12 @@ void gc_sweep_sysimg(void)
 static void _jl_write_value(jl_serializer_state *s, jl_value_t *v)
 {
     if (v == NULL) {
-        write_uint32(s->s, 0);
+        write_reloc_t(s->s, 0);
         return;
     }
     uintptr_t item = backref_id(s, v);
     uintptr_t reloc = get_reloc_for_item(item, 0);
-    assert(reloc < UINT32_MAX);
-    write_uint32(s->s, reloc);
+    write_reloc_t(s->s, reloc);
 }
 
 
@@ -1450,9 +1470,8 @@ static jl_value_t *jl_read_value(jl_serializer_state *s)
 {
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     size_t size = s->s->size;
-    uintptr_t val = base + s->s->bpos;
-    uint32_t offset = load_uint32(&val);
-    s->s->bpos += sizeof(uint32_t);
+    uintptr_t offset = *(reloc_t*)(base + (uintptr_t)s->s->bpos);
+    s->s->bpos += sizeof(reloc_t);
     if (offset == 0)
         return NULL;
     return (jl_value_t*)get_item_for_reloc(s, base, size, offset);
@@ -1475,12 +1494,11 @@ static void jl_update_all_fptrs(jl_serializer_state *s)
     jl_method_instance_t **linfos = (jl_method_instance_t**)&s->fptr_record->buf[0];
     uint32_t clone_idx = 0;
     for (i = 0; i < sysimg_fvars_max; i++) {
-        uintptr_t val = (uintptr_t)&linfos[i];
-        uint32_t offset = load_uint32(&val);
+        reloc_t offset = *(reloc_t*)&linfos[i];
         linfos[i] = NULL;
         if (offset != 0) {
             int specfunc = 1;
-            if (offset & ((uintptr_t)1 << (8 * sizeof(uint32_t) - 1))) {
+            if (offset & ((uintptr_t)1 << (8 * sizeof(reloc_t) - 1))) {
                 // if high bit is set, this is the func wrapper, not the specfunc
                 specfunc = 0;
                 offset = ~offset;
@@ -1522,15 +1540,16 @@ static void jl_update_all_gvars(jl_serializer_state *s)
     size_t gvname_index = 0;
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     size_t size = s->s->size;
-    uintptr_t gvars = (uintptr_t)&s->gvar_record->buf[0];
-    uintptr_t end = gvars + s->gvar_record->size;
+    reloc_t *gvars = (reloc_t*)&s->gvar_record->buf[0];
+    reloc_t *end = gvars + s->gvar_record->size / sizeof(reloc_t);
     while (gvars < end) {
-        uint32_t offset = load_uint32(&gvars);
+        uintptr_t offset = *gvars;
         if (offset) {
             uintptr_t v = get_item_for_reloc(s, base, size, offset);
             *sysimg_gvars(sysimg_gvars_base, gvname_index) = v;
         }
         gvname_index += 1;
+        gvars++;
     }
 }
 
@@ -1546,14 +1565,14 @@ static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
         size_t item = (size_t)list->items[i];
         size_t reloc_offset = (size_t)layout_table.items[item];
         assert(reloc_offset != 0);
-        write_uint32(s->s, (uint32_t)reloc_offset);
-        write_uint32(s->s, (uint32_t)((uintptr_t)list->items[i + 1]));
+        write_reloc_t(s->s, reloc_offset);
+        write_uint8(s->s, (uintptr_t)list->items[i + 1]);
     }
-    write_uint32(s->s, 0);
+    write_reloc_t(s->s, 0);
 }
 
 
-static void jl_reinit_item(jl_value_t *v, int how) JL_GC_DISABLED
+static void jl_reinit_item(jl_value_t *v, uint8_t how) JL_GC_DISABLED
 {
     switch (how) {
         case 1: { // rehash IdDict
@@ -1605,11 +1624,17 @@ static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
     // run reinitialization functions
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     while (1) {
-        size_t offset = read_uint32(s->s);
+        size_t offset;
+        if (sizeof(reloc_t) <= 4) {
+            offset = read_uint32(s->s);
+        }
+        else {
+            offset = read_uint64(s->s);
+        }
         if (offset == 0)
             break;
         jl_value_t *v = (jl_value_t*)(base + offset);
-        jl_reinit_item(v, read_uint32(s->s));
+        jl_reinit_item(v, read_uint8(s->s));
     }
 }
 
@@ -1621,7 +1646,7 @@ static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
     size_t l = jl_svec_len(cache), i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL || ti == jl_nothing)
+        if (ti == jl_nothing)
             continue;
         if (jl_get_llvm_gv(native_functions, ti)) {
             jl_serialize_value(s, ti);
@@ -1635,16 +1660,21 @@ static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
 }
 
 // remove cached types not referenced in the stream
-static void jl_prune_type_cache_hash(jl_svec_t *cache)
+static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL || ti == jl_nothing)
+        if (ti == jl_nothing)
             continue;
         if (ptrhash_get(&backref_table, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
     }
+    void *idx = ptrhash_get(&backref_table, cache);
+    ptrhash_remove(&backref_table, cache);
+    cache = cache_rehash_set(cache, l);
+    ptrhash_put(&backref_table, cache, idx);
+    return cache;
 }
 
 static void jl_prune_type_cache_linear(jl_svec_t *cache)
@@ -1652,14 +1682,13 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
     size_t l = jl_svec_len(cache), ins = 0, i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL)
+        if (ti == jl_nothing)
             break;
         if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND)
             jl_svecset(cache, ins++, ti);
     }
-    if (i > ins) {
-        memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
-    }
+    while (ins < l)
+        jl_svecset(cache, ins++, jl_nothing);
 }
 
 static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
@@ -1711,7 +1740,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
-                record_field_change(&inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
@@ -1724,6 +1753,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
     }
     if (jl_options.strip_ir) {
         record_field_change(&mi->uninferred, NULL);
+        record_field_change((jl_value_t**)&mi->backedges, NULL);
+        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 
@@ -1764,11 +1795,15 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     }
     if (m->unspecialized)
         strip_specializations_(m->unspecialized);
+    if (jl_options.strip_ir && m->root_blocks)
+        record_field_change((jl_value_t**)&m->root_blocks, NULL);
     return 1;
 }
 
 static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
+    if (jl_options.strip_ir && mt->backedges)
+        record_field_change((jl_value_t**)&mt->backedges, NULL);
     return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
@@ -1933,61 +1968,80 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         // built-in type caches
         for (i = 0; i < typenames.len; i++) {
             jl_typename_t *tn = (jl_typename_t*)typenames.items[i];
-            jl_prune_type_cache_hash(tn->cache);
+            tn->cache = jl_prune_type_cache_hash(tn->cache);
+            jl_gc_wb(tn, tn->cache);
             jl_prune_type_cache_linear(tn->linearcache);
         }
         arraylist_free(&typenames);
     }
 
     { // step 2: build all the sysimg sections
-        write_padding(&sysimg, sizeof(uint32_t));
+        write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
         jl_write_relocations(&s);
         jl_write_gv_syms(&s, jl_get_root_symbol());
         jl_write_gv_tagrefs(&s);
     }
 
-    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET) ||
-        const_data.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)) {
-        jl_printf(JL_STDERR, "ERROR: system image too large\n");
+    if (sysimg.size > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: system image too large: sysimg.size is %jd but the limit is %" PRIxPTR "\n",
+            (intmax_t)sysimg.size,
+            ((uintptr_t)1 << RELOC_TAG_OFFSET)
+        );
+        jl_exit(1);
+    }
+    if (const_data.size / sizeof(void*) > ((uintptr_t)1 << RELOC_TAG_OFFSET)) {
+        jl_printf(
+            JL_STDERR,
+            "ERROR: system image too large: const_data.size is %jd but the limit is %" PRIxPTR "\n",
+            (intmax_t)const_data.size,
+            ((uintptr_t)1 << RELOC_TAG_OFFSET)*sizeof(void*)
+        );
         jl_exit(1);
     }
 
     // step 3: combine all of the sections into one file
-    write_uint32(f, sysimg.size - sizeof(uint32_t));
-    ios_seek(&sysimg, sizeof(uint32_t));
+    write_uint(f, sysimg.size - sizeof(uintptr_t));
+    ios_seek(&sysimg, sizeof(uintptr_t));
     ios_copyall(f, &sysimg);
     ios_close(&sysimg);
 
-    write_uint32(f, const_data.size);
+    write_uint(f, const_data.size);
     // realign stream to max-alignment for data
-    write_padding(f, LLT_ALIGN(ios_pos(f), 16) - ios_pos(f));
+    write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
     ios_seek(&const_data, 0);
     ios_copyall(f, &const_data);
     ios_close(&const_data);
 
-    write_uint32(f, symbols.size);
+    write_uint(f, symbols.size);
+    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&symbols, 0);
     ios_copyall(f, &symbols);
     ios_close(&symbols);
 
-    write_uint32(f, relocs.size);
+    write_uint(f, relocs.size);
+    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&relocs, 0);
     ios_copyall(f, &relocs);
     ios_close(&relocs);
 
-    write_uint32(f, gvar_record.size);
+    write_uint(f, gvar_record.size);
+    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&gvar_record, 0);
     ios_copyall(f, &gvar_record);
     ios_close(&gvar_record);
 
-    write_uint32(f, fptr_record.size);
+    write_uint(f, fptr_record.size);
+    write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
     ios_seek(&fptr_record, 0);
     ios_copyall(f, &fptr_record);
     ios_close(&fptr_record);
 
     { // step 4: record locations of special roots
         s.s = f;
+        write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
             jl_value_t *tag = *tags[i];
@@ -1996,8 +2050,8 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         jl_write_value(&s, jl_global_roots_table);
         jl_write_value(&s, s.ptls->root_task->tls);
         write_uint32(f, jl_get_gs_ctr());
-        write_uint32(f, jl_atomic_load_acquire(&jl_world_counter));
-        write_uint32(f, jl_typeinf_world);
+        write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
+        write_uint(f, jl_typeinf_world);
         jl_finalize_serializer(&s, &reinit_list);
         jl_finalize_serializer(&s, &ccallable_list);
     }
@@ -2084,37 +2138,43 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
 
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
-    size_t sizeof_sysimg = read_uint32(f);
-    ios_static_buffer(&sysimg, f->buf, sizeof_sysimg + sizeof(uint32_t));
+    size_t sizeof_sysimg = read_uint(f);
+    ios_static_buffer(&sysimg, f->buf, sizeof_sysimg + sizeof(uintptr_t));
     ios_skip(f, sizeof_sysimg);
 
-    size_t sizeof_constdata = read_uint32(f);
+    size_t sizeof_constdata = read_uint(f);
     // realign stream to max-alignment for data
-    ios_seek(f, LLT_ALIGN(ios_pos(f), 16));
+    ios_seek(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT));
     ios_static_buffer(&const_data, f->buf + f->bpos, sizeof_constdata);
     ios_skip(f, sizeof_constdata);
 
-    size_t sizeof_symbols = read_uint32(f);
+    size_t sizeof_symbols = read_uint(f);
+    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     ios_static_buffer(&symbols, f->buf + f->bpos, sizeof_symbols);
     ios_skip(f, sizeof_symbols);
 
-    size_t sizeof_relocations = read_uint32(f);
+    size_t sizeof_relocations = read_uint(f);
+    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     ios_static_buffer(&relocs, f->buf + f->bpos, sizeof_relocations);
     ios_skip(f, sizeof_relocations);
 
-    size_t sizeof_gvar_record = read_uint32(f);
+    size_t sizeof_gvar_record = read_uint(f);
+    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     ios_static_buffer(&gvar_record, f->buf + f->bpos, sizeof_gvar_record);
     ios_skip(f, sizeof_gvar_record);
 
-    size_t sizeof_fptr_record = read_uint32(f);
+    size_t sizeof_fptr_record = read_uint(f);
+    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     ios_static_buffer(&fptr_record, f->buf + f->bpos, sizeof_fptr_record);
     ios_skip(f, sizeof_fptr_record);
 
     // step 2: get references to special values
     s.s = f;
+    ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
+    assert(!ios_eof(f));
     size_t i;
     for (i = 0; tags[i] != NULL; i++) {
         jl_value_t **tag = tags[i];
@@ -2130,8 +2190,8 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_init_box_caches();
 
     uint32_t gs_ctr = read_uint32(f);
-    jl_atomic_store_release(&jl_world_counter, read_uint32(f));
-    jl_typeinf_world = read_uint32(f);
+    jl_atomic_store_release(&jl_world_counter, read_uint(f));
+    jl_typeinf_world = read_uint(f);
     jl_set_gs_ctr(gs_ctr);
     s.s = NULL;
 
@@ -2145,7 +2205,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
 
     s.s = &sysimg;
-    jl_read_relocations(&s, GC_OLD_MARKED); // gctags
+    jl_read_relocations(&s, GC_OLD); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_relocations(&s, 0); // general relocs

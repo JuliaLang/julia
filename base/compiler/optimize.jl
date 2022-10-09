@@ -64,14 +64,13 @@ EdgeTracker() = EdgeTracker(Any[], 0:typemax(UInt))
 intersect!(et::EdgeTracker, range::WorldRange) =
     et.valid_worlds[] = intersect(et.valid_worlds[], range)
 
-push!(et::EdgeTracker, mi::MethodInstance) = push!(et.edges, mi)
-function add_edge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
-    invokesig === nothing && return push!(et.edges, mi)
-    push!(et.edges, invokesig, mi)
+function add_backedge!(et::EdgeTracker, mi::MethodInstance)
+    push!(et.edges, mi)
+    return nothing
 end
-function push!(et::EdgeTracker, ci::CodeInstance)
-    intersect!(et, WorldRange(min_world(li), max_world(li)))
-    push!(et, ci.def)
+function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::MethodInstance)
+    push!(et.edges, invokesig, mi)
+    return nothing
 end
 
 struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInterpreter}
@@ -84,8 +83,9 @@ end
 is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
-function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
-                         mi::MethodInstance, argtypes::Vector{Any})
+function inlining_policy(interp::AbstractInterpreter,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
+    argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = is_source_inferred(src)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
@@ -114,7 +114,7 @@ mutable struct OptimizationState
     linfo::MethodInstance
     src::CodeInfo
     ir::Union{Nothing, IRCode}
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
@@ -147,7 +147,7 @@ mutable struct OptimizationState
         if slottypes === nothing
             slottypes = Any[ Any for i = 1:nslots ]
         end
-        stmt_info = Any[nothing for i = 1:nssavalues]
+        stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
         # cache some useful state computations
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
@@ -155,7 +155,7 @@ mutable struct OptimizationState
         # This method is mostly used for unit testing the optimizer
         inlining = InliningState(params,
             nothing,
-            WorldView(code_cache(interp), get_world_counter()),
+            WorldView(code_cache(interp), get_world_counter(interp)),
             interp)
         return new(linfo, src, nothing, stmt_info, mod,
                    sptypes, slottypes, inlining, nothing)
@@ -208,9 +208,10 @@ function stmt_affects_purity(@nospecialize(stmt), ir)
 end
 
 """
-    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact})
+    stmt_effect_flags(stmt, rt, src::Union{IRCode,IncrementalCompact}) ->
+        (consistent::Bool, effect_free_and_nothrow::Bool, nothrow::Bool)
 
-Returns a tuple of (consistent,  effect_free_and_nothrow, nothrow) for a given statement.
+Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
 """
 function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
@@ -243,6 +244,10 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
                 nothrow = _builtin_nothrow(lattice, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
+            if f === Intrinsics.cglobal
+                # TODO: these are not yet linearized
+                return (false, false, false)
+            end
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
@@ -253,16 +258,31 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             nothrow = is_nothrow(effects)
             return (consistent, effect_free & nothrow, nothrow)
         elseif head === :new
-            typ = argextype(args[1], src)
+            atyp = argextype(args[1], src)
             # `Expr(:new)` of unknown type could raise arbitrary TypeError.
-            typ, isexact = instanceof_tfunc(typ)
-            isexact || return (false, false, false)
-            isconcretedispatch(typ) || return (false, false, false)
+            typ, isexact = instanceof_tfunc(atyp)
+            if !isexact
+                atyp = unwrap_unionall(widenconst(atyp))
+                if isType(atyp) && isTypeDataType(atyp.parameters[1])
+                    typ = atyp.parameters[1]
+                else
+                    return (false, false, false)
+                end
+                isabstracttype(typ) && return (false, false, false)
+            else
+                isconcretedispatch(typ) || return (false, false, false)
+            end
             typ = typ::DataType
             fieldcount(typ) >= length(args) - 1 || return (false, false, false)
             for fld_idx in 1:(length(args) - 1)
                 eT = argextype(args[fld_idx + 1], src)
                 fT = fieldtype(typ, fld_idx)
+                # Currently, we cannot represent any type equality constraints
+                # in the lattice, so if we see any type of type parameter,
+                # there is very little we can say about it
+                if !isexact && has_free_typevars(fT)
+                    return (false, false, false)
+                end
                 eT ⊑ₒ fT || return (false, false, false)
             end
             return (false, true, true)
@@ -335,7 +355,7 @@ function argextype(
     elseif isa(x, QuoteNode)
         return Const(x.value)
     elseif isa(x, GlobalRef)
-        return abstract_eval_global(x.mod, x.name)
+        return abstract_eval_globalref(x)
     elseif isa(x, PhiNode)
         return Any
     elseif isa(x, PiNode)
@@ -531,7 +551,7 @@ function run_passes(
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "compact 1" ir = compact!(ir)
-    @pass "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
@@ -583,7 +603,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(code, idx, Expr(:code_coverage_effect))
             insert!(codelocs, idx, codeloc)
             insert!(ssavaluetypes, idx, Nothing)
-            insert!(stmtinfo, idx, nothing)
+            insert!(stmtinfo, idx, NoCallInfo())
             insert!(ssaflags, idx, IR_FLAG_NULL)
             if ssachangemap === nothing
                 ssachangemap = fill(0, nstmts)
@@ -604,7 +624,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
-                insert!(stmtinfo, idx + 1, nothing)
+                insert!(stmtinfo, idx + 1, NoCallInfo())
                 insert!(ssaflags, idx + 1, ssaflags[idx])
                 if ssachangemap === nothing
                     ssachangemap = fill(0, nstmts)

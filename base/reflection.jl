@@ -119,10 +119,10 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
-const NamedTuple_typename = NamedTuple.body.body.name
+const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         if t.parameters[1] isa Tuple
             return t.parameters[1]
         else
@@ -264,6 +264,11 @@ Determine whether a global is declared `const` in a given module `m`.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
+
+function isconst(g::GlobalRef)
+    g.binding != C_NULL && return ccall(:jl_binding_is_const, Cint, (Ptr{Cvoid},), g.binding) != 0
+    return isconst(g.mod, g.name)
+end
 
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
@@ -792,7 +797,7 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
@@ -1833,7 +1838,7 @@ as well to get the properties of an instance of the type.
 
 `propertynames(x)` may return only "public" property names that are part
 of the documented interface of `x`.   If you want it to also return "private"
-fieldnames intended for internal use, pass `true` for the optional second argument.
+property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also: [`hasproperty`](@ref), [`hasfield`](@ref).

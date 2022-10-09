@@ -1,13 +1,22 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+function maybe_show_ir(ir::IRCode)
+    if isdefined(Core, :Main)
+        Core.Main.Base.display(ir)
+    end
+end
+
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
         arg isa String && return esc(:(print && println(stderr, $arg)))
-        (arg isa Expr && arg.head === :string) || error("verify_error macro expected a string expression")
+        isexpr(arg, :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
         arg.head = :call
-        return esc(arg)
+        return esc(quote
+            $arg
+            maybe_show_ir(ir)
+        end)
     end
 end
 
@@ -30,7 +39,6 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         else
             if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
-                #@Base.show ir
                 @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
                 error("")
             end
@@ -53,7 +61,6 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             end
         end
     elseif isa(op, Union{OldSSAValue, NewSSAValue})
-        #@Base.show ir
         @verify_error "Left over SSA marker"
         error("")
     elseif isa(op, Union{SlotNumber, TypedSlot})
@@ -236,6 +243,12 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                         (stmt.args[1] isa GlobalRef || (stmt.args[1] isa Expr && stmt.args[1].head === :static_parameter))
                     # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
+                elseif stmt.head === :call
+                    f = stmt.args[1]
+                    if f isa GlobalRef && f.name === :cglobal
+                        # TODO: these are not yet linearized
+                        continue
+                    end
                 end
             end
             n = 1

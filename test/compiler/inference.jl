@@ -1526,6 +1526,11 @@ end
 @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
 @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 @test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
+@test nfields_tfunc(@NamedTuple{a::Int,b::Integer}) === Const(2)
+@test nfields_tfunc(NamedTuple{(:a,:b),T} where T<:Tuple{Int,Integer}) === Const(2)
+@test nfields_tfunc(NamedTuple{(:a,:b)}) === Const(2)
+@test nfields_tfunc(NamedTuple{names,Tuple{Any,Any}} where names) === Const(2)
+@test nfields_tfunc(Union{NamedTuple{(:a,:b)},NamedTuple{(:c,:d)}}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
@@ -1588,6 +1593,7 @@ g23024(TT::Tuple{DataType}) = f23024(TT[1], v23024)
 @test g23024((UInt8,)) === 2
 
 @test !Core.Compiler.isconstType(Type{typeof(Union{})}) # could be Core.TypeofBottom or Type{Union{}} at runtime
+@test !isa(Core.Compiler.getfield_tfunc(Type{Core.TypeofBottom}, Core.Compiler.Const(:name)), Core.Compiler.Const)
 @test Base.return_types(supertype, (Type{typeof(Union{})},)) == Any[Any]
 
 # issue #23685
@@ -2334,6 +2340,13 @@ end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
+
+# `apply_type_tfunc` should always return accurate result for empty NamedTuple case
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+@test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple{}) === Const(typeof((;)))
+@test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple) === Const(typeof((;)))
+@test apply_type_tfunc(Const(NamedTuple), Tuple{Vararg{Symbol}}, Type{Tuple{}}) === Const(typeof((;)))
 
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
@@ -4077,16 +4090,6 @@ g_max_methods(x) = f_max_methods(x)
 @test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
 @test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
 
-# Unit tests for BitSetBoundedMinPrioritySet
-let bsbmp = Core.Compiler.BitSetBoundedMinPrioritySet(5)
-    Core.Compiler.push!(bsbmp, 2)
-    Core.Compiler.push!(bsbmp, 2)
-    @test Core.Compiler.popfirst!(bsbmp) == 2
-    Core.Compiler.push!(bsbmp, 1)
-    @test Core.Compiler.popfirst!(bsbmp) == 1
-    @test Core.Compiler.isempty(bsbmp)
-end
-
 # Make sure return_type_tfunc doesn't accidentally cause bad inference if used
 # at top level.
 @test let
@@ -4170,8 +4173,8 @@ for setting = (:type, :const, :conditional)
 end
 
 # https://github.com/JuliaLang/julia/issues/46426
-@noinline Base.@assume_effects :nothrow typebarrier() = Base.inferencebarrier(0.0)
-@noinline Base.@assume_effects :nothrow constbarrier() = Base.compilerbarrier(:const, 0.0)
+@noinline typebarrier() = Base.inferencebarrier(0.0)
+@noinline constbarrier() = Base.compilerbarrier(:const, 0.0)
 let src = code_typed1() do
         typebarrier()
     end
@@ -4201,3 +4204,55 @@ end
 end
 call_pure_annotated_loop(x) = Val{pure_annotated_loop(x, 1)}()
 @test only(Base.return_types(call_pure_annotated_loop, Tuple{Int})) === Val{1}
+
+function isa_kindtype(T::Type{<:AbstractVector})
+    if isa(T, DataType)
+        # `T` here should be inferred as `DataType` rather than `Type{<:AbstractVector}`
+        return T.name.name # should be inferred as ::Symbol
+    end
+    return nothing
+end
+@test only(Base.return_types(isa_kindtype)) === Union{Nothing,Symbol}
+
+invoke_concretized1(a::Int) = a > 0 ? :int : nothing
+invoke_concretized1(a::Integer) = a > 0 ? "integer" : nothing
+# check if `invoke(invoke_concretized1, Tuple{Integer}, ::Int)` is foldable
+@test Base.infer_effects((Int,)) do a
+    @invoke invoke_concretized1(a::Integer)
+end |> Core.Compiler.is_foldable
+@test Base.return_types() do
+    @invoke invoke_concretized1(42::Integer)
+end |> only === String
+
+invoke_concretized2(a::Int) = a > 0 ? :int : nothing
+invoke_concretized2(a::Integer) = a > 0 ? :integer : nothing
+# check if `invoke(invoke_concretized2, Tuple{Integer}, ::Int)` is foldable
+@test Base.infer_effects((Int,)) do a
+    @invoke invoke_concretized2(a::Integer)
+end |> Core.Compiler.is_foldable
+@test let
+    Base.Experimental.@force_compile
+    @invoke invoke_concretized2(42::Integer)
+end === :integer
+
+# Test that abstract_apply doesn't fail to fully infer if the result is unused
+struct FiniteIteration
+    n::Int
+end
+Base.iterate(f::FiniteIteration, i::Int = 0) = i < f.n ? (i, i+1) : nothing
+function unused_apply_iterate()
+    tuple(FiniteIteration(4)...)
+    return nothing
+end
+@test fully_eliminated(unused_apply_iterate, ())
+
+@testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
+    function foo()
+        cglobal((a, ))
+        ccall(0, Cvoid, (Nothing,), b)
+    end
+    @test only(code_typed() do
+        cglobal((a, ))
+        ccall(0, Cvoid, (Nothing,), b)
+    end)[2] === Nothing
+end

@@ -49,6 +49,9 @@ mutable struct Prompt <: TextInterface
     prompt_prefix::Union{String,Function}
     # Same as prefix except after the prompt
     prompt_suffix::Union{String,Function}
+    output_prefix::Union{String,Function}
+    output_prefix_prefix::Union{String,Function}
+    output_prefix_suffix::Union{String,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -1098,7 +1101,7 @@ end
 
 function edit_transpose_chars(buf::IOBuffer)
     # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
-    eof(buf) && char_move_left(buf)
+    eof(buf) && position(buf) !== 0 && char_move_left(buf)
     position(buf) == 0 && return false
     char_move_left(buf)
     pos = position(buf)
@@ -1452,7 +1455,6 @@ default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
 write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
-
 function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     prefix = prompt_string(p.prompt_prefix)
     suffix = prompt_string(p.prompt_suffix)
@@ -1461,6 +1463,17 @@ function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
     width = write_prompt(terminal, p.prompt, color)
     color && write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
+    return width
+end
+
+function write_output_prefix(io::IO, p::Prompt, color::Bool)
+    prefix = prompt_string(p.output_prefix_prefix)
+    suffix = prompt_string(p.output_prefix_suffix)
+    print(io, prefix)
+    color && write(io, Base.text_colors[:bold])
+    width = write_prompt(io, p.output_prefix, color)
+    color && write(io, Base.text_colors[:normal])
+    print(io, suffix)
     return width
 end
 
@@ -1495,7 +1508,7 @@ end
 end
 
 # returns the width of the written prompt
-function write_prompt(terminal::AbstractTerminal, s::Union{AbstractString,Function}, color::Bool)
+function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
     @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)
@@ -2591,6 +2604,9 @@ function Prompt(prompt
     ;
     prompt_prefix = "",
     prompt_suffix = "",
+    output_prefix = "",
+    output_prefix_prefix = "",
+    output_prefix_suffix = "",
     keymap_dict = default_keymap_dict,
     repl = nothing,
     complete = EmptyCompletionProvider(),
@@ -2599,8 +2615,8 @@ function Prompt(prompt
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    return Prompt(prompt, prompt_prefix, prompt_suffix, keymap_dict, repl,
-        complete, on_enter, on_done, hist, sticky)
+    return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
+                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing

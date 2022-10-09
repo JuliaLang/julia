@@ -269,7 +269,7 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 function code_llvm(io::IO, @nospecialize(f), @nospecialize(types), raw::Bool,
                    dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default)
     d = _dump_function(f, types, false, false, !raw, dump_module, :att, optimize, debuginfo, false)
-    if highlighting[:llvm] && get(io, :color, false)
+    if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
         print(io, d)
@@ -296,7 +296,7 @@ See also: [`@code_native`](@ref), [`code_llvm`](@ref), [`code_typed`](@ref) and 
 function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
                      dump_module::Bool=true, syntax::Symbol=:att, debuginfo::Symbol=:default, binary::Bool=false)
     d = _dump_function(f, types, true, false, false, dump_module, syntax, true, debuginfo, binary)
-    if highlighting[:native] && get(io, :color, false)
+    if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)

@@ -36,8 +36,6 @@
 
 using namespace llvm;
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "codegen_shared.h"
 #include "jitlayers.h"
 #include "julia_assert.h"
@@ -49,6 +47,9 @@ using namespace llvm;
 # endif
 # include <llvm/ExecutionEngine/JITLink/EHFrameSupport.h>
 # include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
+# if JL_LLVM_VERSION >= 150000
+# include <llvm/ExecutionEngine/Orc/MapperJITLinkMemoryManager.h>
+# endif
 #else
 # include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #endif
@@ -385,8 +386,6 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-    auto ctx = jl_ExecutionEngine->getContext();
-    auto &context = *ctx;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
@@ -430,7 +429,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
             }
         }
         ++SpecFPtrCount;
-        _jl_compile_codeinst(codeinst, src, world, context);
+        _jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL)
             codeinst = NULL;
     }
@@ -455,8 +454,6 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     JL_LOCK(&jl_codegen_lock);
-    auto ctx = jl_ExecutionEngine->getContext();
-    auto &context = *ctx;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -481,7 +478,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
-        _jl_compile_codeinst(unspec, src, unspec->min_world, context);
+        _jl_compile_codeinst(unspec, src, unspec->min_world, *jl_ExecutionEngine->getContext());
         if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
             // if we hit a codegen bug (or ran into a broken generated function or llvmcall), fall back to the interpreter as a last resort
             jl_atomic_store_release(&unspec->invoke, jl_fptr_interpret_call_addr);
@@ -511,8 +508,6 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
-            auto ctx = jl_ExecutionEngine->getContext();
-            auto &context = *ctx;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -534,7 +529,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                 if (src && jl_is_code_info(src)) {
                     if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
-                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, context);
+                        fptr = (uintptr_t)_jl_compile_codeinst(codeinst, src, world, *jl_ExecutionEngine->getContext());
                         specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
                     }
                 }
@@ -744,6 +739,50 @@ public:
         });
     }
 };
+
+class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
+private:
+    std::atomic<size_t> &total_size;
+
+public:
+
+    JLMemoryUsagePlugin(std::atomic<size_t> &total_size)
+        : total_size(total_size) {}
+
+    Error notifyFailed(orc::MaterializationResponsibility &MR) override {
+        return Error::success();
+    }
+    Error notifyRemovingResources(orc::ResourceKey K) override {
+        return Error::success();
+    }
+    void notifyTransferringResources(orc::ResourceKey DstKey,
+                                     orc::ResourceKey SrcKey) override {}
+
+    void modifyPassConfig(orc::MaterializationResponsibility &,
+                          jitlink::LinkGraph &,
+                          jitlink::PassConfiguration &Config) override {
+        Config.PostAllocationPasses.push_back([this](jitlink::LinkGraph &G) {
+            size_t graph_size = 0;
+            for (auto block : G.blocks()) {
+                graph_size += block->getSize();
+            }
+            this->total_size.fetch_add(graph_size, std::memory_order_relaxed);
+            return Error::success();
+        });
+    }
+};
+
+// TODO: Port our memory management optimisations to JITLink instead of using the
+// default InProcessMemoryManager.
+std::unique_ptr<jitlink::JITLinkMemoryManager> createJITLinkMemoryManager() {
+#if JL_LLVM_VERSION < 140000
+    return std::make_unique<jitlink::InProcessMemoryManager>();
+#elif JL_LLVM_VERSION < 150000
+    return cantFail(jitlink::InProcessMemoryManager::Create());
+#else
+    return cantFail(orc::MapperJITLinkMemoryManager::CreateWithMapper<orc::InProcessMemoryMapper>());
+#endif
+}
 }
 
 # ifdef LLVM_SHLIB
@@ -1151,18 +1190,13 @@ JuliaOJIT::JuliaOJIT()
     ContextPool([](){
         auto ctx = std::make_unique<LLVMContext>();
 #ifdef JL_LLVM_OPAQUE_POINTERS
-        ctx->enableOpaquePointers();
+        ctx->setOpaquePointers(true);
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
 #ifdef JL_USE_JITLINK
-    // TODO: Port our memory management optimisations to JITLink instead of using the
-    // default InProcessMemoryManager.
-# if JL_LLVM_VERSION < 140000
-    ObjectLayer(ES, std::make_unique<jitlink::InProcessMemoryManager>()),
-# else
-    ObjectLayer(ES, cantFail(jitlink::InProcessMemoryManager::Create())),
-# endif
+    MemMgr(createJITLinkMemoryManager()),
+    ObjectLayer(ES, *MemMgr),
 #else
     MemMgr(createRTDyldMemoryManager()),
     ObjectLayer(
@@ -1193,6 +1227,7 @@ JuliaOJIT::JuliaOJIT()
         ES, std::move(ehRegistrar)));
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
+    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(total_size));
 #else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
@@ -1443,8 +1478,7 @@ std::string JuliaOJIT::getMangledName(const GlobalValue *GV)
 #ifdef JL_USE_JITLINK
 size_t JuliaOJIT::getTotalBytes() const
 {
-    // TODO: Implement in future custom JITLink memory manager.
-    return 0;
+    return total_size.load(std::memory_order_relaxed);
 }
 #else
 size_t getRTDyldMemoryManagerTotalBytes(RTDyldMemoryManager *mm);

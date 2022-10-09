@@ -164,7 +164,7 @@ div12(x, y) = div12(promote(x, y)...)
 A number with twice the precision of `T`, e.g., quad-precision if `T =
 Float64`.
 
-!!! warn
+!!! warning
     `TwicePrecision` is an internal type used to increase the
     precision of floating-point ranges, and not intended for external use.
     If you encounter them in real code, the most likely explanation is
