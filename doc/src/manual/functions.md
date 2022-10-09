@@ -716,23 +716,20 @@ string of those integers in a date format; instead of having the user pass the m
 we can make them optional by giving default values to them as `1`. This behavior can be expressed
 concisely as:
 
-```jldoctest
+```jldoctest datefunc
 julia> function date(year::Int, month::Int=1, day::Int=1)
            y = clamp(year,  1:typemax(Int))
            m = clamp(month, 1:12)
            d = clamp(day,   1:31)
-           
            if m == 2
-               leap_year = ((y%4 == 0) && (y%100 ≠ 0)) || (y%400 == 0) 
-               leap_year ? d = clamp(d, 1:29) : d = clamp(d, 1:28)
+               is_leap_year = ((y%4 == 0) && (y%100 ≠ 0)) || (y%400 == 0)
+               is_leap_year ? d = clamp(d, 1:29) : d = clamp(d, 1:28)
            elseif m in [4, 6, 9, 11]
                d = clamp(d, 1:30)
            end
-           
            yy = string(y, pad=4)
            mm = string(m, pad=2)
            dd = string(d, pad=2)
-           
            return "$yy-$mm-$dd"
        end
 date (generic function with 3 methods)
@@ -744,7 +741,7 @@ we have a function named `date`, and there are 3 "versions" (i.e. methods) of it
 With this definition, the function can be called with either one, two or three arguments, and
 `1` is automatically passed when only one or two of the arguments are specified:
 
-```jldoctest
+```jldoctest datefunc
 julia> date(2023, 2, 32)
 "2023-02-28"
 
@@ -759,7 +756,7 @@ Optional arguments are actually just a convenient syntax for writing multiple me
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
 This can be checked for our `date` function example by calling `methods` function:
 
-```julia
+```julia datefunc
 julia> methods(date)
 # 3 methods for generic function "date":
 [1] date(year::Int64) in Main at REPL[1]:1
