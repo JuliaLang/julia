@@ -53,3 +53,15 @@ end
         end
     end
 end
+
+# Make sure that the compiler can sort things.
+# https://github.com/JuliaLang/julia/issues/47065
+@testset "Compiler Sorting" begin
+    for len in (0, 1, 10, 100, 10000)
+        v = Core.Compiler.sort!(rand(Int8,len))
+        @test length(v) == len
+        @test issorted(v)
+        Core.Compiler.sort!(v, by=abs)
+        @test issorted(v, by=abs)
+    end
+end
