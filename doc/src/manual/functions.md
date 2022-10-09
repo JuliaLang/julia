@@ -756,7 +756,7 @@ Optional arguments are actually just a convenient syntax for writing multiple me
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
 This can be checked for our `date` function example by calling `methods` function:
 
-```julia datefunc
+```jldoctest datefunc
 julia> methods(date)
 # 3 methods for generic function "date":
 [1] date(year::Int64) in Main at REPL[1]:1
