@@ -210,7 +210,7 @@ SamplerRangeFast(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeFast(r, uint_sup(T))
 
 function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
     bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
     mask = ((1 % U) << bw) - (1 % U)
