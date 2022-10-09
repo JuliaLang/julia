@@ -72,7 +72,7 @@ function try_compute_fieldidx_stmt(ir::Union{IncrementalCompact,IRCode}, stmt::E
     return try_compute_fieldidx(typ, field)
 end
 
-function find_curblock(domtree::DomTree, allblocks::Vector{Int}, curblock::Int)
+function find_curblock(domtree::DomTree, allblocks::BitSet, curblock::Int)
     # TODO: This can be much faster by looking at current level and only
     # searching for those blocks in a sorted order
     while !(curblock in allblocks) && curblock !== 0
@@ -92,7 +92,7 @@ function val_for_def_expr(ir::IRCode, def::Int, fidx::Int)
     end
 end
 
-function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
+function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::BitSet, du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, curblock::Int)
     curblock = find_curblock(domtree, allblocks, curblock)
     def = 0
     for stmt in du.defs
@@ -103,7 +103,7 @@ function compute_value_for_block(ir::IRCode, domtree::DomTree, allblocks::Vector
     def == 0 ? phinodes[curblock] : val_for_def_expr(ir, def, fidx)
 end
 
-function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::Vector{Int},
+function compute_value_for_use(ir::IRCode, domtree::DomTree, allblocks::BitSet,
     du::SSADefUse, phinodes::IdDict{Int, SSAValue}, fidx::Int, use::Int)
     def, useblock, curblock = find_def_for_use(ir, domtree, allblocks, du, use)
     if def == 0
@@ -122,7 +122,7 @@ end
 # even when the allocation contains an uninitialized field, we try an extra effort to check
 # if this load at `idx` have any "safe" `setfield!` calls that define the field
 function has_safe_def(
-    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse,
+    ir::IRCode, domtree::DomTree, allblocks::BitSet, du::SSADefUse,
     newidx::Int, idx::Int)
     def, _, _ = find_def_for_use(ir, domtree, allblocks, du, idx)
     # will throw since we already checked this `:new` site doesn't define this field
@@ -157,7 +157,7 @@ end
 
 # find the first dominating def for the given use
 function find_def_for_use(
-    ir::IRCode, domtree::DomTree, allblocks::Vector{Int}, du::SSADefUse, use::Int, inclusive::Bool=false)
+    ir::IRCode, domtree::DomTree, allblocks::BitSet, du::SSADefUse, use::Int, inclusive::Bool=false)
     useblock = block_for_inst(ir.cfg, use)
     curblock = find_curblock(domtree, allblocks, useblock)
     local def = 0
@@ -401,6 +401,16 @@ function lift_leaves(compact::IncrementalCompact,
                 end
                 lift_arg!(compact, leaf, cache_key, def, 1+field, lifted_leaves)
                 continue
+            # NOTE we can enable this, but most `:splatnew` expressions are transformed into
+            #      `:new` expressions by the inlinear
+            # elseif isexpr(def, :splatnew) && length(def.args) == 2 && isa(def.args[2], AnySSAValue)
+            #     tplssa = def.args[2]::AnySSAValue
+            #     tplexpr = compact[tplssa][:inst]
+            #     if is_known_call(tplexpr, tuple, compact) && 1 ≤ field < length(tplexpr.args)
+            #         lift_arg!(compact, tplssa, cache_key, tplexpr, 1+field, lifted_leaves)
+            #         continue
+            #     end
+            #     return nothing
             elseif is_getfield_captures(def, compact)
                 # Walk to new_opaque_closure
                 ocleaf = def.args[2]
@@ -469,7 +479,7 @@ function lift_arg!(
         end
     end
     lifted_leaves[cache_key] = LiftedValue(lifted)
-    nothing
+    return nothing
 end
 
 function walk_to_def(compact::IncrementalCompact, @nospecialize(leaf))
@@ -1310,7 +1320,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
         # but we should come up with semantics for well defined semantics
         # for uninitialized fields first.
         ndefuse = length(fielddefuse)
-        blocks = Vector{Tuple{#=phiblocks=# Vector{Int}, #=allblocks=# Vector{Int}}}(undef, ndefuse)
+        blocks = Vector{Tuple{#=phiblocks=# Vector{Int}, #=allblocks=# BitSet}}(undef, ndefuse)
         for fidx in 1:ndefuse
             du = fielddefuse[fidx]
             isempty(du.uses) && continue
@@ -1321,7 +1331,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
             else
                 phiblocks = iterated_dominance_frontier(ir.cfg, ldu, get!(lazydomtree))
             end
-            allblocks = sort!(vcat(phiblocks, ldu.def_bbs); alg=QuickSort)
+            allblocks = union!(BitSet(phiblocks), ldu.def_bbs)
             blocks[fidx] = phiblocks, allblocks
             if fidx + 1 > length(defexpr.args)
                 for i = 1:length(du.uses)
