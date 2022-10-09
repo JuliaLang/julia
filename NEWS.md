@@ -142,6 +142,9 @@ Standard library changes
 
 #### Dates
 
+* Empty strings are no longer incorrectly parsed as valid `DateTime`s, `Date`s or `Time`s and instead throw an
+  `ArgumentError` in constructors and `parse`, while `nothing` is returned by `tryparse` ([#47117]).
+
 #### Downloads
 
 #### Statistics
