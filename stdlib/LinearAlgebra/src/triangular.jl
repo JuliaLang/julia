@@ -151,13 +151,17 @@ julia> UnitUpperTriangular(A)
 """
 UnitUpperTriangular
 
+const UpperOrUnitUpperTriangular{T} = Union{UpperTriangular{T}, UnitUpperTriangular{T}}
+const LowerOrUnitLowerTriangular{T} = Union{LowerTriangular{T}, UnitLowerTriangular{T}}
+const UpperOrLowerTriangular{T} = Union{UpperOrUnitUpperTriangular{T}, LowerOrUnitLowerTriangular{T}}
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
 Array(A::AbstractTriangular) = Matrix(A)
-parent(A::AbstractTriangular) = A.data
+parent(A::UpperOrLowerTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
@@ -661,10 +665,6 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # is this necessary?
 
-@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Tridiagonal, alpha::Number, beta::Number) =
-    mul!(C, copyto!(similar(parent(A)), A), B, alpha, beta)
-@inline mul!(C::AbstractMatrix, A::Tridiagonal, B::AbstractTriangular, alpha::Number, beta::Number) =
-    mul!(C, A, copyto!(similar(parent(B)), B), alpha, beta)
 mul!(C::AbstractVector, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
     (B = transB.parent; lmul!(A, transpose!(C, B)))
 mul!(C::AbstractMatrix, A::AbstractTriangular, transB::Transpose{<:Any,<:AbstractVecOrMat}) =
@@ -683,8 +683,6 @@ mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = lmul!(A,
     mul!(C, A, copy(B), alpha, beta)
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
     mul!(C, A, copy(B), alpha, beta)
-mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Adjoint}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
-mul!(C::AbstractVector, A::AbstractTriangular{<:Any,<:Transpose}, B::Transpose{<:Any,<:AbstractVecOrMat}) = throw(MethodError(mul!, (C, A, B)))
 
 # preserve triangular structure in in-place multiplication
 for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
@@ -2347,10 +2345,6 @@ for func in (:svd, :svd!, :svdvals)
 end
 
 factorize(A::AbstractTriangular) = A
-
-# disambiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
-*(A::AbstractTriangular, B::AdjointAbsVec) = adjoint(adjoint(B) * adjoint(A))
-*(A::AbstractTriangular, B::TransposeAbsVec) = transpose(transpose(B) * transpose(A))
 
 # disambiguation methods: /(Adjoint of AbsVec, <:AbstractTriangular)
 /(u::AdjointAbsVec, A::Union{LowerTriangular,UpperTriangular}) = adjoint(adjoint(A) \ u.parent)

@@ -20,9 +20,9 @@ uniformscaling
 lq
 hessenberg
 blas
+structuredbroadcast
 adjtrans
 pinv
 givens
-structuredbroadcast
 ldlt
 factorization

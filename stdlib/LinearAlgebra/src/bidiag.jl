@@ -404,7 +404,6 @@ const BiTriSym = Union{Bidiagonal,Tridiagonal,SymTridiagonal}
 const BiTri = Union{Bidiagonal,Tridiagonal}
 @inline mul!(C::AbstractMatrix, A::SymTridiagonal,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::BiTri,              B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::AbstractMatrix,     B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::Diagonal,           B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
 @inline mul!(C::AbstractMatrix, A::Adjoint{<:Any,<:AbstractVecOrMat}, B::BiTriSym, alpha::Number, beta::Number) = A_mul_B_td!(C, A, B, MulAddMul(alpha, beta))
@@ -642,14 +641,6 @@ function A_mul_B_td!(C::AbstractMatrix, A::Diagonal, B::BiTriSym,
     C
 end
 
-function *(A::AbstractTriangular, B::Union{SymTridiagonal, Tridiagonal})
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(TS, size(A)), A, B)
-end
-
-const UpperOrUnitUpperTriangular{T} = Union{UpperTriangular{T}, UnitUpperTriangular{T}}
-const LowerOrUnitLowerTriangular{T} = Union{LowerTriangular{T}, UnitLowerTriangular{T}}
-
 function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = A_mul_B_td!(zeros(TS, size(A)), A, B)
@@ -660,11 +651,6 @@ function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = A_mul_B_td!(zeros(TS, size(A)), A, B)
     return B.uplo == 'L' ? LowerTriangular(C) : C
-end
-
-function *(A::Union{SymTridiagonal, Tridiagonal}, B::AbstractTriangular)
-    TS = promote_op(matprod, eltype(A), eltype(B))
-    A_mul_B_td!(zeros(TS, size(A)), A, B)
 end
 
 function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
