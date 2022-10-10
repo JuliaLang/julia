@@ -21,6 +21,8 @@ Language changes
   rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
   as arguments are handled correctly. ([#45807])
 * The `invokelatest` function and `@invokelatest` macro introduced in 1.7 are now exported. ([#45831])
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
 Compiler/Runtime improvements
 -----------------------------
