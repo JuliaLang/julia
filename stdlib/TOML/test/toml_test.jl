@@ -46,7 +46,7 @@ end
 @test check_valid("array-string-quote-comma")
 @test check_valid("array-string-with-comma")
 @test check_valid("array-table-array-string-backslash")
-@test check_valid("arrays-hetergeneous")
+@test check_valid("arrays-heterogeneous")
 @test check_valid("arrays-nested")
 @test check_valid("arrays")
 @test check_valid("bool")

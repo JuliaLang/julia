@@ -468,7 +468,7 @@ A character is classified as numeric if it belongs to the Unicode general catego
 i.e. a character whose category code begins with 'N'.
 
 Note that this broad category includes characters such as ¾ and ௰.
-Use [`isdigit`](@ref) to check whether a character a decimal digit between 0 and 9.
+Use [`isdigit`](@ref) to check whether a character is a decimal digit between 0 and 9.
 
 # Examples
 ```jldoctest

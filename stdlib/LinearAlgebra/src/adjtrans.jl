@@ -308,8 +308,8 @@ IndexStyle(::Type{<:AdjOrTransAbsMat}) = IndexCartesian()
 @propagate_inbounds getindex(v::AdjOrTransAbsVec, ::Colon, ::Colon) = wrapperop(v)(v.parent[:])
 
 # conversion of underlying storage
-convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))
-convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))
+convert(::Type{Adjoint{T,S}}, A::Adjoint) where {T,S} = Adjoint{T,S}(convert(S, A.parent))::Adjoint{T,S}
+convert(::Type{Transpose{T,S}}, A::Transpose) where {T,S} = Transpose{T,S}(convert(S, A.parent))::Transpose{T,S}
 
 # Strides and pointer for transposed strided arrays — but only if the elements are actually stored in memory
 Base.strides(A::Adjoint{<:Real, <:AbstractVector}) = (stride(A.parent, 2), stride(A.parent, 1))
@@ -378,22 +378,36 @@ Broadcast.broadcast_preserving_zero_d(f, tvs::Union{Number,TransposeAbsVec}...) 
 
 
 ### reductions
-# faster to sum the Array than to work through the wrapper
-Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Transpose, dims::Colon) =
-    transpose(Base._mapreduce_dim(_sandwich(transpose, f), _sandwich(transpose, op), init, parent(A), dims))
-Base._mapreduce_dim(f, op, init::Base._InitialValue, A::Adjoint, dims::Colon) =
-    adjoint(Base._mapreduce_dim(_sandwich(adjoint, f), _sandwich(adjoint, op), init, parent(A), dims))
+# faster to sum the Array than to work through the wrapper (but only in commutative reduction ops as in Base/permuteddimsarray.jl)
+Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::Transpose, dims::Colon) =
+    Base._mapreduce_dim(f∘transpose, op, init, parent(A), dims)
+Base._mapreduce_dim(f, op::CommutativeOps, init::Base._InitialValue, A::Adjoint, dims::Colon) =
+    Base._mapreduce_dim(f∘adjoint, op, init, parent(A), dims)
+# in prod, use fast path only in the commutative case to avoid surprises
+Base._mapreduce_dim(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod)}, init::Base._InitialValue, A::Transpose{<:Union{Real,Complex}}, dims::Colon) =
+    Base._mapreduce_dim(f∘transpose, op, init, parent(A), dims)
+Base._mapreduce_dim(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod)}, init::Base._InitialValue, A::Adjoint{<:Union{Real,Complex}}, dims::Colon) =
+    Base._mapreduce_dim(f∘adjoint, op, init, parent(A), dims)
+# count allows for optimization only if the parent array has Bool eltype
+Base._count(::typeof(identity), A::Transpose{Bool}, ::Colon, init) = Base._count(identity, parent(A), :, init)
+Base._count(::typeof(identity), A::Adjoint{Bool}, ::Colon, init) = Base._count(identity, parent(A), :, init)
+Base._any(f, A::Transpose, ::Colon) = Base._any(f∘transpose, parent(A), :)
+Base._any(f, A::Adjoint, ::Colon) = Base._any(f∘adjoint, parent(A), :)
+Base._all(f, A::Transpose, ::Colon) = Base._all(f∘transpose, parent(A), :)
+Base._all(f, A::Adjoint, ::Colon) = Base._all(f∘adjoint, parent(A), :)
 # sum(A'; dims)
-Base.mapreducedim!(f, op, B::AbstractArray, A::TransposeAbsMat) =
-    transpose(Base.mapreducedim!(_sandwich(transpose, f), _sandwich(transpose, op), transpose(B), parent(A)))
-Base.mapreducedim!(f, op, B::AbstractArray, A::AdjointAbsMat) =
-    adjoint(Base.mapreducedim!(_sandwich(adjoint, f), _sandwich(adjoint, op), adjoint(B), parent(A)))
+Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray, A::TransposeAbsMat) =
+    (Base.mapreducedim!(f∘transpose, op, switch_dim12(B), parent(A)); B)
+Base.mapreducedim!(f, op::CommutativeOps, B::AbstractArray, A::AdjointAbsMat) =
+    (Base.mapreducedim!(f∘adjoint, op, switch_dim12(B), parent(A)); B)
+Base.mapreducedim!(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::TransposeAbsMat{<:Union{Real,Complex}}) =
+    (Base.mapreducedim!(f∘transpose, op, switch_dim12(B), parent(A)); B)
+Base.mapreducedim!(f::typeof(identity), op::Union{typeof(*),typeof(Base.mul_prod)}, B::AbstractArray, A::AdjointAbsMat{<:Union{Real,Complex}}) =
+    (Base.mapreducedim!(f∘adjoint, op, switch_dim12(B), parent(A)); B)
 
-_sandwich(adj::Function, fun) = (xs...,) -> adj(fun(map(adj, xs)...))
-for fun in [:identity, :add_sum, :mul_prod] #, :max, :min]
-    @eval _sandwich(::Function, ::typeof(Base.$fun)) = Base.$fun
-end
-
+switch_dim12(B::AbstractVector) = permutedims(B)
+switch_dim12(B::AbstractArray{<:Any,0}) = B
+switch_dim12(B::AbstractArray) = PermutedDimsArray(B, (2, 1, ntuple(Base.Fix1(+,2), ndims(B) - 2)...))
 
 ### linear algebra
 
@@ -441,8 +455,6 @@ pinv(v::TransposeAbsVec, tol::Real = 0) = pinv(conj(v.parent)).parent
 
 ## left-division \
 \(u::AdjOrTransAbsVec, v::AdjOrTransAbsVec) = pinv(u) * v
-\(u::AdjointAbsVec, y::Number) = adjoint(conj(y) / u.parent)
-\(u::TransposeAbsVec, y::Number) = transpose(y / u.parent)
 
 
 ## right-division /

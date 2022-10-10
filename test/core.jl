@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def]),
+        (Core.CodeInstance, [:def, :min_world, :max_world, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
         (Core.MethodTable, [:module]),
@@ -674,14 +674,14 @@ end
 f21900_cnt = 0
 function f21900()
     for i = 1:1
-        x = 0
+        x_global_undefined_error = 0
     end
     global f21900_cnt += 1
-    x # should be global
+    x_global_undefined_error # should be global
     global f21900_cnt += -1000
     nothing
 end
-@test_throws UndefVarError(:x) f21900()
+@test_throws UndefVarError(:x_global_undefined_error) f21900()
 @test f21900_cnt == 1
 
 # use @eval so this runs as a toplevel scope block
@@ -784,7 +784,7 @@ end
 mutable struct Type11167{T,N} end
 function count11167()
     let cache = Type11167.body.body.name.cache
-        return sum(i -> isassigned(cache, i), 0:length(cache))
+        return count(!isnothing, cache)
     end
 end
 @test count11167() == 0
@@ -1407,6 +1407,7 @@ let
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
     res = @test_throws ArgumentError unsafe_wrap(Array, pointer(a) + 1, (1, 1))
     @test occursin("is not properly aligned to $(sizeof(Int)) bytes", res.value.msg)
+    res = @test_throws MethodError unsafe_wrap(Vector{UInt8}, pointer(Int32[1]), (sizeof(Int32),))
 end
 
 struct FooBar2515
@@ -1987,9 +1988,8 @@ mutable struct TupleParam{P}
     x::Bool
 end
 
-function tupledispatch(a::TupleParam{(1,:a)})
-    a.x
-end
+tupledispatch(a::TupleParam{(1,:a)}) = a.x
+tupledispatch(a::TupleParam{(1,(:a,))}) = 42
 
 # tuples can be used as type params
 let t1 = TupleParam{(1,:a)}(true),
@@ -2001,6 +2001,10 @@ let t1 = TupleParam{(1,:a)}(true),
     # dispatch works properly
     @test tupledispatch(t1) == true
     @test_throws MethodError tupledispatch(t2)
+
+    @test tupledispatch(TupleParam{(1,(:a,))}(true)) === 42
+    @test_throws TypeError TupleParam{NamedTuple{(:a,), Tuple{Any}}((1,))}
+    @test_throws TypeError Val{NamedTuple{(:a,), Tuple{NamedTuple{<:Any,Tuple{Int}}}}(((x=2,),))}
 end
 
 # issue #5254
@@ -6910,9 +6914,9 @@ g27209(x) = f27209(x ? nothing : 1.0)
 # Issue 27240
 @inline function foo27240()
     if rand(Bool)
-        return foo_nonexistant_27240
+        return foo_nonexistent_27240
     else
-        return bar_nonexistant_27240
+        return bar_nonexistent_27240
     end
 end
 bar27240() = foo27240()
@@ -7808,3 +7812,36 @@ end
 import .Foo45350: x45350
 f45350() = (global x45350 = 2)
 @test_throws ErrorException f45350()
+
+# #46503 - redefine `invoke`d methods
+foo46503(@nospecialize(a), b::Union{Vector{Any}, Float64, Nothing}) = rand()
+foo46503(a::Int, b::Nothing) = @invoke foo46503(a::Any, b)
+@test 0 <= foo46503(1, nothing) <= 1
+foo46503(@nospecialize(a), b::Union{Nothing, Float64}) = rand() + 10
+@test 10 <= foo46503(1, nothing) <= 11
+
+@testset "effect override on Symbol(::String)" begin
+    @test Core.Compiler.is_foldable(Base.infer_effects(Symbol, (String,)))
+end
+
+@testset "error message for getfield with bad integer type" begin
+    @test_throws "expected Union{$Int, Symbol}" getfield((1,2), Int8(1))
+end
+
+# Correct isdefined error for isdefined of Module of Int fld
+f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
+@test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
+
+# Unspecialized retrieval of vararg length
+fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
+fvarargN(args...) = fvarargN(args)
+finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
+@test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10

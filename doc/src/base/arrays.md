@@ -145,6 +145,7 @@ Base.vcat
 Base.hcat
 Base.hvcat
 Base.hvncat
+Base.stack
 Base.vect
 Base.circshift
 Base.circshift!
