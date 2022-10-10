@@ -24,7 +24,7 @@ function recursive_dotcalls!(ex, args, i=1)
         end
     end
     (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    length_branches = length(branches)::Integer
+    length_branches = length(branches)::Int
     for j in start:length_branches
         branch, i = recursive_dotcalls!(branches[j], args, i)
         branches[j] = branch
@@ -43,7 +43,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             end
             i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
             args = copy(ex0.args[1].args)
-            insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
+            insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
         if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
