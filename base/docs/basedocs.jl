@@ -689,8 +689,7 @@ Expr
 
 Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
-`:identifier` will evaluate to a `Symbol`, but the type of other usages is an
-implementation detail.
+`:identifier` will evaluate to a `Symbol`.
 
 See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
 
