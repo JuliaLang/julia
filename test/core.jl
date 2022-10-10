@@ -784,7 +784,7 @@ end
 mutable struct Type11167{T,N} end
 function count11167()
     let cache = Type11167.body.body.name.cache
-        return sum(i -> isassigned(cache, i), 0:length(cache))
+        return count(!isnothing, cache)
     end
 end
 @test count11167() == 0
@@ -7837,3 +7837,11 @@ fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN(args...) = fvarargN(args)
 finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
 @test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10

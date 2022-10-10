@@ -522,7 +522,7 @@ julia> Foo(b="hi")
 Foo(1, "hi")
 
 julia> Foo()
-ERROR: UndefKeywordError: keyword argument b not assigned
+ERROR: UndefKeywordError: keyword argument `b` not assigned
 Stacktrace:
 [...]
 ```

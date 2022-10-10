@@ -1761,3 +1761,55 @@ let interp = Core.Compiler.NativeInterpreter()
     @test count(isinvoke(:*), ir.stmts.inst) == 0
     @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
 end
+
+# Test special purpose inliner for Core.ifelse
+f_ifelse_1(a, b) = Core.ifelse(true, a, b)
+f_ifelse_2(a, b) = Core.ifelse(false, a, b)
+f_ifelse_3(a, b) = Core.ifelse(a, true, b)
+
+@test fully_eliminated(f_ifelse_1, Tuple{Any, Any}; retval=Core.Argument(2))
+@test fully_eliminated(f_ifelse_2, Tuple{Any, Any}; retval=Core.Argument(3))
+@test !fully_eliminated(f_ifelse_3, Tuple{Any, Any})
+
+# inline_splatnew for abstract `NamedTuple`
+@eval construct_splatnew(T, fields) = $(Expr(:splatnew, :T, :fields))
+for tt = Any[(Int,Int), (Integer,Integer), (Any,Any)]
+    let src = code_typed1(tt) do a, b
+            construct_splatnew(NamedTuple{(:a,:b),typeof((a,b))}, (a,b))
+        end
+        @test count(issplatnew, src.code) == 0
+        @test count(isnew, src.code) == 1
+    end
+end
+
+# optimize away `NamedTuple`s used for handling `@nospecialize`d keyword-argument
+# https://github.com/JuliaLang/julia/pull/47059
+abstract type CallInfo end
+struct NewInstruction
+    stmt::Any
+    type::Any
+    info::CallInfo
+    line::Int32
+    flag::UInt8
+    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+                            line::Int32, flag::UInt8)
+        return new(stmt, type, info, line, flag)
+    end
+end
+@nospecialize
+function NewInstruction(newinst::NewInstruction;
+    stmt=newinst.stmt,
+    type=newinst.type,
+    info::CallInfo=newinst.info,
+    line::Int32=newinst.line,
+    flag::UInt8=newinst.flag)
+    return NewInstruction(stmt, type, info, line, flag)
+end
+@specialize
+let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type, info
+        NewInstruction(newinst; stmt, type, info)
+    end
+    @test count(issplatnew, src.code) == 0
+    @test count(iscall((src,NamedTuple)), src.code) == 0
+    @test count(isnew, src.code) == 1
+end

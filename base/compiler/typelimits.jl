@@ -321,7 +321,7 @@ function issimplertype(lattice::AbstractLattice, @nospecialize(typea), @nospecia
                 bi = (tni.val::Core.TypeName).wrapper
                 is_lattice_equal(lattice, ai, bi) && continue
             end
-            bi = getfield_tfunc(typeb, Const(i))
+            bi = getfield_tfunc(lattice, typeb, Const(i))
             is_lattice_equal(lattice, ai, bi) && continue
             # It is not enough for ai to be simpler than bi: it must exactly equal
             # (for this, an invariant struct field, by contrast to
@@ -490,8 +490,8 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
             fields = Vector{Any}(undef, type_nfields)
             anyrefine = false
             for i = 1:type_nfields
-                ai = getfield_tfunc(typea, Const(i))
-                bi = getfield_tfunc(typeb, Const(i))
+                ai = getfield_tfunc(lattice, typea, Const(i))
+                bi = getfield_tfunc(lattice, typeb, Const(i))
                 ft = fieldtype(aty, i)
                 if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
                     # Since ai===bi, the given type has no restrictions on complexity.
