@@ -1791,13 +1791,14 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & ~(_msk))
+    destc[len_Ac] = (dest_last & (~_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[end]) & _msk
+    destc[len_Ac] |= f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
-    min(length(A), length(B)) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of smallest input collection"))
+    min_bitlen = min(length(A), length(B))
+    min_bitlen <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of smallest input collection"))
     isempty(A) && return dest
     isempty(B) && return dest
     destc = dest.chunks
@@ -1809,7 +1810,7 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     end
     # the last effected UInt64's original content
     dest_last = destc[len_Ac]
-    _msk = _msk_end(len_Ac)
+    _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change
     destc[len_Ac] = (dest_last & ~(_msk))
     # then update bits by `or`ing with a masked RHS
