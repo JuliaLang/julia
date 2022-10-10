@@ -1146,7 +1146,6 @@ function findmin(f, A::AbstractArray; dims=:)
 end
 
 function _findmin(f, A, region)
-    isempty(A) && _error_findminmax_empty("findmin")
     ri = reduced_indices0(A, region)
     if isempty(A)
         if prod(map(length, reduced_indices(A, region))) != 0
