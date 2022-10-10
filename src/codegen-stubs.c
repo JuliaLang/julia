@@ -13,8 +13,7 @@
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
-JL_DLLEXPORT int32_t jl_get_llvm_gv_fallback(void *native_code, jl_value_t *p) UNAVAILABLE
-JL_DLLEXPORT void jl_iterate_llvm_gv_fallback(void *native_code, void (*callback)(void*, int32_t, void*), void* ctx) UNAVAILABLE
+JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 
 JL_DLLEXPORT void jl_extern_c_fallback(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name) UNAVAILABLE
 JL_DLLEXPORT jl_value_t *jl_dump_method_asm_fallback(jl_method_instance_t *linfo, size_t world,
