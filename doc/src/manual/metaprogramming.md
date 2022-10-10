@@ -364,7 +364,7 @@ julia> ex = :(a + b)
 :(a + b)
 
 julia> eval(ex)
-ERROR: UndefVarError: b not defined
+ERROR: UndefVarError: `b` not defined
 [...]
 
 julia> a = 1; b = 2;
@@ -382,7 +382,7 @@ julia> ex = :(x = 1)
 :(x = 1)
 
 julia> x
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 
 julia> eval(ex)
 1

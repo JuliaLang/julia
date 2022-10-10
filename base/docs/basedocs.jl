@@ -1750,7 +1750,7 @@ A symbol in the current scope is not defined.
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
 
 julia> a = 1;
 
@@ -1773,7 +1773,7 @@ julia> function my_func(;my_arg)
 my_func (generic function with 1 method)
 
 julia> my_func()
-ERROR: UndefKeywordError: keyword argument my_arg not assigned
+ERROR: UndefKeywordError: keyword argument `my_arg` not assigned
 Stacktrace:
  [1] my_func() at ./REPL[1]:2
  [2] top-level scope at REPL[2]:1
@@ -2899,7 +2899,7 @@ Base.setproperty!
     swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
 
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
-where there must be one getfield expression common to both sides.
+where there must be one `getproperty` expression common to both sides.
 
 See also [`swapfield!`](@ref Core.swapfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2909,9 +2909,9 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
-max, c, :sequentially_consistent))`, where the first argument must be a
-`getfield` expression and is modified atomically.
+The syntax `@atomic op(x.f, v)` (and its equivalent `@atomic x.f op v`) returns
+`modifyproperty!(x, :f, op, v, :sequentially_consistent)`, where the first argument
+must be a `getproperty` expression and is modified atomically.
 
 Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
 `f` of the object `x` by default.  In particular, unlike the default behavior of

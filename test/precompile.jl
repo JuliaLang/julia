@@ -642,16 +642,11 @@ precompile_test_harness("code caching") do dir
     msize = which(size, (Vector{<:Any},))
     hasspec = false
     for i = 1:length(msize.specializations)
-        if isassigned(msize.specializations, i)
-            mi = msize.specializations[i]
-            if isa(mi, Core.MethodInstance)
-                tt = Base.unwrap_unionall(mi.specTypes)
-                if tt.parameters[2] == Vector{Cacheb8321416e8a3e2f1.X}
-                    if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
-                        hasspec = true
-                        break
-                    end
-                end
+        mi = msize.specializations[i]
+        if isa(mi, Core.MethodInstance) && mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
+            if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+                hasspec = true
+                break
             end
         end
     end
@@ -671,7 +666,7 @@ precompile_test_harness("code caching") do dir
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]
-    @test Base.unwrap_unionall(mi.specTypes).parameters[2] == Vector{Int32}
+    @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
     ci = mi.cache
     @test ci.relocatability == 1
     @test ci.inferred !== nothing
@@ -787,7 +782,7 @@ precompile_test_harness("code caching") do dir
         end
     end
 
-    # Invalidations (this test is adapted from from SnoopCompile)
+    # Invalidations (this test is adapted from SnoopCompile)
     function hasvalid(mi, world)
         isdefined(mi, :cache) || return false
         ci = mi.cache
@@ -898,26 +893,26 @@ precompile_test_harness("code caching") do dir
 
     # Reporting test
     @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
-    idxs = findall(==("insert_backedges"), invalidations)
     m = only(methods(MB.call_nbits))
-    idxsbits = filter(idxs) do i
-        mi = invalidations[i-1]
-        mi.def == m
-    end
-    idx = only(idxsbits)
     for mi in m.specializations
         mi === nothing && continue
         hv = hasvalid(mi, world)
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
 
+    setglobal!(Main, :inval, invalidations)
+    idxs = findall(==("verify_methods"), invalidations)
+    idxsbits = filter(idxs) do i
+        mi = invalidations[i-1]
+        mi.def == m
+    end
+    idx = only(idxsbits)
     tagbad = invalidations[idx+1]
-    buildid = invalidations[idx+2]
-    @test isa(buildid, UInt64)
+    @test isa(tagbad, Int32)
     j = findfirst(==(tagbad), invalidations)
-    @test invalidations[j+1] == buildid
-    @test isa(invalidations[j-2], Type)
     @test invalidations[j-1] == "insert_backedges_callee"
+    @test isa(invalidations[j-2], Type)
+    @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
 
     m = only(methods(MB.map_nbits))
     @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
@@ -931,6 +926,7 @@ precompile_test_harness("invoke") do dir
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
               export f44320, g44320
+              export getlast
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
@@ -954,6 +950,16 @@ precompile_test_harness("invoke") do dir
               f44320(::Any) = 2
               g44320() = invoke(f44320, Tuple{Any}, 0)
               g44320()
+
+              # Adding new specializations should not invalidate `invoke`s
+              function getlast(itr)
+                  x = nothing
+                  for y in itr
+                      x = y
+                  end
+                  return x
+              end
+              getlast(a::AbstractArray) = invoke(getlast, Tuple{Any}, a)
           end
           """)
           write(joinpath(dir, "$CallerModule.jl"),
@@ -981,6 +987,8 @@ precompile_test_harness("invoke") do dir
               # Issue #44320
               f44320(::Real) = 3
 
+              call_getlast(x) = getlast(x)
+
               # force precompilation
               begin
                   Base.Experimental.@force_compile
@@ -996,6 +1004,7 @@ precompile_test_harness("invoke") do dir
                   callqnci(3)
                   internal(3)
                   internalnc(3)
+                  call_getlast([1,2,3])
               end
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
@@ -1007,6 +1016,9 @@ precompile_test_harness("invoke") do dir
           end
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
+    @eval using $InvokeModule: $InvokeModule
+    MI = getfield(@__MODULE__, InvokeModule)
+    @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     M = getfield(@__MODULE__, CallerModule)
 
@@ -1058,6 +1070,9 @@ precompile_test_harness("invoke") do dir
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
 
     m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
+
+    m = which(MI.getlast, (Any,))
     @test m.specializations[1].cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types
@@ -1524,6 +1539,23 @@ precompile_test_harness("Issue #46558") do load_path
     @eval ($Foo.foo)(x::Int) = 2
     Bar = (@eval (using Bar46558; Bar46558))
     @test (@eval $Foo.foo(1)) == 2
+end
+
+precompile_test_harness("issue #46296") do load_path
+    write(joinpath(load_path, "CodeInstancePrecompile.jl"),
+        """
+        module CodeInstancePrecompile
+
+        mi = first(methods(identity)).specializations[1]
+        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+                               typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
+
+        __init__() = @assert ci isa Core.CodeInstance
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("CodeInstancePrecompile"))
+    (@eval (using CodeInstancePrecompile))
 end
 
 empty!(Base.DEPOT_PATH)

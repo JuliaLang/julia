@@ -39,7 +39,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
     if !isa(ssavaluetypes, Vector{Any})
         ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
     end
-    info = Any[nothing for i = 1:nstmts]
+    info = CallInfo[NoCallInfo() for i = 1:nstmts]
     stmts = InstructionStream(code, ssavaluetypes, info, ci.codelocs, ci.ssaflags)
     linetable = ci.linetable
     if !isa(linetable, Vector{LineInfoNode})

@@ -28,6 +28,11 @@ julia> for x in p
        end
 foo
 7
+
+julia> replace.(["xops", "oxps"], "x" => "o")
+2-element Vector{String}:
+ "oops"
+ "oops"
 ```
 """
 Pair, =>
