@@ -953,6 +953,9 @@ let s, c, r
             s = "\"~"
             @test "tmpfoobar/" in c
             c,r = test_complete(s)
+            s = "\"~user"
+            c, r = test_complete(s)
+            @test isempty(c)
             rm(dir)
         end
     end
