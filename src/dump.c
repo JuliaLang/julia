@@ -172,7 +172,7 @@ static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
 static htable_t queued_method_roots;
 
 // inverse of backedges graph (caller=>callees hash)
-jl_array_t *edges_map;
+jl_array_t *edges_map JL_GLOBALLY_ROOTED; // rooted for the duration of our uses of this
 
 // list of requested ccallable signatures
 static arraylist_t ccallable_list;
@@ -1210,7 +1210,9 @@ static void jl_collect_missing_backedges(jl_methtable_t *mt)
             jl_array_t *edges = (jl_array_t*)jl_eqtable_get(edges_map, (jl_value_t*)caller, NULL);
             if (edges == NULL) {
                 edges = jl_alloc_vec_any(0);
+                JL_GC_PUSH1(&edges);
                 edges_map = jl_eqtable_put(edges_map, (jl_value_t*)caller, (jl_value_t*)edges, NULL);
+                JL_GC_POP();
             }
             jl_array_ptr_1d_push(edges, NULL);
             jl_array_ptr_1d_push(edges, missing_callee);
@@ -1232,7 +1234,9 @@ static void collect_backedges(jl_method_instance_t *callee, int internal) JL_GC_
             jl_array_t *edges = (jl_array_t*)jl_eqtable_get(edges_map, (jl_value_t*)caller, NULL);
             if (edges == NULL) {
                 edges = jl_alloc_vec_any(0);
+                JL_GC_PUSH1(&edges);
                 edges_map = jl_eqtable_put(edges_map, (jl_value_t*)caller, (jl_value_t*)edges, NULL);
+                JL_GC_POP();
             }
             jl_array_ptr_1d_push(edges, invokeTypes);
             jl_array_ptr_1d_push(edges, (jl_value_t*)callee);
@@ -1376,10 +1380,13 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
     }
     // process target list to turn it into a memoized validity table
     // and compute the old methods list, ready for serialization
+    jl_value_t *matches = NULL;
+    jl_array_t *callee_ids = NULL;
+    JL_GC_PUSH2(&matches, &callee_ids);
     for (size_t i = 0; i < l; i += 2) {
         jl_array_t *callees = (jl_array_t*)jl_array_ptr_ref(edges, i + 1);
         size_t l = jl_array_len(callees);
-        jl_array_t *callee_ids = jl_alloc_array_1d(jl_array_int32_type, l + 1);
+        callee_ids = jl_alloc_array_1d(jl_array_int32_type, l + 1);
         int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
         idxs[0] = 0;
         size_t nt = 0;
@@ -1400,7 +1407,6 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
             // (invokeTypes, nullptr) => missing invoke (unused--inferred as Any)
             void *target = ptrhash_get(&edges_map2, invokeTypes ? (void*)invokeTypes : (void*)callee);
             if (target == HT_NOTFOUND) {
-                jl_value_t *matches;
                 size_t min_valid = 0;
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
@@ -1462,6 +1468,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
         }
         jl_array_del_end(callee_ids, l - nt);
     }
+    JL_GC_POP();
     htable_free(&edges_map2);
 }
 
