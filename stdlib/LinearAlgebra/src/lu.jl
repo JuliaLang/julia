@@ -132,6 +132,7 @@ lu!(A::AbstractMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype
     generic_lufact!(A, pivot; check = check)
 function generic_lufact!(A::AbstractMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
                          check::Bool = true) where {T}
+    LAPACK.chkfinite(A)
     # Extract values
     m, n = size(A)
     minmn = min(m,n)
