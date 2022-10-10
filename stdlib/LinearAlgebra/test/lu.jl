@@ -224,6 +224,11 @@ dimg  = randn(n)/2
     end
 end
 
+@testset "Small tridiagonal matrices" for T in (Float64, ComplexF64)
+    A = Tridiagonal(T[], T[1], T[])
+    @test inv(A) == A
+end
+
 @testset "Singular matrices" for T in (Float64, ComplexF64)
     A = T[1 2; 0 0]
     @test_throws SingularException lu(A)
@@ -433,6 +438,15 @@ end
     ldiv!(u,lu(A),b)
     push!(b,4.0)
     @test length(b) == 4
+end
+
+@testset "NaN matrix should throw error" begin
+    for eltya in (NaN16, NaN32, NaN64, BigFloat(NaN))
+        r = fill(eltya, 2, 3)
+        c = fill(complex(eltya, eltya), 2, 3)
+        @test_throws ArgumentError lu(r)
+        @test_throws ArgumentError lu(c)
+    end
 end
 
 end # module TestLU

@@ -1,6 +1,5 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-#undef DEBUG
 #include "llvm-version.h"
 #include "passes.h"
 
@@ -20,10 +19,12 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
-#define DEBUG_TYPE "combine_muladd"
 
 #include "julia.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "combine_muladd"
+#undef DEBUG
 
 using namespace llvm;
 STATISTIC(TotalContracted, "Total number of multiplies marked for FMA");
@@ -83,7 +84,7 @@ static bool combineMulAdd(Function &F)
             }
         }
     }
-    assert(!verifyFunction(F));
+    assert(!verifyFunction(F, &errs()));
     return modified;
 }
 

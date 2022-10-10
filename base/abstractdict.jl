@@ -565,7 +565,7 @@ push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), 
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
 
 function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
-    h = T(x)
+    h = T(x)::T
     if length(h) != length(x)
         error("key collision during dictionary conversion")
     end

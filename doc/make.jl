@@ -239,12 +239,6 @@ DocMeta.setdocmeta!(
     recursive=true, warn=false,
 )
 DocMeta.setdocmeta!(
-    SuiteSparse,
-    :DocTestSetup,
-    maybe_revise(:(using SparseArrays, LinearAlgebra, SuiteSparse));
-    recursive=true, warn=false,
-)
-DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,
     maybe_revise(:(using UUIDs, Random));
@@ -342,8 +336,14 @@ end
 
 # Define our own DeployConfig
 struct BuildBotConfig <: Documenter.DeployConfig end
+Documenter.authentication_method(::BuildBotConfig) = Documenter.HTTPS
+Documenter.authenticated_repo_url(::BuildBotConfig) = "https://github.com/JuliaLang/docs.julialang.org.git"
 function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs...)
-    haskey(ENV, "DOCUMENTER_KEY") || return Documenter.DeployDecision(; all_ok=false)
+    if !haskey(ENV, "DOCUMENTER_KEY")
+        @info "Unable to deploy the documentation: DOCUMENTER_KEY missing"
+        return Documenter.DeployDecision(; all_ok=false)
+    end
+    release = match(r"^release-([0-9]+\.[0-9]+)$", Base.GIT_VERSION_INFO.branch)
     if Base.GIT_VERSION_INFO.tagged_commit
         # Strip extra pre-release info (1.5.0-rc2.0 -> 1.5.0-rc2)
         ver = VersionNumber(VERSION.major, VERSION.minor, VERSION.patch,
@@ -352,7 +352,16 @@ function Documenter.deploy_folder(::BuildBotConfig; devurl, repo, branch, kwargs
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder)
     elseif Base.GIT_VERSION_INFO.branch == "master"
         return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder=devurl)
+    elseif !isnothing(release)
+        # If this is a non-tag build from a release-* branch, we deploy them as dev docs into the
+        # appropriate vX.Y-dev subdirectory.
+        return Documenter.DeployDecision(; all_ok=true, repo, branch, subfolder="v$(release[1])-dev")
     end
+    @info """
+    Unable to deploy the documentation: invalid GIT_VERSION_INFO
+    GIT_VERSION_INFO.tagged_commit: $(Base.GIT_VERSION_INFO.tagged_commit)
+    GIT_VERSION_INFO.branch: $(Base.GIT_VERSION_INFO.branch)
+    """
     return Documenter.DeployDecision(; all_ok=false)
 end
 
@@ -380,11 +389,16 @@ function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     return Documenter.Writers.HTMLWriter.expand_versions(dir, v.versions)
 end
 
-deploydocs(
-    repo = "github.com/JuliaLang/docs.julialang.org.git",
-    deploy_config = BuildBotConfig(),
-    target = joinpath(buildroot, "doc", "_build", "html", "en"),
-    dirname = "en",
-    devurl = devurl,
-    versions = Versions(["v#.#", devurl => devurl]),
-)
+if "deploy" in ARGS
+    deploydocs(
+        repo = "github.com/JuliaLang/docs.julialang.org.git",
+        deploy_config = BuildBotConfig(),
+        target = joinpath(buildroot, "doc", "_build", "html", "en"),
+        dirname = "en",
+        devurl = devurl,
+        versions = Versions(["v#.#", devurl => devurl]),
+        archive = get(ENV, "DOCUMENTER_ARCHIVE", nothing),
+    )
+else
+    @info "Skipping deployment ('deploy' not passed)"
+end

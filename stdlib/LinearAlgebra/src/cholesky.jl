@@ -168,7 +168,7 @@ CholeskyPivoted(A::AbstractMatrix{T}, uplo::AbstractChar, piv::AbstractVector{<:
     CholeskyPivoted{T,typeof(A),typeof(piv)}(A, uplo, piv, rank, tol, info)
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(CholeskyPivoted{T,S}(factors, uplo, piv, rank, tol, info) where {T,S<:AbstractMatrix},
-           CholeskyPivoted{T,S,typeof(piv)}(factors, uplo, piv, rank, tol, info))
+           CholeskyPivoted{T,S,typeof(piv)}(factors, uplo, piv, rank, tol, info), false)
 
 
 # iteration for destructuring into components
@@ -178,10 +178,8 @@ Base.iterate(C::CholeskyPivoted, ::Val{:done}) = nothing
 
 
 # make a copy that allow inplace Cholesky factorization
-@inline choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
-@inline cholcopy(A::StridedMatrix) = copymutable_oftype(A, choltype(A))
-@inline cholcopy(A::RealHermSymComplexHerm) = copymutable_oftype(A, choltype(A))
-@inline cholcopy(A::AbstractMatrix) = copy_similar(A, choltype(A))
+choltype(A) = promote_type(typeof(sqrt(oneunit(eltype(A)))), Float32)
+cholcopy(A::AbstractMatrix) = eigencopy_oftype(A, choltype(A))
 
 # _chol!. Internal methods for calling unpivoted Cholesky
 ## BLAS/LAPACK element types

@@ -252,36 +252,17 @@ end
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
-#TODO: It seems better to call (D' * adjA')' directly?
-function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
-    A = adjA.parent
-    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    adjoint!(Ac, A)
+function *(A::AdjOrTransAbsMat, D::Diagonal)
+    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     rmul!(Ac, D)
-end
-
-function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
-    A = transA.parent
-    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    transpose!(At, A)
-    rmul!(At, D)
 end
 
 *(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
 
-function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
-    A = adjA.parent
-    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    adjoint!(Ac, A)
+function *(D::Diagonal, A::AdjOrTransAbsMat)
+    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     lmul!(D, Ac)
-end
-
-function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
-    A = transA.parent
-    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    transpose!(At, A)
-    lmul!(D, At)
 end
 
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
@@ -366,6 +347,12 @@ end
     _muldiag_size_check(out, A, B)
     __muldiag!(out, A, B, alpha, beta)
     return out
+end
+
+function (*)(Da::Diagonal, A::AbstractMatrix, Db::Diagonal)
+    _muldiag_size_check(Da, A)
+    _muldiag_size_check(A, Db)
+    return broadcast(*, Da.diag, A, permutedims(Db.diag))
 end
 
 # Get ambiguous method if try to unify AbstractVector/AbstractMatrix here using AbstractVecOrMat
@@ -590,7 +577,21 @@ end
     return C
 end
 
-kron(A::Diagonal{<:Number}, B::Diagonal{<:Number}) = Diagonal(kron(A.diag, B.diag))
+kron(A::Diagonal, B::Diagonal) = Diagonal(kron(A.diag, B.diag))
+
+function kron(A::Diagonal, B::SymTridiagonal)
+    kdv = kron(diag(A), B.dv)
+    # We don't need to drop the last element
+    kev = kron(diag(A), _pushzero(_evview(B)))
+    SymTridiagonal(kdv, kev)
+end
+function kron(A::Diagonal, B::Tridiagonal)
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kd = _makevector(kron(diag(A), B.d))
+    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
+    Tridiagonal(kdl, kd, kdu)
+end
 
 @inline function kron!(C::AbstractMatrix, A::Diagonal, B::AbstractMatrix)
     require_one_based_indexing(B)
@@ -675,9 +676,9 @@ for f in (:exp, :cis, :log, :sqrt,
 end
 
 function inv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
-        if D.diag[i] == zero(T)
+        if iszero(D.diag[i])
             throw(SingularException(i))
         end
         Di[i] = inv(D.diag[i])
@@ -686,20 +687,34 @@ function inv(D::Diagonal{T}) where T
 end
 
 function pinv(D::Diagonal{T}) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
     for i = 1:length(D.diag)
-        isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
+        if !iszero(D.diag[i])
+            invD = inv(D.diag[i])
+            if isfinite(invD)
+                Di[i] = invD
+                continue
+            end
+        end
+        # fallback
+        Di[i] = zero(T)
     end
     Diagonal(Di)
 end
 function pinv(D::Diagonal{T}, tol::Real) where T
-    Di = similar(D.diag, typeof(inv(zero(T))))
-    if( !isempty(D.diag) ) maxabsD = maximum(abs.(D.diag)) end
-    for i = 1:length(D.diag)
-        if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
-            Di[i]=inv(D.diag[i])
-        else
-            Di[i]=zero(T)
+    Di = similar(D.diag, typeof(inv(oneunit(T))))
+    if !isempty(D.diag)
+        maxabsD = maximum(abs, D.diag)
+        for i = 1:length(D.diag)
+            if abs(D.diag[i]) > tol*maxabsD
+                invD = inv(D.diag[i])
+                if isfinite(invD)
+                    Di[i] = invD
+                    continue
+                end
+            end
+            # fallback
+            Di[i] = zero(T)
         end
     end
     Diagonal(Di)
@@ -718,7 +733,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     λ = eigvals(D)
     if !isnothing(sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
-        λ = λ[p] # make a copy, otherwise this permutes D.diag
+        λ = λ[p]
         evecs = zeros(Td, size(D))
         @inbounds for i in eachindex(p)
             evecs[p[i],i] = one(Td)
@@ -727,6 +742,29 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         evecs = Matrix{Td}(I, size(D))
     end
     Eigen(λ, evecs)
+end
+function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(!isfinite, Da.diag) || any(!isfinite, Db.diag)
+        throw(ArgumentError("matrices contain Infs or NaNs"))
+    end
+    if any(iszero, Db.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    return GeneralizedEigen(eigen(Db \ Da; sortby)...)
+end
+function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(iszero, D.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    if size(A, 1) == size(A, 2) && isdiag(A)
+        return eigen(Diagonal(A), D; sortby)
+    elseif ishermitian(A)
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+    else
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+    end
 end
 
 #Singular system
@@ -756,8 +794,8 @@ end
 /(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
 /(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
-*(A::AbstractTriangular, D::Diagonal) = Base.@invoke *(A::AbstractMatrix, D::Diagonal)
-*(D::Diagonal, A::AbstractTriangular) = Base.@invoke *(D::Diagonal, A::AbstractMatrix)
+*(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
+*(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
 
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 
@@ -770,6 +808,9 @@ end
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
+    if !(length(x) == length(D.diag) == length(y))
+        throw(DimensionMismatch("x has length $(length(x)), D has size $(size(D)), and y has $(length(y))"))
+    end
     if isempty(x) && isempty(D) && isempty(y)
         return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
     else
@@ -794,8 +835,10 @@ end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
-@inline cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
-@inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copymutable_oftype(A, choltype(A))
+inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
+
+cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
+cholcopy(A::RealHermSymComplexHerm{<:Any,<:Diagonal}) = Diagonal(copy_similar(diag(A), choltype(A)))
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

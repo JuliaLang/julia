@@ -1,2 +1,7 @@
-LIBUV_BRANCH=julia-uv2-1.44.1
-LIBUV_SHA1=1b2d16477fe1142adea952168d828a066e03ee4c
+## jll artifact
+LIBUV_JLL_NAME := LibUV
+
+## source build
+LIBUV_VER := 2
+LIBUV_BRANCH=julia-uv2-1.44.2
+LIBUV_SHA1=e6f0e4900e195c8352f821abe2b3cffc3089547b

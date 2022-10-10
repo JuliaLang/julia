@@ -209,7 +209,7 @@ MyType(7)
 
 julia> fetch(@spawnat 2 MyType(7))
 ERROR: On worker 2:
-UndefVarError: MyType not defined
+UndefVarError: `MyType` not defined
 ⋮
 
 julia> fetch(@spawnat 2 DummyModule.MyType(7))
@@ -251,7 +251,7 @@ The base Julia installation has in-built support for two types of clusters:
     should use to connect to this worker.
 
 !!! note
-    While Julia generally strives for backward compatability, distribution of code to worker processes relies on
+    While Julia generally strives for backward compatibility, distribution of code to worker processes relies on
     [`Serialization.serialize`](@ref). As pointed out in the corresponding documentation, this can not be guaranteed to work across
     different Julia versions, so it is advised that all workers on all machines use the same version.
 

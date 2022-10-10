@@ -64,7 +64,7 @@ LU{T}(factors::AbstractMatrix, ipiv::AbstractVector{<:Integer}, info::Integer) w
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(LU{T,S}(factors::AbstractMatrix{T}, ipiv::AbstractVector{<:Integer},
                    info::BlasInt) where {T,S},
-           LU{T,S,typeof(ipiv)}(factors, ipiv, info))
+           LU{T,S,typeof(ipiv)}(factors, ipiv, info), false)
 
 # iteration for destructuring into components
 Base.iterate(S::LU) = (S.L, Val(:U))
@@ -136,6 +136,7 @@ lu!(A::StridedMatrix, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(
     generic_lufact!(A, pivot; check = check)
 function generic_lufact!(A::StridedMatrix{T}, pivot::Union{RowMaximum,NoPivot,RowNonZero} = lupivottype(T);
                          check::Bool = true) where {T}
+    LAPACK.chkfinite(A)
     # Extract values
     m, n = size(A)
     minmn = min(m,n)
@@ -461,18 +462,18 @@ end
 
 function (/)(A::AbstractMatrix, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(A), eltype(F))
-    return adjoint(ldiv!(F.parent, copymutable_oftype(adjoint(A), T)))
+    return adjoint(ldiv!(F.parent, copy_similar(adjoint(A), T)))
 end
 # To avoid ambiguities with definitions in adjtrans.jl and factorizations.jl
 (/)(adjA::Adjoint{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 (/)(adjA::Adjoint{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU}) = adjoint(F.parent \ adjA.parent)
 function (/)(trA::Transpose{<:Any,<:AbstractVector}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
+    return adjoint(ldiv!(F.parent, conj!(copy_similar(trA.parent, T))))
 end
 function (/)(trA::Transpose{<:Any,<:AbstractMatrix}, F::Adjoint{<:Any,<:LU})
     T = promote_type(eltype(trA), eltype(F))
-    return adjoint(ldiv!(F.parent, conj!(copymutable_oftype(trA.parent, T))))
+    return adjoint(ldiv!(F.parent, conj!(copy_similar(trA.parent, T))))
 end
 
 function det(F::LU{T}) where T
@@ -530,7 +531,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
     if dl === du
         throw(ArgumentError("off-diagonals of `A` must not alias"))
     end
-    du2 = fill!(similar(d, n-2), 0)::V
+    du2 = fill!(similar(d, max(0, n-2)), 0)::V
 
     @inbounds begin
         for i = 1:n

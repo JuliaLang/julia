@@ -15,12 +15,11 @@ bitcheck(x) = true
 bcast_setindex!(b, x, I...) = (b[I...] .= x; b)
 
 function check_bitop_call(ret_type, func, args...; kwargs...)
-    r1 = func(args...; kwargs...)
     r2 = func(map(x->(isa(x, BitArray) ? Array(x) : x), args)...; kwargs...)
-    ret_type ≢ nothing && !isa(r1, ret_type) && @show ret_type, typeof(r1)
-    ret_type ≢ nothing && @test isa(r1, ret_type)
+    r1 = func(args...; kwargs...)
+    ret_type ≢ nothing && (@test isa(r1, ret_type) || @show ret_type, typeof(r1))
     @test tc(r1, r2)
-    @test isequal(r1, ret_type ≡ nothing ? r2 : r2)
+    @test isequal(r1, r2)
     @test bitcheck(r1)
 end
 macro check_bit_operation(ex, ret_type)
@@ -518,12 +517,14 @@ timesofar("constructors")
             end
         end
 
+        self_copyto!(a, n1, n2, l) = copyto!(a, n1, a, n2, l)
         for p1 = [rand(1:v1) 1 63 64 65 191 192 193]
             for p2 = [rand(1:v1) 1 63 64 65 191 192 193]
                 for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
                     b1 = bitrand(v1)
                     b2 = bitrand(v1)
                     @check_bit_operation copyto!(b1, p1, b2, p2, n) BitVector
+                    @check_bit_operation self_copyto!(b1, p1, p2, n) BitVector
                 end
             end
         end
@@ -1786,4 +1787,39 @@ end
         @test all(bitarray[rangeout, rangein] .== true)
         @test all(bitarray[rangein, rangeout] .== true)
     end
+end
+
+# issue #45825
+
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+
+let all_false = OffsetArray(falses(2001), -1000:1000)
+    @test !any(==(true), all_false)
+    # should be run with --check-bounds=yes
+    @test_throws DimensionMismatch BitArray(all_false)
+    all_false = OffsetArray(falses(2001), 1:2001)
+    @test !any(==(true), BitArray(all_false))
+    all_false = OffsetArray(falses(100, 100), 0:99, -1:98)
+    @test !any(==(true), all_false)
+    @test_throws DimensionMismatch BitArray(all_false)
+    all_false = OffsetArray(falses(100, 100), 1:100, 1:100)
+    @test !any(==(true), all_false)
+end
+let a = falses(1000),
+    msk = BitArray(rand(Bool, 1000)),
+    n = count(msk),
+    b = OffsetArray(rand(Bool, n), (-n÷2):(n÷2)-iseven(n))
+    a[msk] = b
+    @test a[msk] == collect(b)
+    a = falses(100, 100)
+    msk = BitArray(rand(Bool, 100, 100))
+    n = count(msk)
+    b = OffsetArray(rand(Bool, 1, n), 1:1, (-n÷2):(n÷2)-iseven(n))
+    a[msk] = b
+    @test a[msk] == vec(collect(b))
+end
+let b = trues(10)
+    copyto!(b, view([0,0,0], :))
+    @test b == [0,0,0,1,1,1,1,1,1,1]
 end

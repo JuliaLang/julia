@@ -695,8 +695,13 @@ julia> args = [1,2,3]
 
 julia> baz(args...)
 ERROR: MethodError: no method matching baz(::Int64, ::Int64, ::Int64)
+
 Closest candidates are:
-  baz(::Any, ::Any) at none:1
+  baz(::Any, ::Any)
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 As you can see, if the wrong number of elements are in the splatted container, then the function
@@ -1092,7 +1097,7 @@ they are equivalent to `broadcast` calls and are fused with other nested "dot" c
 
 You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
 ```jldoctest
-julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
+julia> 1:5 .|> [x->x^2, inv, x->2*x, -, isodd]
 5-element Vector{Real}:
     1
     0.5

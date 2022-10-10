@@ -1,4 +1,5 @@
 ## PCRE ##
+include $(SRCDIR)/pcre.version
 
 ifneq ($(USE_BINARYBUILDER_PCRE),1)
 # Force optimization for PCRE flags (Issue #11668)

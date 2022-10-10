@@ -180,7 +180,7 @@ end
         else
             @test_throws "Parent's strides" strides(reinterpret(Int64, view(A, 1:8, viewax2)))
         end
-        # non-integer-multipled classified
+        # non-integer-multiplied classified
         if mod(step(viewax2), 3) == 0
             @test check_strides(reinterpret(NTuple{3,Int16}, view(A, 2:7, viewax2)))
         else
@@ -197,6 +197,9 @@ end
         end
         @test check_strides(reinterpret(Float32, view(A, 8:-1:1, viewax2)))
     end
+    # issue 46113
+    A = reinterpret(Int8, reinterpret(reshape, Int16, rand(Int8, 2, 3, 3)))
+    @test check_strides(A)
 end
 
 @testset "strides for ReshapedReinterpretArray" begin
@@ -326,8 +329,8 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     @test r[1,2] === reinterpret(Int64, v[1,2])
     @test r[0,3] === reinterpret(Int64, v[0,3])
     @test r[1,3] === reinterpret(Int64, v[1,3])
-    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is OffsetArrays.IdOffsetRange(0:1). Try reshaping first.") reinterpret(UInt32, v)
-    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got OffsetArrays.IdOffsetRange(0:1)) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
+    @test_throws ArgumentError("cannot reinterpret a `Float64` array to `UInt32` when the first axis is $(repr(axes(v,1))). Try reshaping first.") reinterpret(UInt32, v)
+    @test_throws ArgumentError("`reinterpret(reshape, Tuple{Float64, Float64}, a)` where `eltype(a)` is Float64 requires that `axes(a, 1)` (got $(repr(axes(v,1)))) be equal to 1:2 (from the ratio of element sizes)") reinterpret(reshape, Tuple{Float64,Float64}, v)
     v = OffsetArray(a, (0, 1))
     @test axes(reinterpret(reshape, Tuple{Float64,Float64}, v)) === (OffsetArrays.IdOffsetRange(Base.OneTo(2), 1),)
     r = reinterpret(UInt32, v)
@@ -347,7 +350,7 @@ let a = [0.1 0.2; 0.3 0.4], at = reshape([(i,i+1) for i = 1:2:8], 2, 2)
     offsetvt = (-2, 4)
     vt = OffsetArray(at, offsetvt)
     istr = string(Int)
-    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is OffsetArrays.IdOffsetRange(-1:0). Try reshaping first.") reinterpret(Int, vt)
+    @test_throws ArgumentError("cannot reinterpret a `Tuple{$istr, $istr}` array to `$istr` when the first axis is $(repr(axes(vt,1))). Try reshaping first.") reinterpret(Int, vt)
     vt = reshape(vt, 1:1, axes(vt)...)
     r = reinterpret(Int, vt)
     @test r == OffsetArray(reshape(1:8, 2, 2, 2), (0, offsetvt...))

@@ -159,6 +159,12 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL
     return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp);
 }
 
+jl_value_t *jl_eqtable_getkey(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT
+{
+    _Atomic(jl_value_t*) *bp = jl_table_peek_bp(h, key);
+    return (bp == NULL) ? deflt : jl_atomic_load_relaxed(bp - 1);
+}
+
 JL_DLLEXPORT
 jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found)
 {

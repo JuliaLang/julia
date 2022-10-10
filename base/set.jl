@@ -458,7 +458,7 @@ function _hashed_allunique(C)
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
-            v, s = x
+            v, s = something(x)
             in!(v, seen) && return false
             x = iterate(C, s)
         end
@@ -548,7 +548,7 @@ function hash(s::AbstractSet, h::UInt)
 end
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
-convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
+convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)::T
 
 
 ## replace/replace! ##

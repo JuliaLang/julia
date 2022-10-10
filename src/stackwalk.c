@@ -988,6 +988,7 @@ void jl_rec_backtrace(jl_task_t *t)
    #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown linux")
    (void)mc;
    (void)c;
+   (void)mctx;
   #endif
  #elif defined(_OS_DARWIN_)
     sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
