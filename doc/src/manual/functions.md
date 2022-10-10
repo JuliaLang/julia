@@ -259,7 +259,7 @@ name based on consecutive numbering.
 
 And because they're first class objects, we can assign them to a variable and then call them using
 the variable assigned to as a function:
-```julia
+```jldoctest
 julia> A = x -> x^2 + 2x - 1
 #5 (generic function with 1 method)
 
