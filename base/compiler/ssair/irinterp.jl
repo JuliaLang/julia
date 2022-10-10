@@ -220,6 +220,9 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             if mi′ !== irsv.mi # prevent infinite loop
                 rt = concrete_eval_invoke(interp, inst, mi′, irsv)
             end
+        elseif inst.head === :throw_undef_if_not
+            # TODO: Terminate interpretation early if known false?
+            return false
         else
             ccall(:jl_, Cvoid, (Any,), inst)
             error()
