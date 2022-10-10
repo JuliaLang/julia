@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Make a copy of the original environment
+original_env = copy(ENV)
+
 using Random
 
 @test !("f=a=k=e=n=a=m=e" ∈ keys(ENV))
@@ -117,4 +120,14 @@ if Sys.iswindows()
             @test !haskey(ENV, K)
         end
     end
+end
+
+# Restore the original environment
+for k in keys(ENV)
+    if !haskey(original_env, k)
+        delete!(ENV, k)
+    end
+end
+for (k, v) in pairs(original_env)
+    ENV[k] = v
 end

@@ -111,7 +111,8 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
         types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
-        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length(names))...}
+        length_names = length(names)::Integer
+        types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
         NamedTuple{names, types}(map(Fix1(getfield, nt), names))
     end
 end
@@ -148,7 +149,7 @@ convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names,T}) where {names,T<:Tu
 convert(::Type{NamedTuple{names}}, nt::NamedTuple{names}) where {names} = nt
 
 function convert(::Type{NamedTuple{names,T}}, nt::NamedTuple{names}) where {names,T<:Tuple}
-    NamedTuple{names,T}(T(nt))
+    NamedTuple{names,T}(T(nt))::NamedTuple{names,T}
 end
 
 if nameof(@__MODULE__) === :Base
@@ -318,8 +319,9 @@ values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
 get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key) ? getfield(nt, key) : f()
-tail(t::NamedTuple{names}) where names = NamedTuple{tail(names)}(t)
-front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
+tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
+front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
+reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
 
 @assume_effects :total function diff_names(an::Tuple{Vararg{Symbol}}, bn::Tuple{Vararg{Symbol}})
     @nospecialize an bn
@@ -333,7 +335,7 @@ front(t::NamedTuple{names}) where names = NamedTuple{front(names)}(t)
 end
 
 """
-    structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn},Type{NamedTuple{bn}}}) where {an,bn}
+    structdiff(a::NamedTuple, b::Union{NamedTuple,Type{NamedTuple}})
 
 Construct a copy of named tuple `a`, except with fields that exist in `b` removed.
 `b` can be a named tuple, or a type of the form `NamedTuple{field_names}`.
@@ -341,14 +343,19 @@ Construct a copy of named tuple `a`, except with fields that exist in `b` remove
 function structdiff(a::NamedTuple{an}, b::Union{NamedTuple{bn}, Type{NamedTuple{bn}}}) where {an, bn}
     if @generated
         names = diff_names(an, bn)
+        isempty(names) && return (;) # just a fast pass
         idx = Int[ fieldindex(a, names[n]) for n in 1:length(names) ]
         types = Tuple{Any[ fieldtype(a, idx[n]) for n in 1:length(idx) ]...}
         vals = Any[ :(getfield(a, $(idx[n]))) for n in 1:length(idx) ]
-        :( NamedTuple{$names,$types}(($(vals...),)) )
+        return :( NamedTuple{$names,$types}(($(vals...),)) )
     else
         names = diff_names(an, bn)
+        # N.B this early return is necessary to get a better type stability,
+        # and also allows us to cut off the cost from constructing
+        # potentially type unstable closure passed to the `map` below
+        isempty(names) && return (;)
         types = Tuple{Any[ fieldtype(typeof(a), names[n]) for n in 1:length(names) ]...}
-        NamedTuple{names,types}(map(Fix1(getfield, a), names))
+        return NamedTuple{names,types}(map(n::Symbol->getfield(a, n), names))
     end
 end
 

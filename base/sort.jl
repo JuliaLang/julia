@@ -333,6 +333,8 @@ Return the index of the first value in `a` greater than or equal to `x`, accordi
 specified order. Return `lastindex(a) + 1` if `x` is greater than all values in `a`.
 `a` is assumed to be sorted.
 
+`insert!`ing `x` at this index will maintain sorted order.
+
 See also: [`searchsortedlast`](@ref), [`searchsorted`](@ref), [`findfirst`](@ref).
 
 # Examples
@@ -514,12 +516,13 @@ const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, ::InsertionSortAlg, o::Ordering)
-    @inbounds for i = lo+1:hi
+    lo_plus_1 = (lo + 1)::Integer
+    @inbounds for i = lo_plus_1:hi
         j = i
         x = v[i]
         while j > lo
             y = v[j-1]
-            if !lt(o, x, y)
+            if !(lt(o, x, y)::Bool)
                 break
             end
             v[j] = y
@@ -1172,7 +1175,7 @@ function sortperm(A::AbstractArray;
             min, max = extrema(A)
             (diff, o1) = sub_with_overflow(max, min)
             (rangelen, o2) = add_with_overflow(diff, oneunit(diff))
-            if !o1 && !o2 && rangelen < div(n,2)
+            if !(o1 || o2)::Bool && rangelen < div(n,2)
                 return sortperm_int_range(A, rangelen, min)
             end
         end
@@ -1477,10 +1480,15 @@ import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-const Floats = Union{Float32,Float64}
-const FPSortable = Union{ # Mixed Float32 and Float64 are not allowed.
+# IEEEFloat is not available in Core.Compiler
+const Floats = Union{Float16, Float32, Float64}
+# fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
+# This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
+const FPSortable = Union{
+    AbstractVector{Union{Float16, Missing}},
     AbstractVector{Union{Float32, Missing}},
     AbstractVector{Union{Float64, Missing}},
+    AbstractVector{Float16},
     AbstractVector{Float32},
     AbstractVector{Float64},
     AbstractVector{Missing}}
@@ -1496,6 +1504,12 @@ right(o::Perm) = Perm(right(o.order), o.data)
 
 lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
 lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+
+uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
+uint_map(x::Float16, ::Right) = reinterpret(UInt16, x)
+uint_unmap(::Type{Float16}, u::UInt16, ::Right) = reinterpret(Float16, u)
+UIntMappable(::Type{Float16}, ::Union{Left, Right}) = UInt16
 
 uint_map(x::Float32, ::Left) = ~reinterpret(UInt32, x)
 uint_unmap(::Type{Float32}, u::UInt32, ::Left) = reinterpret(Float32, ~u)

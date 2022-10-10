@@ -521,7 +521,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                 end
             end
             return path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base", path))
+        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
             return joinpath("@Base", normpath(path))
@@ -992,8 +992,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             root.count += 1
             startframe = i
         elseif !skip
-            pushfirst!(build, parent)
             if recur === :flat || recur === :flatc
+                pushfirst!(build, parent)
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
                 found = false
                 for j in 1:(startframe - i)
@@ -1238,6 +1238,27 @@ function warning_empty(;summary = false)
         or adjust the delay between samples with `Profile.init()`."""
     end
 end
+
+
+"""
+    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+
+Write a snapshot of the heap, in the JSON format expected by the Chrome
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to the given
+file path or IO stream. If all_one is true, then report the size of
+every object as one so they can be easily counted. Otherwise, report
+the actual size.
+"""
+function take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+end
+function take_heap_snapshot(filepath::String, all_one::Bool=false)
+    open(filepath, "w") do io
+        take_heap_snapshot(io, all_one)
+    end
+end
+
 
 include("Allocs.jl")
 

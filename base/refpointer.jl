@@ -101,7 +101,7 @@ IteratorSize(::Type{<:Ref}) = HasShape{0}()
 unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)
 unsafe_convert(::Type{Ref{T}}, x) where {T} = unsafe_convert(Ptr{T}, x)
 
-convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)
+convert(::Type{Ref{T}}, x) where {T} = RefValue{T}(x)::RefValue{T}
 
 ### Methods for a Ref object that is backed by an array at index i
 struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}

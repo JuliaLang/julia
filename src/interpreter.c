@@ -151,6 +151,17 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
+jl_value_t *jl_eval_globalref(jl_globalref_t *g)
+{
+    if (g->bnd_cache) {
+        jl_value_t *v = jl_atomic_load_relaxed(&g->bnd_cache->value);
+        if (v == NULL)
+            jl_undefined_var_error(g->name);
+        return v;
+    }
+    return jl_eval_global_var(g->mod, g->name);
+}
+
 static int jl_source_nslots(jl_code_info_t *src) JL_NOTSAFEPOINT
 {
     return jl_array_len(src->slotflags);
@@ -190,7 +201,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_global_var(jl_globalref_mod(e), jl_globalref_name(e));
+        return jl_eval_globalref((jl_globalref_t*)e);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
         return jl_eval_global_var(s->module, (jl_sym_t*)e);
@@ -542,6 +553,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 // leave happens during normal control flow, but we must
                 // longjmp to pop the eval_body call for each enter.
                 s->continue_at = next_ip;
+                asan_unpoison_task_stack(ct, &eh->eh_ctx);
                 jl_longjmp(eh->eh_ctx, 1);
             }
             else if (head == jl_pop_exception_sym) {

@@ -993,7 +993,7 @@ end
 let
     @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, 2)
 
-    bad_thunk = ()->NonexistantModule.f()
+    bad_thunk = ()->NonexistentModule.f()
     @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
 
     # Test that the stream is still usable
