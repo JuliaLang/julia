@@ -1300,14 +1300,10 @@ contains `missing` but not `item`, in which case `missing` is returned
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 
 Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
-[`Dict`](@ref)s look for `key=>value` pairs, and the `key` (not the `value`)
-is compared using [`isequal`](@ref). To test for the presence of a key in
-a dictionary, use [`haskey`](@ref) or `k in keys(dict)`.
-
-For [`Set`](@ref)s, the result is always a `Bool`. As for [`Dict`](@ref)s,
-the result is always a `Bool` if `value` in `(key=>value) in Dict` is not
-`missing`, otherwise `missing` is returned.
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
+[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
+[`isequal`](@ref). To test for the presence of a key in a dictionary, use [`haskey`](@ref)
+or `k in keys(dict)`. For these collections, the result is always a `Bool` and never `missing`.
 
 To determine whether an item is not in a given collection, see [`∉`](@ref).
 You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
@@ -1343,10 +1339,10 @@ true
 julia> missing in Set([1, 2])
 false
 
-julia> (missing=>NaN) in Dict(1=>10, 2=>20, 3=>30, missing=>NaN)
-false
+julia> (missing=>1) in Dict(1=>10, 2=>20, missing=>1)
+true
 
-julia> (2=>missing) in Dict(1=>10, 2=>20, 3=>30, missing=>NaN)
+julia> (1=>missing) in Dict(1=>10, 2=>20, missing=>NaN) # value contains missing
 missing
 
 julia> !(21 in a)
