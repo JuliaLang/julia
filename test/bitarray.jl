@@ -1531,7 +1531,7 @@ timesofar("reductions")
                     @test first(dest, l) == map(op, b2, b4)
                     # check we didn't change bits we're not suppose to
                     @test last(dest, extra_l) == original_tail
-                    
+           
                     map!(op, dest_inbetween, b2, b4)
                     @test first(dest_inbetween, l) == map(op, b2, b4)
                     @test last(dest_inbetween, extra_l÷2) == original_tail_inbetween
