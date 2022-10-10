@@ -1110,8 +1110,10 @@ julia> findmin(A, dims=2)
 ([1.0; 3.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 1);;])
 ```
 """
-function findmin(A::AbstractArray; dims=:) 
-    isempty(A) && _error_findminmax_empty("findmin")
+function findmin(A::AbstractArray; dims=:)
+    if isempty(A) && (dims==:)
+        _error_findminmax_empty("findmin")
+    end
     _findmin(A, dims)
 end
 _findmin(A, dims) = _findmin(identity, A, dims)
@@ -1137,7 +1139,9 @@ julia> findmin(abs2, A, dims=2)
 ```
 """
 function findmin(f, A::AbstractArray; dims=:)
-    isempty(A) && _error_findminmax_empty("findmin")
+    if isempty(A) && (dims==:)
+        _error_findminmax_empty("findmin")
+    end
     return _findmin(f, A, dims)
 end
 
@@ -1189,7 +1193,9 @@ julia> findmax(A, dims=2)
 ```
 """
 function findmax(A::AbstractArray; dims=:)
-    isempty(A) && _error_findminmax_empty("findmax")
+    if isempty(A) && (dims==:)
+        _error_findminmax_empty("findmax")
+    end
     return _findmax(A, dims)
 end
 _findmax(A, dims) = _findmax(identity, A, dims)
@@ -1214,8 +1220,10 @@ julia> findmax(abs2, A, dims=2)
 ([1.0; 4.0;;], CartesianIndex{2}[CartesianIndex(1, 1); CartesianIndex(2, 2);;])
 ```
 """
-function findmax(f, A::AbstractArray; dims=:) 
-    isempty(A) && _error_findminmax_empty("findmax")
+function findmax(f, A::AbstractArray; dims=:)
+    if isempty(A) && (dims==:)
+        _error_findminmax_empty("findmax")
+    end
     return _findmax(f, A, dims)
 end
 
@@ -1269,7 +1277,9 @@ julia> argmin(A, dims=2)
 ```
 """
 function argmin(A::AbstractArray; dims=:)
-    isempty(A) && _error_findminmax_empty("argmin")
+    if isempty(A) && (dims==:)
+        _error_findminmax_empty("argmin")
+    end
     return findmin(A; dims=dims)[2]
 end
 
@@ -1298,6 +1308,8 @@ julia> argmax(A, dims=2)
 ```
 """
 function argmax(A::AbstractArray; dims=:)
-    isempty(A) && _error_findminmax_empty("argmax")
+    if isempty(A) && (dims==:)
+        _error_findminmax_empty("argmax")
+    end
     return findmax(A; dims=dims)[2]
 end
