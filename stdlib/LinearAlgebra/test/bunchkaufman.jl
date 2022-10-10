@@ -190,4 +190,10 @@ end
     @test_throws ArgumentError("adjoint not implemented for complex symmetric matrices") F'
 end
 
+@testset "BunchKaufman for AbstractMatrix" begin
+    S = SymTridiagonal(fill(2.0, 4), ones(3))
+    B = bunchkaufman(S)
+    @test B.U * B.D * B.U' ≈ S
+end
+
 end # module TestBunchKaufman

@@ -419,7 +419,7 @@ function tmeet(lattice::PartialsLattice, @nospecialize(v), @nospecialize(t::Type
             if isvarargtype(vfi)
                 new_fields[i] = vfi
             else
-                new_fields[i] = tmeet(lattice, vfi, widenconst(getfield_tfunc(t, Const(i))))
+                new_fields[i] = tmeet(lattice, vfi, widenconst(getfield_tfunc(lattice, t, Const(i))))
                 if new_fields[i] === Bottom
                     return Bottom
                 end

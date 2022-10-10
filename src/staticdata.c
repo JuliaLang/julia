@@ -1091,6 +1091,10 @@ static void jl_write_values(jl_serializer_state *s)
                     arraylist_push(&ccallable_list, (void*)3);
                 }
             }
+            else if (jl_is_method_instance(v)) {
+                jl_method_instance_t *newmi = (jl_method_instance_t*)&s->s->buf[reloc_offset];
+                newmi->precompiled = 0;
+            }
             else if (jl_is_code_instance(v)) {
                 // Handle the native-code pointers
                 jl_code_instance_t *m = (jl_code_instance_t*)v;
@@ -1343,7 +1347,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(offset < deser_sym.len && deser_sym.items[offset] && "corrupt relocation item id");
         return (uintptr_t)deser_sym.items[offset];
     case BindingRef:
-        return jl_buff_tag | GC_OLD_MARKED;
+        return jl_buff_tag | GC_OLD;
     case TagRef:
         if (offset == 0)
             return (uintptr_t)s->ptls->root_task;
@@ -1642,7 +1646,7 @@ static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
     size_t l = jl_svec_len(cache), i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL || ti == jl_nothing)
+        if (ti == jl_nothing)
             continue;
         if (jl_get_llvm_gv(native_functions, ti)) {
             jl_serialize_value(s, ti);
@@ -1656,16 +1660,21 @@ static void jl_scan_type_cache_gv(jl_serializer_state *s, jl_svec_t *cache)
 }
 
 // remove cached types not referenced in the stream
-static void jl_prune_type_cache_hash(jl_svec_t *cache)
+static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL || ti == jl_nothing)
+        if (ti == jl_nothing)
             continue;
         if (ptrhash_get(&backref_table, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
     }
+    void *idx = ptrhash_get(&backref_table, cache);
+    ptrhash_remove(&backref_table, cache);
+    cache = cache_rehash_set(cache, l);
+    ptrhash_put(&backref_table, cache, idx);
+    return cache;
 }
 
 static void jl_prune_type_cache_linear(jl_svec_t *cache)
@@ -1673,14 +1682,13 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
     size_t l = jl_svec_len(cache), ins = 0, i;
     for (i = 0; i < l; i++) {
         jl_value_t *ti = jl_svecref(cache, i);
-        if (ti == NULL)
+        if (ti == jl_nothing)
             break;
         if (ptrhash_get(&backref_table, ti) != HT_NOTFOUND)
             jl_svecset(cache, ins++, ti);
     }
-    if (i > ins) {
-        memset(&jl_svec_data(cache)[ins], 0, (i - ins) * sizeof(jl_value_t*));
-    }
+    while (ins < l)
+        jl_svecset(cache, ins++, jl_nothing);
 }
 
 static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
@@ -1732,7 +1740,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
         if (inferred && inferred != jl_nothing) {
             if (jl_options.strip_ir) {
-                record_field_change(&inferred, jl_nothing);
+                record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
                 jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
@@ -1745,6 +1753,8 @@ static void strip_specializations_(jl_method_instance_t *mi)
     }
     if (jl_options.strip_ir) {
         record_field_change(&mi->uninferred, NULL);
+        record_field_change((jl_value_t**)&mi->backedges, NULL);
+        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 
@@ -1785,11 +1795,15 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     }
     if (m->unspecialized)
         strip_specializations_(m->unspecialized);
+    if (jl_options.strip_ir && m->root_blocks)
+        record_field_change((jl_value_t**)&m->root_blocks, NULL);
     return 1;
 }
 
 static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
 {
+    if (jl_options.strip_ir && mt->backedges)
+        record_field_change((jl_value_t**)&mt->backedges, NULL);
     return jl_typemap_visitor(mt->defs, strip_all_codeinfos__, NULL);
 }
 
@@ -1954,7 +1968,8 @@ static void jl_save_system_image_to_stream(ios_t *f) JL_GC_DISABLED
         // built-in type caches
         for (i = 0; i < typenames.len; i++) {
             jl_typename_t *tn = (jl_typename_t*)typenames.items[i];
-            jl_prune_type_cache_hash(tn->cache);
+            tn->cache = jl_prune_type_cache_hash(tn->cache);
+            jl_gc_wb(tn, tn->cache);
             jl_prune_type_cache_linear(tn->linearcache);
         }
         arraylist_free(&typenames);
@@ -2190,7 +2205,7 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
 
     s.s = &sysimg;
-    jl_read_relocations(&s, GC_OLD_MARKED); // gctags
+    jl_read_relocations(&s, GC_OLD); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
     jl_read_relocations(&s, 0); // general relocs

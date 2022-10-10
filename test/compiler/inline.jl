@@ -1709,3 +1709,107 @@ let src = code_typed1((Any,)) do x
     end
     @test count(iscall((src, f_union_unmatched)), src.code) == 0
 end
+
+# modifyfield! handling
+# =====================
+
+isinvokemodify(y) = @nospecialize(x) -> isinvokemodify(y, x)
+isinvokemodify(sym::Symbol, @nospecialize(x)) = isinvokemodify(mi->mi.def.name===sym, x)
+isinvokemodify(pred::Function, @nospecialize(x)) = isexpr(x, :invoke_modify) && pred(x.args[1]::MethodInstance)
+
+mutable struct Atomic{T}
+    @atomic x::T
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x + 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x += 1
+    end
+    @test count(isinvokemodify(:+), src.code) == 1
+end
+let src = code_typed1((Atomic{Int},)) do a
+        @atomic a.x max 10
+    end
+    @test count(isinvokemodify(:max), src.code) == 1
+end
+# simple union split handling
+mymax(x::T, y::T) where T<:Real = max(x, y)
+mymax(x::T, y::Real) where T<:Real = convert(T, max(x, y))::T
+let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
+        @atomic a.x mymax b
+    end
+    @test count(isinvokemodify(:mymax), src.code) == 2
+end
+
+# apply `ssa_inlining_pass` multiple times
+let interp = Core.Compiler.NativeInterpreter()
+    # check if callsite `@noinline` annotation works
+    ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
+        @noinline a*b
+    end |> only
+    i = findfirst(isinvoke(:*), ir.stmts.inst)
+    @test i !== nothing
+
+    # ok, now delete the callsite flag, and see the second inlining pass can inline the call
+    @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
+    inlining = Core.Compiler.InliningState(Core.Compiler.OptimizationParams(interp), nothing,
+        Core.Compiler.code_cache(interp), interp)
+    ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
+    @test count(isinvoke(:*), ir.stmts.inst) == 0
+    @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
+end
+
+# Test special purpose inliner for Core.ifelse
+f_ifelse_1(a, b) = Core.ifelse(true, a, b)
+f_ifelse_2(a, b) = Core.ifelse(false, a, b)
+f_ifelse_3(a, b) = Core.ifelse(a, true, b)
+
+@test fully_eliminated(f_ifelse_1, Tuple{Any, Any}; retval=Core.Argument(2))
+@test fully_eliminated(f_ifelse_2, Tuple{Any, Any}; retval=Core.Argument(3))
+@test !fully_eliminated(f_ifelse_3, Tuple{Any, Any})
+
+# inline_splatnew for abstract `NamedTuple`
+@eval construct_splatnew(T, fields) = $(Expr(:splatnew, :T, :fields))
+for tt = Any[(Int,Int), (Integer,Integer), (Any,Any)]
+    let src = code_typed1(tt) do a, b
+            construct_splatnew(NamedTuple{(:a,:b),typeof((a,b))}, (a,b))
+        end
+        @test count(issplatnew, src.code) == 0
+        @test count(isnew, src.code) == 1
+    end
+end
+
+# optimize away `NamedTuple`s used for handling `@nospecialize`d keyword-argument
+# https://github.com/JuliaLang/julia/pull/47059
+abstract type CallInfo end
+struct NewInstruction
+    stmt::Any
+    type::Any
+    info::CallInfo
+    line::Int32
+    flag::UInt8
+    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+                            line::Int32, flag::UInt8)
+        return new(stmt, type, info, line, flag)
+    end
+end
+@nospecialize
+function NewInstruction(newinst::NewInstruction;
+    stmt=newinst.stmt,
+    type=newinst.type,
+    info::CallInfo=newinst.info,
+    line::Int32=newinst.line,
+    flag::UInt8=newinst.flag)
+    return NewInstruction(stmt, type, info, line, flag)
+end
+@specialize
+let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type, info
+        NewInstruction(newinst; stmt, type, info)
+    end
+    @test count(issplatnew, src.code) == 0
+    @test count(iscall((src,NamedTuple)), src.code) == 0
+    @test count(isnew, src.code) == 1
+end

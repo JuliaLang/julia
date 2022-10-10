@@ -453,7 +453,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_isassigned) \
     XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \

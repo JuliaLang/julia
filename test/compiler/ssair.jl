@@ -173,7 +173,17 @@ let ci = make_ci([
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+let ci = make_ci([
+        Expr(:call, GlobalRef(Main, :cglobal),
+                    Expr(:call, Core.tuple, :(:c)), Nothing),
+                    Core.Compiler.ReturnNode()
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
@@ -460,4 +470,60 @@ let ir = Base.code_ircode((Bool,Any)) do c, x
             @test !Core.Compiler.postdominates(post_domtree, i, j)
         end
     end
+end
+
+@testset "issue #46967: undef stmts introduced by compaction" begin
+    # generate some IR
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    instructions = length(ir.stmts)
+
+    # get the addition instruction
+    add_stmt = ir.stmts[1]
+    @test Meta.isexpr(add_stmt[:inst], :call) && add_stmt[:inst].args[3] == 42
+
+    # replace the addition with a slightly different one
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    node = Core.Compiler.insert_node!(ir, 1, inst)
+    Core.Compiler.setindex!(add_stmt, node, :inst)
+
+    # perform compaction (not by calling compact! because with DCE the bug doesn't trigger)
+    compact = Core.Compiler.IncrementalCompact(ir)
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+    ir = Core.Compiler.complete(compact)
+
+    # test that the inserted node was compacted
+    @test Core.Compiler.length(ir.new_nodes) == 0
+
+    # test that we performed copy propagation, but that the undef node was trimmed
+    @test length(ir.stmts) == instructions
+
+    @test show(devnull, ir) === nothing
+end
+
+@testset "IncrementalCompact statefulness" begin
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    compact = Core.Compiler.IncrementalCompact(ir)
+
+    # set up first iterator
+    x = Core.Compiler.iterate(compact)
+    x = Core.Compiler.iterate(compact, x[2])
+
+    # set up second iterator
+    x = Core.Compiler.iterate(compact)
+
+    # consume remainder
+    while x !== nothing
+        x = Core.Compiler.iterate(compact, x[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end

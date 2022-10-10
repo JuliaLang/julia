@@ -175,11 +175,11 @@ julia> Uonly == U
 true
 ```
 """
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
-    svd!(copymutable_oftype(A, eigtype(T)), full = full, alg = alg)
+function svd(A::AbstractVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T}
+    svd!(eigencopy_oftype(A, eigtype(T)), full = full, alg = alg)
 end
-function svd(A::StridedVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
-    A = svd!(copymutable_oftype(A, eigtype(T)), full = full, alg = alg)
+function svd(A::AbstractVecOrMat{T}; full::Bool = false, alg::Algorithm = default_svd_alg(A)) where {T <: Union{Float16,Complex{Float16}}}
+    A = svd!(eigencopy_oftype(A, eigtype(T)), full = full, alg = alg)
     return SVD{T}(A)
 end
 function svd(x::Number; full::Bool = false, alg::Algorithm = default_svd_alg(x))
@@ -240,10 +240,8 @@ julia> svdvals(A)
  0.0
 ```
 """
-svdvals(A::AbstractMatrix{T}) where {T} = svdvals!(copymutable_oftype(A, eigtype(T)))
+svdvals(A::AbstractMatrix{T}) where {T} = svdvals!(eigencopy_oftype(A, eigtype(T)))
 svdvals(A::AbstractVector{T}) where {T} = [convert(eigtype(T), norm(A))]
-svdvals(A::AbstractMatrix{<:BlasFloat}) = svdvals!(copy(A))
-svdvals(A::AbstractVector{<:BlasFloat}) = [norm(A)]
 svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
@@ -457,9 +455,9 @@ julia> U == Uonly
 true
 ```
 """
-function svd(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+function svd(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA),TB)
-    return svd!(copymutable_oftype(A, S), copymutable_oftype(B, S))
+    return svd!(copy_similar(A, S), copy_similar(B, S))
 end
 # This method can be heavily optimized but it is probably not critical
 # and might introduce bugs or inconsistencies relative to the 1x1 matrix
@@ -541,7 +539,6 @@ function svdvals!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     a[1:k + l] ./ b[1:k + l]
 end
-svdvals(A::StridedMatrix{T},B::StridedMatrix{T}) where {T<:BlasFloat} = svdvals!(copy(A),copy(B))
 
 """
     svdvals(A, B)
@@ -567,9 +564,9 @@ julia> svdvals(A, B)
  1.0
 ```
 """
-function svdvals(A::StridedMatrix{TA}, B::StridedMatrix{TB}) where {TA,TB}
+function svdvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) where {TA,TB}
     S = promote_type(eigtype(TA), TB)
-    return svdvals!(copymutable_oftype(A, S), copymutable_oftype(B, S))
+    return svdvals!(copy_similar(A, S), copy_similar(B, S))
 end
 svdvals(x::Number, y::Number) = abs(x/y)
 
