@@ -265,9 +265,6 @@ julia> A = x -> x^2 + 2x - 1
 
 julia> A(10)
 119
-
-julia> A(-3)
-2
 ```
 
 However, the primary use for anonymous functions is passing them to functions which take other functions
