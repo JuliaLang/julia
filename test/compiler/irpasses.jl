@@ -960,7 +960,7 @@ let # effect-freeness computation for array allocation
         end
     end
 
-    # shouldn't eliminate errorneous dead allocations
+    # shouldn't eliminate erroneous dead allocations
     bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
         dims = ntuple(i->dim, N)

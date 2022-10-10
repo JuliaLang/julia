@@ -263,7 +263,6 @@ let x = [4,3,5,2]
     @test maximum(x) == 5
     @test minimum(x) == 2
     @test extrema(x) == (2, 5)
-    @test Core.Compiler.extrema(x) == (2, 5)
 
     @test maximum(abs2, x) == 25
     @test minimum(abs2, x) == 4

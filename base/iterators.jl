@@ -1381,24 +1381,41 @@ julia> peek(a)
 julia> sum(a) # Sum the remaining elements
 7
 ```
-""" mutable struct Stateful{T, VS}
+"""
+mutable struct Stateful{T, VS, N<:Integer}
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
-    taken::Int
+
+    # Number of remaining elements, if itr is HasLength or HasShape.
+    # if not, store -1 - number_of_consumed_elements.
+    # This allows us to defer calculating length until asked for.
+    # See PR #45924
+    remaining::N
     @inline function Stateful{<:Any, Any}(itr::T) where {T}
-        new{T, Any}(itr, iterate(itr), 0)
+        itl = iterlength(itr)
+        new{T, Any, typeof(itl)}(itr, iterate(itr), itl)
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        return new{T, VS}(itr, iterate(itr)::VS, 0)
+        itl = iterlength(itr)
+        return new{T, VS, typeof(itl)}(itr, iterate(itr)::VS, itl)
+    end
+end
+
+function iterlength(it)::Signed
+    if IteratorSize(it) isa Union{HasShape, HasLength}
+       return length(it)
+    else
+        -1
     end
 end
 
 function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
     s.itr = itr
+    itl = iterlength(itr)
     setfield!(s, :nextvalstate, iterate(itr))
-    s.taken = 0
+    s.remaining = itl
     s
 end
 
@@ -1432,7 +1449,8 @@ convert(::Type{Stateful}, itr) = Stateful(itr)
     else
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
-        s.taken += 1
+        rem = s.remaining
+        s.remaining = rem - typeof(rem)(1)
         return val
     end
 end
@@ -1442,11 +1460,21 @@ end
     return ns !== nothing ? ns[1] : sentinel
 end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
-IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
-eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
-IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
-length(s::Stateful) = length(s.itr) - s.taken
+IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
+eltype(::Type{<:Stateful{T}}) where {T} = eltype(T)
+IteratorEltype(::Type{<:Stateful{T}}) where {T} = IteratorEltype(T)
+
+function length(s::Stateful)
+    rem = s.remaining
+    # If rem is actually remaining length, return it.
+    # else, rem is number of consumed elements.
+    if rem >= 0
+        rem
+    else
+        length(s.itr) - (typeof(rem)(1) - rem)
+    end
 end
+end # if statement several hundred lines above
 
 """
     only(x)

@@ -500,7 +500,10 @@ See also [`split`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> collect(eachsplit(a, "."))
+julia> b = eachsplit(a, ".")
+Base.SplitIterator{String, String}("Ma.rch", ".", 0, true)
+
+julia> collect(b)
 2-element Vector{SubString{String}}:
  "Ma"
  "rch"
@@ -541,6 +544,15 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     end
     iter.keepempty || i <= ncodeunits(iter.str) || return nothing
     @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
+end
+
+# Specialization for partition(s,n) to return a SubString
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+
+function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
+    state > ncodeunits(itr.c) && return nothing
+    r = min(nextind(itr.c, state, itr.n - 1), lastindex(itr.c))
+    return SubString(itr.c, state, r), nextind(itr.c, r)
 end
 
 eachsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =

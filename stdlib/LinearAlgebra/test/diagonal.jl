@@ -462,6 +462,43 @@ end
     @test kron(Ad, Ad).diag == kron([1, 2, 3], [1, 2, 3])
 end
 
+# Define a vector type that does not support `deleteat!`, to ensure that `kron` handles this
+struct SimpleVector{T} <: AbstractVector{T}
+    vec::Vector{T}
+end
+SimpleVector(x::SimpleVector) = SimpleVector(Vector(x.vec))
+SimpleVector{T}(::UndefInitializer, n::Integer) where {T} = SimpleVector(Vector{T}(undef, n))
+Base.:(==)(x::SimpleVector, y::SimpleVector) = x == y
+Base.axes(x::SimpleVector) = axes(x.vec)
+Base.convert(::Type{Vector{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x.vec)
+Base.convert(::Type{Vector}, x::SimpleVector{T}) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array{T}}, x::SimpleVector) where {T} = convert(Vector{T}, x)
+Base.convert(::Type{Array}, x::SimpleVector) = convert(Vector, x)
+Base.copyto!(x::SimpleVector, y::SimpleVector) = (copyto!(x.vec, y.vec); x)
+Base.eltype(::Type{SimpleVector{T}}) where {T} = T
+Base.getindex(x::SimpleVector, ind...) = getindex(x.vec, ind...)
+Base.kron(x::SimpleVector, y::SimpleVector) = SimpleVector(kron(x.vec, y.vec))
+Base.promote_rule(::Type{<:AbstractVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = Vector{promote_type(T, U)}
+Base.promote_rule(::Type{SimpleVector{T}}, ::Type{SimpleVector{U}}) where {T,U} = SimpleVector{promote_type(T, U)}
+Base.setindex!(x::SimpleVector, val, ind...) = (setindex!(x.vec, val, ind...), x)
+Base.similar(x::SimpleVector, ::Type{T}) where {T} = SimpleVector(similar(x.vec, T))
+Base.similar(x::SimpleVector, ::Type{T}, dims::Dims{1}) where {T} = SimpleVector(similar(x.vec, T, dims))
+Base.size(x::SimpleVector) = size(x.vec)
+
+@testset "kron (issue #46456)" for repr in Any[identity, SimpleVector]
+    A = Diagonal(repr(randn(10)))
+    BL = Bidiagonal(repr(randn(10)), repr(randn(9)), :L)
+    BU = Bidiagonal(repr(randn(10)), repr(randn(9)), :U)
+    C = SymTridiagonal(repr(randn(10)), repr(randn(9)))
+    Cl = SymTridiagonal(repr(randn(10)), repr(randn(10)))
+    D = Tridiagonal(repr(randn(9)), repr(randn(10)), repr(randn(9)))
+    @test kron(A, BL)::Bidiagonal == kron(Array(A), Array(BL))
+    @test kron(A, BU)::Bidiagonal == kron(Array(A), Array(BU))
+    @test kron(A, C)::SymTridiagonal == kron(Array(A), Array(C))
+    @test kron(A, Cl)::SymTridiagonal == kron(Array(A), Array(Cl))
+    @test kron(A, D)::Tridiagonal == kron(Array(A), Array(D))
+end
+
 @testset "svdvals and eigvals (#11120/#11247)" begin
     D = Diagonal(Matrix{Float64}[randn(3,3), randn(2,2)])
     @test sort([svdvals(D)...;], rev = true) ≈ svdvals([D.diag[1] zeros(3,2); zeros(2,3) D.diag[2]])
@@ -940,10 +977,14 @@ end
     @test s1 == prod(sign, d)
 end
 
-@testset "Empty (#35424)" begin
+@testset "Empty (#35424) & size checks (#47060)" begin
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+    @test_throws DimensionMismatch zeros(2)' * Diagonal(zeros(2)) * zeros(3)
+    @test_throws DimensionMismatch zeros(3)' * Diagonal(zeros(2)) * zeros(2)
+    @test_throws DimensionMismatch dot(zeros(2), Diagonal(zeros(2)), zeros(3))
+    @test_throws DimensionMismatch dot(zeros(3), Diagonal(zeros(2)), zeros(2))
 end
 
 @testset "Diagonal(undef)" begin
@@ -1067,6 +1108,29 @@ end
     @test outTri === mul!(outTri, D, UTriA, 2, 1)::Tri == mul!(out, D, Matrix(UTriA), 2, 1)
     @test outTri === mul!(outTri, TriA, D, 2, 1)::Tri == mul!(out, Matrix(TriA), D, 2, 1)
     @test outTri === mul!(outTri, UTriA, D, 2, 1)::Tri == mul!(out, Matrix(UTriA), D, 2, 1)
+end
+
+struct SMatrix1{T} <: AbstractArray{T,2}
+    elt::T
+end
+Base.:(==)(A::SMatrix1, B::SMatrix1) = A.elt == B.elt
+Base.zero(::Type{SMatrix1{T}}) where {T} = SMatrix1(zero(T))
+Base.iszero(A::SMatrix1) = iszero(A.elt)
+Base.getindex(A::SMatrix1, inds...) = A.elt
+Base.size(::SMatrix1) = (1, 1)
+@testset "map for Diagonal matrices (#46292)" begin
+    A = Diagonal([1])
+    @test A isa Diagonal{Int,Vector{Int}}
+    @test 2*A isa Diagonal{Int,Vector{Int}}
+    @test A.+1 isa Matrix{Int}
+    # Numeric element types remain diagonal
+    B = map(SMatrix1, A)
+    @test B == fill(SMatrix1(1), 1, 1)
+    @test B isa Diagonal{SMatrix1{Int},Vector{SMatrix1{Int}}}
+    # Non-numeric element types become dense
+    C = map(a -> SMatrix1(string(a)), A)
+    @test C == fill(SMatrix1(string(1)), 1, 1)
+    @test C isa Matrix{SMatrix1{String}}
 end
 
 end # module TestDiagonal

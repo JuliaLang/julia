@@ -6,5 +6,7 @@ include("strings/unicode.jl")
 import .Unicode: textwidth, islowercase, isuppercase, isletter, isdigit, isnumeric, iscntrl, ispunct,
     isspace, isprint, isxdigit, lowercase, uppercase, titlecase, lowercasefirst, uppercasefirst
 
+import .Iterators: PartitionIterator
+
 include("strings/util.jl")
 include("strings/io.jl")

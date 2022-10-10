@@ -525,6 +525,10 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test_throws MethodError convert(Union{}, X)
 end
 
+@testset "CanonicalIndexError is a Exception" begin
+    @test Base.CanonicalIndexError <: Exception
+end
+
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
 @testset "ErrorException if getindex is not defined" begin
     Base.length(::TestThrowNoGetindex) = 2
@@ -1811,3 +1815,7 @@ end
     a, b = zeros(2, 2, 2), zeros(2, 2)
     @test_broken IRUtils.fully_eliminated(_has_offset_axes, Base.typesof(a, a, b, b))
 end
+
+# type stable [x;;] (https://github.com/JuliaLang/julia/issues/45952)
+f45952(x) = [x;;]
+@inferred f45952(1.0)
