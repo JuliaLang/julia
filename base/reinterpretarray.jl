@@ -678,7 +678,7 @@ end
 """
     Compute the location of padding in a type. Recursive for nested types.
 """
-function padding(T, baseoffset = UInt(0))
+@assume_effects :foldable function padding(T, baseoffset = UInt(0))
     pads = Padding[]
     last_end::Int = baseoffset
     for i = 1:fieldcount(T)
@@ -727,59 +727,16 @@ using .Iterators: Stateful
     return true
 end
 
-# Reductions with IndexSCartesian2
-
-function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOrBroadcasted) where {F,OP,K}
-    inds = eachindex(style, A)
-    n = size(inds)[2]
-    if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
-    else
-        return mapreduce_impl(f, op, A, first(inds), last(inds))
-    end
-end
-
-@noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
-                                  ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
-    if ilast.j - ifirst.j < blksize
-        # sequential portion
-        @inbounds a1 = A[ifirst]
-        @inbounds a2 = A[SCI(2,ifirst.j)]
-        v = op(f(a1), f(a2))
-        @simd for i = ifirst.i + 2 : K
-            @inbounds ai = A[SCI(i,ifirst.j)]
-            v = op(v, f(ai))
-        end
-        # Remaining columns
-        for j = ifirst.j+1 : ilast.j
-            @simd for i = 1:K
-                @inbounds ai = A[SCI(i,j)]
-                v = op(v, f(ai))
-            end
-        end
-        return v
-    else
-        # pairwise portion
-        jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
-        v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
-        v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
-        return op(v1, v2)
-    end
-end
-
-mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
-
-@pure function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
+@assume_effects :foldable function struct_subpadding(::Type{Out}, ::Type{In}) where {Out, In}
     padding(Out) == padding(In)
 end
 
-@pure function packedsize(::Type{T}) where T
+@assume_effects :foldable function packedsize(::Type{T}) where T
     pads = padding(T)
-    return sizeof(T) - (isempty(pads) ? 0 : sum(p.size for p ∈ pads))
+    return sizeof(T) - sum((p.size for p ∈ pads), init = 0)
 end
 
-@pure ispacked(::Type{T}) where T = packedsize(T) == sizeof(T)
+@assume_effects :foldable ispacked(::Type{T}) where T = packedsize(T) == sizeof(T)
 
 function _copytopacked!(ptr_out::Ptr{Out}, ptr_in::Ptr{In}) where {Out, In}
     writeoffset = 0
@@ -852,3 +809,47 @@ end
         return out[]
     end
 end
+
+
+# Reductions with IndexSCartesian2
+
+function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOrBroadcasted) where {F,OP,K}
+    inds = eachindex(style, A)
+    n = size(inds)[2]
+    if n == 0
+        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+    else
+        return mapreduce_impl(f, op, A, first(inds), last(inds))
+    end
+end
+
+@noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
+                                  ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
+    if ilast.j - ifirst.j < blksize
+        # sequential portion
+        @inbounds a1 = A[ifirst]
+        @inbounds a2 = A[SCI(2,ifirst.j)]
+        v = op(f(a1), f(a2))
+        @simd for i = ifirst.i + 2 : K
+            @inbounds ai = A[SCI(i,ifirst.j)]
+            v = op(v, f(ai))
+        end
+        # Remaining columns
+        for j = ifirst.j+1 : ilast.j
+            @simd for i = 1:K
+                @inbounds ai = A[SCI(i,j)]
+                v = op(v, f(ai))
+            end
+        end
+        return v
+    else
+        # pairwise portion
+        jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
+        v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
+        v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
+        return op(v1, v2)
+    end
+end
+
+mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
+    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
