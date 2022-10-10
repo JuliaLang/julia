@@ -7837,3 +7837,11 @@ fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN(args...) = fvarargN(args)
 finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
 @test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10

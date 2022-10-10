@@ -525,10 +525,6 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test_throws MethodError convert(Union{}, X)
 end
 
-@testset "CanonicalIndexError is a Exception" begin
-    @test Base.CanonicalIndexError <: Exception
-end
-
 mutable struct TestThrowNoGetindex{T} <: AbstractVector{T} end
 @testset "ErrorException if getindex is not defined" begin
     Base.length(::TestThrowNoGetindex) = 2
