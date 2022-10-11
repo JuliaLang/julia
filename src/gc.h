@@ -81,35 +81,26 @@ typedef struct {
     uint64_t    total_mark_time;
 } jl_gc_num_t;
 
-// Double the mark queue
-static NOINLINE void gc_markqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
-{
-    jl_value_t **old_start = mq->start;
-    size_t old_queue_size = (mq->end - mq->start);
-    size_t offset = (mq->current - old_start);
-    mq->start = (jl_value_t **)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t *));
-    mq->current = (mq->start + offset);
-    mq->end = (mq->start + 2 * old_queue_size);
-}
-// Push a work item to the queue
-STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq,
-                                     jl_value_t *obj) JL_NOTSAFEPOINT
-{
-    if (__unlikely(mq->current == mq->end))
-        gc_markqueue_resize(mq);
-    *mq->current = obj;
-    mq->current++;
-}
+typedef enum {
+    GC_empty_chunk,
+    GC_objary_chunk,
+    GC_ary8_chunk,
+    GC_ary16_chunk,
+    GC_finlist_chunk,
+} gc_chunk_id_t;
 
-// Pop from the mark queue
-STATIC_INLINE jl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
-{
-    if (mq->current == mq->start)
-        return NULL;
-    mq->current--;
-    jl_value_t *obj = *mq->current;
-    return obj;
-}
+typedef struct _jl_gc_chunk_t {
+    gc_chunk_id_t cid;
+    struct _jl_value_t *parent;
+    struct _jl_value_t **begin;
+    struct _jl_value_t **end;
+    void *elem_begin;
+    void *elem_end;
+    uint32_t step;
+    uintptr_t nptr;
+} jl_gc_chunk_t;
+
+#define MAX_REFS_AT_ONCE (1 << 16)
 
 // layout for big (>2k) objects
 
@@ -377,8 +368,8 @@ STATIC_INLINE void gc_big_object_link(bigval_t *hdr, bigval_t **list) JL_NOTSAFE
 }
 
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
-void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list,
-                     size_t start);
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end);
+void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start);
 void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq);
 void gc_mark_loop(jl_ptls_t ptls);
 void sweep_stack_pools(void);

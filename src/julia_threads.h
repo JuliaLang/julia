@@ -168,7 +168,14 @@ typedef struct {
     arraylist_t free_stacks[JL_N_STACK_POOLS];
 } jl_thread_heap_t;
 
+struct _jl_gc_chunk_t;
+
 typedef struct {
+#ifndef GC_VERIFY
+    struct _jl_gc_chunk_t *chunk_start;
+    struct _jl_gc_chunk_t *current_chunk;
+    struct _jl_gc_chunk_t *chunk_end;
+#endif
     struct _jl_value_t **start;
     struct _jl_value_t **current;
     struct _jl_value_t **end;
