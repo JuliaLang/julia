@@ -1100,6 +1100,11 @@ function round(z::Complex, rr::RoundingMode=RoundNearest, ri::RoundingMode=rr; k
             round(imag(z), ri; kwargs...))
 end
 
+function round(::Type{Complex{T}}, z::Complex) where {T}
+    Complex{T}(round(T, real(z)),
+               round(T, imag(z)))
+end
+
 
 float(z::Complex{<:AbstractFloat}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))

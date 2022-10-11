@@ -1209,3 +1209,14 @@ end
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
 end
+
+@testset "Complex{T} -> Complex{S} rounding" begin
+    z = Complex{Float64}(2^15 + 0.6, 2^15 - 0.6)
+    z_i32 = round(Complex{Int32}, z)
+    @test isa(z_i32, Complex{Int32})
+    @test isa(real(z_i32),Int32)
+    @test real(z_i32) == 2^15 + 1
+    @test imag(z_i32) == 2^15 - 1
+
+    @test_throws InexactError round(Complex{Int16}, z)
+end
