@@ -34,23 +34,41 @@ static int method_instance_in_queue(jl_method_instance_t *mi)
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
-static int type_in_worklist(jl_value_t *typ) JL_NOTSAFEPOINT
+static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    if (!jl_is_datatype(typ))
-        return 0;
-    jl_datatype_t *dt = (jl_datatype_t*)typ;
-    if (!jl_object_in_image((jl_value_t*)dt->name->module))
-        return 1;
-    int i, l = jl_svec_len(dt->parameters);
-    for (i = 0; i < l; i++) {
-        jl_value_t *p = jl_tparam(dt, i);
-        // TODO: what about Union and TypeVar??
-        if (type_in_worklist(p))
+    if (jl_object_in_image(v))
+        return 0; // fast-path for rejection
+    if (jl_is_uniontype(v)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)v;
+        return type_in_worklist(u->a) || type_in_worklist(u->b);
+    }
+    else if (jl_is_unionall(v)) {
+        jl_unionall_t *ua = (jl_unionall_t*)v;
+        return type_in_worklist((jl_value_t*)ua->var) || type_in_worklist(ua->body);
+    }
+    else if (jl_is_typevar(v)) {
+        jl_tvar_t *tv = (jl_tvar_t*)v;
+        return type_in_worklist(tv->lb) || type_in_worklist(tv->ub);
+    }
+    else if (jl_is_vararg(v)) {
+        jl_vararg_t *tv = (jl_vararg_t*)v;
+        if (tv->T && type_in_worklist(tv->T))
             return 1;
+        if (tv->N && type_in_worklist(tv->N))
+            return 1;
+    }
+    else if (jl_is_datatype(v)) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        if (!jl_object_in_image((jl_value_t*)dt->name))
+            return 1;
+        jl_svec_t *tt = dt->parameters;
+        size_t i, l = jl_svec_len(tt);
+        for (i = 0; i < l; i++)
+            if (type_in_worklist(jl_tparam(dt, i)))
+                return 1;
     }
     return 0;
 }
-
 
 static void mark_backedges_in_worklist(jl_method_instance_t *mi, htable_t *visited, int found)
 {
