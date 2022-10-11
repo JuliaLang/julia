@@ -2188,16 +2188,17 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     htable_new(&external_mis, 0);
     *new_specializations = queue_external_mis(newly_inferred);
     htable_free(&external_mis);
-
     // Collect the new method roots
     htable_t methods_with_newspecs;
     htable_new(&methods_with_newspecs, 0);
     jl_collect_methods(&methods_with_newspecs, *new_specializations);
+    *method_roots_list = jl_alloc_vec_any(0);
     jl_collect_new_roots(*method_roots_list, &methods_with_newspecs);
     htable_free(&methods_with_newspecs);
 
     // Collect method extensions and edges data
     htable_new(&edges_map, 0);
+    *extext_methods = jl_alloc_vec_any(0);
     size_t i, len = jl_array_len(mod_array);
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
@@ -2211,6 +2212,8 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     jl_collect_missing_backedges(jl_nonfunction_mt);
     // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
     // Process this to extract `edges` and `ext_targets`.
+    *ext_targets = jl_alloc_vec_any(0);
+    *edges = jl_alloc_vec_any(0);
     jl_collect_edges(*edges, *ext_targets);
     htable_free(&edges_map);
 }
@@ -2325,7 +2328,6 @@ static void jl_save_system_image_to_stream(ios_t *f,
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
-            assert(new_specializations);
             assert(ext_targets);
             assert(edges);
             // Queue method extensions
@@ -2696,7 +2698,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
         jl_set_gs_ctr(gs_ctr);
     }
     else {
-        assert(extext_methods && method_roots_list && new_specializations && ext_targets && edges);
+        assert(extext_methods && method_roots_list && ext_targets && edges);
         *worklist = (jl_array_t*)jl_read_value(&s);
         *extext_methods = (jl_array_t*)jl_read_value(&s);
         *new_specializations = (jl_array_t*)jl_read_value(&s);
@@ -2904,7 +2906,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *de
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
         JL_SIGATOMIC_BEGIN();
-        size_t len_begin = ios_pos(f);
+        size_t len_begin = LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT);
         assert(len_begin > 0);
         ios_seek_end(f);
         size_t len = ios_pos(f) - len_begin;
