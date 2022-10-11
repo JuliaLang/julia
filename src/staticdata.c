@@ -1837,8 +1837,9 @@ static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset)
     for (i = 0; i < sz; i+=2) {
         if (table[i+1] != HT_NOTFOUND) {
             m = (jl_method_t*)table[i];
+            assert(jl_is_method(m));
             j = external_blob_index((jl_value_t*)m);
-            assert(j);
+            assert(j < n_linkage_blobs());
             key = buildids[j];
             nwithkey = nroots_with_key(m, key);
             if (nwithkey) {
