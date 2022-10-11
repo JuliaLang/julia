@@ -1773,7 +1773,7 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
 }
 
 // Enqueue an unmarked obj. last bit of `nptr` is set if `_obj` is young
-void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
+STATIC_INLINE void gc_try_claim_and_push(jl_gc_markqueue_t *mq, void *_obj,
                            uintptr_t *nptr) JL_NOTSAFEPOINT
 {
     if (!_obj)
@@ -1871,7 +1871,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
 }
 
 // Mark object array
-void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
+STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_begin,
                       jl_value_t **obj_end, uint32_t step, uintptr_t nptr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
@@ -1898,7 +1898,7 @@ void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_value_t **obj_b
 }
 
 // Mark array with 8bit field descriptors
-void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t **ary8_begin,
+STATIC_INLINE void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t **ary8_begin,
                     jl_value_t **ary8_end, uint8_t *elem_begin, uint8_t *elem_end,
                     uintptr_t nptr) JL_NOTSAFEPOINT
 {
@@ -1929,7 +1929,7 @@ void gc_mark_array8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_value_t **ary8_b
 }
 
 // Mark array with 16bit field descriptors
-void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_value_t **ary16_begin,
+STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_value_t **ary16_begin,
                      jl_value_t **ary16_end, uint16_t *elem_begin, uint16_t *elem_end,
                      uintptr_t nptr) JL_NOTSAFEPOINT
 {
@@ -2012,7 +2012,7 @@ STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_ch
 }
 
 // Mark gc frame
-void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots, uintptr_t offset,
+STATIC_INLINE void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots, uintptr_t offset,
                    uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
@@ -2046,7 +2046,7 @@ void gc_mark_stack(jl_ptls_t ptls, jl_gcframe_t *s, uint32_t nroots, uintptr_t o
 }
 
 // Mark exception stack
-void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr) JL_NOTSAFEPOINT
 {
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
@@ -2074,7 +2074,7 @@ void gc_mark_excstack(jl_ptls_t ptls, jl_excstack_t *excstack, size_t itr) JL_NO
 }
 
 // Mark module binding
-void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t **mb_begin,
+STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t **mb_begin,
                             jl_binding_t **mb_end, uintptr_t nptr,
                             uint8_t bits) JL_NOTSAFEPOINT
 {
@@ -2119,7 +2119,7 @@ void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent, jl_binding_t
     }
 }
 
-void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
+STATIC_INLINE void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
 #ifndef GC_VERIFY
@@ -2146,7 +2146,7 @@ void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t *
 }
 
 // Mark finalizer list (or list of objects following same format)
-void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
+STATIC_INLINE void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
 {
     size_t len = list->len;
     if (len <= start)
@@ -2174,7 +2174,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // Enqueue and mark all outgoing references from `new_obj` which have not been marked
 // yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
 // objects which have been enqueued into the `remset`
-NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj,
+STATIC_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_obj,
                               int meta_updated)
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
@@ -2912,17 +2912,17 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     live_bytes += -gc_num.freed + gc_num.since_sweep;
 
     if (collection == JL_GC_AUTO) {
-      // If the current interval is larger than half the live data decrease the interval
-      int64_t half = live_bytes/2;
-      if (gc_num.interval > half) gc_num.interval = half;
-      // But never go below default
-      if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
+        // If the current interval is larger than half the live data decrease the interval
+        int64_t half = live_bytes/2;
+        if (gc_num.interval > half) gc_num.interval = half;
+        // But never go below default
+        if (gc_num.interval < default_collect_interval) gc_num.interval = default_collect_interval;
     }
 
     if (gc_num.interval + live_bytes > max_total_memory) {
         if (live_bytes < max_total_memory) {
             gc_num.interval = max_total_memory - live_bytes;
-        } 
+        }
         else {
             // We can't stay under our goal so let's go back to
             // the minimum interval and hope things get better
