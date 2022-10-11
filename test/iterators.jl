@@ -961,6 +961,7 @@ end
     @test Base.IteratorSize(zip(repeated(0), 1:5 )) == Base.HasLength()     # for zip of ::IsInfinite and ::HasShape
     @test Base.IteratorSize(zip((1,2,3), 1:5) ) == Base.HasLength()         # for zip of ::HasLength and ::HasShape
     @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
+    @test Base.IteratorSize(zip(1:3, rand(3, 3))) == Base.HasLength()       # for zip of two different ::HasShape
 end
 
 @testset "proper patition for non-1-indexed vector" begin

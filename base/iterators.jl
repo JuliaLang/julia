@@ -76,6 +76,7 @@ end
 and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
 and_iteratorsize(::HasShape, ::HasLength) = HasLength()
+and_iteratorsize(::HasShape{A}, ::HasShape{B}) where {A, B} = HasLength()
 and_iteratorsize(a, b) = SizeUnknown()
 
 and_iteratoreltype(iel::T, ::T) where {T} = iel
