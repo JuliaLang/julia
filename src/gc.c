@@ -1970,20 +1970,6 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
     gc_mark_objarray(ptls, parent, objs, objs + nobjs, 1, nptr);
 }
 
-#define OPT_SINGLE_OUTREF
-
-#define gc_mark_single_outref(new_obj, obj_parent, obj_begin, nptr) \
-    do {                                                            \
-        new_obj = ((jl_value_t **)obj_parent)[*obj_begin];          \
-        if (!new_obj)                                               \
-            return;                                                 \
-        jl_taggedvalue_t *o = jl_astaggedvalue(new_obj);            \
-        nptr |= !gc_old(o->header);                                 \
-        gc_mark_push_remset(ptls, (jl_value_t *)obj_parent, nptr);  \
-        if (gc_try_setmark_tag(o, GC_MARKED))                       \
-            goto mark_obj;                                          \
-    } while (0)
-
 // Enqueue and mark all outgoing references from `new_obj` which have not been marked
 // yet. `meta_updated` is mostly used to make sure we don't update metadata twice for
 // objects which have been enqueued into the `remset`
@@ -1991,9 +1977,6 @@ NOINLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_new_
                               int meta_updated)
 {
     jl_value_t *new_obj = (jl_value_t *)_new_obj;
-#ifdef OPT_SINGLE_OUTREF
-mark_obj : {
-#endif
 #ifdef JL_DEBUG_BUILD
     if (new_obj == gc_findval)
         jl_raise_debugger();
@@ -2200,58 +2183,25 @@ mark_obj : {
         if (layout->fielddesc_type == 0) {
             char *obj8_parent = (char *)new_obj;
             uint8_t *obj8_begin = (uint8_t *)jl_dt_layout_ptrs(layout);
-#ifdef OPT_SINGLE_OUTREF
-            if (npointers == 1 && !meta_updated) {
-                gc_mark_single_outref(new_obj, obj8_parent, obj8_begin, nptr);
-            }
-            else {
-                uint8_t *obj8_end = obj8_begin + npointers;
-                assert(obj8_begin < obj8_end);
-                gc_mark_obj8(ptls, obj8_parent, obj8_begin, obj8_end, nptr);
-            }
-#else
             uint8_t *obj8_end = obj8_begin + npointers;
             assert(obj8_begin < obj8_end);
             gc_mark_obj8(ptls, obj8_parent, obj8_begin, obj8_end, nptr);
-#endif
         }
         else if (layout->fielddesc_type == 1) {
             char *obj16_parent = (char *)new_obj;
             uint16_t *obj16_begin = (uint16_t *)jl_dt_layout_ptrs(layout);
-#ifdef OPT_SINGLE_OUTREF
-            if (npointers == 1 && !meta_updated) {
-                gc_mark_single_outref(new_obj, obj16_parent, obj16_begin, nptr);
-            }
-            else {
-                uint16_t *obj16_end = obj16_begin + npointers;
-                assert(obj16_begin < obj16_end);
-                gc_mark_obj16(ptls, obj16_parent, obj16_begin, obj16_end, nptr);
-            }
-#else
             uint16_t *obj16_end = obj16_begin + npointers;
             assert(obj16_begin < obj16_end);
             gc_mark_obj16(ptls, obj16_parent, obj16_begin, obj16_end, nptr);
-#endif
         }
         else if (layout->fielddesc_type == 2) {
             // This is very uncommon
             // Do not do store to load forwarding to save some code size
             char *obj32_parent = (char *)new_obj;
             uint32_t *obj32_begin = (uint32_t *)jl_dt_layout_ptrs(layout);
-#ifdef OPT_SINGLE_OUTREF
-            if (npointers == 1 && !meta_updated) {
-                gc_mark_single_outref(new_obj, obj32_parent, obj32_begin, nptr);
-            }
-            else {
-                uint32_t *obj32_end = obj32_begin + npointers;
-                assert(obj32_begin < obj32_end);
-                gc_mark_obj32(ptls, obj32_parent, obj32_begin, obj32_end, nptr);
-            }
-#else
             uint32_t *obj32_end = obj32_begin + npointers;
             assert(obj32_begin < obj32_end);
             gc_mark_obj32(ptls, obj32_parent, obj32_begin, obj32_end, nptr);
-#endif
         }
         else {
             assert(layout->fielddesc_type == 3);
@@ -2262,13 +2212,10 @@ mark_obj : {
                 gc_mark_push_remset(ptls, new_obj, young * 4 + 3);
         }
     }
-#ifdef OPT_SINGLE_OUTREF
-}
-#endif
 }
 
 // Used in gc-debug
-void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
+void gc_mark_loop_(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 {
     while (1) {
         void *new_obj = (void *)gc_markqueue_pop(&ptls->mark_queue);
@@ -2287,7 +2234,7 @@ void _gc_mark_loop(jl_ptls_t ptls, jl_gc_markqueue_t *mq)
 // makes it easier to implement parallel marking via work-stealing
 JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls)
 {
-    _gc_mark_loop(ptls, &ptls->mark_queue);
+    gc_mark_loop_(ptls, &ptls->mark_queue);
 }
 
 static void gc_premark(jl_ptls_t ptls2)
