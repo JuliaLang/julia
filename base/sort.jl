@@ -14,7 +14,7 @@ using .Base: length, first, last, axes, firstindex, lastindex, eltype,
     reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned, Val,
     Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
     (:), >, <, <=, >=, ==, !=, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor,
-    midpoint, @boundscheck, checkbounds
+    midpoint, @boundscheck, checkbounds, hash
 
 import .Base:
     sort,
