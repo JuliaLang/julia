@@ -2119,7 +2119,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     }
 }
 
-STATIC_INLINE void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
+void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
 #ifndef GC_VERIFY
@@ -2146,7 +2146,7 @@ STATIC_INLINE void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin
 }
 
 // Mark finalizer list (or list of objects following same format)
-STATIC_INLINE void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
+void gc_mark_finlist(jl_gc_markqueue_t *mq, arraylist_t *list, size_t start)
 {
     size_t len = list->len;
     if (len <= start)
