@@ -1593,7 +1593,7 @@ end
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref) into an anonymous module, evaluate all expressions,
+Load the file into an anonymous module using [`include`](@ref), evaluate all expressions,
 and return the value of the last expression.
 The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
 Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not pollute the current module.
