@@ -84,118 +84,31 @@ typedef struct {
 // Double the mark queue
 static NOINLINE void gc_markqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-#if defined(PREFETCH_MARK)
-    jl_gc_markstack_t *ms = &mq->mark_stack;
-    jl_value_t **old_start = ms->start;
-    size_t old_queue_size = (ms->end - ms->start);
-    size_t offset = (ms->current - old_start);
-    ms->start = (jl_value_t**)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t*));
-    ms->current = (ms->start + offset);
-    ms->end = (ms->start + 2 * old_queue_size);
-#elif defined(DFS_MARK)
     jl_value_t **old_start = mq->start;
     size_t old_queue_size = (mq->end - mq->start);
     size_t offset = (mq->current - old_start);
-    mq->start =
-        (jl_value_t **)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t *));
+    mq->start = (jl_value_t **)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t *));
     mq->current = (mq->start + offset);
     mq->end = (mq->start + 2 * old_queue_size);
-#else
-    jl_value_t **old_start = mq->start;
-    size_t old_capacity = mq->capacity;
-    mq->start = (jl_value_t **)malloc(2 * old_capacity * sizeof(jl_value_t *));
-    // Copy elements into new buffer
-    for (size_t i = mq->top; i < mq->bottom; i++)
-        mq->start[i % (2 * old_capacity)] = old_start[i % old_capacity];
-    free(old_start);
-    mq->capacity = 2 * old_capacity;
-#endif
 }
-
-#define PF_MIN (1 << 6)
-#define PF_SIZE (1 << 8)
-
 // Push a work item to the queue
 STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq,
                                      jl_value_t *obj) JL_NOTSAFEPOINT
 {
-#if defined(PREFETCH_MARK)
-    jl_gc_prefetch_buf_t *pf_buf = &mq->prefetch_buf;
-    jl_gc_markstack_t *ms = &mq->mark_stack;
-    // Prefetch buffer overflowed: push to mark-stack
-    if (__likely(pf_buf->bottom - pf_buf->top >= pf_buf->size)) {
-        // Mark-stack overflowed: resize it
-        if (__unlikely(ms->current == ms->end))
-            gc_markqueue_resize(mq);
-        *ms->current = obj;
-        ms->current++;
-    }
-    else {
-        // There is still space in the FIFO buffer: push it there
-        pf_buf->start[pf_buf->bottom % pf_buf->size] = obj;
-        pf_buf->bottom++;
-    }
-#elif defined(DFS_MARK)
     if (__unlikely(mq->current == mq->end))
         gc_markqueue_resize(mq);
     *mq->current = obj;
     mq->current++;
-#else
-    // Mark-stack overflowed: resize it
-    if (__unlikely(mq->bottom - mq->top >= mq->capacity))
-        gc_markqueue_resize(mq);
-    mq->start[mq->bottom % mq->capacity] = obj;
-    mq->bottom++;
-#endif
 }
-
-#if defined(_COMPILER_GCC_) && defined(_CPU_X86_)
-#define jl_prefetch(p) __builtin_prefetch((p), 1, 3)
-#else
-#define jl_prefetch(p)
-#endif
 
 // Pop from the mark queue
 STATIC_INLINE jl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
 {
-#if defined(PREFETCH_MARK)
-    jl_gc_prefetch_buf_t *pf_buf = &mq->prefetch_buf;
-    jl_gc_markstack_t *ms = &mq->mark_stack;
-    jl_value_t *obj = NULL;
-    // FIFO buffer is nearly empty and there is element in mark-stack: pop
-    // element from stack
-    if (pf_buf->bottom - pf_buf->top <= PF_MIN && ms->current != ms->start) {
-        ms->current--;
-        obj = *ms->current;
-    }
-    // enough elements in FIFO buffer
-    else if (pf_buf->bottom - pf_buf->top > 0) {
-        // take element from FIFO buffer
-        obj = pf_buf->start[pf_buf->top % pf_buf->size];
-        pf_buf->top++;
-        // if there is any element in the stack, pop it, prefetch and insert into FIFO buffer
-        if (ms->current != ms->start) {
-            ms->current--;
-            jl_value_t *to_prefetch = *ms->current;
-            jl_prefetch(to_prefetch);
-            pf_buf->start[pf_buf->bottom % pf_buf->size] = to_prefetch;
-            pf_buf->bottom++;
-        }
-    }
-    return obj;
-#elif defined(DFS_MARK)
     if (mq->current == mq->start)
         return NULL;
     mq->current--;
     jl_value_t *obj = *mq->current;
     return obj;
-#else
-    if (mq->bottom == mq->top)
-        return NULL;
-    jl_value_t *obj = mq->start[mq->top % mq->capacity];
-    mq->top++;
-    return obj;
-#endif
 }
 
 // layout for big (>2k) objects
