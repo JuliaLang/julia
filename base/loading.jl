@@ -1593,8 +1593,32 @@ end
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
-and return the value of the last one.
+Load the file using [`include`](@ref) into an anonymous module, evaluate all expressions,
+and return the value of the last expression.
+The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
+Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not pollute the current module.
+
+# Example
+This example creates a temporary file (using [`mktemp`](@ref)) and writes a minimal julia script into it.
+The script is then executed via `evalfile` (with arguments) and prints the returned data.
+
+```jldoctest
+julia> # Create script file
+       mktemp() do path, io
+           # Write minimal script into file
+           write(io, """
+           function get_args()
+               ARGS
+           end
+           get_args()
+           """)
+           flush(io)
+           
+           # Use evalfile and print output
+           println(evalfile(path, ["ARG1", "arg2"]))
+       end
+["ARG1", "arg2"]
+```
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
     return Core.eval(Module(:__anon__),
