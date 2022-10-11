@@ -300,7 +300,7 @@ function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
     (iv1, iv2) = (iterate(a), iterate(b))
     while iv1 !== nothing && iv2 !== nothing
-        (c, d) = (first(iv1), first(iv2))
+        (c, d) = (first(iv1)::AbstractChar, first(iv2)::AbstractChar)
         c ≠ d && return ifelse(c < d, -1, 1)
         (iv1, iv2) = (iterate(a, last(iv1)), iterate(b, last(iv2)))
     end
