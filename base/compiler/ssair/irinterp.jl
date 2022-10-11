@@ -119,7 +119,7 @@ end
 function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                                   arginfo::ArgInfo, si::StmtInfo, @nospecialize(atype),
                                   sv::IRCode, max_methods::Int)
-    return CallMeta(Any, Effects(), false)
+    return CallMeta(Any, Effects(), NoCallInfo())
 end
 
 function collect_limitations!(@nospecialize(typ), ::IRCode)
@@ -133,6 +133,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter,
     code = get(mi_cache, mi, nothing)
     code === nothing && return nothing
     argtypes = collect_argtypes(interp, inst.args[2:end], nothing, irsv.ir)
+    argtypes === nothing && return Union{}
     effects = decode_effects(code.ipo_purity_bits)
     if is_foldable(effects) && is_all_const_arg(argtypes, #=start=#1)
         args = collect_const_args(argtypes, #=start=#1)
@@ -219,6 +220,9 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             if mi′ !== irsv.mi # prevent infinite loop
                 rt = concrete_eval_invoke(interp, inst, mi′, irsv)
             end
+        elseif inst.head === :throw_undef_if_not
+            # TODO: Terminate interpretation early if known false?
+            return false
         else
             ccall(:jl_, Cvoid, (Any,), inst)
             error()

@@ -173,7 +173,17 @@ let ci = make_ci([
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+let ci = make_ci([
+        Expr(:call, GlobalRef(Main, :cglobal),
+                    Expr(:call, Core.tuple, :(:c)), Nothing),
+                    Core.Compiler.ReturnNode()
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical

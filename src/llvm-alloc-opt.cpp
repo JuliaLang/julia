@@ -231,8 +231,8 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
-        bool has_ref = false;
-        bool has_refaggr = false;
+        bool has_ref = use_info.has_unknown_objref;
+        bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
             if (field.hasobjref) {
@@ -576,7 +576,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         // treat this as a non-mem2reg'd alloca
         // The ccall root and GC preserve handling below makes sure that
         // the alloca isn't optimized out.
-        buff = prolog_builder.CreateAlloca(pass.T_prjlvalue);
+        const DataLayout &DL = F.getParent()->getDataLayout();
+        auto asize = ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz / DL.getTypeAllocSize(pass.T_prjlvalue));
+        buff = prolog_builder.CreateAlloca(pass.T_prjlvalue, asize);
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
     }

@@ -83,8 +83,9 @@ end
 is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
-function inlining_policy(interp::AbstractInterpreter, @nospecialize(src), stmt_flag::UInt8,
-                         mi::MethodInstance, argtypes::Vector{Any})
+function inlining_policy(interp::AbstractInterpreter,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
+    argtypes::Vector{Any})
     if isa(src, CodeInfo) || isa(src, Vector{UInt8})
         src_inferred = is_source_inferred(src)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
@@ -113,7 +114,7 @@ mutable struct OptimizationState
     linfo::MethodInstance
     src::CodeInfo
     ir::Union{Nothing, IRCode}
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{Any} # static parameters
     slottypes::Vector{Any}
@@ -146,7 +147,7 @@ mutable struct OptimizationState
         if slottypes === nothing
             slottypes = Any[ Any for i = 1:nslots ]
         end
-        stmt_info = Any[nothing for i = 1:nssavalues]
+        stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
         # cache some useful state computations
         def = linfo.def
         mod = isa(def, Method) ? def.module : def
@@ -242,6 +243,10 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
                 argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
                 nothrow = _builtin_nothrow(lattice, f, argtypes, rt)
                 return (true, nothrow, nothrow)
+            end
+            if f === Intrinsics.cglobal
+                # TODO: these are not yet linearized
+                return (false, false, false)
             end
             isa(f, Builtin) || return (false, false, false)
             # Needs to be handled in inlining to look at the callee effects
@@ -598,7 +603,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             insert!(code, idx, Expr(:code_coverage_effect))
             insert!(codelocs, idx, codeloc)
             insert!(ssavaluetypes, idx, Nothing)
-            insert!(stmtinfo, idx, nothing)
+            insert!(stmtinfo, idx, NoCallInfo())
             insert!(ssaflags, idx, IR_FLAG_NULL)
             if ssachangemap === nothing
                 ssachangemap = fill(0, nstmts)
@@ -619,7 +624,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(code, idx + 1, ReturnNode())
                 insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
-                insert!(stmtinfo, idx + 1, nothing)
+                insert!(stmtinfo, idx + 1, NoCallInfo())
                 insert!(ssaflags, idx + 1, ssaflags[idx])
                 if ssachangemap === nothing
                     ssachangemap = fill(0, nstmts)

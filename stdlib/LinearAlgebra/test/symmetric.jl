@@ -252,6 +252,14 @@ end
                         end
                     end
                 end
+                if eltya <: AbstractFloat
+                @testset "inv should error with NaNs/Infs" begin
+                    h = Hermitian(fill(eltya(NaN), 2, 2))
+                    @test_throws ArgumentError inv(h)
+                    s = Symmetric(fill(eltya(NaN), 2, 2))
+                    @test_throws ArgumentError inv(s)
+                end
+                end
             end
 
             # Revisit when implemented in julia
