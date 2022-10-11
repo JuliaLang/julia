@@ -1613,7 +1613,6 @@ julia> # Create script file
            get_args()
            ")
            flush(io)
-           
            # Use evalfile and print output
            println(evalfile(path, ["ARG1", "arg2"]))
        end
