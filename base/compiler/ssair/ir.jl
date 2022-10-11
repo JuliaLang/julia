@@ -1214,6 +1214,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             label = compact.bb_rename_succ[stmt.args[1]::Int]
             @assert label > 0
             stmt.args[1] = label
+        elseif isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                return result_idx
+            end
         end
         result[result_idx][:inst] = stmt
         result_idx += 1
