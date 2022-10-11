@@ -937,17 +937,17 @@ STATIC_INLINE size_t n_linkage_blobs(void)
 
 // TODO: Makes this a binary search
 STATIC_INLINE size_t external_blob_index(jl_value_t *v) {
-    size_t nblobs = n_linkage_blobs();
-    if (nblobs == 0)
-        return nblobs;
+    size_t i, nblobs = n_linkage_blobs();
     assert(jl_linkage_blobs.len == 2*nblobs);
-    for (size_t i = 0; i < 2*nblobs; i+=2) {
-        uintptr_t left = (uintptr_t)jl_linkage_blobs.items[i], right = (uintptr_t)jl_linkage_blobs.items[i+1];
-        if (left <= (uintptr_t)v && (uintptr_t)v < right) {
-            return i>>1;
+    for (i = 0; i < nblobs; i++) {
+        uintptr_t left = (uintptr_t)jl_linkage_blobs.items[2*i];
+        uintptr_t right = (uintptr_t)jl_linkage_blobs.items[2*i + 1];
+        if (left < (uintptr_t)v && (uintptr_t)v <= right) {
+            // the last object may be a singleton (v is shifted by a type tag, so we use exclusive bounds here)
+            break;
         }
     }
-    return nblobs;
+    return i;
 }
 
 STATIC_INLINE uint8_t jl_object_in_image(jl_value_t* v) {

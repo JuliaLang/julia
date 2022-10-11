@@ -57,7 +57,7 @@
 
   - step 3 combines the different sections (fields of `jl_serializer_state`) into one
 
-  - step 4 writes the values of the hard-coded tagged items and `reinit_list`/`ccallable_list`
+  - step 4 writes the values of the hard-coded tagged items and `ccallable_list`
 
 The tables written to the serializer stream make deserialization fairly straightforward. Much of the "real work" is
 done by `get_item_for_reloc`.
@@ -309,17 +309,6 @@ static arraylist_t serialization_queue;
 static arraylist_t layout_table;     // cache of `position(s)` for each `id` in `visited`
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 
-// Both `reinit_list` and `ccallable_list` are lists of (size_t pos, code) entries
-// for the serializer to mark values in need of rework during deserialization
-// codes:
-//   1: IdDict     (reinit_list)
-//   2: module     (reinit_list)
-//   3: method     (ccallable_list)
-static arraylist_t reinit_list;
-
-// @ccallable entry points to install
-static arraylist_t ccallable_list;
-
 // Permanent list of void* (begin, end+1) pairs of system/package images we've loaded previously
 // togther with their module build_ids (used for external linkage)
 // jl_linkage_blobs.items[2i:2i+1] correspond to jl_build_ids[i]   (0-offset indexing)
@@ -366,6 +355,7 @@ typedef struct {
     arraylist_t gctags_list;    //      "
     arraylist_t uniquing_list;  // a list of locations that reference objects that must be de-duplicated
     arraylist_t fixup_list; // a list of locations of objects requiring (re)caching
+    arraylist_t ccallable_list; // @ccallable entry points to install
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
     // conceptually, the base pointer for the jth externally-linked item is determined from
     //     i = findfirst(==(link_ids[j]), jl_build_ids)
@@ -383,7 +373,6 @@ static jl_value_t *jl_idtable_type = NULL;
 static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
-
 static jl_sym_t *jl_docmeta_sym = NULL;
 
 // Tags of category `t` are located at offsets `t << RELOC_TAG_OFFSET`
@@ -941,6 +930,8 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     size_t reloc_offset = ios_pos(s->s);
     size_t tot = sizeof(jl_module_t);
     ios_write(s->s, (char*)m, tot);     // raw memory dump of the `jl_module_t` structure
+    // will need to recreate the binding table for this
+    arraylist_push(&s->fixup_list, (void*)reloc_offset);
 
     // Handle the fields requiring special attention
     jl_module_t *newm = (jl_module_t*)&s->s->buf[reloc_offset];
@@ -1073,7 +1064,7 @@ static void jl_write_values(jl_serializer_state *s)
             }
         }
         else if (s->incremental && needs_recaching(v)) {
-            arraylist_push(&(s->fixup_list), (void*)reloc_offset);
+            arraylist_push(&s->fixup_list, (void*)reloc_offset);
         }
 
         // write data
@@ -1182,9 +1173,6 @@ static void jl_write_values(jl_serializer_state *s)
         }
         else if (jl_typeis(v, jl_module_type)) {
             jl_write_module(s, item, (jl_module_t*)v);
-            // will need to recreate the binding table for this
-            arraylist_push(&reinit_list, (void*)item);
-            arraylist_push(&reinit_list, (void*)2);
         }
         else if (jl_typeis(v, jl_task_type)) {
             jl_error("Task cannot be serialized");
@@ -1273,7 +1261,7 @@ static void jl_write_values(jl_serializer_state *s)
                 if (newentry->max_world == ~(size_t)0) {
                     if (newentry->min_world > 1) {
                         newentry->min_world = ~(size_t)0;
-                        arraylist_push(&(s->fixup_list), (void*)reloc_offset);
+                        arraylist_push(&s->fixup_list, (void*)reloc_offset);
                     }
                 }
                 else {
@@ -1293,8 +1281,7 @@ static void jl_write_values(jl_serializer_state *s)
                     newm->primary_world = ~(size_t)0;
                 }
                 if (newm->ccallable) {
-                    arraylist_push(&ccallable_list, (void*)item);
-                    arraylist_push(&ccallable_list, (void*)3);
+                    arraylist_push(&s->ccallable_list, (void*)reloc_offset);
                 }
             }
             else if (jl_is_method_instance(v)) {
@@ -1387,7 +1374,7 @@ static void jl_write_values(jl_serializer_state *s)
                 // TODO: this should be a relocation pointing to the binding in the new image
                 newg->bnd_cache = NULL;
                 if (s->incremental)
-                    arraylist_push(&(s->fixup_list), (void*)reloc_offset);
+                    arraylist_push(&s->fixup_list, (void*)reloc_offset);
             }
             else if (jl_is_datatype(v)) {
                 jl_datatype_t *dt = (jl_datatype_t*)v;
@@ -1449,8 +1436,7 @@ static void jl_write_values(jl_serializer_state *s)
             }
             else if (((jl_datatype_t*)(jl_typeof(v)))->name == jl_idtable_typename) {
                 // will need to rehash this, later (after types are fully constructed)
-                arraylist_push(&reinit_list, (void*)item);
-                arraylist_push(&reinit_list, (void*)1);
+                arraylist_push(&s->fixup_list, (void*)reloc_offset);
             }
             else {
                 write_padding(s->s, t->size - tot);
@@ -1664,7 +1650,8 @@ static void jl_read_relocations(jl_serializer_state *s, jl_array_t *link_ids, ui
 static void jl_read_arraylist(ios_t *s, arraylist_t *list)
 {
     size_t list_len = read_uint(s);
-    arraylist_new(list, list_len);
+    arraylist_new(list, 0);
+    arraylist_grow(list, list_len);
     ios_read(s, (char*)list->items, list_len * sizeof(void*));
 }
 
@@ -1779,7 +1766,7 @@ static void write_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAFE
             write_reloc_t(s->gvar_record, (uintptr_t)b);
             continue;
         }
-        uintptr_t item = backref_id(s, g, s->link_ids_relocs);
+        uintptr_t item = backref_id(s, g, s->link_ids_gvars);
         uintptr_t reloc = get_reloc_for_item(item, 0);
         write_reloc_t(s->gvar_record, reloc);
     }
@@ -1862,72 +1849,17 @@ static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset)
     JL_GC_POP();
 }
 
-// Reinitialization
-static void jl_finalize_serializer(jl_serializer_state *s, arraylist_t *list)
-{
-    size_t i, l;
 
-    // record list of reinitialization functions
-    l = list->len;
-    for (i = 0; i < l; i += 2) {
-        size_t item = (size_t)list->items[i];
-        size_t reloc_offset = (size_t)layout_table.items[item];
-        assert(reloc_offset != 0);
-        write_reloc_t(s->s, reloc_offset);
-        write_uint8(s->s, (uintptr_t)list->items[i + 1]);
-    }
-    write_reloc_t(s->s, 0);
+static void jl_compile_extern(jl_method_t *v) JL_GC_DISABLED
+{
+    // install ccallable entry point in JIT
+    jl_svec_t *sv = ((jl_method_t*)v)->ccallable;
+    int success = jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
+    assert(success); (void)success;
 }
 
 
-static void jl_reinit_item(jl_value_t *v, uint8_t how) JL_GC_DISABLED
-{
-    switch (how) {
-        case 1: { // rehash IdDict
-            jl_array_t **a = (jl_array_t**)v;
-            assert(jl_is_array(*a));
-            // Assume *a don't need a write barrier
-            *a = jl_idtable_rehash(*a, jl_array_len(*a));
-            jl_gc_wb(v, *a);
-            break;
-        }
-        case 2: { // rebuild the binding table for module v
-            jl_module_t *mod = (jl_module_t*)v;
-            assert(jl_is_module(mod));
-            size_t nbindings = mod->bindings.size;
-            htable_new(&mod->bindings, nbindings);
-            struct binding {
-                jl_sym_t *asname;
-                uintptr_t tag;
-                jl_binding_t b;
-            } *b;
-            b = (struct binding*)&mod[1];
-            while (nbindings > 0) {
-                ptrhash_put(&mod->bindings, b->asname, &b->b);
-                b += 1;
-                nbindings -= 1;
-            }
-            if (mod->usings.items != &mod->usings._space[0]) {
-                void **newitems = (void**)malloc_s(mod->usings.max * sizeof(void*));
-                memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
-                mod->usings.items = newitems;
-            }
-            break;
-        }
-        case 3: { // install ccallable entry point in JIT
-            jl_svec_t *sv = ((jl_method_t*)v)->ccallable;
-            int success = jl_compile_extern_c(NULL, NULL, jl_sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
-            assert(success); (void)success;
-            break;
-        }
-        default:
-            assert(0 && "corrupt deserialization state");
-            abort();
-    }
-}
-
-
-static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
+static void jl_reinit_ccallable(jl_serializer_state *s) JL_GC_DISABLED
 {
     // run reinitialization functions
     uintptr_t base = (uintptr_t)&s->s->buf[0];
@@ -1941,8 +1873,8 @@ static void jl_finalize_deserializer(jl_serializer_state *s) JL_GC_DISABLED
         }
         if (offset == 0)
             break;
-        jl_value_t *v = (jl_value_t*)(base + offset);
-        jl_reinit_item(v, read_uint8(s->s));
+        jl_method_t *v = (jl_method_t*)(base + offset);
+        jl_compile_extern(v);
     }
 }
 
@@ -2246,8 +2178,6 @@ static void jl_save_system_image_to_stream(ios_t *f,
     }
     htable_new(&visited, 250000);
     htable_new(&bindings, 0);
-    arraylist_new(&reinit_list, 0);
-    arraylist_new(&ccallable_list, 0);
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
@@ -2270,6 +2200,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     arraylist_new(&s.gctags_list, 0);
     arraylist_new(&s.uniquing_list, 0);
     arraylist_new(&s.fixup_list, 0);
+    arraylist_new(&s.ccallable_list, 0);
     s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
@@ -2451,8 +2382,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
         ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
         write_uint32(f, jl_array_len(s.link_ids_gvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
-        jl_finalize_serializer(&s, &reinit_list);
-        jl_finalize_serializer(&s, &ccallable_list);
+        jl_write_arraylist(s.s, &s.ccallable_list);
     }
     // Write the build_id key
     uint64_t buildid = 0;
@@ -2465,8 +2395,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     arraylist_free(&object_worklist);
     arraylist_free(&serialization_queue);
     arraylist_free(&layout_table);
-    arraylist_free(&reinit_list);
-    arraylist_free(&ccallable_list);
+    arraylist_free(&s.ccallable_list);
     arraylist_free(&s.relocs_list);
     arraylist_free(&s.gctags_list);
     arraylist_free(&gvars);
@@ -2766,8 +2695,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
                 dt = (jl_value_t*)pfld;
                 obj = (jl_value_t*)jl_lookup_cache_type_((jl_datatype_t*)dt);
                 if (obj == NULL) {
-                    jl_cache_type_((jl_datatype_t*)dt);
-                    obj = dt;
+                    // make a non-owned copy of obj so we don't accidentally
+                    // assume this is the unique copy later
+                    obj = (jl_value_t*)jl_new_uninitialized_datatype();
+                    jl_astaggedvalue(obj)->bits.gc = GC_OLD;
+                    memcpy(obj, dt, sizeof(jl_datatype_t*));
+                    jl_cache_type_((jl_datatype_t*)obj);
                 }
                 assert(((jl_datatype_t*)obj)->hash == ((jl_datatype_t*)dt)->hash);
                 //assert(jl_invalid_types_equal(t, dt));
@@ -2778,8 +2711,19 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
             assert(jl_is_datatype_singleton((jl_datatype_t*)otyp) && "unreachable");
             obj = ((jl_datatype_t*)otyp)->instance;
         }
+        s.uniquing_list.items[i] = (void*)*pfld;
         *pfld = (jl_value_t**)obj;
         assert(jl_typeis(obj, otyp));
+    }
+    for (size_t i = 0; i < s.uniquing_list.len; i++) {
+        void *item = s.uniquing_list.items[i];
+        jl_taggedvalue_t *o = jl_astaggedvalue(item);
+        if (o->type == (jl_value_t*)jl_method_instance_type)
+            memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_method_instance_t));
+        else if (o->type == (jl_value_t*)jl_datatype_type)
+            memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_datatype_t));
+        else
+            memset(o, 0xba, sizeof(jl_value_t*));
     }
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     for (size_t i = 0; i < s.fixup_list.len; i++) {
@@ -2812,8 +2756,35 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
             jl_binding_t *b = jl_get_binding_if_bound(r->mod, r->name);
             r->bnd_cache = b && b->value ? b : NULL;
         }
+        else if (jl_is_module(obj)) {
+            // rebuild the binding table for module v
+            jl_module_t *mod = (jl_module_t*)obj;
+            size_t nbindings = mod->bindings.size;
+            htable_new(&mod->bindings, nbindings);
+            struct binding {
+                jl_sym_t *asname;
+                uintptr_t tag;
+                jl_binding_t b;
+            } *b;
+            b = (struct binding*)&mod[1];
+            while (nbindings > 0) {
+                ptrhash_put(&mod->bindings, b->asname, &b->b);
+                b += 1;
+                nbindings -= 1;
+            }
+            if (mod->usings.items != &mod->usings._space[0]) {
+                void **newitems = (void**)malloc_s(mod->usings.max * sizeof(void*));
+                memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
+                mod->usings.items = newitems;
+            }
+        }
         else {
-            assert(0 && "unreachable");
+            // rehash IdDict
+            //assert(((jl_datatype_t*)(jl_typeof(obj)))->name == jl_idtable_typename);
+            jl_array_t **a = (jl_array_t**)obj;
+            assert(jl_typeis(*a, jl_array_any_type));
+            *a = jl_idtable_rehash(*a, jl_array_len(*a));
+            jl_gc_wb(obj, *a);
         }
     }
 
@@ -2822,13 +2793,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
     ios_close(&const_data);
     jl_update_all_gvars(&s); // gvars relocs
     ios_close(&gvar_record);
-    s.s = NULL;
-
-    jl_kwcall_mt = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
-
-    s.s = f;
-    // reinit items except ccallables
-    jl_finalize_deserializer(&s);
     s.s = NULL;
 
     if (0) {
@@ -2854,7 +2818,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
     jl_update_all_fptrs(&s); // fptr relocs and registration
     // reinit ccallables, which require codegen to be initialized
     s.s = f;
-    jl_finalize_deserializer(&s);
+    jl_reinit_ccallable(&s);
 
     ios_close(&fptr_record);
     ios_close(&sysimg);
@@ -2865,7 +2829,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
 
     // Prepare for later external linkage against the sysimg
     arraylist_push(&jl_linkage_blobs, image_base);
-    arraylist_push(&jl_linkage_blobs, (char*)image_base + sizeof_sysimg);
+    arraylist_push(&jl_linkage_blobs, (char*)image_base + sizeof_sysimg + sizeof(uintptr_t));
     arraylist_push(&jl_image_relocs, relocs_base);
 
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
