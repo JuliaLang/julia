@@ -35,7 +35,7 @@ corresponding address.
 ## Generational and remembered sets
 
 Field writes into old objects trigger a write barrier if the written field
-points to a young object and if a write barrier has not been triggered in the old object yet.
+points to a young object and if a write barrier has not been triggered on the old object yet.
 In this case, the old object being written to is enqueued into a remembered set, and
 its mark bit is set to indicate that a write barrier has already been triggered on it.
 
