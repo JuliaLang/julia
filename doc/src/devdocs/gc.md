@@ -11,7 +11,7 @@ An opaque tag is stored in the front of GC managed objects, and its lowest two b
 used for garbage collection.  The lowest bit is set for marked objects and the second
 lowest bit stores age information (e.g. it's only set for old objects).
 
-Objects are allocated in multiple of 4 bytes to ensure this pointer tagging is legal.
+Objects are aligned by a multiple of 4 bytes to ensure this pointer tagging is legal.
 
 ## Pool allocation
 
