@@ -546,7 +546,9 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3].inlineable
+let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
+    @test Core.Compiler.is_inlineable(src)
+end
 
 # issue #16096
 module M16096
@@ -1543,7 +1545,8 @@ end
 # issue #27129
 f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source)
+    @test Core.Compiler.is_inlineable(src)
 end
 
 # issue #27710

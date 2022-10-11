@@ -103,7 +103,7 @@ end
         min = Top(T,Base.min)
         max = Top(T,Base.max)
         (==) = Top(T,_compare)
-        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equalvient
+        (===) = Top(T,Base.isequal) # we only use === to compare -0.0/0.0, `isequal` should be equivalent
         @test minmax(3., 5.) == (3., 5.)
         @test minmax(5., 3.) == (3., 5.)
         @test minmax(3., NaN) ≣ (NaN, NaN)
@@ -1071,6 +1071,15 @@ end
     @test Float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
     @test Float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
     @test Float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
+
+    # Test lsb/msb gaps of 54 (wont fit in 64 bit mantissa)
+    @test Float64(Int128(9007199254740993)) == 9.007199254740992e15
+    @test Float64(UInt128(9007199254740993)) == 9.007199254740992e15
+    # Test 2^104-1 and 2^104 (2^104 is cutoff for which case is run in the conversion algorithm)
+    @test Float64(Int128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(Int128(20282409603651670423947251286016)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286015)) == 2.028240960365167e31
+    @test Float64(UInt128(20282409603651670423947251286016)) == 2.028240960365167e31
 end
 @testset "Float vs Int128 comparisons" begin
     @test Int128(1e30) == 1e30
@@ -1151,11 +1160,13 @@ end
 
     @test sqrt(2) == 1.4142135623730951
 end
+Base.@irrational i46051 4863.185427757 1548big(pi)
 @testset "Irrational printing" begin
     @test sprint(show, "text/plain", π) == "π = 3.1415926535897..."
     @test sprint(show, "text/plain", π, context=:compact => true) == "π"
     @test sprint(show, π) == "π"
-
+    # issue #46051
+    @test sprint(show, "text/plain", i46051) == "i46051 = 4863.185427757..."
 end
 @testset "issue #6365" begin
     for T in (Float32, Float64)
@@ -2343,12 +2354,6 @@ end
     end
 end
 @testset "getindex error throwing" begin
-    #getindex(x::Number,-1) throws BoundsError
-    #getindex(x::Number,0) throws BoundsError
-    #getindex(x::Number,2) throws BoundsError
-    #getindex(x::Array,-1) throws BoundsError
-    #getindex(x::Array,0 throws BoundsError
-    #getindex(x::Array,length(x::Array)+1) throws BoundsError
     for x in [1.23, 7, ℯ, 4//5] #[FP, Int, Irrational, Rat]
         @test_throws BoundsError getindex(x,-1)
         @test_throws BoundsError getindex(x,0)
@@ -2671,6 +2676,15 @@ end
     @test rem2pi(T(-8), RoundNearest) ≈ -8+2pi
     @test rem2pi(T(-8), RoundDown)    ≈ -8+4pi
     @test rem2pi(T(-8), RoundUp)      ≈ -8+2pi
+end
+
+@testset "PR #36420 $T" for T in (Float16, Float32, Float64)
+    for r in (RoundToZero, RoundNearest, RoundDown, RoundUp)
+        for x in (Inf, -Inf, NaN, -NaN)
+            @test isnan(rem2pi(T(x), r))
+            @test rem2pi(T(x), r) isa T
+        end
+    end
 end
 
 import Base.^

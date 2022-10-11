@@ -706,3 +706,14 @@ end
         end
     end
 end
+
+@testset "begin/end in gen_call_with_extracted_types users" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            a = [1,2]
+            @test (@code_typed a[1:end]).second == Vector{Int}
+            @test (@code_llvm a[begin:2]) === nothing
+            @test (@code_native a[begin:end]) === nothing
+        end
+    end
+end

@@ -15,6 +15,10 @@ const Pointer = Val{'p'}
 const HexBases = Union{Val{'x'}, Val{'X'}, Val{'a'}, Val{'A'}}
 const PositionCounter = Val{'n'}
 
+const MAX_FRACTIONAL_PART_WIDTH = 17  # max significant decimals + 1: `ceil(Int, log10(1 / eps(Float64))) + 1`
+const MAX_INTEGER_PART_WIDTH = 309  # max exponent: `ceil(Int, log10(prevfloat(typemax(Float64))))`
+const MAX_FMT_CHARS_WIDTH = 5  # hash | sign +/- | decimal dot | exponent e/E | exponent sign
+
 """
 Typed representation of a format specifier.
 
@@ -85,7 +89,7 @@ struct InvalidFormatStringError <: Exception
 end
 
 function Base.showerror(io::IO, err::InvalidFormatStringError)
-    io_has_color = get(io, :color, false)
+    io_has_color = get(io, :color, false)::Bool
 
     println(io, "InvalidFormatStringError: ", err.message)
     print(io, "    \"", @view(err.format[begin:prevind(err.format, err.start_color)]))
@@ -277,7 +281,7 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    slen = textwidth(str)::Int + (hash ? arg isa AbstractString ? 2 : 1 : 0)
     op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)
@@ -630,7 +634,9 @@ function ini_dec end
 function fmtfallback(buf, pos, arg, spec::Spec{T}) where {T}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
-    buf2 = Base.StringVector(309 + 17 + 5)
+    buf2 = Base.StringVector(
+        MAX_INTEGER_PART_WIDTH + MAX_FRACTIONAL_PART_WIDTH + MAX_FMT_CHARS_WIDTH
+    )
     ise = T <: Union{Val{'e'}, Val{'E'}}
     isg = T <: Union{Val{'g'}, Val{'G'}}
     isf = T <: Val{'f'}
@@ -815,13 +821,16 @@ end
 
 function plength(f::Spec{T}, x) where {T <: Ints}
     x2 = toint(x)
-    return max(f.width, f.precision + ndigits(x2, base=base(T), pad=1) + 5)
+    return max(
+        f.width,
+        f.precision + ndigits(x2, base=base(T), pad=1) + MAX_FMT_CHARS_WIDTH
+    )
 end
 
 plength(f::Spec{T}, x::AbstractFloat) where {T <: Ints} =
-    max(f.width, 0 + 309 + 17 + f.hash + 5)
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + 0 + MAX_FMT_CHARS_WIDTH)
 plength(f::Spec{T}, x) where {T <: Floats} =
-    max(f.width, f.precision + 309 + 17 + f.hash + 5)
+    max(f.width, f.hash + MAX_INTEGER_PART_WIDTH + f.precision + MAX_FMT_CHARS_WIDTH)
 plength(::Spec{PositionCounter}, x) = 0
 
 @inline function computelen(substringranges, formats, args)

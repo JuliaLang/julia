@@ -412,7 +412,7 @@ eval(Core, quote
     end
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
-    GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
+    GlobalRef(m::Module, s::Symbol, binding::Ptr{Nothing}) = $(Expr(:new, :GlobalRef, :m, :s, :binding))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
     TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
@@ -434,7 +434,7 @@ eval(Core, quote
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
     # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(typ::DataType, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
-    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source::Method) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
+    PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
@@ -462,7 +462,8 @@ macro _foldable_meta()
         #=:nothrow=#false,
         #=:terminates_globally=#true,
         #=:terminates_locally=#false,
-        #=:notaskstate=#false))
+        #=:notaskstate=#false,
+        #=:inaccessiblememonly=#false))
 end
 
 const NTuple{N,T} = Tuple{Vararg{T,N}}
@@ -614,7 +615,8 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
+             $(Expr(:splatnew, :(NamedTuple{names,typeof(args)}), :args))))
 
 using .Intrinsics: sle_int, add_int
 
@@ -811,6 +813,8 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
+GlobalRef(m::Module, s::Symbol) = GlobalRef(m, s, bitcast(Ptr{Nothing}, 0))
+
 # Binding for the julia parser, called as
 #
 #    Core._parse(text, filename, lineno, offset, options)
@@ -837,8 +841,10 @@ struct Pair{A, B}
     # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
     # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
     Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
-    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
-    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+        @inline
+        return new(a::A, b::B)
+    end
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

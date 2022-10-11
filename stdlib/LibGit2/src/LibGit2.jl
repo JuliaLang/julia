@@ -477,7 +477,7 @@ current changes. Note that this detaches the current HEAD.
 
 # Examples
 ```julia
-repo = LibGit2.init(repo_path)
+repo = LibGit2.GitRepo(repo_path)
 open(joinpath(LibGit2.path(repo), "file1"), "w") do f
     write(f, "111\n")
 end

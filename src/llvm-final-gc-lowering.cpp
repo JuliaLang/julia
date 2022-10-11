@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "passes.h"
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IntrinsicInst.h>
@@ -18,6 +19,13 @@
 #include "llvm-pass-helpers.h"
 
 #define DEBUG_TYPE "final_gc_lowering"
+STATISTIC(NewGCFrameCount, "Number of lowered newGCFrameFunc intrinsics");
+STATISTIC(PushGCFrameCount, "Number of lowered pushGCFrameFunc intrinsics");
+STATISTIC(PopGCFrameCount, "Number of lowered popGCFrameFunc intrinsics");
+STATISTIC(GetGCFrameSlotCount, "Number of lowered getGCFrameSlotFunc intrinsics");
+STATISTIC(GCAllocBytesCount, "Number of lowered GCAllocBytesFunc intrinsics");
+STATISTIC(QueueGCRootCount, "Number of lowered queueGCRootFunc intrinsics");
+STATISTIC(QueueGCBindingCount, "Number of lowered queueGCBindingFunc intrinsics");
 
 using namespace llvm;
 
@@ -66,16 +74,26 @@ private:
 
 Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 {
+    ++NewGCFrameCount;
     assert(target->arg_size() == 1);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(0))->getLimitedValue(INT_MAX);
 
     // Create the GC frame.
-    AllocaInst *gcframe = new AllocaInst(
+    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
+    AllocaInst *gcframe_alloca = new AllocaInst(
         T_prjlvalue,
-        0,
+        allocaAddressSpace,
         ConstantInt::get(Type::getInt32Ty(F.getContext()), nRoots + 2),
         Align(16));
-    gcframe->insertAfter(target);
+    gcframe_alloca->insertAfter(target);
+    Instruction *gcframe;
+    if (allocaAddressSpace) {
+        // addrspacecast as needed for non-0 alloca addrspace
+        gcframe = new AddrSpaceCastInst(gcframe_alloca, T_prjlvalue->getPointerTo(0));
+        gcframe->insertAfter(gcframe_alloca);
+    } else {
+        gcframe = gcframe_alloca;
+    }
     gcframe->takeName(target);
 
     // Zero out the GC frame.
@@ -89,7 +107,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
         ConstantInt::get(Type::getInt32Ty(F.getContext()), sizeof(jl_value_t*) * (nRoots + 2)), // len
         ConstantInt::get(Type::getInt1Ty(F.getContext()), 0)}; // volatile
     CallInst *zeroing = CallInst::Create(memset, makeArrayRef(args));
-    cast<MemSetInst>(zeroing)->setDestAlignment(16);
+    cast<MemSetInst>(zeroing)->setDestAlignment(Align(16));
     zeroing->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
     zeroing->insertAfter(tempSlot_i8);
 
@@ -98,6 +116,7 @@ Value *FinalLowerGC::lowerNewGCFrame(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 {
+    ++PushGCFrameCount;
     assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
     unsigned nRoots = cast<ConstantInt>(target->getArgOperand(1))->getLimitedValue(INT_MAX);
@@ -127,6 +146,7 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
 void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 {
+    ++PopGCFrameCount;
     assert(target->arg_size() == 1);
     auto gcframe = target->getArgOperand(0);
 
@@ -146,6 +166,7 @@ void FinalLowerGC::lowerPopGCFrame(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 {
+    ++GetGCFrameSlotCount;
     assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
     auto index = target->getArgOperand(1);
@@ -165,6 +186,7 @@ Value *FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 {
+    ++QueueGCRootCount;
     assert(target->arg_size() == 1);
     target->setCalledFunction(queueRootFunc);
     return target;
@@ -172,6 +194,7 @@ Value *FinalLowerGC::lowerQueueGCRoot(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerQueueGCBinding(CallInst *target, Function &F)
 {
+    ++QueueGCBindingCount;
     assert(target->arg_size() == 1);
     target->setCalledFunction(queueBindingFunc);
     return target;
@@ -179,6 +202,7 @@ Value *FinalLowerGC::lowerQueueGCBinding(CallInst *target, Function &F)
 
 Value *FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 {
+    ++GCAllocBytesCount;
     assert(target->arg_size() == 2);
     auto sz = (size_t)cast<ConstantInt>(target->getArgOperand(1))->getZExtValue();
     // This is strongly architecture and OS dependent
