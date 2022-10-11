@@ -542,7 +542,7 @@ end
 # This method is redefined to rand(lo:hi) in Random.jl
 # We can't use rand here because it is not available in Core.Compiler and
 # because rand is defined in the stdlib Random.jl after sorting is used in Base.
-select_pivot(lo::Integer, hi::Integer) = midpoint(lo, hi)
+select_pivot(lo::Integer, hi::Integer) = typeof(hi-lo)(hash((lo, hi)) % (hi-lo+1)) + lo
 
 # select a pivot, partition v[lo:hi] according
 # to the pivot, and store the result in t[lo:hi].
