@@ -1606,12 +1606,12 @@ The script is then executed via `evalfile` (with arguments) and prints the retur
 julia> # Create script file
        mktemp() do path, io
            # Write minimal script into file
-           write(io, """
+           write(io, "
            function get_args()
                ARGS
            end
            get_args()
-           """)
+           ")
            flush(io)
            
            # Use evalfile and print output
