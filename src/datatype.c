@@ -113,7 +113,6 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     return t;
 }
 
-#include "support/htable.h"
 #include "support/htable.inc"
 
 static uint32_t _hash_djb2(uint32_t hash, const char *mem, size_t s) JL_NOTSAFEPOINT
