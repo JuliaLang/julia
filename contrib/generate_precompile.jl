@@ -212,7 +212,6 @@ if Test !== nothing
     precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
     precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
     precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
     precompile(Tuple{typeof(Test.detect_ambiguities), Any})
     precompile(Tuple{typeof(Test.collect_test_logs), Function})
     precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})

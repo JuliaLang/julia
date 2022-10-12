@@ -520,11 +520,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
-        if isdefined(t.mt, :kwsorter)
-            serialize(s, t.mt.kwsorter)
-        else
-            writetag(s.io, UNDEFREF_TAG)
-        end
+        writetag(s.io, UNDEFREF_TAG)
     else
         writetag(s.io, UNDEFREF_TAG)
     end
@@ -1354,9 +1350,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
-            if makenew
-                tn.mt.kwsorter = kws
-            end
+            # old object format -- discard any kwfuncs it had
         end
     elseif makenew
         mt = Symbol.name.mt

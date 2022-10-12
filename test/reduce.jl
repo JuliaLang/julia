@@ -160,11 +160,11 @@ plus(x,y) = x + y
 sum3(A) = reduce(plus, A)
 sum4(itr) = invoke(reduce, Tuple{Function, Any}, plus, itr)
 sum5(A) = reduce(plus, A; init=0)
-sum6(itr) = invoke(Core.kwfunc(reduce), Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum6(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
 sum7(A) = mapreduce(x->x, plus, A)
 sum8(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, x->x, plus, itr)
 sum9(A) = mapreduce(x->x, plus, A; init=0)
-sum10(itr) = invoke(Core.kwfunc(mapreduce), Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
+sum10(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
 for f in (sum2, sum5, sum6, sum9, sum10)
     @test sum(z) == f(z)
     @test sum(Int[]) == f(Int[]) == 0
