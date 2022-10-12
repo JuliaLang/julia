@@ -37,10 +37,10 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             false
         elseif k == K"Char"
             v, err, _ = unescape_julia_string(val_str, false, false)
-            if err
+            if err || length(v) != 1
                 ErrorVal()
             else
-                v[2]
+                only(v)
             end
         elseif k == K"Identifier"
             if has_flags(head(raw), RAW_STRING_FLAG)

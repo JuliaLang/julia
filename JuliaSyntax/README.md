@@ -741,6 +741,9 @@ parsing `key=val` pairs inside parentheses.
   :([(x, y) for $(Expr(:filter, :(y < x), :(x = 1:10), :(y = 1:10)))])
   ```
 
+* The character `'` may be written without escaping as `'''` rather than
+  requiring the form `'\''`.
+
 # Comparisons to other packages
 
 ### Official Julia compiler

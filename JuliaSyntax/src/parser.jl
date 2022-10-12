@@ -1561,7 +1561,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 emit(ps, mark, K".")
                 this_iter_valid_macroname = true
             end
-        elseif k == K"'"
+        elseif k == K"'" && !preceding_whitespace(t)
             if !is_suffixed(t)
                 # f'  ==> (' f)
                 bump(ps, TRIVIA_FLAG)
@@ -3148,7 +3148,7 @@ function parse_string(ps::ParseState, raw::Bool)
     else
         # Missing delimiter recovery
         # "str   ==> (string "str" (error-t))
-        bump_invisible(ps, K"error", TRIVIA_FLAG, error="Unterminated string literal")
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="unterminated string literal")
     end
     # String interpolations
     # "$x$y$z"  ==> (string x y z)
@@ -3197,7 +3197,32 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     mark = position(ps)
     leading_kind = peek(ps)
     # todo: Reorder to put most likely tokens first?
-    if leading_kind == K":"
+    if leading_kind == K"'"
+        # char literal
+        bump(ps, TRIVIA_FLAG)
+        k = peek(ps)
+        if k == K"Char"
+            bump(ps)
+            if peek(ps) == K"'"
+                # 'a'         ==>  (char 'a')
+                # 'α'         ==>  (char 'α')
+                # '\xce\xb1'  ==>  (char 'α')
+                bump(ps, TRIVIA_FLAG)
+            else
+                # 'a  ==>  (char 'a' (error-t))
+                bump_invisible(ps, K"error", TRIVIA_FLAG,
+                               error="unterminated character literal")
+            end
+        elseif k == K"'"
+            # ''  ==>  (char (error))
+            bump_invisible(ps, K"error", error="empty character literal")
+        else
+            # '   ==>  (char (error))
+            @check k == K"EndMarker"
+            bump_invisible(ps, K"error", error="unterminated character literal")
+        end
+        emit(ps, mark, K"char")
+    elseif leading_kind == K":"
         # symbol/expression quote
         # :foo  ==>  (quote foo)
         t = peek_token(ps, 2)
@@ -3275,7 +3300,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
                 bump(ps, TRIVIA_FLAG)
             else
                 bump_invisible(ps, K"error", TRIVIA_FLAG,
-                               error="Unterminated string literal")
+                               error="unterminated string literal")
             end
             t = peek_token(ps)
             k = kind(t)

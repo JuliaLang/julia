@@ -15,7 +15,6 @@ include("tokenize_utils.jl")
 # Error kind => description
 TOKEN_ERROR_DESCRIPTION = Dict{Kind, String}(
     K"ErrorEofMultiComment" => "unterminated multi-line comment #= ... =#",
-    K"ErrorEofChar" => "unterminated character literal",
     K"ErrorInvalidNumericConstant" => "invalid numeric constant",
     K"ErrorInvalidOperator" => "invalid operator",
     K"ErrorInvalidInterpolationTerminator" => "interpolated variable ends with invalid character; use `\$(...)` instead",
@@ -263,9 +262,9 @@ end
 
 Returns a `Token` of kind `kind` with contents `str` and starts a new `Token`.
 """
-function emit(l::Lexer, kind::Kind)
+function emit(l::Lexer, kind::Kind, maybe_op=true)
     suffix = false
-    if optakessuffix(kind)
+    if optakessuffix(kind) && maybe_op
         while isopsuffix(peekchar(l))
             readchar(l)
             suffix = true
@@ -448,6 +447,11 @@ function lex_string_chunk(l)
         end
         return emit(l, K"Whitespace")
     elseif pc == state.delim && string_terminates(l, state.delim, state.triplestr)
+        if state.delim == '\'' && l.last_token == K"'" && dpeekchar(l)[2] == '\''
+            # Handle '''
+            readchar(l)
+            return emit(l, K"Char")
+        end
         # Terminate string
         pop!(l.string_states)
         readchar(l)
@@ -456,7 +460,8 @@ function lex_string_chunk(l)
             return emit(l, state.delim == '"' ?
                         K"\"\"\"" : K"```")
         else
-            return emit(l, state.delim == '"' ? K"\"" : K"`")
+            return emit(l, state.delim == '"' ? K"\"" :
+                           state.delim == '`' ? K"`"  : K"'", false)
         end
     end
     # Read a chunk of string characters
@@ -516,7 +521,8 @@ function lex_string_chunk(l)
             end
         end
     end
-    return emit(l, state.delim == '"' ?  K"String" : K"CmdString")
+    return emit(l, state.delim == '"' ? K"String"    :
+                   state.delim == '`' ? K"CmdString" : K"Char")
 end
 
 # Lex whitespace, a whitespace char `c` has been consumed
@@ -859,41 +865,23 @@ function lex_digit(l::Lexer, kind)
     return emit(l, kind)
 end
 
-function lex_prime(l, doemit = true)
-    if l.last_token == K"Identifier" ||
-        is_contextual_keyword(l.last_token) ||
-        is_word_operator(l.last_token) ||
-        l.last_token == K"." ||
-        l.last_token ==  K")" ||
-        l.last_token ==  K"]" ||
-        l.last_token ==  K"}" ||
-        l.last_token == K"'" ||
-        l.last_token == K"end" || is_literal(l.last_token)
+function lex_prime(l)
+    if l.last_token == K"Identifier"         ||
+         is_contextual_keyword(l.last_token) ||
+         is_word_operator(l.last_token)      ||
+         l.last_token == K"."                ||
+         l.last_token ==  K")"               ||
+         l.last_token ==  K"]"               ||
+         l.last_token ==  K"}"               ||
+         l.last_token == K"'"                ||
+         l.last_token == K"end"              ||
+         is_literal(l.last_token)
+        # FIXME ^ This doesn't cover all cases - probably needs involvement
+        # from the parser state.
         return emit(l, K"'")
     else
-        if accept(l, '\'')
-            if accept(l, '\'')
-                return doemit ? emit(l, K"Char") : EMPTY_TOKEN
-            else
-                # Empty char literal
-                # Arguably this should be an error here, but we generally
-                # look at the contents of the char literal in the parser,
-                # so we defer erroring until there.
-                return doemit ? emit(l, K"Char") : EMPTY_TOKEN
-            end
-        end
-        while true
-            c = readchar(l)
-            if c == EOF_CHAR
-                return doemit ? emit_error(l, K"ErrorEofChar") : EMPTY_TOKEN
-            elseif c == '\\'
-                if readchar(l) == EOF_CHAR
-                    return doemit ? emit_error(l, K"ErrorEofChar") : EMPTY_TOKEN
-                end
-            elseif c == '\''
-                return doemit ? emit(l, K"Char") : EMPTY_TOKEN
-            end
-        end
+        push!(l.string_states, StringState(false, true, '\'', 0))
+        return emit(l, K"'", false)
     end
 end
 
