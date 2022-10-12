@@ -126,7 +126,6 @@
     XX(jl_environ) \
     XX(jl_eof_error) \
     XX(jl_eqtable_get) \
-    XX(jl_eqtable_nextind) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
     XX(jl_errno) \
