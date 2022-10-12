@@ -727,9 +727,6 @@ julia> function date(y::Int64, m::Int64=1, d::Int64=1)
 date (generic function with 3 methods)
 ```
 
-Note how the signature says **"date (generic function with 3 methods)"**, denoting that
-we have a function named `date`, and there are 3 "versions" (i.e. methods) of it.
-
 With this definition, the function can be called with either one, two or three arguments, and
 `1` is automatically passed when only one or two of the arguments are specified:
 
