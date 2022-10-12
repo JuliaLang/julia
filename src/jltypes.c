@@ -2551,8 +2551,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             //"absolute_max",
                             "ipo_purity_bits", "purity_bits",
                             "argescapes",
-                            "isspecsig", "precompile", "invoke", "specptr", // function object decls
-                            "relocatability"),
+                            "isspecsig", "precompile", "relocatability",
+                            "invoke", "specptr"), // function object decls
                         jl_svec(15,
                             jl_method_instance_type,
                             jl_any_type,
@@ -2567,13 +2567,13 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_any_type, jl_any_type, // fptrs
-                            jl_uint8_type),
+                            jl_uint8_type,
+                            jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
     const static uint32_t code_instance_constfields[1] = { 0b000001010111101 }; // Set fields 1, 3-6, 8, 10 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b011100101000010 }; // Set fields 2, 7, 9, 12-14 as atomic
+    const static uint32_t code_instance_atomicfields[1] = { 0b110100101000010 }; // Set fields 2, 7, 9, 12, 14-15 as atomic
     //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;
     jl_code_instance_type->name->atomicfields = code_instance_atomicfields;
@@ -2730,8 +2730,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_methtable_type->types, 11, jl_uint8_type);
     jl_svecset(jl_method_type->types, 12, jl_method_instance_type);
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
-    jl_svecset(jl_code_instance_type->types, 12, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 13, jl_voidpointer_type);
+    jl_svecset(jl_code_instance_type->types, 14, jl_voidpointer_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
