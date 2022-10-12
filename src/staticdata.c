@@ -520,7 +520,7 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v)
 }
 
 
-static int caching_tag(jl_value_t *v)
+static int caching_tag(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
@@ -542,23 +542,23 @@ static int caching_tag(jl_value_t *v)
     return 0;
 }
 
-static int needs_recaching(jl_value_t *v)
+static int needs_recaching(jl_value_t *v) JL_NOTSAFEPOINT
 {
     return caching_tag(v) == 2;
 }
 
-static int needs_uniquing(jl_value_t *v)
+static int needs_uniquing(jl_value_t *v) JL_NOTSAFEPOINT
 {
     assert(!jl_object_in_image(v));
     return caching_tag(v) == 1;
 }
 
-static void record_field_change(jl_value_t **addr, jl_value_t *newval)
+static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
 {
     ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
-static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl)
+static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DISABLED
 {
     jl_value_t *fld = (jl_value_t*)ptrhash_get(&field_replace, addr);
     if (fld == HT_NOTFOUND) {
@@ -647,6 +647,15 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             record_field_change(&dt->instance, jl_nothing);
         }
     }
+    else if (jl_is_typename(v)) {
+        // XXX: typename might require really complicating uniquing to handle kwfunc
+        jl_typename_t *tn = (jl_typename_t*)v;
+        assert(!jl_object_in_image((jl_value_t*)tn->module));
+        assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
+        // don't recurse into several fields
+        jl_queue_for_serialization_(s, (jl_value_t*)tn->cache, 0, 1);
+        jl_queue_for_serialization_(s, (jl_value_t*)tn->linearcache, 0, 1);
+    }
 
     const jl_datatype_layout_t *layout = t->layout;
     if (layout->npointers == 0) {
@@ -687,18 +696,6 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
-    }
-    else if (jl_is_typename(v)) {
-        jl_typename_t *tn = (jl_typename_t*)v;
-        jl_queue_for_serialization(s, tn->name);
-        jl_queue_for_serialization(s, tn->module);
-        jl_queue_for_serialization(s, tn->names);
-        jl_queue_for_serialization(s, tn->wrapper);
-        jl_queue_for_serialization(s, tn->Typeofwrapper);
-        jl_queue_for_serialization_(s, (jl_value_t*)tn->cache, 0, 1);
-        jl_queue_for_serialization_(s, (jl_value_t*)tn->linearcache, 0, 1);
-        jl_queue_for_serialization(s, tn->mt);
-        jl_queue_for_serialization(s, tn->partial);
     }
     else if (layout->nfields > 0) {
         char *data = (char*)jl_data_ptr(v);
@@ -938,7 +935,7 @@ static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref) JL_NOTSAF
 }
 
 // Special handling from `jl_write_values` for modules
-static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t *m)
+static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t *m) JL_GC_DISABLED
 {
     size_t reloc_offset = ios_pos(s->s);
     size_t tot = sizeof(jl_module_t);
@@ -1032,7 +1029,7 @@ static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAF
 
 jl_value_t *jl_find_ptr = NULL;
 // The main function for serializing all the items queued in `visited`
-static void jl_write_values(jl_serializer_state *s)
+static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 {
     size_t l = serialization_queue.len;
 
@@ -1831,7 +1828,7 @@ static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
     }
 }
 
-static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset)
+static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset) JL_GC_DISABLED
 {
     size_t i, j, sz = mset->size;
     uint64_t key;
@@ -2449,7 +2446,7 @@ static int64_t jl_incremental_header_stuff(ios_t *f, jl_array_t *worklist, jl_ar
     return srctextpos;
 }
 
-JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist, jl_array_t *_newly_inferred /*FIXME*/)
+JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist)
 {
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
@@ -2457,8 +2454,10 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     int64_t srctextpos = 0;
+    int en = 0;
     if (worklist) {
         srctextpos = jl_incremental_header_stuff(f, worklist, &mod_array, &udeps);
+        en = jl_gc_enable(0);
         jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
         write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
     }
@@ -2467,6 +2466,7 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     native_functions = NULL;
     if (worklist) {
         // Write the source-text for the dependent files
+        jl_gc_enable(en);
         if (udeps) {
             // Go back and update the source-text position to point to the current position
             int64_t posfile = ios_pos(f);
@@ -2886,12 +2886,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
 
 static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *depmods)
 {
-    jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *new_specializations = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
-    char *base;
-    arraylist_t ccallable_list;
-    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
-
     if (ios_eof(f) || !jl_read_verify_header(f)) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
@@ -2912,6 +2906,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *de
         return verify_fail;
     }
 
+    jl_value_t *restored = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *new_specializations = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    char *base;
+    arraylist_t ccallable_list;
+    JL_GC_PUSH7(&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);

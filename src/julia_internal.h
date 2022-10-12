@@ -907,7 +907,7 @@ typedef DWORD jl_pgcstack_key_t;
 #else
 typedef jl_gcframe_t ***(*jl_pgcstack_key_t)(void) JL_NOTSAFEPOINT;
 #endif
-JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k);
+JL_DLLEXPORT void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k) JL_NOTSAFEPOINT;
 
 #if !defined(_OS_WINDOWS_) && !defined(__APPLE__) && !defined(JL_DISABLE_LIBUNWIND)
 extern pthread_mutex_t in_signal_lock;
@@ -927,7 +927,7 @@ static inline void jl_set_gc_and_wait(void)
 #endif
 
 // Query if a Julia object is if a permalloc region (due to part of a sys- pkg-image)
-STATIC_INLINE size_t n_linkage_blobs(void)
+STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 {
     if (!jl_build_ids)
         return 0;
@@ -936,7 +936,7 @@ STATIC_INLINE size_t n_linkage_blobs(void)
 }
 
 // TODO: Makes this a binary search
-STATIC_INLINE size_t external_blob_index(jl_value_t *v) {
+STATIC_INLINE size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT {
     size_t i, nblobs = n_linkage_blobs();
     assert(jl_linkage_blobs.len == 2*nblobs);
     for (i = 0; i < nblobs; i++) {
@@ -950,7 +950,7 @@ STATIC_INLINE size_t external_blob_index(jl_value_t *v) {
     return i;
 }
 
-STATIC_INLINE uint8_t jl_object_in_image(jl_value_t* v) {
+STATIC_INLINE uint8_t jl_object_in_image(jl_value_t* v) JL_NOTSAFEPOINT {
     size_t blob = external_blob_index(v);
     if (blob == n_linkage_blobs()) {
         return 0;

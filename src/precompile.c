@@ -35,8 +35,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     }
 
     jl_array_t *worklist = jl_module_init_order;
-    jl_array_t *newly_inferred = NULL;
-    JL_GC_PUSH2(&worklist, &newly_inferred);
+    JL_GC_PUSH1(&worklist);
     jl_module_init_order = jl_alloc_vec_any(0);
     int i, l = jl_array_len(worklist);
     for (i = 0; i < l; i++) {
@@ -76,7 +75,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     ios_t *s = NULL;
     if (jl_options.outputji || jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm)
-        s = jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL, newly_inferred);
+        s = jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL);
 
     if (jl_options.outputji) {
         ios_t f;

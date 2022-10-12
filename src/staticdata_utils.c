@@ -19,7 +19,7 @@ static uint64_t jl_worklist_key(jl_array_t *worklist)
     return 0;
 }
 
-static jl_array_t *newly_inferred;
+static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
     assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
@@ -214,7 +214,7 @@ static jl_array_t *queue_external_mis(jl_array_t *list)
 // for anything that points to a method not part of the worklist
 //
 // from MethodTables
-static void jl_collect_missing_backedges(jl_methtable_t *mt)
+static void jl_collect_missing_backedges(jl_methtable_t *mt) JL_GC_DISABLED
 {
     jl_array_t *backedges = mt->backedges;
     if (backedges) {
@@ -670,7 +670,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 static void jl_insert_methods(jl_array_t *list)
 {
     size_t i, l = jl_array_len(list);
-    for (i = 0; i < l; i += 2) {
+    for (i = 0; i < l; i++) {
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
