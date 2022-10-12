@@ -1828,23 +1828,18 @@ static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
     }
 }
 
-static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset) JL_GC_DISABLED
+static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key) JL_GC_DISABLED
 {
-    size_t i, j, sz = mset->size;
-    uint64_t key;
+    size_t i, sz = mset->size;
     int nwithkey;
     jl_method_t *m;
     void **table = mset->table;
-    uint64_t *buildids = (uint64_t*)jl_build_ids->data;
     jl_array_t *newroots = NULL;
     JL_GC_PUSH1(&newroots);
     for (i = 0; i < sz; i+=2) {
         if (table[i+1] != HT_NOTFOUND) {
             m = (jl_method_t*)table[i];
             assert(jl_is_method(m));
-            j = external_blob_index((jl_value_t*)m);
-            assert(j < n_linkage_blobs());
-            key = buildids[j];
             nwithkey = nroots_with_key(m, key);
             if (nwithkey) {
                 jl_array_ptr_1d_push(roots, (jl_value_t*)m);
@@ -2108,7 +2103,7 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val JL_MAYBE_UNROOTED)
     return val;
 }
 
-static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred,
+static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred, uint64_t worklist_key,
                            /* outputs */  jl_array_t **extext_methods,
                                           jl_array_t **new_specializations, jl_array_t **method_roots_list,
                                           jl_array_t **ext_targets, jl_array_t **edges)
@@ -2128,7 +2123,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     htable_new(&methods_with_newspecs, 0);
     jl_collect_methods(&methods_with_newspecs, *new_specializations);
     *method_roots_list = jl_alloc_vec_any(0);
-    jl_collect_new_roots(*method_roots_list, &methods_with_newspecs);
+    jl_collect_new_roots(*method_roots_list, &methods_with_newspecs, worklist_key);
     htable_free(&methods_with_newspecs);
 
     // Collect method extensions and edges data
@@ -2458,7 +2453,7 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     if (worklist) {
         srctextpos = jl_incremental_header_stuff(f, worklist, &mod_array, &udeps);
         en = jl_gc_enable(0);
-        jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+        jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
         write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
     }
     native_functions = _native_data;
@@ -2934,7 +2929,6 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *de
 
             // Insert method extensions
             jl_insert_methods(extext_methods);
-            if (0) { // TODO
             // No special processing of `new_specializations` is required because recaching handled it
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
@@ -2942,7 +2936,6 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *de
             jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_specializations); // restore external backedges (needs to be last)
             // check new CodeInstances and validate any that lack external backedges
             validate_new_code_instances();
-            }
             // reinit ccallables
             jl_reinit_ccallable(&ccallable_list, base, NULL);
             arraylist_free(&ccallable_list);
