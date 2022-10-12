@@ -4643,6 +4643,16 @@ end
     end)[2] === Nothing
 end
 
+# `apply_type_tfunc` accuracy for constrained type construction
+# https://github.com/JuliaLang/julia/issues/47089
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+struct Issue47089{A,B} end
+let A = Type{<:Integer}
+    @test apply_type_tfunc(Const(T), A, A) <: (Type{T{A,B}} where {A<:Integer, B<:Integer})
+end
+@test only(Base.return_types(keys, (Dict{String},))) == Base.KeySet{String, T} where T<:(Dict{String})
+
 # singleton_type on slot wrappers
 @test Base.return_types((Int,)) do x
     c = isa(x, Int) # ::Conditional
