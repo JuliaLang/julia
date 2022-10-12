@@ -109,7 +109,7 @@ end # testset
             K"NewlineWs",K"[",K"Integer",K"*",K"Integer",K",",K"Integer",
             K";",K"Integer",K",",K"Integer",K"]",
 
-            K"NewlineWs",K"\"",K"String",K"\"",K";",K"Whitespace",K"Char",
+            K"NewlineWs",K"\"",K"String",K"\"",K";",K"Whitespace",K"'",K"Char",K"'",
 
             K"NewlineWs",K"(",K"Identifier",K"&&",K"Identifier",K")",K"||",
             K"(",K"Identifier",K"||",K"Identifier",K")",
@@ -130,7 +130,7 @@ end # testset
 
             K"NewlineWs",K"{",K"}",
 
-            K"NewlineWs",K"ErrorEofChar",K"EndMarker"]
+            K"NewlineWs",K"'",K"Char",K"EndMarker"]
 
     for (i, n) in enumerate(tokenize(str))
         @test kind(n) == kinds[i]
@@ -190,6 +190,8 @@ function test_roundtrip(str, kind, val)
     @test untokenize(t, str) == val
 end
 
+roundtrip(str) = join(untokenize.(collect(tokenize(str)), str))
+
 @testset "tokenizing juxtaposed numbers and dotted operators/identifiers" begin
     test_roundtrip("1234 .+1",     K"Integer", "1234")
     test_roundtrip("1234.0+1",     K"Float",   "1234.0")
@@ -228,15 +230,24 @@ end
     D = ImageMagick.load(fn)
     """
     tokens = collect(tokenize(str))
-    @test string(untokenize(tokens[16], str))==string(untokenize(tokens[17], str))=="'"
+    @test string(untokenize(tokens[16], str)) == string(untokenize(tokens[17], str))=="'"
 
-    test_roundtrip("'a'",  K"Char", "'a'")
-    test_roundtrip("''",   K"Char", "''")
-    test_roundtrip("'''",  K"Char", "'''")
-    test_roundtrip("''''", K"Char", "'''")
+    @test roundtrip("'a'") == "'a'"
+    @test kind.(collect(tokenize("'a'"))) == [K"'", K"Char", K"'", K"EndMarker"]
 
-    @test tok("''''", 1).kind == K"Char"
-    @test tok("''''", 2).kind == K"'"
+    # ' is not an operator here, so doesn't consume the suffix ᵀ
+    @test roundtrip("'ᵀ'") == "'ᵀ'"
+    @test kind.(collect(tokenize("'₁'"))) == [K"'", K"Char", K"'", K"EndMarker"]
+
+    @test roundtrip("''") == "''"
+    @test kind.(collect(tokenize("''"))) == [K"'", K"'", K"EndMarker"]
+
+    @test roundtrip("'''") == "'''"
+    @test kind.(collect(tokenize("'''"))) == [K"'", K"Char", K"'", K"EndMarker"]
+
+    @test roundtrip("''''") == "''''"
+    @test kind.(collect(tokenize("''''"))) == [K"'", K"Char", K"'", K"'", K"EndMarker"]
+
     @test tok("()'", 3).kind == K"'"
     @test tok("{}'", 3).kind == K"'"
     @test tok("[]'", 3).kind == K"'"
@@ -244,6 +255,7 @@ end
     @test tok("mutable'", 2).kind == K"'"
     @test tok("as'", 2).kind == K"'"
     @test tok("isa'", 2).kind == K"'"
+    @test untokenize.(collect(tokenize("a'ᵀ")), "a'ᵀ") == ["a", "'ᵀ", ""]
 end
 
 @testset "keywords" begin
@@ -293,9 +305,8 @@ end
 end
 
 @testset "errors" begin
-    @test tok("#=   #=   =#",           1).kind == K"ErrorEofMultiComment"
-    @test tok("'dsadsa",                1).kind == K"ErrorEofChar"
-    @test tok("aa **",                  3).kind == K"ErrorInvalidOperator"
+    @test tok("#=   #=   =#", 1).kind == K"ErrorEofMultiComment"
+    @test tok("aa **",        3).kind == K"ErrorInvalidOperator"
 end
 
 @testset "xor_eq" begin

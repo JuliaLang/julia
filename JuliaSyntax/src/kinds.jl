@@ -15,7 +15,6 @@ const _kind_names =
     "BEGIN_ERRORS"
         # Tokenization errors
         "ErrorEofMultiComment"
-        "ErrorEofChar"
         "ErrorInvalidNumericConstant"
         "ErrorInvalidOperator"
         "ErrorInvalidInterpolationTerminator"
@@ -874,6 +873,7 @@ const _kind_names =
         "inert"          # QuoteNode; not quasiquote
         "string"         # A string interior node (possibly containing interpolations)
         "cmdstring"      # A cmd string node (containing delimiters plus string)
+        "char"           # A char string node (containing delims + char data)
         "macrocall"
         "parameters"     # the list after ; in f(; a=1)
         "toplevel"
@@ -1004,7 +1004,6 @@ const _nonunique_kind_names = Set([
     K"Identifier"
 
     K"ErrorEofMultiComment"
-    K"ErrorEofChar"
     K"ErrorInvalidNumericConstant"
     K"ErrorInvalidOperator"
     K"ErrorInvalidInterpolationTerminator"

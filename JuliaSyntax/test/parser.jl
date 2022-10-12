@@ -567,6 +567,14 @@ tests = [
         "(1:2)" => "(call-i 1 : 2)"
     ],
     JuliaSyntax.parse_atom => [
+        # char literal
+        "'a'"           =>  "(char 'a')"
+        "'α'"           =>  "(char 'α')"
+        "'\\xce\\xb1'"  =>  "(char 'α')"
+        "'a"            =>  "(char 'a' (error-t))"
+        "''"            =>  "(char (error))"
+        "'"             =>  "(char (error))"
+        # symbol/expression quote
         ":foo"   => "(quote foo)"
         # Literal colons
         ":)"     => ":"

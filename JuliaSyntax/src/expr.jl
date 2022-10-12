@@ -239,6 +239,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym == :do
         @check length(args) == 3
         return Expr(:do, args[1], Expr(:->, args[2], args[3]))
+    elseif headsym == :char
+        @check length(args) == 1
+        return args[1]
     end
     return Expr(headsym, args...)
 end

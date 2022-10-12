@@ -42,9 +42,6 @@ function _incomplete_tag(n::SyntaxNode)
         k1 = kind(cs[1])
         if k1 == K"ErrorEofMultiComment"
             return :comment
-        elseif k1 == K"ErrorEofChar"
-            # TODO: Make this case into an internal node
-            return :char
         end
         for cc in cs
             if kind(cc) == K"error"
@@ -57,6 +54,8 @@ function _incomplete_tag(n::SyntaxNode)
         return :string
     elseif kp == K"cmdstring"
         return :cmd
+    elseif kp == K"char"
+        return :char
     elseif kp in KSet"block quote let try"
         return :block
     elseif kp in KSet"for while function if"

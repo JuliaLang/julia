@@ -157,6 +157,14 @@
             Expr(:string, "a\n", :x, "\nb\nc")
     end
 
+    @testset "Char conversions" begin
+        @test parse(Expr, "'a'") == 'a'
+        @test parse(Expr, "'α'") == 'α'
+        @test parse(Expr, "'\\xce\\xb1'") == 'α'
+        # FIXME
+        # @test_throws ParseError parse(Expr, "'abcde'")
+    end
+
     @testset "do block conversion" begin
         @test parse(Expr, "f(x) do y\n body end") ==
             Expr(:do, Expr(:call, :f, :x),
