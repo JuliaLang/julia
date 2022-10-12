@@ -2304,7 +2304,7 @@ static void jl_init_serializer2(int for_serialize)
         htable_new(&symbol_table, 0);
         htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
         htable_new(&backref_table, 0);
-        htable_new(&layout_cache, 0); // TODO: Is this in the right spot to initialize?
+        htable_new(&layout_cache, 0);
         uintptr_t i;
         for (i = 0; id_to_fptrs[i] != NULL; i++) {
             ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
