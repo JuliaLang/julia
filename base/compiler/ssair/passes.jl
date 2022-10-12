@@ -1727,8 +1727,6 @@ function type_lift_pass!(ir::IRCode)
                         first = false
                     end
                     local id::Int = 0
-                    all_same = true
-                    local last_val
                     for i = 1:length(values)
                         if !isassigned(def.values, i)
                             val = false
@@ -1769,25 +1767,17 @@ function type_lift_pass!(ir::IRCode)
                             end
                         end
                         if isa(def, PhiNode)
-                            if !@isdefined(last_val)
-                                last_val = val
-                            elseif all_same
-                                all_same &= last_val === val
-                            end
                             values[i] = val
                         else
                             values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), Bool))
                         end
                     end
-                    if all_same && @isdefined(last_val)
-                        # Decay the PhiNode back to the single value
-                        ir[new_phi][:inst] = last_val
-                    end
                     if which !== SSAValue(0)
                         phi = ir[which][:inst]
                         if isa(phi, PhiNode)
                             phi.values[use] = new_phi
-                        elseif isa(phi, PhiCNode)
+                        else
+                            phi = phi::PhiCNode
                             phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), Bool))
                         end
                     end
