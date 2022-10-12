@@ -134,6 +134,13 @@ emit(iterate_read, Vector{Int64})
 emit(iterate_write, Vector{Int64}, Vector{Int64})
 emit(iterate_write!, Vector{Int64})
 
+emit(iterate_write!, Vector{ComplexF32})
+emit(iterate_write!, Vector{Complex{Int64}})
+emit(iterate_write, Vector{Tuple{Float64,Int64,Float64}}, Vector{Tuple{Float64,Int64,Float64}})
+emit(iterate_write, Vector{Tuple{Float32,ComplexF32,Float32}}, Vector{Tuple{Float32,ComplexF32,Float32}})
+emit(iterate_write, Vector{Tuple{ComplexF32,Int32,Int32}}, Vector{Tuple{ComplexF32,Int32,Int32}})
+emit(iterate_write, Vector{Tuple{Int32,ComplexF32,Int32,ComplexF32}}, Vector{Tuple{Int32,ComplexF32,Int32,ComplexF32}})
+
 emit(multiiterate_read, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write, Vector{Int64}, Vector{Int64}, Vector{Int64})
 emit(multiiterate_write!, Vector{Int64}, Vector{Int64})

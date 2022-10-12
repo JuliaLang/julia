@@ -433,6 +433,37 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     return tbaa_decorate(x.tbaa, load);
 }
 
+// A rough rule to judge should we use `store` for arrayset.
+// LLVM's vectorizer prefers `store` if the struct has 2/3/4/6 nfield and equal fieldsz.
+// NOTE: this does not cover all cases.
+static void deserves_store_walk_type(jl_value_t* jltype, int *count, int *min_sz) {
+    int sz = jl_datatype_size(jltype);
+    if (jl_is_primitivetype(jltype)) {
+        if (*min_sz == 0)
+            *min_sz = sz;
+        if (*min_sz == sz)
+            *count = *count + 1;
+        else
+            *count = -1;
+    }
+    else if (sz > 0) {
+        jl_datatype_t *jldtype = (jl_datatype_t *)jltype;
+        for (size_t i = 0; i < jl_datatype_nfields(jldtype); i++) {
+            deserves_store_walk_type(jl_field_type(jldtype, i), count, min_sz);
+            if (*count == -1)
+                break;
+        }
+    }
+}
+
+static bool deserves_store(jl_value_t* jltype) {
+    if (!jl_isbits(jltype) || jl_datatype_size(jltype) > 64 || jl_datatype_size(jltype) == 0)
+        return false;
+    int count = 0, min_sz = 0;
+    deserves_store_walk_type(jltype, &count, &min_sz);
+    return (count >= 2 && count <= 4) || count == 6;
+}
+
 // emit code to store a raw value into a destination
 static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, unsigned alignment, bool isVolatile)
 {
@@ -452,6 +483,11 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     // bools stored as int8, but can be narrowed to int1 often
     if (x.typ == (jl_value_t*)jl_bool_type)
         unboxed = emit_unbox(ctx, getInt8Ty(ctx.builder.getContext()), x, (jl_value_t*)jl_bool_type);
+    else {
+        jl_value_t *jltype = (jl_value_t *)x.typ;
+        if (deserves_store(jltype))
+            unboxed = emit_unbox(ctx, julia_type_to_llvm(ctx, jltype), x, jltype);
+    }
 
     if (unboxed) {
         Type *dest_ty = unboxed->getType()->getPointerTo();
