@@ -650,8 +650,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_is_typename(v)) {
         // XXX: typename might require really complicating uniquing to handle kwfunc
         jl_typename_t *tn = (jl_typename_t*)v;
-        assert(!jl_object_in_image((jl_value_t*)tn->module));
-        assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
+        if (s->incremental) {
+            assert(!jl_object_in_image((jl_value_t*)tn->module));
+            assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
+        }
         // don't recurse into several fields
         jl_queue_for_serialization_(s, (jl_value_t*)tn->cache, 0, 1);
         jl_queue_for_serialization_(s, (jl_value_t*)tn->linearcache, 0, 1);
