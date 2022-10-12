@@ -1710,6 +1710,26 @@ static void _jl_write_value(jl_serializer_state *s, jl_value_t *v)
 }
 
 
+static uintptr_t jl_read_offset(jl_serializer_state *s)
+{
+    uintptr_t base = (uintptr_t)&s->s->buf[0];
+    uintptr_t offset = *(reloc_t*)(base + (uintptr_t)s->s->bpos);
+    s->s->bpos += sizeof(reloc_t);
+    return offset;
+}
+
+static jl_value_t *jl_delayed_reloc(jl_serializer_state *s, uintptr_t offset)
+{
+    if (!offset)
+        return NULL;
+    uintptr_t base = (uintptr_t)&s->s->buf[0];
+    size_t size = s->s->size;
+    int link_index = 0;
+    jl_value_t *ret = (jl_value_t*)get_item_for_reloc(s, base, size, offset, s->link_ids_relocs, &link_index);
+    assert(link_index < jl_array_len(s->link_ids_relocs));
+    return ret;
+}
+
 static jl_value_t *jl_read_value(jl_serializer_state *s)
 {
     uintptr_t base = (uintptr_t)&s->s->buf[0];
@@ -2619,6 +2639,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
     ios_seek(f, LLT_ALIGN(ios_pos(f), 8));
     assert(!ios_eof(f));
     s.s = f;
+    uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_specializations = 0, offset_method_roots_list = 0;
+    uintptr_t offset_ext_targets = 0, offset_edges = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -2641,13 +2663,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
     }
     else {
         assert(restored && init_order && extext_methods && new_specializations && method_roots_list && ext_targets && edges);
-        *restored = (jl_array_t*)jl_read_value(&s);
-        *init_order = (jl_array_t*)jl_read_value(&s);
-        *extext_methods = (jl_array_t*)jl_read_value(&s);
-        *new_specializations = (jl_array_t*)jl_read_value(&s);
-        *method_roots_list = (jl_array_t*)jl_read_value(&s);
-        *ext_targets = (jl_array_t*)jl_read_value(&s);
-        *edges = (jl_array_t*)jl_read_value(&s);
+        offset_restored = jl_read_offset(&s);
+        offset_init_order = jl_read_offset(&s);
+        offset_extext_methods = jl_read_offset(&s);
+        offset_new_specializations = jl_read_offset(&s);
+        offset_method_roots_list = jl_read_offset(&s);
+        offset_ext_targets = jl_read_offset(&s);
+        offset_edges = jl_read_offset(&s);
     }
     size_t nlinks_gctags = read_uint32(f);
     if (nlinks_gctags > 0) {
@@ -2665,6 +2687,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
         ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
     }
     jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
+    if (s.incremental) {
+        *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
+        *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
+        *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
+        *new_specializations = (jl_array_t*)jl_delayed_reloc(&s, offset_new_specializations);
+        *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
+        *ext_targets = (jl_array_t*)jl_delayed_reloc(&s, offset_ext_targets);
+        *edges = (jl_array_t*)jl_delayed_reloc(&s, offset_edges);
+    }
     s.s = NULL;
 
     // step 3: apply relocations
