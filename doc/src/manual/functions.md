@@ -716,21 +716,13 @@ string of those integers in a date format; instead of having the user pass the m
 we can make them optional by giving default values to them as `1`. This behavior can be expressed
 concisely as:
 
-```jldoctest datefunc
-julia> function date(year::Int, month::Int=1, day::Int=1)
-           y = clamp(year,  1:typemax(Int))
-           m = clamp(month, 1:12)
-           d = clamp(day,   1:31)
-           if m == 2
-               is_leap_year = ((y%4 == 0) && (y%100 ≠ 0)) || (y%400 == 0)
-               is_leap_year ? d = clamp(d, 1:29) : d = clamp(d, 1:28)
-           elseif m in [4, 6, 9, 11]
-               d = clamp(d, 1:30)
-           end
-           yy = string(y, pad=4)
-           mm = string(m, pad=2)
-           dd = string(d, pad=2)
-           return "$yy-$mm-$dd"
+```julia-repl
+julia> using Dates
+
+julia> function date(y::Int64, m::Int64=1, d::Int64=1)
+           err = Dates.validargs(Date, y, m, d)
+           err === nothing || throw(err)
+           return Date(Dates.UTD(Dates.totaldays(y, m, d)))
        end
 date (generic function with 3 methods)
 ```
@@ -741,27 +733,27 @@ we have a function named `date`, and there are 3 "versions" (i.e. methods) of it
 With this definition, the function can be called with either one, two or three arguments, and
 `1` is automatically passed when only one or two of the arguments are specified:
 
-```jldoctest datefunc
-julia> date(2023, 2, 32)
-"2023-02-28"
+```julia-repl
+julia> date(2000, 12, 12)
+2000-12-12
 
-julia> date(2023, 2)
-"2023-02-01"
+julia> date(2000, 12)
+2000-12-01
 
-julia> date(2023)
-"2023-01-01"
+julia> date(2000)
+2000-01-01
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
-This can be checked for our `date` function example by calling `methods` function:
+This can be checked for our `date` function example by calling the `methods` function:
 
-```jldoctest datefunc
+```julia-repl
 julia> methods(date)
-# 3 methods for generic function "date" from Main:
-[1] date(year::Int64) @ none:1
-[2] date(year::Int64, month::Int64) @ none:1
-[3] date(year::Int64, month::Int64, day::Int64) @ none:1
+# 3 methods for generic function "date":
+[1] date(y::Int64) in Main at REPL[1]:1
+[2] date(y::Int64, m::Int64) in Main at REPL[1]:1
+[3] date(y::Int64, m::Int64, d::Int64) in Main at REPL[1]:1
 ```
 
 ## Keyword Arguments
