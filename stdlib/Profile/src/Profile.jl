@@ -31,13 +31,18 @@ macro profile(ex)
     end
 end
 
-# triggers printing the report after a SIGINFO/SIGUSR1 profile request
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
 function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
+            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", "false") == "true"
+                println("Saving heap snapshot (`JULIA_PROFILE_PEEK_HEAP_SNAPSHOT=true`)")
+                fname = take_heap_snapshot()
+                println("Heap snapshot saved to `$(fname)`")
+            end
         end
     catch ex
         if !isa(ex, InterruptException)
