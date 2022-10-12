@@ -1866,19 +1866,18 @@ static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key
             if (nwithkey) {
                 jl_array_ptr_1d_push(roots, (jl_value_t*)m);
                 newroots = jl_alloc_vec_any(nwithkey);
-                jl_array_del_end(newroots, nwithkey);
                 jl_array_ptr_1d_push(roots, (jl_value_t*)newroots);
                 rle_iter_state rootiter = rle_iter_init(0);
                 uint64_t *rletable = NULL;
-                size_t nblocks2 = 0, nroots = jl_array_len(m->roots);
+                size_t nblocks2 = 0, nroots = jl_array_len(m->roots), k = 0;
                 if (m->root_blocks) {
                     rletable = (uint64_t*)jl_array_data(m->root_blocks);
                     nblocks2 = jl_array_len(m->root_blocks);
                 }
                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
                     if (rootiter.key == key)
-                        jl_array_ptr_1d_push(newroots, jl_array_ptr_ref(m->roots, rootiter.i));
-                assert(jl_array_len(newroots) == nwithkey);
+                        jl_array_ptr_set(newroots, k++, jl_array_ptr_ref(m->roots, rootiter.i));
+                assert(k == nwithkey);
             }
         }
     }
