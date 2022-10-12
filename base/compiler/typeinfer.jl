@@ -222,7 +222,14 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     opt = caller.src
     if opt isa OptimizationState # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
-            caller.src = ir_to_codeinf!(opt)
+            if caller.must_be_codeinf
+                caller.src = ir_to_codeinf!(opt)
+            elseif is_inlineable(opt.src)
+                caller.src = opt.ir
+            else
+                # Not cached and not inlineable - drop the ir
+                caller.src = nothing
+            end
         end
     end
     return caller.src
@@ -1057,6 +1064,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     end
     lock_mi_inference(interp, mi)
     frame = InferenceState(InferenceResult(mi), #=cache=#:global, interp)
+    frame.result.must_be_codeinf = true
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
