@@ -808,6 +808,9 @@ end
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
+    if !(length(x) == length(D.diag) == length(y))
+        throw(DimensionMismatch("x has length $(length(x)), D has size $(size(D)), and y has $(length(y))"))
+    end
     if isempty(x) && isempty(D) && isempty(y)
         return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
     else

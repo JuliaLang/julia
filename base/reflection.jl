@@ -498,8 +498,8 @@ end
     ismutable(v) -> Bool
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
-for a discussion of immutability. Note that this function works on values, so if you give it
-a type, it will tell you that a value of `DataType` is mutable.
+for a discussion of immutability. Note that this function works on values, so if you
+give it a `DataType`, it will tell you that a value of the type is mutable.
 
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
