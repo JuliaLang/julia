@@ -1,17 +1,17 @@
 @testset "Hooks for Core integration" begin
     @testset "whitespace parsing" begin
-        @test JuliaSyntax.core_parser_hook("", "somefile", 0, :statement) == Core.svec(nothing, 0)
-        @test JuliaSyntax.core_parser_hook("", "somefile", 0, :statement) == Core.svec(nothing, 0)
+        @test JuliaSyntax._core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
+        @test JuliaSyntax._core_parser_hook("", "somefile", 1, 0, :statement) == Core.svec(nothing, 0)
 
-        @test JuliaSyntax.core_parser_hook("  ", "somefile", 2, :statement) == Core.svec(nothing,2)
-        @test JuliaSyntax.core_parser_hook(" #==# ", "somefile", 6, :statement) == Core.svec(nothing,6)
+        @test JuliaSyntax._core_parser_hook("  ", "somefile", 1, 2, :statement) == Core.svec(nothing,2)
+        @test JuliaSyntax._core_parser_hook(" #==# ", "somefile", 1, 6, :statement) == Core.svec(nothing,6)
 
-        @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 0, :statement) == Core.svec(:x,4)
-        @test JuliaSyntax.core_parser_hook(" x \n", "somefile", 0, :atom)      == Core.svec(:x,2)
+        @test JuliaSyntax._core_parser_hook(" x \n", "somefile", 1, 0, :statement) == Core.svec(:x,4)
+        @test JuliaSyntax._core_parser_hook(" x \n", "somefile", 1, 0, :atom)      == Core.svec(:x,2)
     end
 
     @testset "filename is used" begin
-        ex = JuliaSyntax.core_parser_hook("@a", "somefile", 0, :statement)[1]
+        ex = JuliaSyntax._core_parser_hook("@a", "somefile", 1, 0, :statement)[1]
         @test Meta.isexpr(ex, :macrocall)
         @test ex.args[2] == LineNumberNode(1, "somefile")
     end
@@ -95,5 +95,8 @@
             end
         end
         JuliaSyntax.enable_in_core!(false)
+
+        # Should not throw
+        @test JuliaSyntax._core_parser_hook("+=", "somefile", 1, 0, :statement)[1] isa Expr
     end
 end

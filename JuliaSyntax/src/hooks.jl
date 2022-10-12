@@ -49,6 +49,9 @@ function _incomplete_tag(n::SyntaxNode)
             end
         end
     end
+    if isnothing(c.parent)
+        return :other
+    end
     kp = kind(c.parent)
     if kp == K"string"
         return :string
