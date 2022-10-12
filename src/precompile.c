@@ -86,7 +86,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     }
 
     if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm) {
-        assert(s);
         jl_dump_native(native_code,
                         jl_options.outputbc,
                         jl_options.outputunoptbc,
@@ -94,6 +93,11 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                         jl_options.outputasm,
                         (const char*)s->buf, (size_t)s->size);
         jl_postoutput_hook();
+    }
+
+    if (s) {
+        ios_close(s);
+        free(s);
     }
 
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {

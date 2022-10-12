@@ -1850,7 +1850,7 @@ static void jl_collect_methods(htable_t *mset, jl_array_t *new_specializations)
     }
 }
 
-static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key) JL_GC_DISABLED
+static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key)
 {
     size_t i, sz = mset->size;
     int nwithkey;
@@ -1858,7 +1858,7 @@ static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key
     void **table = mset->table;
     jl_array_t *newroots = NULL;
     JL_GC_PUSH1(&newroots);
-    for (i = 0; i < sz; i+=2) {
+    for (i = 0; i < sz; i += 2) {
         if (table[i+1] != HT_NOTFOUND) {
             m = (jl_method_t*)table[i];
             assert(jl_is_method(m));
@@ -1884,7 +1884,7 @@ static void jl_collect_new_roots(jl_array_t *roots, htable_t *mset, uint64_t key
 }
 
 
-static void jl_compile_extern(jl_method_t *m, void *sysimg_handle) JL_GC_DISABLED
+static void jl_compile_extern(jl_method_t *m, void *sysimg_handle)
 {
     // install ccallable entry point in JIT
     jl_svec_t *sv = m->ccallable;
@@ -1895,7 +1895,7 @@ static void jl_compile_extern(jl_method_t *m, void *sysimg_handle) JL_GC_DISABLE
 }
 
 
-static void jl_reinit_ccallable(arraylist_t *ccallable_list, char *base, void *sysimg_handle) JL_GC_DISABLED
+static void jl_reinit_ccallable(arraylist_t *ccallable_list, char *base, void *sysimg_handle)
 {
     for (size_t i = 0; i < ccallable_list->len; i++) {
         uintptr_t item = (uintptr_t)ccallable_list->items[i];
@@ -2137,6 +2137,8 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     //              abstract call: callee is signature
     // edges: [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
 
+    JL_GC_PUSH1(&edges_map);
+
     // Save the inferred code from newly inferred, external methods
     htable_new(&external_mis, 0);  // we need external_mis until after `jl_collect_edges` finishes
     *new_specializations = queue_external_cis(newly_inferred);
@@ -2149,7 +2151,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     htable_free(&methods_with_newspecs);
 
     // Collect method extensions and edges data
-    htable_new(&edges_map, 0);
+    edges_map = jl_alloc_vec_any(0);
     *extext_methods = jl_alloc_vec_any(0);
     size_t i, len = jl_array_len(mod_array);
     for (i = 0; i < len; i++) {
@@ -2168,19 +2170,17 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     *edges = jl_alloc_vec_any(0);
     jl_collect_edges(*edges, *ext_targets);
     htable_free(&external_mis);
-    htable_free(&edges_map);
+    assert(edges_map == NULL); // jl_collect_edges clears this when done
+
+    JL_GC_POP();
 }
 
-// In addtion to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
+// In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_specializations, jl_array_t *method_roots_list,
                                            jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
 {
-    jl_gc_collect(JL_GC_FULL);
-    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
-    JL_TIMING(SYSIMG_DUMP);
-
     htable_new(&field_replace, 10000);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
@@ -2202,12 +2202,12 @@ static void jl_save_system_image_to_stream(ios_t *f,
     arraylist_new(&object_worklist, 0);
     arraylist_new(&serialization_queue, 0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
-    ios_mem(&sysimg,     1000000);
-    ios_mem(&const_data,  100000);
-    ios_mem(&symbols,     100000);
-    ios_mem(&relocs,      100000);
-    ios_mem(&gvar_record, 100000);
-    ios_mem(&fptr_record, 100000);
+    ios_mem(&sysimg, 0);
+    ios_mem(&const_data, 0);
+    ios_mem(&symbols, 0);
+    ios_mem(&relocs, 0);
+    ios_mem(&gvar_record, 0);
+    ios_mem(&fptr_record, 0);
     jl_serializer_state s;
     s.incremental = !(worklist == NULL);
     s.s = &sysimg;
@@ -2463,18 +2463,23 @@ static int64_t jl_incremental_header_stuff(ios_t *f, jl_array_t *worklist, jl_ar
     return srctextpos;
 }
 
+
 JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist)
 {
+    jl_gc_collect(JL_GC_FULL);
+    jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
+    JL_TIMING(SYSIMG_DUMP);
+
+    jl_task_t *ct = jl_current_task;
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
     jl_array_t *mod_array = NULL, *udeps = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     int64_t srctextpos = 0;
-    int en = 0;
     if (worklist) {
         srctextpos = jl_incremental_header_stuff(f, worklist, &mod_array, &udeps);
-        en = jl_gc_enable(0);
+        jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
         write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
     }
@@ -2482,8 +2487,8 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     jl_save_system_image_to_stream(f, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
+        jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
         // Write the source-text for the dependent files
-        jl_gc_enable(en);
         if (udeps) {
             // Go back and update the source-text position to point to the current position
             int64_t posfile = ios_pos(f);

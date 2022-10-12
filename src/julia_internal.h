@@ -614,9 +614,9 @@ void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *ca
 
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root);
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots);
-int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i);
-jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index);
-int nroots_with_key(jl_method_t *m, uint64_t key);
+int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i) JL_NOTSAFEPOINT;
+jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index) JL_NOTSAFEPOINT;
+int nroots_with_key(jl_method_t *m, uint64_t key) JL_NOTSAFEPOINT;
 
 int jl_valid_type_param(jl_value_t *v);
 
