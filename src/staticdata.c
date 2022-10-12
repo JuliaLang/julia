@@ -656,6 +656,10 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_queue_for_serialization_(s, (jl_value_t*)tn->cache, 0, 1);
         jl_queue_for_serialization_(s, (jl_value_t*)tn->linearcache, 0, 1);
     }
+    else if (s->incremental && jl_is_method_instance(v) && needs_recaching(v)) {
+        jl_method_instance_t *mi = (jl_method_instance_t*)v;
+        record_field_change((jl_value_t**)&mi->cache, NULL);
+    }
 
     const jl_datatype_layout_t *layout = t->layout;
     if (layout->npointers == 0) {
@@ -1170,11 +1174,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
                                 if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld))
                                     arraylist_push(&s->uniquing_list, (void*)(uintptr_t)fld_pos);
-                                memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                             }
-                            else {
-                                assert(*(jl_value_t**)&s->s->buf[fld_pos] == NULL);
-                            }
+                            memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                         }
                     }
                 }
@@ -1266,9 +1267,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld, s->link_ids_relocs)); // relocation target
                     if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld))
                         arraylist_push(&s->uniquing_list, (void*)(uintptr_t)fld_pos);
-                    memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
                 }
-                memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
+                memset(&s->s->buf[fld_pos], 0, sizeof(fld)); // relocation offset (none)
             }
 
             // A few objects need additional handling beyond the generic serialization above
