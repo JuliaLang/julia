@@ -290,7 +290,6 @@ static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, j
     if (cache == (jl_array_t*)jl_an_empty_vec_any)
         return (jl_typemap_t*)jl_nothing;
     jl_typemap_t *ml = (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
-    JL_GC_PROMISE_ROOTED(ml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
     return ml;
 }
 
