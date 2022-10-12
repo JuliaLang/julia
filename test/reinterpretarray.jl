@@ -450,8 +450,8 @@ end
         SomeSingleton(x) = new()
     end
 
-    @test_throws ErrorException reinterpret(Int, nothing)
-    @test_throws ErrorException reinterpret(Missing, 3)
+    @test_throws ArgumentError reinterpret(Int, nothing)
+    @test_throws ArgumentError reinterpret(Missing, 3)
     @test_throws ErrorException reinterpret(Missing, NotASingleton())
     @test_throws ErrorException reinterpret(NotASingleton, ())
 
@@ -512,4 +512,26 @@ end
     @test x == x2
     @test setindex!(x, SomeSingleton(:), 3, 5) == x2
     @test_throws MethodError x[2,4] = nothing
+end
+
+# reinterpret of arbitrary bitstypes
+@testset "Reinterpret arbitrary bitstypes" begin
+    struct Bytes15
+        a::Int8
+        b::Int16
+        c::Int32
+        d::Int64
+    end
+
+    @test reinterpret(Float64, ComplexF32(1, 1)) === 0.007812501848093234
+    @test reinterpret(ComplexF32, 0.007812501848093234) === ComplexF32(1, 1)
+    @test reinterpret(Tuple{Float64, Float64}, ComplexF64(1, 1)) === (1.0, 1.0)
+    @test reinterpret(ComplexF64, (1.0, 1.0)) === ComplexF64(1, 1)
+    @test reinterpret(Tuple{Int8, Int16, Int32, Int64}, (Int64(1), Int32(2), Int16(3), Int8(4))) === (Int8(1), Int16(0), Int32(0), 288233674686595584)
+    @test reinterpret(Tuple{Int8, Int16, Tuple{Int32, Int64}}, (Int64(1), Int32(2), Int16(3), Int8(4))) === (Int8(1), Int16(0), (Int32(0), 288233674686595584))
+    @test reinterpret(Tuple{Int64, Int32, Int16, Int8}, (Int8(1), Int16(0), (Int32(0), 288233674686595584))) === (Int64(1), Int32(2), Int16(3), Int8(4))
+    @test reinterpret(Tuple{Int8, Int16, Int32, Int64}, Bytes15(Int8(1), Int16(2), Int32(3), Int64(4))) === (Int8(1), Int16(2), Int32(3), Int64(4))
+    @test reinterpret(Bytes15, (Int8(1), Int16(2), Int32(3), Int64(4))) == Bytes15(Int8(1), Int16(2), Int32(3), Int64(4))
+
+    @test_throws ArgumentError reinterpret(Tuple{Int32, Int64}, (Int16(1), Int64(4)))
 end

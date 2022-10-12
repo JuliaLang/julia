@@ -776,7 +776,7 @@ end
     isprimitivetype(Out) && isprimitivetype(In) && return bitcast(Out, x)
     inpackedsize = packedsize(In)
     outpackedsize = packedsize(Out)
-    inpackedsize == outpackedsize || throw(PaddingError(Out, In))
+    inpackedsize == outpackedsize || throw(ArgumentError("Packed sizes of types $Out and $In do not match; got $outpackedsize and $inpackedsize, respectively."))
     in = Ref{In}(x)
     out = Ref{Out}()
     if struct_subpadding(Out, In)
