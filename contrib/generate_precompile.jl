@@ -453,6 +453,6 @@ let pre_output_time = time_ns()
     # Print report after sysimage has been saved so all time spent can be captured
     Base.postoutput() do
         output_time = time_ns() - pre_output_time
-        print("Output ────── "); Base.time_print(output_time); println()
+        print("Output ────── "); Base.time_print(output_time)
     end
 end

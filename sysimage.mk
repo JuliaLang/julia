@@ -79,7 +79,8 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 	if ! JULIA_BINDIR=$$(call cygpath_w,$(build_bindir)) WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
 			JULIA_NUM_THREADS=1 \
 			$$(call spawn, $3) $2 -C "$$(JULIA_CPU_TARGET)" --output-$$* $$(call cygpath_w,$$@).tmp $$(JULIA_SYSIMG_BUILD_FLAGS) \
-			--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE); then \
+			--startup-file=no --warn-overwrite=yes --sysimage $$(call cygpath_w,$$<) $$(call cygpath_w,$$(JULIAHOME)/contrib/generate_precompile.jl) $(JULIA_PRECOMPILE) \
+			|| ! $$(call spawn, $3) --startup-file=no --sysimage $$(call cygpath_w,$$<)--sysimage $$(call cygpath_w,$$<) -e 'println(", sysimage size: ", Base.format_bytes(filesize(unsafe_string(Base.JLOptions().image_file))))'; then \
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
