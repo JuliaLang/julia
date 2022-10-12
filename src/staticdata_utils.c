@@ -153,57 +153,40 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     return found;
 }
 
-// given the list of MethodInstances that were inferred during the
-// build, select those that are external and have at least one
-// relocatable CodeInstance and are inferred to be called from the worklist
-// or explicitly added by a precompile statement.
-// Also prepares external_mis for method_instance_in_queue queries.
-static jl_array_t *queue_external_mis(jl_array_t *list)
+// given the list of CodeInstances that were inferred during the
+// build, select those that are (1) external, and (2) are inferred to be called
+// from the worklist or explicitly added by a `precompile` statement.
+// Also prepares for method_instance_in_queue queries.
+static jl_array_t *queue_external_cis(jl_array_t *list)
 {
     if (list == NULL)
         return NULL;
-    size_t i, n = 0;
+    size_t i;
     htable_t visited;
     assert(jl_is_array(list));
     size_t n0 = jl_array_len(list);
     htable_new(&visited, n0);
+    jl_array_t *new_specializations = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&new_specializations);
     for (i = 0; i < n0; i++) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(list, i);
-        assert(jl_is_method_instance(mi));
-        if (jl_is_method(mi->def.value)) {
-            jl_method_t *m = mi->def.method;
+        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(list, i);
+        assert(jl_is_code_instance(ci));
+        jl_method_instance_t *mi = ci->def;
+        jl_method_t *m = mi->def.method;
+        if (jl_is_method(m)) {
             if (jl_object_in_image((jl_value_t*)m->module)) {
-                jl_code_instance_t *ci = mi->cache;
-                while (ci) {
-                    if (ci->max_world == ~(size_t)0 && ci->relocatability && ci->inferred)
-                        break;
-                    ci = jl_atomic_load_relaxed(&ci->next);
-                }
-                if (ci && ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
+                if (ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
                     int found = has_backedge_to_worklist(mi, &visited, 1);
                     assert(found == 0 || found == 1);
                     if (found == 1) {
-                        ptrhash_put(&external_mis, mi, ci);
-                        n++;
+                        ptrhash_put(&external_mis, mi, mi);
+                        jl_array_ptr_1d_push(new_specializations, (jl_value_t*)ci);
                     }
                 }
             }
         }
     }
     htable_free(&visited);
-    if (n == 0) {
-        return NULL;
-    }
-    jl_array_t *new_specializations = jl_alloc_vec_any(n);
-    JL_GC_PUSH1(&new_specializations);
-    n = 0;
-    for (size_t i = 0; i < external_mis.size; i += 2) {
-        void *ci = external_mis.table[i+1];
-        if (ci != HT_NOTFOUND) {
-            jl_array_ptr_set(new_specializations, n++, (jl_value_t*)ci);
-        }
-    }
-    assert(n == jl_array_len(new_specializations));
     JL_GC_POP();
     return new_specializations;
 }
@@ -950,7 +933,7 @@ static jl_array_t *jl_verify_graph(jl_array_t *edges, htable_t *visited)
 // Restore backedges to external targets
 // `edges` = [caller1, targets_indexes1, ...], the list of worklist-owned methods calling external methods.
 // `ext_targets` is [invokesig1, callee1, matches1, ...], the global set of non-worklist callees of worklist-owned methods.
-static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_array_t *mi_list)
+static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_array_t *ci_list)
 {
     // determine which CodeInstance objects are still valid in our image
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
@@ -962,15 +945,16 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
     valids = jl_verify_graph(edges, &visited);
     size_t i, l = jl_array_len(edges) / 2;
 
-    // next build a map from external_mis to their CodeInstance for insertion
-    if (mi_list == NULL) {
+    // next build a map from external MethodInstances to their CodeInstance for insertion
+    if (ci_list == NULL) {
         htable_reset(&visited, 0);
     }
     else {
-        size_t i, l = jl_array_len(mi_list);
+        size_t i, l = jl_array_len(ci_list);
         htable_reset(&visited, l);
         for (i = 0; i < l; i++) {
-            jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(mi_list, i);
+            jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(ci_list, i);
+            assert(ptrhash_get(&visited, (void*)ci->def) == HT_NOTFOUND);   // check that we don't have multiple cis for same mi
             ptrhash_put(&visited, (void*)ci->def, (void*)ci);
         }
     }

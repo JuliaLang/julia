@@ -2,7 +2,7 @@
 
 # Tracking of newly-inferred MethodInstances during precompilation
 const track_newly_inferred = RefValue{Bool}(false)
-const newly_inferred = MethodInstance[]
+const newly_inferred = CodeInstance[]
 
 # build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
@@ -400,12 +400,12 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
-        code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        code_cache(interp)[linfo] = ci = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
             if isa(m, Method) && m.module != Core
                 ccall(:jl_typeinf_lock_begin, Cvoid, ())
-                push!(newly_inferred, linfo)
+                push!(newly_inferred, ci)
                 ccall(:jl_typeinf_lock_end, Cvoid, ())
             end
         end
