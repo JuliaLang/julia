@@ -93,6 +93,7 @@ typedef struct {
     std::vector<GlobalValue*> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
     std::vector<void*> jl_value_to_llvm;
+    std::vector<jl_code_instance_t*> jl_external_to_llvm;
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT
@@ -116,6 +117,15 @@ void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
     arraylist_grow(gvs, data->jl_value_to_llvm.size());
     memcpy(gvs->items, data->jl_value_to_llvm.data(), gvs->len * sizeof(void*));
+}
+
+extern "C" JL_DLLEXPORT
+void jl_get_llvm_external_fns_impl(void *native_code, arraylist_t *external_fns)
+{
+    jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    arraylist_grow(external_fns, data->jl_external_to_llvm.size());
+    memcpy(external_fns->items, data->jl_external_to_llvm.data(),
+        external_fns->len * sizeof(jl_code_instance_t*));
 }
 
 extern "C" JL_DLLEXPORT
@@ -251,10 +261,12 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
-// all reachable & inferrrable functions. The `policy` flag switches between the default
-// mode `0`, the extern mode `1`.
+// all reachable & inferrrable functions.
+// The `policy` flag switches between the default mode `0` and the extern mode `1` used by GPUCompiler.
+// `_imaging_mode` controls if raw pointers can be embedded (e.g. the code will be loaded into the same session).
+// `_external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode, int _external_linkage)
 {
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
@@ -286,6 +298,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         compiler_start_time = jl_hrtime();
 
     params.imaging = imaging;
+    params.external_linkage = _external_linkage;
 
     // compile all methods for the current world and type-inference world
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
@@ -343,6 +356,47 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         gvars.push_back(std::string(global.second->getName()));
     }
     CreateNativeMethods += emitted.size();
+
+    size_t offset = gvars.size();
+    data->jl_external_to_llvm.resize(params.external_fns.size());
+
+    for (auto &extern_fn : params.external_fns) {
+        jl_code_instance_t *this_code = std::get<0>(extern_fn.first);
+        bool specsig = std::get<1>(extern_fn.first);
+        assert(specsig && "Error external_fns doesn't handle non-specsig yet");
+        (void)specsig;
+        Function *F = extern_fn.second;
+        Module *M = F->getParent();
+
+        Type *T_funcp = F->getFunctionType()->getPointerTo();
+        // Can't create a GC with type FunctionType. Alias also doesn't work
+        GlobalVariable *GV = new GlobalVariable(*M, T_funcp, false,
+                                                GlobalVariable::ExternalLinkage,
+                                                Constant::getNullValue(T_funcp),
+                                                F->getName());
+
+
+        // Need to insert load instruction... can't RAUW
+        for (Value *Use: F->users()) {
+            if (auto CI = dyn_cast<CallInst>(Use)) {
+                auto Callee = new LoadInst(T_funcp, GV, "", false, Align(1), CI); // TODO correct Align?
+                CI->setCalledOperand(Callee);
+                continue;
+            } else {
+                llvm::outs() << *Use << "\n";
+                assert(false);
+            }
+        }
+
+        assert(F->getNumUses() == 0); // declaration counts as use
+        GV->takeName(F);
+        F->eraseFromParent();
+
+        size_t idx = gvars.size() - offset;
+        assert(idx >= 0);
+        data->jl_external_to_llvm.at(idx) = this_code;
+        gvars.push_back(std::string(GV->getName()));
+    }
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
@@ -586,7 +640,7 @@ void jl_dump_native_impl(void *native_code,
     }
 
     // do the actual work
-    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
+    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name, bool inject_crt) {
         preopt.run(M, empty.MAM);
         if (bc_fname || obj_fname || asm_fname) {
             assert(!verifyModule(M, &errs()));
@@ -594,20 +648,36 @@ void jl_dump_native_impl(void *native_code,
             assert(!verifyModule(M, &errs()));
         }
 
-        // We would like to emit an alias or an weakref alias to redirect these symbols
-        // but LLVM doesn't let us emit a GlobalAlias to a declaration...
-        // So for now we inject a definition of these functions that calls our runtime
-        // functions. We do so after optimization to avoid cloning these functions.
-        injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
-                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-        injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
-                FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-        injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
-                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-        injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
-                FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-        injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
-                FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+        if (inject_crt) {
+            // We would like to emit an alias or an weakref alias to redirect these symbols
+            // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+            // So for now we inject a definition of these functions that calls our runtime
+            // functions. We do so after optimization to avoid cloning these functions.
+            injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+                    FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+            injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+                    FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+            injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+                    FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+            injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+                    FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+            injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
+                    FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+#if defined(_OS_WINDOWS_)
+            // Windows expect that the function `_DllMainStartup` is present in an dll.
+            // Normal compilers use something like Zig's crtdll.c instead we provide a
+            // a stub implementation.
+            auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
+            auto T_int32 = Type::getInt32Ty(Context);
+            auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
+            auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", M);
+            F->setCallingConv(CallingConv::X86_StdCall);
+
+            llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", F));
+            builder.CreateRet(ConstantInt::get(T_int32, 1));
+#endif
+        }
 
         postopt.run(M, empty.MAM);
         emitter.run(M);
@@ -622,7 +692,7 @@ void jl_dump_native_impl(void *native_code,
             emit_result(asm_Archive, asm_Buffer, asm_Name, outputs);
     };
 
-    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s");
+    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s", true);
 
     orc::ThreadSafeModule sysimage(std::make_unique<Module>("sysimage", Context), TSCtx);
     auto sysimageM = sysimage.getModuleUnlocked();
@@ -645,7 +715,7 @@ void jl_dump_native_impl(void *native_code,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"));
     }
-    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s");
+    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s", false);
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)

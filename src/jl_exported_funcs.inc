@@ -536,6 +536,7 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_external_fns) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \
