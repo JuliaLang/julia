@@ -215,7 +215,7 @@ end
 
 @inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
              alpha::Number, beta::Number) =
-    _mul!(A, B, C, MulAddMul(alpha, beta))
+    @stable_muladdmul _mul!(A, B, C, MulAddMul(alpha, beta))
 
 @inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
                           _add::MulAddMul)

@@ -453,7 +453,7 @@ for (Trig, UnitTrig) in Any[(UpperTriangular, UnitUpperTriangular),
                         (UnitTrig, Number),
                         (Number, UnitTrig)]
         @eval @inline mul!(A::$Trig, B::$TB, C::$TC, alpha::Number, beta::Number) =
-            _mul!(A, B, C, MulAddMul(alpha, beta))
+            @stable_muladdmul _mul!(A, B, C, MulAddMul(alpha, beta))
     end
 end
 

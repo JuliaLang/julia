@@ -496,7 +496,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
     else
-        return generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
+        return @stable_muladdmul generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
     end
 end
 @inline function mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
@@ -505,7 +505,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.symv!(A.uplo, alpha, A.data, x, beta, y)
     else
-        return generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
+        return @stable_muladdmul generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
     end
 end
 @inline function mul!(y::StridedVector{T}, A::Hermitian{T,<:StridedMatrix}, x::StridedVector{T},
@@ -514,7 +514,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.hemv!(A.uplo, alpha, A.data, x, beta, y)
     else
-        return generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
+        return @stable_muladdmul generic_matvecmul!(y, 'N', A, x, MulAddMul(α, β))
     end
 end
 ## Matmat
@@ -524,7 +524,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        return @stable_muladdmul generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
 @inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Symmetric{T,<:StridedMatrix},
@@ -533,7 +533,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        return @stable_muladdmul generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
 @inline function mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
@@ -542,7 +542,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.symm!('L', A.uplo, alpha, A.data, B, beta, C)
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        return @stable_muladdmul generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
 @inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
@@ -551,7 +551,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.symm!('R', B.uplo, alpha, B.data, A, beta, C)
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        return @stable_muladdmul generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
 @inline function mul!(C::StridedMatrix{T}, A::Hermitian{T,<:StridedMatrix}, B::StridedMatrix{T},
@@ -560,7 +560,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.hemm!('L', A.uplo, alpha, A.data, B, beta, C)
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        return @stable_muladdmul generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
 @inline function mul!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::Hermitian{T,<:StridedMatrix},
@@ -569,7 +569,7 @@ end
     if alpha isa Union{Bool,T} && beta isa Union{Bool,T}
         return BLAS.hemm!('R', B.uplo, alpha, B.data, A, beta, C)
     else
-        return generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
+        return @stable_muladdmul generic_matmatmul!(C, 'N', 'N', A, B, MulAddMul(alpha, beta))
     end
 end
 
