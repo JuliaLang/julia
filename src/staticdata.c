@@ -1081,8 +1081,8 @@ static void jl_write_values(jl_serializer_state *s)
                 if (fld != NULL) {
                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)(offset + reloc_offset)); // relocation location
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld)); // relocation target
-                    memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
                 }
+                memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
             }
 
             // A few objects need additional handling beyond the generic serialization above
