@@ -864,7 +864,8 @@ function find_all_in_cache_path(pkg::PkgId)
         isdir(path) || continue
         for file in readdir(path, sort = false) # no sort given we sort later
             if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
-                 (pkg.uuid !== nothing && startswith(file, entryfile * "_")))
+                 (pkg.uuid !== nothing && startswith(file, entryfile * "_") &&
+                  endswith(file, ".ji")))
                  continue
             end
             filepath = joinpath(path, file)
@@ -897,8 +898,14 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
         t_comp_before = cumulative_compile_time_ns()
     end
 
-    @debug "Loading cache file $path for $pkg"
-    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
+    opath = string(chopsuffix(path, ".ji"), ".", Base.Libc.dlext)
+    if ispath(opath)
+        @debug "Loading object cache file $opath for $pkg"
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), opath, depmods)
+    else
+        @debug "Loading cache file $path for $pkg"
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
+    end
     if isa(sv, Exception)
         return sv
     end
@@ -1676,9 +1683,11 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
-function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
+                           concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
+    output_o === nothing || rm(output_o, force=true)
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
     load_path = map(abspath, Base.load_path())
@@ -1697,11 +1706,17 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     for (pkg, build_id) in concrete_deps
         push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
+
+    if output_o !== nothing
+        opts = `--output-o $(output_o) --output-ji $(output) --output-incremental=yes`
+    else
+        opts = `--output-ji $(output) --output-incremental=yes`
+    end
+
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
-    io = open(pipeline(addenv(`$(julia_cmd()::Cmd) -O0
-                              --output-ji $output --output-incremental=yes
+    io = open(pipeline(addenv(`$(julia_cmd()::Cmd) -O0 $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
@@ -1756,6 +1771,8 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
+
+
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true)
 
@@ -1779,12 +1796,36 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
+    cache_objects = Linking.use_objcache()
     tmppath, tmpio = mktemp(cachepath)
+
+    if cache_objects
+        tmppath_o, tmpio_o = mktemp(cachepath)
+        tmppath_so, tmpio_so = mktemp(cachepath)
+    else
+        tmppath_o = nothing
+    end
     local p
     try
         close(tmpio)
-        p = create_expr_cache(pkg, path, tmppath, concrete_deps, internal_stderr, internal_stdout)
+        if cache_objects
+            close(tmpio_o)
+            close(tmpio_so)
+        end
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, internal_stderr, internal_stdout)
+
         if success(p)
+            if cache_objects
+                # Run linker over tmppath_o
+                Linking.link_image(tmppath_o, tmppath_so)
+            end
+
+            # Read preferences hash back from .ji file (we can't precompute because
+            # we don't actually know what the list of compile-time preferences are without compiling)
+            prefs_hash = preferences_hash(tmppath)
+            cachefile = compilecache_path(pkg, prefs_hash)
+            ocachefile = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
+
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if iszero(isvalid_cache_header(f))
@@ -1795,11 +1836,6 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             end
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(path) & 0o777 | 0o200)
-
-            # Read preferences hash back from .ji file (we can't precompute because
-            # we don't actually know what the list of compile-time preferences are without compiling)
-            prefs_hash = preferences_hash(tmppath)
-            cachefile = compilecache_path(pkg, prefs_hash)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -1813,10 +1849,17 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
             # this is atomic according to POSIX (not Win32):
             rename(tmppath, cachefile; force=true)
+            if cache_objects
+                rename(tmppath_so, ocachefile; force=true)
+            end
             return cachefile
         end
     finally
         rm(tmppath, force=true)
+        if cache_objects
+            rm(tmppath_o, force=true)
+            rm(tmppath_so, force=true)
+        end
     end
     if p.exitcode == 125
         return PrecompilableError()
@@ -2368,4 +2411,5 @@ end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
-precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), IO, IO))
+precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), IO, IO))
+precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), IO, IO))

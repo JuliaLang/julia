@@ -67,17 +67,16 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             jl_precompile_toplevel_module = NULL;
     }
 
-    if (jl_options.incremental) {
-        if (jl_options.outputbc || jl_options.outputunoptbc)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
-        if (jl_options.outputasm)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .s file is not implemented\n");
-        if (jl_options.outputo) {
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
-        }
-    }
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
 
-    ios_t *s = jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL);
+    bool_t emit_split = jl_options.outputji && emit_native;
+
+    ios_t *s = NULL;
+    ios_t *z = NULL;
+    jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL, emit_split, &s, &z);
+
+    if (!emit_split)
+        z = s;
 
     if (jl_options.outputji) {
         ios_t f;
@@ -93,13 +92,18 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        (const char*)s->buf, (size_t)s->size);
+                        (const char*)z->buf, (size_t)z->size);
         jl_postoutput_hook();
     }
 
     if (s) {
         ios_close(s);
         free(s);
+    }
+
+    if (emit_split) {
+        ios_close(z);
+        free(z);
     }
 
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
@@ -342,7 +346,7 @@ static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
     return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), precompile_enq_all_specializations__, env);
 }
 
-static void *jl_precompile_(jl_array_t *m)
+static void *jl_precompile_(jl_array_t *m, int external_linkage)
 {
     jl_array_t *m2 = NULL;
     jl_method_instance_t *mi = NULL;
@@ -365,7 +369,7 @@ static void *jl_precompile_(jl_array_t *m)
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage);
     JL_GC_POP();
     return native_code;
 }
@@ -378,7 +382,7 @@ static void *jl_precompile(int all)
     if (all)
         jl_compile_all_defs(m);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
-    void *native_code = jl_precompile_(m);
+    void *native_code = jl_precompile_(m, 0);
     JL_GC_POP();
     return native_code;
 }
@@ -397,7 +401,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist)
         assert(jl_is_module(mod));
         foreach_mtable_in_module(mod, precompile_enq_all_specializations_, m);
     }
-    void *native_code = jl_precompile_(m);
+    void *native_code = jl_precompile_(m, 1);
     JL_GC_POP();
     return native_code;
 }

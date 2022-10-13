@@ -1419,6 +1419,7 @@ public:
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     std::map<void*, GlobalVariable*> &global_targets;
+    std::map<std::tuple<jl_code_instance_t*, bool>, Function*> &external_calls;
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -1455,6 +1456,7 @@ public:
 
     bool debug_enabled = false;
     bool use_cache = false;
+    bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
     std::vector<orc::ThreadSafeModule> llvmcall_modules;
@@ -1464,8 +1466,10 @@ public:
         emission_context(params),
         call_targets(),
         global_targets(params.globals),
+        external_calls(params.external_fns),
         world(params.world),
         use_cache(params.cache),
+        external_linkage(params.external_linkage),
         params(params.params) { }
 
     jl_typecache_t &types() {
@@ -4023,9 +4027,18 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     std::string name;
                     StringRef protoname;
                     bool need_to_emit = true;
-                    // TODO: We should check if the code is available externally
-                    //       and then emit a trampoline.
-                    if (ctx.use_cache) {
+                    bool cache_valid = ctx.use_cache;
+                    bool external = false;
+                    if (ctx.external_linkage) {
+                       if (jl_object_in_image((jl_value_t*)codeinst)) {
+                           // Target is present in another pkgimage
+                           jl_printf(JL_STDERR, "\n (emit_invoke:) Want to resolve method!\n");
+                           cache_valid = true;
+                           external = true;
+                       }
+                    }
+
+                    if (cache_valid) {
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
                         auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
@@ -4052,6 +4065,13 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
                     else
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
+                    if (external) {
+                        assert(!need_to_emit);
+                        auto calledF = jl_Module->getFunction(protoname);
+                        assert(calledF);
+                        // TODO: Check if already present?
+                        ctx.external_calls[std::make_tuple(codeinst, specsig)] = calledF;
+                    }
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -5371,7 +5391,17 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     Function *theFunc;
     Value *theFarg;
     auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-    if (params.cache && invoke != NULL) {
+
+    bool cache_valid = params.cache;
+    if (params.external_linkage) {
+        if (jl_object_in_image((jl_value_t*)codeinst)) {
+            // Target is present in another pkgimage
+            jl_printf(JL_STDERR, "\n (emit_jlinvoke) Want to resolve method\n");
+            cache_valid = true;
+        }
+    }
+
+    if (cache_valid && invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
         theFunc = cast<Function>(
             M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(ctx.builder.getContext())).getCallee());
@@ -8265,11 +8295,11 @@ void jl_compile_workqueue(
         StringRef preal_decl = "";
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-        // TODO: available_extern
-        // We need to emit a trampoline that loads the target address in an extern_module from a GV
-        // Right now we will unecessarily emit a function we have already compiled in a native module
-        // again in a calling module.
-        if (params.cache && invoke != NULL) {
+        bool cache_valid = params.cache;
+        if (params.external_linkage) {
+            cache_valid = jl_object_in_image((jl_value_t*)codeinst);
+        }
+        if (cache_valid && invoke != NULL) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (invoke == jl_fptr_args_addr) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);

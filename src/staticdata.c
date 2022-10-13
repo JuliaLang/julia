@@ -364,6 +364,7 @@ typedef struct {
     jl_array_t *link_ids_relocs;
     jl_array_t *link_ids_gctags;
     jl_array_t *link_ids_gvars;
+    jl_array_t *link_ids_external_fnvars;
     jl_ptls_t ptls;
     htable_t callers_with_edges;
     jl_image_t *image;
@@ -1082,6 +1083,24 @@ static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAF
     }
 }
 
+static void record_external_fns(jl_serializer_state *s, arraylist_t *external_fns) JL_NOTSAFEPOINT
+{
+    if (!s->incremental) {
+        assert(external_fns->len == 0);
+        (void) external_fns;
+        return;
+    }
+
+    // We could call jl_queue_for_serialization here, but that should
+    // always be a no-op.
+#ifndef JL_NDEBUG
+    for (size_t i = 0; i < external_fns->len; i++) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
+        assert(jl_object_in_image((jl_value_t*)ci));
+    }
+#endif
+}
+
 jl_value_t *jl_find_ptr = NULL;
 // The main function for serializing all the items queued in `serialization_order`
 // (They are also stored in `serialization_queue` which is order-preserving, unlike the hash table used
@@ -1571,7 +1590,7 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
 }
 
 // Compute target location at deserialization
-static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t base, size_t size, uintptr_t reloc_id, jl_array_t *link_ids, int *link_index)
+static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t base, size_t size, uintptr_t reloc_id, jl_array_t *link_ids, int *link_index) JL_NOTSAFEPOINT
 {
     enum RefTags tag = (enum RefTags)(reloc_id >> RELOC_TAG_OFFSET);
     size_t offset = (reloc_id & (((uintptr_t)1 << RELOC_TAG_OFFSET) - 1));
@@ -1886,9 +1905,10 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
     jl_register_fptrs(image->base, &fvars, linfos, sysimg_fvars_max);
 }
 
-static void write_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAFEPOINT
+static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arraylist_t *external_fns) JL_NOTSAFEPOINT
 {
-    ios_ensureroom(s->gvar_record, globals->len * sizeof(reloc_t));
+    size_t len = globals->len + external_fns->len;
+    ios_ensureroom(s->gvar_record, len * sizeof(reloc_t));
     for (size_t i = 0; i < globals->len; i++) {
         void *g = globals->items[i];
         if (jl_is_binding((uintptr_t)g)) {
@@ -1909,10 +1929,17 @@ static void write_gvars(jl_serializer_state *s, arraylist_t *globals) JL_NOTSAFE
         write_reloc_t(s->gvar_record, reloc);
         record_uniquing(s, (jl_value_t*)g, ((i << 2) | 2)); // mark as gvar && !tag
     }
+    for (size_t i = 0; i < external_fns->len; i++) {
+        jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
+        uintptr_t item = backref_id(s, (void*)ci, s->link_ids_external_fnvars);
+        uintptr_t reloc = get_reloc_for_item(item, 0);
+        write_reloc_t(s->gvar_record, reloc);
+    }
+    return globals->len + 1;
 }
 
 // Pointer relocation for native-code referenced global variables
-static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image)
+static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image, uint32_t external_fns_begin)
 {
     if (image->gvars_base == NULL)
         return;
@@ -1921,17 +1948,24 @@ static void jl_update_all_gvars(jl_serializer_state *s, jl_image_t *image)
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     size_t size = s->s->size;
     reloc_t *gvars = (reloc_t*)&s->gvar_record->buf[0];
-    int link_index = 0;
+    int gvar_link_index = 0;
+    int external_fns_link_index = 0;
     for (i = 0; i < l; i++) {
         uintptr_t offset = gvars[i];
-        uintptr_t v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &link_index);
+        uintptr_t v = 0;
+        if (i < external_fns_begin) {
+            v = get_item_for_reloc(s, base, size, offset, s->link_ids_gvars, &gvar_link_index);
+        } else {
+            v = get_item_for_reloc(s, base, size, offset, s->link_ids_external_fnvars, &external_fns_link_index);
+        }
         uintptr_t *gv = sysimg_gvars(image->gvars_base, image->gvars_offsets, i);
         *gv = v;
     }
-    assert(!s->link_ids_gvars || link_index == jl_array_len(s->link_ids_gvars));
+    assert(!s->link_ids_gvars || gvar_link_index == jl_array_len(s->link_ids_gvars));
+    assert(!s->link_ids_external_fnvars || external_fns_link_index == jl_array_len(s->link_ids_external_fnvars));
 }
 
-static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image)
+static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_t external_fns_begin)
 {
     if (image->gvars_base == NULL)
         return;
@@ -1940,8 +1974,14 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image)
     for (i = 0; i < l; i++) {
         uintptr_t *gv = sysimg_gvars(image->gvars_base, image->gvars_offsets, i);
         uintptr_t v = *gv;
-        if (!jl_is_binding(v))
-            v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
+        if (i < external_fns_begin) {
+            if (!jl_is_binding(v))
+                v = (uintptr_t)jl_as_global_root((jl_value_t*)v);
+        } else {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*) v;
+            assert(codeinst && codeinst->isspecsig);
+            v = (uintptr_t)codeinst->specptr.fptr;
+        }
         *gv = v;
     }
 }
@@ -2293,13 +2333,18 @@ static void jl_save_system_image_to_stream(ios_t *f,
     s.link_ids_relocs = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_uint64_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
+    s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, 0);
     htable_new(&s.callers_with_edges, 0);
     jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
 
     arraylist_t gvars;
+    arraylist_t external_fns;
     arraylist_new(&gvars, 0);
-    if (native_functions)
+    arraylist_new(&external_fns, 0);
+    if (native_functions) {
         jl_get_llvm_gvs(native_functions, &gvars);
+        jl_get_llvm_external_fns(native_functions, &external_fns);
+    }
 
     if (worklist == NULL) {
         // empty!(Core.ARGS)
@@ -2365,6 +2410,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
         jl_serialize_reachable(&s);
         // step 1.2: now that we have marked all bindings (badly), ensure all gvars are part of the sysimage
         record_gvars(&s, &gvars);
+        record_external_fns(&s, &external_fns);
         jl_serialize_reachable(&s);
         // step 1.3: prune (garbage collect) some special weak references from
         // built-in type caches
@@ -2378,10 +2424,11 @@ static void jl_save_system_image_to_stream(ios_t *f,
         }
     }
 
+    uint32_t external_fns_begin = 0;
     { // step 2: build all the sysimg sections
         write_padding(&sysimg, sizeof(uintptr_t));
         jl_write_values(&s);
-        write_gvars(&s, &gvars);
+        external_fns_begin = write_gvars(&s, &gvars, &external_fns);
         jl_write_relocations(&s);
     }
 
@@ -2481,6 +2528,9 @@ static void jl_save_system_image_to_stream(ios_t *f,
         ios_write(f, (char*)jl_array_data(s.link_ids_relocs), jl_array_len(s.link_ids_relocs)*sizeof(uint64_t));
         write_uint32(f, jl_array_len(s.link_ids_gvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_gvars), jl_array_len(s.link_ids_gvars)*sizeof(uint64_t));
+        write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
+        ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars), jl_array_len(s.link_ids_external_fnvars)*sizeof(uint64_t));
+        write_uint32(f, external_fns_begin);
         jl_write_arraylist(s.s, &s.ccallable_list);
     }
     // Write the build_id key
@@ -2498,6 +2548,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     arraylist_free(&s.relocs_list);
     arraylist_free(&s.gctags_list);
     arraylist_free(&gvars);
+    arraylist_free(&external_fns);
     htable_free(&field_replace);
     if (worklist)
         htable_free(&external_objects);
@@ -2534,31 +2585,59 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_mod_list(f, *mod_array);
 }
 
-
-JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist)
+JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z)
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP);
 
+    // iff emit_split
+    // write header and src_text to one file f/s
+    // write systemimg to a second file ff/z
     jl_task_t *ct = jl_current_task;
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
+
+    ios_t *ff = NULL;
+    if (emit_split) {
+        ff = (ios_t*)malloc_s(sizeof(ios_t));
+        ios_mem(ff, 0);
+    } else {
+        ff = f;
+    }
+
     jl_array_t *mod_array = NULL, *udeps = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     int64_t srctextpos = 0;
     int64_t checksumpos = 0;
+    int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
+    int64_t datastartpos_ff = 0;
     if (worklist) {
         jl_write_header_for_incremental(f, worklist, &mod_array, &udeps, &srctextpos, &checksumpos);
+        if (emit_split) {
+            write_header(ff);
+            // last word of the header is the checksumpos
+            checksumpos_ff = ios_pos(ff) - sizeof(uint64_t);
+            write_mod_list(ff, mod_array);
+        }
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+
         write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
         datastartpos = ios_pos(f);
+        if (emit_split) {
+            write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
+            datastartpos_ff = ios_pos(ff);
+        }
+    }
+    if (!emit_split) {
+        assert(datastartpos_ff == 0);
+        assert(checksumpos_ff == 0);
     }
     native_functions = _native_data;
-    jl_save_system_image_to_stream(f, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
         jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
@@ -2569,6 +2648,15 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
         write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
         ios_seek(f, srctextpos);
         write_uint64(f, dataendpos);
+
+        if (emit_split) {
+            // Go back and update the checksum in the header
+            int64_t dataendpos_ff = ios_pos(ff);
+            uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos_ff], dataendpos_ff - datastartpos_ff);
+            ios_seek(ff, checksumpos_ff);
+            write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
+        }
+
         // Write the source-text for the dependent files
         // Go back and update the source-text position to point to the current position
         if (udeps) {
@@ -2615,7 +2703,10 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     }
 
     JL_GC_POP();
-    return f;
+    *s = f;
+    if (emit_split)
+        *z = ff;
+    return;
 }
 
 JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
@@ -2678,7 +2769,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     s.ptls = jl_current_task->ptls;
     arraylist_new(&s.relocs_list, 0);
     arraylist_new(&s.gctags_list, 0);
-    s.link_ids_relocs = s.link_ids_gctags = s.link_ids_gvars = NULL;
+    s.link_ids_relocs = s.link_ids_gctags = s.link_ids_gvars = s.link_ids_external_fnvars = NULL;
     jl_value_t **const*const tags = get_tags();
     htable_t new_dt_objs;
     htable_new(&new_dt_objs, 0);
@@ -2770,6 +2861,12 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         s.link_ids_gvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_gvars);
         ios_read(f, (char*)jl_array_data(s.link_ids_gvars), nlinks_gvars * sizeof(uint64_t));
     }
+    size_t nlinks_external_fnvars = read_uint32(f);
+    if (nlinks_external_fnvars > 0) {
+        s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_uint64_type, nlinks_external_fnvars);
+        ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars), nlinks_external_fnvars * sizeof(uint64_t));
+    }
+    uint32_t external_fns_begin = read_uint32(f);
     jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
     if (s.incremental) {
         assert(restored && init_order && extext_methods && new_specializations && method_roots_list && ext_targets && edges);
@@ -2782,6 +2879,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         *edges = (jl_array_t*)jl_delayed_reloc(&s, offset_edges);
     }
     s.s = NULL;
+
 
     // step 3: apply relocations
     assert(!ios_eof(f));
@@ -2799,7 +2897,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     (void)sizeof_tags;
     jl_read_reloclist(&s, s.link_ids_relocs, 0); // general relocs
     // s.link_ids_gvars will be processed in `jl_update_all_gvars`
-    jl_update_all_gvars(&s, image); // gvars relocs
+    // s.link_ids_external_fns will be processed in `jl_update_all_gvars`
+    jl_update_all_gvars(&s, image, external_fns_begin); // gvars relocs
     if (s.incremental) {
         jl_read_arraylist(s.relocs, &s.uniquing_types);
         jl_read_arraylist(s.relocs, &s.uniquing_objs);
@@ -3108,7 +3207,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_free(&s.fixup_objs);
 
     if (s.incremental)
-        jl_root_new_gvars(&s, image);
+        jl_root_new_gvars(&s, image, external_fns_begin);
     ios_close(&relocs);
     ios_close(&const_data);
     ios_close(&gvar_record);
@@ -3184,16 +3283,17 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
-    { // skip past the mod list
-        size_t len;
-        while ((len = read_int32(f)))
-            ios_skip(f, len + 3 * sizeof(uint64_t));
-    }
-    { // skip past the dependency list
-        size_t deplen = read_uint64(f);
-        ios_skip(f, deplen - sizeof(uint64_t));
-        *dataendpos = read_uint64(f);
-    }
+    // TODO: Differentiate between ji and so in the header?
+    // { // skip past the modlist
+    //     size_t len;
+    //     while ((len = read_int32(f)))
+    //         ios_skip(f, len + 3 * sizeof(uint64_t));
+    // }
+    // { // skip past the dependency list
+    //     size_t deplen = read_uint64(f);
+    //     ios_skip(f, deplen - sizeof(uint64_t));
+    //     *dataendpos = read_uint64(f);
+    // }
 
     // verify that the system state is valid
     return read_verify_mod_list(f, depmods);
