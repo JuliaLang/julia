@@ -2817,8 +2817,14 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;
             assert(s.incremental);
             ci->min_world = world;
-            if (ci->max_world == 1) // sentinel value?
+            if (ci->max_world == 1) { // sentinel value: has edges to external callables
                 ptrhash_put(&new_code_instance_validate, ci, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
+            }
+            else {
+                // It should be valid, but it may not be connected
+                if (!ci->def->cache)
+                    ci->def->cache = ci;
+            }
         }
         else if (jl_is_datatype(obj)) {
             jl_cache_type_((jl_datatype_t*)obj);

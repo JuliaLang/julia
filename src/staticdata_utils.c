@@ -1064,6 +1064,7 @@ static void validate_new_code_instances(void)
     size_t i;
     for (i = 0; i < new_code_instance_validate.size; i += 2) {
         if (new_code_instance_validate.table[i+1] != HT_NOTFOUND) {
+            assert(0 && "unexpected unprocessed CodeInstance found");
             jl_code_instance_t *ci = (jl_code_instance_t*)new_code_instance_validate.table[i];
             JL_GC_PROMISE_ROOTED(ci); // TODO: this needs a root (or restructuring to avoid it)
             assert(ci->min_world >= world && ci->inferred);
