@@ -166,6 +166,10 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
 
+### `JULIA_VERBOSE_LINKING`
+
+If set to true, linker commands will be displayed during precompilation.
+
 ## Pkg.jl
 
 ### `JULIA_CI`

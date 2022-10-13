@@ -746,7 +746,11 @@ for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
 for depot in depots
-    rm(depot, force=true, recursive=true)
+    try
+        rm(depot, force=true, recursive=true)
+    catch err
+        @show err
+    end
 end
 
 append!(empty!(LOAD_PATH), saved_load_path)
