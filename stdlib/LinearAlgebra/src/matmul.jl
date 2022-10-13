@@ -673,7 +673,8 @@ function gemm_wrapper!(C::StridedVecOrMat{T}, tA::AbstractChar, tB::AbstractChar
         stride(C, 2) >= size(C, 1))
         return BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
     end
-    generic_matmatmul!(C, tA, tB, A, B, _add)
+    # inferencebarrier() to deliberately avoid compiling genetic_matmatmul when we don't use it
+    generic_matmatmul!(C, tA, tB, A, B, Base.inferencebarrier(_add))
 end
 
 function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::AbstractChar,
@@ -716,7 +717,7 @@ function gemm_wrapper!(C::StridedVecOrMat{Complex{T}}, tA::AbstractChar, tB::Abs
         BLAS.gemm!(tA, tB, alpha, reinterpret(T, A), B, beta, reinterpret(T, C))
         return C
     end
-    generic_matmatmul!(C, tA, tB, A, B, _add)
+    generic_matmatmul!(C, tA, tB, A, B, Base.inferencebarrier(_add))
 end
 
 # blas.jl defines matmul for floats; other integer and mixed precision
