@@ -1055,7 +1055,7 @@ void jl_rec_backtrace(jl_task_t *t)
     sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
     mcontext_t *mc = &c.uc_mcontext;
     // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
-    mc->mc_rdx = ((long*)mctx)[0];
+    mc->mc_rip = ((long*)mctx)[0];
     mc->mc_rbx = ((long*)mctx)[1];
     mc->mc_rsp = ((long*)mctx)[2];
     mc->mc_rbp = ((long*)mctx)[3];
