@@ -63,19 +63,17 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     if (jl_options.incremental)
         jl_precompile_toplevel_module = NULL;
 
-    if (jl_options.incremental) {
-        if (jl_options.outputbc || jl_options.outputunoptbc)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .bc file is not implemented\n");
-        if (jl_options.outputasm)
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .s file is not implemented\n");
-        if (jl_options.outputo) {
-            jl_printf(JL_STDERR, "WARNING: incremental output to a .o file is not implemented\n");
-        }
-    }
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
+
+    bool_t emit_split = jl_options.outputji && emit_native;
 
     ios_t *s = NULL;
-    if (jl_options.outputji || jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm)
-        s = jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL);
+    ios_t *z = NULL;
+    if (jl_options.outputji || emit_native)
+        jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL, emit_split, &s, &z);
+    
+    if (!emit_split)
+        z = s; 
 
     if (jl_options.outputji) {
         ios_t f;
@@ -91,13 +89,18 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                         jl_options.outputunoptbc,
                         jl_options.outputo,
                         jl_options.outputasm,
-                        (const char*)s->buf, (size_t)s->size);
+                        (const char*)z->buf, (size_t)z->size);
         jl_postoutput_hook();
     }
 
     if (s) {
         ios_close(s);
         free(s);
+    }
+
+    if (emit_split) {
+        ios_close(z);
+        free(z);
     }
 
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {

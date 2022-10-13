@@ -2430,7 +2430,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     jl_gc_enable(en);
 }
 
-static int64_t jl_incremental_header_stuff(ios_t *f, jl_array_t *worklist, jl_array_t **mod_array, jl_array_t **udeps)
+static int64_t jl_incremental_write_header(ios_t *f, jl_array_t *worklist, jl_array_t **mod_array, jl_array_t **udeps)
 {
     *mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     assert(jl_precompile_toplevel_module == NULL);
@@ -2450,28 +2450,46 @@ static int64_t jl_incremental_header_stuff(ios_t *f, jl_array_t *worklist, jl_ar
     return srctextpos;
 }
 
-
-JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *worklist)
+JL_DLLEXPORT jl_create_system_image(void *_native_data, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z)
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP);
 
+    // iff emit_split
+    // write header and src_text to one file f/s
+    // write systemimg to a second file ff/z
     jl_task_t *ct = jl_current_task;
     ios_t *f = (ios_t*)malloc_s(sizeof(ios_t));
     ios_mem(f, 0);
+
+    ios_t *ff = NULL;
+    if (emit_split) {
+        ff = (ios_t*)malloc_s(sizeof(ios_t));
+        ios_mem(ff, 0);
+    } else {
+        ff = f;
+    }
+
     jl_array_t *mod_array = NULL, *udeps = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     int64_t srctextpos = 0;
     if (worklist) {
-        srctextpos = jl_incremental_header_stuff(f, worklist, &mod_array, &udeps);
+        srctextpos = jl_incremental_write_header(f, worklist, &mod_array, &udeps);
+        if (emit_split) {
+            write_header(ff);
+            write_mod_list(ff, mod_array);
+        }
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
+
         write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
+        if (emit_split)
+            write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
     }
     native_functions = _native_data;
-    jl_save_system_image_to_stream(f, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
         jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
@@ -2524,7 +2542,10 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     }
 
     JL_GC_POP();
-    return f;
+    *s = f;
+    if (emit_split)
+        *z = ff;
+    return;
 }
 
 JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
@@ -2924,15 +2945,16 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_array_t *de
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
-    { // skip past the mod list
-        size_t len;
-        while ((len = read_int32(f)))
-            ios_skip(f, len + 3 * sizeof(uint64_t));
-    }
-    { // skip past the dependency list
-        size_t deplen = read_uint64(f);
-        ios_skip(f, deplen);
-    }
+    // mod list and dependency list stored in .ji
+    // { // skip past the mod list
+    //     size_t len;
+    //     while ((len = read_int32(f)))
+    //         ios_skip(f, len + 3 * sizeof(uint64_t));
+    // }
+    // { // skip past the dependency list
+    //     size_t deplen = read_uint64(f);
+    //     ios_skip(f, deplen);
+    // }
 
     // verify that the system state is valid
     jl_value_t *verify_fail = read_verify_mod_list(f, depmods);

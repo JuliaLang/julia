@@ -898,8 +898,14 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
         t_comp_before = cumulative_compile_time_ns()
     end
 
-    @debug "Loading cache file $path for $pkg"
-    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    opath = string(chopsuffix(path, ".ji"), ".", Base.Libc.dlext)
+    if ispath(opath)
+        @debug "Loading object cache file $opath for $pkg"
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), opath, depmods)
+    else
+        @debug "Loading cache file $path for $pkg"
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    end
     if isa(sv, Exception)
         return sv
     end
@@ -1658,9 +1664,11 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
 end
 
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
-function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
+function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::Union{Nothing, String},
+                           concrete_deps::typeof(_concrete_dependencies), internal_stderr::IO = stderr, internal_stdout::IO = stdout)
     @nospecialize internal_stderr internal_stdout
     rm(output, force=true)   # Remove file if it exists
+    rm(output_o, force=true)
     depot_path = map(abspath, DEPOT_PATH)
     dl_load_path = map(abspath, DL_LOAD_PATH)
     load_path = map(abspath, Base.load_path())
@@ -1679,11 +1687,17 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
     for (pkg, build_id) in concrete_deps
         push!(deps_strs, "$(pkg_str(pkg)) => $(repr(build_id))")
     end
+
+    if output_o !== nothing
+        opts = `--output-o $(output_o) --output-ji $(output) --output-incremental=yes`
+    else
+        opts = `--output-ji $(output) --output-incremental=yes`
+    end
+
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
-    io = open(pipeline(addenv(`$(julia_cmd()::Cmd) -O0
-                              --output-ji $output --output-incremental=yes
+    io = open(pipeline(addenv(`$(julia_cmd()::Cmd) -O0 $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
@@ -1738,6 +1752,58 @@ end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
 
+module Linking
+
+const lld_path = Ref{String}()
+if Sys.iswindows()
+    const lld_exe = "lld.exe"
+else
+    const lld_exe = "lld"
+end
+
+function __init__()
+    # Prefer our own bundled lld, but if we don't have one, pick it up off of the PATH
+    # If this is an in-tree build, `lld` will live in `tools`.  Otherwise, it'll be in `libexec`
+    for bundled_lld_path in (joinpath(Sys.BINDIR, Base.LIBEXECDIR, lld_exe),
+                             joinpath(Sys.BINDIR, "..", "tools", lld_exe),
+                             joinpath(Sys.BINDIR, lld_exe))
+        if isfile(bundled_lld_path)
+            lld_path[] = abspath(bundled_lld_path)
+            return
+        end
+    end
+    lld_path[] = something(Sys.which(lld_exe), lld_exe)
+    return
+end
+
+function lld()
+    return Cmd([lld_path[]])
+end
+
+
+function ld()
+    @static if Sys.iswindows()
+        flavor = "link"
+    elseif Sys.isapple()
+        flavor = "darwin"
+    else
+        flavor = "gnu"
+    end
+    `$(lld()) -flavor $flavor`
+end
+
+is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
+
+function link_jilib(path, out, args=``)
+    LIBDIR = joinpath(Sys.BINDIR, "..", "lib")
+    LIBS = is_debug() ? `-ljulia-debug -ljulia-internal-debug` : `-ljulia -ljulia-internal`
+    WHOLE_ARCHIVE = Sys.isapple() ? `-all_load` : `--whole-archive`
+    NO_WHOLE_ARCHIVE = Sys.isapple() ? `` : `--no-whole-archive`
+
+    run(`$(ld()) --shared --output=$out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE -L$(LIBDIR) $LIBS $args`, stdin, stdout, stderr)
+end
+end
+
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true)
 
@@ -1762,22 +1828,31 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
     tmppath, tmpio = mktemp(cachepath)
+    tmppath_o, tmpio_o = mktemp(cachepath)
+    tmppath_so, tmpio_so = mktemp(cachepath)
     local p
     try
         close(tmpio)
-        p = create_expr_cache(pkg, path, tmppath, concrete_deps, internal_stderr, internal_stdout)
+        close(tmpio_o)
+        close(tmpio_so)
+        p = create_expr_cache(pkg, path, tmppath, tmppath_o, concrete_deps, internal_stderr, internal_stdout)
         if success(p)
-            # append checksum to the end of the .ji file:
-            open(tmppath, "a+") do f
-                write(f, _crc32c(seekstart(f)))
-            end
-            # inherit permission from the source file (and make them writable)
-            chmod(tmppath, filemode(path) & 0o777 | 0o200)
+            # Run linker over tmppath_o
+            Linking.link_jilib(tmppath_o, tmppath_so)
 
             # Read preferences hash back from .ji file (we can't precompute because
             # we don't actually know what the list of compile-time preferences are without compiling)
             prefs_hash = preferences_hash(tmppath)
             cachefile = compilecache_path(pkg, prefs_hash)
+            ocachefile = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
+
+            # append checksum to the end of the .ji file:
+            open(tmppath, "a+") do f
+                # TODO write path and checksum of ocachefile
+                write(f, _crc32c(seekstart(f)))
+            end
+            # inherit permission from the source file (and make them writable)
+            chmod(tmppath, filemode(path) & 0o777 | 0o200)
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -1791,10 +1866,13 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
             # this is atomic according to POSIX:
             rename(tmppath, cachefile; force=true)
+            rename(tmppath_so, ocachefile; force=true)
             return cachefile
         end
     finally
         rm(tmppath, force=true)
+        rm(tmppath_o, force=true)
+        rm(tmppath_so, force=true)
     end
     if p.exitcode == 125
         return PrecompilableError()
@@ -2336,4 +2414,5 @@ end
 
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), Nothing))
 precompile(include_package_for_output, (PkgId, String, Vector{String}, Vector{String}, Vector{String}, typeof(_concrete_dependencies), String))
-precompile(create_expr_cache, (PkgId, String, String, typeof(_concrete_dependencies), IO, IO))
+precompile(create_expr_cache, (PkgId, String, String, String, typeof(_concrete_dependencies), IO, IO))
+precompile(create_expr_cache, (PkgId, String, String, Nothing, typeof(_concrete_dependencies), IO, IO))
