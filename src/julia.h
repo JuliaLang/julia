@@ -433,6 +433,7 @@ typedef struct _jl_code_instance_t {
     // compilation state cache
     uint8_t isspecsig; // if specptr is a specialized function signature for specTypes->rettype
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
+    uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
     _Atomic(jl_callptr_t) invoke; // jlcall entry point
     union _jl_generic_specptr_t {
         _Atomic(void*) fptr;
@@ -441,7 +442,6 @@ typedef struct _jl_code_instance_t {
         _Atomic(jl_fptr_sparam_t) fptr3;
         // 4 interpreter
     } specptr; // private data for `jlcall entry point
-    uint8_t relocatability;  // nonzero if all roots are built into sysimg or tagged by module key
 } jl_code_instance_t;
 
 // all values are callable as Functions
