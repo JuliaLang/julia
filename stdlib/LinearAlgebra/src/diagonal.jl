@@ -571,14 +571,14 @@ for Tri in (:UpperTriangular, :LowerTriangular)
         iszero(α) && return _rmul_or_fill!(C, β)
         diag′ = iszero(β) ? nothing : diag(C)
         data = mul!(C.data, D, A.data, α, β)
-        @stable_muladdmul $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
+        $Tri(@stable_muladdmul _setdiag!(data, MulAddMul(α, β), D.diag, diag′))
     end
     @eval @inline mul!(C::$Tri, A::$Tri, D::Diagonal, α::Number, β::Number) = $Tri(mul!(C.data, A.data, D, α, β))
     @eval @inline function mul!(C::$Tri, A::$UTri, D::Diagonal, α::Number, β::Number)
         iszero(α) && return _rmul_or_fill!(C, β)
         diag′ = iszero(β) ? nothing : diag(C)
         data = mul!(C.data, A.data, D, α, β)
-        @stable_muladdmul $Tri(_setdiag!(data, MulAddMul(α, β), D.diag, diag′))
+        $Tri(@stable_muladdmul _setdiag!(data, MulAddMul(α, β), D.diag, diag′))
     end
 end
 
