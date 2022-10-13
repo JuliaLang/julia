@@ -75,18 +75,18 @@ const longDecodedText = "name = \"Genie\"\nuuid = \"c43c736e-a2d1-11e8-161f-af95
     #@test read(ipipe, String) == inputText
 
     # Decode with two padding characters ("==")
-    ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end - 2], "==")))
-    @test read(ipipe, String) == inputText[1:end - 1]
+    ipipe = Base64DecodePipe(IOBuffer(string(encodedMaxLine76[1:end-2], "==")))
+    @test read(ipipe, String) == inputText[1:end-1]
 
     # Test incorrect format
-    ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end - 3]))
+    ipipe = Base64DecodePipe(IOBuffer(encodedMaxLine76[1:end-3]))
     @test_throws ArgumentError read(ipipe, String)
 
     # issue #21314
     @test base64decode(chomp("test")) == base64decode("test")
 
     # issue #32397
-    @test String(base64decode(longEncodedText)) == longDecodedText;
+    @test String(base64decode(longEncodedText)) == longDecodedText
 
     # Optional padding
     @test base64decode("AQ==") == base64decode("AQ")
@@ -116,16 +116,16 @@ struct PNG end
 Base.show(io::IO, ::MIME"image/png", ::PNG) = print(io, "PNG")
 
 @testset "stringmime" begin
-    @test stringmime("text/plain", [1 2;3 4]) == repr("text/plain", [1 2;3 4])
+    @test stringmime("text/plain", [1 2; 3 4]) == repr("text/plain", [1 2; 3 4])
     @test stringmime("text/html", "raw html data") == "raw html data"
     @test stringmime("text/plain", "string") == "\"string\""
-    @test stringmime("image/png", UInt8[2,3,4,7]) == "AgMEBw=="
-    @test stringmime("text/plain", 3.141592653589793, context = :compact => true) == "3.14159"
+    @test stringmime("image/png", UInt8[2, 3, 4, 7]) == "AgMEBw=="
+    @test stringmime("text/plain", 3.141592653589793, context=:compact => true) == "3.14159"
     @test stringmime("image/png", PNG()) == stringmime(MIME("image/png"), PNG()) == "UE5H"
 end
 
-function splace(in::String, p = 0.3)
-    spaces = ["\n"," "]
+function splace(in::String, p=0.3)
+    spaces = ["\n", " "]
     len = length(in)
     len == 0 && return in
     rc::String = ""

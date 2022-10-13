@@ -9,7 +9,7 @@ for (i, c) in enumerate(BASE64_ENCODE)
     BASE64_DECODE[Int(c)+1] = UInt8(i - 1)
 end
 BASE64_DECODE[Int(encodepadding())+1] = BASE64_CODE_PAD
-decode(x::UInt8) = @inbounds return BASE64_DECODE[x + 1]
+decode(x::UInt8) = @inbounds return BASE64_DECODE[x+1]
 
 """
     Base64DecodePipe(istream)
@@ -69,9 +69,9 @@ function read_until_end(pipe::Base64DecodePipe, ptr::Ptr{UInt8}, n::UInt)
     while true
         if b1 < 0x40 && b2 < 0x40 && b3 < 0x40 && b4 < 0x40 && p + 2 < p_end
             # fast path to decode
-            unsafe_store!(p    , b1 << 2 | b2 >> 4)
+            unsafe_store!(p, b1 << 2 | b2 >> 4)
             unsafe_store!(p + 1, b2 << 4 | b3 >> 2)
-            unsafe_store!(p + 2, b3 << 6 | b4     )
+            unsafe_store!(p + 2, b3 << 6 | b4)
             p += 3
         else
             i, p, ended = decode_slow(b1, b2, b3, b4, buffer, i, pipe.io, p, p_end - p, pipe.rest)
@@ -182,7 +182,7 @@ function decode_slow(b1, b2, b3, b4, buffer, i, input, ptr, n, rest)
     end
     k ≥ 1 && output(b1 << 2 | b2 >> 4)
     k ≥ 2 && output(b2 << 4 | b3 >> 2)
-    k ≥ 3 && output(b3 << 6 | b4     )
+    k ≥ 3 && output(b3 << 6 | b4)
 
     return i, p, k == 0
 end

@@ -2,8 +2,8 @@
 
 # Generate encode table.
 const BASE64_ENCODE = [UInt8(x) for x in append!(['A':'Z'; 'a':'z'; '0':'9'], ['+', '/'])]
-encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x & 0x3f) + 1]
-encodepadding()  = UInt8('=')
+encode(x::UInt8) = @inbounds return BASE64_ENCODE[(x&0x3f)+1]
+encodepadding() = UInt8('=')
 
 """
     Base64EncodePipe(ostream)
@@ -69,10 +69,10 @@ function Base.unsafe_write(pipe::Base64EncodePipe, ptr::Ptr{UInt8}, n::UInt)::In
     i = 0
     p_end = ptr + n
     while true
-        buffer[i+1] = encode(b1 >> 2          )
+        buffer[i+1] = encode(b1 >> 2)
         buffer[i+2] = encode(b1 << 4 | b2 >> 4)
         buffer[i+3] = encode(b2 << 2 | b3 >> 6)
-        buffer[i+4] = encode(          b3     )
+        buffer[i+4] = encode(b3)
         i += 4
         if p + 2 < p_end
             b1 = unsafe_load(p, 1)
@@ -113,23 +113,23 @@ function Base.close(pipe::Base64EncodePipe)
         # no leftover and padding
     elseif k == 1
         write(pipe.io,
-              encode(b1 >> 2),
-              encode(b1 << 4),
-              encodepadding(),
-              encodepadding())
+            encode(b1 >> 2),
+            encode(b1 << 4),
+            encodepadding(),
+            encodepadding())
     elseif k == 2
         write(pipe.io,
-              encode(          b1 >> 2),
-              encode(b1 << 4 | b2 >> 4),
-              encode(b2 << 2          ),
-              encodepadding())
+            encode(b1 >> 2),
+            encode(b1 << 4 | b2 >> 4),
+            encode(b2 << 2),
+            encodepadding())
     else
         @assert k == 3
         write(pipe.io,
-              encode(b1 >> 2          ),
-              encode(b1 << 4 | b2 >> 4),
-              encode(b2 << 2 | b3 >> 6),
-              encode(          b3     ))
+            encode(b1 >> 2),
+            encode(b1 << 4 | b2 >> 4),
+            encode(b2 << 2 | b3 >> 6),
+            encode(b3))
     end
     return nothing
 end
