@@ -369,11 +369,11 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
+# dispatch token indicating a kwarg (keyword sorter) call
 function kwcall end
+# deprecated internal functions:
 kwfunc(@nospecialize(f)) = kwcall
 kwftype(@nospecialize(t)) = typeof(kwcall)
-kwcall(kwargs, ::typeof(invoke), f, T, args...) = kwinvoke(kwargs, invoke, f, T, args...)
-# invoke(f, T, args...; kwargs...) = kwinvoke(kwargs, invoke, f, T, args...)
 
 mutable struct Box
     contents::Any
