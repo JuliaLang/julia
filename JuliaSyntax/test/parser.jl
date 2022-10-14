@@ -48,7 +48,7 @@ tests = [
         "a .+= b"     =>  "(.+= a b)"
         "a, b = c, d" =>  "(= (tuple a b) (tuple c d))"
         "x, = xs"     =>  "(= (tuple x) xs)"
-        "[a ~b]"      =>  "(hcat a (call ~ b))"
+        "[a ~b]"      =>  "(hcat a (call-pre ~ b))"
         "a ~ b"       =>  "(call-i a ~ b)"
         "[a ~ b c]"   =>  "(hcat (call-i a ~ b) c)"
     ],
@@ -122,8 +122,8 @@ tests = [
         "a + b .+ c" => "(call-i (call-i a + b) .+ c)"
         # parse_with_chains:
         # The following is two elements of a hcat
-        "[x +y]"     =>  "(hcat x (call + y))"
-        "[x+y +z]"   =>  "(hcat (call-i x + y) (call + z))"
+        "[x +y]"     =>  "(hcat x (call-pre + y))"
+        "[x+y +z]"   =>  "(hcat (call-i x + y) (call-pre + z))"
         # Conversely the following are infix calls
         "[x +₁y]"    =>  "(vect (call-i x +₁ y))"
         "[x+y+z]"    =>  "(vect (call-i x + y z))"
@@ -142,14 +142,14 @@ tests = [
         "2(x)"       => "(call-i 2 * x)"
         "(2)(3)x"    => "(call-i 2 * 3 x)"
         "(x-1)y"     => "(call-i (call-i x - 1) * y)"
-        "x'y"        => "(call-i (' x) * y)"
+        "x'y"        => "(call-i (call-post x ') * y)"
         # errors
         "\"a\"\"b\"" => "(call-i (string \"a\") * (error-t) (string \"b\"))"
         "\"a\"x"     => "(call-i (string \"a\") * (error-t) x)"
         # Not juxtaposition - parse_juxtapose will consume only the first token.
         "x.3"       =>  "x"
         "sqrt(2)2"  =>  "(call sqrt 2)"
-        "x' y"      =>  "(' x)"
+        "x' y"      =>  "(call-post x ')"
         "x 'y"      =>  "x"
         "0xenomorph" => "0x0e"
     ],
@@ -157,13 +157,13 @@ tests = [
         ":T"       => "(quote T)"
         "in::T"    => "(:: in T)"
         "isa::T"   => "(:: isa T)"
-        "-2^x"     => "(call - (call-i 2 ^ x))"
-        "-2[1, 3]" => "(call - (ref 2 1 3))"
+        "-2^x"     => "(call-pre - (call-i 2 ^ x))"
+        "-2[1, 3]" => "(call-pre - (ref 2 1 3))"
         "-2"       => "-2"
         "+2.0"     => "2.0"
-        "-0x1"     => "(call - 0x01)"
-        "- 2"      => "(call - 2)"
-        ".-2"      => "(call .- 2)"
+        "-0x1"     => "(call-pre - 0x01)"
+        "- 2"      => "(call-pre - 2)"
+        ".-2"      => "(call-pre .- 2)"
     ],
     JuliaSyntax.parse_unary_call => [
         # Standalone dotted operators are parsed as (|.| op)
@@ -179,7 +179,7 @@ tests = [
         "*(x)"        =>  "(call * x)"
         # Prefix function calls for operators which are both binary and unary
         "+(a,b)"   =>  "(call + a b)"
-        "+(a=1,)"  =>  "(call + (= a 1))"
+        "+(a=1,)"  =>  "(call + (= a 1))" => Expr(:call, :+, Expr(:kw, :a, 1))
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
         "+(;a)"    =>  "(call + (parameters a))"
@@ -189,19 +189,19 @@ tests = [
         "+(a,b)^2"  =>  "(call-i (call + a b) ^ 2)"
         "+(a,b)(x)^2"  =>  "(call-i (call (call + a b) x) ^ 2)"
         # Unary function calls with brackets as grouping, not an arglist
-        "+(a;b)"  =>  "(call + (block a b))"
-        "+(a=1)"  =>  "(call + (= a 1))"
+        "+(a;b)"  =>  "(call-pre + (block a b))"
+        "+(a=1)"  =>  "(call-pre + (= a 1))"  => Expr(:call, :+, Expr(:(=), :a, 1))
         # Unary operators have lower precedence than ^
-        "+(a)^2"  =>  "(call + (call-i a ^ 2))"
-        "+(a)(x,y)^2"  =>  "(call + (call-i (call a x y) ^ 2))"
+        "+(a)^2"  =>  "(call-pre + (call-i a ^ 2))"
+        "+(a)(x,y)^2"  =>  "(call-pre + (call-i (call a x y) ^ 2))"
         # Normal unary calls (see parse_unary)
-        "+x" => "(call + x)"
-        "√x" => "(call √ x)"
-        "±x" => "(call ± x)"
+        "+x" => "(call-pre + x)"
+        "√x" => "(call-pre √ x)"
+        "±x" => "(call-pre ± x)"
         # Not a unary operator
-        "/x"     => "(call (error /) x)"
-        "+₁ x"   => "(call (error +₁) x)"
-        ".<: x"  => "(call (error .<:) x)"
+        "/x"     => "(call-pre (error /) x)"
+        "+₁ x"   => "(call-pre (error +₁) x)"
+        ".<: x"  => "(call-pre (error .<:) x)"
     ],
     JuliaSyntax.parse_factor => [
         "x^y"      =>  "(call-i x ^ y)"
@@ -218,8 +218,8 @@ tests = [
         "<: \n"   =>  "<:"
         "<: ="    =>  "<:"
         "<:{T}(x::T)"   =>  "(call (curly <: T) (:: x T))"
-        "<:(x::T)"      =>  "(<: (:: x T))"
-        "<: A where B"  =>  "(<: (where A B))"
+        "<:(x::T)"      =>  "(<:-pre (:: x T))"
+        "<: A where B"  =>  "(<:-pre (where A B))"
         # Really for parse_where
         "x where \n {T}"  =>  "(where x T)"
         "x where {T,S}"  =>  "(where x T S)"
@@ -242,6 +242,9 @@ tests = [
         "f(x)"    =>  "(call f x)"
         "\$f(x)"  =>  "(call (\$ f) x)"
         "f(a,b)"  => "(call f a b)"
+        "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))" =>
+            Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
+        "(a=1)()" =>  "(call (= a 1))" => Expr(:call, Expr(:(=), :a, 1))
         "f (a)" => "(call f (error-t) a)"
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
@@ -284,12 +287,16 @@ tests = [
         "a[i]"  =>  "(ref a i)"
         "a [i]"  =>  "(ref a (error-t) i)"
         "a[i,j]"  =>  "(ref a i j)"
+        "(a=1)[]" =>  "(ref (= a 1))" => Expr(:ref, Expr(:(=), :a, 1))
         "T[x   y]"  =>  "(typed_hcat T x y)"
         "T[x ; y]"  =>  "(typed_vcat T x y)"
         "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
         "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (= x xs)))"
         ((v=v"1.8",), "T[a ; b ;; c ; d]") => "(typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))"
         "f.(a,b)"   =>  "(. f (tuple a b))"
+        "f.(a=1; b=2)" => "(. f (tuple (= a 1) (parameters (= b 2))))" =>
+            Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
+        "(a=1).()" =>  "(. (= a 1) (tuple))" => Expr(:., Expr(:(=), :a, 1), Expr(:tuple))
         "f. (x)"    =>  "(. f (error-t) (tuple x))"
         # Other dotted syntax
         "A.:+"      =>  "(. A (quote +))"
@@ -301,8 +308,8 @@ tests = [
         "f.x.y"  =>  "(. (. f (quote x)) (quote y))"
         "x .y"   =>  "(. x (error-t) (quote y))"
         # Adjoint
-        "f'"  => "(' f)"
-        "f'ᵀ" => "(call-i f 'ᵀ)"
+        "f'"  => "(call-post f ')"
+        "f'ᵀ" => "(call-post f 'ᵀ)"
         # Curly calls
         "@S{a,b}" => "(macrocall @S (braces a b))"
         "S{a,b}"  => "(curly S a b)"
@@ -322,6 +329,7 @@ tests = [
         "x\"s\"in"   => """(macrocall @x_str (string-r "s") "in")"""
         "x\"s\"2"    => """(macrocall @x_str (string-r "s") 2)"""
         "x\"s\"10.0" => """(macrocall @x_str (string-r "s") 10.0)"""
+        # 
     ],
     JuliaSyntax.parse_resword => [
         # In normal_context

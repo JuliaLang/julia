@@ -99,39 +99,28 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         args[1] = _to_expr(node_args[1], need_linenodes=false)
         args[2] = _to_expr(node_args[2])
     else
-        eq_to_kw =  headsym == :call && !has_flags(node, INFIX_FLAG)  ||
-                    headsym == :ref                                   ||
-                   (headsym == :parameters && !inside_vect_or_braces) ||
-                   (headsym == :tuple && inside_dot_expr)
+        eq_to_kw_in_call =
+            headsym == :call && is_prefix_call(node)          ||
+            headsym == :ref
+        eq_to_kw_all = headsym == :parameters && !inside_vect_or_braces ||
+                      (headsym == :tuple && inside_dot_expr)
         in_dot = headsym == :.
         in_vb = headsym == :vect || headsym == :braces
-        if insert_linenums
-            if isempty(node_args)
-                push!(args, source_location(LineNumberNode, node.source, node.position))
-            else
-                for i in 1:length(node_args)
-                    n = node_args[i]
-                    args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
-                    args[2*i] = _to_expr(n,
-                                         eq_to_kw=eq_to_kw,
-                                         inside_dot_expr=in_dot,
-                                         inside_vect_or_braces=in_vb)
-                end
-            end
+        if insert_linenums && isempty(node_args)
+            push!(args, source_location(LineNumberNode, node.source, node.position))
         else
             for i in 1:length(node_args)
-                args[i] = _to_expr(node_args[i],
-                                   eq_to_kw=eq_to_kw,
-                                   inside_dot_expr=in_dot,
-                                   inside_vect_or_braces=in_vb)
+                n = node_args[i]
+                if insert_linenums
+                    args[2*i-1] = source_location(LineNumberNode, n.source, n.position)
+                end
+                eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
+                args[insert_linenums ? 2*i : i] =
+                    _to_expr(n, eq_to_kw=eq_to_kw,
+                             inside_dot_expr=in_dot,
+                             inside_vect_or_braces=in_vb)
             end
         end
-    end
-    # Julia's standard `Expr` ASTs have children stored in a canonical
-    # order which is often not always source order. We permute the children
-    # here as necessary to get the canonical order.
-    if is_infix(node.raw)
-        args[2], args[1] = args[1], args[2]
     end
 
     # Special cases for various expression heads
@@ -139,6 +128,17 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     if headsym == :macrocall
         insert!(args, 2, loc)
     elseif headsym in (:call, :ref)
+        # Julia's standard `Expr` ASTs have children stored in a canonical
+        # order which is often not always source order. We permute the children
+        # here as necessary to get the canonical order.
+        if is_infix_op_call(node) || is_postfix_op_call(node)
+            args[2], args[1] = args[1], args[2]
+        end
+        # Lower (call x ') to special ' head
+        if is_postfix_op_call(node) && args[1] == Symbol("'")
+            popfirst!(args)
+            headsym = Symbol("'")
+        end
         # Move parameters block to args[2]
         if length(args) > 1 && Meta.isexpr(args[end], :parameters)
             insert!(args, 2, args[end])
