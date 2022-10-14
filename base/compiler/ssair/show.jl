@@ -918,9 +918,11 @@ function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=defau
             end
         end
 
+        still_to_be_inserted = (last(input_bb.stmts) - compact.idx) + count
+
         result_bb = result_bbs[compact.active_result_bb]
         result_bbs[compact.active_result_bb] = Core.Compiler.BasicBlock(result_bb,
-            Core.Compiler.StmtRange(first(result_bb.stmts), last(result_bb.stmts)+count))
+            Core.Compiler.StmtRange(first(result_bb.stmts), compact.result_idx+still_to_be_inserted))
     end
     compact_cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
 
