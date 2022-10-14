@@ -836,15 +836,10 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
     # where we only need to radix over the last few bits (5, in the example).
     bits = unsigned(8sizeof(u_range) - leading_zeros(u_range))
 
-    # radix sort runs in O(bits * lenm1), insertion sort runs in O(lenm1^2). Radix sort
-    # has a constant factor that is three times higher, so radix runtime is 3bits * lenm1
-    # and insertion runtime is lenm1^2. Empirically, insertion is faster than radix iff
-    # lenm1 < 3bits.
-    # Insertion < Radix
-    #   lenm1^2 < 3 * bits * lenm1
-    #     lenm1 < 3bits
-    if lenm1 < 3bits
-        # at lenm1 = 64*3-1, QuickSort is about 40% faster than InsertionSort.
+    # radix sort runs in O(bits * lenm1), quick sort runs in O(lenm1 * log(lenm1)).
+    # dividing both sides by lenm1 and introducing empirical constant factors yields
+    # the following heuristic for when QuickSort is faster than RadixSort
+    if 22log(lenm1) < bits + 70
         return if lenm1 > 80
             sort!(v, lo, hi, QuickSort, o; check_presorted=false)
         else
