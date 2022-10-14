@@ -1759,6 +1759,8 @@ function type_lift_pass!(ir::IRCode)
                                         if haskey(processed, id)
                                             val = processed[id]
                                         else
+                                            # TODO: Re-check after convergence whether all the values are the same
+                                            all_same = false
                                             push!(worklist, (id, up_id, new_phi::SSAValue, i))
                                             continue
                                         end
@@ -1782,6 +1784,7 @@ function type_lift_pass!(ir::IRCode)
                     if all_same && @isdefined(last_val)
                         # Decay the PhiNode back to the single value
                         ir[new_phi][:inst] = last_val
+                        isa(last_val, Bool) && (processed[item] = last_val)
                     end
                     if which !== SSAValue(0)
                         phi = ir[which][:inst]

@@ -1983,7 +1983,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber)
-        return vtypes[slot_id(e)].typ
+        vtyp = vtypes[slot_id(e)]
+        if vtyp.undef
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow=false))
+        end
+        return vtyp.typ
     elseif isa(e, Argument)
         if !isa(vtypes, Nothing)
             return vtypes[slot_id(e)].typ
