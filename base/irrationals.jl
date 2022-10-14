@@ -174,6 +174,14 @@ and arbitrary-precision definition in terms of `BigFloat`s given by the expressi
 An `AssertionError` is thrown when either `big(def) isa BigFloat` or `Float64(val) == Float64(def)`
 returns `false`.
 
+!!! warning
+    This macro should not be used outside of `Base` Julia.
+
+    The macro creates a new type `Irrational{:sym}` regardless of where it's invoked. This can
+    lead to conflicting definitions if two packages define an irrational number with the same
+    name but different values.
+
+
 # Examples
 ```jldoctest
 julia> Base.@irrational(twoπ, 6.2831853071795864769, 2*big(π))

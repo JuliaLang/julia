@@ -320,7 +320,12 @@ function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_
 end
 
 function complete_expanduser(path::AbstractString, r)
-    expanded = expanduser(path)
+    expanded =
+        try expanduser(path)
+        catch e
+            e isa ArgumentError || rethrow()
+            path
+        end
     return Completion[PathCompletion(expanded)], r, path != expanded
 end
 

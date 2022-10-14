@@ -536,15 +536,6 @@ end
 insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-# For bootstrapping
-function my_sortperm(v)
-    p = Vector{Int}(undef, length(v))
-    for i = 1:length(v)
-        p[i] = i
-    end
-    sort!(p, Sort.DEFAULT_UNSTABLE, Order.Perm(Sort.Forward,v))
-    p
-end
 
 mutable struct IncrementalCompact
     ir::IRCode
@@ -562,9 +553,8 @@ mutable struct IncrementalCompact
     # This supports insertion while compacting
     new_new_nodes::NewNodeStream  # New nodes that were before the compaction point at insertion time
     new_new_used_ssas::Vector{Int}
-    # TODO: Switch these two to a min-heap of some sort
     pending_nodes::NewNodeStream  # New nodes that were after the compaction point at insertion time
-    pending_perm::Vector{Int}
+    pending_perm::Vector{Int} # pending_nodes.info[pending_perm] is in min-heap order by pos
 
     # State
     idx::Int
@@ -577,10 +567,9 @@ mutable struct IncrementalCompact
 
     function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
         # Sort by position with attach after nodes after regular ones
-        perm = my_sortperm(Int[let new_node = code.new_nodes.info[i]
-            (new_node.pos * 2 + Int(new_node.attach_after))
-            end for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
+        info = code.new_nodes.info
+        perm = sort!(collect(eachindex(info)); by=i->(2info[i].pos+info[i].attach_after, i))
+        new_len = length(code.stmts) + length(info)
         result = InstructionStream(new_len)
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
@@ -632,8 +621,9 @@ mutable struct IncrementalCompact
 
     # For inlining
     function IncrementalCompact(parent::IncrementalCompact, code::IRCode, result_offset)
-        perm = my_sortperm(Int[code.new_nodes.info[i].pos for i in 1:length(code.new_nodes)])
-        new_len = length(code.stmts) + length(code.new_nodes)
+        info = code.new_nodes.info
+        perm = sort!(collect(eachindex(info)); by=i->(info[i].pos, i))
+        new_len = length(code.stmts) + length(info)
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         bb_rename = Vector{Int}()
         pending_nodes = NewNodeStream()
@@ -772,9 +762,7 @@ end
 
 function add_pending!(compact::IncrementalCompact, pos::Int, attach_after::Bool)
     node = add_inst!(compact.pending_nodes, pos, attach_after)
-    # TODO: switch this to `l = length(pending_nodes); splice!(pending_perm, searchsorted(pending_perm, l), l)`
-    push!(compact.pending_perm, length(compact.pending_nodes))
-    sort!(compact.pending_perm, DEFAULT_STABLE, Order.By(x->compact.pending_nodes.info[x].pos, Order.Forward))
+    heappush!(compact.pending_perm, length(compact.pending_nodes), By(x -> compact.pending_nodes.info[x].pos))
     return node
 end
 
@@ -1226,6 +1214,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             label = compact.bb_rename_succ[stmt.args[1]::Int]
             @assert label > 0
             stmt.args[1] = label
+        elseif isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                return result_idx
+            end
         end
         result[result_idx][:inst] = stmt
         result_idx += 1
@@ -1481,7 +1476,7 @@ function iterate_compact(compact::IncrementalCompact)
             if !(info.attach_after ? info.pos <= compact.idx - 1 : info.pos <= compact.idx)
                 break
             end
-            popfirst!(compact.pending_perm)
+            heappop!(compact.pending_perm, By(x -> compact.pending_nodes.info[x].pos))
         end
         # Move to next block
         compact.idx += 1
@@ -1508,7 +1503,7 @@ function iterate_compact(compact::IncrementalCompact)
     elseif !isempty(compact.pending_perm) &&
         (info = compact.pending_nodes.info[compact.pending_perm[1]];
          info.attach_after ? info.pos == idx - 1 : info.pos == idx)
-        new_idx = popfirst!(compact.pending_perm)
+        new_idx = heappop!(compact.pending_perm, By(x -> compact.pending_nodes.info[x].pos))
         new_node_entry = compact.pending_nodes.stmts[new_idx]
         new_node_info = compact.pending_nodes.info[new_idx]
         new_idx += length(compact.ir.stmts) + length(compact.ir.new_nodes)

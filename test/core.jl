@@ -7837,3 +7837,32 @@ fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN(args...) = fvarargN(args)
 finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
 @test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10
+
+let # https://github.com/JuliaLang/julia/issues/46918
+    # jl_binding_type shouldn't be unstable
+    code = quote
+        res1 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+
+        stderr
+
+        res2 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+
+        res3 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+
+        print(stdout, res1, " ", res2, " ", res3)
+    end |> x->join(x.args, ';')
+    cmd = `$(Base.julia_cmd()) -e $code` # N.B make sure not to pass this code as `:block`
+    stdout = IOBuffer()
+    stderr = IOBuffer()
+    @test success(pipeline(Cmd(cmd); stdout, stderr))
+    @test isempty(String(take!(stderr))) # make sure no error has happened
+    @test String(take!(stdout)) == "nothing IO IO"
+end

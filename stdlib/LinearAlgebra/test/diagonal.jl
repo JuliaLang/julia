@@ -977,10 +977,14 @@ end
     @test s1 == prod(sign, d)
 end
 
-@testset "Empty (#35424)" begin
+@testset "Empty (#35424) & size checks (#47060)" begin
     @test zeros(0)'*Diagonal(zeros(0))*zeros(0) === 0.0
     @test transpose(zeros(0))*Diagonal(zeros(Complex{Int}, 0))*zeros(0) === 0.0 + 0.0im
     @test dot(zeros(Int32, 0), Diagonal(zeros(Int, 0)), zeros(Int16, 0)) === 0
+    @test_throws DimensionMismatch zeros(2)' * Diagonal(zeros(2)) * zeros(3)
+    @test_throws DimensionMismatch zeros(3)' * Diagonal(zeros(2)) * zeros(2)
+    @test_throws DimensionMismatch dot(zeros(2), Diagonal(zeros(2)), zeros(3))
+    @test_throws DimensionMismatch dot(zeros(3), Diagonal(zeros(2)), zeros(2))
 end
 
 @testset "Diagonal(undef)" begin

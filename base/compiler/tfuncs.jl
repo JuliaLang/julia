@@ -403,11 +403,19 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 function nfields_tfunc(@nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
-    x = unwrap_unionall(widenconst(x))
+    xt = widenconst(x)
+    x = unwrap_unionall(xt)
     isconstType(x) && return Const(nfields(x.parameters[1]))
     if isa(x, DataType) && !isabstracttype(x)
-        if !(x.name === Tuple.name && isvatuple(x)) &&
-           !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
+        if x.name === Tuple.name
+            isvatuple(x) && return Int
+            return Const(length(x.types))
+        elseif x.name === _NAMEDTUPLE_NAME
+            length(x.parameters) == 2 || return Int
+            names = x.parameters[1]
+            isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(rewrap_unionall(x.parameters[2], xt))
+            return Const(length(names))
+        else
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
     end
@@ -846,15 +854,18 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     return false
 end
 
-function getfield_tfunc(s00, name, boundscheck_or_order)
-    @nospecialize
+function getfield_tfunc(@specialize(lattice::AbstractLattice), @nospecialize(s00),
+        @nospecialize(name), @nospecialize(boundscheck_or_order))
     t = isvarargtype(boundscheck_or_order) ? unwrapva(boundscheck_or_order) :
         widenconst(boundscheck_or_order)
     hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
-    return getfield_tfunc(s00, name)
+    return getfield_tfunc(lattice, s00, name)
 end
-function getfield_tfunc(s00, name, order, boundscheck)
-    @nospecialize
+function getfield_tfunc(@nospecialize(s00), name, boundscheck_or_order)
+    return getfield_tfunc(fallback_lattice, s00, name, boundscheck_or_order)
+end
+function getfield_tfunc(@specialize(lattice::AbstractLattice), @nospecialize(s00),
+        @nospecialize(name), @nospecialize(order), @nospecialize(boundscheck))
     hasintersect(widenconst(order), Symbol) || return Bottom
     if isvarargtype(boundscheck)
         t = unwrapva(boundscheck)
@@ -862,9 +873,14 @@ function getfield_tfunc(s00, name, order, boundscheck)
     else
         hasintersect(widenconst(boundscheck), Bool) || return Bottom
     end
-    return getfield_tfunc(s00, name)
+    return getfield_tfunc(lattice, s00, name)
 end
-getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(s00, name, false)
+function getfield_tfunc(@nospecialize(s00), @nospecialize(name), @nospecialize(order), @nospecialize(boundscheck))
+    return getfield_tfunc(fallback_lattice, s00, name, order, boundscheck)
+end
+getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(fallback_lattice, s00, name, false)
+getfield_tfunc(@specialize(lattice::AbstractLattice), @nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(lattice, s00, name, false)
+
 
 function _getfield_fieldindex(@nospecialize(s), name::Const)
     nv = name.val
@@ -894,10 +910,46 @@ function _getfield_tfunc_const(@nospecialize(sv), name::Const, setfield::Bool)
     return nothing
 end
 
-function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool)
-    if isa(s00, Conditional)
+function _getfield_tfunc(@specialize(lattice::InferenceLattice), @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    if isa(s00, LimitedAccuracy)
+        # This will error, but it's better than duplicating the error here
+        s00 = widenconst(s00)
+    end
+    return _getfield_tfunc(widenlattice(lattice), s00, name, setfield)
+end
+
+function _getfield_tfunc(@specialize(lattice::OptimizerLattice), @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    # If undef, that's a Union, but that doesn't affect the rt when tmerged
+    # into the unwrapped result.
+    isa(s00, MaybeUndef) && (s00 = s00.typ)
+    return _getfield_tfunc(widenlattice(lattice), s00, name, setfield)
+end
+
+function _getfield_tfunc(@specialize(lattice::AnyConditionalsLattice), @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    if isa(s00, AnyConditional)
         return Bottom # Bool has no fields
-    elseif isa(s00, Const)
+    end
+    return _getfield_tfunc(widenlattice(lattice), s00, name, setfield)
+end
+
+function _getfield_tfunc(@specialize(lattice::PartialsLattice), @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    if isa(s00, PartialStruct)
+        s = widenconst(s00)
+        sty = unwrap_unionall(s)::DataType
+        if isa(name, Const)
+            nv = _getfield_fieldindex(sty, name)
+            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
+                return unwrapva(s00.fields[nv])
+            end
+        end
+        s00 = s
+    end
+
+    return _getfield_tfunc(widenlattice(lattice), s00, name, setfield)
+end
+
+function _getfield_tfunc(lattice::ConstsLattice, @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    if isa(s00, Const)
         sv = s00.val
         if isa(name, Const)
             nv = name.val
@@ -911,30 +963,24 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
             r = _getfield_tfunc_const(sv, name, setfield)
             r !== nothing && return r
         end
-        s = typeof(sv)
-    elseif isa(s00, PartialStruct)
-        s = widenconst(s00)
-        sty = unwrap_unionall(s)::DataType
-        if isa(name, Const)
-            nv = _getfield_fieldindex(sty, name)
-            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
-                return unwrapva(s00.fields[nv])
-            end
-        end
-    else
-        s = unwrap_unionall(s00)
+        s00 = widenconst(s00)
     end
+    return _getfield_tfunc(widenlattice(lattice), s00, name, setfield)
+end
+
+function _getfield_tfunc(lattice::JLTypeLattice, @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    s = unwrap_unionall(s00)
     if isa(s, Union)
-        return tmerge(_getfield_tfunc(rewrap_unionall(s.a, s00), name, setfield),
-                      _getfield_tfunc(rewrap_unionall(s.b, s00), name, setfield))
+        return tmerge(_getfield_tfunc(lattice, rewrap_unionall(s.a, s00), name, setfield),
+                      _getfield_tfunc(lattice, rewrap_unionall(s.b, s00), name, setfield))
     end
     if isType(s)
         if isconstType(s)
             sv = s00.parameters[1]
-	    if isa(name, Const)
+            if isa(name, Const)
                 r = _getfield_tfunc_const(sv, name, setfield)
                 r !== nothing && return r
-	    end
+            end
             s = typeof(sv)
         else
             sv = s.parameters[1]
@@ -974,7 +1020,7 @@ function _getfield_tfunc(@nospecialize(s00), @nospecialize(name), setfield::Bool
         if !(_ts <: Tuple)
             return Any
         end
-        return _getfield_tfunc(_ts, name, setfield)
+        return _getfield_tfunc(lattice, _ts, name, setfield)
     end
     ftypes = datatype_fieldtypes(s)
     nf = length(ftypes)
@@ -1082,7 +1128,7 @@ end
 function setfield!_tfunc(o, f, v)
     @nospecialize
     mutability_errorcheck(o) || return Bottom
-    ft = _getfield_tfunc(o, f, true)
+    ft = _getfield_tfunc(fallback_lattice, o, f, true)
     ft === Bottom && return Bottom
     hasintersect(widenconst(v), widenconst(ft)) || return Bottom
     return v
@@ -1160,7 +1206,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         # as well as compute the info for the method matches
         op = unwrapva(argtypes[4])
         v = unwrapva(argtypes[5])
-        TF = getfield_tfunc(o, f)
+        TF = getfield_tfunc(typeinf_lattice(interp), o, f)
         callinfo = abstract_call(interp, ArgInfo(nothing, Any[op, TF, v]), StmtInfo(true), sv, #=max_methods=# 1)
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
@@ -1594,6 +1640,12 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     end
     if istuple
         return Type{<:appl}
+    elseif isa(appl, DataType) && appl.name === _NAMEDTUPLE_NAME && length(appl.parameters) == 2 &&
+           (appl.parameters[1] === () || appl.parameters[2] === Tuple{})
+        # if the first/second parameter of `NamedTuple` is known to be empty,
+        # the second/first argument should also be empty tuple type,
+        # so refine it here
+        return Const(NamedTuple{(),Tuple{}})
     end
     ans = Type{appl}
     for i = length(outervars):-1:1
@@ -2103,6 +2155,9 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
     elseif !(tf[1] <= length(argtypes) <= tf[2])
         # wrong # of args
         return Bottom
+    end
+    if f === getfield
+        return getfield_tfunc(typeinf_lattice(interp), argtypes...)
     end
     return tf[3](argtypes...)
 end

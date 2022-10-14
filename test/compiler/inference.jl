@@ -1526,6 +1526,11 @@ end
 @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
 @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 @test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
+@test nfields_tfunc(@NamedTuple{a::Int,b::Integer}) === Const(2)
+@test nfields_tfunc(NamedTuple{(:a,:b),T} where T<:Tuple{Int,Integer}) === Const(2)
+@test nfields_tfunc(NamedTuple{(:a,:b)}) === Const(2)
+@test nfields_tfunc(NamedTuple{names,Tuple{Any,Any}} where names) === Const(2)
+@test nfields_tfunc(Union{NamedTuple{(:a,:b)},NamedTuple{(:c,:d)}}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
@@ -2335,6 +2340,13 @@ end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
+
+# `apply_type_tfunc` should always return accurate result for empty NamedTuple case
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+@test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple{}) === Const(typeof((;)))
+@test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple) === Const(typeof((;)))
+@test apply_type_tfunc(Const(NamedTuple), Tuple{Vararg{Symbol}}, Type{Tuple{}}) === Const(typeof((;)))
 
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}

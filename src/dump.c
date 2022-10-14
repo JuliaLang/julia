@@ -172,7 +172,7 @@ static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
 static htable_t queued_method_roots;
 
 // inverse of backedges graph (caller=>callees hash)
-htable_t edges_map;
+jl_array_t *edges_map JL_GLOBALLY_ROOTED; // rooted for the duration of our uses of this
 
 // list of requested ccallable signatures
 static arraylist_t ccallable_list;
@@ -1207,11 +1207,15 @@ static void jl_collect_missing_backedges(jl_methtable_t *mt)
         for (i = 1; i < l; i += 2) {
             jl_method_instance_t *caller = (jl_method_instance_t*)jl_array_ptr_ref(backedges, i);
             jl_value_t *missing_callee = jl_array_ptr_ref(backedges, i - 1);  // signature of abstract callee
-            jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, (void*)caller);
-            if (*edges == HT_NOTFOUND)
-                *edges = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(*edges, NULL);
-            jl_array_ptr_1d_push(*edges, missing_callee);
+            jl_array_t *edges = (jl_array_t*)jl_eqtable_get(edges_map, (jl_value_t*)caller, NULL);
+            if (edges == NULL) {
+                edges = jl_alloc_vec_any(0);
+                JL_GC_PUSH1(&edges);
+                edges_map = jl_eqtable_put(edges_map, (jl_value_t*)caller, (jl_value_t*)edges, NULL);
+                JL_GC_POP();
+            }
+            jl_array_ptr_1d_push(edges, NULL);
+            jl_array_ptr_1d_push(edges, missing_callee);
         }
     }
 }
@@ -1227,11 +1231,15 @@ static void collect_backedges(jl_method_instance_t *callee, int internal) JL_GC_
             jl_value_t *invokeTypes;
             jl_method_instance_t *caller;
             i = get_next_edge(backedges, i, &invokeTypes, &caller);
-            jl_array_t **edges = (jl_array_t**)ptrhash_bp(&edges_map, caller);
-            if (*edges == HT_NOTFOUND)
-                *edges = jl_alloc_vec_any(0);
-            jl_array_ptr_1d_push(*edges, invokeTypes);
-            jl_array_ptr_1d_push(*edges, (jl_value_t*)callee);
+            jl_array_t *edges = (jl_array_t*)jl_eqtable_get(edges_map, (jl_value_t*)caller, NULL);
+            if (edges == NULL) {
+                edges = jl_alloc_vec_any(0);
+                JL_GC_PUSH1(&edges);
+                edges_map = jl_eqtable_put(edges_map, (jl_value_t*)caller, (jl_value_t*)edges, NULL);
+                JL_GC_POP();
+            }
+            jl_array_ptr_1d_push(edges, invokeTypes);
+            jl_array_ptr_1d_push(edges, (jl_value_t*)callee);
         }
     }
 }
@@ -1316,9 +1324,8 @@ static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m) JL
 
 static void jl_record_edges(jl_method_instance_t *caller, arraylist_t *wq, jl_array_t *edges) JL_GC_DISABLED
 {
-    jl_array_t *callees = (jl_array_t*)ptrhash_get(&edges_map, (void*)caller);
-    if (callees != HT_NOTFOUND) {
-        ptrhash_remove(&edges_map, (void*)caller);
+    jl_array_t *callees = (jl_array_t*)jl_eqtable_pop(edges_map, (jl_value_t*)caller, NULL, NULL);
+    if (callees != NULL) {
         jl_array_ptr_1d_push(edges, (jl_value_t*)caller);
         jl_array_ptr_1d_push(edges, (jl_value_t*)callees);
         size_t i, l = jl_array_len(callees);
@@ -1340,14 +1347,14 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     arraylist_t wq;
     arraylist_new(&wq, 0);
-    void **table = edges_map.table;    // edges is caller => callees
-    size_t table_size = edges_map.size;
+    void **table = (void**)jl_array_data(edges_map);    // edges is caller => callees
+    size_t table_size = jl_array_len(edges_map);
     for (size_t i = 0; i < table_size; i += 2) {
-        assert(table == edges_map.table && table_size == edges_map.size &&
+        assert(table == jl_array_data(edges_map) && table_size == jl_array_len(edges_map) &&
                "edges_map changed during iteration");
         jl_method_instance_t *caller = (jl_method_instance_t*)table[i];
         jl_array_t *callees = (jl_array_t*)table[i + 1];
-        if (callees == HT_NOTFOUND)
+        if (callees == NULL)
             continue;
         assert(jl_is_method_instance(caller) && jl_is_method(caller->def.method));
         if (module_in_worklist(caller->def.method->module) ||
@@ -1360,7 +1367,9 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
         jl_record_edges(caller, &wq, edges);
     }
     arraylist_free(&wq);
-    htable_reset(&edges_map, 0);
+    edges_map = NULL;
+    htable_t edges_map2;
+    htable_new(&edges_map2, 0);
     htable_t edges_ids;
     size_t l = jl_array_len(edges);
     htable_new(&edges_ids, l);
@@ -1371,10 +1380,13 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
     }
     // process target list to turn it into a memoized validity table
     // and compute the old methods list, ready for serialization
+    jl_value_t *matches = NULL;
+    jl_array_t *callee_ids = NULL;
+    JL_GC_PUSH2(&matches, &callee_ids);
     for (size_t i = 0; i < l; i += 2) {
         jl_array_t *callees = (jl_array_t*)jl_array_ptr_ref(edges, i + 1);
         size_t l = jl_array_len(callees);
-        jl_array_t *callee_ids = jl_alloc_array_1d(jl_array_int32_type, l + 1);
+        callee_ids = jl_alloc_array_1d(jl_array_int32_type, l + 1);
         int32_t *idxs = (int32_t*)jl_array_data(callee_ids);
         idxs[0] = 0;
         size_t nt = 0;
@@ -1393,9 +1405,8 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
             // (invokeTypes, c) => invoke
             // (nullptr, invokeTypes) => missing call
             // (invokeTypes, nullptr) => missing invoke (unused--inferred as Any)
-            void *target = ptrhash_get(&edges_map, invokeTypes ? (void*)invokeTypes : (void*)callee);
+            void *target = ptrhash_get(&edges_map2, invokeTypes ? (void*)invokeTypes : (void*)callee);
             if (target == HT_NOTFOUND) {
-                jl_value_t *matches;
                 size_t min_valid = 0;
                 size_t max_valid = ~(size_t)0;
                 if (invokeTypes) {
@@ -1436,7 +1447,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
                 jl_array_ptr_1d_push(ext_targets, callee);
                 jl_array_ptr_1d_push(ext_targets, matches);
                 target = (void*)((char*)HT_NOTFOUND + jl_array_len(ext_targets) / 3);
-                ptrhash_put(&edges_map, (void*)callee, target);
+                ptrhash_put(&edges_map2, (void*)callee, target);
             }
             idxs[++nt] = (char*)target - (char*)HT_NOTFOUND - 1;
         }
@@ -1457,7 +1468,8 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
         }
         jl_array_del_end(callee_ids, l - nt);
     }
-    htable_reset(&edges_map, 0);
+    JL_GC_POP();
+    htable_free(&edges_map2);
 }
 
 // serialize information about all loaded modules
@@ -2935,13 +2947,18 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
 {
     JL_TIMING(SAVE_MODULE);
+    jl_task_t *ct = jl_current_task;
     ios_t f;
-    jl_array_t *mod_array = NULL, *udeps = NULL;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
         jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
         return 1;
     }
-    JL_GC_PUSH2(&mod_array, &udeps);
+
+    jl_array_t *mod_array = NULL, *udeps = NULL;
+    jl_array_t *extext_methods = NULL, *mi_list = NULL;
+    jl_array_t *ext_targets = NULL, *edges = NULL;
+    JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &mi_list, &ext_targets, &edges, &edges_map);
+
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     assert(jl_precompile_toplevel_module == NULL);
     jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
@@ -2960,7 +2977,6 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     write_mod_list(&f, mod_array);
 
     arraylist_new(&reinit_list, 0);
-    htable_new(&edges_map, 0);
     htable_new(&backref_table, 5000);
     htable_new(&external_mis, newly_inferred ? jl_array_len(newly_inferred) : 0);
     ptrhash_put(&backref_table, jl_main_module, (char*)HT_NOTFOUND + 1);
@@ -2973,11 +2989,13 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
                                                     jl_symbol("BITS_PER_LIMB"))) / 8;
     }
 
-    // Save the inferred code from newly inferred, external methods
-    jl_array_t *mi_list = queue_external_mis(newly_inferred);
+    jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
 
-    int en = jl_gc_enable(0); // edges map is not gc-safe
-    jl_array_t *extext_methods = jl_alloc_vec_any(0);  // [method1, simplesig1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
+    // Save the inferred code from newly inferred, external methods
+    mi_list = queue_external_mis(newly_inferred);
+
+    edges_map = jl_alloc_vec_any(0);
+    extext_methods = jl_alloc_vec_any(0);  // [method1, simplesig1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
     size_t i, len = jl_array_len(mod_array);
     for (i = 0; i < len; i++) {
         jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
@@ -2991,11 +3009,11 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     jl_collect_missing_backedges(jl_nonfunction_mt);
     // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in edges_map.
     // Process this to extract `edges` and `ext_targets`.
-    jl_array_t *ext_targets = jl_alloc_vec_any(0);     // [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
+    ext_targets = jl_alloc_vec_any(0);     // [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
                                                        // ordinary dispatch: invokesig=NULL, callee is MethodInstance
                                                        // `invoke` dispatch: invokesig is signature, callee is MethodInstance
                                                        // abstract call: callee is signature
-    jl_array_t *edges = jl_alloc_vec_any(0);           // [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
+    edges = jl_alloc_vec_any(0);           // [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
     jl_collect_edges(edges, ext_targets);
 
     jl_serializer_state s = {
@@ -3013,11 +3031,11 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
     jl_finalize_serializer(&s);
     serializer_worklist = NULL;
 
-    jl_gc_enable(en);
-    htable_free(&edges_map);
     htable_free(&backref_table);
     htable_free(&external_mis);
     arraylist_free(&reinit_list);
+
+    jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
 
     // Write the source-text for the dependent files
     if (udeps) {
