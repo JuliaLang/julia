@@ -945,7 +945,6 @@ function lex_backslash(l::Lexer)
     return emit(l, K"\\")
 end
 
-# TODO .op
 function lex_dot(l::Lexer)
     if accept(l, '.')
         if accept(l, '.')

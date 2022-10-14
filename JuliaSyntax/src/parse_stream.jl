@@ -5,18 +5,25 @@
 # TODO: Use `primitive type SyntaxFlags 16 end` rather than an alias?
 const RawFlags = UInt16
 const EMPTY_FLAGS = RawFlags(0)
+# Applied to tokens which are syntax trivia after parsing
 const TRIVIA_FLAG = RawFlags(1<<0)
-# Some of the following flags are head-specific and could probably be allowed
-# to cover the same bits...
-const INFIX_FLAG  = RawFlags(1<<1)
-# Record whether syntactic operators were dotted
-const DOTOP_FLAG = RawFlags(1<<2)
-# Set when kind == K"String" was triple-delimited as with """ or ```
-const TRIPLE_STRING_FLAG = RawFlags(1<<3)
-# Set when a string or identifier needs "raw string" unescaping
-const RAW_STRING_FLAG = RawFlags(1<<4)
+
+# Record whether operators are dotted
+const DOTOP_FLAG = RawFlags(1<<1)
 # Record whether operator has a suffix
-const SUFFIXED_FLAG        = RawFlags(1<<6)
+const SUFFIXED_FLAG        = RawFlags(1<<2)
+
+# Distinguish various syntaxes which are mapped to K"call"
+const PREFIX_CALL_FLAG = RawFlags(0<<3)
+const INFIX_FLAG       = RawFlags(1<<3)
+const PREFIX_OP_FLAG   = RawFlags(2<<3)
+const POSTFIX_OP_FLAG  = RawFlags(3<<3)
+
+# The next two bits could overlap with the previous two if necessary
+# Set when kind == K"String" was triple-delimited as with """ or ```
+const TRIPLE_STRING_FLAG = RawFlags(1<<5)
+# Set when a string or identifier needs "raw string" unescaping
+const RAW_STRING_FLAG = RawFlags(1<<6)
 
 # Token-only flag
 # Record whether a token had preceding whitespace
@@ -32,6 +39,10 @@ function set_numeric_flags(n::Integer)
         error("Numeric flags unable to hold large integer $n")
     end
     f
+end
+
+function call_type_flags(f::RawFlags)
+    f & 0b11000
 end
 
 function numeric_flags(f::RawFlags)
@@ -70,7 +81,9 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     if include_flag_suff && suffix_flags != EMPTY_FLAGS
         str = str*"-"
         is_trivia(head)  && (str = str*"t")
-        is_infix(head)   && (str = str*"i")
+        is_infix_op_call(head)          && (str = str*"i")
+        is_prefix_op_call(head)  && (str = str*"pre")
+        is_postfix_op_call(head) && (str = str*"post")
         has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
         has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
         is_suffixed(head) && (str = str*"S")
@@ -90,8 +103,13 @@ flags(x) = flags(head(x))
 
 # Predicates based on flags()
 has_flags(x, test_flags) = has_flags(flags(x), test_flags)
+call_type_flags(x) = call_type_flags(flags(x))
+
 is_trivia(x) = has_flags(x, TRIVIA_FLAG)
-is_infix(x)  = has_flags(x, INFIX_FLAG)
+is_prefix_call(x)     = call_type_flags(x) == PREFIX_CALL_FLAG
+is_infix_op_call(x)   = call_type_flags(x) == INFIX_FLAG
+is_prefix_op_call(x)  = call_type_flags(x) == PREFIX_OP_FLAG
+is_postfix_op_call(x) = call_type_flags(x) == POSTFIX_OP_FLAG
 is_dotted(x) = has_flags(x, DOTOP_FLAG)
 is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
 is_decorated(x) = is_dotted(x) || is_suffixed(x)
