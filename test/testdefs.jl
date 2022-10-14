@@ -57,7 +57,11 @@ function runtests(name, path, isolate=true; seed=nothing)
                     testset_name = name,
                     testset_path = path,
                 )
-                error(msg)
+                throw_error_str = get(ENV, "JULIA_TEST_CHECK_MUTATED_ENV", "true")
+                throw_error_b = parse(Bool, throw_error_str)
+                if throw_error_b
+                    error(msg)
+                end
             end
         end
         rss = Sys.maxrss()
