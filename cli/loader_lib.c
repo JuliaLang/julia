@@ -173,7 +173,7 @@ static void write_wrapper(int fd, char *str, size_t len)
         ssize_t bytes_written = write(fd, str + written_sofar, len);
         if (bytes_written == -1 && errno == EINTR) continue;
         if (bytes_written == -1 && errno != EINTR) {
-            perror("Error in write wrapper:\nwrite");
+            perror("(julia) child libstdcxxprobe write");
             _exit(1);
         }
         len -= bytes_written;
@@ -188,9 +188,7 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
     size_t len = JL_PATH_MAX;
     char *buf = (char *)malloc(len + 1);
     if (!buf) {
-        char err_str[] = "Error in read wrapper:\nmalloc() returned NULL.\n";
-        size_t err_strlen = strlen(err_str);
-        write_wrapper(STDERR_FILENO, err_str, err_strlen);
+        perror("(julia) malloc");
         exit(1);
     }
 
@@ -201,16 +199,14 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
         have_read += n;
         if (n == 0) break;
         if (n == -1 && errno != EINTR) {
-            perror("Error in read wrapper:\nread");
+            perror("(julia) libstdcxxprobe read");
             exit(1);
         }
         if (n == -1 && errno == EINTR) continue;
         if (have_read == len) {
             buf = (char *)realloc(buf, 1 + (len *= 2));
             if (!buf) {
-                char err_str[] = "Error in read wrapper:\nrealloc() returned NULL.\n";
-                size_t err_strlen = strlen(err_str);
-                write_wrapper(STDERR_FILENO, err_str, err_strlen);
+                perror("(julia) realloc");
                 exit(1);
             }
         }
@@ -230,7 +226,7 @@ static char *libstdcxxprobe(void)
     int fork_pipe[2];
     int ret = pipe(fork_pipe);
     if (ret == -1) {
-        perror("Error during libstdcxxprobe:\npipe");
+        perror("(julia) Error during libstdcxxprobe: pipe");
         exit(1);
     }
     pid_t pid = fork();
