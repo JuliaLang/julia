@@ -260,9 +260,11 @@ static char *libstdcxxprobe(void)
         struct link_map *lm;
         ret = dlinfo(handle, RTLD_DI_LINKMAP, &lm);
         if (ret == -1) {
-            char errbuf[2048];
-            int err_len = snprintf(errbuf, 2048, "Error during libstdcxxprobe in child process:\ndlinfo() - %s\n", dlerror());
-            write_wrapper(STDOUT_FILENO, errbuf, (size_t)err_len);
+            char *errbuf = dlerror();
+            const char *errdesc = "Error during libstdcxxprobe in child process:\ndlinfo: ";
+            write_wrapper(STDERR_FILENO, errdesc, strlen(errdesc));
+            write_wrapper(STDERR_FILENO, errbuf, strlen(errbuf));
+            write_wrapper(STDERR_FILENO, "\n", 1);
             _exit(1);
         }
         char *libpath = lm->l_name;
