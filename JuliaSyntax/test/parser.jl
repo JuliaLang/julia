@@ -1,13 +1,17 @@
-function test_parse(production, code; v=v"1.6")
+function test_parse(production, code; v=v"1.6", expr=false)
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
     t = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
-    if kind(s) == K"None"
-        join([sprint(show, MIME("text/x.sexpression"), c) for c in children(s)], ' ')
+    if expr
+        JuliaSyntax.remove_linenums!(Expr(s))
     else
-        sprint(show, MIME("text/x.sexpression"), s)
+        if kind(s) == K"None"
+            join([sprint(show, MIME("text/x.sexpression"), c) for c in children(s)], ' ')
+        else
+            sprint(show, MIME("text/x.sexpression"), s)
+        end
     end
 end
 
@@ -482,7 +486,8 @@ tests = [
         ((v=v"1.8",), "try else end") => "(try (block) false false (error (block)) false)"
         ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) false (block) (error (block)) false)"
         # finally before catch :-(
-        "try x finally y catch e z end"  =>  "(try-f (block x) false false false (block y) e (block z))"
+        "try x finally y catch e z end"  =>  "(try_finally_catch (block x) false false false (block y) e (block z))" =>
+            Expr(:try, Expr(:block, :x), :e, Expr(:block, :z), Expr(:block, :y))
     ],
     JuliaSyntax.parse_imports => [
         "import A as B: x"  => "(import (: (error (as (. A) B)) (. x)))"
@@ -816,7 +821,12 @@ broken_tests = [
             else
                 opts = NamedTuple()
             end
-            @test test_parse(production, input; opts...) == output
+            if output isa Pair
+                @test test_parse(production, input; opts...) == output[1]
+                @test test_parse(production, input; opts..., expr=true) == output[2]
+            else
+                @test test_parse(production, input; opts...) == output
+            end
         end
     end
     @testset "Broken $production" for (production, test_specs) in broken_tests

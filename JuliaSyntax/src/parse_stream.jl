@@ -15,8 +15,6 @@ const DOTOP_FLAG = RawFlags(1<<2)
 const TRIPLE_STRING_FLAG = RawFlags(1<<3)
 # Set when a string or identifier needs "raw string" unescaping
 const RAW_STRING_FLAG = RawFlags(1<<4)
-# try-finally-catch
-const TRY_CATCH_AFTER_FINALLY_FLAG = RawFlags(1<<5)
 # Record whether operator has a suffix
 const SUFFIXED_FLAG        = RawFlags(1<<6)
 
@@ -75,7 +73,6 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
         is_infix(head)   && (str = str*"i")
         has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
         has_flags(head, RAW_STRING_FLAG) && (str = str*"r")
-        has_flags(head, TRY_CATCH_AFTER_FINALLY_FLAG) && (str = str*"f")
         is_suffixed(head) && (str = str*"S")
         n = numeric_flags(head)
         n != 0 && (str = str*string(n))
