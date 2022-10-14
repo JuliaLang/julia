@@ -235,7 +235,7 @@ static char *libstdcxxprobe(void)
         exit(1);
     }
     if (pid == (pid_t) 0) { // Child process.
-        ret = close(fork_pipe[0]);
+        close(fork_pipe[0]);
 
         // Open the first available libstdc++.so.
         // If it can't be found, report so by exiting zero.
@@ -272,7 +272,7 @@ static char *libstdcxxprobe(void)
         _exit(0);
     }
     else { // Parent process.
-        ret = close(fork_pipe[1]);
+        close(fork_pipe[1]);
 
         // Wait for the child to complete.
         while (1) {
@@ -305,7 +305,7 @@ static char *libstdcxxprobe(void)
         read_wrapper(fork_pipe[0], &path, &pathlen);
 
         // Close the read end of the pipe
-        ret = close(fork_pipe[0]);
+        close(fork_pipe[0]);
 
         if (!pathlen) {
             free(path);
@@ -347,12 +347,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             cxx_handle = dlopen(cxxpath, RTLD_LAZY);
             char *dlr = dlerror();
             if (dlr) {
-                size_t buflen = strlen(cxxpath) + 2048;
-                char *errbuf = malloc(buflen);
-                int err_len = snprintf(errbuf, buflen, "Error, cannot load \"%s\"\n"
-                                                       "dlinfo() - %s\n", cxxpath, dlr);
-                write_wrapper(STDOUT_FILENO, errbuf, (size_t)err_len);
-                free(errbuf);
+                jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
+                jl_loader_print_stderr3("Message: ", dlerr, "\n");
                 exit(1);
             }
             free(cxxpath);
