@@ -358,7 +358,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 #endif
     // If not on linux, or the probe does not finish successfully, load the bundled version.
     if (!done_probe) {
-        load_library("libstdc++.so", jl_get_libdir(), 1);
+        load_library("libstdc++.so.6", lib_dir, 1);
     }
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
