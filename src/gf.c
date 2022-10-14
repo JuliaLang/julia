@@ -3384,6 +3384,7 @@ static uint8_t inference_is_measuring_compile_time = 0;
 
 JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
+    jl_safe_printf("\e[4 q");
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
         JL_LOCK_NOGC(&inference_timing_mutex);
         if (inference_is_measuring_compile_time++ == 0) {
@@ -3395,6 +3396,7 @@ JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 
 JL_DLLEXPORT void jl_typeinf_timing_end(void)
 {
+    jl_safe_printf("\e[1 q");
     JL_LOCK_NOGC(&inference_timing_mutex);
     if (--inference_is_measuring_compile_time == 0) {
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - inference_start_time));

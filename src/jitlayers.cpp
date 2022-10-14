@@ -297,6 +297,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
     JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    jl_safe_printf("\e[4 q");
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     orc::ThreadSafeContext ctx;
@@ -329,6 +330,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (success && llvmmod == NULL)
             jl_ExecutionEngine->addModule(std::move(*into));
     }
+    jl_safe_printf("\e[1 q");
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (ctx.getContext()) {
@@ -389,6 +391,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
+    jl_safe_printf("\e[4 q");
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     // if we don't have any decls already, try to generate it now
@@ -436,6 +439,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else {
         codeinst = NULL;
     }
+    jl_safe_printf("\e[1 q");
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled) {
         uint64_t t_comp = jl_hrtime() - compiler_start_time;
         if (is_recompile)
@@ -456,6 +460,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     JL_LOCK(&jl_codegen_lock);
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    jl_safe_printf("\e[4 q");
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
     if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
@@ -485,6 +490,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
+    jl_safe_printf("\e[1 q");
     if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     JL_UNLOCK(&jl_codegen_lock); // Might GC
@@ -510,6 +516,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+            jl_safe_printf("\e[4 q");
             if (measure_compile_time_enabled)
                 compiler_start_time = jl_hrtime();
             specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
@@ -535,6 +542,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
+            jl_safe_printf("\e[1 q");
             if (measure_compile_time_enabled)
                 jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
             JL_UNLOCK(&jl_codegen_lock);

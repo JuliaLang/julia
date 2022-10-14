@@ -286,6 +286,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     params.params = cgparams;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+    jl_safe_printf("\e[4 q");
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
@@ -420,6 +421,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
 
     data->M = std::move(clone);
+    jl_safe_printf("\e[1 q");
     if (measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (ctx.getContext()) {
@@ -1019,6 +1021,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx, output.imaging);
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
+        jl_safe_printf("\e[4 q");
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
@@ -1053,6 +1056,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             F = cast<Function>(m.getModuleUnlocked()->getNamedValue(*fname));
         }
         JL_GC_POP();
+        jl_safe_printf("\e[1 q");
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         JL_UNLOCK(&jl_codegen_lock); // Might GC
