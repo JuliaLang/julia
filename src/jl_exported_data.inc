@@ -130,7 +130,7 @@
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
     XX(jl_n_threadpools, int) \
-    XX(jl_n_threads, int) \
+    XX(jl_n_threads, _Atomic(int)) \
     XX(jl_options, jl_options_t) \
 
 // end of file

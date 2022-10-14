@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if Threads.nthreads() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.nthreads()
+if Threads.maxthreadid() != 1
+    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
@@ -340,7 +340,7 @@ function generate_precompile_statements()
                 # wait for the next prompt-like to appear
                 readuntil(output_copy, "\n")
                 strbuf = ""
-                while true
+                while !eof(output_copy)
                     strbuf *= String(readavailable(output_copy))
                     occursin(JULIA_PROMPT, strbuf) && break
                     occursin(PKG_PROMPT, strbuf) && break
