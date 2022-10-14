@@ -150,19 +150,19 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             pushfirst!(args, args[end])
             pop!(args)
         end
-    elseif headsym == :try
+    elseif headsym in (:try, :try_finally_catch)
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
         # Expr ordering:
         #   try_block catch_var catch_block [finally_block] [else_block]
         catch_ = nothing
-        if has_flags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
+        if headsym === :try_finally_catch
             catch_ = pop!(args)
             catch_var = pop!(args)
         end
         finally_ = pop!(args)
         else_ = pop!(args)
-        if has_flags(node, TRY_CATCH_AFTER_FINALLY_FLAG)
+        if headsym === :try_finally_catch
             pop!(args)
             pop!(args)
             push!(args, catch_var)
@@ -176,6 +176,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         if else_ !== false
             push!(args, else_)
         end
+        headsym = :try
     elseif headsym == :filter
         pushfirst!(args, last(args))
         pop!(args)

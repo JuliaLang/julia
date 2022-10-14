@@ -2085,6 +2085,7 @@ end
 #
 # flisp: embedded in parse_resword
 function parse_try(ps)
+    out_kind = K"try"
     mark = position(ps)
     bump(ps, TRIVIA_FLAG)
     parse_block(ps)
@@ -2132,15 +2133,15 @@ function parse_try(ps)
     # in which these blocks execute.
     bump_trivia(ps)
     if !has_catch && peek(ps) == K"catch"
-        # try x finally y catch e z end  ==>  (try-f (block x) false false false (block y) e (block z))
-        flags |= TRY_CATCH_AFTER_FINALLY_FLAG
+        # try x finally y catch e z end  ==>  (try_finally_catch (block x) false false false (block y) e (block z))
+        out_kind = K"try_finally_catch"
         m = position(ps)
         parse_catch(ps)
         emit_diagnostic(ps, m, position(ps),
                         warning="`catch` after `finally` will execute out of order")
     end
     bump_closing_token(ps, K"end")
-    emit(ps, mark, K"try", flags)
+    emit(ps, mark, out_kind, flags)
 end
 
 function parse_catch(ps::ParseState)
