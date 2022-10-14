@@ -969,15 +969,21 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
  'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
+julia> (==(6)∘length).(["apple", "banana", "carrot"])
+3-element BitVector:
+ 0
+ 1
+ 1
+
 julia> fs = [
            x -> 2x
-           x -> x/2
            x -> x-1
+           x -> x/2
            x -> x+1
        ];
 
 julia> ∘(fs...)(3)
-3.0
+2.0
 ```
 See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """

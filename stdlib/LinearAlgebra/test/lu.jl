@@ -440,4 +440,13 @@ end
     @test length(b) == 4
 end
 
+@testset "NaN matrix should throw error" begin
+    for eltya in (NaN16, NaN32, NaN64, BigFloat(NaN))
+        r = fill(eltya, 2, 3)
+        c = fill(complex(eltya, eltya), 2, 3)
+        @test_throws ArgumentError lu(r)
+        @test_throws ArgumentError lu(c)
+    end
+end
+
 end # module TestLU
