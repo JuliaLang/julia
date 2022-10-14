@@ -1156,7 +1156,7 @@ function try_resolve_finalizer!(ir::IRCode, idx::Int, finalizer_idx::Int, defuse
             bb_insert_block, usebb)
         if new_bb_insert_block == bb_insert_block == usebb
             if bb_insert_idx !== nothing
-                bb_insert_idx = max(bb_insert_idx, useidx)
+                bb_insert_idx = max(bb_insert_idx::Int, useidx)
             else
                 bb_insert_idx = useidx
             end
