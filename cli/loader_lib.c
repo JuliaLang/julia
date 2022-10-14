@@ -274,6 +274,14 @@ static char *libstdcxxprobe(void)
     else { // Parent process.
         close(fork_pipe[1]);
 
+        // Read the absolute path to the lib from the child process.
+        char *path;
+        size_t pathlen;
+        read_wrapper(fork_pipe[0], &path, &pathlen);
+
+        // Close the read end of the pipe
+        close(fork_pipe[0]);
+        
         // Wait for the child to complete.
         while (1) {
             int wstatus;
@@ -298,14 +306,6 @@ static char *libstdcxxprobe(void)
             }
             break;
         }
-
-        // Read the absolute path to the lib from the child process.
-        char *path;
-        size_t pathlen;
-        read_wrapper(fork_pipe[0], &path, &pathlen);
-
-        // Close the read end of the pipe
-        close(fork_pipe[0]);
 
         if (!pathlen) {
             free(path);
