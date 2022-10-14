@@ -152,9 +152,15 @@ JL_DLLEXPORT const char * jl_get_libdir()
     return lib_dir;
 }
 
+// On Linux, it can happen that the system has a newer libstdc++ than the one we ship,
+// which can break loading of some system libraries: <https://github.com/JuliaLang/julia/issues/34276>.
+// As a fix, on linux we probe the system libstdc++ to see if it is newer, and then load it if it is.
+// Otherwise, we load the packaged one. This improves compatibility with third party dynamic libs that
+// may depend on symbols exported by the system libstdxc++.
 #ifdef _OS_LINUX_
-#ifndef GLIBCXX_LEAST_VERSION_SYMBOL /* Should always be defined in the makefile. This appeases the linter. */
-#define GLIBCXX_LEAST_VERSION_SYMBOL "GLIBCXX_a.b.c"
+#ifndef GLIBCXX_LEAST_VERSION_SYMBOL
+#warning GLIBCXX_LEAST_VERSION_SYMBOL should always be defined in the makefile.
+#define GLIBCXX_LEAST_VERSION_SYMBOL "GLIBCXX_a.b.c" // Appease the linter
 #endif
 
 #include <link.h>
@@ -214,9 +220,6 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
     *ret_len = have_read;
 }
 
-// On Linux, it can happen that the system has a newer libstdc++ than the one we ship,
-// which can break loading of some system libraries: <https://github.com/JuliaLang/julia/issues/34276>.
-
 // Return the path to the libstdcxx to load.
 // If the path is found, return it.
 // Otherwise, print the error and exit.
@@ -237,10 +240,6 @@ static char *libstdcxxprobe(void)
     }
     if (pid == (pid_t) 0) { // Child process.
         ret = close(fork_pipe[0]);
-        if (ret == -1) {
-            perror("Error during libstdcxxprobe in child process:\nclose");
-            _exit(1);
-        }
 
         // Open the first available libstdc++.so.
         // If it can't be found, report so by exiting zero.
@@ -276,10 +275,6 @@ static char *libstdcxxprobe(void)
     }
     else { // Parent process.
         ret = close(fork_pipe[1]);
-        if (ret == -1) {
-            perror("Error during libstdcxxprobe in parent process:\nclose");
-            _exit(1);
-        }
 
         // Wait for the child to complete.
         while (1) {
@@ -313,10 +308,6 @@ static char *libstdcxxprobe(void)
 
         // Close the read end of the pipe
         ret = close(fork_pipe[0]);
-        if (ret == -1) {
-            perror("Error during libstdcxxprobe in parent process:\nclose");
-            _exit(1);
-        }
 
         if (!pathlen) {
             free(path);
