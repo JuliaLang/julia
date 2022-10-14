@@ -890,7 +890,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
-    else if (s->incremental && jl_object_in_image(v)) {
+    if (s->incremental && jl_object_in_image(v)) {
         assert(link_ids);
         uintptr_t item = add_external_linkage(s, v, link_ids);
         if (!item) {
