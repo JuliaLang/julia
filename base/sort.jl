@@ -2,21 +2,12 @@
 
 module Sort
 
-import ..@__MODULE__, ..parentmodule
-const Base = parentmodule(@__MODULE__)
-using .Base.Order
+using Base.Order
 
-using .Base: length, first, last, axes, firstindex, lastindex, eltype,
-    similar, iterate, keytype, copymutable, fill, eachindex, zip,
-    copyto!, reverse!, resize!, require_one_based_indexing,
-    AbstractVector, Vector, AbstractRange, OrdinalRange, UnitRange, LinearIndices, OneTo,
-    identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
-    reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned, Val,
-    Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
-    (:), >, <, <=, >=, ==, !=, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor,
-    midpoint, @boundscheck, checkbounds, hash
+using Base: copymutable, midpoint, require_one_based_indexing,
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType
 
-import .Base:
+import Base:
     sort,
     sort!,
     issorted,
@@ -634,7 +625,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
 
         t = t0 === nothing ? similar(v, m-lo+1) : t0
         length(t) < m-lo+1 && resize!(t, m-lo+1)
-        Base.require_one_based_indexing(t)
+        require_one_based_indexing(t)
 
         sort!(v, lo,  m,  a, o, t)
         sort!(v, m+1, hi, a, o, t)
@@ -1411,10 +1402,7 @@ uint_map(x::Signed, ::ForwardOrdering) =
 uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
-# unsigned(Int) is not available during bootstrapping.
-for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
-    @eval UIntMappable(::Union{Type{$U}, Type{$S}}, ::ForwardOrdering) = $U
-end
+UIntMappable(T::BitIntegerType, ::ForwardOrdering) = unsigned(T)
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
 # uint mappings for floats are defined in Float, where the Left and Right orderings
@@ -1456,14 +1444,12 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
+using Base: IEEEFloat
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-# IEEEFloat is not available in Core.Compiler
-const Floats = Union{Float16, Float32, Float64}
 # fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
 # This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
 const FPSortable = Union{
@@ -1484,8 +1470,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
-lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:IEEEFloat} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:IEEEFloat} = slt_int(x, y)
 
 uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
 uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
@@ -1505,11 +1491,11 @@ uint_map(x::Float64, ::Right) = reinterpret(UInt64, x)
 uint_unmap(::Type{Float64}, u::UInt64, ::Right) = reinterpret(Float64, u)
 UIntMappable(::Type{Float64}, ::Union{Left, Right}) = UInt64
 
-isnan(o::DirectOrdering, x::Floats) = (x!=x)
+isnan(o::DirectOrdering, x::IEEEFloat) = (x!=x)
 isnan(o::DirectOrdering, x::Missing) = false
 isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
-ismissing(o::DirectOrdering, x::Floats) = false
+ismissing(o::DirectOrdering, x::IEEEFloat) = false
 ismissing(o::DirectOrdering, x::Missing) = true
 ismissing(o::Perm, i::Integer) = ismissing(o.order,o.data[i])
 
@@ -1581,8 +1567,8 @@ specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ForwardOrder
 specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ReverseOrdering}) =
     specials2left!(v, a, o)
 
-issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
-issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
+issignleft(o::ForwardOrdering, x::IEEEFloat) = lt(o, x, zero(x))
+issignleft(o::ReverseOrdering, x::IEEEFloat) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,
