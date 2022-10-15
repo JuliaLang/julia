@@ -372,9 +372,9 @@ function generate_precompile_statements()
         end
     end
 
-    # Execute the collected precompile statements
+    # Execute the precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort!(collect(statements))
+    include_time = @elapsed for statement in statements
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
         occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
