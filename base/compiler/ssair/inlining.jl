@@ -339,7 +339,7 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     coverage_by_path = JLOptions().code_coverage == 3
     push!(linetable, LineInfoNode(inlinee.module, inlinee.name, inlinee.file, inlinee.line, inlined_at))
     oldlinetable = inlinee_ir.linetable
-    extra_coverage_line = 0
+    extra_coverage_line = zero(Int32)
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
         if !coverage && coverage_by_path && is_file_tracked(entry.file)
@@ -1439,7 +1439,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
         # we can try to inline it even in the presence of unmatched sparams
         # -- But don't try it if we already tried to handle the match in the revisit_idx
         # case, because that'll (necessarily) be the same method.
-        if nsplit(info) > 1
+        if nsplit(info)::Int > 1
             atype = argtypes_to_type(argtypes)
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), atype, only_method.sig)::SimpleVector
             match = MethodMatch(metharg, methsp::SimpleVector, only_method, true)
@@ -1846,7 +1846,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
             else
                 flag = subst_inst[:flag]
                 maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
-                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, maybe_undef)
+                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(
                         non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
@@ -1859,7 +1859,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
             if !isa(val, TypeVar)
                 return true
             else
-                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, true)
+                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, true)
                 return tcheck_not
             end
         elseif head === :cfunction && spvals_ssa === nothing
