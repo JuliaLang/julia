@@ -1727,6 +1727,8 @@ function type_lift_pass!(ir::IRCode)
                         first = false
                     end
                     local id::Int = 0
+                    all_same = true
+                    local last_val
                     for i = 1:length(values)
                         if !isassigned(def.values, i)
                             val = false
@@ -1757,6 +1759,8 @@ function type_lift_pass!(ir::IRCode)
                                         if haskey(processed, id)
                                             val = processed[id]
                                         else
+                                            # TODO: Re-check after convergence whether all the values are the same
+                                            all_same = false
                                             push!(worklist, (id, up_id, new_phi::SSAValue, i))
                                             continue
                                         end
@@ -1767,17 +1771,26 @@ function type_lift_pass!(ir::IRCode)
                             end
                         end
                         if isa(def, PhiNode)
+                            if !@isdefined(last_val)
+                                last_val = val
+                            elseif all_same
+                                all_same &= last_val === val
+                            end
                             values[i] = val
                         else
                             values[i] = insert_node!(ir, up_id, NewInstruction(UpsilonNode(val), Bool))
                         end
                     end
+                    if all_same && @isdefined(last_val)
+                        # Decay the PhiNode back to the single value
+                        ir[new_phi][:inst] = last_val
+                        isa(last_val, Bool) && (processed[item] = last_val)
+                    end
                     if which !== SSAValue(0)
                         phi = ir[which][:inst]
                         if isa(phi, PhiNode)
                             phi.values[use] = new_phi
-                        else
-                            phi = phi::PhiCNode
+                        elseif isa(phi, PhiCNode)
                             phi.values[use] = insert_node!(ir, w_up_id, NewInstruction(UpsilonNode(new_phi), Bool))
                         end
                     end

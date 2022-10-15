@@ -550,6 +550,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * )
         function getrf!(A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
+            chkfinite(A)
             chkstride1(A)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
