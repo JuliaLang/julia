@@ -871,13 +871,11 @@ function resolve_todo(todo::InliningTodo, state::InliningState, @nospecialize(in
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(match, InferenceResult)
-        inferred_src = match.src
-        if isa(inferred_src, ConstAPI)
+        src = match.src
+        if isa(src, ConstAPI)
             # use constant calling convention
             add_inlining_backedge!(et, mi)
-            return ConstantCase(quoted(inferred_src.val))
-        else
-            src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
+            return ConstantCase(quoted(src.val))
         end
         effects = match.ipo_effects
     else
@@ -897,6 +895,15 @@ function resolve_todo(todo::InliningTodo, state::InliningState, @nospecialize(in
     end
 
     src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
+
+    if isa(src, ConstAPI)
+        # duplicates the check above in case inlining_policy has a better idea.
+        # We still keep the check above to make sure we can inline to ConstAPI
+        # even if is_stmt_noinline. This doesn't currently happen in Base, but
+        # can happen with external AbstractInterpreter.
+        add_inlining_backedge!(et, mi)
+        return ConstantCase(quoted(src.val))
+    end
 
     src === nothing && return compileable_specialization(match, effects, et;
         compilesig_invokes=state.params.compilesig_invokes)
@@ -1336,9 +1343,14 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
         return handle_concrete_result!(cases, result, state)
-    elseif isa(result, SemiConcreteResult)
-        return handle_semi_concrete_result!(cases, result; allow_abstract)
-    elseif isa(result, ConstPropResult)
+    end
+    if isa(result, SemiConcreteResult)
+        result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
+        if isa(result, SemiConcreteResult)
+            return handle_semi_concrete_result!(cases, result; allow_abstract)
+        end
+    end
+    if isa(result, ConstPropResult)
         return handle_const_prop_result!(cases, result, argtypes, info, flag, state; allow_abstract, allow_typevars)
     else
         @assert result === nothing
