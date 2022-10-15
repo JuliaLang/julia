@@ -1983,7 +1983,11 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
     elseif isa(e, SSAValue)
         return abstract_eval_ssavalue(e, sv)
     elseif isa(e, SlotNumber)
-        return vtypes[slot_id(e)].typ
+        vtyp = vtypes[slot_id(e)]
+        if vtyp.undef
+            merge_effects!(interp, sv, Effects(EFFECTS_TOTAL; nothrow=false))
+        end
+        return vtyp.typ
     elseif isa(e, Argument)
         if !isa(vtypes, Nothing)
             return vtypes[slot_id(e)].typ
@@ -2113,11 +2117,11 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             at = abstract_eval_value(interp, e.args[2], vtypes, sv)
             n = fieldcount(t)
             if isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
-                let t = t, at = at; _all(i->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n); end
+                let t = t, at = at; all(i::Int->getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n); end
                 nothrow = isexact
                 t = Const(ccall(:jl_new_structt, Any, (Any, Any), t, at.val))
             elseif isa(at, PartialStruct) && at ⊑ᵢ Tuple && n == length(at.fields::Vector{Any}) &&
-                let t = t, at = at; _all(i->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n); end
+                let t = t, at = at; all(i::Int->(at.fields::Vector{Any})[i] ⊑ᵢ fieldtype(t, i), 1:n); end
                 nothrow = isexact
                 t = PartialStruct(t, at.fields::Vector{Any})
             end

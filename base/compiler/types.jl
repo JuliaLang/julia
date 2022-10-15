@@ -53,7 +53,7 @@ mutable struct InferenceResult
         arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=#)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing, false)
+            WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
 

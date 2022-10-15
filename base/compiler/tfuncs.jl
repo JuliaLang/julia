@@ -985,7 +985,7 @@ function _getfield_tfunc(lattice::JLTypeLattice, @nospecialize(s00), @nospeciali
         else
             sv = s.parameters[1]
             if isTypeDataType(sv) && isa(name, Const)
-                nv = _getfield_fieldindex(DataType, name)
+                nv = _getfield_fieldindex(DataType, name)::Int
                 if nv == DATATYPE_NAME_FIELDINDEX
                     # N.B. This only works for fields that do not depend on type
                     # parameters (which we do not know here).
@@ -1200,7 +1200,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
     RT = modifyfield!_tfunc(o, f, Any, Any)
-    info = false
+    info = NoCallInfo()
     if nargs >= 5 && RT !== Bottom
         # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
         # as well as compute the info for the method matches
@@ -2394,7 +2394,9 @@ function setglobal!_nothrow(argtypes::Vector{Any})
     M, s, newty = argtypes
     if M isa Const && s isa Const
         M, s = M.val, s.val
-        return global_assignment_nothrow(M, s, newty)
+        if isa(M, Module) && isa(s, Symbol)
+            return global_assignment_nothrow(M, s, newty)
+        end
     end
     return false
 end

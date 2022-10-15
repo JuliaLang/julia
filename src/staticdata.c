@@ -301,6 +301,8 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
 
+static htable_t layout_cache;
+
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
@@ -1079,8 +1081,8 @@ static void jl_write_values(jl_serializer_state *s)
                 if (fld != NULL) {
                     arraylist_push(&s->relocs_list, (void*)(uintptr_t)(offset + reloc_offset)); // relocation location
                     arraylist_push(&s->relocs_list, (void*)backref_id(s, fld)); // relocation target
-                    memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
                 }
+                memset(&s->s->buf[offset + reloc_offset], 0, sizeof(fld)); // relocation offset (none)
             }
 
             // A few objects need additional handling beyond the generic serialization above
@@ -1164,20 +1166,32 @@ static void jl_write_values(jl_serializer_state *s)
                 jl_datatype_t *dt = (jl_datatype_t*)v;
                 jl_datatype_t *newdt = (jl_datatype_t*)&s->s->buf[reloc_offset];
                 if (dt->layout != NULL) {
-                    size_t nf = dt->layout->nfields;
-                    size_t np = dt->layout->npointers;
-                    size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
+                    newdt->layout = NULL;
+
                     char *flddesc = (char*)dt->layout;
-                    size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
-                    if (dt->layout->first_ptr != -1)
-                        fldsize += np << dt->layout->fielddesc_type;
-                    uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
-                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
-                    newdt->layout = NULL; // relocation offset
-                    layout /= sizeof(void*);
-                    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location
-                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
-                    ios_write(s->const_data, flddesc, fldsize);
+                    void* reloc_from = (void*)(reloc_offset + offsetof(jl_datatype_t, layout));
+                    void* reloc_to;
+
+                    void** bp = ptrhash_bp(&layout_cache, flddesc);
+                    if (*bp == HT_NOTFOUND) {
+                        int64_t streampos = ios_pos(s->const_data);
+                        uintptr_t align = LLT_ALIGN(streampos, sizeof(void*));
+                        uintptr_t layout = align / sizeof(void*);
+                        *bp = reloc_to = (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout);
+
+                        size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
+                        size_t layoutsize = sizeof(jl_datatype_layout_t) + dt->layout->nfields * fieldsize;
+                        if (dt->layout->first_ptr != -1)
+                            layoutsize += dt->layout->npointers << dt->layout->fielddesc_type;
+                        write_padding(s->const_data, align - streampos);
+                        ios_write(s->const_data, flddesc, layoutsize);
+                    }
+                    else {
+                        reloc_to = *bp;
+                    }
+
+                    arraylist_push(&s->relocs_list, reloc_from);
+                    arraylist_push(&s->relocs_list, reloc_to);
                 }
             }
             else if (jl_is_typename(v)) {
@@ -2305,6 +2319,7 @@ static void jl_init_serializer2(int for_serialize)
         htable_new(&symbol_table, 0);
         htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
         htable_new(&backref_table, 0);
+        htable_new(&layout_cache, 0);
         uintptr_t i;
         for (i = 0; id_to_fptrs[i] != NULL; i++) {
             ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
@@ -2321,6 +2336,7 @@ static void jl_cleanup_serializer2(void)
     htable_reset(&symbol_table, 0);
     htable_reset(&fptr_to_id, 0);
     htable_reset(&backref_table, 0);
+    htable_reset(&layout_cache, 0);
     arraylist_free(&deser_sym);
 }
 
