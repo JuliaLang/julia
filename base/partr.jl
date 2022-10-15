@@ -2,7 +2,7 @@
 
 module Partr
 
-using ..Threads: SpinLock, maxthreadid, threadid
+using ..Threads: SpinLock, nthreads, threadid
 
 # a task minheap
 mutable struct taskheap

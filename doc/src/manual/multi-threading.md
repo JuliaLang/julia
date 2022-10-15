@@ -267,7 +267,7 @@ avoid the race:
 ```julia-repl
 julia> using Base.Threads
 
-julia> Threads.nthreads()
+julia> nthreads()
 4
 
 julia> acc = Ref(0)

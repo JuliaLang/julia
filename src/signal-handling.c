@@ -182,10 +182,14 @@ static int *profile_get_randperm(int size)
 
 JL_DLLEXPORT int jl_profile_is_buffer_full(void)
 {
-    // Declare buffer full if there isn't enough room to sample even just the
-    // thread metadata and one max-sized frame. The `+ 6` is for the two block
-    // terminator `0`'s plus the 4 metadata entries.
-    return bt_size_cur + ((JL_BT_MAX_ENTRY_SIZE + 1) + 6) > bt_size_max;
+    // declare buffer full if there isn't enough room to take samples across all threads
+    #if defined(_OS_WINDOWS_)
+        uint64_t nthreads = 1; // windows only profiles the main thread
+    #else
+        uint64_t nthreads = jl_n_threads;
+    #endif
+    // the `+ 6` is for the two block terminators `0` plus 4 metadata entries
+    return bt_size_cur + (((JL_BT_MAX_ENTRY_SIZE + 1) + 6) * nthreads) > bt_size_max;
 }
 
 static uint64_t jl_last_sigint_trigger = 0;

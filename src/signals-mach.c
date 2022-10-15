@@ -50,7 +50,7 @@ void jl_mach_gc_end(void)
         uintptr_t item = (uintptr_t)suspended_threads.items[i];
         int16_t tid = (int16_t)item;
         int8_t gc_state = (int8_t)(item >> 8);
-        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+        jl_ptls_t ptls2 = jl_all_tls_states[tid];
         jl_atomic_store_release(&ptls2->gc_state, gc_state);
         thread_resume(pthread_mach_thread_np(ptls2->system_id));
     }
@@ -119,8 +119,7 @@ static void allocate_mach_handler()
     if (_keymgr_set_lockmode_processwide_ptr(KEYMGR_GCC3_DW2_OBJ_LIST, NM_ALLOW_RECURSION))
         jl_error("_keymgr_set_lockmode_processwide_ptr failed");
 
-    int16_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    arraylist_new(&suspended_threads, nthreads); // we will resize later (inside safepoint_lock), if needed
+    arraylist_new(&suspended_threads, jl_n_threads);
     pthread_t thread;
     pthread_attr_t attr;
     kern_return_t ret;
@@ -222,7 +221,7 @@ static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exceptio
     host_thread_state_t state;
     kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     if (!jl_get_safe_restore()) {
         assert(exception);
         ptls2->bt_size =
@@ -266,9 +265,8 @@ kern_return_t catch_mach_exception_raise(
 #endif
     int16_t tid;
     jl_ptls_t ptls2 = NULL;
-    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    for (tid = 0; tid < nthreads; tid++) {
-        jl_ptls_t _ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    for (tid = 0; tid < jl_n_threads; tid++) {
+        jl_ptls_t _ptls2 = jl_all_tls_states[tid];
         if (pthread_mach_thread_np(_ptls2->system_id) == thread) {
             ptls2 = _ptls2;
             break;
@@ -383,15 +381,9 @@ static void attach_exception_port(thread_port_t thread, int segv_only)
     HANDLE_MACH_ERROR("thread_set_exception_ports", ret);
 }
 
-static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
+static void jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    if (ptls2 == NULL) // this thread is not alive
-        return 0;
-    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
-    if (ct2 == NULL) // this thread is already dead
-        return 0;
-
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(thread);
@@ -403,22 +395,18 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
 
     // Get the state of the suspended thread
     ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)ctx, &count);
-    return 1;
 }
 
 static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 {
     static host_thread_state_t state;
-    if (!jl_thread_suspend_and_get_state2(tid, &state)) {
-        *ctx = NULL;
-        return;
-    }
+    jl_thread_suspend_and_get_state2(tid, &state);
     *ctx = (unw_context_t*)&state;
 }
 
 static void jl_thread_resume(int tid, int sig)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
     kern_return_t ret = thread_resume(thread);
     HANDLE_MACH_ERROR("thread_resume", ret);
@@ -428,7 +416,7 @@ static void jl_thread_resume(int tid, int sig)
 // or if SIGINT happens too often.
 static void jl_try_deliver_sigint(void)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     kern_return_t ret = thread_suspend(thread);
@@ -464,12 +452,11 @@ CFI_NORETURN
 
 static void jl_exit_thread0(int exitstate, jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     host_thread_state_t state;
-    if (!jl_thread_suspend_and_get_state2(0, &state))
-        return;
+    jl_thread_suspend_and_get_state2(0, &state);
     unw_context_t *uc = (unw_context_t*)&state;
 
     // This aborts `sleep` and other syscalls.
@@ -621,9 +608,8 @@ void *mach_profile_listener(void *arg)
         // (so that thread zero gets notified last)
         int keymgr_locked = jl_lock_profile_mach(0);
 
-        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-        int *randperm = profile_get_randperm(nthreads);
-        for (int idx = nthreads; idx-- > 0; ) {
+        int *randperm = profile_get_randperm(jl_n_threads);
+        for (int idx = jl_n_threads; idx-- > 0; ) {
             // Stop the threads in the random or reverse round-robin order.
             int i = randperm[idx];
             // if there is no space left, break early
@@ -635,8 +621,7 @@ void *mach_profile_listener(void *arg)
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_prepare(); // briefly acquire the dlsym lock
             host_thread_state_t state;
-            if (!jl_thread_suspend_and_get_state2(i, &state))
-                continue;
+            jl_thread_suspend_and_get_state2(i, &state);
             unw_context_t *uc = (unw_context_t*)&state;
             if (_dyld_atfork_prepare != NULL && _dyld_atfork_parent != NULL)
                 _dyld_atfork_parent(); // quickly release the dlsym lock
@@ -675,12 +660,12 @@ void *mach_profile_listener(void *arg)
 #else
                 bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur, bt_size_max - bt_size_cur - 1, uc, NULL);
 #endif
-                jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
+                jl_ptls_t ptls = jl_all_tls_states[i];
 
                 // store threadid but add 1 as 0 is preserved to indicate end of block
                 bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
-                // store task id (never null)
+                // store task id
                 bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
                 // store cpu cycle clock

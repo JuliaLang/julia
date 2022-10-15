@@ -372,14 +372,7 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += 1;
     pthread_mutex_lock(&in_signal_lock);
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
-    if (ct2 == NULL) {
-        // this thread is not alive or already dead
-        *ctx = NULL;
-        pthread_mutex_unlock(&in_signal_lock);
-        return;
-    }
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
     // wait for thread to acknowledge
@@ -411,7 +404,7 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
 
 static void jl_thread_resume(int tid, int sig)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_ptls_t ptls2 = jl_all_tls_states[tid];
     jl_atomic_store_release(&ptls2->signal_request, sig == -1 ? 3 : 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
@@ -427,7 +420,7 @@ static void jl_thread_resume(int tid, int sig)
 // or if SIGINT happens too often.
 static void jl_try_deliver_sigint(void)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     jl_atomic_store_release(&ptls2->signal_request, 2);
@@ -458,7 +451,7 @@ CFI_NORETURN
 
 static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
+    jl_ptls_t ptls2 = jl_all_tls_states[0];
     if (thread0_exit_count <= 1) {
         unw_context_t *signal_context;
         jl_thread_suspend_and_get_state(0, &signal_context);
@@ -708,7 +701,7 @@ void trigger_profile_peek(void)
     if (bt_size_max == 0){
         // If the buffer hasn't been initialized, initialize with default size
         // Keep these values synchronized with Profile.default_init()
-        if (jl_profile_init(10000000, 1000000) == -1) {
+        if (jl_profile_init(10000000 * jl_n_threads, 1000000) == -1){
             jl_safe_printf("ERROR: could not initialize the profile buffer");
             return;
         }
@@ -838,7 +831,6 @@ static void *signal_listener(void *arg)
         }
 #endif
 
-        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         unw_context_t *signal_context;
@@ -848,8 +840,8 @@ static void *signal_listener(void *arg)
             jl_lock_profile();
             int *randperm;
             if (profile)
-                 randperm = profile_get_randperm(nthreads);
-            for (int idx = nthreads; idx-- > 0; ) {
+                 randperm = profile_get_randperm(jl_n_threads);
+            for (int idx = jl_n_threads; idx-- > 0; ) {
                 // Stop the threads in the random or reverse round-robin order.
                 int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
@@ -861,7 +853,7 @@ static void *signal_listener(void *arg)
                 // this part must be signal-handler safe
                 if (critical) {
                     bt_size += rec_backtrace_ctx(bt_data + bt_size,
-                            JL_MAX_BT_SIZE / nthreads - 1,
+                            JL_MAX_BT_SIZE / jl_n_threads - 1,
                             signal_context, NULL);
                     bt_data[bt_size++].uintptr = 0;
                 }
@@ -888,12 +880,12 @@ static void *signal_listener(void *arg)
                         }
                         jl_set_safe_restore(old_buf);
 
-                        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
+                        jl_ptls_t ptls2 = jl_all_tls_states[i];
 
                         // store threadid but add 1 as 0 is preserved to indicate end of block
                         bt_data_prof[bt_size_cur++].uintptr = ptls2->tid + 1;
 
-                        // store task id (never null)
+                        // store task id
                         bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
 
                         // store cpu cycle clock
@@ -935,11 +927,11 @@ static void *signal_listener(void *arg)
             else {
 #ifndef SIGINFO // SIGINFO already prints this automatically
                 int nrunning = 0;
-                for (int idx = nthreads; idx-- > 0; ) {
-                    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
+                for (int idx = jl_n_threads; idx-- > 0; ) {
+                    jl_ptls_t ptls2 = jl_all_tls_states[idx];
                     nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
                 }
-                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, jl_n_threads);
 #endif
 
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));

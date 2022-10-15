@@ -331,8 +331,7 @@ JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid
 {
     size_t off = 0;
 #ifndef _OS_WINDOWS_
-    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (ptls0->root_task == task) {
+    if (jl_all_tls_states[0]->root_task == task) {
         // See jl_init_root_task(). The root task of the main thread
         // has its buffer enlarged by an artificial 3000000 bytes, but
         // that means that the start of the buffer usually points to
@@ -373,8 +372,7 @@ JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
     else if (task->stkbuf) {
         *total_start = *active_start = (char*)task->stkbuf;
 #ifndef _OS_WINDOWS_
-        jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-        if (ptls0->root_task == task) {
+        if (jl_all_tls_states[0]->root_task == task) {
             // See jl_init_root_task(). The root task of the main thread
             // has its buffer enlarged by an artificial 3000000 bytes, but
             // that means that the start of the buffer usually points to

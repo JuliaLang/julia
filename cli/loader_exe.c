@@ -15,7 +15,7 @@ extern "C" {
 JULIA_DEFINE_FAST_TLS
 
 #ifdef _COMPILER_ASAN_ENABLED_
-JL_DLLEXPORT const char* __asan_default_options(void)
+JL_DLLEXPORT const char* __asan_default_options()
 {
     return "allow_user_segv_handler=1:detect_leaks=0";
     // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),

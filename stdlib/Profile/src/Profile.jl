@@ -88,6 +88,10 @@ stored per thread. Each instruction pointer corresponds to a single line of code
 list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
 NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
 using keywords or in the order `(n, delay)`.
+
+!!! compat "Julia 1.8"
+    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
+    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
@@ -98,7 +102,8 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        return n_cur, delay_cur
+        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
+        return round(Int, n_cur / nthreads), delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -106,17 +111,20 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
+    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
-    buffer_samples = n
+    buffer_samples = n * nthreads
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
-        buffer_samples = floor(Int, 2^29 / sample_size_bytes)
+        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
+        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
+        buffer_samples = buffer_samples_per_thread * nthreads
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
     end
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
+        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
     end
 end
 
@@ -419,7 +427,7 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
-    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.nthreads(), RoundUp))
         Threads.@spawn begin
             for i in indexes_part
                 iplookups[i] = _lookup_corrected(unique_ips[i])
