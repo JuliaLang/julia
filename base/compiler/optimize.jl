@@ -104,6 +104,8 @@ function inlining_policy(interp::AbstractInterpreter,
         else
             return nothing
         end
+    elseif isa(src, IRCode)
+        return src
     end
     return nothing
 end
