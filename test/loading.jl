@@ -1,16 +1,18 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+original_depot_path = copy(Base.DEPOT_PATH)
+
 using Test
 
 # Tests for @__LINE__ inside and outside of macros
-@test (@__LINE__) == 6
+@test (@__LINE__) == 8
 
 macro macro_caller_lineno()
-    @test 9 == (@__LINE__) != __source__.line > 12
+    @test 11 == (@__LINE__) != __source__.line > 14
     return __source__.line
 end
 
-@test @macro_caller_lineno() == (@__LINE__) > 12
+@test @macro_caller_lineno() == (@__LINE__) > 14
 
 # @__LINE__ in a macro expands to the location of the macrocall in the source
 # while __source__.line is the location of the macro caller
@@ -660,7 +662,7 @@ finally
     Base.set_active_project(old_act_proj)
     popfirst!(LOAD_PATH)
 end
-@test Base.pkgorigins[Base.PkgId(UUID("69145d58-7df6-11e8-0660-cf7622583916"), "TestPkg")].version == v"1.2.3"
+@test pkgversion(TestPkg) == v"1.2.3"
 
 @testset "--project and JULIA_PROJECT paths should be absolutified" begin
     mktempdir() do dir; cd(dir) do
@@ -984,7 +986,10 @@ end
             @test Base.locate_package(pkg, env) === nothing
         finally
             copy!(LOAD_PATH, old_load_path)
-            copy!(DEPOT_PATH, old_load_path)
+            copy!(DEPOT_PATH, old_depot_path)
         end
     end
 end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)

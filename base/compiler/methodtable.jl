@@ -44,6 +44,12 @@ struct OverlayMethodTable <: MethodTableView
     mt::Core.MethodTable
 end
 
+struct MethodMatchKey
+    sig # ::Type
+    limit::Int
+    MethodMatchKey(@nospecialize(sig), limit::Int) = new(sig, limit)
+end
+
 """
     struct CachedMethodTable <: MethodTableView
 
@@ -51,27 +57,28 @@ Overlays another method table view with an additional local fast path cache that
 can respond to repeated, identical queries faster than the original method table.
 """
 struct CachedMethodTable{T} <: MethodTableView
-    cache::IdDict{Any, Union{Missing, MethodMatchResult}}
+    cache::IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}
     table::T
 end
-CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{Any, Union{Missing, MethodMatchResult}}(), table)
+CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}(), table)
 
 """
-    findall(sig::Type, view::MethodTableView; limit::Int=typemax(Int)) ->
+    findall(sig::Type, view::MethodTableView; limit::Int=-1) ->
         MethodMatchResult(matches::MethodLookupResult, overlayed::Bool) or missing
 
 Find all methods in the given method table `view` that are applicable to the given signature `sig`.
 If no applicable methods are found, an empty result is returned.
-If the number of applicable methods exceeded the specified limit, `missing` is returned.
+If the number of applicable methods exceeded the specified `limit`, `missing` is returned.
+Note that the default setting `limit=-1` does not limit the number of applicable methods.
 `overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
-function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1)
     result = _findall(sig, nothing, table.world, limit)
     result === missing && return missing
     return MethodMatchResult(result, false)
 end
 
-function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1)
     result = _findall(sig, table.mt, table.world, limit)
     result === missing && return missing
     nr = length(result)
@@ -104,14 +111,16 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=typemax(Int))
+function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1)
     if isconcretetype(sig)
         # as for concrete types, we cache result at on the next level
         return findall(sig, table.table; limit)
     end
-    box = Core.Box(sig)
-    return get!(table.cache, sig) do
-        findall(box.contents, table.table; limit)
+    key = MethodMatchKey(sig, limit)
+    if haskey(table.cache, key)
+        return table.cache[key]
+    else
+        return table.cache[key] = findall(sig, table.table; limit)
     end
 end
 

@@ -31,7 +31,7 @@ struct Irrational{sym} <: AbstractIrrational end
 show(io::IO, x::Irrational{sym}) where {sym} = print(io, sym)
 
 function show(io::IO, ::MIME"text/plain", x::Irrational{sym}) where {sym}
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, sym)
     else
         print(io, sym, " = ", string(float(x))[1:min(end,15)], "...")
@@ -173,6 +173,14 @@ and arbitrary-precision definition in terms of `BigFloat`s given by the expressi
 
 An `AssertionError` is thrown when either `big(def) isa BigFloat` or `Float64(val) == Float64(def)`
 returns `false`.
+
+!!! warning
+    This macro should not be used outside of `Base` Julia.
+
+    The macro creates a new type `Irrational{:sym}` regardless of where it's invoked. This can
+    lead to conflicting definitions if two packages define an irrational number with the same
+    name but different values.
+
 
 # Examples
 ```jldoctest

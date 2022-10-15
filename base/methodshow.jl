@@ -11,7 +11,7 @@ function strip_gensym(sym)
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[unwrapva(min(i, end))]
+    t = unwrapva(sig.parameters[min(i, end)])
     if i == nargs && isva
         va = sig.parameters[end]
         if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
@@ -247,7 +247,7 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
     end
 
     # module & file, re-using function from errorshow.jl
-    if get(io, :compact, false) # single-line mode
+    if get(io, :compact, false)::Bool # single-line mode
         print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width)
     else
         println(io)
@@ -268,7 +268,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && last(ms).sig === Tuple ?
+               : mt.module === Core && mt.defs isa Core.TypeMapEntry && (mt.defs.func::Method).sig === Tuple ?
                     "builtin function"
                : # else
                     "generic function")
@@ -472,6 +472,8 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
             push!(last_shown_line_infos, (string(file), line))
         end
     end
+    first && summary(io, mt)
+    nothing
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
@@ -484,4 +486,5 @@ function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
         end
         print(io, "</ul>")
     end
+    nothing
 end

@@ -163,7 +163,12 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
     auto check_inst = [&] (Instruction *inst, Use *use) {
         if (isa<LoadInst>(inst)) {
             required.use_info.hasload = true;
-            if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, 0, cur.offset,
+            if (cur.offset == UINT32_MAX) {
+                auto elty = inst->getType();
+                required.use_info.has_unknown_objref |= hasObjref(elty);
+                required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
+                required.use_info.hasunknownmem = true;
+            } else if (!required.use_info.addMemOp(inst, 0, cur.offset,
                                                                inst->getType(),
                                                                false, required.DL))
                 required.use_info.hasunknownmem = true;
@@ -232,7 +237,12 @@ void jl_alloc::runEscapeAnalysis(llvm::Instruction *I, EscapeAnalysisRequiredArg
                 return false;
             }
             auto storev = store->getValueOperand();
-            if (cur.offset == UINT32_MAX || !required.use_info.addMemOp(inst, use->getOperandNo(),
+            if (cur.offset == UINT32_MAX) {
+                auto elty = storev->getType();
+                required.use_info.has_unknown_objref |= hasObjref(elty);
+                required.use_info.has_unknown_objrefaggr |= hasObjref(elty) && !isa<PointerType>(elty);
+                required.use_info.hasunknownmem = true;
+            } else if (!required.use_info.addMemOp(inst, use->getOperandNo(),
                                                                cur.offset, storev->getType(),
                                                                true, required.DL))
                 required.use_info.hasunknownmem = true;

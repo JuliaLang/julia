@@ -290,7 +290,7 @@ cat_shape(dims, shape::Tuple{}) = () # make sure `cat_shape(dims, ())` do not re
 @deprecate unsafe_indices(A) axes(A) false
 @deprecate unsafe_length(r) length(r) false
 
-# these were internal type aliases, but some pacakges seem to be relying on them
+# these were internal type aliases, but some packages seem to be relying on them
 const Any16{N} = Tuple{Any,Any,Any,Any,Any,Any,Any,Any,
                         Any,Any,Any,Any,Any,Any,Any,Any,Vararg{Any,N}}
 const All16{T,N} = Tuple{T,T,T,T,T,T,T,T,
@@ -334,6 +334,36 @@ end
 function setproperty!(ci::CodeInfo, s::Symbol, v)
     s === :inlineable && return Core.Compiler.set_inlineable!(ci, v)
     return setfield!(ci, s, convert(fieldtype(CodeInfo, s), v))
+end
+
+@eval Threads nthreads() = threadpoolsize()
+
+@eval Threads begin
+    """
+        resize_nthreads!(A, copyvalue=A[1])
+
+    Resize the array `A` to length [`nthreads()`](@ref).   Any new
+    elements that are allocated are initialized to `deepcopy(copyvalue)`,
+    where `copyvalue` defaults to `A[1]`.
+
+    This is typically used to allocate per-thread variables, and
+    should be called in `__init__` if `A` is a global constant.
+
+    !!! warning
+
+        This function is deprecated, since as of Julia v1.9 the number of
+        threads can change at run time. Instead, per-thread state should be
+        created as needed based on the thread id of the caller.
+    """
+    function resize_nthreads!(A::AbstractVector, copyvalue=A[1])
+        nthr = nthreads()
+        nold = length(A)
+        resize!(A, nthr)
+        for i = nold+1:nthr
+            A[i] = deepcopy(copyvalue)
+        end
+        return A
+    end
 end
 
 # END 1.9 deprecations

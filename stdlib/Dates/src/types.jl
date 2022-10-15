@@ -103,7 +103,7 @@ end
 UTM(x) = UTInstant(Millisecond(x))
 UTD(x) = UTInstant(Day(x))
 
-# Calendar types provide rules for interpretating instant
+# Calendar types provide rules for interpreting instant
 # timelines in human-readable form.
 abstract type Calendar <: AbstractTime end
 
@@ -199,7 +199,7 @@ daysinmonth(y,m) = DAYSINMONTH[m] + (m == 2 && isleapyear(y))
 """
     validargs(::Type{<:TimeType}, args...) -> Union{ArgumentError, Nothing}
 
-Determine whether the given arguments consitute valid inputs for the given type.
+Determine whether the given arguments constitute valid inputs for the given type.
 Returns either an `ArgumentError`, or [`nothing`](@ref) in case of success.
 """
 function validargs end

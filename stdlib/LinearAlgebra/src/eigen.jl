@@ -233,16 +233,20 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where T
-    AA = copymutable_oftype(A, eigtype(T))
-    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
-    return eigen!(AA; permute=permute, scale=scale, sortby=sortby)
+    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
+    ishermitian(A) && return eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
+    AA = eigencopy_oftype(A, eigtype(T))
+    return eigen!(AA; permute, scale, sortby)
 end
 function eigen(A::AbstractMatrix{T}; permute::Bool=true, scale::Bool=true, sortby::Union{Function,Nothing}=eigsortby) where {T <: Union{Float16,Complex{Float16}}}
-    AA = copymutable_oftype(A, eigtype(T))
-    isdiag(AA) && return eigen(Diagonal(AA); permute=permute, scale=scale, sortby=sortby)
-    A = eigen!(AA; permute, scale, sortby)
-    values = convert(AbstractVector{isreal(A.values) ? Float16 : Complex{Float16}}, A.values)
-    vectors = convert(AbstractMatrix{isreal(A.vectors) ? Float16 : Complex{Float16}}, A.vectors)
+    isdiag(A) && return eigen(Diagonal{eigtype(T)}(diag(A)); sortby)
+    E = if ishermitian(A)
+        eigen!(eigencopy_oftype(Hermitian(A), eigtype(T)); sortby)
+    else
+        eigen!(eigencopy_oftype(A, eigtype(T)); permute, scale, sortby)
+    end
+    values = convert(AbstractVector{isreal(E.values) ? Float16 : Complex{Float16}}, E.values)
+    vectors = convert(AbstractMatrix{isreal(E.vectors) ? Float16 : Complex{Float16}}, E.vectors)
     return Eigen(values, vectors)
 end
 eigen(x::Number) = Eigen([x], fill(one(x), 1, 1))
@@ -333,7 +337,7 @@ julia> eigvals(diag_matrix)
 ```
 """
 eigvals(A::AbstractMatrix{T}; kws...) where T =
-    eigvals!(copymutable_oftype(A, eigtype(T)); kws...)
+    eigvals!(eigencopy_oftype(A, eigtype(T)); kws...)
 
 """
 For a scalar input, `eigvals` will return a scalar.
@@ -507,11 +511,19 @@ true
 ```
 """
 function eigen(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
-    S = promote_type(eigtype(TA),TB)
-    eigen!(copymutable_oftype(A, S), copymutable_oftype(B, S); kws...)
+    S = promote_type(eigtype(TA), TB)
+    eigen!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
 end
-
 eigen(A::Number, B::Number) = eigen(fill(A,1,1), fill(B,1,1))
+
+"""
+    LinearAlgebra.eigencopy_oftype(A::AbstractMatrix, ::Type{S})
+
+Creates a dense copy of `A` with eltype `S` by calling `copy_similar(A, S)`.
+In the case of `Hermitian` or `Symmetric` matrices additionally retains the wrapper,
+together with the `uplo` field.
+"""
+eigencopy_oftype(A, S) = copy_similar(A, S)
 
 """
     eigvals!(A, B; sortby) -> values
@@ -586,8 +598,8 @@ julia> eigvals(A,B)
 ```
 """
 function eigvals(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}; kws...) where {TA,TB}
-    S = promote_type(eigtype(TA),TB)
-    return eigvals!(copymutable_oftype(A, S), copymutable_oftype(B, S); kws...)
+    S = promote_type(eigtype(TA), TB)
+    return eigvals!(eigencopy_oftype(A, S), eigencopy_oftype(B, S); kws...)
 end
 
 """

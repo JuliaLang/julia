@@ -9,6 +9,7 @@ New language features
   handled via `Base.split_rest`. ([#42902])
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
+* Nested combinations of tuples and named tuples of symbols are now allowed as type parameters ([#46300]).
 
 Language changes
 ----------------
@@ -57,6 +58,10 @@ Multi-threading changes
   An interactive task desires low latency and implicitly agrees to be short duration or to
   yield frequently. Interactive tasks will run on interactive threads, if any are specified
   when Julia is started ([#42302]).
+* Threads started outside the Julia runtime (e.g. from C or Java) can now become able to
+  call into Julia code by calling `jl_adopt_thread`. This is done automatically when
+  entering Julia code via `cfunction` or a `@ccallable` entry point. As a consequence, the
+  number of threads can now change during execution ([#46609]).
 
 Build system changes
 --------------------
@@ -88,6 +93,7 @@ Library changes
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 * `@kwdef` is now exported and added to the public API ([#46273])
+* An issue with order of operations in `fld1` is now fixed ([#28973]).
 
 Standard library changes
 ------------------------
@@ -127,6 +133,9 @@ Standard library changes
 * The contextual module which is active at the REPL can be changed (it is `Main` by default),
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
+
+* An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
+  activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
 #### SparseArrays
 

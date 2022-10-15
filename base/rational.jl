@@ -551,7 +551,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
 end
 
 # These methods are only needed for performance. Since `first(r)` and `last(r)` have the
-# same denominator (because their difference is an integer), `length(r)` can be calulated
+# same denominator (because their difference is an integer), `length(r)` can be calculated
 # without calling `gcd`.
 function length(r::AbstractUnitRange{T}) where T<:Rational
     @inline

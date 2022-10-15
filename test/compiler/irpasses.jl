@@ -960,7 +960,7 @@ let # effect-freeness computation for array allocation
         end
     end
 
-    # shouldn't eliminate errorneous dead allocations
+    # shouldn't eliminate erroneous dead allocations
     bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
         dims = ntuple(i->dim, N)
@@ -1064,4 +1064,31 @@ let sroa_no_forward() = begin
     return res
     end
     @test sroa_no_forward() == (1, 2.0)
+end
+
+@noinline function foo_defined_last_iter(n::Int)
+    local x
+    for i = 1:n
+        if i == 5
+            x = 1
+        end
+    end
+    if n > 2
+        return x + n
+    end
+    return 0
+end
+const_call_defined_last_iter() = foo_defined_last_iter(3)
+@test foo_defined_last_iter(2) == 0
+@test_throws UndefVarError foo_defined_last_iter(3)
+@test_throws UndefVarError const_call_defined_last_iter()
+@test foo_defined_last_iter(6) == 7
+
+let src = code_typed1(foo_defined_last_iter, Tuple{Int})
+    for i = 1:length(src.code)
+        e = src.code[i]
+        if isexpr(e, :throw_undef_if_not)
+            @assert !isa(e.args[2], Bool)
+        end
+    end
 end

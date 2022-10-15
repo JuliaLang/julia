@@ -181,7 +181,7 @@ begin #@deprecated error message
     # `Old{T}(args...) where {...} = new(args...)` or
     # `(Old{T} where {...})(args...) = new(args...)`.
     # Since nobody has requested this feature yet, make sure that it throws, until we
-    # conciously define
+    # consciously define
     @test_throws(
         "invalid usage of @deprecate",
         @eval @deprecate Foo{T} where {T <: Int} g true

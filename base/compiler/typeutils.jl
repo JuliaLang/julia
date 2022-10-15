@@ -23,13 +23,41 @@ function hasuniquerep(@nospecialize t)
     return false
 end
 
-function has_nontrivial_const_info(@nospecialize t)
+"""
+    isTypeDataType(@nospecialize t)
+
+For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
+we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
+(potentially wrapped in some UnionAll), then we are guaranteed that this statement
+will be a DataType at runtime (and not e.g. a Union or UnionAll typeequal to it).
+"""
+function isTypeDataType(@nospecialize t)
+    isa(t, DataType) || return false
+    isType(t) && return false
+    # Could be Union{} at runtime
+    t === Core.TypeofBottom && return false
+    if t.name === Tuple.name
+        # If we have a Union parameter, could have been redistributed at runtime,
+        # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
+        # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
+        # is not.
+        return _all(isTypeDataType, t.parameters)
+    end
+    return true
+end
+
+function has_nontrivial_const_info(lattice::PartialsLattice, @nospecialize t)
     isa(t, PartialStruct) && return true
     isa(t, PartialOpaque) && return true
+    return has_nontrivial_const_info(widenlattice(lattice), t)
+end
+function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return true
-    isa(t, Const) || return false
-    val = t.val
-    return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+    if isa(t, Const)
+        val = t.val
+        return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+    end
+    return has_nontrivial_const_info(widenlattice(lattice), t)
 end
 
 has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
@@ -52,7 +80,7 @@ end
 # (therefore also a lower bound on the number of fields)
 function datatype_min_ninitialized(t::DataType)
     isabstracttype(t) && return 0
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
@@ -103,16 +131,25 @@ function valid_as_lattice(@nospecialize(x))
     return false
 end
 
-# test if non-Type, non-TypeVar `x` can be used to parameterize a type
-function valid_tparam(@nospecialize(x))
-    if isa(x, Tuple)
-        for t in x
-            isa(t, Symbol) || isbits(t) || return false
+function valid_typeof_tparam(@nospecialize(t))
+    if t === Symbol || isbitstype(t)
+        return true
+    end
+    isconcretetype(t) || return false
+    if t <: NamedTuple
+        t = t.parameters[2]
+    end
+    if t <: Tuple
+        for p in t.parameters
+            valid_typeof_tparam(p) || return false
         end
         return true
     end
-    return isa(x, Symbol) || isbits(x)
+    return false
 end
+
+# test if non-Type, non-TypeVar `x` can be used to parameterize a type
+valid_tparam(@nospecialize(x)) = valid_typeof_tparam(typeof(x))
 
 function compatible_vatuple(a::DataType, b::DataType)
     vaa = a.parameters[end]

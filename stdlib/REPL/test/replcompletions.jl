@@ -293,6 +293,12 @@ let
     @test isempty(c)
 end
 
+# issue 46800: (3,2).<TAB> errors in the REPL
+let
+    c, r = test_complete("(3,2).")
+    @test isempty(c)
+end
+
 # inexistent completion inside a string
 @test_nocompletion("Base.print(\"lol")
 
@@ -524,7 +530,7 @@ let s = "CompletionFoo.test4(CompletionFoo.test_y_array[1]()[1], CompletionFoo.t
     @test c[1] == string(first(methods(Main.CompletionFoo.test4, Tuple{String, String})))
 end
 
-# Test that string escaption is handled correct
+# Test that string escaping is handled correct
 let s = """CompletionFoo.test4("\\"","""
     c, r, res = test_complete(s)
     @test !res
@@ -1093,6 +1099,9 @@ let s, c, r
             s = "\"~"
             @test "tmpfoobar/" in c
             c,r = test_complete(s)
+            s = "\"~user"
+            c, r = test_complete(s)
+            @test isempty(c)
             rm(dir)
         end
     end

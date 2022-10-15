@@ -649,6 +649,9 @@ See also [`digits`](@ref), [`count_ones`](@ref).
 
 # Examples
 ```jldoctest
+julia> ndigits(0)
+1
+
 julia> ndigits(12345)
 5
 

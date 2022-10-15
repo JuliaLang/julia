@@ -548,7 +548,7 @@ function hash(s::AbstractSet, h::UInt)
 end
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
-convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
+convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)::T
 
 
 ## replace/replace! ##
