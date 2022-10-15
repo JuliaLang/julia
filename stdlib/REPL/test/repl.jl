@@ -99,8 +99,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
     end
 
     global inc = false
-    global b = Condition()
-    global c = Condition()
+    global b = Base.Event(true)
+    global c = Base.Event(true)
     let cmd = "\"Hello REPL\""
         write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
     end
@@ -709,7 +709,7 @@ fake_repl() do stdin_write, stdout_read, repl
         REPL.run_repl(repl)
     end
 
-    global c = Condition()
+    global c = Base.Event(true)
     function sendrepl2(cmd)
         t = @async readuntil(stdout_read, "\"done\"\n\n")
         write(stdin_write, "$cmd\n notify($(curmod_prefix)c); \"done\"\n")
@@ -1584,29 +1584,24 @@ fake_repl() do stdin_write, stdout_read, repl
 
     REPL.ipython_mode!(repl, backend)
 
-    global c = Condition()
-    sendrepl2(cmd) = write(stdin_write, "$cmd\n notify($(curmod_prefix)c)\n")
+    global c = Base.Event(true)
+    function sendrepl2(cmd, txt)
+        t = @async write(stdin_write, "$cmd\n notify($(curmod_prefix)c); \"done\"\n")
+        r = readuntil(stdout_read, txt, keep=true)
+        readuntil(stdout_read, "\"done\"\n\n", keep=true)
+        wait(c)
+        wait(t)
+        return r
+    end
 
-    t = @async readuntil(stdout_read, "\"zz\""; keep=true)
-    sendrepl2("\"z\" * \"z\"\n")
-    wait(c)
-    s = fetch(t)
-    readuntil(stdout_read, "\n\n")
+    s = sendrepl2("\"z\" * \"z\"\n", "\"zz\"")
     @test contains(s, "In [1]")
     @test contains(s, "Out[1]: \"zz\"")
 
-    t = @async readuntil(stdout_read, "\"yy\""; keep=true)
-    sendrepl2("\"y\" * \"y\"\n")
-    wait(c)
-    s = fetch(t)
-    readuntil(stdout_read, "\n\n")
+    s = sendrepl2("\"y\" * \"y\"\n", "\"yy\"")
     @test contains(s, "Out[3]: \"yy\"")
 
-    t = @async readuntil(stdout_read, "\"zzyy\""; keep=true)
-    sendrepl2("Out[1] * Out[3]\n")
-    wait(c)
-    s = fetch(t)
-    readuntil(stdout_read, "\n\n")
+    s = sendrepl2("Out[1] * Out[3]\n", "\"zzyy\"")
     @test contains(s, "Out[5]: \"zzyy\"")
 
     write(stdin_write, '\x04')
