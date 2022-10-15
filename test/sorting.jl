@@ -740,19 +740,19 @@ end
 end
 
 # This testset is at the end of the file because it is slow
-@testset "sort(x; buffer)" begin
+@testset "sort(x; scratch)" begin
     for n in [1,10,100,1000]
         v = rand(n)
-        buffer = [0.0]
-        @test sort(v) == sort(v; buffer)
-        @test sort!(copy(v)) == sort!(copy(v); buffer)
-        @test sortperm(v) == sortperm(v; buffer=[4])
-        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; buffer=[4])
+        scratch = [0.0]
+        @test sort(v) == sort(v; scratch)
+        @test sort!(copy(v)) == sort!(copy(v); scratch)
+        @test sortperm(v) == sortperm(v; scratch=[4])
+        @test sortperm!(Vector{Int}(undef, n), v) == sortperm!(Vector{Int}(undef, n), v; scratch=[4])
 
         n > 100 && continue
         M = rand(n, n)
-        @test sort(M; dims=2) == sort(M; dims=2, buffer)
-        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
+        @test sort(M; dims=2) == sort(M; dims=2, scratch)
+        @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, scratch)
     end
 end
 
