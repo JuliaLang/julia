@@ -894,7 +894,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         if (!item) {
             // If we got here, we failed to find the expected external linkage. Print debugging info.
             for (size_t i = 0; i < jl_linkage_blobs.len; i+=2) {
-                jl_printf(JL_STDOUT, "i = %ld: %p to %p\n", i>>1, jl_linkage_blobs.items[i], jl_linkage_blobs.items[i+1]);
+                jl_printf(JL_STDOUT, "i = %zd: %p to %p\n", i>>1, jl_linkage_blobs.items[i], jl_linkage_blobs.items[i+1]);
             }
             jl_printf(JL_STDOUT, "Object pointer %p for ", v);
             jl_(v);
