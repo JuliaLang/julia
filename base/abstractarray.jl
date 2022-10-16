@@ -496,7 +496,7 @@ first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[range(begin, length=min(n, length(v)))]
+    v[range(begin, length=min(n, length(v)))]
 end
 
 """
@@ -546,7 +546,7 @@ last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), 
 # Faster method for arrays
 function last(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[range(stop=lastindex(v), length=min(n, length(v)))]
+    v[range(stop=lastindex(v), length=min(n, length(v)))]
 end
 
 """
