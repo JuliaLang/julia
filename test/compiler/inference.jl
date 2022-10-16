@@ -3933,10 +3933,6 @@ end
         +(UnhandledVarargCond(false), xs...)
     end |> only === Int
 
-    @test (Base.return_types((Vector{Any},)) do xs
-        Core.kwfunc(xs...)
-    end; true)
-
     @test Base.return_types((Vector{Vector{Int}},)) do xs
         Tuple(xs...)
     end |> only === Tuple{Vararg{Int}}

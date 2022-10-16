@@ -103,6 +103,17 @@ include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
+# define invoke(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to invoke
+function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+    @inline
+    # prepend kwargs and f to the invoked from the user
+    T = rewrap_unionall(Tuple{Any, Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    return invoke(Core.kwcall, T, kwargs, f, args...)
+end
+# invoke does not have its own call cache, but kwcall for invoke does
+typeof(invoke).name.mt.max_args = 3 # invoke, f, T, args...
+
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")

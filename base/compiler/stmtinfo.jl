@@ -74,7 +74,7 @@ struct SemiConcreteResult
     effects::Effects
 end
 
-const ConstResult = Union{ConstPropResult,ConcreteResult, SemiConcreteResult}
+const ConstResult = Union{ConstPropResult, ConcreteResult, SemiConcreteResult}
 
 """
     info::ConstCallInfo <: CallInfo
