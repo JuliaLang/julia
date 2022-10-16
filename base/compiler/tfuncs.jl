@@ -1877,9 +1877,6 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
     elseif f === Core.sizeof
         length(argtypes) == 1 || return false
         return sizeof_nothrow(argtypes[1])
-    elseif f === Core.kwfunc
-        length(argtypes) == 1 || return false
-        return isa(rt, Const)
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ₗ Bool
@@ -1919,7 +1916,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:),
+    Core.ifelse, Core._typevar, (<:),
     typeassert, throw, arraysize, getglobal, compilerbarrier
 ]
 
@@ -1934,7 +1931,6 @@ const _CONSISTENT_BUILTINS = Any[
     isa,
     UnionAll,
     Core.sizeof,
-    Core.kwfunc,
     Core.ifelse,
     (<:),
     typeassert,

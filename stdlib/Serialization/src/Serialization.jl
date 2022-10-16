@@ -520,10 +520,11 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
-        if isdefined(t.mt, :kwsorter)
-            serialize(s, t.mt.kwsorter)
-        else
+        kws = collect(methods(Core.kwcall, (Any, t.wrapper, Vararg)))
+        if isempty(kws)
             writetag(s.io, UNDEFREF_TAG)
+        else
+            serialize(s, kws)
         end
     else
         writetag(s.io, UNDEFREF_TAG)
@@ -1355,7 +1356,15 @@ function deserialize_typename(s::AbstractSerializer, number)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
             if makenew
-                tn.mt.kwsorter = kws
+                if kws isa Vector{Method}
+                    for def in kws
+                        kwmt = typeof(Core.kwcall).name.mt
+                        ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
+                    end
+                else
+                    # old object format -- try to forward from old to new
+                    @eval Core.kwcall(kwargs, f::$ty, args...) = $kws(kwargs, f, args...)
+                end
             end
         end
     elseif makenew
