@@ -325,8 +325,6 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
 
-static htable_t layout_cache;
-
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
@@ -1401,32 +1399,20 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
                 newdt->imgcache = 1;
                 if (dt->layout != NULL) {
-                    newdt->layout = NULL;
-
+                    size_t nf = dt->layout->nfields;
+                    size_t np = dt->layout->npointers;
+                    size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
                     char *flddesc = (char*)dt->layout;
-                    void* reloc_from = (void*)(reloc_offset + offsetof(jl_datatype_t, layout));
-                    void* reloc_to;
-
-                    void** bp = ptrhash_bp(&layout_cache, flddesc);
-                    if (*bp == HT_NOTFOUND) {
-                        int64_t streampos = ios_pos(s->const_data);
-                        uintptr_t align = LLT_ALIGN(streampos, sizeof(void*));
-                        uintptr_t layout = align / sizeof(void*);
-                        *bp = reloc_to = (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout);
-
-                        size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
-                        size_t layoutsize = sizeof(jl_datatype_layout_t) + dt->layout->nfields * fieldsize;
-                        if (dt->layout->first_ptr != -1)
-                            layoutsize += dt->layout->npointers << dt->layout->fielddesc_type;
-                        write_padding(s->const_data, align - streampos);
-                        ios_write(s->const_data, flddesc, layoutsize);
-                    }
-                    else {
-                        reloc_to = *bp;
-                    }
-
-                    arraylist_push(&s->relocs_list, reloc_from);
-                    arraylist_push(&s->relocs_list, reloc_to);
+                    size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
+                    if (dt->layout->first_ptr != -1)
+                        fldsize += np << dt->layout->fielddesc_type;
+                    uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
+                    write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
+                    newdt->layout = NULL; // relocation offset
+                    layout /= sizeof(void*);
+                    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location
+                    arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
+                    ios_write(s->const_data, flddesc, fldsize);
                 }
             }
             else if (jl_is_typename(v)) {
