@@ -2816,9 +2816,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
             jl_cache_type_((jl_datatype_t*)obj);
         }
         else if (jl_is_globalref(obj)) {
-            jl_globalref_t *r = (jl_globalref_t*)obj;
-            jl_binding_t *b = jl_get_binding_if_bound(r->mod, r->name);
-            r->bnd_cache = b && b->value ? b : NULL;
+            continue; // wait until all the module binding tables have been initialized
         }
         else if (jl_is_module(obj)) {
             // rebuild the binding table for module v
@@ -2849,6 +2847,16 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
             assert(jl_typeis(*a, jl_array_any_type));
             *a = jl_idtable_rehash(*a, jl_array_len(*a));
             jl_gc_wb(obj, *a);
+        }
+    }
+    // Now pick up the globalrefs
+    for (size_t i = 0; i < s.fixup_list.len; i++) {
+        uintptr_t item = (uintptr_t)s.fixup_list.items[i];
+        jl_value_t *obj = (jl_value_t*)(image_base + item);
+        if (jl_is_globalref(obj)) {
+            jl_globalref_t *r = (jl_globalref_t*)obj;
+            jl_binding_t *b = jl_get_binding_if_bound(r->mod, r->name);
+            r->bnd_cache = b && b->value ? b : NULL;
         }
     }
     arraylist_free(&s.uniquing_list);
