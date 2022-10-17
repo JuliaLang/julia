@@ -226,7 +226,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test errors_not_signals(`$exename --cpu-target=invalidtarget`)
 
     # -t, --threads
-    code = "print(Threads.nthreads())"
+    code = "print(Threads.threadpoolsize())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
           read(`$exename --threads auto -e $code`, String) ==
@@ -254,7 +254,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # Combining --threads and --procs: --threads does propagate
     withenv("JULIA_NUM_THREADS" => nothing) do
-        code = "print(sum(remotecall_fetch(Threads.nthreads, x) for x in procs()))"
+        code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
         @test read(`$exename -p2 -t2 -e $code`, String) == "6"
     end
 

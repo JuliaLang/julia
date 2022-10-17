@@ -474,7 +474,8 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-let buf = IOBuffer(
+withenv("COLUMNS"=>"80") do
+    buf = IOBuffer(
         "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
     seek(buf, 4)
     outbuf = IOBuffer()
