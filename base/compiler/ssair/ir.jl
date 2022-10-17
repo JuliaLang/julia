@@ -950,6 +950,8 @@ end
 __set_check_ssa_counts(onoff::Bool) = __check_ssa_counts__[] = onoff
 const __check_ssa_counts__ = fill(false)
 
+should_check_ssa_counts() = __check_ssa_counts__[]
+
 function _oracle_check(compact::IncrementalCompact)
     observed_used_ssas = Core.Compiler.find_ssavalue_uses1(compact)
     for i = 1:length(observed_used_ssas)
@@ -1683,7 +1685,7 @@ end
 function complete(compact::IncrementalCompact)
     result_bbs = resize!(compact.result_bbs, compact.active_result_bb-1)
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
-    if __check_ssa_counts__[]
+    if should_check_ssa_counts()
         oracle_check(compact)
     end
 
