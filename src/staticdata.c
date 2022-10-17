@@ -1409,7 +1409,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 }
 
 
-static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *list)
+static void jl_write_reloclist(ios_t *s, char *base, size_t size, arraylist_t *list)
 {
     for (size_t i = 0; i < list->len; i += 2) {
         size_t last_pos = i ? (size_t)list->items[i - 2] : 0;
@@ -1444,11 +1444,11 @@ static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *li
 static void jl_write_relocations(jl_serializer_state *s)
 {
     char *base = &s->s->buf[0];
-    jl_write_skiplist(s->relocs, base, s->s->size, &s->gctags_list);
-    jl_write_skiplist(s->relocs, base, s->s->size, &s->relocs_list);
+    jl_write_reloclist(s->relocs, base, s->s->size, &s->gctags_list);
+    jl_write_reloclist(s->relocs, base, s->s->size, &s->relocs_list);
 }
 
-static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
+static void jl_read_reloclist(jl_serializer_state *s, uint8_t bits)
 {
     uintptr_t base = (uintptr_t)s->s->buf;
     size_t size = s->s->size;
@@ -2261,10 +2261,10 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
 
     s.s = &sysimg;
-    jl_read_relocations(&s, GC_OLD); // gctags
+    jl_read_reloclist(&s, GC_OLD); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
-    jl_read_relocations(&s, 0); // general relocs
+    jl_read_reloclist(&s, 0); // general relocs
     ios_close(&relocs);
     ios_close(&const_data);
     jl_update_all_gvars(&s); // gvars relocs
