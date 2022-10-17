@@ -366,12 +366,12 @@ typedef enum {
 } jl_callingconv_t;
 
 
-//#ifdef _P64
-//#define RELOC_TAG_OFFSET 61
-//#else
+#ifdef _P64
+#define RELOC_TAG_OFFSET 61
+#else
 // this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 #define RELOC_TAG_OFFSET 29
-//#endif
+#endif
 
 #if RELOC_TAG_OFFSET <= 32
 typedef uint32_t reloc_t;
