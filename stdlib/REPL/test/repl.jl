@@ -35,6 +35,33 @@ function kill_timer(delay)
     return Timer(kill_test, delay)
 end
 
+## Debugging toys. Usage:
+##   stdout_read = tee_repr_stdout(stdout_read)
+##   ccall(:jl_breakpoint, Cvoid, (Any,), stdout_read)
+#function tee(f, in::IO)
+#    copy = Base.BufferStream()
+#    t = @async try
+#        while !eof(in)
+#            l = readavailable(in)
+#            f(l)
+#            write(copy, l)
+#        end
+#    catch ex
+#        if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+#            rethrow() # ignore EIO on `in` stream
+#        end
+#    finally
+#        # TODO: could we call closewrite to propagate an error, instead of always doing a clean close here?
+#        closewrite(copy)
+#    end
+#    Base.errormonitor(t)
+#    return copy
+#end
+#tee(out::IO, in::IO) = tee(l -> write(out, l), in)
+#tee_repr_stdout(io) = tee(io) do x
+#    print(repr(String(copy(x))) * "\n")
+#end
+
 # REPL tests
 function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
@@ -1596,13 +1623,23 @@ fake_repl() do stdin_write, stdout_read, repl
 
     s = sendrepl2("\"z\" * \"z\"\n", "\"zz\"")
     @test contains(s, "In [1]")
-    @test contains(s, "Out[1]: \"zz\"")
+    @test endswith(s, "Out[1]: \"zz\"")
 
     s = sendrepl2("\"y\" * \"y\"\n", "\"yy\"")
-    @test contains(s, "Out[3]: \"yy\"")
+    @test endswith(s, "Out[3]: \"yy\"")
 
     s = sendrepl2("Out[1] * Out[3]\n", "\"zzyy\"")
-    @test contains(s, "Out[5]: \"zzyy\"")
+    @test endswith(s, "Out[5]: \"zzyy\"")
+
+    # test a top-level expression
+    s = sendrepl2("import REPL\n", "In [8]")
+    @test !contains(s, "ERROR")
+    @test !contains(s, "[6]")
+    @test !contains(s, "Out[7]:")
+    @test contains(s, "In [7]: ")
+    @test contains(s, "import REPL")
+    s = sendrepl2("REPL\n", "In [10]")
+    @test contains(s, "Out[9]: REPL")
 
     write(stdin_write, '\x04')
     Base.wait(repltask)
