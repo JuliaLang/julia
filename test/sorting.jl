@@ -79,8 +79,9 @@ end
 end
 
 @testset "stability" begin
-    for Alg in [InsertionSort, MergeSort, QuickSort, Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE,
-        PartialQuickSort(missing, 1729), PartialQuickSort(1729, missing)]
+    for Alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE,
+            PartialQuickSort(missing, 1729, Base.Sort.SMALL_ALGORITHM),
+            PartialQuickSort(1729, missing, Base.Sort.SMALL_ALGORITHM)]
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
@@ -534,11 +535,11 @@ end
     @test issorted(a)
 
     a = view([9:-1:0;], :)::SubArray
-    Base.Sort.sort_int_range!(a, 10, 0, identity)  # test it supports non-Vector
+    Base.Sort._sort!(a, Base.Sort.CountingSort(), Base.Forward, mn=0, mx=9)  # test it supports non-Vector
     @test issorted(a)
 
     a = OffsetArray([9:-1:0;], -5)
-    Base.Sort.sort_int_range!(a, 10, 0, identity)
+    Base.Sort._sort!(a, Base.Sort.CountingSort(), Base.Forward, mn=0, mx=9)
     @test issorted(a)
 end
 
@@ -632,9 +633,9 @@ end
 @testset "uint mappings" begin
 
     #Construct value lists
-    floats = [T[-π, -1.0, -1/π, 1/π, 1.0, π, -0.0, 0.0, Inf, -Inf, NaN, -NaN,
-                prevfloat(T(0)), nextfloat(T(0)), prevfloat(T(Inf)), nextfloat(T(-Inf))]
-        for T in [Float16, Float32, Float64]]
+    floats = [reinterpret(U, vcat(T[-π, -1.0, -1/π, 1/π, 1.0, π, -0.0, 0.0, Inf, -Inf, NaN, -NaN,
+                prevfloat(T(0)), nextfloat(T(0)), prevfloat(T(Inf)), nextfloat(T(-Inf))], randnans(4)))
+        for (U, T) in [(UInt16, Float16), (UInt32, Float32), (UInt64, Float64)]]
 
     ints = [T[17, -T(17), 0, -one(T), 1, typemax(T), typemin(T), typemax(T)-1, typemin(T)+1]
         for T in Base.BitInteger_types]
@@ -650,21 +651,18 @@ end
     UIntN(::Val{8}) = UInt64
     UIntN(::Val{16}) = UInt128
     map(vals) do x
+        x isa Base.ReinterpretArray && return
         T = eltype(x)
         U = UIntN(Val(sizeof(T)))
         append!(x, rand(T, 4))
         append!(x, reinterpret.(T, rand(U, 4)))
-        if T <: AbstractFloat
-            mask = reinterpret(U, T(NaN))
-            append!(x, reinterpret.(T, mask .| rand(U, 4)))
-        end
     end
 
     for x in vals
         T = eltype(x)
         U = UIntN(Val(sizeof(T)))
-        for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
-            if order isa Base.Order.By || ((T <: AbstractFloat) == (order isa DirectOrdering))
+        for order in [Forward, Reverse, By(Forward, identity)]
+            if order isa Base.Order.By
                 @test Base.Sort.UIntMappable(T, order) === nothing
                 continue
             end
@@ -681,10 +679,6 @@ end
 
             for a in x
                 for b in x
-                    if order === Base.Sort.Float.Left() || order === Base.Sort.Float.Right()
-                        # Left and Right orderings guarantee homogeneous sign and no NaNs
-                        (isnan(a) || isnan(b) || signbit(a) != signbit(b)) && continue
-                    end
                     @test Base.Order.lt(order, a, b) === Base.Order.lt(Forward, Base.Sort.uint_map(a, order), Base.Sort.uint_map(b, order))
                 end
             end
@@ -705,7 +699,7 @@ end
 
     # Nevertheless, it still works...
     for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
         @test sort(v, alg=alg, lt = <=) == s
     end
     @test partialsort(v, 172, lt = <=) == s[172]
@@ -716,7 +710,7 @@ end
     # this invalid lt order.
     perm = reverse(sortperm(v, rev=true))
     for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
     @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
@@ -724,7 +718,7 @@ end
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
     for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
         @test sort!(sort(v, alg=alg, lt = (x,y) -> rand([false, true]))) == s
     end
     @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
