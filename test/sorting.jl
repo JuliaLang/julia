@@ -381,7 +381,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
