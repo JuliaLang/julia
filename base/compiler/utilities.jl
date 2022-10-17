@@ -146,7 +146,7 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atype, sparams, method)

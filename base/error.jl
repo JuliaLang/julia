@@ -162,7 +162,7 @@ end
 ## keyword arg lowering generates calls to this ##
 function kwerr(kw, args::Vararg{Any,N}) where {N}
     @noinline
-    throw(MethodError(typeof(args[1]).name.mt.kwsorter, (kw,args...)))
+    throw(MethodError(Core.kwcall, (kw, args...)))
 end
 
 ## system error handling ##

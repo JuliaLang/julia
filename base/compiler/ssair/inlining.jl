@@ -339,7 +339,7 @@ function ir_inline_linetable!(linetable::Vector{LineInfoNode}, inlinee_ir::IRCod
     coverage_by_path = JLOptions().code_coverage == 3
     push!(linetable, LineInfoNode(inlinee.module, inlinee.name, inlinee.file, inlinee.line, inlined_at))
     oldlinetable = inlinee_ir.linetable
-    extra_coverage_line = 0
+    extra_coverage_line = zero(Int32)
     for oldline in 1:length(oldlinetable)
         entry = oldlinetable[oldline]
         if !coverage && coverage_by_path && is_file_tracked(entry.file)
@@ -871,13 +871,11 @@ function resolve_todo(todo::InliningTodo, state::InliningState, @nospecialize(in
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
     if isa(match, InferenceResult)
-        inferred_src = match.src
-        if isa(inferred_src, ConstAPI)
+        src = match.src
+        if isa(src, ConstAPI)
             # use constant calling convention
             add_inlining_backedge!(et, mi)
-            return ConstantCase(quoted(inferred_src.val))
-        else
-            src = inferred_src # ::Union{Nothing,CodeInfo} for NativeInterpreter
+            return ConstantCase(quoted(src.val))
         end
         effects = match.ipo_effects
     else
@@ -897,6 +895,15 @@ function resolve_todo(todo::InliningTodo, state::InliningState, @nospecialize(in
     end
 
     src = inlining_policy(state.interp, src, info, flag, mi, argtypes)
+
+    if isa(src, ConstAPI)
+        # duplicates the check above in case inlining_policy has a better idea.
+        # We still keep the check above to make sure we can inline to ConstAPI
+        # even if is_stmt_noinline. This doesn't currently happen in Base, but
+        # can happen with external AbstractInterpreter.
+        add_inlining_backedge!(et, mi)
+        return ConstantCase(quoted(src.val))
+    end
 
     src === nothing && return compileable_specialization(match, effects, et;
         compilesig_invokes=state.params.compilesig_invokes)
@@ -1336,9 +1343,14 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
         return handle_concrete_result!(cases, result, state)
-    elseif isa(result, SemiConcreteResult)
-        return handle_semi_concrete_result!(cases, result; allow_abstract)
-    elseif isa(result, ConstPropResult)
+    end
+    if isa(result, SemiConcreteResult)
+        result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
+        if isa(result, SemiConcreteResult)
+            return handle_semi_concrete_result!(cases, result; allow_abstract)
+        end
+    end
+    if isa(result, ConstPropResult)
         return handle_const_prop_result!(cases, result, argtypes, info, flag, state; allow_abstract, allow_typevars)
     else
         @assert result === nothing
@@ -1439,7 +1451,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt8, sig:
         # we can try to inline it even in the presence of unmatched sparams
         # -- But don't try it if we already tried to handle the match in the revisit_idx
         # case, because that'll (necessarily) be the same method.
-        if nsplit(info) > 1
+        if nsplit(info)::Int > 1
             atype = argtypes_to_type(argtypes)
             (metharg, methsp) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), atype, only_method.sig)::SimpleVector
             match = MethodMatch(metharg, methsp::SimpleVector, only_method, true)
@@ -1745,6 +1757,15 @@ function early_inline_special_case(
         setting === :const || setting === :conditional || setting === :type || return nothing
         # barriered successfully already, eliminate it
         return SomeCase(stmt.args[3])
+    elseif f === Core.ifelse && length(argtypes) == 4
+        cond = argtypes[2]
+        if isa(cond, Const)
+            if cond.val === true
+                return SomeCase(stmt.args[3])
+            elseif cond.val === false
+                return SomeCase(stmt.args[4])
+            end
+        end
     end
     return nothing
 end
@@ -1837,7 +1858,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
             else
                 flag = subst_inst[:flag]
                 maybe_undef = (flag & IR_FLAG_NOTHROW) == 0 && isa(val, TypeVar)
-                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, maybe_undef)
+                (ret, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, maybe_undef)
                 if maybe_undef
                     insert_node!(
                         non_effect_free(NewInstruction(Expr(:throw_undef_if_not, val.name, tcheck_not), Nothing)))
@@ -1850,7 +1871,7 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction,
             if !isa(val, TypeVar)
                 return true
             else
-                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa, spidx, true)
+                (_, tcheck_not) = insert_spval!(insert_node!, spvals_ssa::SSAValue, spidx, true)
                 return tcheck_not
             end
         elseif head === :cfunction && spvals_ssa === nothing

@@ -26,6 +26,9 @@ static const int16_t not_sleeping = 0;
 // it is acceptable for the thread to be sleeping.
 static const int16_t sleeping = 1;
 
+// this thread is dead.
+static const int16_t sleeping_like_the_dead JL_UNUSED = 2;
+
 // invariant: No thread is ever asleep unless sleep_check_state is sleeping (or we have a wakeup signal pending).
 // invariant: Any particular thread is not asleep unless that thread's sleep_check_state is sleeping.
 // invariant: The transition of a thread state to sleeping must be followed by a check that there wasn't work pending for it.
@@ -182,7 +185,7 @@ static int sleep_check_after_threshold(uint64_t *start_cycles)
 
 static int wake_thread(int16_t tid)
 {
-    jl_ptls_t other = jl_all_tls_states[tid];
+    jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     int8_t state = sleeping;
 
     if (jl_atomic_load_relaxed(&other->sleep_check_state) == sleeping) {
@@ -229,7 +232,7 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         if (wake_thread(tid)) {
             // check if we need to notify uv_run too
             jl_fence();
-            jl_ptls_t other = jl_all_tls_states[tid];
+            jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
             jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
             // now that we have changed the thread to not-sleeping, ensure that
             // either it has not yet acquired the libuv lock, or that it will
@@ -244,7 +247,8 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         // in the future, we might want to instead wake some fraction of threads,
         // and let each of those wake additional threads if they find work
         int anysleep = 0;
-        for (tid = 0; tid < jl_n_threads; tid++) {
+        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+        for (tid = 0; tid < nthreads; tid++) {
             if (tid != self)
                 anysleep |= wake_thread(tid);
         }

@@ -525,6 +525,9 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    Tridiagonal{T,V}(A.dl, A.d, A.du)
+end
 
 """
     Tridiagonal(A)

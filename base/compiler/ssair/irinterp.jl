@@ -220,6 +220,9 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             if mi′ !== irsv.mi # prevent infinite loop
                 rt = concrete_eval_invoke(interp, inst, mi′, irsv)
             end
+        elseif inst.head === :throw_undef_if_not
+            # TODO: Terminate interpretation early if known false?
+            return false
         else
             ccall(:jl_, Cvoid, (Any,), inst)
             error()
@@ -242,6 +245,36 @@ function reprocess_instruction!(interp::AbstractInterpreter,
     return false
 end
 
+# Process the terminator and add the successor to `ip`. Returns whether a backedge was seen.
+function process_terminator!(ir::IRCode, idx::Int, bb::Int,
+    all_rets::Vector{Int}, ip::BitSetBoundedMinPrioritySet)
+    inst = ir.stmts[idx][:inst]
+    if isa(inst, ReturnNode)
+        if isdefined(inst, :val)
+            push!(all_rets, idx)
+        end
+        return false
+    elseif isa(inst, GotoNode)
+        backedge = inst.label < bb
+        !backedge && push!(ip, inst.label)
+        return backedge
+    elseif isa(inst, GotoIfNot)
+        backedge = inst.dest < bb
+        !backedge && push!(ip, inst.dest)
+        push!(ip, bb + 1)
+        return backedge
+    elseif isexpr(inst, :enter)
+        dest = inst.args[1]::Int
+        @assert dest > bb
+        push!(ip, dest)
+        push!(ip, bb + 1)
+        return false
+    else
+        push!(ip, bb + 1)
+        return false
+    end
+end
+
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
     extra_reprocess::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
@@ -250,40 +283,6 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     ip = BitSetBoundedMinPrioritySet(length(bbs))
     push!(ip, 1)
     all_rets = Int[]
-
-    """
-        process_terminator!
-
-    Process the terminator and add the successor to `ip`. Returns whether a
-    backedge was seen.
-    """
-    function process_terminator!(ip::BitSetBoundedMinPrioritySet, bb::Int, idx::Int)
-        inst = ir.stmts[idx][:inst]
-        if isa(inst, ReturnNode)
-            if isdefined(inst, :val)
-                push!(all_rets, idx)
-            end
-            return false
-        elseif isa(inst, GotoNode)
-            backedge = inst.label < bb
-            !backedge && push!(ip, inst.label)
-            return backedge
-        elseif isa(inst, GotoIfNot)
-            backedge = inst.dest < bb
-            !backedge && push!(ip, inst.dest)
-            push!(ip, bb + 1)
-            return backedge
-        elseif isexpr(inst, :enter)
-            dest = inst.args[1]::Int
-            @assert dest > bb
-            push!(ip, dest)
-            push!(ip, bb + 1)
-            return false
-        else
-            push!(ip, bb + 1)
-            return false
-        end
-    end
 
     # Fast path: Scan both use counts and refinement in one single pass of
     #            of the instructions. In the absence of backedges, this will
@@ -313,7 +312,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 idx, bb, inst, typ, irsv)
                 push!(ssa_refined, idx)
             end
-            if idx == lstmt && process_terminator!(ip, bb, idx)
+            if idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
                 @goto residual_scan
             end
             if typ === Bottom && !isa(inst, PhiNode)
@@ -344,7 +343,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                         count!(tpdum, val)
                     end
                 end
-                idx == lstmt && process_terminator!(ip, bb, idx)
+                idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
             end
         end
 
@@ -363,7 +362,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                         push!(tpdum[val.id], idx)
                     end
                 end
-                idx == lstmt && process_terminator!(ip, bb, idx)
+                idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
             end
         end
 
