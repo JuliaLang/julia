@@ -1411,21 +1411,6 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 
 static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *list)
 {
-    /*
-    size_t i;
-    for (i = 0; i < list->len; i += 2) {
-        size_t pos = (size_t)list->items[i];
-        size_t item = (size_t)list->items[i + 1];
-        uintptr_t *pv = (uintptr_t*)(base + pos);
-        assert(pos < size && pos != 0);
-        *pv = get_reloc_for_item(item, *pv);
-        // record pos in relocations list
-        // TODO: save space by using delta-compression
-        write_reloc_t(s, pos);
-    }
-    write_reloc_t(s, 0);
-    */
-
     for (size_t i = 0; i < list->len; i += 2) {
         size_t last_pos = i ? (size_t)list->items[i - 2] : 0;
         size_t pos = (size_t)list->items[i];
@@ -1465,33 +1450,17 @@ static void jl_write_relocations(jl_serializer_state *s)
 
 static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
 {
-    /*
-    uintptr_t base = (uintptr_t)&s->s->buf[0];
-    size_t size = s->s->size;
-    while (1) {
-        uintptr_t offset = *(reloc_t*)&s->relocs->buf[(uintptr_t)s->relocs->bpos];
-        s->relocs->bpos += sizeof(reloc_t);
-        if (offset == 0)
-            break;
-        uintptr_t *pv = (uintptr_t*)(base + offset);
-        uintptr_t v = *pv;
-        v = get_item_for_reloc(s, base, size, v);
-        *pv = v | bits;
-    }
-    */
-
-    ///////////
     uintptr_t base = (uintptr_t)s->s->buf;
     size_t size = s->s->size;
     uintptr_t last_pos = 0;
-    uint8_t* current = (uint8_t*)(s->relocs->buf + s->relocs->bpos);
+    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
         size_t cnt = 0;
         while (1) {
             assert(s->relocs->bpos <= s->relocs->size);
-            assert((char*)current <= (char*)(s->relocs->buf + s->relocs->size));
+            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
             int8_t c = *current++;
             s->relocs->bpos += 1;
 
@@ -1504,7 +1473,7 @@ static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
 
         uintptr_t pos = last_pos + pos_diff;
         last_pos = pos;
-        uintptr_t *pv = (uintptr_t*)(base + pos);
+        uintptr_t *pv = (uintptr_t *)(base + pos);
         uintptr_t v = *pv;
         v = get_item_for_reloc(s, base, size, v);
         *pv = v | bits;
@@ -1519,7 +1488,7 @@ void gc_sweep_sysimg(void)
         return;
     uintptr_t base = (uintptr_t)sysimg_base;
     uintptr_t last_pos = 0;
-    uint8_t* current = (uint8_t*)sysimg_relocs;
+    uint8_t *current = (uint8_t *)sysimg_relocs;
     while (1) {
         // Read the offset of the next object
         size_t pos_diff = 0;
@@ -1535,7 +1504,7 @@ void gc_sweep_sysimg(void)
 
         uintptr_t pos = last_pos + pos_diff;
         last_pos = pos;
-        jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + pos);
+        jl_taggedvalue_t *o = (jl_taggedvalue_t *)(base + pos);
         o->bits.gc = GC_OLD;
     }
 }
