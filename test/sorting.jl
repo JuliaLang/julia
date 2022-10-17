@@ -764,6 +764,10 @@ end
     end
 end
 
+@testset "Unions with missing" begin
+    @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
