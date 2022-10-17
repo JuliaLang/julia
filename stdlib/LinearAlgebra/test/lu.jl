@@ -455,4 +455,13 @@ end
     @test A * ldiv!(lu(A), Base.ReshapedArray(copy(b)', (3,), ())) ≈ b
 end
 
+@testset "generic lu!" begin
+    A = rand(3,3); B = deepcopy(A); C = A[2:3,2:3]
+    Asub1 = @view(A[2:3,2:3])
+    F1 = lu!(Asub1)
+    Asub2 = @view(B[[2,3],[2,3]])
+    F2 = lu!(Asub2)
+    @test Matrix(F1) ≈ Matrix(F2) ≈ C
+end
+
 end # module TestLU
