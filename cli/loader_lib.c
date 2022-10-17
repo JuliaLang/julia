@@ -261,7 +261,7 @@ static char *libstdcxxprobe(void)
         ret = dlinfo(handle, RTLD_DI_LINKMAP, &lm);
         if (ret == -1) {
             char *errbuf = dlerror();
-            const char *errdesc = "Error during libstdcxxprobe in child process:\ndlinfo: ";
+            char *errdesc = (char*)"Error during libstdcxxprobe in child process:\ndlinfo: ";
             write_wrapper(STDERR_FILENO, errdesc, strlen(errdesc));
             write_wrapper(STDERR_FILENO, errbuf, strlen(errbuf));
             write_wrapper(STDERR_FILENO, "\n", 1);
@@ -331,9 +331,10 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     char *curr_dep = &dep_libs[0];
 
     void *cxx_handle;
-    int done_probe = 0;
+    
 #if defined(_OS_LINUX_)
     int do_probe = 1;
+    int done_probe = 0;
     char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
     if (probevar) {
         if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes"))
@@ -348,13 +349,14 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             char *dlr = dlerror();
             if (dlr) {
                 jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
-                jl_loader_print_stderr3("Message: ", dlerr, "\n");
+                jl_loader_print_stderr3("Message: ", dlr, "\n");
                 exit(1);
             }
             free(cxxpath);
             done_probe = 1;
         }
     }
+    
 #endif
     // If not on linux, or the probe does not finish successfully, load the bundled version.
     if (!done_probe) {
