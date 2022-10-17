@@ -431,7 +431,7 @@ struct WithoutMissingVector{T, U <: AbstractVector{Union{T, Missing}}} <: Abstra
 end
 Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
     out = v.data[i]
-    @assert !out isa Missing
+    @assert !(out isa Missing)
     out::eltype(v)
 end
 Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector{T}, x::T, i) where T
@@ -750,7 +750,7 @@ function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering;
                 U = UIntMappable(eltype(v), o),
                 mn, mx, umn=uint_map(mn, o), umx=uint_map(mx, o), urange=umx-umn,
                 bits = unsigned(8sizeof(urange) - leading_zeros(urange)), kw...)
-    if sizeof(U) <= 8 && bits+70 < 22log(lenm1)
+    if sizeof(U) <= 8 && bits+70 < 22log(lenm1) # TODO there are some unexpected allocations here
         _sort!(v, a.radix, o; lo, hi, lenm1, mn, mx, umn, umx, urange, bits, kw...)
     else
         _sort!(v, a.next, o; lo, hi, lenm1, mn, mx, umn, umx, urange, bits, kw...)
