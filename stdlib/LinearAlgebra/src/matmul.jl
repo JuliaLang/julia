@@ -646,9 +646,9 @@ function gemm_wrapper(tA::AbstractChar, tB::AbstractChar,
     gemm_wrapper!(C, tA, tB, A, B)
 end
 
-@inline function gemm_wrapper!(C::StridedVecOrMat{Union{T, Complex{T}}}, tA::AbstractChar, tB::AbstractChar,
-                            A::StridedVecOrMat{Union{T, Complex{T}}}, B::StridedVecOrMat{T},
-                            α::Number=true, β::Number=false) where {T<:BlasFloat}
+@inline function gemm_wrapper!(C::StridedVecOrMat{S}, tA::AbstractChar, tB::AbstractChar,
+                            A::StridedVecOrMat{S}, B::StridedVecOrMat{T},
+                            α::Number=true, β::Number=false) where {T<:BlasFloat,S<:Union{T, Complex{T}}}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 
