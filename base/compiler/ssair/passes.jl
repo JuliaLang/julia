@@ -1511,6 +1511,30 @@ function is_union_phi(compact::IncrementalCompact, idx::Int)
     return is_some_union(inst[:type])
 end
 
+function kill_phi!(compact::IncrementalCompact, phi_uses::Vector{Int},
+                    to_drop::Union{Vector{Int}, UnitRange{Int}},
+                    ssa::SSAValue, phi::PhiNode, delete_inst::Bool = false)
+    for d in to_drop
+        if isassigned(phi.values, d)
+            val = phi.values[d]
+            if !delete_inst
+                # Deleting the inst will update compact's use count, so
+                # don't do it here.
+                kill_current_use(compact, val)
+            end
+            if isa(val, SSAValue)
+                phi_uses[val.id] -= 1
+            end
+        end
+    end
+    if delete_inst
+        compact[ssa] = nothing
+    elseif !isempty(to_drop)
+        deleteat!(phi.values, to_drop)
+        deleteat!(phi.edges, to_drop)
+    end
+end
+
 """
     adce_pass!(ir::IRCode) -> newir::IRCode
 
@@ -1596,7 +1620,8 @@ function adce_pass!(ir::IRCode)
         phi = unionphi[1]
         t = unionphi[2]
         if t === Union{}
-            compact[SSAValue(phi)] = nothing
+            stmt = compact[SSAValue(phi)][:inst]::PhiNode
+            kill_phi!(compact, phi_uses, 1:length(stmt.values), SSAValue(phi), stmt, true)
             continue
         elseif t === Any
             continue
@@ -1617,12 +1642,7 @@ function adce_pass!(ir::IRCode)
             end
         end
         compact.result[phi][:type] = t
-        isempty(to_drop) && continue
-        for d in to_drop
-            isassigned(stmt.values, d) && kill_current_use(compact, stmt.values[d])
-        end
-        deleteat!(stmt.values, to_drop)
-        deleteat!(stmt.edges, to_drop)
+        kill_phi!(compact, phi_uses, to_drop, SSAValue(phi), stmt, false)
     end
     # Perform simple DCE for unused values
     extra_worklist = Int[]
