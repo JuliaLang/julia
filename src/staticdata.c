@@ -1133,7 +1133,7 @@ static void jl_write_values(jl_serializer_state *s)
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
                                     ios_seek(s->fptr_record, (invokeptr_id - 1) * sizeof(void*));
-                                    write_reloc_t(s->fptr_record, (uint32_t)~reloc_offset);
+                                    write_reloc_t(s->fptr_record, (reloc_t)~reloc_offset);
 #ifdef _P64
                                     if (sizeof(reloc_t) < 8)
                                         write_padding(s->fptr_record, 8 - sizeof(reloc_t));
@@ -1411,6 +1411,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 
 static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *list)
 {
+    /*
     size_t i;
     for (i = 0; i < list->len; i += 2) {
         size_t pos = (size_t)list->items[i];
@@ -1423,6 +1424,35 @@ static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *li
         write_reloc_t(s, pos);
     }
     write_reloc_t(s, 0);
+    */
+
+    for (size_t i = 0; i < list->len; i += 2) {
+        size_t last_pos = i ? (size_t)list->items[i - 2] : 0;
+        size_t pos = (size_t)list->items[i];
+        size_t item = (size_t)list->items[i + 1];
+        uintptr_t *pv = (uintptr_t*)(base + pos);
+        assert(pos < size && pos != 0);
+        *pv = get_reloc_for_item(item, *pv);
+
+        // write pos as compressed difference.
+        size_t pos_diff = pos - last_pos;
+        while (pos_diff) {
+            assert(pos_diff >= 0);
+            if (pos_diff <= 127) {
+                write_int8(s, pos_diff);
+                break;
+            }
+            else {
+                // Extract the next 7 bits
+                int8_t ns = pos_diff & (int8_t)0x7F;
+                pos_diff >>= 7;
+                // Set the high bit if there's still more
+                ns |= (!!pos_diff) << 7;
+                write_int8(s, ns);
+            }
+        }
+    }
+    write_int8(s, 0);
 }
 
 
@@ -1433,9 +1463,9 @@ static void jl_write_relocations(jl_serializer_state *s)
     jl_write_skiplist(s->relocs, base, s->s->size, &s->relocs_list);
 }
 
-
 static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
 {
+    /*
     uintptr_t base = (uintptr_t)&s->s->buf[0];
     size_t size = s->s->size;
     while (1) {
@@ -1448,22 +1478,64 @@ static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
         v = get_item_for_reloc(s, base, size, v);
         *pv = v | bits;
     }
+    */
+
+    ///////////
+    uintptr_t base = (uintptr_t)s->s->buf;
+    size_t size = s->s->size;
+    uintptr_t last_pos = 0;
+    uint8_t* current = (uint8_t*)(s->relocs->buf + s->relocs->bpos);
+    while (1) {
+        // Read the offset of the next object
+        size_t pos_diff = 0;
+        size_t cnt = 0;
+        while (1) {
+            assert(s->relocs->bpos <= s->relocs->size);
+            assert((char*)current <= (char*)(s->relocs->buf + s->relocs->size));
+            int8_t c = *current++;
+            s->relocs->bpos += 1;
+
+            pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
+            if ((c >> 7) == 0)
+                break;
+        }
+        if (pos_diff == 0)
+            break;
+
+        uintptr_t pos = last_pos + pos_diff;
+        last_pos = pos;
+        uintptr_t *pv = (uintptr_t*)(base + pos);
+        uintptr_t v = *pv;
+        v = get_item_for_reloc(s, base, size, v);
+        *pv = v | bits;
+    }
 }
 
 static char *sysimg_base;
 static char *sysimg_relocs;
 void gc_sweep_sysimg(void)
 {
-    char *base = sysimg_base;
-    reloc_t *relocs = (reloc_t*)sysimg_relocs;
-    if (relocs == NULL)
+    if (!sysimg_relocs)
         return;
+    uintptr_t base = (uintptr_t)sysimg_base;
+    uintptr_t last_pos = 0;
+    uint8_t* current = (uint8_t*)sysimg_relocs;
     while (1) {
-        uintptr_t offset = *relocs;
-        relocs++;
-        if (offset == 0)
+        // Read the offset of the next object
+        size_t pos_diff = 0;
+        size_t cnt = 0;
+        while (1) {
+            int8_t c = *current++;
+            pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
+            if ((c >> 7) == 0)
+                break;
+        }
+        if (pos_diff == 0)
             break;
-        jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + offset);
+
+        uintptr_t pos = last_pos + pos_diff;
+        last_pos = pos;
+        jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + pos);
         o->bits.gc = GC_OLD;
     }
 }
