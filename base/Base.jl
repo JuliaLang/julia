@@ -50,11 +50,11 @@ setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # t
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
 
-swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
+swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic) =
     (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
-modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
+modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic) =
     (@inline; Core.modifyfield!(x, f, op, v, order))
-replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
+replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
 convert(::Type{Any}, Core.@nospecialize x) = x
