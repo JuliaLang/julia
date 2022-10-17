@@ -274,7 +274,7 @@ end
 
 @testset "HeapSnapshot" begin
     fname = tempname()
-    Profile.take_heap_snapshot(fname)
+    run(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; Profile.take_heap_snapshot($(repr(fname)))"`)
 
     open(fname) do fs
         @test readline(fs) != ""
