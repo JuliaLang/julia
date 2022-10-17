@@ -160,7 +160,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 #ifdef _OS_LINUX_
 #ifndef GLIBCXX_LEAST_VERSION_SYMBOL
 #warning GLIBCXX_LEAST_VERSION_SYMBOL should always be defined in the makefile.
-#define GLIBCXX_LEAST_VERSION_SYMBOL "GLIBCXX_a.b.c" // Appease the linter
+#define GLIBCXX_LEAST_VERSION_SYMBOL "GLIBCXX_a.b.c" /* Appease the linter */
 #endif
 
 #include <link.h>
@@ -356,12 +356,10 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             done_probe = 1;
         }
     }
-    
-#endif
-    // If not on linux, or the probe does not finish successfully, load the bundled version.
     if (!done_probe) {
         load_library("libstdc++.so.6", lib_dir, 1);
     }
+#endif
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
     // which are libraries that we want to load in some special, custom way, such as
