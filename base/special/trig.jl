@@ -28,12 +28,7 @@ end
 @noinline sin_domain_error(x) = throw(DomainError(x, "sin(x) is only defined for finite x."))
 function sin(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
-    if absx < T(pi)/4 #|x| ~<= pi/4, no need for reduction
-        if absx < sqrt(eps(T))
-            return x
-        end
-        return sin_kernel(x)
-    elseif isnan(x)
+    if isnan(x)
         return T(NaN)
     elseif isinf(x)
         sin_domain_error(x)
@@ -97,12 +92,7 @@ end
 @noinline cos_domain_error(x) = throw(DomainError(x, "cos(x) is only defined for finite x."))
 function cos(x::T) where T<:Union{Float32, Float64}
     absx = abs(x)
-    if absx < T(pi)/4
-        if absx < sqrt(eps(T)/T(2.0))
-            return T(1.0)
-        end
-        return cos_kernel(x)
-    elseif isnan(x)
+    if isnan(x)
         return T(NaN)
     elseif isinf(x)
         cos_domain_error(x)

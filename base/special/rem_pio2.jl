@@ -44,16 +44,6 @@ const INV_2PI = (
     0x9afe_d7ec_47e3_5742,
     0x1580_cc11_bf1e_daea)
 
-@inline function cody_waite_2c_pio2(x::Float64, fn, n)
-    pio2_1 = 1.57079632673412561417e+00
-    pio2_1t = 6.07710050650619224932e-11
-
-    z = muladd(-fn, pio2_1, x) # x - fn*pio2_1
-    y1 = muladd(-fn, pio2_1t, z) # z - fn*pio2_1t
-    y2 = muladd(-fn, pio2_1t, (z - y1)) # (z - y1) - fn*pio2_1t
-    n, DoubleFloat64(y1, y2)
-end
-
 @inline function cody_waite_ext_pio2(x::Float64, xhp)
     pio2_1 = 1.57079632673412561417e+00
     pio2_1t = 6.07710050650619224932e-11
@@ -222,108 +212,28 @@ The remainder is given as a double-double pair.
 """
 @inline function rem_pio2_kernel(x::Float64)
     xhp = poshighword(x)
-    #  xhp <= highword(5pi/4) implies |x| ~<= 5pi/4,
-    if xhp <= 0x400f6a7a
-        #  last five bits of xhp == last five bits of highword(pi/2) or
-        #  highword(2pi/2) implies |x| ~= pi/2 or 2pi/2,
-        if (xhp & 0xfffff) == 0x921fb # use precise Cody Waite scheme
-            return cody_waite_ext_pio2(x, xhp)
-        end
-        # use Cody Waite with two constants
-        #  xhp <= highword(3pi/4) implies |x| ~<= 3pi/4
-        if xhp <= 0x4002d97c
-            if x > 0.0
-                return cody_waite_2c_pio2(x, 1.0, 1)
-            else
-                return cody_waite_2c_pio2(x, -1.0, -1)
-            end
-        # 3pi/4 < |x| <= 5pi/4
-        else
-            if x > 0.0
-                return cody_waite_2c_pio2(x, 2.0, 2)
-            else
-                return cody_waite_2c_pio2(x, -2.0, -2)
-            end
-        end
-    end
-    #  xhp <= highword(9pi/4) implies |x| ~<= 9pi/4
-    if xhp <= 0x401c463b
-        #  xhp <= highword(7pi/4) implies |x| ~<= 7pi/4
-        if xhp <= 0x4015fdbc
-            #  xhp == highword(3pi/2) implies |x| ~= 3pi/2
-            if xhp == 0x4012d97c # use precise Cody Waite scheme
-                return cody_waite_ext_pio2(x, xhp)
-            end
-            # use Cody Waite with two constants
-            if x > 0.0
-                return cody_waite_2c_pio2(x, 3.0, 3)
-            else
-                return cody_waite_2c_pio2(x, -3.0, -3)
-            end
-        # 7pi/4 < |x| =< 9pi/4
-        else
-            #  xhp == highword(4pi/2) implies |x| ~= 4pi/2
-            if xhp == 0x401921fb # use precise Cody Waite scheme
-                return cody_waite_ext_pio2(x, xhp)
-            end
-            # use Cody Waite with two constants
-            if x > 0.0
-                return cody_waite_2c_pio2(x, 4.0, 4)
-            else
-                return cody_waite_2c_pio2(x, -4.0, -4)
-            end
-        end
-    end
-    #  xhp < highword(2.0^20*pi/2) implies |x| ~< 2^20*pi/2
-    if xhp < 0x413921fb # use precise Cody Waite scheme
-        return cody_waite_ext_pio2(x, xhp)
-    end
     # if |x| >= 2^20*pi/2 switch to Payne Hanek
-    return paynehanek(x)
+    if xhp >= 0x413921fb
+        return paynehanek(x)
+    end
+    fn = round(x * (2/pi))
+    r  = fma(fn, -pi/2, x)
+    w  = fn * 6.123233995736766e-17 # big(pi)/2 - pi/2 remainder
+    y = r-w
+    ylo = (r-y)-w
+    if reinterpret(UInt64, ylo) & 0xff != 0 #no tricky rounding
+        return unsafe_trunc(Int, fn), DoubleFloat64(y, ylo)
+    end
+    return cody_waite_ext_pio2(x, xhp)
 end
 
-## Float32
 @inline function rem_pio2_kernel(x::Float32)
-    pio2_1 = 1.57079631090164184570e+00
-    pio2_1t = 1.58932547735281966916e-08
-    inv_pio2 = 6.36619772367581382433e-01
     xd = convert(Float64, x)
-    absxd = abs(xd)
-    # it is assumed that NaN and Infs have been checked
-    if absxd <= pi*5/4
-        if absxd <= pi*3/4
-            if x > 0
-                return 1, DoubleFloat32(xd - pi/2)
-            else
-                return -1, DoubleFloat32(xd + pi/2)
-            end
-        end
-        if x > 0
-            return 2, DoubleFloat32(xd - pi)
-        else
-            return -2, DoubleFloat32(xd + pi)
-        end
-    elseif absxd <= pi*9/4
-        if absxd <= pi*7/4
-            if x > 0
-                return 3, DoubleFloat32(xd - pi*3/2)
-            else
-                return -3, DoubleFloat32(xd + pi*3/2)
-            end
-        end
-        if x > 0
-            return 4, DoubleFloat32(xd - pi*4/2)
-        else
-            return -4, DoubleFloat32(xd + pi*4/2)
-        end
-    end
-    #/* 33+53 bit pi is good enough for medium size */
-    if absxd < Float32(pi)/2*2.0f0^28 # medium size */
+    if abs(x) < Float32(0x1p20) # x < 2^20
         # use Cody Waite reduction with two coefficients
-        fn = round(xd*inv_pio2)
-        r  = xd-fn*pio2_1
-        w  = fn*pio2_1t
-        y = r-w;
+        fn = round(xd * (2/pi))
+        r  = fma(fn, -pi/2, xd)
+        y = fma(fn, -6.123233995736766e-17, r) # big(pi)/2 - pi/2 remainder
         return unsafe_trunc(Int, fn), DoubleFloat32(y)
     end
     n, y = rem_pio2_kernel(xd)
