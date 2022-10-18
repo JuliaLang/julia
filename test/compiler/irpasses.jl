@@ -1092,3 +1092,13 @@ let src = code_typed1(foo_defined_last_iter, Tuple{Int})
         end
     end
 end
+
+# Issue #47180, incorrect phi counts in CmdRedirect
+function a47180(b; stdout )
+    c = setenv(b, b.env)
+    if true
+        c = pipeline(c, stdout)
+    end
+    c
+end
+@test isa(a47180(``; stdout), Base.AbstractCmd)

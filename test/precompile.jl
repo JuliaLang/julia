@@ -159,10 +159,9 @@ precompile_test_harness(false) do dir
               # issue 16529 (adding a method to a type with no instances)
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
-              # issue 16471 (capturing references to a kwfunc)
-              Test.@test !isdefined(typeof(sin).name.mt, :kwsorter)
+              # issue 16471
               Base.sin(::UInt8, ::UInt16, ::UInt32; x = 52) = x
-              const sinkw = Core.kwfunc(Base.sin)
+              const sinkw = Core.kwcall
 
               # issue 16908 (some complicated types and external method definitions)
               abstract type CategoricalPool{T, R <: Integer, V} end
@@ -253,9 +252,6 @@ precompile_test_harness(false) do dir
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
           """)
-    # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
-    @test !isdefined(typeof(sin).name.mt, :kwsorter)
-
     # Issue #12623
     @test __precompile__(false) === nothing
 
@@ -387,7 +383,7 @@ precompile_test_harness(false) do dir
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test sin(0x01, 0x4000, 0x30031234) == 52
         @test sin(0x01, 0x4000, 0x30031234; x = 9142) == 9142
-        @test Foo.sinkw === Core.kwfunc(Base.sin)
+        @test Foo.sinkw === Core.kwcall
 
         @test Foo.NominalValue() == 1
         @test Foo.OrdinalValue() == 1

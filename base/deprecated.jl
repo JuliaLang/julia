@@ -167,11 +167,8 @@ function firstcaller(bt::Vector, funcsyms)
             if !found
                 li = lkup.linfo
                 if li isa Core.MethodInstance
-                    ft = ccall(:jl_first_argument_datatype, Any, (Any,), (li.def::Method).sig)
-                    if isType(ft)
-                        ft = unwrap_unionall(ft.parameters[1])
-                        found = (isa(ft, DataType) && ft.name.name in funcsyms)
-                    end
+                    def = li.def
+                    found = def isa Method && def.name in funcsyms
                 end
             end
         end
