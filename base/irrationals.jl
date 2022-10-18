@@ -178,7 +178,7 @@ returns `false`.
     This macro should not be used outside of `Base` Julia.
 
     The macro creates a new type `Irrational{:sym}` regardless of where it's invoked. This can
-    lead to conflicting definitions if two packages define an irrational number with the same 
+    lead to conflicting definitions if two packages define an irrational number with the same
     name but different values.
 
 

@@ -527,7 +527,17 @@ scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::S
 scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach_after::Bool=false)
-    node = add_inst!(ir.new_nodes, pos.id, attach_after)
+    posid = pos.id
+    if pos.id > length(ir.stmts)
+        if attach_after
+            info = ir.new_nodes.info[pos.id-length(ir.stmts)];
+            posid = info.pos
+            attach_after = info.attach_after
+        else
+            error("Cannot attach before a pending node.")
+        end
+    end
+    node = add_inst!(ir.new_nodes, posid, attach_after)
     newline = something(newinst.line, ir[pos][:line])
     newflag = recompute_inst_flag(newinst, ir)
     node = inst_from_newinst!(node, newinst, newline, newflag)
@@ -950,6 +960,8 @@ end
 __set_check_ssa_counts(onoff::Bool) = __check_ssa_counts__[] = onoff
 const __check_ssa_counts__ = fill(false)
 
+should_check_ssa_counts() = __check_ssa_counts__[]
+
 function _oracle_check(compact::IncrementalCompact)
     observed_used_ssas = Core.Compiler.find_ssavalue_uses1(compact)
     for i = 1:length(observed_used_ssas)
@@ -1214,6 +1226,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             label = compact.bb_rename_succ[stmt.args[1]::Int]
             @assert label > 0
             stmt.args[1] = label
+        elseif isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                return result_idx
+            end
         end
         result[result_idx][:inst] = stmt
         result_idx += 1
@@ -1676,7 +1695,7 @@ end
 function complete(compact::IncrementalCompact)
     result_bbs = resize!(compact.result_bbs, compact.active_result_bb-1)
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
-    if __check_ssa_counts__[]
+    if should_check_ssa_counts()
         oracle_check(compact)
     end
 
