@@ -469,14 +469,14 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
             ios_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        ios_printf(stream, "%zu", from_node.type);
-        ios_printf(stream, ",%zu", from_node.name);
-        ios_printf(stream, ",%zu", from_node.id);
-        ios_printf(stream, ",%zu", all_one ? (size_t)1 : from_node.self_size);
-        ios_printf(stream, ",%zu", from_node.edges.size());
-        ios_printf(stream, ",%zu", from_node.trace_node_id);
-        ios_printf(stream, ",%d", from_node.detachedness);
-        ios_printf(stream, "\n");
+        ios_printf(stream, "%zu,%zu,%zu,%zu,%zu,%zu,%d\n",
+                            from_node.type,
+                            from_node.name,
+                            from_node.id,
+                            all_one ? (size_t)1 : from_node.self_size,
+                            from_node.edges.size(),
+                            from_node.trace_node_id,
+                            from_node.detachedness);
     }
     ios_printf(stream, "],\n");
 
@@ -490,10 +490,10 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
             else {
                 ios_printf(stream, ",");
             }
-            ios_printf(stream, "%zu", edge.type);
-            ios_printf(stream, ",%zu", edge.name_or_index);
-            ios_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
-            ios_printf(stream, "\n");
+            ios_printf(stream, "%zu,%zu,%zu\n",
+                                edge.type,
+                                edge.name_or_index,
+                                edge.to_node * k_node_number_of_fields);
         }
     }
     ios_printf(stream, "],\n"); // end "edges"
