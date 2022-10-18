@@ -709,9 +709,12 @@ call will fail, just as it would if too many arguments were given explicitly.
 
 ## Optional Arguments
 
-For example, the function [`Date(y, [m, d])`](@ref) from `Dates` module constructs a `Date` type for
-a given year `y`, month `m` and day `d`. However, `m` and `d` arguments are optional and their default
-value is `1`. This behavior can be expressed concisely as:
+It is often possible to provide sensible default values for function arguments.
+This can save users from having to pass every argument on every call.
+For example, the function [`Date(y, [m, d])`](@ref)
+from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
+However, `m` and `d` arguments are optional and their default value is `1`.
+This behavior can be expressed concisely as:
 
 ```julia-repl
 julia> using Dates
@@ -723,6 +726,9 @@ julia> function date(y::Int64, m::Int64=1, d::Int64=1)
        end
 date (generic function with 3 methods)
 ```
+
+Observe, that this definition calls another method of the `Date` function that takes one argument
+of type `UTInstant{Day}`.
 
 With this definition, the function can be called with either one, two or three arguments, and
 `1` is automatically passed when only one or two of the arguments are specified:
