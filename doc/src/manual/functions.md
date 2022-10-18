@@ -709,12 +709,9 @@ call will fail, just as it would if too many arguments were given explicitly.
 
 ## Optional Arguments
 
-It is often possible to provide sensible default values for function arguments.
-This can save users from having to pass every argument on every call.
-For example, suppose we want to create a simple function to take in integers and then return a
-string of those integers in a date format; instead of having the user pass the month and day always,
-we can make them optional by giving default values to them as `1`. This behavior can be expressed
-concisely as:
+For example, the function [`Date(y, [m, d])`](@ref) from `Dates` module constructs a `Date` type for
+a given year `y`, month `m` and day `d`. However, `m` and `d` arguments are optional and their default
+value is `1`. This behavior can be expressed concisely as:
 
 ```julia-repl
 julia> using Dates
