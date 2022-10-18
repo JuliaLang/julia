@@ -1739,7 +1739,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     }
 #endif
 
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+    if (jl_options.handle_signals != JL_OPTIONS_HANDLE_SIGNALS_OFF)
         jl_install_thread_signal_handler(ptls);
 
     return ct;

@@ -1034,80 +1034,85 @@ static void sigtrap_handler(int sig, siginfo_t *info, void *context)
 
 void jl_install_default_signal_handlers(void)
 {
-    struct sigaction actf;
-    memset(&actf, 0, sizeof(struct sigaction));
-    sigemptyset(&actf.sa_mask);
-    actf.sa_sigaction = fpe_handler;
-    actf.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON) {
+        struct sigaction actf;
+        memset(&actf, 0, sizeof(struct sigaction));
+        sigemptyset(&actf.sa_mask);
+        actf.sa_sigaction = fpe_handler;
+        actf.sa_flags = SA_SIGINFO;
+        if (sigaction(SIGFPE, &actf, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
-    struct sigaction acttrap;
-    memset(&acttrap, 0, sizeof(struct sigaction));
-    sigemptyset(&acttrap.sa_mask);
-    acttrap.sa_sigaction = sigtrap_handler;
-    acttrap.sa_flags = SA_SIGINFO;
-    if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+        struct sigaction acttrap;
+        memset(&acttrap, 0, sizeof(struct sigaction));
+        sigemptyset(&acttrap.sa_mask);
+        acttrap.sa_sigaction = sigtrap_handler;
+        acttrap.sa_flags = SA_SIGINFO;
+        if (sigaction(SIGTRAP, &acttrap, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
 #else
-    if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGTRAP");
-    }
+        if (signal(SIGTRAP, SIG_IGN) == SIG_ERR) {
+            jl_error("fatal error: Couldn't set SIGTRAP");
+        }
 #endif
-    struct sigaction actint;
-    memset(&actint, 0, sizeof(struct sigaction));
-    sigemptyset(&actint.sa_mask);
-    actint.sa_handler = sigint_handler;
-    actint.sa_flags = 0;
-    if (sigaction(SIGINT, &actint, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
-        jl_error("fatal error: Couldn't set SIGPIPE");
+        struct sigaction actint;
+        memset(&actint, 0, sizeof(struct sigaction));
+        sigemptyset(&actint.sa_mask);
+        actint.sa_handler = sigint_handler;
+        actint.sa_flags = 0;
+        if (sigaction(SIGINT, &actint, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+        if (signal(SIGPIPE, SIG_IGN) == SIG_ERR) {
+            jl_error("fatal error: Couldn't set SIGPIPE");
+        }
+#if !defined(HAVE_MACH)
+        struct sigaction act;
+        memset(&act, 0, sizeof(struct sigaction));
+        sigemptyset(&act.sa_mask);
+        act.sa_sigaction = usr2_handler;
+        act.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
+        if (sigaction(SIGUSR2, &act, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+#endif
     }
 
 #if defined(HAVE_MACH)
     allocate_mach_handler();
-#else
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = usr2_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
-    if (sigaction(SIGUSR2, &act, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
 #endif
 
     allocate_segv_handler();
 
-    struct sigaction act_die;
-    memset(&act_die, 0, sizeof(struct sigaction));
-    sigemptyset(&act_die.sa_mask);
-    act_die.sa_sigaction = sigdie_handler;
-    act_die.sa_flags = SA_SIGINFO | SA_RESETHAND;
-    if (sigaction(SIGILL, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGABRT, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    if (sigaction(SIGSYS, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
-    // need to ensure the following signals are not SIG_IGN, even though they will be blocked
-    act_die.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON) {
+        struct sigaction act_die;
+        memset(&act_die, 0, sizeof(struct sigaction));
+        sigemptyset(&act_die.sa_mask);
+        act_die.sa_sigaction = sigdie_handler;
+        act_die.sa_flags = SA_SIGINFO | SA_RESETHAND;
+        if (sigaction(SIGILL, &act_die, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+        if (sigaction(SIGABRT, &act_die, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+        if (sigaction(SIGSYS, &act_die, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
+        // need to ensure the following signals are not SIG_IGN, even though they will be blocked
+        act_die.sa_flags = SA_SIGINFO | SA_RESTART | SA_RESETHAND;
 #ifdef SIGINFO
-    if (sigaction(SIGINFO, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+        if (sigaction(SIGINFO, &act_die, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
 #else
-    if (sigaction(SIGUSR1, &act_die, NULL) < 0) {
-        jl_errorf("fatal error: sigaction: %s", strerror(errno));
-    }
+        if (sigaction(SIGUSR1, &act_die, NULL) < 0) {
+            jl_errorf("fatal error: sigaction: %s", strerror(errno));
+        }
 #endif
+    }
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
