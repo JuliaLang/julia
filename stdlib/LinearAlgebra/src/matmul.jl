@@ -573,10 +573,10 @@ end
         return @stable_muladdmul matmul3x3!(C, tA, tAt, A, A, MulAddMul(α, β))
     end
 
-    _syrk_wrapper!(C, tA, A, α, β)
+    _syrk_wrapper!(C, tA, tAt, A, α, β)
 end
 
-function _syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, A::StridedVecOrMat{T},
+function _syrk_wrapper!(C::StridedMatrix{T}, tA::AbstractChar, tAt::AbstractChar, A::StridedVecOrMat{T},
     α::Number=true, β::Number=false) where {T<:BlasFloat}
     # BLAS.syrk! only updates symmetric C
     # alternatively, make non-zero β a show-stopper for BLAS.syrk!
@@ -616,10 +616,10 @@ end
         return @stable_muladdmul matmul3x3!(C, tA, tAt, A, A, MulAddMul(α, β))
     end
 
-    _herk_wrapper!(C, tA, A, α, β)
+    _herk_wrapper!(C, tA, tAt, A, α, β)
 end
 
-function _herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
+function _herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA::AbstractChar, tAt::AbstractChar, A::Union{StridedVecOrMat{T}, StridedVecOrMat{Complex{T}}},
     α::Number=true, β::Number=false) where {T<:BlasReal}
     # Result array does not need to be initialized as long as beta==0
     #    C = Matrix{T}(undef, mA, mA)
