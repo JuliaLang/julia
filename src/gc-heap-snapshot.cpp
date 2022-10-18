@@ -24,26 +24,26 @@ using llvm::StringRef;
 // https://stackoverflow.com/a/33799784/751061
 void print_str_escape_json(ios_t *stream, StringRef s)
 {
-    ios_printf(stream, "\"");
+    ios_putc('"', stream);
     for (auto c = s.begin(); c != s.end(); c++) {
         switch (*c) {
-        case '"': ios_printf(stream, "\\\""); break;
-        case '\\': ios_printf(stream, "\\\\"); break;
-        case '\b': ios_printf(stream, "\\b"); break;
-        case '\f': ios_printf(stream, "\\f"); break;
-        case '\n': ios_printf(stream, "\\n"); break;
-        case '\r': ios_printf(stream, "\\r"); break;
-        case '\t': ios_printf(stream, "\\t"); break;
+        case '"':  ios_write(stream, "\\\"", 2); break;
+        case '\\': ios_write(stream, "\\\\", 2); break;
+        case '\b': ios_write(stream, "\\b",  2); break;
+        case '\f': ios_write(stream, "\\f",  2); break;
+        case '\n': ios_write(stream, "\\n",  2); break;
+        case '\r': ios_write(stream, "\\r",  2); break;
+        case '\t': ios_write(stream, "\\t",  2); break;
         default:
-            if ('\x00' <= *c && *c <= '\x1f') {
+            if (('\x00' <= *c) & (*c <= '\x1f')) {
                 ios_printf(stream, "\\u%04x", (int)*c);
             }
             else {
-                ios_printf(stream, "%c", *c);
+                ios_putc(*c, stream);
             }
         }
     }
-    ios_printf(stream, "\"");
+    ios_putc('"', stream);
 }
 
 
