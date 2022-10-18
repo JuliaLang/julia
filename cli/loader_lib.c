@@ -166,7 +166,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 #include <link.h>
 #include <sys/wait.h>
 
-static void write_wrapper(int fd, char *str, size_t len)
+static void write_wrapper(int fd, const char *str, size_t len)
 {
     size_t written_sofar = 0;
     while (len) {
