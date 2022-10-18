@@ -648,7 +648,7 @@ end
 
 @inline function gemm_wrapper!(C::StridedVecOrMat{S}, tA::AbstractChar, tB::AbstractChar,
                             A::StridedVecOrMat{S}, B::StridedVecOrMat{T},
-                            α::Number=true, β::Number=false) where {T<:BlasFloat,S<:Union{T, Complex{T}}}
+                            α::Number=true, β::Number=false) where {T<:BlasFloat,S<:BlasFloat}
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
 
