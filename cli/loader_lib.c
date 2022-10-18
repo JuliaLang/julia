@@ -294,8 +294,8 @@ static char *libstdcxxprobe(void)
                 }
             }
             else if (!WIFEXITED(wstatus)) {
-                char err_str[] = "Error during libstdcxxprobe in parent process:\n"
-                                 "The child process did not exit normally.\n";
+                const char err_str* = "Error during libstdcxxprobe in parent process:\n"
+                                      "The child process did not exit normally.\n";
                 size_t err_strlen = strlen(err_str);
                 write_wrapper(STDERR_FILENO, err_str, err_strlen);
                 exit(1);
