@@ -243,7 +243,7 @@ variable they have been assigned to. They can be used as arguments, and they can
 values. They can also be created anonymously, without being given a name, using either of these
 syntaxes:
 
-```jldoctest
+```jldoctest fofxyz
 julia> x -> x^2 + 2x - 1
 #1 (generic function with 1 method)
 
@@ -259,7 +259,7 @@ name based on consecutive numbering.
 
 And because they're first class objects, we can assign them to a variable and then call them using
 the variable assigned to as a function:
-```jldoctest
+```jldoctest fofxyz
 julia> A = x -> x^2 + 2x - 1
 #5 (generic function with 1 method)
 
