@@ -527,7 +527,17 @@ scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::S
 scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach_after::Bool=false)
-    node = add_inst!(ir.new_nodes, pos.id, attach_after)
+    posid = pos.id
+    if pos.id > length(ir.stmts)
+        if attach_after
+            info = ir.new_nodes.info[pos.id-length(ir.stmts)];
+            posid = info.pos
+            attach_after = info.attach_after
+        else
+            error("Cannot attach before a pending node.")
+        end
+    end
+    node = add_inst!(ir.new_nodes, posid, attach_after)
     newline = something(newinst.line, ir[pos][:line])
     newflag = recompute_inst_flag(newinst, ir)
     node = inst_from_newinst!(node, newinst, newline, newflag)
