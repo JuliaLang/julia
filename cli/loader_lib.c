@@ -294,7 +294,7 @@ static char *libstdcxxprobe(void)
                 }
             }
             else if (!WIFEXITED(wstatus)) {
-                const char err_str* = "Error during libstdcxxprobe in parent process:\n"
+                const char *err_str = "Error during libstdcxxprobe in parent process:\n"
                                       "The child process did not exit normally.\n";
                 size_t err_strlen = strlen(err_str);
                 write_wrapper(STDERR_FILENO, err_str, err_strlen);
@@ -357,7 +357,11 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         }
     }
     if (!done_probe) {
-        load_library("libstdc++.so.6", lib_dir, 1);
+#ifndef GLIBCXX_PATH
+#define GLIBCXX_PATH "$(private_libdir)/usr/lib/julia/libstdc++.so.6"
+#warning GLIBCXX_PATH is meant to be specified on the command line
+#endif
+        load_library(GLIBCXX_PATH, lib_dir, 1);
     }
 #endif
 
