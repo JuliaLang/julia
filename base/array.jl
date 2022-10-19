@@ -1259,7 +1259,10 @@ end
 """
     sizehint!(s, n) -> s
 
-Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
+you expect that you're going to have to push a lot of values onto `s`, you can avoid
+the cost of incremental reallocation by doing it once up front; this can improve
+performance.
 
 # Notes on the performance model
 
@@ -1273,6 +1276,8 @@ For types that support `sizehint!`,
    `Base`.
 
 3. `empty!` is nearly costless (and O(1)) for types that support this kind of preallocation.
+
+See also: `resize!`.
 """
 function sizehint! end
 
