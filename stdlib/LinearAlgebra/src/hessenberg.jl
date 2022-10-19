@@ -124,48 +124,48 @@ for T = (:Number, :UniformScaling, :Diagonal)
 end
 
 function *(H::UpperHessenberg, U::UpperOrUnitUpperTriangular)
-    HH = _mulmattri!(_init(*, H, U, parent(H)), H, U)
+    HH = _mulmattri!(_initarray(*, eltype(H), eltype(U), size(H)), H, U)
     UpperHessenberg(HH)
 end
 function *(U::UpperOrUnitUpperTriangular, H::UpperHessenberg)
-    HH = _multrimat!(_init(*, U, H, parent(H)), U, H)
+    HH = _multrimat!(_initarray(*, eltype(U), eltype(H), size(H)), U, H)
     UpperHessenberg(HH)
 end
 
 function /(H::UpperHessenberg, U::UpperTriangular)
-    HH = _rdiv!(_init(/, H, U, parent(H)), H, U)
+    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), size(H)), H, U)
     UpperHessenberg(HH)
 end
 function /(H::UpperHessenberg, U::UnitUpperTriangular)
-    HH = _rdiv!(_init(/, H, U, parent(H)), H, U)
+    HH = _rdiv!(_initarray(/, eltype(H), eltype(U), size(H)), H, U)
     UpperHessenberg(HH)
 end
 
 function \(U::UpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(_init(\, U, H, parent(H)), U, H)
+    HH = ldiv!(_initarray(\, eltype(U), eltype(H), size(H)), U, H)
     UpperHessenberg(HH)
 end
 function \(U::UnitUpperTriangular, H::UpperHessenberg)
-    HH = ldiv!(_init(\, U, H, parent(H)), U, H)
+    HH = ldiv!(_initarray(\, eltype(U), eltype(H), size(H)), U, H)
     UpperHessenberg(HH)
 end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
-    A = A_mul_B_td!(_init(*, B, H, parent(H)), H, B)
+    A = A_mul_B_td!(_initarray(*, eltype(B), eltype(H), size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
-    A = A_mul_B_td!(_init(*, B, H, parent(H)), B, H)
+    A = A_mul_B_td!(_initarray(*, eltype(B), eltype(H), size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 function /(H::UpperHessenberg, B::Bidiagonal)
-    A = _rdiv!(_init(/, H, B, parent(H)), H, B)
+    A = _rdiv!(_initarray(/, eltype(H), eltype(B), size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
 function \(B::Bidiagonal, H::UpperHessenberg)
-    A = ldiv!(_init(\, B, H, parent(H)), B, H)
+    A = ldiv!(_initarray(\, eltype(B), eltype(H), size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 

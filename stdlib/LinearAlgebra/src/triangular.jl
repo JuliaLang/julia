@@ -659,7 +659,7 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 # BlasFloat routines #
 ######################
 
-lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B) # this should really be deprecated
+lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
 mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = _multrimat!(C, A, B)
 mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
 mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
@@ -903,11 +903,10 @@ end
 
 ## Generic triangular multiplication
 for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval lmul!(A::$t, B::StridedVecOrMat) =
-        Base.@invoke _multrimat!(B::AbstractVecOrMat, A::$t, B::AbstractVecOrMat)
-    @eval mul!(C::StridedVecOrMat, A::$t, B::StridedVecOrMat) =
-        Base.@invoke _multrimat!(C::AbstractVecOrMat, A::$t, B::AbstractVecOrMat)
+    @eval lmul!(A::$t, B::AbstractVecOrMat) = @inline _multrimat!(B, A, B)
+    @eval mul!(C::AbstractVecOrMat, A::$t, B::AbstractVecOrMat) = _multrimat!(C, A, B)
 end
+
 function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
@@ -930,7 +929,6 @@ function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMa
     end
     C
 end
-
 function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
@@ -953,7 +951,6 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVec
     end
     C
 end
-
 function _multrimat!(C::AbstractVecOrMat, A::LowerTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
@@ -999,114 +996,9 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVec
     C
 end
 
-for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
-    @eval begin
-        function _multrimat!(C::AbstractVecOrMat, xA::UpperTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
-            A = xA.data
-            require_one_based_indexing(C, A, B)
-            m, n = size(B, 1), size(B, 2)
-            N = size(A, 1)
-            if m != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $N, has size $m"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != N || nc != n
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
-            end
-            pA = parent(A)
-            @inbounds for j in 1:n
-                for i in 1:m
-                    Cij = $tfun(pA[i,i]) * B[i,j]
-                    for k in i + 1:m
-                        Cij += $tfun(pA[k,i]) * B[k,j]
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-
-        function _multrimat!(C::AbstractVecOrMat, xA::UnitUpperTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
-            A = xA.data
-            require_one_based_indexing(C, A, B)
-            m, n = size(B, 1), size(B, 2)
-            N = size(A, 1)
-            if m != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $N, has size $m"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != N || nc != n
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
-            end
-            pA = parent(A)
-            @inbounds for j in 1:n
-                for i in 1:m
-                    Cij = xA[i,i] * B[i,j]
-                    for k in i + 1:m
-                        Cij += $tfun(pA[k,i]) * B[k,j]
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-
-        function _multrimat!(C::AbstractVecOrMat, xA::LowerTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
-            A = xA.data
-            require_one_based_indexing(C, A, B)
-            m, n = size(B, 1), size(B, 2)
-            N = size(A, 1)
-            if m != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $N, has size $m"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != N || nc != n
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
-            end
-            pA = parent(A)
-            @inbounds for j in 1:n
-                for i in m:-1:1
-                    Cij = $tfun(pA[i,i]) * B[i,j]
-                    for k in 1:i - 1
-                        Cij += $tfun(pA[k,i]) * B[k,j]
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-        function _multrimat!(C::AbstractVecOrMat, xA::UnitLowerTriangular{<:Any,<:$t}, B::AbstractVecOrMat)
-            A = xA.data
-            require_one_based_indexing(C, A, B)
-            m, n = size(B, 1), size(B, 2)
-            N = size(A, 1)
-            if m != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $N, has size $m"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != N || nc != n
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
-            end
-            pA = parent(A)
-            @inbounds for j in 1:n
-                for i in m:-1:1
-                    Cij = xA[i,i] * B[i,j]
-                    for k in 1:i - 1
-                        Cij += $tfun(pA[k,i]) * B[k,j]
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-    end
-end
-
 for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval rmul!(A::StridedMatrix, B::$t) =
-        Base.@invoke _mulmattri!(A::AbstractMatrix, A::AbstractMatrix, B::$t)
-    @eval mul!(C::StridedMatrix, A::StridedMatrix, B::$t) =
-        Base.@invoke _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::$t)
+    @eval rmul!(A::AbstractMatrix, B::$t) = @inline _mulmattri!(A, A, B)
+    @eval mul!(C::AbstractMatrix, A::AbstractMatrix, B::$t) = _mulmattri!(C, A, B)
 end
 
 function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
@@ -1153,7 +1045,6 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangula
     end
     C
 end
-
 function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
@@ -1197,106 +1088,6 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangula
         end
     end
     C
-end
-
-for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
-    @eval begin
-        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular{<:Any,<:$t})
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            N = size(B, 1)
-            if n != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != m || nc != N
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-            end
-            pB = parent(parent(B))
-            @inbounds for i in 1:m
-                for j = n:-1:1
-                    Cij = A[i,j] * $tfun(pB[j,j])
-                    for k in 1:j - 1
-                        Cij += A[i,k] * $tfun(pB[j,k])
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-
-        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular{<:Any,<:$t})
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            N = size(B, 1)
-            if n != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != m || nc != N
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-            end
-            pB = parent(parent(B))
-            @inbounds for i in 1:m
-                for j in n:-1:1
-                    Cij = A[i,j] * B[j,j]
-                    for k = 1:j - 1
-                        Cij += A[i,k] * $tfun(pB[j,k])
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-
-        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular{<:Any,<:$t})
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            N = size(B, 1)
-            if n != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != m || nc != N
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-            end
-            pB = parent(parent(B))
-            @inbounds for i in 1:m
-                for j in 1:n
-                    Cij = A[i,j] * $tfun(pB[j,j])
-                    for k in j + 1:n
-                        Cij += A[i,k] * $tfun(pB[j,k])
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-
-        function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular{<:Any,<:$t})
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            N = size(B, 1)
-            if n != N
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
-            end
-            mc, nc = size(C, 1), size(C, 2)
-            if mc != m || nc != N
-                throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($m,$N)"))
-            end
-            pB = parent(parent(B))
-            @inbounds for i in 1:m
-                for j in 1:n
-                    Cij = A[i,j] * B[j,j]
-                    for k in j + 1:n
-                        Cij += A[i,k] * $tfun(pB[j,k])
-                    end
-                    C[i,j] = Cij
-                end
-            end
-            C
-        end
-    end
 end
 
 #Generic solver using naive substitution
@@ -1400,94 +1191,7 @@ function ldiv!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix)
     C
 end
 
-# in the following transpose and conjugate transpose naive substitution variants,
-# accumulating in z rather than b[j,k] significantly improves performance as of Dec 2015
-for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
-    @eval begin
-        function ldiv!(c::AbstractVector, xA::UpperTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            require_one_based_indexing(c, xA, b)
-            n = size(A, 1)
-            if !(n == length(b))
-                throw(DimensionMismatch("first dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-            end
-            @inbounds for i in n:-1:1
-                aii = $tfun(A[i,i])
-                iszero(aii) && throw(SingularException(i))
-                bi = b[i]
-                for j in i+1:n
-                    bi -= $tfun(A[j,i]) * c[j]
-                end
-                c[i] = aii \ bi
-            end
-            return c
-        end
-
-        function ldiv!(c::AbstractVector, xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            require_one_based_indexing(c, xA, b)
-            n = size(A, 2)
-            if n != length(b)
-                throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-            end
-            if n != length(c)
-                throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
-            end
-            @inbounds for i in n:-1:1
-                bi = b[i]
-                for j in i+1:n
-                    bi -= $tfun(A[j,i]) * c[j]
-                end
-                c[i] = xA[i,i] \ bi
-            end
-            return c
-        end
-
-        function ldiv!(c::AbstractVector, xA::LowerTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            require_one_based_indexing(c, xA, b)
-            n = size(A, 2)
-            if n != length(b)
-                throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-            end
-            if n != length(c)
-                throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
-            end
-            @inbounds for i in 1:n
-                aii = $tfun(A[i,i])
-                iszero(aii) && throw(SingularException(i))
-                bi = b[i]
-                for j in 1:i-1
-                    bi -= $tfun(A[j,i]) * c[j]
-                end
-                c[i] = aii \ bi
-            end
-            return c
-        end
-
-        function ldiv!(c::AbstractVector, xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector)
-            A = parent(parent(xA))
-            require_one_based_indexing(c, xA, b)
-            n = size(A, 2)
-            if n != length(b)
-                throw(DimensionMismatch("second dimension of left hand side A, $n, and length of right hand side b, $(length(b)), must be equal"))
-            end
-            if n != length(c)
-                throw(DimensionMismatch("length of output c, $(length(c)), does not match length of right hand side b, $(length(b))"))
-            end
-            @inbounds for i in 1:n
-                bi = b[i]
-                for j in 1:i-1
-                    bi -= $tfun(A[j,i]) * c[j]
-                end
-                c[i] = xA[i,i] \ bi
-            end
-            return c
-        end
-    end
-end
-
-rdiv!(A::StridedMatrix, B::AbstractTriangular) = @inline _rdiv!(A, A, B)
+rdiv!(A::AbstractMatrix, B::AbstractTriangular) = @inline _rdiv!(A, A, B)
 function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
@@ -1528,7 +1232,6 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
     end
     C
 end
-
 function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A)
@@ -1568,97 +1271,6 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
         end
     end
     C
-end
-
-for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
-    @eval begin
-        function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, xB::LowerTriangular{<:Any,<:$t})
-            B = parent(parent(xB))
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            if size(B, 1) != n
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-            end
-            if size(C) != size(A)
-                throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
-            end
-            @inbounds for i in 1:m
-                for j in n:-1:1
-                    Aij = A[i,j]
-                    for k in j + 1:n
-                        Aij -= C[i,k] * $tfun(B[j,k])
-                    end
-                    C[i,j] = Aij / $tfun(B[j,j])
-                end
-            end
-            C
-        end
-        function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, xB::UnitLowerTriangular{<:Any,<:$t})
-            B = parent(parent(xB))
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            if size(B, 1) != n
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-            end
-            if size(C) != size(A)
-                throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
-            end
-            o = oneunit(eltype(B))
-            @inbounds for i in 1:m
-                for j in n:-1:1
-                    Aij = A[i,j]
-                    for k in j + 1:n
-                        Aij -= C[i,k] * $tfun(B[j,k])
-                    end
-                    C[i,j] = Aij / xB[j,j]
-                end
-            end
-            C
-        end
-
-        function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, xB::UpperTriangular{<:Any,<:$t})
-            B = parent(parent(xB))
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            if size(B, 1) != n
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-            end
-            if size(C) != size(A)
-                throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
-            end
-            @inbounds for i in 1:m
-                for j in 1:n
-                    Aij = A[i,j]
-                    for k in 1:j - 1
-                        Aij -= C[i,k] * $tfun(B[j,k])
-                    end
-                    C[i,j] = Aij / $tfun(B[j,j])
-                end
-            end
-            C
-        end
-        function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, xB::UnitUpperTriangular{<:Any,<:$t})
-            B = parent(parent(xB))
-            require_one_based_indexing(C, A, B)
-            m, n = size(A)
-            if size(B, 1) != n
-                throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $(size(B,1))"))
-            end
-            if size(C) != size(A)
-                throw(DimensionMismatch("size of output, $(size(C)), does not match size of left hand side, $(size(A))"))
-            end
-            @inbounds for i in 1:m
-                for j in 1:n
-                    Aij = A[i,j]
-                    for k in 1:j - 1
-                        Aij -= C[i,k]*$tfun(B[j,k])
-                    end
-                    C[i,j] = Aij / xB[j,j]
-                end
-            end
-            C
-        end
-    end
 end
 
 function lmul!(A::Union{UpperTriangular,UnitUpperTriangular}, B::UpperTriangular)
@@ -1960,10 +1572,10 @@ end
 # below might compute an unnecessary copy. Eliminating the copy requires adding
 # all the promotion logic here once again. Since these methods are probably relatively
 # rare, we chose not to bother for now.
-*(A::Adjoint{<:Any,<:AbstractMatrix}, B::AbstractTriangular) = copy(A) * B
-*(A::Transpose{<:Any,<:AbstractMatrix}, B::AbstractTriangular) = copy(A) * B
-*(A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractMatrix}) = A * copy(B)
-*(A::AbstractTriangular, B::Transpose{<:Any,<:AbstractMatrix}) = A * copy(B)
+# *(A::AdjointAbsMat, B::AbstractTriangular) = copy(A) * B
+# *(A::TransposeAbsMat, B::AbstractTriangular) = copy(A) * B
+# *(A::AbstractTriangular, B::AdjointAbsMat) = A * copy(B)
+# *(A::AbstractTriangular, B::TransposeAbsMat) = A * copy(B)
 
 # Complex matrix power for upper triangular factor, see:
 #   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",

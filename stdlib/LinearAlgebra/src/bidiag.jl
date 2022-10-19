@@ -783,34 +783,34 @@ ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) 
     (_rdiv!(adjoint(c), adjoint(b), adjoint(A)); return c)
 
 ### Generic promotion methods and fallbacks
-\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_denseinit(\, A, B, B), A, B)
+\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), size(B)), A, B)
 \(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(tA) \ B
 \(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(adjA) \ B
 
 ### Triangular specializations
 for tri in (:UpperTriangular, :UnitUpperTriangular)
     @eval function \(B::Bidiagonal, U::$tri)
-        A = ldiv!(_init(\, B, U, parent(U)), B, U)
+        A = ldiv!(_initarray(\, eltype(B), eltype(U), size(U)), B, U)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
     @eval function \(U::$tri, B::Bidiagonal)
-        A = ldiv!(_init(\, U, B, parent(U)), U, B)
+        A = ldiv!(_initarray(\, eltype(U), eltype(B), size(U)), U, B)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
 end
 for tri in (:LowerTriangular, :UnitLowerTriangular)
     @eval function \(B::Bidiagonal, L::$tri)
-        A = ldiv!(_init(\, B, L, parent(L)), B, L)
+        A = ldiv!(_initarray(\, eltype(B), eltype(L), size(L)), B, L)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
     @eval function \(L::$tri, B::Bidiagonal)
-        A = ldiv!(_init(\, L, B, parent(L)), L, B)
+        A = ldiv!(_initarray(\, eltype(L), eltype(B), size(L)), L, B)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
 ### Diagonal specialization
 function \(B::Bidiagonal, D::Diagonal)
-    A = ldiv!(_denseinit(\, B, D, D), B, D)
+    A = ldiv!(_initarray(\, eltype(B), eltype(D), size(D)), B, D)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
@@ -863,42 +863,39 @@ _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
     (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
 
-/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_denseinit(/, A, B, A), A, B)
+/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), size(A)), A, B)
 
 ### Triangular specializations
 for tri in (:UpperTriangular, :UnitUpperTriangular)
     @eval function /(U::$tri, B::Bidiagonal)
-        A = _rdiv!(_init(/, U, B, parent(U)), U, B)
+        A = _rdiv!(_initarray(/, eltype(U), eltype(B), size(U)), U, B)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
     @eval function /(B::Bidiagonal, U::$tri)
-        A = _rdiv!(_init(/, B, U, parent(U)), B, U)
+        A = _rdiv!(_initarray(/, eltype(B), eltype(U), size(U)), B, U)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
 end
 for tri in (:LowerTriangular, :UnitLowerTriangular)
     @eval function /(L::$tri, B::Bidiagonal)
-        A = _rdiv!(_init(/, L, B, parent(L)), L, B)
+        A = _rdiv!(_initarray(/, eltype(L), eltype(B), size(L)), L, B)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
     @eval function /(B::Bidiagonal, L::$tri)
-        A = _rdiv!(_init(/, B, L, parent(L)), B, L)
+        A = _rdiv!(_initarray(/, eltype(B), eltype(L), size(L)), B, L)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
 
 ### Diagonal specialization
-function /(D::Diagonal{<:Number}, B::Bidiagonal{<:Number})
-    T = typeof((oneunit(eltype(D)))/oneunit(eltype(B)))
-    A = _rdiv!(zeros(T, size(D)), D, B)
+function /(D::Diagonal, B::Bidiagonal)
+    A = _rdiv!(_initarray(/, eltype(D), eltype(B), size(D)), D, B)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
 /(A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) = A / copy(B)
 /(A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) = A / copy(B)
 # disambiguation
-/(A::AdjointAbsVec{<:Number}, B::Bidiagonal{<:Number}) = adjoint(adjoint(B) \ parent(A))
-/(A::TransposeAbsVec{<:Number}, B::Bidiagonal{<:Number}) = transpose(transpose(B) \ parent(A))
 /(A::AdjointAbsVec, B::Bidiagonal) = adjoint(adjoint(B) \ parent(A))
 /(A::TransposeAbsVec, B::Bidiagonal) = transpose(transpose(B) \ parent(A))
 /(A::AdjointAbsVec, B::Transpose{<:Any,<:Bidiagonal}) = adjoint(adjoint(B) \ parent(A))
@@ -909,8 +906,8 @@ end
 factorize(A::Bidiagonal) = A
 function inv(B::Bidiagonal{T}) where T
     n = size(B, 1)
-    dest = zeros(typeof(oneunit(T)\one(T)), (n, n))
-    ldiv!(dest, B, Diagonal{typeof(one(T)\one(T))}(I, n))
+    dest = zeros(typeof(inv(oneunit(T))), (n, n))
+    ldiv!(dest, B, Diagonal{typeof(one(T)/one(T))}(I, n))
     return B.uplo == 'U' ? UpperTriangular(dest) : LowerTriangular(dest)
 end
 
