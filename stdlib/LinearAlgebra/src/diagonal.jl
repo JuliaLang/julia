@@ -377,7 +377,7 @@ end
 mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
     _muldiag!(C, Da, Db, alpha, beta)
 
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init_eltype(/, eltype(A), eltype(D)).(A), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -402,7 +402,7 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(_init_eltype(\, eltype(D), eltype(B)).(B), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -540,7 +540,8 @@ for Tri in (:UpperTriangular, :LowerTriangular)
     @eval ldiv!(C::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(C.data, D, A.data))
     @eval ldiv!(C::$Tri, D::Diagonal, A::$UTri) = $Tri(_setdiag!(ldiv!(C.data, D, A.data), inv, D.diag))
     # 3-arg mul!: invoke 5-arg mul! rather than lmul!
-    @eval mul!(C::$Tri, A::Union{$Tri,$UTri}, D::Diagonal) = mul!(C, A, D, true, false)
+    @eval mul!(C::$Tri, A::$Tri, D::Diagonal) = mul!(C, A, D, true, false)
+    @eval mul!(C::$Tri, A::$UTri, D::Diagonal) = mul!(C, A, D, true, false)
     # 5-arg mul!
     @eval @inline mul!(C::$Tri, D::Diagonal, A::$Tri, α::Number, β::Number) = $Tri(mul!(C.data, D, A.data, α, β))
     @eval @inline function mul!(C::$Tri, D::Diagonal, A::$UTri, α::Number, β::Number)

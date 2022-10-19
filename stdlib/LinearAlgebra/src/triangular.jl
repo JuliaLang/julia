@@ -425,7 +425,7 @@ function -(A::UnitUpperTriangular)
 end
 
 # copy and scale
-function copyto!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
+function copyto!(A::T, B::T) where {T<:Union{UpperTriangular,UnitUpperTriangular}}
     n = size(B,1)
     for j = 1:n
         for i = 1:(isa(B, UnitUpperTriangular) ? j-1 : j)
@@ -434,7 +434,7 @@ function copyto!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     end
     return A
 end
-function copyto!(A::T, B::T) where T<:Union{LowerTriangular,UnitLowerTriangular}
+function copyto!(A::T, B::T) where {T<:Union{LowerTriangular,UnitLowerTriangular}}
     n = size(B,1)
     for j = 1:n
         for i = (isa(B, UnitLowerTriangular) ? j+1 : j):n
@@ -542,8 +542,8 @@ end
     return A
 end
 
-rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = mul!(A, A, c)
-lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = mul!(A, c, A)
+rmul!(A::Union{UpperTriangular,LowerTriangular}, c::Number) = @inline mul!(A, A, c)
+lmul!(c::Number, A::Union{UpperTriangular,LowerTriangular}) = @inline mul!(A, c, A)
 
 function dot(x::AbstractVector, A::UpperTriangular, y::AbstractVector)
     require_one_based_indexing(x, y)
@@ -660,9 +660,9 @@ fillstored!(A::UnitUpperTriangular, x) = (fillband!(A.data, x, 1, size(A,2)-1); 
 ######################
 
 lmul!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
-mul!(C::AbstractVector  , A::AbstractTriangular, B::AbstractVector)   = _multrimat!(C, A, B)
-mul!(C::AbstractMatrix  , A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
-mul!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = _multrimat!(C, A, B)
+mul!(C::AbstractVector, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractVector) = _multrimat!(C, A, B)
+mul!(C::AbstractMatrix, A::AbstractTriangular, B::AbstractMatrix) = _multrimat!(C, A, B)
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Adjoint{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
     mul!(C, A, copy(B), alpha, beta)
 @inline mul!(C::AbstractMatrix, A::AbstractTriangular, B::Transpose{<:Any,<:AbstractVecOrMat}, alpha::Number, beta::Number) =
@@ -687,6 +687,7 @@ for (cty, aty, bty) in ((:UpperTriangular, :UpperTriangular, :UpperTriangular),
         _multrimat!(parent(C), A, B)
         return C
     end
+    @eval mul!(C::AbstractMatrix, A::$aty, B::$bty) = _multrimat!(C, A, B) # disambiguation
     @eval function mul!(C::$cty{T}, A::$aty{T}, B::$bty{T}) where {T<:BlasFloat}
         lmul!(A, copyto!(parent(C), B))
         return C
@@ -796,17 +797,17 @@ end
 
 # give BLAS a chance
 for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T,<:StridedMatrix}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
         lmul!(A, copyto!(C, B))
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T,<:Adjoint}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
         lmul!(A, copyto!(C, B))
-    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{T,<:Transpose}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+    @eval _multrimat!(C::StridedVecOrMat{T}, A::$t{<:Any,<:Transpose{T,<:StridedMatrix}}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
         lmul!(A, copyto!(C, B))
-    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$t{T}) where {T<:BlasFloat} =
+    @eval _mulmattri!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{T,<:StridedMatrix}) where {T<:BlasFloat} =
         rmul!(copyto!(C, A), B)
-    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$t{T,<:Adjoint}) where {T<:BlasFloat} =
+    @eval _mulmattri!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{<:Any,<:Adjoint{T,<:StridedMatrix}}) where {T<:BlasFloat} =
         rmul!(copyto!(C, A), B)
-    @eval _mulmattri!(C::StridedMatrix{T}, A::StridedMatrix{T}, B::$t{T,<:Transpose}) where {T<:BlasFloat} =
+    @eval _mulmattri!(C::StridedMatrix{T}, A::AbstractMatrix{T}, B::$t{<:Any,<:Transpose{T,<:StridedMatrix}}) where {T<:BlasFloat} =
         rmul!(copyto!(C, A), B)
 end
 
@@ -816,8 +817,8 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
         if S <: BlasFloat
             $t(ldiv!(convert(AbstractArray{S}, A), Matrix{S}(I, size(A, 1), size(A, 1))))
         else
-            J = I(size(A, 1))
-            $t(ldiv!(_denseinit(\, A, J, parent(A)), A, J))
+            J = (one(T)*I)(size(A, 1))
+            $t(ldiv!(similar(A, S, size(A)), A, J))
         end
     end
 end
@@ -904,7 +905,10 @@ end
 ## Generic triangular multiplication
 for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
     @eval lmul!(A::$t, B::AbstractVecOrMat) = @inline _multrimat!(B, A, B)
-    @eval mul!(C::AbstractVecOrMat, A::$t, B::AbstractVecOrMat) = _multrimat!(C, A, B)
+    @eval mul!(C::AbstractVector, A::$t, B::AbstractVector) = _multrimat!(C, A, B)
+    @eval mul!(C::AbstractMatrix, A::$t, B::AbstractVector) = _multrimat!(C, A, B)
+    @eval mul!(C::AbstractMatrix, A::$t, B::AbstractMatrix) = _multrimat!(C, A, B)
+    @eval mul!(C::AbstractMatrix, A::$t, B::AbstractTriangular) = _multrimat!(C, A, B)
 end
 
 function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
@@ -998,7 +1002,6 @@ end
 
 for t in (:UpperTriangular, :UnitUpperTriangular, :LowerTriangular, :UnitLowerTriangular)
     @eval rmul!(A::AbstractMatrix, B::$t) = @inline _mulmattri!(A, A, B)
-    @eval mul!(C::AbstractMatrix, A::AbstractMatrix, B::$t) = _mulmattri!(C, A, B)
 end
 
 function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
@@ -1273,31 +1276,25 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
     C
 end
 
-function lmul!(A::Union{UpperTriangular,UnitUpperTriangular}, B::UpperTriangular)
-    UpperTriangular(lmul!(A, triu!(B.data)))
-end
-function lmul!(A::Union{LowerTriangular,UnitLowerTriangular}, B::LowerTriangular)
-    return LowerTriangular(lmul!(A, tril!(B.data)))
-end
-function ldiv!(xA::Union{UpperTriangular,UnitUpperTriangular}, B::UpperTriangular)
-    return UpperTriangular(ldiv!(xA, triu!(B.data)))
-end
-function ldiv!(xA::Union{LowerTriangular,UnitLowerTriangular}, B::LowerTriangular)
-    return LowerTriangular(ldiv!(xA, tril!(B.data)))
-end
+lmul!(A::UpperTriangular,     B::UpperTriangular) = UpperTriangular(lmul!(A, triu!(B.data)))
+lmul!(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(lmul!(A, triu!(B.data)))
+lmul!(A::LowerTriangular,     B::LowerTriangular) = LowerTriangular(lmul!(A, tril!(B.data)))
+lmul!(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(lmul!(A, tril!(B.data)))
 
-function rdiv!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular})
-    return UpperTriangular(rdiv!(triu!(A.data), B))
-end
-function rdiv!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular})
-    return LowerTriangular(rdiv!(tril!(A.data), B))
-end
-function rmul!(A::UpperTriangular, B::Union{UpperTriangular,UnitUpperTriangular})
-    return UpperTriangular(rmul!(triu!(A.data), B))
-end
-function rmul!(A::LowerTriangular, B::Union{LowerTriangular,UnitLowerTriangular})
-    return LowerTriangular(rmul!(tril!(A.data), B))
-end
+ldiv!(A::UpperTriangular,     B::UpperTriangular) = UpperTriangular(ldiv!(A, triu!(B.data)))
+ldiv!(A::UnitUpperTriangular, B::UpperTriangular) = UpperTriangular(ldiv!(A, triu!(B.data)))
+ldiv!(A::LowerTriangular,     B::LowerTriangular) = LowerTriangular(ldiv!(A, tril!(B.data)))
+ldiv!(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(ldiv!(A, tril!(B.data)))
+
+rdiv!(A::UpperTriangular, B::UpperTriangular)     = UpperTriangular(rdiv!(triu!(A.data), B))
+rdiv!(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(rdiv!(triu!(A.data), B))
+rdiv!(A::LowerTriangular, B::LowerTriangular)     = LowerTriangular(rdiv!(tril!(A.data), B))
+rdiv!(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(rdiv!(tril!(A.data), B))
+
+rmul!(A::UpperTriangular, B::UpperTriangular)     = UpperTriangular(rmul!(triu!(A.data), B))
+rmul!(A::UpperTriangular, B::UnitUpperTriangular) = UpperTriangular(rmul!(triu!(A.data), B))
+rmul!(A::LowerTriangular, B::LowerTriangular)     = LowerTriangular(rmul!(tril!(A.data), B))
+rmul!(A::LowerTriangular, B::UnitLowerTriangular) = LowerTriangular(rmul!(tril!(A.data), B))
 
 # Promotion
 ## Promotion methods in matmul don't apply to triangular multiplication since
@@ -1563,19 +1560,9 @@ function *(A::AbstractMatrix, B::AbstractTriangular)
         mul!(similar(A, TAB, size(A)), A, B)
     end
 end
-# ambiguity resolution with definitions in linalg/rowvector.jl
+# ambiguity resolution with definitions in matmul.jl
 *(v::AdjointAbsVec, A::AbstractTriangular) = adjoint(adjoint(A) * v.parent)
 *(v::TransposeAbsVec, A::AbstractTriangular) = transpose(transpose(A) * v.parent)
-
-# If these are not defined, they will fallback to the versions in matmul.jl
-# and dispatch to generic_matmatmul! which is very costly to compile. The methods
-# below might compute an unnecessary copy. Eliminating the copy requires adding
-# all the promotion logic here once again. Since these methods are probably relatively
-# rare, we chose not to bother for now.
-# *(A::AdjointAbsMat, B::AbstractTriangular) = copy(A) * B
-# *(A::TransposeAbsMat, B::AbstractTriangular) = copy(A) * B
-# *(A::AbstractTriangular, B::AdjointAbsMat) = A * copy(B)
-# *(A::AbstractTriangular, B::TransposeAbsMat) = A * copy(B)
 
 # Complex matrix power for upper triangular factor, see:
 #   Higham and Lin, "A Schur-Padé algorithm for fractional powers of a Matrix",
