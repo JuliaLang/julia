@@ -281,7 +281,7 @@ static char *libstdcxxprobe(void)
 
         // Close the read end of the pipe
         close(fork_pipe[0]);
-        
+
         // Wait for the child to complete.
         while (1) {
             int wstatus;
@@ -331,7 +331,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     char *curr_dep = &dep_libs[0];
 
     void *cxx_handle;
-    
+
 #if defined(_OS_LINUX_)
     int do_probe = 1;
     int done_probe = 0;
@@ -363,6 +363,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 #endif
         load_library(GLIBCXX_PATH, lib_dir, 1);
     }
+            puts(GLIBCXX_PATH);
 #endif
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
