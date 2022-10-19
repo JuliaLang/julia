@@ -312,36 +312,35 @@ Random.seed!(1)
                 @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(promty)*norm(x,Inf))
             end
             @testset "Specialized multiplication/division" begin
+                getval(x) = x
+                getval(x::Furlong) = x.val
                 function _bidiagdivmultest(T,
                         x,
                         typemul=T.uplo == 'U' ? UpperTriangular : Matrix,
                         typediv=T.uplo == 'U' ? UpperTriangular : Matrix,
                         typediv2=T.uplo == 'U' ? UpperTriangular : Matrix)
                     TM = Matrix(T)
-                    @test (T*x)::typemul ≈  TM*x #broken=eltype(x) <: Furlong
-                    @test (x*T)::typemul ≈ x*TM #broken=eltype(x) <: Furlong
-                    @test (x\T)::typediv ≈ x\TM #broken=eltype(T) <: Furlong
-                    @test (T/x)::typediv ≈ TM/x #broken=eltype(T) <: Furlong
+                    @test map(getval, (T*x)::typemul) ≈ map(getval, TM*x)
+                    @test map(getval, (x*T)::typemul) ≈ map(getval, x*TM)
+                    @test map(getval, (x\T)::typediv) ≈ map(getval, x\TM)
+                    @test map(getval, (T/x)::typediv) ≈ map(getval, TM/x)
                     if !isa(x, Number)
-                        @test (T\x)::typediv2 ≈ TM\x #broken=eltype(x) <: Furlong
-                        @test (x/T)::typediv2 ≈ x/TM #broken=eltype(x) <: Furlong
+                        @test map(getval, Array((T\x)::typediv2)) ≈ map(getval, Array(TM\x))
+                        @test map(getval, Array((x/T)::typediv2)) ≈ map(getval, Array(x/TM))
                     end
                     return nothing
                 end
-                A = randn(n,n)
-                d = randn(n)
-                dl = randn(n-1)
-                t = T
-                for t in (T, #=Furlong.(T)=#), (A, d, dl) in ((A, d, dl), #=(Furlong.(A), Furlong.(d), Furlong.(dl))=#)
+                A = Matrix(T)
+                for t in (T, Furlong.(T)), (A, dv, ev) in ((A, dv, ev), (Furlong.(A), Furlong.(dv), Furlong.(ev)))
                     _bidiagdivmultest(t, 5, Bidiagonal, Bidiagonal)
                     _bidiagdivmultest(t, 5I, Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
-                    _bidiagdivmultest(t, Diagonal(d), Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
+                    _bidiagdivmultest(t, Diagonal(dv), Bidiagonal, Bidiagonal, t.uplo == 'U' ? UpperTriangular : LowerTriangular)
                     _bidiagdivmultest(t, UpperTriangular(A))
                     _bidiagdivmultest(t, UnitUpperTriangular(A))
                     _bidiagdivmultest(t, LowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
                     _bidiagdivmultest(t, UnitLowerTriangular(A), t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix, t.uplo == 'L' ? LowerTriangular : Matrix)
-                    _bidiagdivmultest(t, Bidiagonal(d, dl, :U), Matrix, Matrix, Matrix)
-                    _bidiagdivmultest(t, Bidiagonal(d, dl, :L), Matrix, Matrix, Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(dv, ev, :U), Matrix, Matrix, Matrix)
+                    _bidiagdivmultest(t, Bidiagonal(dv, ev, :L), Matrix, Matrix, Matrix)
                 end
             end
         end
