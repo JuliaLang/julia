@@ -475,50 +475,12 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 12;
     }
 
-    char *dtname = jl_symbol_name(dt->name->name);
-    size_t dtnl = strlen(dtname);
-    if (dtnl > 4 && strcmp(&dtname[dtnl - 4], "##kw") == 0 && !internal && tag != 0) {
-        /* XXX: yuck, this is horrible, but the auto-generated kw types from the serializer isn't a real type, so we *must* be very careful */
-        assert(tag == 6); // other struct types should never exist
-        tag = 9;
-        if (jl_type_type_mt->kwsorter != NULL && dt == (jl_datatype_t*)jl_typeof(jl_type_type_mt->kwsorter)) {
-            dt = jl_datatype_type; // any representative member with this MethodTable
-        }
-        else if (jl_nonfunction_mt->kwsorter != NULL && dt == (jl_datatype_t*)jl_typeof(jl_nonfunction_mt->kwsorter)) {
-            dt = jl_symbol_type; // any representative member with this MethodTable
-        }
-        else {
-            // search for the representative member of this MethodTable
-            jl_methtable_t *mt = dt->name->mt;
-            size_t l = strlen(jl_symbol_name(mt->name));
-            char *prefixed;
-            prefixed = (char*)malloc_s(l + 2);
-            prefixed[0] = '#';
-            strcpy(&prefixed[1], jl_symbol_name(mt->name));
-            // remove ##kw suffix
-            prefixed[l-3] = 0;
-            jl_sym_t *tname = jl_symbol(prefixed);
-            free(prefixed);
-            jl_value_t *primarydt = jl_get_global(mt->module, tname);
-            if (!primarydt)
-                primarydt = jl_get_global(mt->module, mt->name);
-            primarydt = jl_unwrap_unionall(primarydt);
-            assert(jl_is_datatype(primarydt));
-            assert(primarydt == (jl_value_t*)jl_any_type || jl_typeof(((jl_datatype_t*)primarydt)->name->mt->kwsorter) == (jl_value_t*)dt);
-            dt = (jl_datatype_t*)primarydt;
-        }
-    }
-
     write_uint8(s->s, TAG_DATATYPE);
     write_uint8(s->s, tag);
     if (tag == 6 || tag == 7) {
         // for tag==6, copy its typevars in case there are references to them elsewhere
         jl_serialize_value(s, dt->name);
         jl_serialize_value(s, dt->parameters);
-        return;
-    }
-    if (tag == 9) {
-        jl_serialize_value(s, dt);
         return;
     }
 
@@ -1672,12 +1634,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         jl_value_t *dtv = name->wrapper;
         jl_svec_t *parameters = (jl_svec_t*)jl_deserialize_value(s, NULL);
         dtv = jl_apply_type(dtv, jl_svec_data(parameters), jl_svec_len(parameters));
-        backref_list.items[pos] = dtv;
-        return dtv;
-    }
-    if (tag == 9) {
-        jl_datatype_t *primarydt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
-        jl_value_t *dtv = jl_typeof(jl_get_kwsorter((jl_value_t*)primarydt));
         backref_list.items[pos] = dtv;
         return dtv;
     }

@@ -235,15 +235,15 @@ function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b)
     a === Any && return false
     a === Union{} && return true
     b === Union{} && return false
-    T = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
-    if isa(a, T)
-        if isa(b, T)
+    ConditionalT = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
+    if isa(a, ConditionalT)
+        if isa(b, ConditionalT)
             return issubconditional(lattice, a, b)
         elseif isa(b, Const) && isa(b.val, Bool)
             return maybe_extract_const_bool(a) === b.val
         end
         a = Bool
-    elseif isa(b, T)
+    elseif isa(b, ConditionalT)
         return false
     end
     return ⊑(widenlattice(lattice), a, b)
@@ -348,7 +348,8 @@ function is_lattice_equal(lattice::OptimizerLattice, @nospecialize(a), @nospecia
 end
 
 function is_lattice_equal(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, AnyConditional) || isa(b, AnyConditional)
+    ConditionalT = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
+    if isa(a, ConditionalT) || isa(b, ConditionalT)
         # TODO: Unwrap these and recurse to is_lattice_equal
         return ⊑(lattice, a, b) && ⊑(lattice, b, a)
     end

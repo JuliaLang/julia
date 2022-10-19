@@ -104,6 +104,12 @@ function inlining_policy(interp::AbstractInterpreter,
         else
             return nothing
         end
+    elseif isa(src, IRCode)
+        return src
+    elseif isa(src, SemiConcreteResult)
+        # For NativeInterpreter, SemiConcreteResult are only produced if they're supposed
+        # to be inlined.
+        return src
     end
     return nothing
 end
