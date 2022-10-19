@@ -259,14 +259,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_getglobal);
         INSERT_TAG(jl_builtin_setglobal);
         // n.b. must update NUM_TAGS when you add something here
-
-        // All optional tags must be placed at the end, so that we
-        // don't accidentally have a `NULL` in the middle
-#ifdef SEGV_EXCEPTION
-        INSERT_TAG(jl_segv_exception);
-#endif
 #undef INSERT_TAG
-        assert(i >= (NUM_TAGS-2) && i < NUM_TAGS);
+        assert(i == NUM_TAGS - 1);
     }
     return (jl_value_t**const*const) _tags;
 }
