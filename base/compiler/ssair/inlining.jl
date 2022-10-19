@@ -820,7 +820,7 @@ struct CachedResult
     CachedResult(@nospecialize(src), effects::Effects) = new(src, effects)
 end
 @inline function get_cached_result(state::InliningState, mi::MethodInstance)
-    code = get(state.mi_cache, mi, nothing)
+    code = get(code_cache(state), mi, nothing)
     if code isa CodeInstance
         if use_const_api(code)
             # in this case function can be inlined to a constant
@@ -1322,7 +1322,7 @@ function info_effects(@nospecialize(result), match::MethodMatch, state::Inlining
     else
         mi = specialize_method(match; preexisting=true)
         if isa(mi, MethodInstance)
-            code = get(state.mi_cache, mi, nothing)
+            code = get(code_cache(state), mi, nothing)
             if code isa CodeInstance
                 return decode_effects(code.ipo_purity_bits)
             end
