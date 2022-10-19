@@ -2443,12 +2443,12 @@ stack: {
                 else {
                     new_obj = (jl_value_t*)gc_read_stack(&rts[i], offset, lb, ub);
                     if (gc_ptr_tag(new_obj, 3)) {
-                        // handle tagged pointers in finalizer list
-                        new_obj = gc_ptr_clear_tag(new_obj, 1);
                         // skip over the finalizer fptr
                         i++;
                         if (gc_ptr_tag(new_obj, 2))
                             continue;
+                        // handle tagged pointers in finalizer list
+                        new_obj = gc_ptr_clear_tag(new_obj, 1);
                     }
                 }
                 if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
@@ -3045,7 +3045,7 @@ static void sweep_finalizer_list(arraylist_t *list)
         void *fin = items[i+1];
         int isfreed;
         int isold;
-        if (gc_ptr_tag(v, 2)) {
+        if (gc_ptr_tag(v0, 2)) {
             isfreed = 1;
             isold = 0;
         }
