@@ -478,6 +478,21 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
+zerodefined(::Type) = false
+zerodefined(::Type{<:Number}) = true
+# some trait like this would be cool
+# zerodefined(::Type{T}) where {T} = hasmethod(zero, (T,))
+
+# initialize return array for op(A, B)
+_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (zerodefined(TA) && zerodefined(TB)) ?
+        typeof(op(zero(TA), zero(TB))) :
+        promote_op(op, TA, TB)
+_initarray(op, ::Type{TA}, ::Type{TB}, sz) where {TA,TB} =
+    (zerodefined(TA) && zerodefined(TB)) ?
+        zeros(_init_eltype(op, TA, TB), sz) :
+        Array{_init_eltype(op, TA, TB)}(undef, sz)
+
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
 # which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
