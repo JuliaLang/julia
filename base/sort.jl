@@ -440,31 +440,17 @@ Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector{T}, x::
 end
 Base.size(v::WithoutMissingVector) = size(v.data)
 
-# TODO simplify this further, remove redundancy, try a reverse view.
 """
-    send_to_end!(f::Function, v::AbstractVector)
+    send_to_end!(f::Function, v::AbstractVector; [lo, hi])
 
-Send every element of `v` for which `f` returns `true` to the end of that range and return
-the number of elements index of the last element which for which `f` returns `false`.
+Send every element of `v` for which `f` returns `true` to the end of the vector and return
+the index of the last element which for which `f` returns `false`.
+
+`send_to_end!(f, v, lo, hi)` is equivalent to `send_to_end!(f, view(v, lo:hi))+lo-1`
 
 Preserves the order of the elements that are not sent to the end.
 """
-function send_to_end!(f::Function, v::AbstractVector, ::ReverseOrdering; lo, hi)
-    i = hi
-    @inbounds while lo <= i && !f(v[i])
-        i -= 1
-    end
-    j = i - 1
-    @inbounds while lo <= j
-        if !f(v[j])
-            v[i], v[j] = v[j], v[i]
-            i -= 1
-        end
-        j -= 1
-    end
-    return (i+1, hi), (lo, i)
-end
-function send_to_end!(f::Function, v::AbstractVector, ::ForwardOrdering; lo, hi)
+function send_to_end!(f::F, v::AbstractVector; lo=firstindex(v), hi=lastindex(v)) where F <: Function
     i = lo
     @inbounds while i <= hi && !f(v[i])
         i += 1
@@ -477,17 +463,32 @@ function send_to_end!(f::Function, v::AbstractVector, ::ForwardOrdering; lo, hi)
         end
         j += 1
     end
-    return (lo, i-1), (i, hi)
+    i - 1
 end
+"""
+    send_to_end!(f::Function, v::AbstractVector, o::DirectOrdering[, end_stable]; lo, hi)
+
+Return `(a, b)` where `v[a:b]` are the elements that are not sent to the end.
+
+If `o isa ReverseOrdering` then the "end" of `v` is `v[lo]`.
+
+If `end_stable` is set, the elements that are sent to the end are stable instead of the
+elements that are not
+"""
+@inline send_to_end!(f::F, v::AbstractVector, ::ForwardOrdering, end_stable=false; lo, hi) where F <: Function =
+    end_stable ? (lo, hi-send_to_end!(!f, view(v, hi:-1:lo))) : (lo, send_to_end!(f, v; lo, hi))
+@inline send_to_end!(f::F, v::AbstractVector, ::ReverseOrdering, end_stable=false; lo, hi) where F <: Function =
+    end_stable ? (send_to_end!(!f, v; lo, hi)+1, hi) : (hi-send_to_end!(f, view(v, hi:-1:lo))+1, hi)
+
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering;
                 lo=firstindex(v), hi=lastindex(v), kw...)
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
-        (lo, hi), _ = send_to_end!(ismissing, v, o; lo, hi)
+        lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o; lo, hi, kw...)
         v
     elseif eltype(v) <: Integer && o isa Perm{DirectOrdering} && nonmissingtype(eltype(o.data)) != eltype(o.data)
-        (lo, hi), _ = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
+        lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
         _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)); lo, hi, kw...)
     else
         _sort!(v, a.next, o; lo, hi, kw...)
@@ -512,15 +513,15 @@ is_concrete_IEEEFloat(T::Type) = T <: Base.IEEEFloat && isconcretetype(T)
 function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering;
                 lo=firstindex(v), hi=lastindex(v), kw...)
     if is_concrete_IEEEFloat(eltype(v)) && o isa DirectOrdering
-        _, (lo, hi) = send_to_end!(!isnan, v, ReverseOrdering(o); lo, hi)
+        lo, hi = send_to_end!(isnan, v, o, true; lo, hi)
         iv = reinterpret(UIntType(eltype(v)), v)
-        (_, j), _ = send_to_end!(x -> after_zero(o, x), v, Forward; lo, hi)
+        j = send_to_end!(x -> after_zero(o, x), v; lo, hi)
         _sort!(iv, a.next, Reverse; lo, hi=j, kw...)
         _sort!(iv, a.next, Forward; lo=j+1, hi, kw...)
     elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
-        _, (lo, hi) = send_to_end!(i -> !isnan(@inbounds o.data[i]), v, ReverseOrdering(o.order); lo, hi)
+        lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
-        (_, j), _ = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v, Forward; lo, hi)
+        j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
         _sort!(v, a.next, Perm(Reverse, ip); lo, hi=j, kw...)
         _sort!(v, a.next, Perm(Forward, ip); lo=j+1, hi, kw...)
     else
