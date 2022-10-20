@@ -1596,27 +1596,23 @@ end
 Load the file into an anonymous module using [`include`](@ref), evaluate all expressions,
 and return the value of the last expression.
 The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
-Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not pollute the current module.
+Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not affect the current module.
 
 # Example
-This example creates a temporary file (using [`mktemp`](@ref)) and writes a minimal julia script into it.
-The script is then executed via `evalfile` (with arguments) and prints the returned data.
 
 ```jldoctest
-julia> # Create script file
-       mktemp() do path, io
-           # Write minimal script into file
-           write(io, "
-           function get_args()
-               ARGS
-           end
-           get_args()
-           ")
-           flush(io)
-           # Use evalfile and print output
-           println(evalfile(path, ["ARG1", "arg2"]))
-       end
-["ARG1", "arg2"]
+julia> write("testfile.jl", """
+           @show ARGS
+           1 + 1
+       """);
+
+julia> x = evalfile("testfile.jl", ["ARG1", "ARG2"]);
+ARGS = ["ARG1", "ARG2"]
+
+julia> x
+2
+
+julia> rm("testfile.jl")
 ```
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
