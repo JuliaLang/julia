@@ -16,13 +16,24 @@ body:
     attributes:
       label: What happened?
       description: Please describe the steps you took and provide any code executed to reproduce the bug.
+      placeholder: |
+        I executed this function:
+        
+        ```julia
+        [...]
+        ````
+  
+        and encountered the following error/wrong/unexpected result:
+  
+        [...]
     validations:
       required: true
   - type: textarea
     id: expectation
     attributes:
-      label: What should happen?
+      label: What did you expect to happen?
       description: Please describe what you expected to happen.
+      placeholder: I expected the function to return `foobar`.
     validations:
       required: true
   - type: textarea
