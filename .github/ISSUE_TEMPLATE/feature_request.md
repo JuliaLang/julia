@@ -2,7 +2,7 @@
 name: Feature Request
 about: Suggest a new julia feature
 title: '[FR]: '
-labels: ["feature"]
+labels: feature
 ---
 
 <!--
