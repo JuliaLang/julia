@@ -472,10 +472,13 @@ function inv(z::Complex{T}) where T<:Union{Float16,Float32}
 end
 function inv(w::ComplexF64)
     c, d = reim(w)
-    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
     absc, absd = abs(c), abs(d)
-    cd = ifelse(absc>absd, absc, absd) # cheap `max`: don't need sign- and nan-checks here
-
+    cd = ifelse(absc>absd, absc, absd)
+    if sqrt(floatmin(Float64)/2) <= cd <= sqrt(floatmax(Float64)/2)
+        return conj(w) / abs2(w)
+    end
+    (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
+    
     ϵ  = eps(Float64)
     bs = 2/(ϵ*ϵ)
 
@@ -493,7 +496,7 @@ function inv(w::ComplexF64)
     else
         q, p = robust_cinv(-d, -c)
     end
-    return ComplexF64(p*s, q*s) # undo scaling
+    return ComplexF64(p*s, q*s)
 end
 function robust_cinv(c::Float64, d::Float64)
     r = d/c
