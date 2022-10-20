@@ -232,7 +232,7 @@ endif
 # Note that we disable MSYS2's path munging here, as otherwise
 # it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
-	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - '$1' | grep '$2' | awk '{print $$1;}') '$3' 255 '$(call cygpath_w,$1)'
+	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - '$1' | grep "$2" | awk '{print $$1;}') "$3" 255 "$(call cygpath_w,$1)"
 endef
 
 
@@ -384,7 +384,7 @@ endif
 
 	# Replace libstdc++ path, which is also moving from `lib` to `../lib/julia`.
 ifeq ($(OS),Linux)
-	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),\*libstdc\+\+\.so\.6$$,*$(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libstdc++.so.6))
+	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),\*libstdc++\.so\.6$$,*$(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libstdc++.so.6))
 endif
 
 
