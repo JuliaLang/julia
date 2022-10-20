@@ -1,0 +1,40 @@
+name: Bug Report
+description: File a bug report
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Please describe the steps you took and provide any code executed to reproduce the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expectation
+    attributes:
+      label: What should happen?
+      description: Please describe what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: version
+    attributes:
+      label: Version
+      description: What version of julia are you running?
+      placeholder: Output of `julia -e 'using InteractiveUtils; versioninfo()'`
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: What platform you using? Please be as detailed as possible.
+      placeholder: Linux / macOS / Windows
+    validations:
+      required: true
