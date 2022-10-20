@@ -86,12 +86,17 @@ Empty out the previously recorded type inference timings (`Core.Compiler._timing
 start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inference.
 """
 function reset_timings()
-    empty!(_timings)
-    push!(_timings, Timing(
-        # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
-        _time_ns()))
-    return nothing
+    ccall(:jl_typeinf_lock_begin, Cvoid, ())
+    try
+        empty!(_timings)
+        push!(_timings, Timing(
+            # The MethodInstance for ROOT(), and default empty values for other fields.
+            InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
+            _time_ns()))
+        return nothing
+    finally
+        ccall(:jl_typeinf_lock_end, Cvoid, ())
+    end
 end
 reset_timings()
 
