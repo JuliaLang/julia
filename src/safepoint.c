@@ -111,10 +111,6 @@ void jl_safepoint_init(void)
 
 int jl_safepoint_start_gc(void)
 {
-    if (jl_n_threads == 1) {
-        jl_atomic_store_relaxed(&jl_gc_running, 1);
-        return 1;
-    }
     // The thread should have set this already
     assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
     uv_mutex_lock(&safepoint_lock);
@@ -137,10 +133,6 @@ int jl_safepoint_start_gc(void)
 void jl_safepoint_end_gc(void)
 {
     assert(jl_atomic_load_relaxed(&jl_gc_running));
-    if (jl_n_threads == 1) {
-        jl_atomic_store_relaxed(&jl_gc_running, 0);
-        return;
-    }
     uv_mutex_lock(&safepoint_lock);
     // Need to reset the page protection before resetting the flag since
     // the thread will trigger a segfault immediately after returning from

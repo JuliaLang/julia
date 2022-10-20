@@ -881,8 +881,7 @@ end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(fallback_lattice, s00, name, false)
 getfield_tfunc(@specialize(lattice::AbstractLattice), @nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(lattice, s00, name, false)
 
-
-function _getfield_fieldindex(@nospecialize(s), name::Const)
+function _getfield_fieldindex(s::DataType, name::Const)
     nv = name.val
     if isa(nv, Symbol)
         nv = fieldindex(s, nv, false)
@@ -893,19 +892,17 @@ function _getfield_fieldindex(@nospecialize(s), name::Const)
     return nothing
 end
 
-function _getfield_tfunc_const(@nospecialize(sv), name::Const, setfield::Bool)
-    if isa(name, Const)
-        nv = _getfield_fieldindex(typeof(sv), name)
-        nv === nothing && return Bottom
-        if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+function _getfield_tfunc_const(@nospecialize(sv), name::Const)
+    nv = _getfield_fieldindex(typeof(sv), name)
+    nv === nothing && return Bottom
+    if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+        return Const(getfield(sv, nv))
+    end
+    if isconst(typeof(sv), nv)
+        if isdefined(sv, nv)
             return Const(getfield(sv, nv))
         end
-        if isconst(typeof(sv), nv)
-            if isdefined(sv, nv)
-                return Const(getfield(sv, nv))
-            end
-            return Union{}
-        end
+        return Bottom
     end
     return nothing
 end
@@ -960,7 +957,7 @@ function _getfield_tfunc(lattice::ConstsLattice, @nospecialize(s00), @nospeciali
                 end
                 return Bottom
             end
-            r = _getfield_tfunc_const(sv, name, setfield)
+            r = _getfield_tfunc_const(sv, name)
             r !== nothing && return r
         end
         s00 = widenconst(s00)
@@ -976,16 +973,16 @@ function _getfield_tfunc(lattice::JLTypeLattice, @nospecialize(s00), @nospeciali
     end
     if isType(s)
         if isconstType(s)
-            sv = s00.parameters[1]
+            sv = (s00::DataType).parameters[1]
             if isa(name, Const)
-                r = _getfield_tfunc_const(sv, name, setfield)
+                r = _getfield_tfunc_const(sv, name)
                 r !== nothing && return r
             end
             s = typeof(sv)
         else
             sv = s.parameters[1]
             if isTypeDataType(sv) && isa(name, Const)
-                nv = _getfield_fieldindex(DataType, name)
+                nv = _getfield_fieldindex(DataType, name)::Int
                 if nv == DATATYPE_NAME_FIELDINDEX
                     # N.B. This only works for fields that do not depend on type
                     # parameters (which we do not know here).
@@ -1133,12 +1130,12 @@ function setfield!_tfunc(o, f, v)
     hasintersect(widenconst(v), widenconst(ft)) || return Bottom
     return v
 end
-function mutability_errorcheck(@nospecialize obj)
-    objt0 = widenconst(obj)
+mutability_errorcheck(@nospecialize obj) = _mutability_errorcheck(widenconst(obj))
+function _mutability_errorcheck(@nospecialize objt0)
     objt = unwrap_unionall(objt0)
     if isa(objt, Union)
-        return mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
-               mutability_errorcheck(rewrap_unionall(objt.b, objt0))
+        return _mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
+               _mutability_errorcheck(rewrap_unionall(objt.b, objt0))
     elseif isa(objt, DataType)
         # Can't say anything about abstract types
         isabstracttype(objt) && return true
@@ -1200,7 +1197,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
     o = unwrapva(argtypes[2])
     f = unwrapva(argtypes[3])
     RT = modifyfield!_tfunc(o, f, Any, Any)
-    info = false
+    info = NoCallInfo()
     if nargs >= 5 && RT !== Bottom
         # we may be able to refine this to a PartialStruct by analyzing `op(o.f, v)::T`
         # as well as compute the info for the method matches
@@ -1877,9 +1874,6 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
     elseif f === Core.sizeof
         length(argtypes) == 1 || return false
         return sizeof_nothrow(argtypes[1])
-    elseif f === Core.kwfunc
-        length(argtypes) == 1 || return false
-        return isa(rt, Const)
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
         return argtypes[1] ⊑ₗ Bool
@@ -1919,7 +1913,7 @@ const _PURE_BUILTINS = Any[tuple, svec, ===, typeof, nfields]
 const _EFFECT_FREE_BUILTINS = [
     fieldtype, apply_type, isa, UnionAll,
     getfield, arrayref, const_arrayref, isdefined, Core.sizeof,
-    Core.kwfunc, Core.ifelse, Core._typevar, (<:),
+    Core.ifelse, Core._typevar, (<:),
     typeassert, throw, arraysize, getglobal, compilerbarrier
 ]
 
@@ -1934,7 +1928,6 @@ const _CONSISTENT_BUILTINS = Any[
     isa,
     UnionAll,
     Core.sizeof,
-    Core.kwfunc,
     Core.ifelse,
     (<:),
     typeassert,
@@ -2394,7 +2387,9 @@ function setglobal!_nothrow(argtypes::Vector{Any})
     M, s, newty = argtypes
     if M isa Const && s isa Const
         M, s = M.val, s.val
-        return global_assignment_nothrow(M, s, newty)
+        if isa(M, Module) && isa(s, Symbol)
+            return global_assignment_nothrow(M, s, newty)
+        end
     end
     return false
 end
