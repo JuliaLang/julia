@@ -1234,8 +1234,9 @@ add_tfunc(swapfield!, 3, 4, swapfield!_tfunc, 3)
 add_tfunc(modifyfield!, 4, 5, modifyfield!_tfunc, 3)
 add_tfunc(replacefield!, 4, 6, replacefield!_tfunc, 3)
 
-function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
+function fieldtype_nothrow(@specialize(𝕃::AbstractLattice), @nospecialize(s0), @nospecialize(name))
     s0 === Bottom && return true # unreachable
+    ⊑ = Core.Compiler.:⊑(𝕃)
     if s0 === Any || s0 === Type || DataType ⊑ s0 || UnionAll ⊑ s0
         # We have no idea
         return false
@@ -1249,8 +1250,8 @@ function fieldtype_nothrow(@nospecialize(s0), @nospecialize(name))
 
     su = unwrap_unionall(s0)
     if isa(su, Union)
-        return fieldtype_nothrow(rewrap_unionall(su.a, s0), name) &&
-               fieldtype_nothrow(rewrap_unionall(su.b, s0), name)
+        return fieldtype_nothrow(𝕃, rewrap_unionall(su.a, s0), name) &&
+               fieldtype_nothrow(𝕃, rewrap_unionall(su.b, s0), name)
     end
 
     s, exact = instanceof_tfunc(s0)
@@ -1828,8 +1829,8 @@ function arrayset_typecheck(@nospecialize(arytype), @nospecialize(elmtype))
 end
 
 # Query whether the given builtin is guaranteed not to throw given the argtypes
-function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
-    ⊑ₗ = ⊑(lattice)
+function _builtin_nothrow(@specialize(𝕃::AbstractLattice), @nospecialize(f), argtypes::Array{Any,1}, @nospecialize(rt))
+    ⊑ = Core.Compiler.:⊑(𝕃)
     if f === arrayset
         array_builtin_common_nothrow(argtypes, 4) || return false
         # Additionally check element type compatibility
@@ -1838,7 +1839,7 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
         return array_builtin_common_nothrow(argtypes, 3)
     elseif f === Core._expr
         length(argtypes) >= 1 || return false
-        return argtypes[1] ⊑ₗ Symbol
+        return argtypes[1] ⊑ Symbol
     end
 
     # These builtins are not-vararg, so if we have varars, here, we can't guarantee
@@ -1857,18 +1858,18 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
         return setfield!_nothrow(argtypes)
     elseif f === fieldtype
         length(argtypes) == 2 || return false
-        return fieldtype_nothrow(argtypes[1], argtypes[2])
+        return fieldtype_nothrow(𝕃, argtypes[1], argtypes[2])
     elseif f === apply_type
-        return apply_type_nothrow(lattice, argtypes, rt)
+        return apply_type_nothrow(𝕃, argtypes, rt)
     elseif f === isa
         length(argtypes) == 2 || return false
-        return argtypes[2] ⊑ₗ Type
+        return argtypes[2] ⊑ Type
     elseif f === (<:)
         length(argtypes) == 2 || return false
-        return argtypes[1] ⊑ₗ Type && argtypes[2] ⊑ₗ Type
+        return argtypes[1] ⊑ Type && argtypes[2] ⊑ Type
     elseif f === UnionAll
         return length(argtypes) == 2 &&
-            (argtypes[1] ⊑ₗ TypeVar && argtypes[2] ⊑ₗ Type)
+            (argtypes[1] ⊑ TypeVar && argtypes[2] ⊑ Type)
     elseif f === isdefined
         return isdefined_nothrow(argtypes)
     elseif f === Core.sizeof
@@ -1876,12 +1877,12 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
         return sizeof_nothrow(argtypes[1])
     elseif f === Core.ifelse
         length(argtypes) == 3 || return false
-        return argtypes[1] ⊑ₗ Bool
+        return argtypes[1] ⊑ Bool
     elseif f === typeassert
         length(argtypes) == 2 || return false
         a3 = argtypes[2]
-        if (isType(a3) && !has_free_typevars(a3) && argtypes[1] ⊑ₗ a3.parameters[1]) ||
-            (isa(a3, Const) && isa(a3.val, Type) && argtypes[1] ⊑ₗ a3.val)
+        if (isType(a3) && !has_free_typevars(a3) && argtypes[1] ⊑ a3.parameters[1]) ||
+            (isa(a3, Const) && isa(a3.val, Type) && argtypes[1] ⊑ a3.val)
             return true
         end
         return false
@@ -1891,7 +1892,7 @@ function _builtin_nothrow(@specialize(lattice::AbstractLattice), @nospecialize(f
         return setglobal!_nothrow(argtypes)
     elseif f === Core.get_binding_type
         length(argtypes) == 2 || return false
-        return argtypes[1] ⊑ₗ Module && argtypes[2] ⊑ₗ Symbol
+        return argtypes[1] ⊑ Module && argtypes[2] ⊑ Symbol
     elseif f === donotdelete
         return true
     elseif f === Core.finalizer
