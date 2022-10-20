@@ -3398,3 +3398,7 @@ f45162(f) = f(x=1)
     @test Meta.isexpr(Meta.parse("'a"), :incomplete)
     @test ''' == "'"[1]
 end
+
+# issue #46251
+@test begin; global value = 1; (value, value += 1) end == (1, 2)
+@test begin; global value = 1; "($(value), $(value += 1))" end == "(1, 2)"
