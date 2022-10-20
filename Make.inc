@@ -482,6 +482,8 @@ MACOSX_VERSION_MIN := 11.0
 endif
 endif
 
+COMPRESS_DEBUG_FLAGS := -gz
+
 ifeq ($(USEGCC),1)
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
@@ -494,7 +496,7 @@ ifneq ($(OS), WINNT)
 JCXXFLAGS += -pedantic
 endif
 DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector
-SHIPFLAGS := -O3 -ggdb2 -falign-functions -gz
+SHIPFLAGS := -O3 -ggdb2 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -515,6 +517,9 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
+
+# Always add compression flags, if any
+SHIPFLAGS += $(COMPRESS_DEBUG_FLAGS)
 
 JLDFLAGS :=
 
