@@ -738,11 +738,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
                 ival = incoming_vals[slot_id(slot)]
                 ivalundef = ival === UNDEF_TOKEN
-                unode = ivalundef ? UpsilonNode() : UpsilonNode(ival)
-                typ = ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes)
-                push!(node.values,
-                    NewSSAValue(insert_node!(ir, first_insert_for_bb(code, cfg, item),
-                                 NewInstruction(unode, typ), true).id - length(ir.stmts)))
+                Υ = NewInstruction(ivalundef ? UpsilonNode() : UpsilonNode(ival),
+                                   ivalundef ? MaybeUndef(Union{}) : typ_for_val(ival, ci, ir.sptypes, -1, slottypes))
+                # insert `UpsilonNode` immediately before the `:enter` expression
+                Υssa = insert_node!(ir, first_insert_for_bb(code, cfg, item), Υ)
+                push!(node.values, NewSSAValue(Υssa.id - length(ir.stmts)))
             end
         end
         push!(visited, item)
