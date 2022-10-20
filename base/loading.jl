@@ -1601,10 +1601,10 @@ Note that definitions (e.g. methods, globals) are evaluated in the anonymous mod
 # Example
 
 ```jldoctest
-julia> write("testfile.jl", "
+julia> write("testfile.jl", \"\"\"
            @show ARGS
            1 + 1
-       ");
+       \"\"\");
 
 julia> x = evalfile("testfile.jl", ["ARG1", "ARG2"]);
 ARGS = ["ARG1", "ARG2"]
