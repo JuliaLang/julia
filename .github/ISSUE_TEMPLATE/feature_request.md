@@ -1,10 +1,11 @@
 ---
-name: Enhancement
-about: Suggest an Enhancement
-title: ''
+name: Feature Request
+about: Suggest a new julia feature
+title: '[FR]: '
+labels: ["feature"]
 ---
 
 <!--
-Your enhancement may already be reported!
+Your feature may already be requested!
 Please search on the issue tracker before creating a new issue.
 -->
