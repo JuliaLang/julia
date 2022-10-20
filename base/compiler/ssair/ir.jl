@@ -350,6 +350,22 @@ struct IRCode
         copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
 end
 
+"""
+    IRCode()
+
+Create an empty IRCode object with a single `return nothing` statement. This method is mostly intended
+for debugging and unit testing of IRCode APIs. The compiler itself should generally obtain an IRCode
+from the frontend or one of the caches.
+"""
+function IRCode()
+    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], Any[])
+    ir[SSAValue(1)][:inst] = ReturnNode(nothing)
+    ir[SSAValue(1)][:type] = Nothing
+    ir[SSAValue(1)][:flag] = 0x00
+    ir[SSAValue(1)][:line] = Int32(0)
+    return ir
+end
+
 function block_for_inst(ir::IRCode, inst::Int)
     if inst > length(ir.stmts)
         inst = ir.new_nodes.info[inst - length(ir.stmts)].pos
@@ -527,7 +543,17 @@ scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::S
 scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach_after::Bool=false)
-    node = add_inst!(ir.new_nodes, pos.id, attach_after)
+    posid = pos.id
+    if pos.id > length(ir.stmts)
+        if attach_after
+            info = ir.new_nodes.info[pos.id-length(ir.stmts)];
+            posid = info.pos
+            attach_after = info.attach_after
+        else
+            error("Cannot attach before a pending node.")
+        end
+    end
+    node = add_inst!(ir.new_nodes, posid, attach_after)
     newline = something(newinst.line, ir[pos][:line])
     newflag = recompute_inst_flag(newinst, ir)
     node = inst_from_newinst!(node, newinst, newline, newflag)

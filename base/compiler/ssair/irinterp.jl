@@ -193,6 +193,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
             end
             if (cond.val)::Bool
                 ir.stmts[idx][:inst] = nothing
+                ir.stmts[idx][:type] = Any
                 kill_edge!(ir, bb, inst.dest, update_phi!)
             else
                 ir.stmts[idx][:inst] = GotoNode(inst.dest)
@@ -233,7 +234,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(argextype(inst.val, ir), inst.typ)
+        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), inst.typ)
     else
         ccall(:jl_, Cvoid, (Any,), inst)
         error()

@@ -519,7 +519,8 @@ end
 function lift_comparison! end
 
 function lift_comparison!(::typeof(===), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
+    opt_lattice::AbstractLattice = OptimizerLattice())
     args = stmt.args
     length(args) == 3 || return
     lhs, rhs = args[2], args[3]
@@ -538,19 +539,20 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
 end
 
-isa_tfunc_opt(@nospecialize(v), @nospecialize(t)) = isa_tfunc(OptimizerLattice(), v, t)
-
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
+    opt_lattice::AbstractLattice = OptimizerLattice())
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
+    isa_tfunc_opt(@nospecialize(v), @nospecialize(typ)) = isa_tfunc(opt_lattice, v, typ)
     lift_comparison_leaves!(isa_tfunc_opt, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
-    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue})
+    idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
+    opt_lattice::AbstractLattice = OptimizerLattice())
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
@@ -847,6 +849,7 @@ In a case when all usages are fully eliminated, `struct` allocation may also be 
 a result of succeeding dead code elimination.
 """
 function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothing)
+    opt_lattice = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
@@ -940,9 +943,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             elseif is_known_call(stmt, Core._svec_ref, compact)
                 lift_svec_ref!(compact, idx, stmt)
             elseif is_known_call(stmt, (===), compact)
-                lift_comparison!(===, compact, idx, stmt, lifting_cache)
+                lift_comparison!(===, compact, idx, stmt, lifting_cache, opt_lattice)
             elseif is_known_call(stmt, isa, compact)
-                lift_comparison!(isa, compact, idx, stmt, lifting_cache)
+                lift_comparison!(isa, compact, idx, stmt, lifting_cache, opt_lattice)
             end
             continue
         end
@@ -962,7 +965,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             struct_typ = unswitchtupleunion(struct_typ)
         end
         if isa(struct_typ, Union) && is_isdefined
-            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache)
+            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, opt_lattice)
             continue
         end
         isa(struct_typ, DataType) || continue
@@ -1061,7 +1064,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    code = get(inlining.mi_cache, mi, nothing)
+    code = get(code_cache(inlining), mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
         if use_const_api(code)

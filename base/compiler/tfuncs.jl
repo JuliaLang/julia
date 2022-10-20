@@ -881,8 +881,7 @@ end
 getfield_tfunc(@nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(fallback_lattice, s00, name, false)
 getfield_tfunc(@specialize(lattice::AbstractLattice), @nospecialize(s00), @nospecialize(name)) = _getfield_tfunc(lattice, s00, name, false)
 
-
-function _getfield_fieldindex(@nospecialize(s), name::Const)
+function _getfield_fieldindex(s::DataType, name::Const)
     nv = name.val
     if isa(nv, Symbol)
         nv = fieldindex(s, nv, false)
@@ -893,19 +892,17 @@ function _getfield_fieldindex(@nospecialize(s), name::Const)
     return nothing
 end
 
-function _getfield_tfunc_const(@nospecialize(sv), name::Const, setfield::Bool)
-    if isa(name, Const)
-        nv = _getfield_fieldindex(typeof(sv), name)
-        nv === nothing && return Bottom
-        if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+function _getfield_tfunc_const(@nospecialize(sv), name::Const)
+    nv = _getfield_fieldindex(typeof(sv), name)
+    nv === nothing && return Bottom
+    if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
+        return Const(getfield(sv, nv))
+    end
+    if isconst(typeof(sv), nv)
+        if isdefined(sv, nv)
             return Const(getfield(sv, nv))
         end
-        if isconst(typeof(sv), nv)
-            if isdefined(sv, nv)
-                return Const(getfield(sv, nv))
-            end
-            return Union{}
-        end
+        return Bottom
     end
     return nothing
 end
@@ -960,7 +957,7 @@ function _getfield_tfunc(lattice::ConstsLattice, @nospecialize(s00), @nospeciali
                 end
                 return Bottom
             end
-            r = _getfield_tfunc_const(sv, name, setfield)
+            r = _getfield_tfunc_const(sv, name)
             r !== nothing && return r
         end
         s00 = widenconst(s00)
@@ -976,9 +973,9 @@ function _getfield_tfunc(lattice::JLTypeLattice, @nospecialize(s00), @nospeciali
     end
     if isType(s)
         if isconstType(s)
-            sv = s00.parameters[1]
+            sv = (s00::DataType).parameters[1]
             if isa(name, Const)
-                r = _getfield_tfunc_const(sv, name, setfield)
+                r = _getfield_tfunc_const(sv, name)
                 r !== nothing && return r
             end
             s = typeof(sv)
@@ -1133,12 +1130,12 @@ function setfield!_tfunc(o, f, v)
     hasintersect(widenconst(v), widenconst(ft)) || return Bottom
     return v
 end
-function mutability_errorcheck(@nospecialize obj)
-    objt0 = widenconst(obj)
+mutability_errorcheck(@nospecialize obj) = _mutability_errorcheck(widenconst(obj))
+function _mutability_errorcheck(@nospecialize objt0)
     objt = unwrap_unionall(objt0)
     if isa(objt, Union)
-        return mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
-               mutability_errorcheck(rewrap_unionall(objt.b, objt0))
+        return _mutability_errorcheck(rewrap_unionall(objt.a, objt0)) ||
+               _mutability_errorcheck(rewrap_unionall(objt.b, objt0))
     elseif isa(objt, DataType)
         # Can't say anything about abstract types
         isabstracttype(objt) && return true
