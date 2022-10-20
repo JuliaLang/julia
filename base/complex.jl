@@ -501,8 +501,9 @@ function inv(w::ComplexF64)
 end
 function robust_cinv(c::Float64, d::Float64)
     r = d/c
-    p = inv(muladd(d, r, c))
-    q = -r*p
+    z = muladd(d, r, c)
+    p = 1.0/z
+    q = -r/z
     return p, q
 end
 
