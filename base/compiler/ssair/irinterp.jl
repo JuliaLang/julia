@@ -402,7 +402,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
 end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
-    if __measure_typeinf__[]
+    if __measure_typeinf()
         inf_frame = Timings.InferenceFrameInfo(irsv.mi, irsv.world, Any[], Any[], length(irsv.ir.argtypes))
         Timings.enter_new_timer(inf_frame)
         v = _ir_abstract_constant_propagation(interp, irsv)

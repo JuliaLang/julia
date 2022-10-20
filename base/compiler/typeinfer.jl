@@ -199,19 +199,23 @@ end
     return nothing
 end
 
+# Whether or not inference Timing is enabled.
+mutable struct TimingInvocations
+    Core.Compiler.@atomic count::Int
+end
+const __measuring_typeinf = TimingInvocations(0)
+
 end  # module Timings
 
-"""
-    Core.Compiler.__set_measure_typeinf(onoff::Bool)
-
-If set to `true`, record per-method-instance timings within type inference in the Compiler.
-"""
-__set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
-const __measure_typeinf__ = fill(false)
+__start_measuring_typeinf() = @atomic Timings.__measuring_typeinf.count += 1
+__stop_measuring_typeinf() = @atomic Timings.__measuring_typeinf.count -= 1
+__measure_typeinf() = @atomic(Timings.__measuring_typeinf.count) > 0
+# DEPRECATED:
+__set_measure_typeinf(onoff::Bool) = onoff ? __start_measuring_typeinf() : __stop_measuring_typeinf()
 
 # Wrapper around _typeinf that optionally records the exclusive time for each invocation.
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    if __measure_typeinf__[]
+    if __measure_typeinf()
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
         Timings.exit_current_timer(frame)
