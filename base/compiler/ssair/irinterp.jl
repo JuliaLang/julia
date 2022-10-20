@@ -165,15 +165,16 @@ function reprocess_instruction!(interp::AbstractInterpreter,
     irsv::IRInterpretationState)
     ir = irsv.ir
     if isa(inst, GotoIfNot)
-        cond = argextype(inst.cond, ir)
-        if isa(cond, Const)
+        cond = inst.cond
+        condval = maybe_extract_const_bool(argextype(cond, ir))
+        if condval isa Bool
             function update_phi!(from::Int, to::Int)
                 if length(ir.cfg.blocks[to].preds) == 0
                     return
                 end
                 for idx in ir.cfg.blocks[to].stmts
                     stmt = ir.stmts[idx][:inst]
-                    isa(stmt, Nothing) && continue
+                    isa(stmt, Nothing) && continue # allowed between `PhiNode`s
                     isa(stmt, PhiNode) || break
                     for (i, edge) in enumerate(stmt.edges)
                         if edge == from
@@ -185,13 +186,13 @@ function reprocess_instruction!(interp::AbstractInterpreter,
                     end
                 end
             end
-            if isa(inst.cond, SSAValue)
-                kill_def_use!(irsv.tpdum, inst.cond::SSAValue, idx)
+            if isa(cond, SSAValue)
+                kill_def_use!(irsv.tpdum, cond, idx)
             end
             if bb === nothing
                 bb = block_for_inst(ir, idx)
             end
-            if (cond.val)::Bool
+            if condval
                 ir.stmts[idx][:inst] = nothing
                 ir.stmts[idx][:type] = Any
                 kill_edge!(ir, bb, inst.dest, update_phi!)
