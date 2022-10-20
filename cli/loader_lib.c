@@ -16,7 +16,7 @@ extern "C" {
 #endif
 
 // Save DEP_LIBS to a variable that is explicitly sized for expansion
-static char dep_libs[1024] = DEP_LIBS;
+static char dep_libs[1024] = "\0" DEP_LIBS;
 
 JL_DLLEXPORT void jl_loader_print_stderr(const char * msg)
 {
@@ -239,7 +239,10 @@ static char *libstdcxxprobe(void)
 
         // Open the first available libstdc++.so.
         // If it can't be found, report so by exiting zero.
-        void *handle = dlopen("libstdc++.so.6", RTLD_LAZY);
+        // The star is there to prevent the compiler from merging constants
+        // with "\0*libstdc++.so.6", which we string replace inside the .so during
+        // make install.
+        void *handle = dlopen("libstdc++.so.6\0*", RTLD_LAZY);
         if (!handle) {
             _exit(0);
         }
@@ -327,8 +330,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     const char *lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
-    int deps_len = strlen(dep_libs);
-    char *curr_dep = &dep_libs[0];
+    int deps_len = strlen(&dep_libs[1]);
+    char *curr_dep = &dep_libs[1];
 
     void *cxx_handle;
 
@@ -337,9 +340,9 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     int done_probe = 0;
     char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
     if (probevar) {
-        if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes"))
+        if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes") == 0)
             do_probe = 1;
-        else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no"))
+        else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no") == 0)
             do_probe = 0;
     }
     if (do_probe) {
@@ -357,13 +360,9 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         }
     }
     if (!done_probe) {
-#ifndef GLIBCXX_PATH
-#define GLIBCXX_PATH "$(private_libdir)/usr/lib/julia/libstdc++.so.6"
-#warning GLIBCXX_PATH is meant to be specified on the command line
-#endif
-        load_library(GLIBCXX_PATH, lib_dir, 1);
+        const static char bundled_path[256] = "\0*libstdc++.so.6";
+        load_library(&bundled_path[2], lib_dir, 1);
     }
-            puts(GLIBCXX_PATH);
 #endif
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
