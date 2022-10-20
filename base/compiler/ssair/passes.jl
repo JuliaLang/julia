@@ -1064,7 +1064,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    code = get(inlining.mi_cache, mi, nothing)
+    code = get(code_cache(inlining), mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
         if use_const_api(code)
