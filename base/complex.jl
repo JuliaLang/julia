@@ -473,9 +473,10 @@ end
 function inv(w::ComplexF64)
     c, d = reim(w)
     absc, absd = abs(c), abs(d)
-    cd = ifelse(absc>absd, absc, absd)
+    cd, dc = ifelse(absc>absd, (absc, absd), (absd, absc))
+    # no overflow from abs2
     if sqrt(floatmin(Float64)/2) <= cd <= sqrt(floatmax(Float64)/2)
-        return conj(w) / abs2(w)
+        return conj(w) / muladd(cd, cd, dc*dc)
     end
     (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
     
