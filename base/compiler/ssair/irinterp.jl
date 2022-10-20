@@ -206,7 +206,8 @@ function reprocess_instruction!(interp::AbstractInterpreter,
 
     rt = nothing
     if isa(inst, Expr)
-        if inst.head === :call || inst.head === :foreigncall || inst.head === :new
+        head = inst.head
+        if head === :call || head === :foreigncall || head === :new
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
             # All other effects already guaranteed effect free by construction
             if is_nothrow(effects)
@@ -216,17 +217,18 @@ function reprocess_instruction!(interp::AbstractInterpreter,
                     ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
                 end
             end
-        elseif inst.head === :invoke
+        elseif head === :invoke
             mi′ = inst.args[1]::MethodInstance
             if mi′ !== irsv.mi # prevent infinite loop
                 rt = concrete_eval_invoke(interp, inst, mi′, irsv)
             end
-        elseif inst.head === :throw_undef_if_not
-            # TODO: Terminate interpretation early if known false?
+        elseif head === :throw_undef_if_not || # TODO: Terminate interpretation early if known false?
+               head === :gc_preserve_begin ||
+               head === :gc_preserve_end
             return false
         else
             ccall(:jl_, Cvoid, (Any,), inst)
-            error()
+            error("reprocess_instruction!: unhandled expression found")
         end
     elseif isa(inst, PhiNode)
         rt = abstract_eval_phi_stmt(interp, inst, idx, irsv)
