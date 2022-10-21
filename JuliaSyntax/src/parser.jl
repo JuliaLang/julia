@@ -1449,33 +1449,42 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             end
         elseif k == K"["
             if is_macrocall
-                # a().@x[1]  ==> (macrocall (ref (error (. (call a) (quote x))) 1))
+                # a().@x[1]  ==> (macrocall (error (. (call a) (quote x))) (vect 1))
                 finish_macroname(ps, mark, valid_macroname, macro_name_position)
             end
+            m = position(ps)
             # a [i]  ==>  (ref a (error-t) i)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
             ckind, cflags = parse_cat(ParseState(ps, end_symbol=true),
                                       K"]", ps.end_symbol)
-            # a[i]    ==>  (ref a i)
-            # a[i,j]  ==>  (ref a i j)
-            # (a=1)[] ==>  (ref (= a 1))
-            # T[x   y]  ==>  (typed_hcat T x y)
-            # T[x ; y]  ==>  (typed_vcat T x y)
-            # T[a b; c d]  ==>  (typed_vcat T (row a b) (row c d))
-            # T[x for x in xs]  ==>  (typed_comprehension T (generator x (= x xs)))
-            #v1.8: T[a ; b ;; c ; d]  ==>  (typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))
-            outk = ckind == K"vect"          ? K"ref"                  :
-                   ckind == K"hcat"          ? K"typed_hcat"           :
-                   ckind == K"vcat"          ? K"typed_vcat"           :
-                   ckind == K"comprehension" ? K"typed_comprehension"  :
-                   ckind == K"ncat"          ? K"typed_ncat"           :
-                   internal_error("unrecognized kind in parse_cat ", ckind)
-            emit(ps, mark, outk, cflags)
-            check_ncat_compat(ps, mark, ckind)
             if is_macrocall
+                # @S[a,b]  ==>  (macrocall @S (vect a b))
+                # @S[a b]  ==>  (macrocall @S (hcat a b))
+                # @S[a; b] ==>  (macrocall @S (vcat a b))
+                #v1.7: @S[a ;; b]  ==>  (macrocall @S (ncat-2 a b))
+                #v1.6: @S[a ;; b]  ==>  (macrocall @S (error (ncat-2 a b)))
+                emit(ps, m, ckind, cflags)
+                check_ncat_compat(ps, m, ckind)
                 emit(ps, mark, K"macrocall")
                 break
+            else
+                # a[i]    ==>  (ref a i)
+                # a[i,j]  ==>  (ref a i j)
+                # (a=1)[] ==>  (ref (= a 1))
+                # T[x   y]  ==>  (typed_hcat T x y)
+                # T[x ; y]  ==>  (typed_vcat T x y)
+                # T[a b; c d]  ==>  (typed_vcat T (row a b) (row c d))
+                # T[x for x in xs]  ==>  (typed_comprehension T (generator x (= x xs)))
+                #v1.8: T[a ; b ;; c ; d]  ==>  (typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))
+                outk = ckind == K"vect"          ? K"ref"                  :
+                       ckind == K"hcat"          ? K"typed_hcat"           :
+                       ckind == K"vcat"          ? K"typed_vcat"           :
+                       ckind == K"comprehension" ? K"typed_comprehension"  :
+                       ckind == K"ncat"          ? K"typed_ncat"           :
+                       internal_error("unrecognized kind in parse_cat ", ckind)
+                emit(ps, mark, outk, cflags)
+                check_ncat_compat(ps, mark, ckind)
             end
         elseif k == K"."
             # x .y  ==>  (. x (error-t) (quote y))
