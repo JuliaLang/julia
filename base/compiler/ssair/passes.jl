@@ -1064,7 +1064,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    code = get(inlining.mi_cache, mi, nothing)
+    code = get(code_cache(inlining), mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1840,6 +1840,8 @@ end
 
 # TODO: This is terrible, we should change the IR for GotoIfNot to gain an else case
 function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
+    # For the time being, don't drop the first bb, because it has special predecessor semantics.
+    bbidx == 1 && return false
     # If the block we're going to is the same as the fallthrow, it's always legal to drop
     # the block.
     length(bb.stmts) == 0 && return true
@@ -1862,6 +1864,8 @@ function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
     end
     return true
 end
+
+is_terminator(@nospecialize(inst)) = isa(inst, GotoNode) || isa(inst, GotoIfNot) || isexpr(inst, :enter)
 
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
@@ -1891,14 +1895,19 @@ function cfg_simplify!(ir::IRCode)
     for (idx, bb) in enumerate(bbs)
         if length(bb.succs) == 1
             succ = bb.succs[1]
-            if length(bbs[succ].preds) == 1
+            if length(bbs[succ].preds) == 1 && succ != 1
+                # Can't merge blocks with :enter terminator even if they
+                # only have one successor.
+                if isexpr(ir[SSAValue(last(bb.stmts))][:inst], :enter)
+                    continue
+                end
                 # Prevent cycles by making sure we don't end up back at `idx`
                 # by following what is to be merged into `succ`
                 if follow_merged_succ(succ) != idx
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
-            elseif is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
+            elseif merge_into[idx] == 0 && is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
                 found_interference = false
@@ -1919,6 +1928,21 @@ function cfg_simplify!(ir::IRCode)
                 end
                 @label done
                 if !found_interference
+                    # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
+                    # instruction numbering to merge the blocks now such that below processing will properly
+                    # update it.
+                    if idx-1 in bb.preds
+                        last_fallthrough = idx-1
+                        dbi = length(dropped_bbs)
+                        while dbi != 0 && dropped_bbs[dbi] == last_fallthrough && (last_fallthrough-1 in bbs[last_fallthrough].preds)
+                            last_fallthrough -= 1
+                            dbi -= 1
+                        end
+                        terminator = ir[SSAValue(last(bbs[last_fallthrough].stmts))][:inst]
+                        if !is_terminator(terminator)
+                            bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
+                        end
+                    end
                     push!(dropped_bbs, idx)
                 end
             end
@@ -1965,6 +1989,8 @@ function cfg_simplify!(ir::IRCode)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
+                elseif isexpr(terminator, :enter)
+                    push!(worklist, terminator.args[1])
                 end
                 ncurr = curr + 1
                 if !isempty(searchsorted(dropped_bbs, ncurr))
@@ -2087,8 +2113,12 @@ function cfg_simplify!(ir::IRCode)
             res = Int[]
             function scan_preds!(preds)
                 for pred in preds
+                    if pred == 0
+                        push!(res, 0)
+                        continue
+                    end
                     r = bb_rename_pred[pred]
-                    r == -2 && continue
+                    (r == -2 || r == -1) && continue
                     if r == -3
                         scan_preds!(bbs[pred].preds)
                     else
