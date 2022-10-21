@@ -479,7 +479,7 @@ function inv(w::ComplexF64)
         return conj(w) / muladd(cd, cd, dc*dc)
     end
     (isinf(c) | isinf(d)) && return complex(copysign(0.0, c), flipsign(-0.0, d))
-    
+
     ϵ  = eps(Float64)
     bs = 2/(ϵ*ϵ)
 
