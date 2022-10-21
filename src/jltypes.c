@@ -2572,7 +2572,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 1, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001010110001 }; // Set fields 1, 3-6, 8, 10 as const
+    const static uint32_t code_instance_constfields[1]  = { 0b000001010110001 }; // Set fields 1, 5-6, 8, 10 as const
     const static uint32_t code_instance_atomicfields[1] = { 0b110100101000010 }; // Set fields 2, 7, 9, 12, 14-15 as atomic
     //Fields 11 and 15 must be protected by locks, and thus all operations on jl_code_instance_t are threadsafe
     jl_code_instance_type->name->constfields = code_instance_constfields;
