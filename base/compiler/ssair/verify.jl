@@ -197,7 +197,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                     error("")
                 end
                 edge == 0 && continue
-                if bb_unreachable(domtree, Int64(edge))
+                if bb_unreachable(domtree, Int(edge))
                     # TODO: Disallow?
                     #@verify_error "Unreachable edge from #$edge should have been cleaned up at idx $idx"
                     #error("")
