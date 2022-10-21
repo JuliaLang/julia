@@ -2719,6 +2719,10 @@ nocolor(io::IO) = IOContext(io, :color => false)
 alignment_from_show(io::IO, x::Any) =
     textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
 
+nocolor(io::IO) = IOContext(io, :color => false)
+alignment_from_show(io::IO, x::Any) =
+    textwidth(sprint(show, x, context=nocolor(io), sizehint=0))
+
 """
 `alignment(io, X)` returns a tuple (left,right) showing how many characters are
 needed on either side of an alignment feature such as a decimal point.
