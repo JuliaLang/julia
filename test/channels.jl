@@ -14,6 +14,25 @@ using Base: n_avail
     @test fetch(t) == "finished"
 end
 
+@testset "waitfirst behavior of wait on Condition" begin
+    a = Condition()
+    waiter1 = @async begin
+        wait(a)
+    end
+    waiter2 = @async begin
+        wait(a)
+    end
+    waiter3 = @async begin
+        wait(a; waitfirst=true)
+    end
+    t = @async begin
+        Base.notify(a, "success"; all=false)
+        "finished"
+    end
+    @test fetch(waiter3) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
