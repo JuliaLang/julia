@@ -156,8 +156,8 @@ Standard library changes
   `copy_symbolic=false` keyword arguments.
 
 * An experimental function `SparseArrays.allowscalar(::Bool)` allows scalar indexing of sparse arrays to be
-  disabled or enabled. This function is primary intended to flush out accidental scalar indexing of
-  `SparseMatrixCSC` matrices which is a common source of performance issues (<https://github.com/JuliaSparse/SparseArrays.jl/pull/200>).
+  disabled or enabled. This function is intended to help find accidental scalar indexing of
+  `SparseMatrixCSC` objects which is a common source of performance issues (<https://github.com/JuliaSparse/SparseArrays.jl/pull/200>).
 
 
 
