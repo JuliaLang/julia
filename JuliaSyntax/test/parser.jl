@@ -282,8 +282,17 @@ tests = [
         "a().@x(y)" =>  "(macrocall (error (. (call a) (quote x))) y)"
         "a().@x y"  =>  "(macrocall (error (. (call a) (quote x))) y)"
         "a().@x{y}" =>  "(macrocall (error (. (call a) (quote x))) (braces y))"
-        # array indexing, typed comprehension, etc
-        "a().@x[1]" => "(macrocall (ref (error (. (call a) (quote x))) 1))"
+        # square brackets
+        "a().@x[1]" => "(macrocall (error (. (call a) (quote x))) (vect 1))"
+        "@S[a,b]"  => "(macrocall @S (vect a b))" =>
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vect, :a, :b))
+        "@S[a b]"  => "(macrocall @S (hcat a b))" =>
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:hcat, :a, :b))
+        "@S[a; b]" => "(macrocall @S (vcat a b))" =>
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vcat, :a, :b))
+        ((v=v"1.7",), "@S[a ;; b]")  =>  "(macrocall @S (ncat-2 a b))" =>
+            Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:ncat, 2, :a, :b))
+        ((v=v"1.6",), "@S[a ;; b]")  =>  "(macrocall @S (error (ncat-2 a b)))"
         "a[i]"  =>  "(ref a i)"
         "a [i]"  =>  "(ref a (error-t) i)"
         "a[i,j]"  =>  "(ref a i j)"
@@ -805,11 +814,6 @@ broken_tests = [
         # Invalid numeric literals, not juxtaposition
         "0b12" => "(error \"0b12\")"
         "0xex" => "(error \"0xex\")"
-        # Square brackets without space in macrocall
-        "@S[a,b]"  => "(macrocall S (vect a b))"
-        "@S[a b]"  => "(macrocall S (hcat a b))"
-        "@S[a; b]" => "(macrocall S (vcat a b))"
-        "@S[a; b ;; c; d]" => "(macrocall S (ncat-2 (nrow-1 a b) (nrow-1 c d)))"
         # Bad character literals
         "'\\xff'"  => "(error '\\xff')"
         "'\\x80'"  => "(error '\\x80')"
