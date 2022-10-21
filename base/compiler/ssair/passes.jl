@@ -1090,7 +1090,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     # TOOD: Should there be a special line number node for inlined finalizers?
     inlined_at = ir[SSAValue(idx)][:line]
     ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
-        ir.linetable, src, mi.sparam_vals, mi.def, inlined_at, argexprs)
+        ir.linetable, src, mi.sparam_vals, mi, inlined_at, argexprs)
 
     # TODO: Use the actual inliner here rather than open coding this special purpose inliner.
     spvals = mi.sparam_vals

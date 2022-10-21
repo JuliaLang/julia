@@ -91,8 +91,9 @@ trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
     @test frame.func === typeof(func).name.mt.name
-    #@test get(frame.linfo).def === which(func, (Any,)).func
-    #@test get(frame.linfo).specTypes === Tuple{typeof(func), Int}
+    @test frame.linfo.def.module === which(func, (Any,)).module
+    @test frame.linfo.def === which(func, (Any,))
+    @test frame.linfo.specTypes === Tuple{typeof(func), Int}
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c

@@ -228,7 +228,7 @@ typedef struct _jl_method_instance_t jl_method_instance_t;
 
 typedef struct _jl_line_info_node_t {
     struct _jl_module_t *module;
-    jl_value_t *method;
+    jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t
     jl_sym_t *file;
     int32_t line;
     int32_t inlined_at;
@@ -393,7 +393,7 @@ typedef struct _jl_code_instance_t {
     // inference state cache
     jl_value_t *rettype; // return type for fptr
     jl_value_t *rettype_const; // inferred constant return value, or null
-    _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t, or jl_nothing, or null
+    _Atomic(jl_value_t *) inferred; // inferred jl_code_info_t (may be compressed), or jl_nothing, or null
     //TODO: jl_array_t *edges; // stored information about edges from this object
     //TODO: uint8_t absolute_max; // whether true max world is unknown
 
