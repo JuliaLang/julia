@@ -148,15 +148,16 @@ Standard library changes
 
 #### SparseArrays
 
-* SuiteSparse solvers are now available as submodules of SparseArrays.
+* SuiteSparse solvers are now available as submodules of SparseArrays (<https://github.com/JuliaSparse/SparseArrays.jl/pull/95>).
 
-* UMFPACK and CHOLMOD thread safety are improved by avoiding globals and using locks. 
-  Multithreaded `ldiv!` of UMFPACK objects may now be performed safely by copying the factorization
-  object with `copy_numeric=false` and `copy_symbolic=false` keyword arguments.
+* UMFPACK (<https://github.com/JuliaSparse/SparseArrays.jl/pull/179>) and CHOLMOD (<https://github.com/JuliaSparse/SparseArrays.jl/pull/206>) thread safety are improved by 
+  avoiding globals and using locks. Multithreaded `ldiv!` of UMFPACK objects may now be
+  performed safely by copying the factorization object with `copy_numeric=false` and 
+  `copy_symbolic=false` keyword arguments.
 
 * An experimental function `SparseArrays.allowscalar(::Bool)` allows scalar indexing of sparse arrays to be
   disabled or enabled. This function is primary intended to flush out accidental scalar indexing of
-  `SparseMatrixCSC` matrices which is a common source of performance issues.
+  `SparseMatrixCSC` matrices which is a common source of performance issues (<https://github.com/JuliaSparse/SparseArrays.jl/pull/200>).
 
 
 
