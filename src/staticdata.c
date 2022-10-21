@@ -1301,6 +1301,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_code_instance_t *newm = (jl_code_instance_t*)&s->s->buf[reloc_offset];
 
                 if (s->incremental) {
+                    arraylist_push(&s->fixup_list, (void*)reloc_offset);
                     if (m->min_world > 1)
                         newm->min_world = ~(size_t)0;     // checks that we reprocess this upon deserialization
                     if (m->max_world != ~(size_t)0)
@@ -1308,10 +1309,10 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     else {
                         if (m->inferred && ptrhash_has(&s->callers_with_edges, m->def))
                             newm->max_world = 1;  // sentinel value indicating this will need validation
-                        if (m->min_world > 0 && m->inferred)
+                        if (m->min_world > 0 && m->inferred) {
                             // TODO: also check if this object is part of the codeinst cache
                             // will check on deserialize if this cache entry is still valid
-                            arraylist_push(&s->fixup_list, (void*)reloc_offset);
+                        }
                     }
                 }
 
@@ -2812,10 +2813,15 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_array_t *depmods,
             if (ci->max_world == 1) { // sentinel value: has edges to external callables
                 ptrhash_put(&new_code_instance_validate, ci, (void*)(~(uintptr_t)HT_NOTFOUND));   // "HT_FOUND"
             }
-            else {
-                // It should be valid, but it may not be connected
+            else if (ci->max_world) {
+                // It's valid, but it may not be connected
                 if (!ci->def->cache)
                     ci->def->cache = ci;
+            }
+            else {
+                // Ensure this code instance is not connected
+                if (ci->def->cache == ci)
+                    ci->def->cache = NULL;
             }
         }
         else if (jl_is_datatype(obj)) {
