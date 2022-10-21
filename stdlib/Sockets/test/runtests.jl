@@ -9,6 +9,23 @@ using Base: Experimental
 # expected test duration is about 5-10 seconds
 function killjob(d)
     Core.print(Core.stderr, d)
+    try
+        run(`ss -tuam`)
+        run(`nstat -t 90`)
+    catch ss_failed
+        @show ss_failed
+        try
+            run(`netstat -pant`)
+        catch netstat_failed
+            @show netstat_failed
+            println("/proc/net/tcp:\n", try; read("/proc/net/tcp", String); catch ex; ex; end)
+            println("/proc/net/tcp6:\n", try; read("/proc/net/tcp6", String); catch ex; ex; end)
+            println("/proc/net/udp:\n", try; read("/proc/net/udp", String); catch ex; ex; end)
+            println("/proc/net/udp6:\n", try; read("/proc/net/udp6", String); catch ex; ex; end)
+        end
+    end
+    @isdefined(defaultport) && @show Int(defaultport), UInt16(defaultport)
+    @isdefined(randport) && @show Int(randport), UInt16(randport)
     if Sys.islinux()
         SIGINFO = 10
     elseif Sys.isbsd()
@@ -21,7 +38,7 @@ function killjob(d)
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
 end
-sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 600)
+sockets_watchdog_timer = Timer(t -> killjob("KILLING BY SOCKETS TEST WATCHDOG\n"), 60)
 
 @testset "parsing" begin
     @test ip"127.0.0.1" == IPv4(127,0,0,1)
@@ -304,8 +321,8 @@ end
     let
         a = UDPSocket()
         b = UDPSocket()
-        bind(a, ip"127.0.0.1", randport)
-        bind(b, ip"127.0.0.1", randport + 1)
+        @test bind(a, ip"127.0.0.1", randport)
+        @test bind(b, ip"127.0.0.1", randport + 1)
 
         @Experimental.sync begin
             let i = 0
@@ -354,11 +371,18 @@ end
 
     @test_throws MethodError bind(UDPSocket(), randport)
 
+@isdefined(defaultport) && @show Int(defaultport), UInt16(defaultport)
+@isdefined(randport) && @show Int(randport), UInt16(randport)
+run(`nstat -r`)
+
     let
         a = UDPSocket()
         b = UDPSocket()
-        bind(a, ip"::1", UInt16(randport))
-        bind(b, ip"::1", UInt16(randport + 1))
+        @test bind(a, ip"::1", UInt16(randport))
+        @test bind(b, ip"::1", UInt16(randport + 1))
+
+try; run(`ss -u6am`); catch ss_failed; @show ss_failed; end
+println("/proc/net/udp6:\n", try; read("/proc/net/udp6", String); catch ex; ex; end)
 
         for i = 1:3
             tsk = @async begin
@@ -423,7 +447,7 @@ end
 
         function create_socket(addr::IPAddr, port)
             s = UDPSocket()
-            bind(s, addr, port, reuseaddr = true, enable_broadcast = true)
+            @test bind(s, addr, port, reuseaddr = true, enable_broadcast = true)
             return s
         end
 
