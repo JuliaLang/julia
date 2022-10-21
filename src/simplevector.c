@@ -7,7 +7,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 
-JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...)
+JL_DLLEXPORT jl_svec_t *(jl_svec)(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_emptysvec;
