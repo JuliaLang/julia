@@ -1696,19 +1696,16 @@ function parse_resword(ps::ParseState)
     elseif word == K"let"
         bump(ps, TRIVIA_FLAG)
         if peek(ps) ∉ KSet"NewlineWs ;"
-            # let x=1\n end    ==>  (let (= x 1) (block))
+            # let x=1\n end   ==>  (let (block (= x 1)) (block))
+            # let x=1 ; end   ==>  (let (block (= x 1)) (block))
             m = position(ps)
             n_subexprs = parse_comma_separated(ps, parse_eq_star)
             kb = peek_behind(ps).kind
-            # Wart: This ugly logic seems unfortunate. Why not always emit a block?
-            # let x=1 ; end   ==>  (let (= x 1) (block))
-            # let x::1 ; end  ==>  (let (:: x 1) (block))
-            # let x ; end     ==>  (let x (block))
-            if n_subexprs > 1 || !(kb in KSet"Identifier = ::")
-                # let x=1,y=2 ; end  ==>  (let (block (= x 1) (= y 2) (block)))
-                # let x+=1 ; end     ==>  (let (block (+= x 1)) (block))
-                emit(ps, m, K"block")
-            end
+            # let x::1 ; end    ==>  (let (block (:: x 1)) (block))
+            # let x ; end       ==>  (let (block x) (block))
+            # let x=1,y=2 ; end ==>  (let (block (= x 1) (= y 2) (block)))
+            # let x+=1 ; end    ==>  (let (block (+= x 1)) (block))
+            emit(ps, m, K"block")
         else
             # let end           ==>  (let (block) (block))
             # let ; end         ==>  (let (block) (block))

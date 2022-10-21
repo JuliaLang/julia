@@ -243,6 +243,16 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym == :char
         @check length(args) == 1
         return args[1]
+    elseif headsym == :let
+        @check Meta.isexpr(args[1], :block)
+        a1 = args[1].args
+        # Ugly logic to strip the Expr(:block) in certian cases for compatibility
+        if length(a1) == 1
+            a = a1[1]
+            if a isa Symbol || Meta.isexpr(a, (:(=), :(::)))
+                args[1] = a
+            end
+        end
     end
     return Expr(headsym, args...)
 end

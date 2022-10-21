@@ -357,15 +357,15 @@ tests = [
         "for x in xs end" => "(for (= x xs) (block))"
         "for x in xs, y in ys \n a \n end" => "(for (block (= x xs) (= y ys)) (block a))"
         # let
-        "let x=1\n end"    =>  "(let (= x 1) (block))"
-        "let x ; end"      =>  "(let x (block))"
-        "let x=1 ; end"    =>  "(let (= x 1) (block))"
-        "let x::1 ; end"   =>  "(let (:: x 1) (block))"
-        "let x=1,y=2 end"  =>  "(let (block (= x 1) (= y 2)) (block))"
-        "let x+=1 ; end"   =>  "(let (block (+= x 1)) (block))"
-        "let ; end"        =>  "(let (block) (block))"
-        "let ; body end"   =>  "(let (block) (block body))"
-        "let\na\nb\nend"   =>  "(let (block) (block a b))"
+        "let x=1\n end"    =>  "(let (block (= x 1)) (block))"  => Expr(:let, Expr(:(=), :x, 1),  Expr(:block))
+        "let x=1 ; end"    =>  "(let (block (= x 1)) (block))"  => Expr(:let, Expr(:(=), :x, 1),  Expr(:block))
+        "let x ; end"      =>  "(let (block x) (block))"        => Expr(:let, :x,                 Expr(:block))
+        "let x::1 ; end"   =>  "(let (block (:: x 1)) (block))" => Expr(:let, Expr(:(::), :x, 1), Expr(:block))
+        "let x=1,y=2 end"  =>  "(let (block (= x 1) (= y 2)) (block))" => Expr(:let, Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2)), Expr(:block))
+        "let x+=1 ; end"   =>  "(let (block (+= x 1)) (block))" => Expr(:let, Expr(:block, Expr(:+=, :x, 1)), Expr(:block))
+        "let ; end"        =>  "(let (block) (block))"          => Expr(:let, Expr(:block), Expr(:block))
+        "let ; body end"   =>  "(let (block) (block body))"     => Expr(:let, Expr(:block), Expr(:block, :body))
+        "let\na\nb\nend"   =>  "(let (block) (block a b))"      => Expr(:let, Expr(:block), Expr(:block, :a, :b))
         # abstract type
         "abstract type A end"            =>  "(abstract A)"
         "abstract type A ; end"          =>  "(abstract A)"
