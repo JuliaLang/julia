@@ -141,7 +141,24 @@ Standard library changes
 * An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
   activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
+#### SuiteSparse
+
+* Code for the SuiteSparse solver wrappers has been moved to SparseArrays.jl. Solvers are now re-exported by
+  SuiteSparse.jl
+
 #### SparseArrays
+
+* SuiteSparse solvers are now available as submodules of SparseArrays.
+
+* UMFPACK and CHOLMOD thread safety are improved by avoiding globals and using locks. 
+  Multithreaded `ldiv!` of UMFPACK objects may now be performed safely by copying the factorization
+  object with `copy_numeric=false` and `copy_symbolic=false` keyword arguments.
+
+* An experimental function `SparseArrays.allowscalar(::Bool)` allows scalar indexing of sparse arrays to be
+  disabled or enabled. This function is primary intended to flush out accidental scalar indexing of
+  `SparseMatrixCSC` matrices which is a common source of performance issues.
+
+
 
 #### Test
 * New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
