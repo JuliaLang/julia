@@ -401,10 +401,6 @@ function generate_precompile_statements()
             end
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-            # Skipping them avoids the warning.
-            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-            ms isa Vector || continue
             precompile(ps...)
             n_succeeded += 1
             print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
