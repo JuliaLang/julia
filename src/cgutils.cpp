@@ -3890,15 +3890,6 @@ static Value *emit_defer_signal(jl_codectx_t &ctx)
     return ctx.builder.CreateInBoundsGEP(ctx.types().T_sigatomic, ptls, ArrayRef<Value*>(offset), "jl_defer_signal");
 }
 
-static void emit_gc_safepoint(jl_codectx_t &ctx)
-{
-    ctx.builder.CreateCall(prepare_call(gcroot_flush_func));
-    Value* signal_page = get_current_signal_page(ctx);
-    emit_signal_fence(ctx);
-    ctx.builder.CreateLoad(getSizeTy(ctx.builder.getContext()), signal_page, true);
-    emit_signal_fence(ctx);
-}
-
 #ifndef JL_NDEBUG
 static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
 {
