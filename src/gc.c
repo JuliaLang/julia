@@ -1825,7 +1825,7 @@ STATIC_INLINE jl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
 // Double the chunk queue
 static NOINLINE void gc_chunkqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
-#if 0
+#ifndef GC_VERIFY
     jl_gc_chunk_t *old_start = mq->chunk_start;
     size_t old_queue_size = (mq->chunk_end - mq->chunk_start);
     size_t offset = (mq->current_chunk - old_start);
@@ -1838,7 +1838,7 @@ static NOINLINE void gc_chunkqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 // Push chunk `*c` into chunk queue
 STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
-#if 0
+#ifndef GC_VERIFY
     if (__unlikely(mq->current_chunk == mq->chunk_end))
         gc_chunkqueue_resize(mq);
     *mq->current_chunk = *c;
@@ -1850,7 +1850,7 @@ STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) J
 STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     jl_gc_chunk_t c = {.cid = GC_empty_chunk};
-#if 0
+#ifndef GC_VERIFY
     if (mq->current_chunk != mq->chunk_start) {
         mq->current_chunk--;
         c = *mq->current_chunk;
@@ -2023,7 +2023,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
     jl_value_t *new_obj;
     size_t elsize = ((jl_array_t *)ary16_parent)->elsize / sizeof(jl_value_t *);
-#if 0
+#ifndef GC_VERIFY
     // Decide whether need to chunk ary16
     size_t nrefs = (ary16_end - ary16_begin) / elsize;
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -2049,7 +2049,7 @@ STATIC_INLINE void gc_mark_array16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl_
 // Mark chunk of large array
 STATIC_INLINE void gc_mark_chunk(jl_ptls_t ptls, jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
-#if 0
+#ifndef GC_VERIFY
     switch (c->cid) {
         case GC_objary_chunk: {
             jl_value_t *obj_parent = c->parent;
@@ -2209,7 +2209,7 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
 void gc_mark_finlist_(jl_gc_markqueue_t *mq, jl_value_t **fl_begin, jl_value_t **fl_end)
 {
     jl_value_t *new_obj;
-#if 0
+#ifndef GC_VERIFY
     // Decide whether need to chunk finlist
     size_t nrefs = (fl_end - fl_begin);
     if (nrefs > MAX_REFS_AT_ONCE) {
@@ -3205,12 +3205,18 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->perm_scanned_bytes = 0;
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
-    size_t init_size = 1024;
-
+    
+    // Initialize GC mark-queue
+    size_t init_size = (1 << 18);
     jl_gc_markqueue_t *mq = &ptls->mark_queue;
-
-    mq->current = mq->start = (jl_value_t**)malloc_s(init_size * sizeof(jl_value_t*));
+    mq->start = (jl_value_t **)malloc_s(init_size * sizeof(jl_value_t *));
+    mq->current = mq->start;
     mq->end = mq->start + init_size;
+#ifndef GC_VERIFY
+    size_t cq_init_size = (1 << 14);
+    mq->current_chunk = mq->chunk_start = (jl_gc_chunk_t *)malloc_s(cq_init_size * sizeof(jl_gc_chunk_t));
+    mq->chunk_end = mq->chunk_start + cq_init_size;
+#endif
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
