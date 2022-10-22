@@ -250,6 +250,17 @@ let i = 0
     @test !Base.isdone(cycle(0:3), 1)
 end
 
+@testset "cycle(iter, n)"  begin
+    @test cycle(0:3, 2) == [0, 1, 2, 3, 0, 1, 2, 3]
+    @test isempty(cycle(1:0)) == isempty(cycle(1:0, 3)) == true
+
+    @test eltype(cycle(0:3, 2)) === Int
+    @test Base.IteratorEltype(cycle(0:3, 2)) == Base.HasEltype()
+
+    Base.haslength(cycle(0:3, 2)) == false  # but not sure we should test these
+    Base.IteratorSize(cycle(0:3, 2)) == Base.SizeUnknown()
+end
+
 # repeated
 # --------
 let i = 0
