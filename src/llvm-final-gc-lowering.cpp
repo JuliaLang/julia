@@ -304,7 +304,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!pgcstack_getter)
+    if (!pgcstack_getter && !adoptthread_func)
         return false;
 
     // Look for a call to 'julia.get_pgcstack'.

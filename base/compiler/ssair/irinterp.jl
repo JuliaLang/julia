@@ -165,15 +165,16 @@ function reprocess_instruction!(interp::AbstractInterpreter,
     irsv::IRInterpretationState)
     ir = irsv.ir
     if isa(inst, GotoIfNot)
-        cond = argextype(inst.cond, ir)
-        if isa(cond, Const)
+        cond = inst.cond
+        condval = maybe_extract_const_bool(argextype(cond, ir))
+        if condval isa Bool
             function update_phi!(from::Int, to::Int)
                 if length(ir.cfg.blocks[to].preds) == 0
                     return
                 end
                 for idx in ir.cfg.blocks[to].stmts
                     stmt = ir.stmts[idx][:inst]
-                    isa(stmt, Nothing) && continue
+                    isa(stmt, Nothing) && continue # allowed between `PhiNode`s
                     isa(stmt, PhiNode) || break
                     for (i, edge) in enumerate(stmt.edges)
                         if edge == from
@@ -185,14 +186,15 @@ function reprocess_instruction!(interp::AbstractInterpreter,
                     end
                 end
             end
-            if isa(inst.cond, SSAValue)
-                kill_def_use!(irsv.tpdum, inst.cond::SSAValue, idx)
+            if isa(cond, SSAValue)
+                kill_def_use!(irsv.tpdum, cond, idx)
             end
             if bb === nothing
                 bb = block_for_inst(ir, idx)
             end
-            if (cond.val)::Bool
+            if condval
                 ir.stmts[idx][:inst] = nothing
+                ir.stmts[idx][:type] = Any
                 kill_edge!(ir, bb, inst.dest, update_phi!)
             else
                 ir.stmts[idx][:inst] = GotoNode(inst.dest)
@@ -205,7 +207,8 @@ function reprocess_instruction!(interp::AbstractInterpreter,
 
     rt = nothing
     if isa(inst, Expr)
-        if inst.head === :call || inst.head === :foreigncall || inst.head === :new
+        head = inst.head
+        if head === :call || head === :foreigncall || head === :new
             (; rt, effects) = abstract_eval_statement_expr(interp, inst, nothing, ir, irsv.mi)
             # All other effects already guaranteed effect free by construction
             if is_nothrow(effects)
@@ -215,17 +218,18 @@ function reprocess_instruction!(interp::AbstractInterpreter,
                     ir.stmts[idx][:flag] |= IR_FLAG_EFFECT_FREE
                 end
             end
-        elseif inst.head === :invoke
+        elseif head === :invoke
             mi′ = inst.args[1]::MethodInstance
             if mi′ !== irsv.mi # prevent infinite loop
                 rt = concrete_eval_invoke(interp, inst, mi′, irsv)
             end
-        elseif inst.head === :throw_undef_if_not
-            # TODO: Terminate interpretation early if known false?
+        elseif head === :throw_undef_if_not || # TODO: Terminate interpretation early if known false?
+               head === :gc_preserve_begin ||
+               head === :gc_preserve_end
             return false
         else
             ccall(:jl_, Cvoid, (Any,), inst)
-            error()
+            error("reprocess_instruction!: unhandled expression found")
         end
     elseif isa(inst, PhiNode)
         rt = abstract_eval_phi_stmt(interp, inst, idx, irsv)
@@ -233,7 +237,7 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(argextype(inst.val, ir), inst.typ)
+        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), inst.typ)
     else
         ccall(:jl_, Cvoid, (Any,), inst)
         error()
@@ -245,6 +249,36 @@ function reprocess_instruction!(interp::AbstractInterpreter,
     return false
 end
 
+# Process the terminator and add the successor to `ip`. Returns whether a backedge was seen.
+function process_terminator!(ir::IRCode, idx::Int, bb::Int,
+    all_rets::Vector{Int}, ip::BitSetBoundedMinPrioritySet)
+    inst = ir.stmts[idx][:inst]
+    if isa(inst, ReturnNode)
+        if isdefined(inst, :val)
+            push!(all_rets, idx)
+        end
+        return false
+    elseif isa(inst, GotoNode)
+        backedge = inst.label < bb
+        !backedge && push!(ip, inst.label)
+        return backedge
+    elseif isa(inst, GotoIfNot)
+        backedge = inst.dest < bb
+        !backedge && push!(ip, inst.dest)
+        push!(ip, bb + 1)
+        return backedge
+    elseif isexpr(inst, :enter)
+        dest = inst.args[1]::Int
+        @assert dest > bb
+        push!(ip, dest)
+        push!(ip, bb + 1)
+        return false
+    else
+        push!(ip, bb + 1)
+        return false
+    end
+end
+
 function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState;
     extra_reprocess::Union{Nothing,BitSet} = nothing)
     (; ir, tpdum, ssa_refined) = irsv
@@ -253,40 +287,6 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
     ip = BitSetBoundedMinPrioritySet(length(bbs))
     push!(ip, 1)
     all_rets = Int[]
-
-    """
-        process_terminator!
-
-    Process the terminator and add the successor to `ip`. Returns whether a
-    backedge was seen.
-    """
-    function process_terminator!(ip::BitSetBoundedMinPrioritySet, bb::Int, idx::Int)
-        inst = ir.stmts[idx][:inst]
-        if isa(inst, ReturnNode)
-            if isdefined(inst, :val)
-                push!(all_rets, idx)
-            end
-            return false
-        elseif isa(inst, GotoNode)
-            backedge = inst.label < bb
-            !backedge && push!(ip, inst.label)
-            return backedge
-        elseif isa(inst, GotoIfNot)
-            backedge = inst.dest < bb
-            !backedge && push!(ip, inst.dest)
-            push!(ip, bb + 1)
-            return backedge
-        elseif isexpr(inst, :enter)
-            dest = inst.args[1]::Int
-            @assert dest > bb
-            push!(ip, dest)
-            push!(ip, bb + 1)
-            return false
-        else
-            push!(ip, bb + 1)
-            return false
-        end
-    end
 
     # Fast path: Scan both use counts and refinement in one single pass of
     #            of the instructions. In the absence of backedges, this will
@@ -316,7 +316,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                 idx, bb, inst, typ, irsv)
                 push!(ssa_refined, idx)
             end
-            if idx == lstmt && process_terminator!(ip, bb, idx)
+            if idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
                 @goto residual_scan
             end
             if typ === Bottom && !isa(inst, PhiNode)
@@ -347,7 +347,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                         count!(tpdum, val)
                     end
                 end
-                idx == lstmt && process_terminator!(ip, bb, idx)
+                idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
             end
         end
 
@@ -366,7 +366,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
                         push!(tpdum[val.id], idx)
                     end
                 end
-                idx == lstmt && process_terminator!(ip, bb, idx)
+                idx == lstmt && process_terminator!(ir, idx, bb, all_rets, ip)
             end
         end
 

@@ -120,9 +120,7 @@ f29083(;μ,σ) = μ + σ*randn()
 g29083() = f29083(μ=2.0,σ=0.1)
 let c = code_typed(g29083, ())[1][1].code
     # make sure no call to kwfunc remains
-    @test !any(e->(isa(e,Expr) && ((e.head === :invoke && e.args[1].def.name === :kwfunc) ||
-                                   (e.head === :foreigncall && e.args[1] === QuoteNode(:jl_get_keyword_sorter)))),
-               c)
+    @test !any(e->(isa(e,Expr) && (e.head === :invoke && e.args[1].def.name === :kwfunc)), c)
 end
 
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
@@ -1597,44 +1595,44 @@ end
     # @inline, @noinline, @constprop
     let @inline f(::Any; x::Int=1) = 2x
         @test is_inlineable(only(methods(f)).source)
-        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
+        @test is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
     end
     let @noinline f(::Any; x::Int=1) = 2x
         @test !is_inlineable(only(methods(f)).source)
-        @test !is_inlineable(only(methods(Core.kwfunc(f))).source)
+        @test !is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :none f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_no_constprop(only(methods(f)))
-        @test Core.Compiler.is_no_constprop(only(methods(Core.kwfunc(f))))
+        @test Core.Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     # @nospecialize
     let f(@nospecialize(A::Any); x::Int=1) = 2x
         @test only(methods(f)).nospecialize == 1
-        @test only(methods(Core.kwfunc(f))).nospecialize == 4
+        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == 4
     end
     let f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
     end
     # Base.@assume_effects
     let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
         @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test is_inlineable(only(methods(f)).source)
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+        @test is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
         @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
 end
 
@@ -1756,7 +1754,7 @@ let interp = Core.Compiler.NativeInterpreter()
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
     inlining = Core.Compiler.InliningState(Core.Compiler.OptimizationParams(interp), nothing,
-        Core.Compiler.code_cache(interp), interp)
+        Core.Compiler.get_world_counter(interp), interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test count(isinvoke(:*), ir.stmts.inst) == 0
     @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1

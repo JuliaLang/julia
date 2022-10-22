@@ -79,7 +79,7 @@ JL_DLLEXPORT void jl_gc_mark_queue_objarray(jl_ptls_t ptls, jl_value_t *parent,
 // will result in the custom sweep function actually being called.
 // This must be done at most once per object and should usually be
 // done right after allocating the object.
-JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t * bj);
+JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *bj);
 
 // The following functions enable support for conservative marking. This
 // functionality allows the user to determine if a machine word can be
