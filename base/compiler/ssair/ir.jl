@@ -144,7 +144,7 @@ function compute_basic_blocks(stmts::Vector{Any})
 end
 
 # this function assumes insert position exists
-function first_insert_for_bb(code, cfg::CFG, block::Int)
+function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
     for idx in cfg.blocks[block].stmts
         stmt = code[idx]
         if !isa(stmt, PhiNode)
