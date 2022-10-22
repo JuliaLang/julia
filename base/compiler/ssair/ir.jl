@@ -771,17 +771,22 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
     return dominates(domtree, xb, yb)
 end
 
+function _count_added_node!(compact,  @nospecialize(val))
+    if isa(val, SSAValue)
+        compact.used_ssas[val.id] += 1
+        return false
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0 # Newly added nodes should be canonicalized
+        compact.new_new_used_ssas[-val.id] += 1
+        return true
+    end
+    return false
+end
+
 function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
     needs_late_fixup = false
     for ops in userefs(v)
-        val = ops[]
-        if isa(val, SSAValue)
-            compact.used_ssas[val.id] += 1
-        elseif isa(val, NewSSAValue)
-            @assert val.id < 0 # Newly added nodes should be canonicalized
-            compact.new_new_used_ssas[-val.id] += 1
-            needs_late_fixup = true
-        end
+        needs_late_fixup |= _count_added_node!(compact, ops[])
     end
     return needs_late_fixup
 end
@@ -978,21 +983,61 @@ const __check_ssa_counts__ = fill(false)
 
 should_check_ssa_counts() = __check_ssa_counts__[]
 
-function _oracle_check(compact::IncrementalCompact)
-    observed_used_ssas = Core.Compiler.find_ssavalue_uses1(compact)
-    for i = 1:length(observed_used_ssas)
-        if observed_used_ssas[i] != compact.used_ssas[i]
-            return (observed_used_ssas, i)
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact)
+    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
+    nvals = length(compact.used_ssas)
+    nvalsnew = length(compact.new_new_used_ssas)
+    nbody1 = compact.result_idx
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    usesnew = zeros(Int, nvalsnew)
+    function increment_uses(ssa::AnySSAValue)
+        if isa(ssa, NewSSAValue)
+            usesnew[-ssa.id] += 1
+        elseif isa(ssa, SSAValue)
+            uses[ssa.id] += 1
         end
     end
-    return (nothing, 0)
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreach_anyssa(increment_uses, e)
+    end
+
+    return (uses, usesnew)
+end
+
+function _oracle_check(compact::IncrementalCompact)
+    (observed_used_ssas, observed_used_newssas) = Core.Compiler.find_ssavalue_uses1(compact)
+    for i = 1:length(observed_used_ssas)
+        if observed_used_ssas[i] != compact.used_ssas[i]
+            return (observed_used_ssas, observed_used_newssas, SSAValue(i))
+        end
+    end
+    for i = 1:length(observed_used_newssas)
+        if observed_used_newssas[i] != compact.new_new_used_ssas[i]
+            return (observed_used_ssas, observed_used_newssas, NewSSAValue(i))
+        end
+    end
+    return (nothing, nothing, 0)
 end
 
 function oracle_check(compact::IncrementalCompact)
-    (maybe_oracle_used_ssas, oracle_error_ssa) = _oracle_check(compact)
+    (maybe_oracle_used_ssas, observed_used_newssas, oracle_error_ssa) = _oracle_check(compact)
     if maybe_oracle_used_ssas !== nothing
-        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas; oracle_error_ssa = $oracle_error_ssa)
-        error("Oracle check failed, inspect Main.{compact, oracle_used_ssas, oracle_error_ssa}")
+        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas; observed_used_newssas = $observed_used_newssas; oracle_error_ssa = $(QuoteNode(oracle_error_ssa)))
+        error("Oracle check failed, inspect Main.{compact, oracle_used_ssas, observed_used_newssas, oracle_error_ssa}")
     end
 end
 

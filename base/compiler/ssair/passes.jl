@@ -691,6 +691,7 @@ function perform_lifting!(compact::IncrementalCompact,
         (old_node_ssa, lf) = visited_phinodes[i], lifted_phis[i]
         old_node = compact[old_node_ssa][:inst]::PhiNode
         new_node = lf.node
+        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
         lf.need_argupdate || continue
         for i = 1:length(old_node.edges)
             edge = old_node.edges[i]
@@ -714,15 +715,17 @@ function perform_lifting!(compact::IncrementalCompact,
                     callback = (@nospecialize(pi), @nospecialize(idx)) -> true
                     val = simple_walk(compact, val, callback)
                 end
+                should_count && _count_added_node!(compact, val)
                 push!(new_node.values, val)
             elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
                 push!(new_node.edges, edge)
-                push!(new_node.values, lifted_phis[reverse_mapping[val]].ssa)
+                newval = lifted_phis[reverse_mapping[val]].ssa
+                should_count && _count_added_node!(compact, newval)
+                push!(new_node.values, newval)
             else
                 # Probably ignored by path condition, skip this
             end
         end
-        count_added_node!(compact, new_node)
     end
 
     # Fixup the stmt itself
