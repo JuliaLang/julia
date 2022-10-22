@@ -918,7 +918,7 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.pending_nodes.stmts[id][:type]
 end
 
-function kill_current_use(compact::IncrementalCompact, @nospecialize(val))
+function kill_current_use!(compact::IncrementalCompact, @nospecialize(val))
     if isa(val, SSAValue)
         @assert compact.used_ssas[val.id] >= 1
         compact.used_ssas[val.id] -= 1
@@ -929,9 +929,9 @@ function kill_current_use(compact::IncrementalCompact, @nospecialize(val))
     end
 end
 
-function kill_current_uses(compact::IncrementalCompact, @nospecialize(stmt))
+function kill_current_uses!(compact::IncrementalCompact, @nospecialize(stmt))
     for ops in userefs(stmt)
-        kill_current_use(compact, ops[])
+        kill_current_use!(compact, ops[])
     end
 end
 
@@ -939,7 +939,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::SSAValue)
     @assert idx.id < compact.result_idx
     (compact.result[idx.id][:inst] === v) && return
     # Kill count for current uses
-    kill_current_uses(compact, compact.result[idx.id][:inst])
+    kill_current_uses!(compact, compact.result[idx.id][:inst])
     compact.result[idx.id][:inst] = v
     # Add count for new use
     count_added_node!(compact, v) && push!(compact.late_fixup, idx.id)
@@ -951,7 +951,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAVal
     if id < compact.idx
         new_idx = compact.ssa_rename[id]
         (compact.result[new_idx][:inst] === v) && return
-        kill_current_uses(compact, compact.result[new_idx][:inst])
+        kill_current_uses!(compact, compact.result[new_idx][:inst])
         compact.result[new_idx][:inst] = v
         count_added_node!(compact, v) && push!(compact.late_fixup, new_idx)
         return compact
@@ -1260,6 +1260,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if !isa(cond, Bool)
                 condT = widenconditional(argextype(cond, compact))
                 isa(condT, Const) || @goto bail
+                kill_current_use!(compact, cond)
                 cond = condT.val
                 isa(cond, Bool) || @goto bail
             end

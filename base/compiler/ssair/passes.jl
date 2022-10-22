@@ -1526,7 +1526,7 @@ function kill_phi!(compact::IncrementalCompact, phi_uses::Vector{Int},
             if !delete_inst
                 # Deleting the inst will update compact's use count, so
                 # don't do it here.
-                kill_current_use(compact, val)
+                kill_current_use!(compact, val)
             end
             if isa(val, SSAValue)
                 phi_uses[val.id] -= 1
