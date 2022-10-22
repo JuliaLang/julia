@@ -1850,18 +1850,40 @@ function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
         stmt === nothing && return true
         ((stmt::GotoNode).label == bbidx + 1) && return true
     end
-    # Otherwise make sure we're not the fallthrough case of any predecessor
-    for pred in bb.preds
-        if pred == bbidx - 1
-            terminator = ir[SSAValue(first(bb.stmts)-1)][:inst]
-            if isa(terminator, GotoIfNot)
-                if terminator.dest != bbidx
-                    return false
-                end
-            end
-            break
-        end
+    return true
+end
+
+function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vector{BasicBlock}, dropped_bbs::Vector{Int})
+    (bbidx-1) in bb.preds || return true
+    last_fallthrough = bbidx-1
+    dbi = length(dropped_bbs)
+    while dbi != 0 && dropped_bbs[dbi] == last_fallthrough && (last_fallthrough-1 in bbs[last_fallthrough].preds)
+        last_fallthrough -= 1
+        dbi -= 1
     end
+    last_fallthrough_term_ssa = SSAValue(last(bbs[last_fallthrough].stmts))
+    terminator = ir[last_fallthrough_term_ssa][:inst]
+    if isa(terminator, GotoIfNot)
+        if terminator.dest != bbidx
+            # The previous terminator's destination matches our fallthrough.
+            # If we're also a fallthrough terminator, then we just have
+            # to delete the GotoIfNot.
+            our_terminator = ir[SSAValue(last(bb.stmts))][:inst]
+            if terminator.dest != (isa(our_terminator, GotoNode) ? our_terminator.label : bbidx + 1)
+                return false
+            end
+        end
+        ir[last_fallthrough_term_ssa] = nothing
+        kill_edge!(bbs, last_fallthrough, terminator.dest)
+    elseif isexpr(terminator, :enter)
+        return false
+    elseif isa(terminator, GotoNode)
+        return true
+    end
+    # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
+    # instruction numbering to merge the blocks now such that below processing will properly
+    # update it.
+    bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
     return true
 end
 
@@ -1927,24 +1949,9 @@ function cfg_simplify!(ir::IRCode)
                     end
                 end
                 @label done
-                if !found_interference
-                    # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
-                    # instruction numbering to merge the blocks now such that below processing will properly
-                    # update it.
-                    if idx-1 in bb.preds
-                        last_fallthrough = idx-1
-                        dbi = length(dropped_bbs)
-                        while dbi != 0 && dropped_bbs[dbi] == last_fallthrough && (last_fallthrough-1 in bbs[last_fallthrough].preds)
-                            last_fallthrough -= 1
-                            dbi -= 1
-                        end
-                        terminator = ir[SSAValue(last(bbs[last_fallthrough].stmts))][:inst]
-                        if !is_terminator(terminator)
-                            bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
-                        end
-                    end
-                    push!(dropped_bbs, idx)
-                end
+                found_interference && continue
+                legalize_bb_drop_pred!(ir, bb, idx, bbs, dropped_bbs) || continue
+                push!(dropped_bbs, idx)
             end
         end
     end
@@ -1990,11 +1997,14 @@ function cfg_simplify!(ir::IRCode)
                         push!(worklist, terminator.dest)
                     end
                 elseif isexpr(terminator, :enter)
-                    push!(worklist, terminator.args[1])
+                    if bb_rename_succ[terminator.args[1]] == 0
+                        push!(worklist, terminator.args[1])
+                    end
                 end
                 ncurr = curr + 1
-                if !isempty(searchsorted(dropped_bbs, ncurr))
-                    break
+                while !isempty(searchsorted(dropped_bbs, ncurr))
+                    bb_rename_succ[ncurr] = -bbs[ncurr].succs[1]
+                    ncurr += 1
                 end
                 curr = ncurr
             end
@@ -2146,7 +2156,7 @@ function cfg_simplify!(ir::IRCode)
         if new_bb.succs[1] == new_bb.succs[2]
             old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
-            @assert isa(terminator[:inst], GotoIfNot)
+            @assert terminator[:inst] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
             terminator[:inst] = GotoNode(terminator[:inst].dest)
             pop!(new_bb.succs)
