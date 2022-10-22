@@ -198,7 +198,6 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
-#ifdef DFS_MARK
     do {
         jl_gc_markqueue_t mq;
         mq.current = mq.start = (ptls->mark_queue).start;
@@ -243,12 +242,10 @@ static void gc_verify_track(jl_ptls_t ptls)
         }
         restore();
     } while(lostval != NULL);
-#endif
 }
 
 void gc_verify(jl_ptls_t ptls)
 {
-#ifdef DFS_MARK
     jl_gc_markqueue_t mq;
     mq.current = mq.start = (ptls->mark_queue).start;
     mq.end = (ptls->mark_queue).end;
@@ -288,7 +285,6 @@ void gc_verify(jl_ptls_t ptls)
     jl_gc_debug_print_status();
     jl_gc_debug_critical_error();
     abort();
-#endif
 }
 #endif
 
@@ -1276,7 +1272,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 // `offset` will be added to `mq->current` for convenience in the debugger.
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset)
 {
-#ifdef DFS_MARK
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);
@@ -1295,7 +1290,6 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
         jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
     }
     jl_set_safe_restore(old_buf);
-#endif
 }
 
 static int gc_logging_enabled = 0;
