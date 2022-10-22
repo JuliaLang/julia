@@ -841,13 +841,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
             # The evaluation threw. By :consistent-cy, we're guaranteed this would have happened at runtime
             return ConstCallResults(Union{}, ConcreteResult(edge, result.effects), result.effects, edge)
         end
-        if is_inlineable_constant(value) || call_result_unused(si)
-            # If the constant is not inlineable, still do the const-prop, since the
-            # code that led to the creation of the Const may be inlineable in the same
-            # circumstance and may be optimizable.
-            return ConstCallResults(Const(value), ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
-        end
-        return false
+        return ConstCallResults(Const(value), ConcreteResult(edge, EFFECTS_TOTAL, value), EFFECTS_TOTAL, edge)
     else # eligible for semi-concrete evaluation
         return true
     end
