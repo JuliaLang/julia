@@ -422,7 +422,7 @@ struct AdaptiveSortAlg  <: Algorithm end
 Indicate that a sorting function should use the partial quick sort algorithm.
 
 Partial quick sort finds and sorts the elements that would end up in positions
-`lo:hi` using [`QuickSort`](@ref).
+`lo:hi` using [`QuickSort`](@ref). Missing bounds are treated as `begin` and `end`.
 
 Characteristics:
   * *stable*: preserves the ordering of elements which compare equal
@@ -434,8 +434,8 @@ struct PartialQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}} <:
     lo::L
     hi::H
 end
-PartialQuickSort(k::Integer) = PartialQuickSort(missing, k)
 PartialQuickSort(k::OrdinalRange) = PartialQuickSort(first(k), last(k))
+@deprecate PartialQuickSort(k::Integer) PartialQuickSort(missing, k)
 
 """
     InsertionSort
