@@ -886,6 +886,12 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     if !const_prop_enabled(interp, sv, match)
         return nothing
     end
+    if is_removable_if_unused(result.effects)
+        if isa(result.rt, Const) || call_result_unused(si)
+            # There is no more information to be gained here. Bail out early.
+            return nothing
+        end
+    end
     res = concrete_eval_call(interp, f, result, arginfo, si, sv, invokecall)
     isa(res, ConstCallResults) && return res
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, si, match, sv)
