@@ -399,7 +399,7 @@ static void buildFullPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimizat
             //We don't know if the loop end callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
         }
-        FPM.addPass(LoopUnrollPass());
+        FPM.addPass(LoopUnrollPass(LoopUnrollOptions().setRuntime(false)));
         JULIA_PASS(FPM.addPass(AllocOptPass()));
         FPM.addPass(SROAPass());
         FPM.addPass(InstSimplifyPass());
