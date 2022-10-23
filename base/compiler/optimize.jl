@@ -126,7 +126,7 @@ code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.wor
 
 include("compiler/ssair/driver.jl")
 
-mutable struct OptimizationState{IState<:InliningState}
+mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
     ir::Union{Nothing, IRCode}
@@ -134,7 +134,7 @@ mutable struct OptimizationState{IState<:InliningState}
     mod::Module
     sptypes::Vector{Any}
     slottypes::Vector{Any}
-    inlining::IState
+    inlining::InliningState{Interp}
     cfg::Union{Nothing,CFG}
 end
 function OptimizationState(frame::InferenceState, params::OptimizationParams,
