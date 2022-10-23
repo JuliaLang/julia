@@ -86,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    sort!(v, PartialQuickSort(k, k), o)
+    sort!(v, _PartialQuickSort(k), o)
     maybeview(v, k)
 end
 
@@ -436,6 +436,8 @@ struct PartialQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}} <:
 end
 PartialQuickSort(k::Integer) = PartialQuickSort(missing, k)
 PartialQuickSort(k::OrdinalRange) = PartialQuickSort(first(k), last(k))
+_PartialQuickSort(k::Integer) = PartialQuickSort(k, k)
+_PartialQuickSort(k::OrdinalRange) = PartialQuickSort(k)
 
 """
     InsertionSort
@@ -1082,7 +1084,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    sort!(ix, PartialQuickSort(k, k), Perm(ord(lt, by, rev, order), v))
+    sort!(ix, _PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
 
     maybeview(ix, k)
 end
