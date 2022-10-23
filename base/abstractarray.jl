@@ -3099,6 +3099,10 @@ block(f, c...) = block(map(f, c...))
 
 Assembles a tensor of order `ndim` from a nested array-of-arrays. Vector sizes must match.
 
+Each recursion level in the array tree is treated as a new dimension to concatenate the data.
+
+If the input is a vector-of-vectors, the result is the same as `reduce(hcat, x)`, or `stack(x)`.
+
 !!! compat "Julia 1.9"
     This function requires at least Julia 1.9.
 
