@@ -905,8 +905,10 @@ _rf_findmax((fm, im), (fx, ix)) = isless(fm, fx) ? (fx, ix) : (fm, im)
     findmax(itr) -> (x, index)
 
 Return the maximal element of the collection `itr` and its index or key.
+
 If there are multiple maximal elements, then the first one will be returned.
-Values are compared with `isless`.
+Values are compared with `isless`. `itr` must map a set of keys to a set of values.
+This includes arrays, where the keys are the array indices.
 
 See also: [`findmin`](@ref), [`argmax`](@ref), [`maximum`](@ref).
 
@@ -965,8 +967,11 @@ _rf_findmin((fm, im), (fx, ix)) = isgreater(fm, fx) ? (fx, ix) : (fm, im)
     findmin(itr) -> (x, index)
 
 Return the minimal element of the collection `itr` and its index or key.
+
 If there are multiple minimal elements, then the first one will be returned.
-`NaN` is treated as less than all other values except `missing`.
+`NaN` is treated as less than all other values except `missing`. `itr` must
+map a set of keys to a set of values. This includes arrays, where the keys
+are the array indices.
 
 See also: [`findmax`](@ref), [`argmin`](@ref), [`minimum`](@ref).
 
