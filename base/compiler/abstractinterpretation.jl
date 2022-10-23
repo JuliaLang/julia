@@ -888,7 +888,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     if is_removable_if_unused(result.effects)
         if isa(result.rt, Const) || call_result_unused(si)
-            # There is no more information to be gained here. Bail out early.
+            add_remark!(interp, sv, "[constprop] No more information to be gained")
             return nothing
         end
     end
@@ -932,13 +932,21 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             return nothing
         end
         frame = InferenceState(inf_result, #=cache=#:local, interp)
-        frame === nothing && return nothing # this is probably a bad generated function (unsound), but just ignore it
+        if frame === nothing
+            add_remark!(interp, sv, "[constprop] Could not retrieve the source")
+            return nothing # this is probably a bad generated function (unsound), but just ignore it
+        end
         frame.parent = sv
-        typeinf(interp, frame) || return nothing
+        if !typeinf(interp, frame)
+            add_remark!(interp, sv, "[constprop] Constant inference failed")
+            return nothing
+        end
     end
     result = inf_result.result
-    # if constant inference hits a cycle, just bail out
-    isa(result, InferenceState) && return nothing
+    if isa(result, InferenceState)
+        add_remark!(interp, sv, "[constprop] Constant inference hit a cycle")
+        return nothing
+    end
     return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects, mi)
 end
 
