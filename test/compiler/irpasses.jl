@@ -796,6 +796,21 @@ let m = Meta.@lower 1 + 1
     @test length(ir.cfg.blocks) == 1
 end
 
+# `cfg_simplify!` shouldn't error in a presence of `try/catch` block
+let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+        v = try
+        catch
+        end
+        v
+    end |> only |> first
+    Core.Compiler.verify_ir(ir)
+    nb = length(ir.cfg.blocks)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    na = length(ir.cfg.blocks)
+    @test na < nb
+end
+
 # Issue #29213
 function f_29213()
     while true
@@ -950,36 +965,40 @@ end
 let # effect-freeness computation for array allocation
 
     # should eliminate dead allocations
-    good_dims = (0, 2)
-    for dim in good_dims, N in 0:10
+    good_dims = @static Int === Int64 ? (1:10) : (1:8)
+    Ns = @static Int === Int64 ? (1:10) : (1:8)
+    for dim = good_dims, N = Ns
         dims = ntuple(i->dim, N)
-        @eval @test fully_eliminated(()) do
+        @test @eval fully_eliminated() do
             Array{Int,$N}(undef, $(dims...))
             nothing
         end
     end
 
-    # shouldn't eliminate errorneous dead allocations
-    bad_dims = [-1,           # should keep "invalid Array dimensions"
-                typemax(Int)] # should keep "invalid Array size"
+    # shouldn't eliminate erroneous dead allocations
+    bad_dims = [-1, typemax(Int)]
     for dim in bad_dims, N in 1:10
         dims = ntuple(i->dim, N)
-        @eval @test !fully_eliminated(()) do
+        @test @eval !fully_eliminated() do
+            Array{Int,$N}(undef, $(dims...))
+            nothing
+        end
+        @test_throws "invalid Array" @eval let
             Array{Int,$N}(undef, $(dims...))
             nothing
         end
     end
 
     # some high-level examples
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         Int[]
         nothing
     end
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         Matrix{Tuple{String,String}}(undef, 4, 4)
         nothing
     end
-    @test fully_eliminated(()) do
+    @test fully_eliminated() do
         IdDict{Any,Any}()
         nothing
     end
@@ -1061,3 +1080,40 @@ let sroa_no_forward() = begin
     end
     @test sroa_no_forward() == (1, 2.0)
 end
+
+@noinline function foo_defined_last_iter(n::Int)
+    local x
+    for i = 1:n
+        if i == 5
+            x = 1
+        end
+    end
+    if n > 2
+        return x + n
+    end
+    return 0
+end
+const_call_defined_last_iter() = foo_defined_last_iter(3)
+@test foo_defined_last_iter(2) == 0
+@test_throws UndefVarError foo_defined_last_iter(3)
+@test_throws UndefVarError const_call_defined_last_iter()
+@test foo_defined_last_iter(6) == 7
+
+let src = code_typed1(foo_defined_last_iter, Tuple{Int})
+    for i = 1:length(src.code)
+        e = src.code[i]
+        if isexpr(e, :throw_undef_if_not)
+            @assert !isa(e.args[2], Bool)
+        end
+    end
+end
+
+# Issue #47180, incorrect phi counts in CmdRedirect
+function a47180(b; stdout )
+    c = setenv(b, b.env)
+    if true
+        c = pipeline(c, stdout)
+    end
+    c
+end
+@test isa(a47180(``; stdout), Base.AbstractCmd)

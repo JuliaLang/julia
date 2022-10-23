@@ -1,5 +1,6 @@
+# -*- makefile -*-
 ## jll artifact
 NGHTTP2_JLL_NAME := nghttp2
 
 ## source build
-NGHTTP2_VER := 1.47.0
+NGHTTP2_VER := 1.48.0

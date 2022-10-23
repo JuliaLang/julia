@@ -48,8 +48,6 @@ jobs:
       - run: |
           declare -a CONTEXT_LIST=(
                 "buildbot/tester_freebsd64"
-                "buildbot/tester_win32"
-                "buildbot/tester_win64"
                 )
           for CONTEXT in "${CONTEXT_LIST[@]}"
           do

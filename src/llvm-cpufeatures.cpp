@@ -26,7 +26,6 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Support/Debug.h>
 
-#include "julia.h"
 #include "jitlayers.h"
 
 #define DEBUG_TYPE "cpufeatures"
@@ -111,7 +110,7 @@ bool lowerCPUFeatures(Module &M)
         for (auto I: Materialized) {
             I->eraseFromParent();
         }
-        assert(!verifyModule(M));
+        assert(!verifyModule(M, &errs()));
         return true;
     } else {
         return false;

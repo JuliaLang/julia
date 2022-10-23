@@ -1135,7 +1135,7 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
 
-    assert(!verifyModule(M));
+    assert(!verifyModule(M, &errs()));
 
     return true;
 }

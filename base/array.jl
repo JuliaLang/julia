@@ -152,7 +152,7 @@ size(a::Array{<:Any,N}) where {N} = (@inline; ntuple(M -> size(a, M), Val(N))::D
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (arraysize(a,n), asize_from(a, n+1)...)
 
-allocatedinline(T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
+allocatedinline(@nospecialize T::Type) = (@_total_meta; ccall(:jl_stored_inline, Cint, (Any,), T) != Cint(0))
 
 """
     Base.isbitsunion(::Type{T})
@@ -322,9 +322,8 @@ end
 function _copyto_impl!(dest::Array, doffs::Integer, src::Array, soffs::Integer, n::Integer)
     n == 0 && return dest
     n > 0 || _throw_argerror()
-    if soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
-        throw(BoundsError())
-    end
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
     return dest
 end
@@ -359,7 +358,7 @@ Create a shallow copy of `x`: the outer structure is copied, but not all interna
 For example, copying an array produces a new array with identically-same elements as the
 original.
 
-See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref).
+See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
@@ -611,8 +610,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 
 ## Conversions ##
 
-convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)
-convert(::Type{Union{}}, a::AbstractArray) = throw(MethodError(convert, (Union{}, a)))
+convert(::Type{T}, a::AbstractArray) where {T<:Array} = a isa T ? a : T(a)::T
 
 promote_rule(a::Type{Array{T,n}}, b::Type{Array{S,n}}) where {T,n,S} = el_same(promote_type(T,S), a, b)
 
@@ -953,6 +951,18 @@ end
 
 Store the given value at the given key or index within a collection. The syntax `a[i,j,...] =
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
+
+# Examples
+```jldoctest
+julia> a = Dict("a"=>1)
+Dict{String, Int64} with 1 entry:
+  "a" => 1
+
+julia> setindex!(a, 2, "b")
+Dict{String, Int64} with 2 entries:
+  "b" => 2
+  "a" => 1
+```
 """
 function setindex! end
 
@@ -1488,7 +1498,7 @@ end
 Remove the item at the given `i` and return the modified `a`. Subsequent items
 are shifted to fill the resulting gap.
 
-See also: [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
+See also: [`keepat!`](@ref), [`delete!`](@ref), [`popat!`](@ref), [`splice!`](@ref).
 
 # Examples
 ```jldoctest
@@ -2327,7 +2337,7 @@ findall(testf::Function, A) = collect(first(p) for p in pairs(A) if testf(last(p
 
 # Broadcasting is much faster for small testf, and computing
 # integer indices from logical index using findall has a negligible cost
-findall(testf::Function, A::AbstractArray) = findall(testf.(A))
+findall(testf::F, A::AbstractArray) where {F<:Function} = findall(testf.(A))
 
 """
     findall(A)
@@ -2633,6 +2643,33 @@ function filter!(f, a::AbstractVector)
         deleteat!(a, j:lastindex(a))
     end
     return a
+end
+
+"""
+    filter(f)
+
+Create a function that filters its arguments with function `f` using [`filter`](@ref), i.e.
+a function equivalent to `x -> filter(f, x)`.
+
+The returned function is of type `Base.Fix1{typeof(filter)}`, which can be
+used to implement specialized methods.
+
+# Examples
+```jldoctest
+julia> (1, 2, Inf, 4, NaN, 6) |> filter(isfinite)
+(1, 2, 4, 6)
+
+julia> map(filter(iseven), [1:3, 2:4, 3:5])
+3-element Vector{Vector{Int64}}:
+ [2]
+ [2, 4]
+ [4]
+```
+!!! compat "Julia 1.9"
+    This method requires at least Julia 1.9.
+"""
+function filter(f)
+    Fix1(filter, f)
 end
 
 """

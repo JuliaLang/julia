@@ -290,7 +290,6 @@ static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, j
     if (cache == (jl_array_t*)jl_an_empty_vec_any)
         return (jl_typemap_t*)jl_nothing;
     jl_typemap_t *ml = (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
-    JL_GC_PROMISE_ROOTED(ml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
     return ml;
 }
 
@@ -349,14 +348,13 @@ int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *
             goto exit;
         JL_GC_POP();
         return 1;
+exit:
+        JL_GC_POP();
+        return 0;
     }
     else {
         return jl_typemap_node_visitor((jl_typemap_entry_t*)cache, fptr, closure);
     }
-
-exit:
-    JL_GC_POP();
-    return 0;
 }
 
 static unsigned jl_supertype_height(jl_datatype_t *dt)

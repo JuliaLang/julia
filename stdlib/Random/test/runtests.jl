@@ -888,7 +888,8 @@ end
     @test (x >> 64) % UInt64 == xs[end-6]
     @test x % UInt64 == xs[end-7]
     x = rand(m, UInt64)
-    @test x == xs[end-8] # should not be == xs[end-7]
+    @test x == xs[end-8]
+    @test x != xs[end-7]
 
     s = Set{UInt64}()
     n = 0
@@ -993,4 +994,27 @@ end
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106
+end
+
+# issue #42752
+# test that running finalizers that launch tasks doesn't change RNG stream
+function f42752(do_gc::Bool, cell = (()->Any[[]])())
+    a = rand()
+    if do_gc
+        finalizer(cell[1]) do _
+            @async nothing
+        end
+        cell[1] = nothing
+        GC.gc()
+    end
+    b = rand()
+    (a, b)
+end
+guardseed() do
+    for _ in 1:4
+        Random.seed!(1)
+        val = f42752(false)
+        Random.seed!(1)
+        @test f42752(true) === val
+    end
 end

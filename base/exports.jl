@@ -445,6 +445,7 @@ export
     sortperm!,
     sortslices,
     dropdims,
+    stack,
     block,
     lolcat,
     step,
@@ -662,7 +663,6 @@ export
 
 # iteration
     iterate,
-
     enumerate,  # re-exported from Iterators
     zip,
     only,
@@ -774,6 +774,7 @@ export
 # syntax
     esc,
     gensym,
+    @kwdef,
     macroexpand,
     @macroexpand1,
     @macroexpand,
@@ -796,6 +797,9 @@ export
     names,
     which,
     @isdefined,
+    @invoke,
+    invokelatest,
+    @invokelatest,
 
 # loading source files
     __precompile__,
@@ -939,6 +943,7 @@ export
     pwd,
     readlink,
     rm,
+    samefile,
     stat,
     symlink,
     tempdir,
@@ -1049,5 +1054,4 @@ export
     @goto,
     @view,
     @views,
-    @static,
-    @invoke
+    @static

@@ -121,14 +121,9 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort end
-function sort! end
-function issorted end
-function sortperm end
 include("ordering.jl")
 using .Order
-include("sort.jl")
-using .Sort
+include("compiler/sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -139,11 +134,11 @@ something(x::Any, y...) = x
 ############
 
 include("compiler/cicache.jl")
+include("compiler/methodtable.jl")
 include("compiler/effects.jl")
 include("compiler/types.jl")
 include("compiler/utilities.jl")
 include("compiler/validation.jl")
-include("compiler/methodtable.jl")
 
 function argextype end # imported by EscapeAnalysis
 function stmt_effect_free end # imported by EscapeAnalysis
@@ -152,6 +147,8 @@ function try_compute_field end # imported by EscapeAnalysis
 include("compiler/ssair/basicblock.jl")
 include("compiler/ssair/domtree.jl")
 include("compiler/ssair/ir.jl")
+
+include("compiler/abstractlattice.jl")
 
 include("compiler/inferenceresult.jl")
 include("compiler/inferencestate.jl")
@@ -164,22 +161,7 @@ include("compiler/stmtinfo.jl")
 
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
-include("compiler/optimize.jl") # TODO: break this up further + extract utilities
-
-# required for bootstrap because sort.jl uses extrema
-# to decide whether to dispatch to counting sort.
-#
-# TODO: remove it.
-function extrema(x::Array)
-    isempty(x) && throw(ArgumentError("collection must be non-empty"))
-    vmin = vmax = x[1]
-    for i in 2:length(x)
-        xi = x[i]
-        vmax = max(vmax, xi)
-        vmin = min(vmin, xi)
-    end
-    return vmin, vmax
-end
+include("compiler/optimize.jl")
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

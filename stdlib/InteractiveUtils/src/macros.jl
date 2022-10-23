@@ -2,7 +2,7 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!
+import Base: typesof, insert!, replace_ref_begin_end!
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -24,7 +24,8 @@ function recursive_dotcalls!(ex, args, i=1)
         end
     end
     (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    for j in start:length(branches)
+    length_branches = length(branches)::Int
+    for j in start:length_branches
         branch, i = recursive_dotcalls!(branches[j], args, i)
         branches[j] = branch
     end
@@ -32,6 +33,9 @@ function recursive_dotcalls!(ex, args, i=1)
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
+    if Meta.isexpr(ex0, :ref)
+        ex0 = replace_ref_begin_end!(ex0)
+    end
     if isa(ex0, Expr)
         if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
@@ -39,7 +43,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             end
             i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
             args = copy(ex0.args[1].args)
-            insert!(args, (isnothing(i) ? 2 : i+1), ex0.args[2])
+            insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
         if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
@@ -93,7 +97,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             return quote
                 local arg1 = $(esc(ex0.args[1]))
                 local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwfunc(arg1),
+                $(fcn)(Core.kwcall,
                        Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...};
                        $(kws...))
             end
@@ -248,7 +252,7 @@ end
 
 Applied to a function or macro call, it evaluates the arguments to the specified call, and
 returns a tuple `(filename,line)` giving the location for the method that would be called for those arguments.
-It calls out to the `functionloc` function.
+It calls out to the [`functionloc`](@ref) function.
 """
 :@functionloc
 
@@ -267,7 +271,7 @@ See also: [`@less`](@ref), [`@edit`](@ref).
 """
     @less
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `less`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`less`](@ref)
 function on the resulting expression.
 
 See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
@@ -277,7 +281,7 @@ See also: [`@edit`](@ref), [`@which`](@ref), [`@code_lowered`](@ref).
 """
     @edit
 
-Evaluates the arguments to the function or macro call, determines their types, and calls the `edit`
+Evaluates the arguments to the function or macro call, determines their types, and calls the [`edit`](@ref)
 function on the resulting expression.
 
 See also: [`@less`](@ref), [`@which`](@ref).
@@ -356,39 +360,31 @@ See also: [`code_native`](@ref), [`@code_llvm`](@ref), [`@code_typed`](@ref) and
 A macro to execute an expression and produce a report of any time spent importing packages and their
 dependencies. Any compilation time will be reported as a percentage, and how much of which was recompilation, if any.
 
-If a package's dependencies have already been imported either globally or by another dependency they will
-not appear under that package and the package will accurately report a faster load time than if it were to
-be loaded in isolation.
-
-!!! compat "Julia 1.9"
-    Reporting of any compilation and recompilation time was added in Julia 1.9
+!!! note
+    During the load process a package sequentially imports all of its dependencies, not just its direct dependencies.
 
 ```julia-repl
 julia> @time_imports using CSV
-      0.4 ms    ┌ IteratorInterfaceExtensions
-     11.1 ms  ┌ TableTraits 84.88% compilation time
-    145.4 ms  ┌ SentinelArrays 66.73% compilation time
-     42.3 ms  ┌ Parsers 19.66% compilation time
-      4.1 ms  ┌ Compat
-      8.2 ms  ┌ OrderedCollections
-      1.4 ms    ┌ Zlib_jll
-      2.3 ms    ┌ TranscodingStreams
-      6.1 ms  ┌ CodecZlib
-      0.3 ms  ┌ DataValueInterfaces
-     15.2 ms  ┌ FilePathsBase 30.06% compilation time
-      9.3 ms    ┌ InlineStrings
-      1.5 ms    ┌ DataAPI
-     31.4 ms  ┌ WeakRefStrings
-     14.8 ms  ┌ Tables
-     24.2 ms  ┌ PooledArrays
-   2002.4 ms  CSV 83.49% compilation time
+     50.7 ms  Parsers 17.52% compilation time
+      0.2 ms  DataValueInterfaces
+      1.6 ms  DataAPI
+      0.1 ms  IteratorInterfaceExtensions
+      0.1 ms  TableTraits
+     17.5 ms  Tables
+     26.8 ms  PooledArrays
+    193.7 ms  SentinelArrays 75.12% compilation time
+      8.6 ms  InlineStrings
+     20.3 ms  WeakRefStrings
+      2.0 ms  TranscodingStreams
+      1.4 ms  Zlib_jll
+      1.8 ms  CodecZlib
+      0.8 ms  Compat
+     13.1 ms  FilePathsBase 28.39% compilation time
+   1681.2 ms  CSV 92.40% compilation time
 ```
 
-!!! note
-    During the load process a package sequentially imports where necessary all of its dependencies, not just
-    its direct dependencies. That is also true for the dependencies themselves so nested importing will likely
-    occur, but not always. Therefore the nesting shown in this output report is not equivalent to the dependency
-    tree, but does indicate where import time has accumulated.
+!!! compat "Julia 1.8"
+    This macro requires at least Julia 1.8
 
 """
 :@time_imports

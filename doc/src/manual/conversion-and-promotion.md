@@ -181,7 +181,7 @@ For example, this definition states that it's valid to `convert` any `Number` ty
 any other by calling a 1-argument constructor:
 
 ```julia
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 ```
 
 This means that new `Number` types only need to define constructors, since this

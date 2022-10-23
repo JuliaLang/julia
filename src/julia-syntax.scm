@@ -562,6 +562,9 @@
              ,(if (any kwarg? pargl) (gensy) UNUSED)
              (call (core kwftype) ,ftype)) ,kw ,@pargl ,@vararg)
           `(block
+            ;; propagate method metadata to keyword sorter
+            ,@(map propagate-method-meta (filter meta? prologue))
+            ,@(filter argwide-nospecialize-meta? prologue)
             ,@(let ((lnns (filter linenum? prologue)))
                 (if (pair? lnns)
                     (list (car lnns))
@@ -1659,7 +1662,7 @@
   (define (kwcall-unless-empty f pa kw-container-test kw-container)
     `(if (call (top isempty) ,kw-container-test)
          (call ,f ,@pa)
-         (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))
+         (call (core kwcall) ,kw-container ,f ,@pa)))
 
   (let ((f            (if (sym-ref? fexpr) fexpr (make-ssavalue)))
         (kw-container (make-ssavalue)))
@@ -1673,7 +1676,7 @@
                                            #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
-           `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
+           `(call (core kwcall) ,kw-container ,f ,@pa)))))
 
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
@@ -3345,9 +3348,9 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
-           ;; calls to functions with keyword args go through `kwfunc` first
-           (if (and (length= e 3) (equal? (cadr e) '(core kwfunc)))
-               (let ((vi2 (get tab (caddr e) #f)))
+           ;; calls to functions with keyword args have head of `kwcall` first
+           (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
+               (let ((vi2 (get tab (cadddr e) #f)))
                  (if vi2
                      (vinfo:set-called! vi2 #t))))
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))

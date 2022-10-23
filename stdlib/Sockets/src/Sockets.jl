@@ -709,16 +709,17 @@ end
 const localhost = ip"127.0.0.1"
 
 """
-    listenany([host::IPAddr,] port_hint) -> (UInt16, TCPServer)
+    listenany([host::IPAddr,] port_hint; backlog::Integer=BACKLOG_DEFAULT) -> (UInt16, TCPServer)
 
 Create a `TCPServer` on any port, using hint as a starting point. Returns a tuple of the
 actual port that the server was created on and the server itself.
+The backlog argument defines the maximum length to which the queue of pending connections for sockfd may grow.
 """
-function listenany(host::IPAddr, default_port)
+function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
     addr = InetAddr(host, default_port)
     while true
         sock = TCPServer()
-        if bind(sock, addr) && trylisten(sock) == 0
+        if bind(sock, addr) && trylisten(sock; backlog) == 0
             if default_port == 0
                 _addr, port = getsockname(sock)
                 return (port, sock)
@@ -726,14 +727,14 @@ function listenany(host::IPAddr, default_port)
             return (addr.port, sock)
         end
         close(sock)
-        addr = InetAddr(addr.host, addr.port + 1)
+        addr = InetAddr(addr.host, addr.port + UInt16(1))
         if addr.port == default_port
             error("no ports available")
         end
     end
 end
 
-listenany(default_port) = listenany(localhost, default_port)
+listenany(default_port; backlog::Integer=BACKLOG_DEFAULT) = listenany(localhost, default_port; backlog)
 
 function udp_set_membership(sock::UDPSocket, group_addr::String,
                             interface_addr::Union{Nothing, String}, operation)
