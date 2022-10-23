@@ -435,7 +435,6 @@ struct PartialQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}} <:
     hi::H
 end
 PartialQuickSort(k::OrdinalRange) = PartialQuickSort(first(k), last(k))
-@deprecate PartialQuickSort(k::Integer) PartialQuickSort(missing, k)
 
 """
     InsertionSort

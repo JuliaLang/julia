@@ -363,4 +363,6 @@ end
     end
 end
 
+@deprecate PartialQuickSort(k::Integer) PartialQuickSort(missing, k)
+
 # END 1.9 deprecations
