@@ -2006,7 +2006,8 @@ Boolean type, containing the values `true` and `false`.
 
 `Bool` is a kind of number: `false` is numerically
 equal to `0` and `true` is numerically equal to `1`.
-Moreover, `false` acts as a multiplicative "strong zero" against [`NaN`](@ref) and [`Inf`](@ref):
+Moreover, `false` acts as a multiplicative "strong zero"
+against [`NaN`](@ref) and [`Inf`](@ref):
 
 ```jldoctest
 julia> [true, false] == [1, 0]
@@ -2022,7 +2023,8 @@ julia> false .* (NaN, Inf, -Inf)
 (0.0, 0.0, -0.0)
 ```
 
-Branches via [`if`](@ref) only accept `Bool`, there are no "truthy" values in Julia.
+Branches via [`if`](@ref) and other conditionals only accept `Bool`.
+There are no "truthy" values in Julia.
 
 Comparisons return `Bool`, and broadcasted comparisons may
 return [`BitArray`](@ref) instead of an `Array{Bool}`.
@@ -2037,7 +2039,7 @@ julia> map(>(pi), [1 2 3 4 5])
  0  0  0  1  1
 ```
 
-See also [`trues`](@ref), [`falses`](@ref), [`digits`](@ref), [`ifelse`](@ref).
+See also [`trues`](@ref), [`falses`](@ref), [`ifelse`](@ref).
 """
 Bool
 
@@ -2054,8 +2056,8 @@ and for many operations such as `1/2, 2pi, log(2), range(0,90,length=4)`.
 Unlike integers, this default does not change with `Sys.WORD_SIZE`.
 
 The exponent for scientific notation can be entered as `e` or `E`,
-thus `2e3 === 2.0E3 === 2.0 * 10^3`. This is strongly preferred over
-`10^n` because integers overflow, thus `10^19 < 0`.
+thus `2e3 === 2.0E3 === 2.0 * 10^3`. Doing so is strongly preferred over
+`10^n` because integers overflow, thus `2.0 * 10^19 < 0` but `2e19 > 0`.
 
 See also [`Inf`](@ref), [`NaN`](@ref), [`floatmax`](@ref), [`Float32`](@ref), [`Complex`](@ref).
 """
@@ -2095,7 +2097,7 @@ for bit in (8, 16, 32, 64, 128)
 
         $($bit)-bit signed integer type.
 
-        Note that integers overflow without warning,
+        Note that such integers overflow without warning,
         thus `typemax($($type)) + $($type)(1) < 0`.
         See also [`Int`](@ref $Int), [`widen`](@ref), [`BigInt`](@ref).
         """
@@ -2114,7 +2116,7 @@ end
 
 @eval begin
     """
-        $Int === Int
+        $Int
 
     $(Sys.WORD_SIZE)-bit signed integer type, `$Int <: Signed <: Integer <: Real`.
 
@@ -2701,6 +2703,9 @@ Multiplication operator.
 
 Infix `x*y*z*...` calls this function with all arguments, i.e. `*(x, y, z, ...)`,
 which by default then calls `(x*y) * z * ...` starting from the left.
+
+Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
+has higher precedence than a literal `*`, so that for instance `1/2pi == 1/(2 * pi)`.
 
 # Examples
 ```jldoctest
