@@ -5,6 +5,12 @@ ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies abo
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
 
+# FIXME on BK FC is not available on Windows
+ifeq ($(OS),WINNT)
+STD_LIB_PATH += $(shell LANG=C $(CC) -print-search-dirs 2>/dev/null | grep '^programs: =' | sed -e "s/^programs: =//")
+STD_LIB_PATH += :$(shell LANG=C $(CC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
+endif
+
 # Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
 define pathsearch
 $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
