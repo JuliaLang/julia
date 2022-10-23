@@ -2600,10 +2600,12 @@ end
 end
 
 """
-    awfulstack(array_of_arrays)
+    block(array_of_arrays)
 
-Concatenates a multi-dimensional array of arrays into a single array, seeing
+Concatenates a multi-dimensional array of arrays into a single array, treating
 the input as a block array. The dimensions of the sub-arrays must match accordingly.
+
+See also: [`hvncat`](@ref).
 
 # Examples
 
@@ -2616,13 +2618,13 @@ julia> reduce(hcat, [[1,2,3], [5,6,7]])
  2  6
  3  7
 
-julia> awfulstack(reshape([[1,2,3], [5,6,7]], 1, :))
+julia> block(reshape([[1,2,3], [5,6,7]], 1, :))
 6-element Vector{Int64}:
  1  5
  2  6
  3  7
 
-julia> awfulstack([[1,2,3], [5,6,7]])
+julia> block([[1,2,3], [5,6,7]])
 6-element Vector{Int64}:
  1
  2
@@ -2636,19 +2638,19 @@ julia> vcat([1,2,3]', [5,6,7]')
  1  2  3
  5  6  7
 
-julia> awfulstack([[1,2,3]', [5,6,7]'])
+julia> block([[1,2,3]', [5,6,7]'])
 2×3 Matrix{Int64}:
  1  2  3
  5  6  7
 
-julia> awfulstack([[1,2,3], [5,6,7]]')
+julia> block([[1,2,3], [5,6,7]]')
 1×6 Matrix{Int64}:
  1  2  3  5  6  7
 ```
 
 "Flatmap" behavior.
 ```jldoctest
-julia> awfulstack(n -> -n:2:n, 1:3)
+julia> block(n -> -n:2:n, 1:3)
 9-element Vector{Int64}:
  -1
   1
@@ -2667,7 +2669,7 @@ Image montage.
 using TestImages, ImageView
 myimages = ["cameraman","resolution_test_512","plastic_bubbles_he_512", "pirate", "woman_darkhair", "walkbridge"]
 imagearray = testimage.(reshape(myimages, 2, :))
-imshow(awfulstack(imagearray))
+imshow(block(imagearray))
 ```
 
 # Extended Help
@@ -2677,19 +2679,19 @@ imshow(awfulstack(imagearray))
 Higher-dimension concatenation.
 
 ```jldoctest
-julia> awfulstack([1 2]) do n reshape(n*4-3:n*4, 2, 2) end
+julia> block([1 2]) do n reshape(n*4-3:n*4, 2, 2) end
 2×4 Matrix{Int64}:
  1  3  5  7
  2  4  6  8
 
-julia> awfulstack([1, 2]) do n reshape(n*4-3:n*4, 2, 2) end
+julia> block([1, 2]) do n reshape(n*4-3:n*4, 2, 2) end
 4×2 Matrix{Int64}:
  1  3
  2  4
  5  7
  6  8
 
-julia> awfulstack([1;;; 2;;;]) do n reshape(n*4-3:n*4, 2, 2) end
+julia> block([1;;; 2;;;]) do n reshape(n*4-3:n*4, 2, 2) end
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -2717,7 +2719,7 @@ julia> lol = eachcol(m) |> collect
  [10, 11, 12]
  [13, 14, 15]
 
-julia> awfulstack(lol)
+julia> block(lol)
 15-element Vector{Int64}:
   1
   2
@@ -2735,11 +2737,11 @@ julia> awfulstack(lol)
  14
  15
 
-julia> awfulstack(lol')
+julia> block(lol')
 1×15 Matrix{Int64}:
  1  2  3  4  5  6  7  8  9  10  11  12  13  14  15
 
-julia> awfulstack(permutedims(lol))
+julia> block(permutedims(lol))
 3×5 Matrix{Int64}:
  1  4  7  10  13
  2  5  8  11  14
@@ -2751,7 +2753,7 @@ julia> lol = eachrow(m) |> collect
  [2, 5, 8, 11, 14]
  [3, 6, 9, 12, 15]
 
-julia> awfulstack(permutedims(lol))
+julia> block(permutedims(lol))
 5×3 Matrix{Int64}:
   1   2   3
   4   5   6
@@ -2759,7 +2761,7 @@ julia> awfulstack(permutedims(lol))
  10  11  12
  13  14  15
 
-julia> awfulstack(permutedims.(lol))
+julia> block(permutedims.(lol))
 3×5 Matrix{Int64}:
  1  4  7  10  13
  2  5  8  11  14
@@ -2781,7 +2783,7 @@ julia> myarrays = map([(j,k,l) for j in 1:2, k in 1:2, l in 1:2]) do (jkl)
  [1;;; 2]        [1 2;;; 3 4]
  [1; 2;;; 3; 4]  [1 3; 2 4;;; 5 7; 6 8]
 
-julia> arr = awfulstack(myarrays)
+julia> arr = block(myarrays)
 3×3×3 Array{Int64, 3}:
 [:, :, 1] =
  1  1  2
@@ -2798,22 +2800,22 @@ julia> arr = awfulstack(myarrays)
  3  5  7
  4  6  8
 
-julia> arr == awfulstack([(j,k,l) for j in 1:2, k in 1:2, l in 1:2]) do (jkl)
+julia> arr == block([(j,k,l) for j in 1:2, k in 1:2, l in 1:2]) do (jkl)
            reshape(1:prod((jkl)), jkl...)
        end
 true
 ```
 """
-awfulstack(array_of_arrays) = awfulstack_(array_of_arrays)
+block(a::AbstractArray{<:AbstractArray}) = Base.hvncat(size(a), false, a...)
 
 """
-    awfulstack(f, c...)
+    block(f, c...)
 
-Equivalent to awfulstack(map(f, c...)). Implements flatmap behavior.
+Equivalent to block(map(f, c...)). Implements flatmap behavior.
 
 # Example
 ```jldoctest
-julia> Zn = [x for n in 1:3 for x in -n:2:n]
+julia> Zn = block(n -> -n:2:n, 1:3)
 9-element Vector{Int64}:
  -1
   1
@@ -2825,29 +2827,20 @@ julia> Zn = [x for n in 1:3 for x in -n:2:n]
   1
   3
 
-julia> awfulstack(n -> -n:2:n, 1:3) == Zn
+julia> Zn == [x for n in 1:3 for x in -n:2:n]
 true
 ```
 """
-awfulstack(f, c...) = awfulstack(map(f, c...))
-
-function awfulstack_(aoa; indices=(), mydim=ndims(aoa))
-    if mydim==1
-        reduce(catdim_(mydim), view(aoa,:,indices...))
-    else
-        reduce(catdim_(mydim), (awfulstack_(aoa, indices=(n, indices...), mydim=mydim-1) for n in 1:size(aoa, mydim)))
-    end
-end
-catdim_(dims) = (a,b) -> cat(a,b,dims=dims)
+block(f, c...) = block(map(f, c...))
 
 """
-    lolstack(list_of_lists)
+    lolcat(list_of_lists)
 
 Assembles a tensor of order `ndim` from a nested array-of-arrays. Vector sizes must match.
 
 # Examples
 ```jldoctest
-julia> lolstack([[[1,2],[3,4]], [[5,6],[7,8]]])
+julia> lolcat([[[1,2],[3,4]], [[5,6],[7,8]]])
 2×2×2 Array{Int64, 3}:
 [:, :, 1] =
  1  3
@@ -2863,12 +2856,12 @@ julia> a = eachcol(reshape(1:6,2,:))
  [3, 4]
  [5, 6]
 
-julia> lolstack(a)
+julia> lolcat(a)
 2×3 Matrix{Int64}:
  1  3  5
  2  4  6
 
-julia> lolstack((j,k) for j in 1:4, k in 5:6) do (j,k)
+julia> lolcat((j,k) for j in 1:4, k in 5:6) do (j,k)
                   [j, (j+k)÷2, k]
               end
 3×4×2 Array{Int64, 3}:
@@ -2883,14 +2876,14 @@ julia> lolstack((j,k) for j in 1:4, k in 5:6) do (j,k)
  6  6  6  6
 ```
 """
-lolstack(array_of_arrays) =
+lolcat(array_of_arrays) =
     if applicable(size, array_of_arrays)
-        lolstack_(array_of_arrays, outersize=size(array_of_arrays))
+        lolcat_(array_of_arrays, outersize=size(array_of_arrays))
     else
-        lolstack_(array_of_arrays)
+        lolcat_(array_of_arrays)
     end
-lolstack(f, c...) = lolstack(Iterators.map(f, c...))
-function lolstack_(gg; myshape=(), outersize=nothing)
+lolcat(f, c...) = lolcat(Iterators.map(f, c...))
+function lolcat_(gg; myshape=(), outersize=nothing)
     head, tail = Iterators.peel(gg)
     # if dimlen == 1
     if !applicable(iterate, head) || !applicable(ndims, head) || length(head) == 1 || ndims(head) == 0
@@ -2900,7 +2893,7 @@ function lolstack_(gg; myshape=(), outersize=nothing)
             reshape(collect(gg), myshape...,outersize...)
         end
     else
-        lolstack_(Iterators.flatten(gg), myshape=(size(head)..., myshape..., ), outersize=outersize)
+        lolcat_(Iterators.flatten(gg), myshape=(size(head)..., myshape..., ), outersize=outersize)
     end
 end
 
