@@ -183,7 +183,8 @@ Deprecated or removed
 
 External dependencies
 ---------------------
-
+* On linux, now autodetects the system libstdc++ version, and automatically loads the system library if it is newer.
+* Removed `RPATH` from the julia binary. On Linux this may break libraries that have failed to set `RUNPATH`.
 
 Tooling Improvements
 ---------------------
