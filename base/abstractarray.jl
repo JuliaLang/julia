@@ -2925,9 +2925,8 @@ Image montage.
 
 ```
 using TestImages, ImageView
-myimages = ["cameraman","resolution_test_512","plastic_bubbles_he_512", "pirate", "woman_darkhair", "walkbridge"]
-imagearray = testimage.(reshape(myimages, 2, :))
-imshow(block(imagearray))
+myimages = ["cameraman" "plastic_bubbles_he_512" "woman_darkhair"; "resolution_test_512" "pirate" "walkbridge"]
+imshow(block(testimage.(myimages)))
 ```
 
 # Extended Help
