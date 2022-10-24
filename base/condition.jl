@@ -78,10 +78,10 @@ islocked(c::GenericCondition) = islocked(c.lock)
 lock(f, c::GenericCondition) = lock(f, c.lock)
 
 # have waiter wait for c
-function _wait2(c::GenericCondition, waiter::Task, waitfirst::Bool=false)
+function _wait2(c::GenericCondition, waiter::Task, first::Bool=false)
     ct = current_task()
     assert_havelock(c)
-    if waitfirst
+    if first
         pushfirst!(c.waitq, waiter)
     else
         push!(c.waitq, waiter)
@@ -108,7 +108,7 @@ Block the current task until some event occurs, depending on the type of the arg
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition and return the `val`
   parameter passed to `notify`. Waiting on a condition additionally allows passing
-  `waitfirst=true` which results in the waiter being put _first_ in line to wake up on `notify`
+  `first=true` which results in the waiter being put _first_ in line to wake up on `notify`
   instead of the usual first-in-first-out behavior.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
@@ -122,9 +122,9 @@ restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
 proceeding.
 """
-function wait(c::GenericCondition; waitfirst::Bool=false)
+function wait(c::GenericCondition; first::Bool=false)
     ct = current_task()
-    _wait2(c, ct, waitfirst)
+    _wait2(c, ct, first)
     token = unlockall(c.lock)
     try
         return wait()

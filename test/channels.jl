@@ -14,7 +14,7 @@ using Base: n_avail
     @test fetch(t) == "finished"
 end
 
-@testset "waitfirst behavior of wait on Condition" begin
+@testset "wait first behavior of wait on Condition" begin
     a = Condition()
     waiter1 = @async begin
         wait(a)
@@ -23,7 +23,10 @@ end
         wait(a)
     end
     waiter3 = @async begin
-        wait(a; waitfirst=true)
+        wait(a; first=true)
+    end
+    waiter4 = @async begin
+        wait(a)
     end
     t = @async begin
         Base.notify(a, "success"; all=false)
