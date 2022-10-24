@@ -871,6 +871,7 @@ end
 
 ## generic sorting methods ##
 
+# TODO: Can be removed in v2.0
 defalg(v::AbstractArray) = DEFAULT_STABLE
 
 function sort!(v::AbstractVector{T}, alg::Algorithm,
@@ -884,7 +885,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, alg::Algorithm,
 end
 
 """
-    sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort!(v; alg::Algorithm=DEFAULT_STABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the vector `v` in place. A stable algorithm is used by default. You can specify a 
 specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for 
@@ -924,7 +925,7 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
 ```
 """
 function sort!(v::AbstractVector{T};
-               alg::Algorithm=defalg(v),
+               alg::Algorithm=DEFAULT_STABLE,
                lt=isless,
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
@@ -957,7 +958,7 @@ function sort_int_range!(x::AbstractVector{<:Integer}, rangelen, minval, maybere
 end
 
 """
-    sort(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(v; alg::Algorithm=DEFAULT_STABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
@@ -1237,7 +1238,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(A; dims::Integer, alg::Algorithm=DEFAULT_STABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -1265,7 +1266,7 @@ julia> sort(A, dims = 2)
 """
 function sort(A::AbstractArray{T};
               dims::Integer,
-              alg::Algorithm=DEFAULT_UNSTABLE,
+              alg::Algorithm=DEFAULT_STABLE,
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
@@ -1296,7 +1297,7 @@ end
 end
 
 """
-    sort!(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort!(A; dims::Integer, alg::Algorithm=DEFAULT_STABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort the multidimensional array `A` along dimension `dims`.
 See [`sort!`](@ref) for a description of possible keyword arguments.
@@ -1326,7 +1327,7 @@ julia> sort!(A, dims = 2); A
 """
 function sort!(A::AbstractArray{T};
                dims::Integer,
-               alg::Algorithm=defalg(A),
+               alg::Algorithm=DEFAULT_STABLE,
                lt=isless,
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
