@@ -872,9 +872,9 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_STABLE
+defalg(v::AbstractArray{Missing}) = DEFAULT_STABLE # for method disambiguation
+defalg(v::AbstractArray{Union{}}) = DEFAULT_STABLE # for method disambiguation
 
 function sort!(v::AbstractVector{T}, alg::Algorithm,
                order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
