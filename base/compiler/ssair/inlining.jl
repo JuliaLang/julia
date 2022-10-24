@@ -35,6 +35,7 @@ end
 struct InvokeCase
     invoke::MethodInstance
     effects::Effects
+    info::CallInfo
 end
 
 struct InliningCase
@@ -592,7 +593,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         elseif isa(case, InvokeCase)
             inst = Expr(:invoke, case.invoke, argexprs′...)
             flag = flags_for_effects(case.effects)
-            val = insert_node_here!(compact, NewInstruction(inst, typ, NoCallInfo(), line, flag))
+            val = insert_node_here!(compact, NewInstruction(inst, typ, case.info, line, flag))
         else
             case = case::ConstantCase
             val = case.val
@@ -796,19 +797,19 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
 end
 
 function compileable_specialization(match::MethodMatch, effects::Effects,
-    et::InliningEdgeTracker; compilesig_invokes::Bool=true)
+    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects)
+    return InvokeCase(mi, effects, info)
 end
 
 function compileable_specialization(linfo::MethodInstance, effects::Effects,
-    et::InliningEdgeTracker; compilesig_invokes::Bool=true)
+    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects)
+    return InvokeCase(mi, effects, info)
 end
 
 compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
@@ -862,7 +863,7 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !state.params.inlining || is_stmt_noinline(flag)
-        return compileable_specialization(result, effects, et;
+        return compileable_specialization(result, effects, et, info;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
@@ -877,7 +878,7 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
         return ConstantCase(quoted(src.val))
     end
 
-    src === nothing && return compileable_specialization(result, effects, et;
+    src === nothing && return compileable_specialization(result, effects, et, info;
         compilesig_invokes=state.params.compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
@@ -966,7 +967,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if mi === nothing
         et = InliningEdgeTracker(state.et, invokesig)
-        return compileable_specialization(match, Effects(), et;
+        return compileable_specialization(match, Effects(), et, info;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
@@ -1542,7 +1543,7 @@ function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::Modif
     length(info.results) == 1 || return nothing
     match = info.results[1]::MethodMatch
     match.fully_covers || return nothing
-    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et);
+    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et), info;
         compilesig_invokes=state.params.compilesig_invokes)
     case === nothing && return nothing
     stmt.head = :invoke_modify
