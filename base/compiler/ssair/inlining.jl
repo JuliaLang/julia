@@ -1169,7 +1169,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     end
     result = info.result
     invokesig = sig.argtypes
-    if isa(result, ConcreteResult)
+    if isa(result, ConcreteResult) && may_inline_concrete_result(result)
         item = concrete_result_item(result, state; invokesig)
     else
         argtypes = invoke_rewrite(sig.argtypes)
@@ -1296,7 +1296,11 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
-        return handle_concrete_result!(cases, result, state)
+        if may_inline_concrete_result(result)
+            return handle_concrete_result!(cases, result, state)
+        else
+            result = nothing
+        end
     end
     if isa(result, SemiConcreteResult)
         result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
@@ -1483,15 +1487,12 @@ function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteRe
     return true
 end
 
+may_inline_concrete_result(result::ConcreteResult) =
+    isdefined(result, :result) && is_inlineable_constant(result.result)
+
 function concrete_result_item(result::ConcreteResult, state::InliningState;
     invokesig::Union{Nothing,Vector{Any}}=nothing)
-    if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        et = InliningEdgeTracker(state.et, invokesig)
-        case = compileable_specialization(result.mi, result.effects, et;
-            compilesig_invokes=state.params.compilesig_invokes)
-        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
-        return case
-    end
+    @assert may_inline_concrete_result(result)
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
 end
@@ -1524,7 +1525,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         mi = result.result.linfo
         validate_sparams(mi.sparam_vals) || return nothing
         item = resolve_todo(mi, result.result, sig.argtypes, info, flag, state)
-    elseif isa(result, ConcreteResult)
+    elseif isa(result, ConcreteResult) && may_inline_concrete_result(result)
         item = concrete_result_item(result, state)
     else
         item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
