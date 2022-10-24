@@ -292,7 +292,7 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(BaseInferenceLattice.instance)
 
 abstract type CallInfo end
 
