@@ -887,7 +887,7 @@ end
 """
     sort!(v; alg::Algorithm=DEFAULT_STABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. A stable algorithm is used by default. You can specify a
+Sort the vector `v` in place. A stable algorithm is used by default. You can select a
 specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for
 available algorithms). The `by` keyword lets you provide a function that will be applied to
 each element before comparison; the `lt` keyword allows providing a custom "less than"
