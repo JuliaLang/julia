@@ -2870,40 +2870,40 @@ See also: [`hvncat`](@ref).
 Simple concatenation of vectors
 
 ```jldoctest
-julia> reduce(hcat, [[1,2,3], [5,6,7]])
+julia> reduce(hcat, [[1,2,3], [4,5,6]])
 3×2 Matrix{Int64}:
- 1  5
- 2  6
- 3  7
+ 1  4
+ 2  5
+ 3  6
 
-julia> block(reshape([[1,2,3], [5,6,7]], 1, :))
+julia> block(reshape([[1,2,3], [4,5,6]], 1, :))
 6-element Vector{Int64}:
- 1  5
- 2  6
- 3  7
+ 1  4
+ 2  5
+ 3  6
 
-julia> block([[1,2,3], [5,6,7]])
+julia> block([[1,2,3], [4,5,6]])
 6-element Vector{Int64}:
  1
  2
  3
+ 4
  5
  6
- 7
 
-julia> vcat([1,2,3]', [5,6,7]')
+julia> vcat([1,2,3]', [4,5,6]')
 3×2 Matrix{Int64}:
  1  2  3
- 5  6  7
+ 4  5  6
 
-julia> block([[1,2,3]', [5,6,7]'])
+julia> block([[1,2,3]', [4,5,6]'])
 2×3 Matrix{Int64}:
  1  2  3
- 5  6  7
+ 4  5  6
 
-julia> block([[1,2,3], [5,6,7]]')
+julia> block([[1,2,3], [4,5,6]]')
 1×6 Matrix{Int64}:
- 1  2  3  5  6  7
+ 1  2  3  4  5  6
 ```
 
 "Flatmap" behavior.
