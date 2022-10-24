@@ -200,13 +200,15 @@ end
     @testset "PartialQuickSort" begin
         b = sort(a)
         @test issorted(b)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+        @test_deprecated PartialQuickSort(length(a))
+        alg = PartialQuickSort(length(a), length(a))
+        @test last(b) == last(sort(a; alg))
         b = sort(a, rev=true)
         @test issorted(b, rev=true)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+        @test last(b) == last(sort(a; alg, rev=true))
         b = sort(a, by=x->1/x)
         @test issorted(b, by=x->1/x)
-        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
+        @test last(b) == last(sort(a; alg, by=x->1/x))
     end
 end
 @testset "insorted" begin
@@ -280,7 +282,7 @@ end
         @test !issorted(d, rev=true)
     end
     let k = div(length(a), 10)
-        alg = PartialQuickSort(k)
+        alg = PartialQuickSort(k, k)
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
@@ -362,7 +364,7 @@ end
                 invpermute!(s, p)
                 @test s == v
             end
-            for alg in [PartialQuickSort(n)]
+            for alg in [PartialQuickSort(n, n)]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 if n == 0
@@ -381,7 +383,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(missing, n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
