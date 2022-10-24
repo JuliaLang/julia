@@ -1963,7 +1963,7 @@ function abstract_eval_value_expr(interp::AbstractInterpreter, e::Expr, sv::Unio
     head = e.head
     if head === :static_parameter
         n = e.args[1]::Int
-        t = Any
+        t = AnySParam()
         if 1 <= n <= length(sv.sptypes)
             t = sv.sptypes[n]
         end

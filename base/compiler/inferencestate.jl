@@ -427,7 +427,7 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
                     lb = Bottom
                 end
                 if Any <: ub && lb <: Bottom
-                    ty = Any
+                    ty = AnySParam()
                 else
                     tv = TypeVar(v.name, lb, ub)
                     ty = UnionAll(tv, Type{tv})

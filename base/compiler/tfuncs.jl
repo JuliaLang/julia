@@ -1471,7 +1471,7 @@ function apply_type_nothrow(@specialize(lattice::AbstractLattice), argtypes::Vec
     for i = 2:length(argtypes)
         isa(u, UnionAll) || return false
         ai = widenconditional(argtypes[i])
-        if ⊑(lattice, ai, TypeVar) || ai === DataType
+        if ⊑(lattice, ai, TypeVar) || ai === DataType || ai === AnySParam()
             # We don't know anything about the bounds of this typevar, but as
             # long as the UnionAll is not constrained, that's ok.
             if !(u.var.lb === Union{} && u.var.ub === Any)
