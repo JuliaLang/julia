@@ -419,7 +419,7 @@ unsigned getCompositeNumElements(Type *T) {
 // Walk through a Type, and record the element path to every tracked value inside
 void TrackCompositeType(Type *T, std::vector<unsigned> &Idxs, std::vector<std::vector<unsigned>> &Numberings) {
     if (isa<PointerType>(T)) {
-        if (T->getPointerAddressSpace() == AddressSpace::Tracked)
+        if (isSpecialPtr(T))
             Numberings.push_back(Idxs);
     }
     else if (isa<StructType>(T) || isa<ArrayType>(T) || isa<VectorType>(T)) {
