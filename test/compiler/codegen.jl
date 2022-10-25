@@ -15,9 +15,12 @@ function libjulia_codegen_name()
     is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
 end
 
-# `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
-    sprint(code_llvm, f, t, raw, dump_module, optimize)
+# The tests below assume a certain format and safepoint_on_entry=true breaks that.
+function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
+    params = Base.CodegenParams(safepoint_on_entry=false)
+    d = InteractiveUtils._dump_function(f, t, false, false, !raw, dump_module, :att, optimize, :none, false, params)
+    sprint(print, d)
+end
 
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
