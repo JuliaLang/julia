@@ -259,6 +259,10 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 #ifdef _OS_WINDOWS_
         err = GetLastError();
         break; // LoadLibrary already tested the rest
+#else
+        // bail out and show the error if file actually exists
+        if (jl_stat(path, (char*)&stbuf) == 0)
+            break;
 #endif
     }
 
