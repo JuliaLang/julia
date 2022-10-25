@@ -3096,12 +3096,12 @@ block(f, c...) = block(map(f, c...))
 """
     lolcat(list_of_lists)
 
-Assembles a tensor of order `ndim` from a nested array-of-arrays. Vector sizes must match.
+Assembles a tensor of order `ndim` from a nested array-of-arrays. Dimensions must match appropriately.
 
 Each recursion level in the array tree is treated as a new dimension to concatenate the data.
 The recursion descends until a non-iterable type is found.
 
-If the input is a vector-of-vectors, the result is the same as `reduce(hcat, x)`, or `stack(x)`.
+For one level of recursion (vector-of-vectors), the result is the same as `reduce(hcat, x)`, or `stack(x)`.
 
 !!! compat "Julia 1.9"
     This function requires at least Julia 1.9.
@@ -3142,6 +3142,41 @@ julia> lolcat((j,k) for j in 1:4, k in 5:6) do (j,k)
  1  2  3  4
  3  4  4  5
  6  6  6  6
+```
+
+## More Examples
+
+Tensor with rank 3 using do-syntax and nested `map` calls.
+```jldoctest
+julia> myxor = lolcat(0:1) do c
+           map(0:7) do b
+               map(0:3) do a
+                   xor(a,b,c)
+               end
+           end
+       end
+4×8×2 Array{Int64, 3}:
+[:, :, 1] =
+ 0  1  2  3  4  5  6  7
+ 1  0  3  2  5  4  7  6
+ 2  3  0  1  6  7  4  5
+ 3  2  1  0  7  6  5  4
+
+[:, :, 2] =
+ 1  0  3  2  5  4  7  6
+ 0  1  2  3  4  5  6  7
+ 3  2  1  0  7  6  5  4
+ 2  3  0  1  6  7  4  5
+
+julia> myxor == [xor(a,b,c) for a in 0:3, b in 0:7, c in 0:1]
+true
+```
+
+Stacking images. (Same behavior as `stack`.)
+```jldoctest
+using TestImages, ImageView
+myimages = ["cameraman", "plastic_bubbles_he_512", "woman_darkhair", "resolution_test_512", "pirate", "walkbridge"]
+imshow(Gray.(lolcat(testimage.(myimages[:]))))
 ```
 """
 lolcat(array_of_arrays) =
