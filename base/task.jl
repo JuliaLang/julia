@@ -452,9 +452,22 @@ const sync_varname = gensym(:sync)
 """
     @sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn), `@spawnat` and `@distributed`
 are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
+a [`CompositeException`](@ref).
+
+# Examples
+```julia-repl
+julia> Threads.nthreads()
+4
+
+julia> @sync begin
+           Threads.@spawn println("Thread-id \$(Threads.threadid()), task 1")
+           Threads.@spawn println("Thread-id \$(Threads.threadid()), task 2")
+       end;
+Thread-id 3, task 1
+Thread-id 1, task 2
+```
 """
 macro sync(block)
     var = esc(sync_varname)
@@ -513,7 +526,7 @@ function do_async_macro(expr; wrap=identity)
 end
 
 # task wrapper that doesn't create exceptions wrapped in TaskFailedException
-struct UnwrapTaskFailedException
+struct UnwrapTaskFailedException <: Exception
     task::Task
 end
 
@@ -545,6 +558,14 @@ end
     errormonitor(t::Task)
 
 Print an error log to `stderr` if task `t` fails.
+
+# Examples
+```julia-repl
+julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+Unhandled Task ERROR: task failed
+Stacktrace:
+[...]
+```
 """
 function errormonitor(t::Task)
     t2 = Task() do
@@ -733,7 +754,7 @@ function workqueue_for(tid::Int)
     @lock l begin
         qs = Workqueues
         if length(qs) < tid
-            nt = Threads.nthreads()
+            nt = Threads.maxthreadid()
             @assert tid <= nt
             global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
         end
@@ -746,7 +767,7 @@ end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    if t.sticky || Threads.nthreads() == 1
+    if t.sticky || Threads.threadpoolsize() == 1
         tid = Threads.threadid(t)
         if tid == 0
             # Issue #41324

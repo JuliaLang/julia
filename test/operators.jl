@@ -184,7 +184,7 @@ end
     @test (@inferred g(1)) == ntuple(Returns(1), 13)
     h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
     @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
-    issue_45877 = reduce(∘, fill(sin,500))
+    issue_45877 = reduce(∘, fill(sin, 50))
     @test Core.Compiler.is_foldable(Base.infer_effects(Base.unwrap_composed, (typeof(issue_45877),)))
     @test fully_eliminated() do
         issue_45877(1.0)
@@ -274,6 +274,9 @@ end
     end
 
     @test fldmod1(4.0, 3) == fldmod1(4, 3)
+
+    # issue 28973
+    @test fld1(0.4, 0.9) == fld1(nextfloat(0.4), 0.9) == 1.0
 end
 
 @testset "Fix12" begin
@@ -325,6 +328,17 @@ end
     @test Returns(val)(1) === val
     @test sprint(show, Returns(1.0)) == "Returns{Float64}(1.0)"
 
-    illtype = Vector{Core._typevar(:T, Union{}, Any)}
+    illtype = Vector{Core.TypeVar(:T)}
     @test Returns(illtype) == Returns{DataType}(illtype)
+end
+
+@testset "<= (issue #46327)" begin
+    struct A46327 <: Real end
+    Base.:(==)(::A46327, ::A46327) = false
+    Base.:(<)(::A46327, ::A46327) = false
+    @test !(A46327() <= A46327())
+    struct B46327 <: Real end
+    Base.:(==)(::B46327, ::B46327) = true
+    Base.:(<)(::B46327, ::B46327) = false
+    @test B46327() <= B46327()
 end

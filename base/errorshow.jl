@@ -107,8 +107,8 @@ showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
-        compact = get(io, :compact, true)
-        limit = get(io, :limit, true)
+        compact = get(io, :compact, true)::Bool
+        limit = get(io, :limit, true)::Bool
         print(IOContext(io, :compact => compact, :limit => limit),
               "DomainError with ", ex.val)
     else
@@ -157,10 +157,10 @@ showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
-    print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
+    print(io, "UndefKeywordError: keyword argument `$(ex.var)` not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    print(io, "UndefVarError: $(ex.var) not defined")
+    print(io, "UndefVarError: `$(ex.var)` not defined")
     Experimental.show_error_hints(io, ex)
 end
 
@@ -235,17 +235,16 @@ function showerror(io::IO, ex::MethodError)
     show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
-    name = ft.name.mt.name
     f_is_function = false
     kwargs = ()
-    if endswith(string(ft.name.name), "##kw")
-        f = ex.args[2]
+    if f === Core.kwcall && !is_arg_types
+        f = (ex.args::Tuple)[2]
         ft = typeof(f)
-        name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end::Int])
     end
+    name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
@@ -451,7 +450,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if get(io, :color, false)
+                    if get(io, :color, false)::Bool
                         let sigstr=sigstr
                             Base.with_output_color(Base.error_color(), iob) do iob
                                 print(iob, "::", sigstr...)
@@ -495,7 +494,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)
+                        if get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
@@ -794,11 +793,6 @@ function show_backtrace(io::IO, t::Vector)
 end
 
 
-function is_kw_sorter_name(name::Symbol)
-    sn = string(name)
-    return !startswith(sn, '#') && endswith(sn, "##kw")
-end
-
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
 function _simplify_include_frames(trace)
@@ -850,15 +844,26 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 continue
             end
 
-            if (lkup.from_c && skipC) || is_kw_sorter_name(lkup.func)
+            if (lkup.from_c && skipC)
                 continue
+            end
+            code = lkup.linfo
+            if code isa MethodInstance
+                def = code.def
+                if def isa Method
+                    if def.name === :kwcall && def.module === Core
+                        continue
+                    end
+                end
+            elseif !lkup.from_c
+                lkup.func === :kwcall && continue
             end
             count += 1
             if count > limit
                 break
             end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== last_frame.linfo
                 if n > 0
                     push!(ret, (last_frame, n))
                 end
@@ -914,6 +919,19 @@ function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
+
+# Display a hint in case the user tries to use the + operator on strings
+# (probably attempting concatenation)
+function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f == +) && all(i -> i <: AbstractString, arg_types)
+        print(io, "\nString concatenation is performed with ")
+        printstyled(io, "*", color=:cyan)
+        print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
+    end
+end
+
+Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

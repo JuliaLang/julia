@@ -137,20 +137,10 @@ function union!(s::BitSet, r::AbstractUnitRange{<:Integer})
 
     # grow s.bits as necessary
     if diffb >= len
-        _growend!(s.bits, diffb - len + 1)
-        # we set only some values to CHK0, those which will not be
-        # fully overwritten (i.e. only or'ed with `|`)
-        s.bits[end] = CHK0 # end == diffb + 1
-        if diffa >= len
-            s.bits[diffa + 1] = CHK0
-        end
+        _growend0!(s.bits, diffb - len + 1)
     end
     if diffa < 0
-        _growbeg!(s.bits, -diffa)
-        s.bits[1] = CHK0
-        if diffb < 0
-            s.bits[diffb - diffa + 1] = CHK0
-        end
+        _growbeg0!(s.bits, -diffa)
         s.offset = cidxa # s.offset += diffa
         diffb -= diffa
         diffa = 0
@@ -320,6 +310,13 @@ intersect!(s1::BitSet, s2::BitSet) = _matched_map!(&, s1, s2)
 setdiff!(s1::BitSet, s2::BitSet) = _matched_map!((p, q) -> p & ~q, s1, s2)
 
 function symdiff!(s::BitSet, ns)
+    for x in ns
+        int_symdiff!(s, x)
+    end
+    return s
+end
+
+function symdiff!(s::BitSet, ns::AbstractSet)
     for x in ns
         int_symdiff!(s, x)
     end

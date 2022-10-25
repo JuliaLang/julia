@@ -1125,12 +1125,12 @@ struct Struct_AA64_2
     v2::Float64
 end
 
-# This is a homogenious short vector aggregate
+# This is a homogeneous short vector aggregate
 struct Struct_AA64_3
     v1::VecReg{8,Int8}
     v2::VecReg{2,Float32}
 end
-# This is NOT a homogenious short vector aggregate
+# This is NOT a homogeneous short vector aggregate
 struct Struct_AA64_4
     v2::VecReg{2,Float32}
     v1::VecReg{8,Int16}
@@ -1590,6 +1590,32 @@ function caller22734(ptr)
 end
 @test caller22734(ptr22734) === 32.0
 
+# issue #46786 -- non-isbitstypes passed "by-value"
+struct NonBits46786
+    x::Union{Int16,NTuple{3,UInt8}}
+end
+let ptr = @cfunction(identity, NonBits46786, (NonBits46786,))
+    obj1 = NonBits46786((0x01,0x02,0x03))
+    obj2 = ccall(ptr, NonBits46786, (NonBits46786,), obj1)
+    @test obj1 === obj2
+end
+let ptr = @cfunction(identity, Base.RefValue{NonBits46786}, (Base.RefValue{NonBits46786},))
+    obj1 = Base.RefValue(NonBits46786((0x01,0x02,0x03)))
+    obj2 = ccall(ptr, Base.RefValue{NonBits46786}, (Base.RefValue{NonBits46786},), obj1)
+    @test obj1 !== obj2
+    @test obj1.x === obj2.x
+end
+
+mutable struct MutNonBits46786
+    x::Union{Int16,NTuple{3,UInt8}}
+end
+let ptr = @cfunction(identity, MutNonBits46786, (MutNonBits46786,))
+    obj1 = MutNonBits46786((0x01,0x02,0x03))
+    obj2 = ccall(ptr, MutNonBits46786, (MutNonBits46786,), obj1)
+    @test obj1 !== obj2
+    @test obj1.x === obj2.x
+end
+
 # 26297#issuecomment-371165725
 #   test that the first argument to cglobal is recognized as a tuple literal even through
 #   macro expansion
@@ -1791,7 +1817,7 @@ end
     str_identity = @cfunction(identity, Cstring, (Cstring,))
     foo = @ccall $str_identity("foo"::Cstring)::Cstring
     @test unsafe_string(foo) == "foo"
-    # test interpolation of an expresison that returns a pointer.
+    # test interpolation of an expression that returns a pointer.
     foo = @ccall $(@cfunction(identity, Cstring, (Cstring,)))("foo"::Cstring)::Cstring
     @test unsafe_string(foo) == "foo"
 

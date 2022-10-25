@@ -8,13 +8,13 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
 
-#include "codegen_shared.h"
-#include "julia.h"
 #include "passes.h"
+#include "codegen_shared.h"
 
 #define DEBUG_TYPE "remove_addrspaces"
 
@@ -465,7 +465,11 @@ struct RemoveAddrspacesPassLegacy : public ModulePass {
 
 public:
     bool runOnModule(Module &M) override {
-        return removeAddrspaces(M, ASRemapper);
+        bool modified = removeAddrspaces(M, ASRemapper);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyModule(M, &errs()));
+#endif
+        return modified;
     }
 };
 
@@ -485,7 +489,11 @@ Pass *createRemoveAddrspacesPass(
 RemoveAddrspacesPass::RemoveAddrspacesPass() : RemoveAddrspacesPass(removeAllAddrspaces) {}
 
 PreservedAnalyses RemoveAddrspacesPass::run(Module &M, ModuleAnalysisManager &AM) {
-    if (removeAddrspaces(M, ASRemapper)) {
+    bool modified = removeAddrspaces(M, ASRemapper);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     } else {
         return PreservedAnalyses::all();

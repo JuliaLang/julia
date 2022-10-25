@@ -369,9 +369,11 @@ include(m::Module, fname::String) = ccall(:jl_load_, Any, (Any, Any), m, fname)
 
 eval(m::Module, @nospecialize(e)) = ccall(:jl_toplevel_eval_in, Any, (Any, Any), m, e)
 
-kwfunc(@nospecialize(f)) = ccall(:jl_get_keyword_sorter, Any, (Any,), f)
-
-kwftype(@nospecialize(t)) = typeof(ccall(:jl_get_kwsorter, Any, (Any,), t))
+# dispatch token indicating a kwarg (keyword sorter) call
+function kwcall end
+# deprecated internal functions:
+kwfunc(@nospecialize(f)) = kwcall
+kwftype(@nospecialize(t)) = typeof(kwcall)
 
 mutable struct Box
     contents::Any
@@ -412,7 +414,7 @@ eval(Core, quote
     end
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
-    GlobalRef(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))
+    GlobalRef(m::Module, s::Symbol, binding::Ptr{Nothing}) = $(Expr(:new, :GlobalRef, :m, :s, :binding))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
     TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
@@ -615,7 +617,8 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
+eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
+             $(Expr(:splatnew, :(NamedTuple{names,typeof(args)}), :args))))
 
 using .Intrinsics: sle_int, add_int
 
@@ -812,6 +815,8 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
 
+GlobalRef(m::Module, s::Symbol) = GlobalRef(m, s, bitcast(Ptr{Nothing}, 0))
+
 # Binding for the julia parser, called as
 #
 #    Core._parse(text, filename, lineno, offset, options)
@@ -838,8 +843,10 @@ struct Pair{A, B}
     # but also mark the whole function with `@inline` to ensure we will inline it whenever possible
     # (even if `convert(::Type{A}, a::A)` for some reason was expensive)
     Pair(a, b) = new{typeof(a), typeof(b)}(a, b)
-    Pair{A, B}(a::A, b::B) where {A, B} = new(a, b)
-    Pair{Any, Any}(@nospecialize(a::Any), @nospecialize(b::Any)) = new(a, b)
+    function Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B}
+        @inline
+        return new(a::A, b::B)
+    end
 end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

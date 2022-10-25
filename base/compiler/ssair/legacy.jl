@@ -39,7 +39,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
     if !isa(ssavaluetypes, Vector{Any})
         ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
     end
-    info = Any[nothing for i = 1:nstmts]
+    info = CallInfo[NoCallInfo() for i = 1:nstmts]
     stmts = InstructionStream(code, ssavaluetypes, info, ci.codelocs, ci.ssaflags)
     linetable = ci.linetable
     if !isa(linetable, Vector{LineInfoNode})
@@ -86,7 +86,7 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode, nargs::Int)
         elseif isa(stmt, GotoIfNot)
             code[i] = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
         elseif isa(stmt, PhiNode)
-            code[i] = PhiNode(Int32[last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
+            code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
         elseif isexpr(stmt, :enter)
             stmt.args[1] = first(ir.cfg.blocks[stmt.args[1]::Int].stmts)
             code[i] = stmt

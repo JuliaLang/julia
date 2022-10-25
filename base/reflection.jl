@@ -100,7 +100,9 @@ since it is not idiomatic to explicitly export names from `Main`.
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+    sort!(unsorted_names(m; all, imported))
+unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -119,10 +121,10 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
-const NamedTuple_typename = NamedTuple.body.body.name
+const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         if t.parameters[1] isa Tuple
             return t.parameters[1]
         else
@@ -264,6 +266,11 @@ Determine whether a global is declared `const` in a given module `m`.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
+
+function isconst(g::GlobalRef)
+    g.binding != C_NULL && return ccall(:jl_binding_is_const, Cint, (Ptr{Cvoid},), g.binding) != 0
+    return isconst(g.mod, g.name)
+end
 
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
@@ -493,8 +500,8 @@ end
     ismutable(v) -> Bool
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
-for a discussion of immutability. Note that this function works on values, so if you give it
-a type, it will tell you that a value of `DataType` is mutable.
+for a discussion of immutability. Note that this function works on values, so if you
+give it a `DataType`, it will tell you that a value of the type is mutable.
 
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
@@ -547,7 +554,7 @@ end
     isprimitivetype(T) -> Bool
 
 Determine whether type `T` was declared as a primitive type
-(i.e. using the `primitive` keyword).
+(i.e. using the `primitive type` syntax).
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
@@ -648,7 +655,7 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
     isabstracttype(T)
 
 Determine whether type `T` was declared as an abstract type
-(i.e. using the `abstract` keyword).
+(i.e. using the `abstract type` syntax).
 
 # Examples
 ```jldoctest
@@ -792,7 +799,7 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
@@ -859,7 +866,7 @@ function to_tuple_type(@nospecialize(t))
     if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
             if isa(p, Core.TypeofVararg)
-                p = p.T
+                p = unwrapva(p)
             end
             if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
@@ -871,13 +878,13 @@ function to_tuple_type(@nospecialize(t))
     t
 end
 
-function signature_type(@nospecialize(f), @nospecialize(args))
-    f_type = isa(f, Type) ? Type{f} : typeof(f)
-    if isa(args, Type)
-        u = unwrap_unionall(args)
-        return rewrap_unionall(Tuple{f_type, u.parameters...}, args)
+function signature_type(@nospecialize(f), @nospecialize(argtypes))
+    ft = Core.Typeof(f)
+    if isa(argtypes, Type)
+        u = unwrap_unionall(argtypes)
+        return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
     else
-        return Tuple{f_type, args...}
+        return Tuple{ft, argtypes...}
     end
 end
 
@@ -1221,13 +1228,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.OpaqueClosure)
         return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
-    else
-        tt = Tuple{ft, types...}
-    end
+    tt = signature_type(f, types)
     return code_typed_by_type(tt; optimize, debuginfo, world, interp)
 end
 
@@ -1347,13 +1348,7 @@ function code_ircode(
     if isa(f, Core.OpaqueClosure)
         error("OpaqueClosure not supported")
     end
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft,u.parameters...}, types)
-    else
-        tt = Tuple{ft,types...}
-    end
+    tt = signature_type(f, types)
     return code_ircode_by_type(tt; world, interp, optimize_until)
 end
 
@@ -1402,14 +1397,19 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
         return Any[rt]
     end
     types = to_tuple_type(types)
-    rt = []
+    if isa(f, Core.Builtin)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Any[rt]
+    end
+    rts = []
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
-        push!(rt, something(ty, Any))
+        push!(rts, something(ty, Any))
     end
-    return rt
+    return rts
 end
 
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
@@ -1420,23 +1420,28 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.Builtin)
         argtypes = Any[types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Core.Compiler.builtin_effects(f, argtypes, rt)
-    else
-        effects = Core.Compiler.EFFECTS_TOTAL
-        matches = _methods(f, types, -1, world)::Vector
-        if isempty(matches)
-            # this call is known to throw MethodError
-            return Core.Compiler.Effects(effects; nothrow=false)
-        end
-        for match in matches
-            match = match::Core.MethodMatch
-            frame = Core.Compiler.typeinf_frame(interp,
-                match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
-            frame === nothing && return Core.Compiler.Effects()
-            effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
-        end
-        return effects
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
     end
+    tt = signature_type(f, types)
+    result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    if result === missing
+        # unanalyzable call, return the unknown effects
+        return Core.Compiler.Effects()
+    end
+    (; matches) = result
+    effects = Core.Compiler.EFFECTS_TOTAL
+    if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
+        # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+        effects = Core.Compiler.Effects(effects; nothrow=false)
+    end
+    for match in matches.matches
+        match = match::Core.MethodMatch
+        frame = Core.Compiler.typeinf_frame(interp,
+            match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+        frame === nothing && return Core.Compiler.Effects()
+        effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
+    end
+    return effects
 end
 
 """
@@ -1799,7 +1804,7 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_table_for, Any, (Any,), m.sig)::Core.MethodTable
+    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
 end
 
 """
@@ -1835,7 +1840,7 @@ as well to get the properties of an instance of the type.
 
 `propertynames(x)` may return only "public" property names that are part
 of the documented interface of `x`.   If you want it to also return "private"
-fieldnames intended for internal use, pass `true` for the optional second argument.
+property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also: [`hasproperty`](@ref), [`hasfield`](@ref).

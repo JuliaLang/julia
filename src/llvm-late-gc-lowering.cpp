@@ -10,6 +10,7 @@
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/ADT/SetVector.h>
 #include <llvm/ADT/SmallVector.h>
+#include <llvm/ADT/SmallSet.h>
 #include "llvm/Analysis/CFG.h"
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -749,6 +750,7 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
     }
     if (!isa<PointerType>(Phi->getType()))
         S.AllCompositeNumbering[Phi] = Numbers;
+    SmallVector<DenseMap<Value*, Value*>, 4> CastedRoots(NumRoots);
     for (unsigned i = 0; i < Phi->getNumIncomingValues(); ++i) {
         Value *Incoming = Phi->getIncomingValue(i);
         BasicBlock *IncomingBB = Phi->getIncomingBlock(i);
@@ -766,8 +768,27 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
                 BaseElem = Base;
             else
                 BaseElem = IncomingBases[i];
-            if (BaseElem->getType() != T_prjlvalue)
-                BaseElem = new BitCastInst(BaseElem, T_prjlvalue, "", Terminator);
+            if (BaseElem->getType() != T_prjlvalue) {
+                auto &remap = CastedRoots[i][BaseElem];
+                if (!remap) {
+                    if (auto constant = dyn_cast<Constant>(BaseElem)) {
+                        remap = ConstantExpr::getBitCast(constant, T_prjlvalue, "");
+                    } else {
+                        Instruction *InsertBefore;
+                        if (auto arg = dyn_cast<Argument>(BaseElem)) {
+                            InsertBefore = &*arg->getParent()->getEntryBlock().getFirstInsertionPt();
+                        } else {
+                            assert(isa<Instruction>(BaseElem) && "Unknown value type detected!");
+                            InsertBefore = cast<Instruction>(BaseElem)->getNextNonDebugInstruction();
+                        }
+                        while (isa<PHINode>(InsertBefore)) {
+                            InsertBefore = InsertBefore->getNextNonDebugInstruction();
+                        }
+                        remap = new BitCastInst(BaseElem, T_prjlvalue, "", InsertBefore);
+                    }
+                }
+                BaseElem = remap;
+            }
             lift->addIncoming(BaseElem, IncomingBB);
         }
     }
@@ -1288,7 +1309,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     //   value of -1 or -2 in the refinement map), or may be externally rooted by refinement to other
     //   values. Thus a value is not externally rooted if it either:
     //   either:
-    //     - Has no refinements (all obiviously externally rooted values are annotated by -1/-2 in the
+    //     - Has no refinements (all obviously externally rooted values are annotated by -1/-2 in the
     //       refinement map).
     //     - Recursively reaches a not-externally rooted value through its refinements
     //
@@ -2614,7 +2635,8 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         unsigned AllocaSlot = 2; // first two words are metadata
         auto replace_alloca = [this, gcframe, &AllocaSlot, T_int32](AllocaInst *&AI) {
             // Pick a slot for the alloca.
-            unsigned align = AI->getAlignment() / sizeof(void*); // TODO: use DataLayout pointer size
+            AI->getAlign();
+            unsigned align = AI->getAlign().value() / sizeof(void*); // TODO: use DataLayout pointer size
             assert(align <= 16 / sizeof(void*) && "Alignment exceeds llvm-final-gc-lowering abilities");
             if (align > 1)
                 AllocaSlot = LLT_ALIGN(AllocaSlot, align);
@@ -2684,12 +2706,12 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
         // Insert GC frame stores
         PlaceGCFrameStores(S, AllocaSlot - 2, Colors, gcframe);
         // Insert GCFrame pops
-        for(Function::iterator I = F->begin(), E = F->end(); I != E; ++I) {
-            if (isa<ReturnInst>(I->getTerminator())) {
+        for (auto &BB : *F) {
+            if (isa<ReturnInst>(BB.getTerminator())) {
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
-                popGcframe->insertBefore(I->getTerminator());
+                popGcframe->insertBefore(BB.getTerminator());
             }
         }
     }
@@ -2698,7 +2720,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(std::vector<int> &Colors, State 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    if (!pgcstack_getter)
+    if (!pgcstack_getter && !adoptthread_func)
         return CleanupIR(F, nullptr, CFGModified);
 
     pgcstack = getPGCstack(F);
@@ -2719,7 +2741,11 @@ bool LateLowerGCFrameLegacy::runOnFunction(Function &F) {
         return getAnalysis<DominatorTreeWrapperPass>().getDomTree();
     };
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
-    return lateLowerGCFrame.runOnFunction(F);
+    bool modified = lateLowerGCFrame.runOnFunction(F);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    return modified;
 }
 
 PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
@@ -2729,7 +2755,11 @@ PreservedAnalyses LateLowerGC::run(Function &F, FunctionAnalysisManager &AM)
     };
     auto lateLowerGCFrame = LateLowerGCFrame(GetDT);
     bool CFGModified = false;
-    if (lateLowerGCFrame.runOnFunction(F, &CFGModified)) {
+    bool modified = lateLowerGCFrame.runOnFunction(F, &CFGModified);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    if (modified) {
         if (CFGModified) {
             return PreservedAnalyses::none();
         } else {

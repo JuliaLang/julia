@@ -556,7 +556,7 @@ const t_log_table_compact = (
 end
 
 # Log implementation that returns 2 numbers which sum to give true value with about 68 bits of precision
-# Since `log` only makes sense for positive exponents, we speed up the implimentation by stealing the sign bit
+# Since `log` only makes sense for positive exponents, we speed up the implementation by stealing the sign bit
 # of the input for an extra bit of the exponent which is used to normalize subnormal inputs.
 # Does not normalize results.
 # Adapted and modified from https://github.com/ARM-software/optimized-routines/blob/master/math/pow.c
@@ -575,7 +575,7 @@ function _log_ext(xu)
     t, logctail = getfield(t_log_table_compact, Int(i+1))
     invc, logc = log_tab_unpack(t)
     # Note: invc is j/N or j/N/2 where j is an integer in [N,2N) and
-    # |z/c - 1| < 1/N, so r = z/c - 1 is exactly representible.
+    # |z/c - 1| < 1/N, so r = z/c - 1 is exactly representable.
     r = fma(z, invc, -1.0)
     # k*Ln2 + log(c) + r.
     t1 = muladd(k, 0.6931471805598903, logc) #ln(2) hi part

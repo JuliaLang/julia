@@ -20,8 +20,8 @@ export
     scal!,
     scal,
     blascopy!,
-    axpy!,
-    axpby!,
+    # xAXPY!,
+    # xAXPBY!,
     # xDOT
     dotc,
     dotu,
@@ -167,7 +167,7 @@ end
 # Level 1
 # A help function to pick the pointer and inc for 1d like inputs.
 @inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
-    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simpify runtime check when possibe
+    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simplify runtime check when possibe
     st, ptr = checkedstride(x), pointer(x)
     isnothing(stride0check) || (st == 0 && throw(stride0check))
     ptr += min(st, 0) * sizeof(eltype(x)) * (length(x) - 1)
