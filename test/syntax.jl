@@ -848,6 +848,14 @@ end
 @test c8925 == 3 && isconst(@__MODULE__, :c8925)
 @test d8925 == 4 && isconst(@__MODULE__, :d8925)
 
+# issue #47168
+let t47168 = (;a47168 = 1, b47168 = 2);
+    global const (;a47168, b47168) = t47168
+    @test a47168 == 1 && isconst(@__MODULE__, :a47168)
+    @test b47168 == 2 && isconst(@__MODULE__, :b47168)
+end
+@test (let x = (;x=1); let (;x) = x; x; end, x; end) == (1, (x = 1,))
+
 # issue #18754: parse ccall as a regular function
 @test Meta.parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
 @test Meta.parse("ccall(a).member") == Expr(:., Expr(:call, :ccall, :a), QuoteNode(:member))

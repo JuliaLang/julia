@@ -35,6 +35,7 @@ end
 struct InvokeCase
     invoke::MethodInstance
     effects::Effects
+    info::CallInfo
 end
 
 struct InliningCase
@@ -592,7 +593,7 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int,
         elseif isa(case, InvokeCase)
             inst = Expr(:invoke, case.invoke, argexprs′...)
             flag = flags_for_effects(case.effects)
-            val = insert_node_here!(compact, NewInstruction(inst, typ, NoCallInfo(), line, flag))
+            val = insert_node_here!(compact, NewInstruction(inst, typ, case.info, line, flag))
         else
             case = case::ConstantCase
             val = case.val
@@ -796,19 +797,19 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
 end
 
 function compileable_specialization(match::MethodMatch, effects::Effects,
-    et::InliningEdgeTracker; compilesig_invokes::Bool=true)
+    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi = specialize_method(match; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects)
+    return InvokeCase(mi, effects, info)
 end
 
 function compileable_specialization(linfo::MethodInstance, effects::Effects,
-    et::InliningEdgeTracker; compilesig_invokes::Bool=true)
+    et::InliningEdgeTracker, @nospecialize(info::CallInfo); compilesig_invokes::Bool=true)
     mi = specialize_method(linfo.def::Method, linfo.specTypes, linfo.sparam_vals; compilesig=compilesig_invokes)
     mi === nothing && return nothing
     add_inlining_backedge!(et, mi)
-    return InvokeCase(mi, effects)
+    return InvokeCase(mi, effects, info)
 end
 
 compileable_specialization(result::InferenceResult, args...; kwargs...) = (@nospecialize;
@@ -862,7 +863,7 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
     # the duplicated check might have been done already within `analyze_method!`, but still
     # we need it here too since we may come here directly using a constant-prop' result
     if !state.params.inlining || is_stmt_noinline(flag)
-        return compileable_specialization(result, effects, et;
+        return compileable_specialization(result, effects, et, info;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
@@ -877,7 +878,7 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
         return ConstantCase(quoted(src.val))
     end
 
-    src === nothing && return compileable_specialization(result, effects, et;
+    src === nothing && return compileable_specialization(result, effects, et, info;
         compilesig_invokes=state.params.compilesig_invokes)
 
     add_inlining_backedge!(et, mi)
@@ -966,7 +967,7 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if mi === nothing
         et = InliningEdgeTracker(state.et, invokesig)
-        return compileable_specialization(match, Effects(), et;
+        return compileable_specialization(match, Effects(), et, info;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
@@ -1169,7 +1170,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     end
     result = info.result
     invokesig = sig.argtypes
-    if isa(result, ConcreteResult)
+    if isa(result, ConcreteResult) && may_inline_concrete_result(result)
         item = concrete_result_item(result, state; invokesig)
     else
         argtypes = invoke_rewrite(sig.argtypes)
@@ -1296,7 +1297,11 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
     if isa(result, ConcreteResult)
-        return handle_concrete_result!(cases, result, state)
+        if may_inline_concrete_result(result)
+            return handle_concrete_result!(cases, result, state)
+        else
+            result = nothing
+        end
     end
     if isa(result, SemiConcreteResult)
         result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
@@ -1483,15 +1488,12 @@ function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteRe
     return true
 end
 
+may_inline_concrete_result(result::ConcreteResult) =
+    isdefined(result, :result) && is_inlineable_constant(result.result)
+
 function concrete_result_item(result::ConcreteResult, state::InliningState;
     invokesig::Union{Nothing,Vector{Any}}=nothing)
-    if !isdefined(result, :result) || !is_inlineable_constant(result.result)
-        et = InliningEdgeTracker(state.et, invokesig)
-        case = compileable_specialization(result.mi, result.effects, et;
-            compilesig_invokes=state.params.compilesig_invokes)
-        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
-        return case
-    end
+    @assert may_inline_concrete_result(result)
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
 end
@@ -1524,7 +1526,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         mi = result.result.linfo
         validate_sparams(mi.sparam_vals) || return nothing
         item = resolve_todo(mi, result.result, sig.argtypes, info, flag, state)
-    elseif isa(result, ConcreteResult)
+    elseif isa(result, ConcreteResult) && may_inline_concrete_result(result)
         item = concrete_result_item(result, state)
     else
         item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
@@ -1541,7 +1543,7 @@ function handle_modifyfield!_call!(ir::IRCode, idx::Int, stmt::Expr, info::Modif
     length(info.results) == 1 || return nothing
     match = info.results[1]::MethodMatch
     match.fully_covers || return nothing
-    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et);
+    case = compileable_specialization(match, Effects(), InliningEdgeTracker(state.et), info;
         compilesig_invokes=state.params.compilesig_invokes)
     case === nothing && return nothing
     stmt.head = :invoke_modify

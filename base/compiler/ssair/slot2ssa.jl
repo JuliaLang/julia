@@ -580,36 +580,53 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
     return new_typ
 end
 
+struct TryCatchRegion
+    enter_block::Int
+    leave_block::Int
+end
+struct NewPhiNode
+    ssaval::NewSSAValue
+    node::PhiNode
+end
+struct NewPhiCNode
+    slot::SlotNumber
+    ssaval::NewSSAValue
+    node::PhiCNode
+end
+
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                         defuses::Vector{SlotInfo}, slottypes::Vector{Any})
     code = ir.stmts.inst
     cfg = ir.cfg
-    catch_entry_blocks = Tuple{Int, Int}[]
+    catch_entry_blocks = TryCatchRegion[]
     lattice = OptimizerLattice()
     ⊑ₒ = ⊑(lattice)
     for idx in 1:length(code)
         stmt = code[idx]
         if isexpr(stmt, :enter)
-            push!(catch_entry_blocks, (block_for_inst(cfg, idx), block_for_inst(cfg, stmt.args[1]::Int)))
+            push!(catch_entry_blocks, TryCatchRegion(
+                block_for_inst(cfg, idx),
+                block_for_inst(cfg, stmt.args[1]::Int)))
         end
     end
 
-    exc_handlers = IdDict{Int, Tuple{Int, Int}}()
+    exc_handlers = IdDict{Int, TryCatchRegion}()
     # Record the correct exception handler for all cricitcal sections
-    for (enter_block, exc) in catch_entry_blocks
-        exc_handlers[enter_block+1] = (enter_block, exc)
+    for catch_entry_block in catch_entry_blocks
+        (; enter_block, leave_block) = catch_entry_block
+        exc_handlers[enter_block+1] = catch_entry_block
         # TODO: Cut off here if the terminator is a leave corresponding to this enter
         for block in dominated(domtree, enter_block+1)
-            exc_handlers[block] = (enter_block, exc)
+            exc_handlers[block] = catch_entry_block
         end
     end
 
-    phi_slots = Vector{Int}[Vector{Int}() for _ = 1:length(ir.cfg.blocks)]
-    phi_nodes = Vector{Pair{NewSSAValue,PhiNode}}[Vector{Pair{NewSSAValue,PhiNode}}() for _ = 1:length(cfg.blocks)]
+    phi_slots = Vector{Int}[Int[] for _ = 1:length(ir.cfg.blocks)]
+    new_phi_nodes = Vector{NewPhiNode}[NewPhiNode[] for _ = 1:length(cfg.blocks)]
     phi_ssas = SSAValue[]
-    phicnodes = IdDict{Int, Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}}()
-    for (_, exc) in catch_entry_blocks
-        phicnodes[exc] = Vector{Tuple{SlotNumber, NewSSAValue, PhiCNode}}()
+    new_phic_nodes = IdDict{Int, Vector{NewPhiCNode}}()
+    for (; leave_block) in catch_entry_blocks
+        new_phic_nodes[leave_block] = NewPhiCNode[]
     end
     @timeit "idf" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
@@ -638,7 +655,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         end
         @timeit "liveness" (live = compute_live_ins(cfg, slot))
         for li in live.live_in_bbs
-            cidx = findfirst(x->x[2] == li, catch_entry_blocks)
+            cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
             if cidx !== nothing
                 # The slot is live-in into this block. We need to
                 # Create a PhiC node in the catch entry block and
@@ -647,7 +664,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 phic_ssa = NewSSAValue(
                     insert_node!(ir, first_insert_for_bb(code, cfg, li),
                         NewInstruction(node, Union{})).id - length(ir.stmts))
-                push!(phicnodes[li], (SlotNumber(idx), phic_ssa, node))
+                push!(new_phic_nodes[li], NewPhiCNode(SlotNumber(idx), phic_ssa, node))
                 # Inform IDF that we now have a def in the catch block
                 if !(li in live.def_bbs)
                     push!(live.def_bbs, li)
@@ -658,9 +675,9 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         for block in phiblocks
             push!(phi_slots[block], idx)
             node = PhiNode()
-            ssa = NewSSAValue(insert_node!(ir,
+            ssaval = NewSSAValue(insert_node!(ir,
                 first_insert_for_bb(code, cfg, block), NewInstruction(node, Union{})).id - length(ir.stmts))
-            push!(phi_nodes[block], ssa=>node)
+            push!(new_phi_nodes[block], NewPhiNode(ssaval, node))
         end
     end
     # Perform SSA renaming
@@ -697,7 +714,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         end
         # Insert phi nodes if necessary
         for (idx, slot) in Iterators.enumerate(phi_slots[item])
-            ssaval, node = phi_nodes[item][idx]
+            (; ssaval, node) = new_phi_nodes[item][idx]
             incoming_val = incoming_vals[slot]
             if incoming_val === SSAValue(-1)
                 # Optimistically omit this path.
@@ -727,15 +744,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         end
         (item in visited) && continue
         # Record phi_C nodes if necessary
-        if haskey(phicnodes, item)
-            for (slot, ssa, _) in phicnodes[item]
-                incoming_vals[slot_id(slot)] = ssa
+        if haskey(new_phic_nodes, item)
+            for (; slot, ssaval) in new_phic_nodes[item]
+                incoming_vals[slot_id(slot)] = ssaval
             end
         end
         # Record initial upsilon nodes if necessary
-        eidx = findfirst(x->x[1] == item, catch_entry_blocks)
+        eidx = findfirst((; enter_block)::TryCatchRegion->enter_block==item, catch_entry_blocks)
         if eidx !== nothing
-            for (slot, _, node) in phicnodes[catch_entry_blocks[eidx][2]]
+            for (; slot, node) in new_phic_nodes[catch_entry_blocks[eidx].leave_block]
                 ival = incoming_vals[slot_id(slot)]
                 ivalundef = ival === UNDEF_TOKEN
                 Υ = NewInstruction(ivalundef ? UpsilonNode() : UpsilonNode(ival),
@@ -772,18 +789,18 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                         code[idx] = nothing
                         incoming_vals[id] = UNDEF_TOKEN
                     end
-                    eidx = item
-                    while haskey(exc_handlers, eidx)
-                        (eidx, exc) = exc_handlers[eidx]
-                        cidx = findfirst(x->slot_id(x[1]) == id, phicnodes[exc])
+                    enter_block = item
+                    while haskey(exc_handlers, enter_block)
+                        (; enter_block, leave_block) = exc_handlers[enter_block]
+                        cidx = findfirst((; slot)::NewPhiCNode->slot_id(slot)==id, new_phic_nodes[leave_block])
                         if cidx !== nothing
                             node = UpsilonNode(incoming_vals[id])
                             if incoming_vals[id] === UNDEF_TOKEN
                                 node = UpsilonNode()
                                 typ = MaybeUndef(Union{})
                             end
-                            push!(phicnodes[exc][cidx][3].values,
-                                NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
+                            push!(new_phic_nodes[leave_block][cidx].node.values,
+                                  NewSSAValue(insert_node!(ir, idx, NewInstruction(node, typ), true).id - length(ir.stmts)))
                         end
                     end
                 end
@@ -840,12 +857,12 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             end
         end
     end
-    for (_, nodes) in phicnodes
-        for (_, ssa, node) in nodes
+    for (_, nodes) in new_phic_nodes
+        for (; ssaval, node) in nodes
             new_typ = Union{}
             # TODO: This could just be the ones that depend on other phis
-            push!(type_refine_phi, ssa.id)
-            new_idx = ssa.id
+            push!(type_refine_phi, ssaval.id)
+            new_idx = ssaval.id
             node = new_nodes.stmts[new_idx]
             phic_values = (node[:inst]::PhiCNode).values
             for i = 1:length(phic_values)
