@@ -22,6 +22,9 @@ function Bidiagonal{T}(dv::AbstractVector, ev::AbstractVector, uplo::Union{Symbo
                convert(AbstractVector{T}, ev)::AbstractVector{T},
                uplo)
 end
+function Bidiagonal{T,V}(A::Bidiagonal) where {T,V<:AbstractVector{T}}
+    Bidiagonal{T,V}(A.dv, A.ev, A.uplo)
+end
 
 """
     Bidiagonal(dv::V, ev::V, uplo::Symbol) where V <: AbstractVector
@@ -200,14 +203,15 @@ promote_rule(::Type{<:Tridiagonal}, ::Type{<:Bidiagonal}) = Tridiagonal
 # When asked to convert Bidiagonal to AbstractMatrix{T}, preserve structure by converting to Bidiagonal{T} <: AbstractMatrix{T}
 AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 
-convert(T::Type{<:Bidiagonal}, m::AbstractMatrix) = m isa T ? m : T(m)
+convert(::Type{T}, m::AbstractMatrix) where {T<:Bidiagonal} = m isa T ? m : T(m)::T
 
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
 similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
 
 function kron(A::Diagonal, B::Bidiagonal)
-    kdv = kron(diag(A), B.dv)
-    kev = _droplast!(kron(diag(A), _pushzero(B.ev)))
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kdv = _makevector(kron(diag(A), B.dv))
+    kev = _droplast!(_makevector(kron(diag(A), _pushzero(B.ev))))
     Bidiagonal(kdv, kev, B.uplo)
 end
 

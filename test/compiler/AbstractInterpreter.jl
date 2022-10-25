@@ -5,6 +5,8 @@ const CC = Core.Compiler
 import Core: MethodInstance, CodeInstance
 import .CC: WorldRange, WorldView
 
+include("irutils.jl")
+
 # define new `AbstractInterpreter` that satisfies the minimum interface requirements
 # while managing its cache independently
 macro newinterp(name)
@@ -127,14 +129,14 @@ import .CC:
 struct TaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
-CC.widen(𝕃::TaintLattice) = 𝕃.parent
+CC.widenlattice(𝕃::TaintLattice) = 𝕃.parent
 CC.is_valid_lattice(𝕃::TaintLattice, @nospecialize(elm)) =
     is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, Taint)
 
 struct InterTaintLattice{PL<:AbstractLattice} <: CC.AbstractLattice
     parent::PL
 end
-CC.widen(𝕃::InterTaintLattice) = 𝕃.parent
+CC.widenlattice(𝕃::InterTaintLattice) = 𝕃.parent
 CC.is_valid_lattice(𝕃::InterTaintLattice, @nospecialize(elm)) =
     is_valid_lattice(widenlattice(𝕃), elem) || isa(elm, InterTaint)
 
@@ -156,6 +158,9 @@ struct Taint
     end
 end
 Taint(@nospecialize(typ), id::Int) = Taint(typ, push!(BitSet(), id))
+function Base.:(==)(a::Taint, b::Taint)
+    return a.typ == b.typ && a.slots == b.slots
+end
 
 struct InterTaint
     typ
@@ -169,6 +174,9 @@ struct InterTaint
     end
 end
 InterTaint(@nospecialize(typ), id::Int) = InterTaint(typ, push!(BitSet(), id))
+function Base.:(==)(a::InterTaint, b::InterTaint)
+    return a.typ == b.typ && a.slots == b.slots
+end
 
 const AnyTaint = Union{Taint, InterTaint}
 
@@ -229,4 +237,117 @@ function CC.widenreturn(𝕃::InferenceLattice{<:InterTaintLattice}, @nospeciali
     return CC.widenreturn(widenlattice(𝕃), rt, bestguess, nargs, slottypes, changes)
 end
 
+@test CC.tmerge(typeinf_lattice(TaintInterpreter()), Taint(Int, 1), Taint(Int, 2)) == Taint(Int, BitSet(1:2))
+
 # code_typed(ifelse, (Bool, Int, Int); interp=TaintInterpreter())
+
+# CallInfo × inlining
+# ===================
+
+import .CC: CallInfo
+
+struct NoinlineInterpreterCache
+    dict::IdDict{MethodInstance,CodeInstance}
+end
+
+"""
+    NoinlineInterpreter(noinline_modules::Set{Module}) <: AbstractInterpreter
+
+An `AbstractInterpreter` that has additional inlineability rules based on caller module context.
+"""
+struct NoinlineInterpreter <: CC.AbstractInterpreter
+    noinline_modules::Set{Module}
+    interp::CC.NativeInterpreter
+    cache::NoinlineInterpreterCache
+    NoinlineInterpreter(noinline_modules::Set{Module}, world = Base.get_world_counter();
+        interp = CC.NativeInterpreter(world),
+        cache = NoinlineInterpreterCache(IdDict{MethodInstance,CodeInstance}())
+        ) = new(noinline_modules, interp, cache)
+end
+CC.InferenceParams(interp::NoinlineInterpreter) = CC.InferenceParams(interp.interp)
+CC.OptimizationParams(interp::NoinlineInterpreter) = CC.OptimizationParams(interp.interp)
+CC.get_world_counter(interp::NoinlineInterpreter) = CC.get_world_counter(interp.interp)
+CC.get_inference_cache(interp::NoinlineInterpreter) = CC.get_inference_cache(interp.interp)
+CC.code_cache(interp::NoinlineInterpreter) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
+CC.get(wvc::WorldView{<:NoinlineInterpreterCache}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
+CC.getindex(wvc::WorldView{<:NoinlineInterpreterCache}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
+CC.haskey(wvc::WorldView{<:NoinlineInterpreterCache}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
+CC.setindex!(wvc::WorldView{<:NoinlineInterpreterCache}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+
+struct NoinlineCallInfo <: CallInfo
+    info::CallInfo # wrapped call
+end
+CC.nsplit_impl(info::NoinlineCallInfo) = CC.nsplit(info.info)
+CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
+CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
+
+function CC.abstract_call(interp::NoinlineInterpreter,
+    arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
+    ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
+        arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
+    if sv.mod in interp.noinline_modules
+        return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
+    end
+    return ret
+end
+function CC.inlining_policy(interp::NoinlineInterpreter,
+    @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt8, mi::MethodInstance,
+    argtypes::Vector{Any})
+    if isa(info, NoinlineCallInfo)
+        return nothing
+    end
+    return @invoke CC.inlining_policy(interp::CC.AbstractInterpreter,
+        src::Any, info::CallInfo, stmt_flag::UInt8, mi::MethodInstance,
+        argtypes::Vector{Any})
+end
+
+@inline function inlined_usually(x, y, z)
+    return x * y + z
+end
+
+# check if the inlining algorithm works as expected
+let src = code_typed1((Float64,Float64,Float64)) do x, y, z
+        inlined_usually(x, y, z)
+    end
+    @test count(isinvoke(:inlined_usually), src.code) == 0
+    @test count(iscall((src, inlined_usually)), src.code) == 0
+end
+let NoinlineModule = Module()
+    interp = NoinlineInterpreter(Set((NoinlineModule,)))
+
+    # this anonymous function's context is Main -- it should be inlined as usual
+    let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
+            inlined_usually(x, y, z)
+        end
+        @test count(isinvoke(:inlined_usually), src.code) == 0
+        @test count(iscall((src, inlined_usually)), src.code) == 0
+    end
+
+    # it should work for cached results
+    method = only(methods(inlined_usually, (Float64,Float64,Float64,)))
+    mi = CC.specialize_method(method, Tuple{typeof(inlined_usually),Float64,Float64,Float64}, Core.svec())
+    @test haskey(interp.cache.dict, mi)
+    let src = code_typed1((Float64,Float64,Float64); interp) do x, y, z
+            inlined_usually(x, y, z)
+        end
+        @test count(isinvoke(:inlined_usually), src.code) == 0
+        @test count(iscall((src, inlined_usually)), src.code) == 0
+    end
+
+    # now the context module is `NoinlineModule` -- it should not be inlined
+    let src = @eval NoinlineModule $code_typed1((Float64,Float64,Float64); interp=$interp) do x, y, z
+            $inlined_usually(x, y, z)
+        end
+        @test count(isinvoke(:inlined_usually), src.code) == 1
+        @test count(iscall((src, inlined_usually)), src.code) == 0
+    end
+
+    # the context module is totally irrelevant -- it should be inlined as usual
+    OtherModule = Module()
+    let src = @eval OtherModule $code_typed1((Float64,Float64,Float64); interp=$interp) do x, y, z
+            $inlined_usually(x, y, z)
+        end
+        @test count(isinvoke(:inlined_usually), src.code) == 0
+        @test count(iscall((src, inlined_usually)), src.code) == 0
+    end
+end

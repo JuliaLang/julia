@@ -708,7 +708,7 @@ end
     ap = PermutedDimsArray(Array(a), (2,1,3))
     @test strides(ap) == (3,1,12)
 
-    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)]
+    for A in [rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1), [rand(ComplexF64, 2,2) for _ in 1:2, _ in 1:3, _ in 1:2, _ in 1:4]]
         perm = randperm(4)
         @test isequal(A,permutedims(permutedims(A,perm),invperm(perm)))
         @test isequal(A,permutedims(permutedims(A,invperm(perm)),perm))
@@ -716,6 +716,10 @@ end
         @test sum(permutedims(A,perm)) ≈ sum(PermutedDimsArray(A,perm))
         @test sum(permutedims(A,perm), dims=2) ≈ sum(PermutedDimsArray(A,perm), dims=2)
         @test sum(permutedims(A,perm), dims=(2,4)) ≈ sum(PermutedDimsArray(A,perm), dims=(2,4))
+
+        @test prod(permutedims(A,perm)) ≈ prod(PermutedDimsArray(A,perm))
+        @test prod(permutedims(A,perm), dims=2) ≈ prod(PermutedDimsArray(A,perm), dims=2)
+        @test prod(permutedims(A,perm), dims=(2,4)) ≈ prod(PermutedDimsArray(A,perm), dims=(2,4))
     end
 
     m = [1 2; 3 4]
@@ -765,6 +769,18 @@ end
     @test circshift(src, 1) == src
     src = zeros(Bool, (4,0))
     @test circshift(src, 1) == src
+
+    # 1d circshift! (https://github.com/JuliaLang/julia/issues/46533)
+    a = [1:5;]
+    @test circshift!(a, 1) === a
+    @test a == circshift([1:5;], 1) == [5, 1, 2, 3, 4]
+    a = [1:5;]
+    @test circshift!(a, -2) === a
+    @test a == circshift([1:5;], -2) == [3, 4, 5, 1, 2]
+    a = [1:5;]
+    oa = OffsetVector(copy(a), -1)
+    @test circshift!(oa, 1) === oa
+    @test oa == circshift(OffsetVector(a, -1), 1)
 end
 
 @testset "circcopy" begin
@@ -1136,7 +1152,7 @@ end
     @test isequal(setdiff([1,2,3,4], [7,8,9]), [1,2,3,4])
     @test isequal(setdiff([1,2,3,4], Int64[]), Int64[1,2,3,4])
     @test isequal(setdiff([1,2,3,4], [1,2,3,4,5]), Int64[])
-    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2])
+    @test isequal(symdiff([1,2,3], [4,3,4]), [1,2,4])
     @test isequal(symdiff(['e','c','a'], ['b','a','d']), ['e','c','b','d'])
     @test isequal(symdiff([1,2,3], [4,3], [5]), [1,2,4,5])
     @test isequal(symdiff([1,2,3,4,5], [1,2,3], [3,4]), [3,5])
@@ -1485,6 +1501,9 @@ end
     @test isempty(eoa)
 end
 
+@testset "filter curried #41173" begin
+    @test -5:5 |> filter(iseven) == -4:2:4
+end
 @testset "logical keepat!" begin
     # Vector
     a = Vector(1:10)

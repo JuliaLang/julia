@@ -121,12 +121,9 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort! end
-function issorted end
 include("ordering.jl")
 using .Order
-include("sort.jl")
-using .Sort
+include("compiler/sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)
@@ -165,21 +162,6 @@ include("compiler/stmtinfo.jl")
 include("compiler/abstractinterpretation.jl")
 include("compiler/typeinfer.jl")
 include("compiler/optimize.jl")
-
-# required for bootstrap because sort.jl uses extrema
-# to decide whether to dispatch to counting sort.
-#
-# TODO: remove it.
-function extrema(x::Array)
-    isempty(x) && throw(ArgumentError("collection must be non-empty"))
-    vmin = vmax = x[1]
-    for i in 2:length(x)
-        xi = x[i]
-        vmax = max(vmax, xi)
-        vmin = min(vmin, xi)
-    end
-    return vmin, vmax
-end
 
 include("compiler/bootstrap.jl")
 ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)

@@ -89,7 +89,7 @@ struct InvalidFormatStringError <: Exception
 end
 
 function Base.showerror(io::IO, err::InvalidFormatStringError)
-    io_has_color = get(io, :color, false)
+    io_has_color = get(io, :color, false)::Bool
 
     println(io, "InvalidFormatStringError: ", err.message)
     print(io, "    \"", @view(err.format[begin:prevind(err.format, err.start_color)]))
@@ -281,7 +281,7 @@ end
 @inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
-    slen = textwidth(str) + (hash ? arg isa AbstractString ? 2 : 1 : 0)
+    slen = textwidth(str)::Int + (hash ? arg isa AbstractString ? 2 : 1 : 0)
     op = p = prec == -1 ? slen : min(slen, prec)
     if !leftalign && width > p
         for _ = 1:(width - p)

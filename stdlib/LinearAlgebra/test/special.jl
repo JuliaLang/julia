@@ -256,8 +256,7 @@ end
         @test hvcat((1,1), specialmata, specialmatb) == hvcat((1,1), MA, MB)
         @test cat(specialmata, specialmatb; dims=(1,2)) == cat(MA, MB; dims=(1,2))
     end
-    # Test concatenating pairwise combinations of special matrices with sparse matrices,
-    # dense matrices, or dense vectors
+    # Test concatenating pairwise combinations of special matrices with dense matrices or dense vectors
     densevec = fill(1., N)
     densemat = diagm(0 => densevec)
     for specialmat in specialmats

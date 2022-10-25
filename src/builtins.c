@@ -569,7 +569,7 @@ STATIC_INLINE void _grow_to(jl_value_t **root, jl_value_t ***oldargs, jl_svec_t 
     *n_alloc = newalloc;
 }
 
-static jl_value_t *do_apply( jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
+static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
 {
     jl_function_t *f = args[0];
     if (nargs == 2) {
@@ -1359,50 +1359,6 @@ JL_CALLABLE(jl_f_invoke)
     return res;
 }
 
-JL_CALLABLE(jl_f_invoke_kwsorter)
-{
-    JL_NARGSV(invoke, 3);
-    jl_value_t *kwargs = args[0];
-    // args[1] is `invoke` itself
-    jl_value_t *func = args[2];
-    jl_value_t *argtypes = args[3];
-    jl_value_t *kws = jl_get_keyword_sorter(func);
-    JL_GC_PUSH1(&argtypes);
-    if (jl_is_tuple_type(argtypes)) {
-        // construct a tuple type for invoking a keyword sorter by putting the kw container type
-        // and the type of the function at the front.
-        size_t i, nt = jl_nparams(argtypes) + 2;
-        if (nt < jl_page_size/sizeof(jl_value_t*)) {
-            jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
-            types[0] = (jl_value_t*)jl_namedtuple_type;
-            types[1] = jl_is_type(func) ? (jl_value_t*)jl_wrap_Type(func) : jl_typeof(func);
-            for (i = 2; i < nt; i++)
-                types[i] = jl_tparam(argtypes, i - 2);
-            argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);
-        }
-        else {
-            jl_svec_t *types = jl_alloc_svec_uninit(nt);
-            JL_GC_PUSH1(&types);
-            jl_svecset(types, 0, jl_namedtuple_type);
-            jl_svecset(types, 1, jl_is_type(func) ? (jl_value_t*)jl_wrap_Type(func) : jl_typeof(func));
-            for (i = 2; i < nt; i++)
-                jl_svecset(types, i, jl_tparam(argtypes, i - 2));
-            argtypes = (jl_value_t*)jl_apply_tuple_type(types);
-            JL_GC_POP();
-        }
-    }
-    else {
-        // invoke will throw an error
-    }
-    args[0] = kws;
-    args[1] = argtypes;
-    args[2] = kwargs;
-    args[3] = func;
-    jl_value_t *res = jl_f_invoke(NULL, args, nargs);
-    JL_GC_POP();
-    return res;
-}
-
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
@@ -2011,11 +1967,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
     jl_builtin_invoke = add_builtin_func("invoke", jl_f_invoke);
-    jl_typename_t *itn = ((jl_datatype_t*)jl_typeof(jl_builtin_invoke))->name;
-    jl_value_t *ikws = jl_new_generic_function_with_supertype(itn->name, jl_core_module, jl_builtin_type);
-    itn->mt->kwsorter = ikws;
-    jl_gc_wb(itn->mt, ikws);
-    jl_mk_builtin_func((jl_datatype_t*)jl_typeof(ikws), jl_symbol_name(jl_gf_name(ikws)), jl_f_invoke_kwsorter);
 
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
