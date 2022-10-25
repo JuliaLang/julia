@@ -353,7 +353,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 ### Julia &hArr; C/C++: Namespaces
   * C/C++ `namespace`s correspond roughly to Julia `module`s.
-  * There are no private functions/variables/modules/... in Julia.  Everthing is accessible
+  * There are no private globals or fields in Julia.  Everything is publicly accessible
     through fully qualified paths (or relative paths, if desired).
   * `using MyNamespace::myfun` (C++) corresponds roughly to `import MyModule: myfun` (Julia).
   * `using namespace MyNamespace` (C++) corresponds roughly to `using MyModule` (Julia)
@@ -371,29 +371,25 @@ For users coming to Julia from R, these are some noteworthy differences:
   * **Instead of build/`make` scripts**, Julia uses "Project Environments" (sometimes called
     either "Project" or "Environment").
     * Build scripts are only needed for more complex applications
-      (like those needing to compile, or download C/C++ executables :) ).
-    * C/C++ code typically target more conventional applications, whereas Julia
-      "Project Environments" provide a set of packages to experiment with particular problem
-      spaces. Julia users typically use problem-specific "scripts" for this type of experimentation.
-    * To develop a "conventional" application/project in Julia, you can initialize its root directory
+      (like those needing to compile or download C/C++ executables).
+    * To develop application or project in Julia, you can initialize its root directory
       as a "Project Environment", and house application-specific code/packages there.
       This provides good control over project dependencies, and future reproducibility.
-    * Available packages are added to a "Project Environment" with the `pkg> add` tool
+    * Available packages are added to a "Project Environment" with the `Pkg.add()` function or Pkg REPL mode.
       (This does not **load** said package, however).
     * The list of available packages (direct dependencies) for a "Project Environment" are
       saved in its `Project.toml` file.
     * The *full* dependency information for a "Project Environment" is auto-generated & saved
-      in its `Manifest.toml` file.
+      in its `Manifest.toml` file by `Pkg.resolve()`.
   * Packages ("software modules") available to the "Project Environment" are loaded with
     `import` or `using`.
     * In C/C++, you `#include <moduleheader>` to get object/function delarations, and link in
       libraries when you build the executable.
-    * In Julia, whatever is loaded is available to *all other* loaded modules through its
-      fully qualified path (no header file required).
-    * Use `import SomePkg: SubModule.SubSubmodule` (Julia) to access package submodules.
+    * In Julia, calling using/import again just brings the existing module into scope, but does not load it again
+      (similar to adding the non-standard `#pragma once` to C/C++).
   * **Directory-based package repositories** (Julia) can be made available by adding repository
     paths to the `Base.LOAD_PATH` array.
-    * Packages from directory-based repositories do not require the `pkg> add` tool prior to
+    * Packages from directory-based repositories do not require the `Pkg.add()` tool prior to
       being loaded with `import` or `using`. They are simply available to the project.
     * Directory-based package repositories are the **quickest solution** to developping local
       libraries of "software modules".
@@ -436,7 +432,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 | function scope     | `function x()` ... `end` | `int x() {` ... `}`                          |
 | global scope       | `module MyMod` ... `end` | `namespace MyNS {` ... `}`                   |
 | software module    | A Julia "package"        | `.h`/`.hpp` files<br>+compiled `somelib.a`   |
-| assembling<br>software modules | `SomePkg.jl`: ...<br>`import subfile1.jl`<br>`import subfile2.jl`<br>... | `$(AR) *.o` &rArr; `somelib.a` |
+| assembling<br>software modules | `SomePkg.jl`: ...<br>`import("subfile1.jl")`<br>`import("subfile2.jl")`<br>... | `$(AR) *.o` &rArr; `somelib.a` |
 | import<br>software module | `import SomePkg`  | `#include <somelib>`<br>+link in `somelib.a` |
 | module library     | `LOAD_PATH[]`, \*Git repository,<br>\*\*custom package registry  | more `.h`/`.hpp` files<br>+bigger compiled `somebiglib.a` |
 
