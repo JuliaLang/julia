@@ -480,9 +480,8 @@ function isdisjoint(a, b)
     _isdisjoint(a, b)
 end
 
-function isdisjoint(a::AbstractRange{<:Real}, b::AbstractRange{<:Real})
-    isempty(a) && return true
-    isempty(b) && return true
+function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Union{Real,Char}
+    (isempty(a) || isempty(b)) && return true
     fa, la = first(a), last(a)
     fb, lb = first(b), last(b)
     if step(a) < 0
@@ -503,14 +502,6 @@ function isdisjoint(a::AbstractRange{<:Real}, b::AbstractRange{<:Real})
     else
         return invoke(isdisjoint, Tuple{Any,Any}, a, b)
     end
-end
-
-function isdisjoint(a::UnitRange, b::UnitRange)
-    isempty(a) && return true
-    isempty(b) && return true
-    fa, la = first(a), last(a)
-    fb, lb = first(b), last(b)
-    return ((la < fb) & (fa < fb)) | ((lb < fa) & (fb < fa))
 end
 
 ## partial ordering of sets by containment

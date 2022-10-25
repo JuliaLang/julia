@@ -431,6 +431,12 @@ end
     @test !isdisjoint(10:-1:1, 3:4)
     @test !isdisjoint(3:4, 10:-1:1)
     @test !isdisjoint(4:-1:3, 10:-1:1)
+    @test isdisjoint(1:2:5, 6:7)
+    @test isdisjoint(1:2:5, 0:2:6)
+    @test isdisjoint(0:0.4:3, 1:.33:2.5)
+    @test isdisjoint('A':'z', 1:2)
+    @test !isdisjoint('a':'l', 'c':'e')
+    @test isdisjoint('a':'l', 'o':'p')
 end
 
 @testset "unique" begin
