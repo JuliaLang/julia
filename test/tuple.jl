@@ -769,4 +769,3 @@ namedtup = (;a=1, b=2, c=3)
         NamedTuple{(:a, :b), Tuple{Int, Int}},
         NamedTuple{(:c,), Tuple{Int}},
     }
-
