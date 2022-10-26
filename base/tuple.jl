@@ -186,7 +186,7 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-split_rest(t::Tuple, n::Int, i=1) = t[i:end-n], t[end-n+1:end]
+@constprop :aggressive split_rest(t::Tuple, n::Int, i=1) = t[i:end-n], t[end-n+1:end]
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
