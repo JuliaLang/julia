@@ -31,7 +31,7 @@ import .Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten
 
 if Base !== Core.Compiler
 export partition
@@ -1155,6 +1155,24 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 """
 flatten(itr) = Flatten(itr)
 
+"""
+    flatten(f, iterators...)
+
+Create a lazy flattened mapping. Equivalent to `flatten(Iterators.map(f, iterators...))`.
+
+See also [`Iterators.map`](@ref).
+
+!!! compat "Julia 1.9"
+    This method was added in Julia 1.9.
+
+# Examples
+```jldoctest
+julia> Iterators.flatten(string, 1:15) |> join
+"123456789101112131415"
+```
+"""
+flatten(f::Function, c...) = flatten(map(f, c...))
+
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
 eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
@@ -1200,47 +1218,6 @@ end
 
 reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 last(f::Flatten) = last(last(f.it))
-
-"""
-    Iterators.flatmap(f, iterators...)
-
-Equivalent to `flatten(map(f, iterators...))`.
-
-See also [`Iterators.flatten`](@ref), [`Iterators.map`](@ref).
-
-!!! compat "Julia 1.9"
-    This function was added in Julia 1.9.
-
-# Examples
-```jldoctest
-julia> Iterators.flatmap(n -> -n:2:n, 1:3) |> collect
-9-element Vector{Int64}:
- -1
-  1
- -2
-  0
-  2
- -3
- -1
-  1
-  3
-
-julia> stack(n -> -n:2:n, 1:3)
-ERROR: DimensionMismatch: stack expects uniform slices, got axes(x) == (1:3,) while first had (1:2,)
-[...]
-
-julia> Iterators.flatmap(n -> (-n, 10n), 1:2) |> collect
-4-element Vector{Int64}:
- -1
- 10
- -2
- 20
-
-julia> ans == vec(stack(n -> (-n, 10n), 1:2))
-true
-```
-"""
-flatmap(f, c...) = flatten(map(f, c...))
 
 if Base !== Core.Compiler # views are not defined
 @doc """

@@ -70,7 +70,7 @@ Build system changes
 New library functions
 ---------------------
 
-* `Iterators.flatmap` was added ([#44792]).
+* `Iterators.flatten` now supports a function as first argument ([#44792]).
 * New helper `Splat(f)` which acts like `x -> f(x...)`, with pretty printing for
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
