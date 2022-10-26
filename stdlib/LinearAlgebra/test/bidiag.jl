@@ -325,8 +325,8 @@ Random.seed!(1)
                     @test map(getval, (x\T)::typediv) ≈ map(getval, x\TM)
                     @test map(getval, (T/x)::typediv) ≈ map(getval, TM/x)
                     if !isa(x, Number)
-                        @test map(getval, Array((T\x)::typediv2)) ≈ map(getval, Array(TM\x))
-                        @test map(getval, Array((x/T)::typediv2)) ≈ map(getval, Array(x/TM))
+                        @test map(getval, Array((T\x)::typediv2)) ≈ getval.(TM)\getval.(x)
+                        @test map(getval, Array((x/T)::typediv2)) ≈ getval.(x)/getval.(TM)
                     end
                     return nothing
                 end
