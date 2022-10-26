@@ -145,7 +145,6 @@ Base.vcat
 Base.hcat
 Base.hvcat
 Base.hvncat
-Base.lolcat
 Base.stack
 Base.block
 Base.vect

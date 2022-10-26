@@ -447,7 +447,6 @@ export
     dropdims,
     stack,
     block,
-    lolcat,
     step,
     stride,
     strides,
