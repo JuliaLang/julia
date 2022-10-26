@@ -2413,17 +2413,18 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
             jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
             if ((jl_value_t*)mt == jl_nothing) {
                 valid = 0;
-                break;
             }
-            matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, world, &min_valid, &max_valid);
-            if (matches == jl_nothing) {
-                 valid = 0;
-                 break;
-            }
-            matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
-            if (matches != expected) {
-                valid = 0;
-                break;
+            else {
+                matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, world, &min_valid, &max_valid);
+                if (matches == jl_nothing) {
+                     valid = 0;
+                }
+                else {
+                    matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
+                    if (matches != expected) {
+                        valid = 0;
+                    }
+                }
             }
         }
         else {
@@ -2439,30 +2440,32 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
                     -1, 0, world, &min_valid, &max_valid, &ambig);
             if (matches == jl_false) {
                 valid = 0;
-                break;
             }
-            // setdiff!(matches, expected)
-            size_t j, k, ins = 0;
-            if (jl_array_len(matches) != jl_array_len(expected)) {
-                valid = 0;
-                if (!_jl_debug_method_invalidation)
-                    break;
-            }
-            for (k = 0; k < jl_array_len(matches); k++) {
-                jl_method_t *match = ((jl_method_match_t*)jl_array_ptr_ref(matches, k))->method;
-                size_t l = jl_array_len(expected);
-                for (j = 0; j < l; j++)
-                    if (match == (jl_method_t*)jl_array_ptr_ref(expected, j))
-                        break;
-                if (j == l) {
-                    // intersection has a new method or a method was
-                    // deleted--this is now probably no good, just invalidate
-                    // everything about it now
+            else {
+                // setdiff!(matches, expected)
+                size_t j, k, ins = 0;
+                if (jl_array_len(matches) != jl_array_len(expected)) {
                     valid = 0;
-                    jl_array_ptr_set(matches, ins++, match);
                 }
+                for (k = 0; k < jl_array_len(matches); k++) {
+                    jl_method_t *match = ((jl_method_match_t*)jl_array_ptr_ref(matches, k))->method;
+                    size_t l = jl_array_len(expected);
+                    for (j = 0; j < l; j++)
+                        if (match == (jl_method_t*)jl_array_ptr_ref(expected, j))
+                            break;
+                    if (j == l) {
+                        // intersection has a new method or a method was
+                        // deleted--this is now probably no good, just invalidate
+                        // everything about it now
+                        valid = 0;
+                        if (!_jl_debug_method_invalidation)
+                            break;
+                        jl_array_ptr_set(matches, ins++, match);
+                    }
+                }
+                if (!valid && _jl_debug_method_invalidation)
+                    jl_array_del_end((jl_array_t*)matches, jl_array_len(matches) - ins);
             }
-            jl_array_del_end((jl_array_t*)matches, jl_array_len(matches) - ins);
         }
         jl_array_uint8_set(valids, i, valid);
         if (!valid && _jl_debug_method_invalidation) {
