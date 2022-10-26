@@ -1647,6 +1647,23 @@ function parse_subtype_spec(ps::ParseState)
     parse_comparison(ps, true)
 end
 
+# flisp: parse-struct-field
+function parse_struct_field(ps::ParseState)
+    mark = position(ps)
+    const_field = peek(ps) == K"const"
+    if const_field
+        bump(ps, TRIVIA_FLAG)
+    end
+    parse_eq(ps)
+    if const_field
+        # Const fields https://github.com/JuliaLang/julia/pull/43305
+        #v1.8: struct A const a end  ==>  (struct false A (block (const x)))
+        #v1.7: struct A const a end  ==>  (struct false A (block (error (const x))))
+        emit(ps, mark, K"const")
+        min_supported_version(v"1.8", ps, mark, "`const` struct field")
+    end
+end
+
 # parse expressions or blocks introduced by syntactic reserved words.
 #
 # The caller should use peek_initial_reserved_words to determine whether
@@ -1727,8 +1744,47 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"let")
     elseif word == K"if"
         parse_if_elseif(ps)
-    elseif word in KSet"const global local"
-        parse_const_local_global(ps)
+    elseif word in KSet"global local"
+        # global x   ==>  (global x)
+        # local x    ==>  (local x)
+        # global x,y ==>  (global x y)
+        bump(ps, TRIVIA_FLAG)
+        const_mark = nothing
+        if peek(ps) == K"const"
+            const_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)
+        end
+        had_assignment = parse_global_local_const_vars(ps)
+        if !isnothing(const_mark)
+            # global const x = 1  ==>  (global (const (= x 1)))
+            # local const x = 1   ==>  (local (const (= x 1)))
+            emit(ps, const_mark, K"const")
+            if !had_assignment
+                # global const x  ==>  (global (error (const x)))
+                emit(ps, mark, K"error", error="expected assignment after `const`")
+            end
+        end
+        emit(ps, mark, word)
+    elseif word == K"const"
+        # const x = 1  ==>  (const (= x 1))
+        bump(ps, TRIVIA_FLAG)
+        scope_mark = nothing
+        scope_k = peek(ps)
+        if scope_k in KSet"local global"
+            scope_mark = position(ps)
+            bump(ps, TRIVIA_FLAG)
+        end
+        had_assignment = parse_global_local_const_vars(ps)
+        if !isnothing(scope_mark)
+            # const global x = 1  ==>  (const (global (= x 1)))
+            # const local x = 1   ==>  (const (local (= x 1)))
+            emit(ps, scope_mark, scope_k)
+        end
+        emit(ps, mark, K"const")
+        if !had_assignment
+            # const x .= 1  ==>  (error (const (.= x 1)))
+            emit(ps, mark, K"error", error="expected assignment after `const`")
+        end
     elseif word in KSet"function macro"
         parse_function(ps)
     elseif word == K"abstract"
@@ -1749,6 +1805,9 @@ function parse_resword(ps::ParseState)
         emit(ps, mark, K"abstract")
     elseif word in KSet"struct mutable"
         # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (:: a X)))
+        # struct A \n a \n b \n end  ==>  (struct false A (block a b))
+        #v1.7: struct A const a end  ==>  (struct false A (block (error (const a))))
+        #v1.8: struct A const a end  ==>  (struct false A (block (const a)))
         if word == K"mutable"
             # mutable struct A end  ==>  (struct true A (block))
             bump(ps, TRIVIA_FLAG)
@@ -1760,7 +1819,7 @@ function parse_resword(ps::ParseState)
         @check peek(ps) == K"struct"
         bump(ps, TRIVIA_FLAG)
         parse_subtype_spec(ps)
-        parse_block(ps)
+        parse_block(ps, parse_struct_field)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"struct")
     elseif word == K"primitive"
@@ -1888,75 +1947,24 @@ function parse_if_elseif(ps, is_elseif=false, is_elseif_whitespace_err=false)
     emit(ps, mark, word)
 end
 
-function parse_const_local_global(ps)
+# Like parse_assignment, but specialized so that we can omit the
+# tuple when there's commas but no assignment.
+function parse_global_local_const_vars(ps)
     mark = position(ps)
-    scope_mark = mark
-    has_const = false
-    scope_k = K"None"
-    k = peek(ps)
-    if k in KSet"global local"
-        # global x  ==>  (global x)
-        # local x   ==>  (local x)
-        scope_k = k
-        bump(ps, TRIVIA_FLAG)
-        if peek(ps) == K"const"
-            # global const x = 1  ==>  (const (global (= x 1)))
-            # local const x = 1   ==>  (const (local (= x 1)))
-            has_const = true
-            bump(ps, TRIVIA_FLAG)
-        end
-    else
-        has_const = true
-        # const x = 1          ==>  (const (= x 1))
-        bump(ps, TRIVIA_FLAG)
-        k = peek(ps)
-        if k in KSet"global local"
-            # const global x = 1   ==>  (const (global (= x 1)))
-            # const local x = 1    ==>  (const (local (= x 1)))
-            scope_k = k
-            scope_mark = position(ps)
-            bump(ps, TRIVIA_FLAG)
-        end
-    end
-    # Like parse_assignment, but specialized so that we can omit the
-    # tuple when there's commas but no assignment.
-    beforevar_mark = position(ps)
     n_commas = parse_comma(ps, false)
     t = peek_token(ps)
-    has_assignment = is_prec_assignment(t)
-    if n_commas >= 1 && (has_assignment || has_const)
+    assign_prec = is_prec_assignment(t)
+    if n_commas >= 1 && assign_prec
         # const x,y = 1,2  ==>  (const (= (tuple x y) (tuple 1 2)))
-        # Maybe nonsensical? But this is what the flisp parser does.
-        #v1.8: const x,y  ==>  (const (tuple x y))
-        emit(ps, beforevar_mark, K"tuple")
+        emit(ps, mark, K"tuple")
     end
-    if has_assignment
+    if assign_prec
         # const x = 1   ==>  (const (= x 1))
         # global x ~ 1  ==>  (global (call-i x ~ 1))
         # global x += 1 ==>  (global (+= x 1))
-        parse_assignment_with_initial_ex(ps, beforevar_mark, parse_comma)
-    else
-        # global x    ==>  (global x)
-        # local x     ==>  (local x)
-        # global x,y  ==>  (global x y)
+        parse_assignment_with_initial_ex(ps, mark, parse_comma)
     end
-    if has_const && (!has_assignment || is_dotted(t))
-        # Const fields https://github.com/JuliaLang/julia/pull/43305
-        #v1.8: const x     ==>  (const x)
-        #v1.8: const x::T  ==>  (const (:: x T))
-        # Disallowed const forms on <= 1.7
-        #v1.7: const x       ==> (const (error x))
-        #v1.7: const x .= 1  ==>  (const (error (.= x 1)))
-        min_supported_version(v"1.8", ps, beforevar_mark,
-                              "`const` struct field without assignment")
-    end
-    if scope_k != K"None"
-        emit(ps, scope_mark, scope_k)
-    end
-    if has_const
-        # TODO: Normalize `global const` during Expr conversion rather than here?
-        emit(ps, mark, K"const")
-    end
+    return kind(t) == K"=" && !is_dotted(t)
 end
 
 # Parse function and macro definitions

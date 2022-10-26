@@ -379,9 +379,12 @@ tests = [
         "primitive type A \$N end"  =>  "(primitive A (\$ N))"
         "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: A B) 8)"
         # struct
-        "struct A <: B \n a::X \n end"  =>  "(struct false (<: A B) (block (:: a X)))"
-        "mutable struct A end"          =>  "(struct true A (block))"
-        "struct A end"    =>  "(struct false A (block))"
+        "struct A <: B \n a::X \n end" =>  "(struct false (<: A B) (block (:: a X)))" => Expr(:struct, false, Expr(:<:, :A, :B), Expr(:block, Expr(:(::), :a, :X)))
+        "struct A \n a \n b \n end"    =>  "(struct false A (block a b))"             => Expr(:struct, false, :A, Expr(:block, :a, :b))
+        "mutable struct A end"         =>  "(struct true A (block))"
+        ((v=v"1.8",), "struct A const a end") => "(struct false A (block (const a)))" => Expr(:struct, false, :A, Expr(:block, Expr(:const, :a)))
+        ((v=v"1.7",), "struct A const a end") => "(struct false A (block (error (const a))))"
+        "struct A end"    =>  "(struct false A (block))"  => Expr(:struct, false, :A, Expr(:block))
         "struct try end"  =>  "(struct false (error (try)) (block))"
         # return
         "return\nx"   =>  "(return nothing)"
@@ -424,26 +427,22 @@ tests = [
         "if true; x ? true\nend"  => "(if true (block (if x true (error-t) (error-t))))"
         "if true; x ? true : elseif true end"  => "(if true (block (if x true (error-t))) (elseif true (block)))"
     ],
-    JuliaSyntax.parse_const_local_global => [
-        "global x"             =>  "(global x)"
-        "local x"              =>  "(local x)"
-        "global const x = 1"   =>  "(const (global (= x 1)))"
-        "local const x = 1"    =>  "(const (local (= x 1)))"
-        "const x = 1"          =>  "(const (= x 1))"
-        "const global x = 1"   =>  "(const (global (= x 1)))"
-        "const local x = 1"    =>  "(const (local (= x 1)))"
-        "const x,y = 1,2"      =>  "(const (= (tuple x y) (tuple 1 2)))"
-        ((v=v"1.8",), "const x,y")  => "(const (tuple x y))"
-        "const x = 1"   =>  "(const (= x 1))"
-        "global x ~ 1"  =>  "(global (call-i x ~ 1))"
-        "global x += 1" =>  "(global (+= x 1))"
-        "global x"    =>  "(global x)"
-        "local x"     =>  "(local x)"
-        "global x,y"  =>  "(global x y)"
-        ((v=v"1.8",), "const x")      => "(const x)"
-        ((v=v"1.8",), "const x::T")   => "(const (:: x T))"
-        ((v=v"1.7",), "const x")      => "(const (error x))"
-        ((v=v"1.7",), "const x .= 1") => "(const (error (.= x 1)))"
+    JuliaSyntax.parse_resword => [
+        "global x"    =>  "(global x)"   => Expr(:global, :x)
+        "local x"     =>  "(local x)"    => Expr(:local, :x)
+        "global x,y"  =>  "(global x y)" => Expr(:global, :x, :y)
+        "global const x = 1" => "(global (const (= x 1)))" => Expr(:const, Expr(:global, Expr(:(=), :x, 1)))
+        "local const x = 1"  => "(local (const (= x 1)))"  => Expr(:const, Expr(:local, Expr(:(=), :x, 1)))
+        "const global x = 1" => "(const (global (= x 1)))" => Expr(:const, Expr(:global, Expr(:(=), :x, 1)))
+        "const local x = 1"  => "(const (local (= x 1)))"  => Expr(:const, Expr(:local, Expr(:(=), :x, 1)))
+        "const x,y = 1,2"    => "(const (= (tuple x y) (tuple 1 2)))" => Expr(:const, Expr(:(=), Expr(:tuple, :x, :y), Expr(:tuple, 1, 2)))
+        "const x = 1"    =>  "(const (= x 1))"           => Expr(:const, Expr(:(=), :x, 1))
+        "const x .= 1"   => "(error (const (.= x 1)))"
+        "global x ~ 1"   =>  "(global (call-i x ~ 1))"   => Expr(:global, Expr(:call, :~, :x, 1))
+        "global x += 1"  => "(global (+= x 1))"          => Expr(:global, Expr(:+=, :x, 1))
+        "const x"        => "(error (const x))"
+        "global const x" => "(global (error (const x)))"
+        "const global x" => "(error (const (global x)))"
     ],
     JuliaSyntax.parse_function => [
         "macro while(ex) end"  =>  "(macro (call (error while) ex) (block))"
