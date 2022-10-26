@@ -382,6 +382,12 @@ else ifeq ($(JULIA_BUILD_MODE),debug)
 endif
 endif
 
+	# Fix rpaths for dependencies. This should be fixed in BinaryBuilder later.
+ifeq ($(OS), Linux)
+	-$(PATCHELF) --set-rpath '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libgfortran.$(SHLIB_EXT)
+	-$(PATCHELF) --set-rpath '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
+endif
+
 	# Replace libstdc++ path, which is also moving from `lib` to `../lib/julia`.
 ifeq ($(OS),Linux)
 	$(call stringreplace,$(DESTDIR)$(shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT),\*libstdc++\.so\.6$$,*$(call dep_lib_path,$(shlibdir),$(private_shlibdir)/libstdc++.so.6))
