@@ -763,10 +763,19 @@ function fun1_47326(args...)
     head..., tail = args
     head
 end
-
 function fun2_47326(args...)
     head, tail... = args
     tail
 end
 @test @inferred(fun1_47326(1,2,3)) === (1, 2)
 @test @inferred(fun2_47326(1,2,3)) === (2, 3)
+
+f47326(x::Union{Tuple, NamedTuple}) = Base.split_rest(x, 1)
+tup = (1, 2, 3)
+namedtup = (;a=1, b=2, c=3)
+@test only(Base.return_types(f47326, (typeof(tup),))) == Tuple{Tuple{Int, Int}, Tuple{Int}}
+@test only(Base.return_types(f47326, (typeof(namedtup),))) ==
+    Tuple{
+        NamedTuple{(:a, :b), Tuple{Int, Int}},
+        NamedTuple{(:c,), Tuple{Int}},
+    }
