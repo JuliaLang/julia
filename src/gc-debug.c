@@ -198,21 +198,21 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
-    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
     do {
-        jl_gc_mark_sp_t sp;
-        gc_mark_sp_init(gc_cache, &sp);
+        jl_gc_markqueue_t mq;
+        mq.current = mq.start = (ptls->mark_queue).start;
+        mq.end = (ptls->mark_queue).end;
         arraylist_push(&lostval_parents_done, lostval);
         jl_safe_printf("Now looking for %p =======\n", lostval);
         clear_mark(GC_CLEAN);
-        gc_mark_queue_all_roots(ptls, &sp);
-        gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
-        for (int i = 0; i < gc_n_threads; i++) {
-            jl_ptls_t ptls2 = gc_all_tls_states[i];
-            gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
+        gc_mark_queue_all_roots(ptls, &mq);
+        gc_mark_finlist(&mq, &to_finalize, 0);
+        for (int i = 0;i < jl_n_threads;i++) {
+            jl_ptls_t ptls2 = jl_all_tls_states[i];
+            gc_mark_finlist(&mq, &ptls2->finalizers, 0);
         }
-        gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-        gc_mark_loop(ptls, sp);
+        gc_mark_finlist(&mq, &finalizer_list_marked, 0);
+        gc_mark_loop_(ptls, &mq);
         if (lostval_parents.len == 0) {
             jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
@@ -246,22 +246,22 @@ static void gc_verify_track(jl_ptls_t ptls)
 
 void gc_verify(jl_ptls_t ptls)
 {
-    jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    jl_gc_mark_sp_t sp;
-    gc_mark_sp_init(gc_cache, &sp);
+    jl_gc_markqueue_t mq;
+    mq.current = mq.start = (ptls->mark_queue).start;
+    mq.end = (ptls->mark_queue).end;
     lostval = NULL;
     lostval_parents.len = 0;
     lostval_parents_done.len = 0;
     clear_mark(GC_CLEAN);
     gc_verifying = 1;
-    gc_mark_queue_all_roots(ptls, &sp);
-    gc_mark_queue_finlist(gc_cache, &sp, &to_finalize, 0);
-    for (int i = 0; i < gc_n_threads; i++) {
-        jl_ptls_t ptls2 = gc_all_tls_states[i];
-        gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
+    gc_mark_queue_all_roots(ptls, &mq);
+    gc_mark_finlist(&mq, &to_finalize, 0);
+    for (int i = 0;i < jl_n_threads;i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        gc_mark_finlist(&mq, &ptls2->finalizers, 0);
     }
-    gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, 0);
-    gc_mark_loop(ptls, sp);
+    gc_mark_finlist(&mq, &finalizer_list_marked, 0);
+    gc_mark_loop_(ptls, &mq);
     int clean_len = bits_save[GC_CLEAN].len;
     for(int i = 0; i < clean_len + bits_save[GC_OLD].len; i++) {
         jl_taggedvalue_t *v = (jl_taggedvalue_t*)bits_save[i >= clean_len ? GC_OLD : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
@@ -500,7 +500,7 @@ int jl_gc_debug_check_other(void)
     return gc_debug_alloc_check(&jl_gc_debug_env.other);
 }
 
-void jl_gc_debug_print_status(void)
+void jl_gc_debug_print_status(void) JL_NOTSAFEPOINT
 {
     uint64_t pool_count = jl_gc_debug_env.pool.num;
     uint64_t other_count = jl_gc_debug_env.other.num;
@@ -509,7 +509,7 @@ void jl_gc_debug_print_status(void)
                    pool_count + other_count, pool_count, other_count, gc_num.pause);
 }
 
-void jl_gc_debug_critical_error(void)
+void jl_gc_debug_critical_error(void) JL_NOTSAFEPOINT
 {
     jl_gc_debug_print_status();
     if (!jl_gc_debug_env.wait_for_debugger)
@@ -1280,9 +1280,9 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
     jl_value_t **end = mq->current + offset;
     for (; start < end; start++) {
         jl_value_t *obj = *start;
-        jl_taggedvalue_t *o = jl_astaggedvalue(o);
-        jl_safe_printf("Queued object: %p :: (tag: %zu) (bits: %zu)\n", obj, (uintptr_t)o->header, 
-                        ((uintptr_t)o->header & 3));
+        jl_taggedvalue_t *o = jl_astaggedvalue(obj);
+        jl_safe_printf("Queued object: %p :: (tag: %zu) (bits: %zu)\n", obj,
+                       (uintptr_t)o->header, ((uintptr_t)o->header & 3));
         jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
     }
     jl_set_safe_restore(old_buf);

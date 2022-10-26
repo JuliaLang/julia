@@ -506,7 +506,7 @@ extern int gc_verifying;
 
 int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
 int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
-NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int pc_offset);
+NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset) JL_NOTSAFEPOINT;
 
 #ifdef GC_DEBUG_ENV
 JL_DLLEXPORT extern jl_gc_debug_env_t jl_gc_debug_env;
