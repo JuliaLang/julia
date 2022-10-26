@@ -1207,13 +1207,14 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
         end
         function _ldiv!(c::AbstractVector, xA::UnitUpperTriangular{<:Any,<:$t}, b::AbstractVector)
             A = parent(parent(xA))
+            oA = oneunit(eltype(A))
             n = size(A, 2)
             @inbounds for j in n:-1:1
                 bj = b[j]
                 for i in j+1:n
                     bj -= $tfun(A[i,j]) * c[i]
                 end
-                c[j] = _ustrip(bj) * oneunit(eltype(c))
+                c[j] = oA \ bj
             end
             return c
         end
@@ -1233,13 +1234,14 @@ for (t, tfun) in ((:Adjoint, :adjoint), (:Transpose, :transpose))
         end
         function _ldiv!(c::AbstractVector, xA::UnitLowerTriangular{<:Any,<:$t}, b::AbstractVector)
             A = parent(parent(xA))
+            oA = oneunit(eltype(A))
             n = size(A, 2)
             @inbounds for j in 1:n
                 bj = b[j]
                 for i in 1:j-1
                     bj -= $tfun(A[i,j]) * c[i]
                 end
-                c[j] = _ustrip(bj) * oneunit(eltype(c))
+                c[j] = oA \ bj
             end
             return c
         end
@@ -1384,7 +1386,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         if TAB <: BlasFloat
             ldiv!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
         else
-            ldiv!(similar(B, TAB, size(B)), A, B)
+            ldiv!(similar(B, TAB <: Integer ? TAB : typeof(oneunit(eltype(A))\oneunit(eltype(B))), size(B)), A, B)
         end
     end
     ### Left division with triangle to the left hence rhs cannot be transposed. Quotients.
@@ -1404,7 +1406,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
         if TAB <: BlasFloat
             rdiv!(copy_similar(A, TAB), convert(AbstractArray{TAB}, B))
         else
-            _rdiv!(similar(A, TAB, size(A)), A, B)
+            _rdiv!(similar(A, TAB <: Integer ? TAB : typeof(oneunit(eltype(A))/oneunit(eltype(B))), size(A)), A, B)
         end
     end
     ### Right division with triangle to the right hence lhs cannot be transposed. Quotients.
