@@ -743,6 +743,94 @@ let m = Meta.@lower 1 + 1
     @test length(ir.cfg.blocks) == 1 && Core.Compiler.length(ir.stmts) == 1
 end
 
+# Test cfg_simplify in complicated sequences of dropped and merged bbs
+using Core.Compiler: Argument, IRCode, GotoNode, GotoIfNot, ReturnNode, NoCallInfo, BasicBlock, StmtRange, SSAValue
+bb_term(ir, bb) = Core.Compiler.getindex(ir, SSAValue(Core.Compiler.last(ir.cfg.blocks[bb].stmts)))[:inst]
+
+function each_stmt_a_bb(stmts, preds, succs)
+    ir = IRCode()
+    empty!(ir.stmts.inst)
+    append!(ir.stmts.inst, stmts)
+    empty!(ir.stmts.type); append!(ir.stmts.type, [Nothing for _ = 1:length(stmts)])
+    empty!(ir.stmts.flag); append!(ir.stmts.flag, [0x0 for _ = 1:length(stmts)])
+    empty!(ir.stmts.line); append!(ir.stmts.line, [Int32(0) for _ = 1:length(stmts)])
+    empty!(ir.stmts.info); append!(ir.stmts.info, [NoCallInfo() for _ = 1:length(stmts)])
+    empty!(ir.cfg.blocks); append!(ir.cfg.blocks, [BasicBlock(StmtRange(i, i), preds[i], succs[i]) for i = 1:length(stmts)])
+    Core.Compiler.verify_ir(ir)
+    return ir
+end
+
+for gotoifnot in (false, true)
+    stmts = [
+        # BB 1
+        GotoIfNot(Argument(1), 8),
+        # BB 2
+        GotoIfNot(Argument(2), 4),
+        # BB 3
+        GotoNode(9),
+        # BB 4
+        GotoIfNot(Argument(3), 10),
+        # BB 5
+        GotoIfNot(Argument(4), 11),
+        # BB 6
+        GotoIfNot(Argument(5), 12),
+        # BB 7
+        GotoNode(13),
+        # BB 8
+        ReturnNode(1),
+        # BB 9
+        nothing,
+        # BB 10
+        nothing,
+        # BB 11
+        gotoifnot ? GotoIfNot(Argument(6), 13) : GotoNode(13),
+        # BB 12
+        ReturnNode(2),
+        # BB 13
+        ReturnNode(3),
+    ]
+    preds = Vector{Int}[Int[], [1], [2], [2], [4], [5], [6], [1], [3], [4, 9], [5, 10], gotoifnot ? [6,11] : [6], [7, 11]]
+    succs = Vector{Int}[[2, 8], [3, 4], [9], [5, 10], [6, 11], [7, 12], [13], Int[], [10], [11], gotoifnot ? [12, 13] : [13], Int[], Int[]]
+    ir = each_stmt_a_bb(stmts, preds, succs)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+
+    if gotoifnot
+        let term4 = bb_term(ir, 4), term5 = bb_term(ir, 5)
+            @test isa(term4, GotoIfNot) && bb_term(ir, term4.dest).val == 3
+            @test isa(term5, ReturnNode) && term5.val == 2
+        end
+    else
+        @test length(ir.cfg.blocks) == 10
+        let term = bb_term(ir, 3)
+            @test isa(term, GotoNode) && bb_term(ir, term.label).val == 3
+        end
+    end
+end
+
+let stmts = [
+        # BB 1
+        GotoIfNot(Argument(1), 4),
+        # BB 2
+        GotoIfNot(Argument(2), 5),
+        # BB 3
+        GotoNode(5),
+        # BB 4
+        ReturnNode(1),
+        # BB 5
+        ReturnNode(2)
+    ]
+    preds = Vector{Int}[Int[], [1], [2], [1], [2, 3]]
+    succs = Vector{Int}[[2, 4], [3, 5], [5], Int[], Int[]]
+    ir = each_stmt_a_bb(stmts, preds, succs)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+
+    @test length(ir.cfg.blocks) == 4
+    terms = map(i->bb_term(ir, i), 1:length(ir.cfg.blocks))
+    @test Set(term.val for term in terms if isa(term, ReturnNode)) == Set([1,2])
+end
+
 let m = Meta.@lower 1 + 1
     # Test that CFG simplify doesn't mess up when chaining past return blocks
     @assert Meta.isexpr(m, :thunk)
@@ -794,6 +882,21 @@ let m = Meta.@lower 1 + 1
     ir = Core.Compiler.cfg_simplify!(ir)
     Core.Compiler.verify_ir(ir)
     @test length(ir.cfg.blocks) == 1
+end
+
+# `cfg_simplify!` shouldn't error in a presence of `try/catch` block
+let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+        v = try
+        catch
+        end
+        v
+    end |> only |> first
+    Core.Compiler.verify_ir(ir)
+    nb = length(ir.cfg.blocks)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    Core.Compiler.verify_ir(ir)
+    na = length(ir.cfg.blocks)
+    @test na < nb
 end
 
 # Issue #29213

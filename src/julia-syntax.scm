@@ -2910,17 +2910,16 @@
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))
 
-(define (lhs-vars e)
-  (cond ((symdecl? e)   (list (decl-var e)))
-        ((and (pair? e) (eq? (car e) 'tuple))
-         (apply append (map lhs-vars (cdr e))))
-        (else '())))
-
 (define (lhs-decls e)
   (cond ((symdecl? e)   (list e))
-        ((and (pair? e) (eq? (car e) 'tuple))
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
+
+(define (lhs-vars e)
+  (map decl-var (lhs-decls e)))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
