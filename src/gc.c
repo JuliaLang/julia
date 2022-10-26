@@ -1893,7 +1893,7 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
     // and popping right away
     slot = &((jl_value_t **)obj8_parent)[*(obj8_end - 1)];
     new_obj = *slot;
-    if (new_obj != NULL) {        
+    if (new_obj != NULL) {
         verify_parent2("object", obj8_parent, slot, "field(%d)",
                         gc_slot_to_fieldidx(obj8_parent, slot, (jl_datatype_t*)jl_typeof(obj8_parent)));
         gc_heap_snapshot_record_object_edge((jl_value_t*)obj8_parent, slot);
