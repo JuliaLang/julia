@@ -691,6 +691,7 @@ function perform_lifting!(compact::IncrementalCompact,
         (old_node_ssa, lf) = visited_phinodes[i], lifted_phis[i]
         old_node = compact[old_node_ssa][:inst]::PhiNode
         new_node = lf.node
+        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
         lf.need_argupdate || continue
         for i = 1:length(old_node.edges)
             edge = old_node.edges[i]
@@ -714,15 +715,17 @@ function perform_lifting!(compact::IncrementalCompact,
                     callback = (@nospecialize(pi), @nospecialize(idx)) -> true
                     val = simple_walk(compact, val, callback)
                 end
+                should_count && _count_added_node!(compact, val)
                 push!(new_node.values, val)
             elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
                 push!(new_node.edges, edge)
-                push!(new_node.values, lifted_phis[reverse_mapping[val]].ssa)
+                newval = lifted_phis[reverse_mapping[val]].ssa
+                should_count && _count_added_node!(compact, newval)
+                push!(new_node.values, newval)
             else
                 # Probably ignored by path condition, skip this
             end
         end
-        count_added_node!(compact, new_node)
     end
 
     # Fixup the stmt itself
@@ -1064,7 +1067,7 @@ end
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    code = get(inlining.mi_cache, mi, nothing)
+    code = get(code_cache(inlining), mi, nothing)
     et = InliningEdgeTracker(inlining.et)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1523,7 +1526,7 @@ function kill_phi!(compact::IncrementalCompact, phi_uses::Vector{Int},
             if !delete_inst
                 # Deleting the inst will update compact's use count, so
                 # don't do it here.
-                kill_current_use(compact, val)
+                kill_current_use!(compact, val)
             end
             if isa(val, SSAValue)
                 phi_uses[val.id] -= 1
@@ -1840,6 +1843,8 @@ end
 
 # TODO: This is terrible, we should change the IR for GotoIfNot to gain an else case
 function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
+    # For the time being, don't drop the first bb, because it has special predecessor semantics.
+    bbidx == 1 && return false
     # If the block we're going to is the same as the fallthrow, it's always legal to drop
     # the block.
     length(bb.stmts) == 0 && return true
@@ -1848,20 +1853,44 @@ function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
         stmt === nothing && return true
         ((stmt::GotoNode).label == bbidx + 1) && return true
     end
-    # Otherwise make sure we're not the fallthrough case of any predecessor
-    for pred in bb.preds
-        if pred == bbidx - 1
-            terminator = ir[SSAValue(first(bb.stmts)-1)][:inst]
-            if isa(terminator, GotoIfNot)
-                if terminator.dest != bbidx
-                    return false
-                end
-            end
-            break
-        end
-    end
     return true
 end
+
+function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vector{BasicBlock}, dropped_bbs::Vector{Int})
+    (bbidx-1) in bb.preds || return true
+    last_fallthrough = bbidx-1
+    dbi = length(dropped_bbs)
+    while dbi != 0 && dropped_bbs[dbi] == last_fallthrough && (last_fallthrough-1 in bbs[last_fallthrough].preds)
+        last_fallthrough -= 1
+        dbi -= 1
+    end
+    last_fallthrough_term_ssa = SSAValue(last(bbs[last_fallthrough].stmts))
+    terminator = ir[last_fallthrough_term_ssa][:inst]
+    if isa(terminator, GotoIfNot)
+        if terminator.dest != bbidx
+            # The previous terminator's destination matches our fallthrough.
+            # If we're also a fallthrough terminator, then we just have
+            # to delete the GotoIfNot.
+            our_terminator = ir[SSAValue(last(bb.stmts))][:inst]
+            if terminator.dest != (isa(our_terminator, GotoNode) ? our_terminator.label : bbidx + 1)
+                return false
+            end
+        end
+        ir[last_fallthrough_term_ssa] = nothing
+        kill_edge!(bbs, last_fallthrough, terminator.dest)
+    elseif isexpr(terminator, :enter)
+        return false
+    elseif isa(terminator, GotoNode)
+        return true
+    end
+    # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
+    # instruction numbering to merge the blocks now such that below processing will properly
+    # update it.
+    bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
+    return true
+end
+
+is_terminator(@nospecialize(inst)) = isa(inst, GotoNode) || isa(inst, GotoIfNot) || isexpr(inst, :enter)
 
 function cfg_simplify!(ir::IRCode)
     bbs = ir.cfg.blocks
@@ -1891,14 +1920,19 @@ function cfg_simplify!(ir::IRCode)
     for (idx, bb) in enumerate(bbs)
         if length(bb.succs) == 1
             succ = bb.succs[1]
-            if length(bbs[succ].preds) == 1
+            if length(bbs[succ].preds) == 1 && succ != 1
+                # Can't merge blocks with :enter terminator even if they
+                # only have one successor.
+                if isexpr(ir[SSAValue(last(bb.stmts))][:inst], :enter)
+                    continue
+                end
                 # Prevent cycles by making sure we don't end up back at `idx`
                 # by following what is to be merged into `succ`
                 if follow_merged_succ(succ) != idx
                     merge_into[succ] = idx
                     merged_succ[idx] = succ
                 end
-            elseif is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
+            elseif merge_into[idx] == 0 && is_bb_empty(ir, bb) && is_legal_bb_drop(ir, idx, bb)
                 # If this BB is empty, we can still merge it as long as none of our successor's phi nodes
                 # reference our predecessors.
                 found_interference = false
@@ -1918,9 +1952,9 @@ function cfg_simplify!(ir::IRCode)
                     end
                 end
                 @label done
-                if !found_interference
-                    push!(dropped_bbs, idx)
-                end
+                found_interference && continue
+                legalize_bb_drop_pred!(ir, bb, idx, bbs, dropped_bbs) || continue
+                push!(dropped_bbs, idx)
             end
         end
     end
@@ -1965,10 +1999,15 @@ function cfg_simplify!(ir::IRCode)
                     if bb_rename_succ[terminator.dest] == 0
                         push!(worklist, terminator.dest)
                     end
+                elseif isexpr(terminator, :enter)
+                    if bb_rename_succ[terminator.args[1]] == 0
+                        push!(worklist, terminator.args[1])
+                    end
                 end
                 ncurr = curr + 1
-                if !isempty(searchsorted(dropped_bbs, ncurr))
-                    break
+                while !isempty(searchsorted(dropped_bbs, ncurr))
+                    bb_rename_succ[ncurr] = -bbs[ncurr].succs[1]
+                    ncurr += 1
                 end
                 curr = ncurr
             end
@@ -2087,8 +2126,12 @@ function cfg_simplify!(ir::IRCode)
             res = Int[]
             function scan_preds!(preds)
                 for pred in preds
+                    if pred == 0
+                        push!(res, 0)
+                        continue
+                    end
                     r = bb_rename_pred[pred]
-                    r == -2 && continue
+                    (r == -2 || r == -1) && continue
                     if r == -3
                         scan_preds!(bbs[pred].preds)
                     else
@@ -2116,7 +2159,7 @@ function cfg_simplify!(ir::IRCode)
         if new_bb.succs[1] == new_bb.succs[2]
             old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
-            @assert isa(terminator[:inst], GotoIfNot)
+            @assert terminator[:inst] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
             terminator[:inst] = GotoNode(terminator[:inst].dest)
             pop!(new_bb.succs)

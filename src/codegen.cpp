@@ -1209,6 +1209,7 @@ extern "C" {
         1,
 #endif
         (int) DICompileUnit::DebugEmissionKind::FullDebug,
+        1,
         jl_rettype_inferred, NULL };
 }
 
@@ -7456,8 +7457,11 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
+    // step 11a. Emit the entry safepoint
+    if (JL_FEAT_TEST(ctx, safepoint_on_entry))
+        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
-    // step 11. Do codegen in control flow order
+    // step 11b. Do codegen in control flow order
     std::vector<int> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
