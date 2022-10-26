@@ -127,7 +127,7 @@ cd(@__DIR__) do
     println("""
         Running parallel tests with:
           nworkers() = $(nworkers())
-          nthreads() = $(Threads.nthreads())
+          nthreads() = $(Threads.threadpoolsize())
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))

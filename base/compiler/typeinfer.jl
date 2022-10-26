@@ -220,9 +220,21 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
     # it anyway for users like typeinf_ext. Do that here.
     opt = caller.src
-    if opt isa OptimizationState # implies `may_optimize(interp) === true`
+    if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
-            caller.src = ir_to_codeinf!(opt)
+            if caller.must_be_codeinf
+                caller.src = ir_to_codeinf!(opt)
+            elseif is_inlineable(opt.src)
+                # TODO: If the CFG is too big, inlining becomes more expensive and if we're going to
+                # use this IR over and over, it's worth simplifying it. Round trips through
+                # CodeInstance do this implicitly, since they recompute the CFG, so try to
+                # match that behavior here.
+                # ir = cfg_simplify!(opt.ir)
+                caller.src = opt.ir
+            else
+                # Not cached and not inlineable - drop the ir
+                caller.src = nothing
+            end
         end
     end
     return caller.src
@@ -255,7 +267,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     empty!(frames)
     for (caller, _, _) in results
         opt = caller.src
-        if opt isa OptimizationState # implies `may_optimize(interp) === true`
+        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
             analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
             if isa(analyzed, ConstAPI)
                 # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
@@ -355,7 +367,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     inferred_result = result.src
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
-    if inferred_result isa OptimizationState
+    if inferred_result isa OptimizationState{typeof(interp)}
         inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
@@ -925,6 +937,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new
         lock_mi_inference(interp, mi)
         result = InferenceResult(mi)
+        if cache === :local
+            result.must_be_codeinf = true # TODO directly keep `opt.ir` for this case
+        end
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
@@ -998,6 +1013,7 @@ function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecializ
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_timing_begin, Cvoid, ())
     result = InferenceResult(mi)
+    result.must_be_codeinf = true
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1056,7 +1072,9 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
-    frame = InferenceState(InferenceResult(mi), #=cache=#:global, interp)
+    result = InferenceResult(mi)
+    result.must_be_codeinf = true
+    frame = InferenceState(result, #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, ())
@@ -1099,6 +1117,7 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             ccall(:jl_typeinf_timing_begin, Cvoid, ())
             if !src.inferred
                 result = InferenceResult(linfo)
+                result.must_be_codeinf = true
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better

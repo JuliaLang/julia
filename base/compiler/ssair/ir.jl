@@ -144,7 +144,7 @@ function compute_basic_blocks(stmts::Vector{Any})
 end
 
 # this function assumes insert position exists
-function first_insert_for_bb(code, cfg::CFG, block::Int)
+function first_insert_for_bb(code::Vector{Any}, cfg::CFG, block::Int)
     for idx in cfg.blocks[block].stmts
         stmt = code[idx]
         if !isa(stmt, PhiNode)
@@ -350,6 +350,22 @@ struct IRCode
         copy(ir.linetable), copy(ir.cfg), copy(ir.new_nodes), copy(ir.meta))
 end
 
+"""
+    IRCode()
+
+Create an empty IRCode object with a single `return nothing` statement. This method is mostly intended
+for debugging and unit testing of IRCode APIs. The compiler itself should generally obtain an IRCode
+from the frontend or one of the caches.
+"""
+function IRCode()
+    ir = IRCode(InstructionStream(1), CFG([BasicBlock(1:1, Int[], Int[])], Int[1]), LineInfoNode[], Any[], Expr[], Any[])
+    ir[SSAValue(1)][:inst] = ReturnNode(nothing)
+    ir[SSAValue(1)][:type] = Nothing
+    ir[SSAValue(1)][:flag] = 0x00
+    ir[SSAValue(1)][:line] = Int32(0)
+    return ir
+end
+
 function block_for_inst(ir::IRCode, inst::Int)
     if inst > length(ir.stmts)
         inst = ir.new_nodes.info[inst - length(ir.stmts)].pos
@@ -527,7 +543,17 @@ scan_ssa_use!(@specialize(push!), used, @nospecialize(stmt)) = foreachssa(ssa::S
 scan_ssa_use!(used::IdSet, @nospecialize(stmt)) = foreachssa(ssa::SSAValue -> push!(used, ssa.id), stmt)
 
 function insert_node!(ir::IRCode, pos::SSAValue, newinst::NewInstruction, attach_after::Bool=false)
-    node = add_inst!(ir.new_nodes, pos.id, attach_after)
+    posid = pos.id
+    if pos.id > length(ir.stmts)
+        if attach_after
+            info = ir.new_nodes.info[pos.id-length(ir.stmts)];
+            posid = info.pos
+            attach_after = info.attach_after
+        else
+            error("Cannot attach before a pending node.")
+        end
+    end
+    node = add_inst!(ir.new_nodes, posid, attach_after)
     newline = something(newinst.line, ir[pos][:line])
     newflag = recompute_inst_flag(newinst, ir)
     node = inst_from_newinst!(node, newinst, newline, newflag)
@@ -745,17 +771,22 @@ function dominates_ssa(compact::IncrementalCompact, domtree::DomTree, x::AnySSAV
     return dominates(domtree, xb, yb)
 end
 
+function _count_added_node!(compact,  @nospecialize(val))
+    if isa(val, SSAValue)
+        compact.used_ssas[val.id] += 1
+        return false
+    elseif isa(val, NewSSAValue)
+        @assert val.id < 0 # Newly added nodes should be canonicalized
+        compact.new_new_used_ssas[-val.id] += 1
+        return true
+    end
+    return false
+end
+
 function count_added_node!(compact::IncrementalCompact, @nospecialize(v))
     needs_late_fixup = false
     for ops in userefs(v)
-        val = ops[]
-        if isa(val, SSAValue)
-            compact.used_ssas[val.id] += 1
-        elseif isa(val, NewSSAValue)
-            @assert val.id < 0 # Newly added nodes should be canonicalized
-            compact.new_new_used_ssas[-val.id] += 1
-            needs_late_fixup = true
-        end
+        needs_late_fixup |= _count_added_node!(compact, ops[])
     end
     return needs_late_fixup
 end
@@ -887,7 +918,7 @@ function getindex(view::TypesView, v::OldSSAValue)
     return view.ir.pending_nodes.stmts[id][:type]
 end
 
-function kill_current_use(compact::IncrementalCompact, @nospecialize(val))
+function kill_current_use!(compact::IncrementalCompact, @nospecialize(val))
     if isa(val, SSAValue)
         @assert compact.used_ssas[val.id] >= 1
         compact.used_ssas[val.id] -= 1
@@ -898,9 +929,9 @@ function kill_current_use(compact::IncrementalCompact, @nospecialize(val))
     end
 end
 
-function kill_current_uses(compact::IncrementalCompact, @nospecialize(stmt))
+function kill_current_uses!(compact::IncrementalCompact, @nospecialize(stmt))
     for ops in userefs(stmt)
-        kill_current_use(compact, ops[])
+        kill_current_use!(compact, ops[])
     end
 end
 
@@ -908,7 +939,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::SSAValue)
     @assert idx.id < compact.result_idx
     (compact.result[idx.id][:inst] === v) && return
     # Kill count for current uses
-    kill_current_uses(compact, compact.result[idx.id][:inst])
+    kill_current_uses!(compact, compact.result[idx.id][:inst])
     compact.result[idx.id][:inst] = v
     # Add count for new use
     count_added_node!(compact, v) && push!(compact.late_fixup, idx.id)
@@ -920,7 +951,7 @@ function setindex!(compact::IncrementalCompact, @nospecialize(v), idx::OldSSAVal
     if id < compact.idx
         new_idx = compact.ssa_rename[id]
         (compact.result[new_idx][:inst] === v) && return
-        kill_current_uses(compact, compact.result[new_idx][:inst])
+        kill_current_uses!(compact, compact.result[new_idx][:inst])
         compact.result[new_idx][:inst] = v
         count_added_node!(compact, v) && push!(compact.late_fixup, new_idx)
         return compact
@@ -950,21 +981,63 @@ end
 __set_check_ssa_counts(onoff::Bool) = __check_ssa_counts__[] = onoff
 const __check_ssa_counts__ = fill(false)
 
-function _oracle_check(compact::IncrementalCompact)
-    observed_used_ssas = Core.Compiler.find_ssavalue_uses1(compact)
-    for i = 1:length(observed_used_ssas)
-        if observed_used_ssas[i] != compact.used_ssas[i]
-            return (observed_used_ssas, i)
+should_check_ssa_counts() = __check_ssa_counts__[]
+
+# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
+function find_ssavalue_uses1(compact)
+    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
+    nvals = length(compact.used_ssas)
+    nvalsnew = length(compact.new_new_used_ssas)
+    nbody1 = compact.result_idx
+    nbody2 = length(body2)
+
+    uses = zeros(Int, nvals)
+    usesnew = zeros(Int, nvalsnew)
+    function increment_uses(ssa::AnySSAValue)
+        if isa(ssa, NewSSAValue)
+            usesnew[-ssa.id] += 1
+        elseif isa(ssa, SSAValue)
+            uses[ssa.id] += 1
         end
     end
-    return (nothing, 0)
+
+    for line in 1:(nbody1 + nbody2)
+        # index into the right body
+        if line <= nbody1
+            isassigned(body1, line) || continue
+            e = body1[line]
+        else
+            line -= nbody1
+            isassigned(body2, line) || continue
+            e = body2[line]
+        end
+
+        foreach_anyssa(increment_uses, e)
+    end
+
+    return (uses, usesnew)
+end
+
+function _oracle_check(compact::IncrementalCompact)
+    (observed_used_ssas, observed_used_newssas) = Core.Compiler.find_ssavalue_uses1(compact)
+    for i = 1:length(observed_used_ssas)
+        if observed_used_ssas[i] != compact.used_ssas[i]
+            return (observed_used_ssas, observed_used_newssas, SSAValue(i))
+        end
+    end
+    for i = 1:length(observed_used_newssas)
+        if observed_used_newssas[i] != compact.new_new_used_ssas[i]
+            return (observed_used_ssas, observed_used_newssas, NewSSAValue(i))
+        end
+    end
+    return (nothing, nothing, 0)
 end
 
 function oracle_check(compact::IncrementalCompact)
-    (maybe_oracle_used_ssas, oracle_error_ssa) = _oracle_check(compact)
+    (maybe_oracle_used_ssas, observed_used_newssas, oracle_error_ssa) = _oracle_check(compact)
     if maybe_oracle_used_ssas !== nothing
-        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas; oracle_error_ssa = $oracle_error_ssa)
-        error("Oracle check failed, inspect Main.{compact, oracle_used_ssas, oracle_error_ssa}")
+        @eval Main (compact = $compact; oracle_used_ssas = $maybe_oracle_used_ssas; observed_used_newssas = $observed_used_newssas; oracle_error_ssa = $(QuoteNode(oracle_error_ssa)))
+        error("Oracle check failed, inspect Main.{compact, oracle_used_ssas, observed_used_newssas, oracle_error_ssa}")
     end
 end
 
@@ -1187,6 +1260,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             if !isa(cond, Bool)
                 condT = widenconditional(argextype(cond, compact))
                 isa(condT, Const) || @goto bail
+                kill_current_use!(compact, cond)
                 cond = condT.val
                 isa(cond, Bool) || @goto bail
             end
@@ -1214,6 +1288,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             label = compact.bb_rename_succ[stmt.args[1]::Int]
             @assert label > 0
             stmt.args[1] = label
+        elseif isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                return result_idx
+            end
         end
         result[result_idx][:inst] = stmt
         result_idx += 1
@@ -1676,7 +1757,7 @@ end
 function complete(compact::IncrementalCompact)
     result_bbs = resize!(compact.result_bbs, compact.active_result_bb-1)
     cfg = CFG(result_bbs, Int[first(result_bbs[i].stmts) for i in 2:length(result_bbs)])
-    if __check_ssa_counts__[]
+    if should_check_ssa_counts()
         oracle_check(compact)
     end
 
