@@ -1000,7 +1000,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
 {
     size_t lx = jl_nparams(xd);
     size_t ly = jl_nparams(yd);
-    size_t i = 0, j = 0, vx = 0, vy = 0, x_reps = 1;
+    size_t i = 0, j = 0, vx = 0, vy = 0, x_reps = 0;
     jl_value_t *lastx = NULL, *lasty = NULL;
     jl_value_t *xi = NULL, *yi = NULL;
 

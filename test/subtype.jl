@@ -2038,3 +2038,5 @@ struct B46871{T, N} <: Ref{A46871{T, N, N}} end
 for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
     @testintersect(T, Ref{<:AbstractArray{<:Real, 3}}, B46871{Int, 3})
 end
+
+@test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)
