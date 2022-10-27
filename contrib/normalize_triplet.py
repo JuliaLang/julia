@@ -113,8 +113,8 @@ if libgfortran_version == "blank_libgfortran":
         if not sys.argv[2]:
             libgfortran_version = "libgfortran5"
         else:
-            # Take the last thing that looks like a version number, and extract its major component
-            version_numbers = list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))
+            # Take the first thing that looks like a version number, and extract its major component
+            version_numbers = list(filter(lambda x: re.match("\d+(\.\d+)?", x), sys.argv[2].split()))
             major_ver = int(version_numbers[-1].split('.')[0])
             if major_ver <= 6:
                 libgfortran_version = "libgfortran3"
