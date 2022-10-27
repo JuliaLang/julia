@@ -2194,7 +2194,7 @@ function cfg_simplify!(ir::IRCode)
                 elseif isa(node[:inst], PhiNode)
                     phi = node[:inst]
                     values = phi.values
-                    (; result, ssa_rename, late_fixup, used_ssas, new_new_used_ssas, cfg_transforms_enabled, fold_constant_branches) = compact
+                    (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
                     processed_idx = i
                     renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true)
