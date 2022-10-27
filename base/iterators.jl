@@ -400,6 +400,7 @@ end
 @inline _zip_any_isdone(::Tuple{}, ::Tuple{}) = false
 
 iterate(::Zip{Tuple{}}) = ((), nothing)
+iterate(::Zip{Tuple{}}, nothing) = nothing
 @propagate_inbounds iterate(z::Zip) = _zip_iterate_all(z.is, Base.map(_ -> (), z.is))
 @propagate_inbounds iterate(z::Zip, ss) = _zip_iterate_all(z.is, Base.map(tuple, ss))
 
