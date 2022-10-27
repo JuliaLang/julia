@@ -185,7 +185,8 @@ determining storage size of a literal. So `0x01` is a `UInt8` while `0x0001` is 
 
 That allows the user to control the size.
 
-Values which cannot be stored in `UInt128` cannot be written as such literals.
+Unsigned literals (starting with `0x`) which are too big to fit in a `UInt128` object are
+interpreted as `BigInt`.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
 unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
