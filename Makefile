@@ -81,8 +81,7 @@ julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
 julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
-	for dir in "/cygdrive/c/Program Files/Python38/Scripts" "/cygdrive/c/Program Files/Python38" "/usr/bin" "/cygdrive/c/Windows/system32" "/cygdrive/c/Windows" "/cygdrive/c/Windows/System32/Wbem" "/cygdrive/c/Windows/System32/WindowsPowerShell/v1.0" "/cygdrive/c/Windows/System32/OpenSSH" "/cygdrive/c/Program Files (x86)/Windows Kits/10/Windows Performance Toolkit" "/cygdrive/c/Windows/system32/config/systemprofile/AppData/Local/Microsoft/WindowsApps"; do ls -lhrt "$$dir"; done
-	echo "$(PATH)"
+	echo $(PATH)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-ji JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
 julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
