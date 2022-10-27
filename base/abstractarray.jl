@@ -2748,112 +2748,12 @@ julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
 stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
 stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
 
-_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
-
-_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
-
-function _stack(dims, ::Union{HasShape, HasLength}, iter)
-    S = @default_eltype iter
-    T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
-    if isconcretetype(T)
-        _typed_stack(dims, T, S, iter)
-    else  # Need to look inside, but shouldn't run an expensive iterator twice:
-        array = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
-        isempty(array) && return _empty_stack(dims, T, S, iter)
-        T2 = mapreduce(eltype, promote_type, array)
-        _typed_stack(dims, T2, eltype(array), array)
-    end
+_stack(::Colon, iter) = _stack(1 + ndims(first(iter)), iter)
+function _stack(dims::Integer, iter)
+    elsize = size(first(iter))
+    newsize = (elsize[1:dims-1]..., 1, elsize[dims:end]...)
+    hvncat(dims, reshape.(iter, newsize...)...)
 end
-
-function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_iterator_axes(A)) where {T, S}
-    xit = iterate(A)
-    nothing === xit && return _empty_stack(:, T, S, A)
-    x1, _ = xit
-    ax1 = _iterator_axes(x1)
-    B = similar(_ensure_array(x1), T, ax1..., Aax...)
-    off = firstindex(B)
-    len = length(x1)
-    while xit !== nothing
-        x, state = xit
-        _stack_size_check(x, ax1)
-        copyto!(B, off, x)
-        off += len
-        xit = iterate(A, state)
-    end
-    B
-end
-
-_iterator_axes(x) = _iterator_axes(x, IteratorSize(x))
-_iterator_axes(x, ::HasLength) = (OneTo(length(x)),)
-_iterator_axes(x, ::IteratorSize) = axes(x)
-
-# For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
-    _typed_stack(dims, T, S, IteratorSize(S), A)
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
-    _typed_stack(dims, T, S, HasShape{1}(), A)
-function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
-    if dims == N+1
-        _typed_stack(:, T, S, A, (_vec_axis(A),))
-    else
-        _dim_stack(dims, T, S, A)
-    end
-end
-_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S} =
-    _dim_stack(dims, T, S, A)
-
-_vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
-
-@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
-    xit = Iterators.peel(A)
-    nothing === xit && return _empty_stack(dims, T, S, A)
-    x1, xrest = xit
-    ax1 = _iterator_axes(x1)
-    N1 = length(ax1)+1
-    dims in 1:N1 || throw(ArgumentError(LazyString("cannot stack slices ndims(x) = ", N1-1, " along dims = ", dims)))
-
-    newaxis = _vec_axis(A)
-    outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
-    B = similar(_ensure_array(x1), T, outax...)
-
-    if dims == 1
-        _dim_stack!(Val(1), B, x1, xrest)
-    elseif dims == 2
-        _dim_stack!(Val(2), B, x1, xrest)
-    else
-        _dim_stack!(Val(dims), B, x1, xrest)
-    end
-    B
-end
-
-function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
-    before = ntuple(d -> Colon(), dims - 1)
-    after = ntuple(d -> Colon(), ndims(B) - dims)
-
-    i = firstindex(B, dims)
-    copyto!(view(B, before..., i, after...), x1)
-
-    for x in xrest
-        _stack_size_check(x, _iterator_axes(x1))
-        i += 1
-        @inbounds copyto!(view(B, before..., i, after...), x)
-    end
-end
-
-@inline function _stack_size_check(x, ax1::Tuple)
-    if _iterator_axes(x) != ax1
-        uax1 = map(UnitRange, ax1)
-        uaxN = map(UnitRange, axes(x))
-        throw(DimensionMismatch(
-            LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
-    end
-end
-
-_ensure_array(x::AbstractArray) = x
-_ensure_array(x) = 1:0  # passed to similar, makes stack's output an Array
-
-_empty_stack(_...) = throw(ArgumentError("`stack` on an empty collection is not allowed"))
-
 
 ## Reductions and accumulates ##
 
