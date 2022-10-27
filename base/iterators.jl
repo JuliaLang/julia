@@ -14,7 +14,7 @@ using .Base:
     @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator,
     AbstractRange, AbstractUnitRange, UnitRange, LinearIndices,
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, missing,
-    any, _counttuple, eachindex, ntuple, zero, prod, in, firstindex, lastindex,
+    any, _counttuple, eachindex, ntuple, zero, sum, prod, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape
 using Core: @doc
 
@@ -1170,6 +1170,8 @@ flatten_iteratorsize(a, b) = SizeUnknown()
 _flatten_iteratorsize(sz, ::EltypeUnknown, I) = SizeUnknown()
 _flatten_iteratorsize(sz, ::HasEltype, I) = flatten_iteratorsize(sz, eltype(I))
 _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
+_flatten_iteratorsize(sz, ::HasEltype, ::Type{<:Tuple{Vararg{AbstractArray}}}) = HasLength()
+_flatten_iteratorsize(sz, ::HasEltype, ::Type{<:AbstractArray{<:AbstractArray}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
@@ -1181,6 +1183,8 @@ flatten_length(f, T) = throw(ArgumentError(
     "Iterates of the argument to Flatten are not known to have constant length"))
 length(f::Flatten{I}) where {I} = flatten_length(f, eltype(I))
 length(f::Flatten{Tuple{}}) = 0
+length(f::Flatten{<:Tuple{Vararg{AbstractArray}}}) = sum(length, f.it, init=0)
+length(f::Flatten{<:AbstractArray{<:AbstractArray}}) = sum(length, f.it, init=0)
 
 @propagate_inbounds function iterate(f::Flatten, state=())
     if state !== ()

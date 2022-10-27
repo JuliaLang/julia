@@ -492,12 +492,30 @@ end
 @test collect(flatten(Any[])) == Any[]
 @test collect(flatten(())) == Union{}[]
 @test_throws ArgumentError length(flatten(NTuple[(1,), ()])) # #16680
-@test_throws ArgumentError length(flatten([[1], [1]]))
+@test length(flatten([[1], [1]])) == 2
 
 @testset "IteratorSize trait for flatten" begin
     @test Base.IteratorSize(Base.Flatten((i for i=1:2) for j=1:1)) == Base.SizeUnknown()
     @test Base.IteratorSize(Base.Flatten((1,2))) == Base.HasLength()
     @test Base.IteratorSize(Base.Flatten(1:2:4)) == Base.HasLength()
+    @test Base.IteratorSize(Base.Flatten([(1,2), (3,4), (5,6)])) == Base.HasLength()
+
+    @test Base.IteratorSize(Base.Flatten((1:2, 3:4, 5:6))) == Base.HasLength()
+    @test Base.IteratorSize(Base.Flatten([1:2, 3:4, 5:6])) == Base.HasLength()
+    @test Base.IteratorSize(Base.Flatten([1:2, [3 4 5], [6.0;;;]])) == Base.HasLength()
+end
+@testset "length of nontrivial flatten" begin
+    @test length(flatten((1:2, 3:4, 5:6))) == 6
+    @test length(flatten((1:2, [3 4 5], [6;;;]))) == 6
+    @test length(flatten(Int[])) == 0
+    @test length(flatten(())) == 0
+
+    @test length(flatten([1:2, 3:4, 5:6])) == 6
+    @test length(flatten([1:2, [3 4 5], [6.0;;;]])) == 6
+    @test length(flatten(Vector[])) == 0
+
+    @test length(flatten([(1,2), (3,4), (5,6)])) == 6  # length from eltype of array
+    @test length(flatten([(1,2)] |> empty!)) == 0
 end
 
 @test Base.IteratorEltype(Base.Flatten((i for i=1:2) for j=1:1)) == Base.EltypeUnknown()
