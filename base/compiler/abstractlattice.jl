@@ -76,8 +76,11 @@ is_valid_lattice(lattice::InferenceLattice, @nospecialize(elem)) =
 The lattice used by the optimizer. Extends
 `BaseInferenceLattice` with `MaybeUndef`.
 """
-struct OptimizerLattice <: AbstractLattice; end
-widenlattice(L::OptimizerLattice) = BaseInferenceLattice.instance
+struct OptimizerLattice{L} <: AbstractLattice
+    parent::L
+end
+OptimizerLattice() = OptimizerLattice(BaseInferenceLattice.instance)
+widenlattice(L::OptimizerLattice) = L.parent
 is_valid_lattice(lattice::OptimizerLattice, @nospecialize(elem)) =
     is_valid_lattice(widenlattice(lattice), elem) || isa(elem, MaybeUndef)
 

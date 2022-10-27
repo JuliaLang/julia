@@ -1097,6 +1097,7 @@ struct CodegenParams
     prefer_specsig::Cint
     gnu_pubnames::Cint
     debug_info_kind::Cint
+    safepoint_on_entry::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1105,12 +1106,14 @@ struct CodegenParams
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   safepoint_on_entry::Bool=true,
                    lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
+            Cint(safepoint_on_entry),
             lookup, generic_context)
     end
 end
