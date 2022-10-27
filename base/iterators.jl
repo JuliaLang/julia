@@ -954,7 +954,7 @@ true
 ```
 """
 cycle(xs) = Cycle(xs)
-cycle(xs, n::Int) = flatten(repeated(xs, n))
+cycle(xs, n::Integer) = flatten(repeated(xs, n))
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
