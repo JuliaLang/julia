@@ -306,7 +306,7 @@ Waits until `testcb()` returns `true` or `timeout` seconds have passed, whicheve
 The test function is polled every `pollint` seconds. The minimum value for `pollint` is 0.001 seconds,
 that is, 1 millisecond.
 
-Return :ok or :timed_out
+Return `:ok` or `:timed_out`.
 """
 function timedwait(testcb, timeout::Real; pollint::Real=0.1)
     pollint >= 1e-3 || throw(ArgumentError("pollint must be ≥ 1 millisecond"))
