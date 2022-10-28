@@ -489,14 +489,46 @@ function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Union{Rea
     not_overlapping = (la < fb) | (lb < fa)
     if not_overlapping
         return true
-    elseif abs(step(a)) === abs(step(b))
-        if fa in b || fb in a
+    else
+        return _overlapping_range_isdisjoint(a, b)
+    end
+end
+
+_overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T = invoke(isdisjoint, Tuple{Any,Any}, a, b)
+
+function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Integer
+    m = gcd(step(a), step(b))
+    fa, fb = minimum(a), minimum(b)
+    if mod(fa - fb, m) == 0
+        shortrg, longrg = argmin(length, (a,b)), argmax(length, (a,b))
+        mis, mil = minimum(shortrg), minimum(longrg)
+        mxs, mxl = maximum(shortrg), maximum(longrg)
+
+        # number of elements in shortrg that overlap longrg
+        overlapping = length(shortrg)
+
+        if mis < mil
+            overlapping -= cld(mil - mis, abs(step(shortrg)))
+        end
+        if mxs > mxl
+            overlapping -= cld(mxs - mxl, abs(step(shortrg)))
+        end
+
+        if overlapping ≥ abs(step(longrg)/m)
             return false
         else
-            return true
+            if (mis < mil) & signbit(step(shortrg)) || (mxs > mxl) & ~signbit(step(shortrg))
+                return invoke(isdisjoint, Tuple{Any,Any},
+                    shortrg[begin:end-overlapping+1], longrg)
+            elseif (mis < mil) & ~signbit(step(shortrg)) || (mxs > mxl) & signbit(step(shortrg))
+                return invoke(isdisjoint, Tuple{Any,Any},
+                    shortrg[begin+overlapping-1:end], longrg)
+            else
+                return invoke(isdisjoint, Tuple{Any,Any}, shortrg, longrg)
+            end
         end
     else
-        return invoke(isdisjoint, Tuple{Any,Any}, a, b)
+        return true
     end
 end
 
