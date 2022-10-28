@@ -2839,7 +2839,6 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
 }
 
-void jl_gc_mark_enqueued_tasks(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp);
 extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 
 // mark the initial root set
@@ -2847,9 +2846,6 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
 {
     // modules
     gc_mark_queue_obj(gc_cache, sp, jl_main_module);
-
-    // tasks
-    jl_gc_mark_enqueued_tasks(gc_cache, sp);
 
     // invisible builtin values
     if (jl_an_empty_vec_any != NULL)

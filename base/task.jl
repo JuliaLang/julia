@@ -705,12 +705,14 @@ const StickyWorkqueue = InvasiveLinkedListSynchronized{Task}
 global const Workqueues = [StickyWorkqueue()]
 global const Workqueue = Workqueues[1] # default work queue is thread 1
 function __preinit_threads__()
-    if length(Workqueues) < Threads.nthreads()
-        resize!(Workqueues, Threads.nthreads())
-        for i = 2:length(Workqueues)
+    nt = Threads.nthreads()
+    if length(Workqueues) < nt
+        resize!(Workqueues, nt)
+        for i = 2:nt
             Workqueues[i] = StickyWorkqueue()
         end
     end
+    Partr.multiq_init(nt)
     nothing
 end
 
@@ -735,7 +737,7 @@ function enq_work(t::Task)
         end
         push!(Workqueues[tid], t)
     else
-        if ccall(:jl_enqueue_task, Cint, (Any,), t) != 0
+        if !Partr.multiq_insert(t, t.priority)
             # if multiq is full, give to a random thread (TODO fix)
             if tid == 0
                 tid = mod(time_ns() % Int, Threads.nthreads()) + 1
@@ -901,24 +903,30 @@ function ensure_rescheduled(othertask::Task)
 end
 
 function trypoptask(W::StickyWorkqueue)
-    isempty(W) && return
-    t = popfirst!(W)
-    if t._state !== task_state_runnable
-        # assume this somehow got queued twice,
-        # probably broken now, but try discarding this switch and keep going
-        # can't throw here, because it's probably not the fault of the caller to wait
-        # and don't want to use print() here, because that may try to incur a task switch
-        ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-            "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
-        return
+    while !isempty(W)
+        t = popfirst!(W)
+        if t._state !== task_state_runnable
+            # assume this somehow got queued twice,
+            # probably broken now, but try discarding this switch and keep going
+            # can't throw here, because it's probably not the fault of the caller to wait
+            # and don't want to use print() here, because that may try to incur a task switch
+            ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
+                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+            continue
+        end
+        return t
     end
-    return t
+    return Partr.multiq_deletemin()
+end
+
+function checktaskempty()
+    return Partr.multiq_check_empty()
 end
 
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any), trypoptask, W)
+        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
     set_next_task(task)
     nothing
