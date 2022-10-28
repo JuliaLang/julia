@@ -3318,6 +3318,16 @@ JL_DLLEXPORT void jl_typeinf_end(void)
     JL_UNLOCK(&typeinf_lock);
 }
 
+JL_DLLEXPORT void jl_typeinf_lock_begin(void)
+{
+    JL_LOCK(&typeinf_lock);
+}
+
+JL_DLLEXPORT void jl_typeinf_lock_end(void)
+{
+    JL_UNLOCK(&typeinf_lock);
+}
+
 #ifdef __cplusplus
 }
 #endif

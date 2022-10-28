@@ -84,12 +84,17 @@ Empty out the previously recorded type inference timings (`Core.Compiler._timing
 start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inference.
 """
 function reset_timings()
-    empty!(_timings)
-    push!(_timings, Timing(
-        # The MethodInstance for ROOT(), and default empty values for other fields.
-        InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
-        _time_ns()))
-    return nothing
+    ccall(:jl_typeinf_lock_begin, Cvoid, ())
+    try
+        empty!(_timings)
+        push!(_timings, Timing(
+            # The MethodInstance for ROOT(), and default empty values for other fields.
+            InferenceFrameInfo(ROOTmi, 0x0, Any[], Any[Core.Const(ROOT)], 1),
+            _time_ns()))
+        return nothing
+    finally
+        ccall(:jl_typeinf_lock_end, Cvoid, ())
+    end
 end
 reset_timings()
 
@@ -192,19 +197,41 @@ end
     return nothing
 end
 
+# Whether or not inference Timing is enabled.
+mutable struct TimingInvocations
+    # This should be `@atomic`, but it's not supported in 1.8 yet.
+    count::Int
+end
+const __measuring_typeinf = TimingInvocations(0)
+
 end  # module Timings
 
-"""
-    Core.Compiler.__set_measure_typeinf(onoff::Bool)
-
-If set to `true`, record per-method-instance timings within type inference in the Compiler.
-"""
-__set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
-const __measure_typeinf__ = fill(false)
+function __start_measuring_typeinf()
+    ccall(:jl_typeinf_lock_begin, Cvoid, ())
+    try
+        Timings.__measuring_typeinf.count += 1
+    finally
+        ccall(:jl_typeinf_lock_end, Cvoid, ())
+    end
+end
+function __stop_measuring_typeinf()
+    ccall(:jl_typeinf_lock_begin, Cvoid, ())
+    try
+        Timings.__measuring_typeinf.count -= 1
+    finally
+        ccall(:jl_typeinf_lock_end, Cvoid, ())
+    end
+end
+function __measure_typeinf()
+    # Assumes typeinf_lock is held
+    return Timings.__measuring_typeinf.count > 0
+end
+# DEPRECATED:
+__set_measure_typeinf(onoff::Bool) = onoff ? __start_measuring_typeinf() : __stop_measuring_typeinf()
 
 # Wrapper around _typeinf that optionally records the exclusive time for each invocation.
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
-    if __measure_typeinf__[]
+    if __measure_typeinf()
         Timings.enter_new_timer(frame)
         v = _typeinf(interp, frame)
         Timings.exit_current_timer(frame)

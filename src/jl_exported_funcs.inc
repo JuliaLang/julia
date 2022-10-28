@@ -475,6 +475,8 @@
     XX(jl_typeassert) \
     XX(jl_typeinf_begin) \
     XX(jl_typeinf_end) \
+    XX(jl_typeinf_lock_begin) \
+    XX(jl_typeinf_lock_end) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
