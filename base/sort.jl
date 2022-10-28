@@ -872,9 +872,6 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 function sort!(v::AbstractVector{T}, alg::Algorithm,
                order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
@@ -889,11 +886,11 @@ end
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. A stable algorithm is used by default. You can specify a 
-specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for 
-available algorithms). The `by` keyword lets you provide a function that will be applied to 
-each element before comparison; the `lt` keyword allows providing a custom "less than" 
-function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return 
+Sort the vector `v` in place. A stable algorithm is used by default. You can select a
+specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for
+available algorithms). The `by` keyword lets you provide a function that will be applied to
+each element before comparison; the `lt` keyword allows providing a custom "less than"
+function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
 `true`); use `rev=true` to reverse the sorting order. These options are independent and can
 be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
 function is applied to the result of the `by` function; `rev=true` reverses whatever
@@ -1240,7 +1237,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -1268,7 +1265,7 @@ julia> sort(A, dims = 2)
 """
 function sort(A::AbstractArray{T};
               dims::Integer,
-              alg::Algorithm=DEFAULT_UNSTABLE,
+              alg::Algorithm=defalg(A),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
