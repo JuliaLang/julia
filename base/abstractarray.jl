@@ -1814,7 +1814,7 @@ end
     vcat(A...)
 
 Concatenate arrays or numbers vertically. Equivalent to [`cat`](@ref)`(A...; dims=1)`,
-which is also called by the syntax `[a; b; c]`.
+and to the syntax `[a; b; c]`.
 
 To concatenate a large vector of arrays, `reduce(vcat, A)` calls an efficient method
 when `A isa AbstractVector{<:AbstractVecOrMat}`, rather than working pairwise.
@@ -1845,11 +1845,6 @@ julia> vcat(range(1, 2, length=3))  # collects lazy ranges
  1.5
  2.0
 
-julia> vcat(3, [], [4.5;;])  # empty vector Any[] affects the eltype
-2×1 Matrix{Any}:
- 3
- 4.5
-
 julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
 ([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
 
@@ -1879,7 +1874,7 @@ vcat(X...) = cat(X...; dims=Val(1))
     hcat(A...)
 
 Concatenate arrays or numbers horizontally. Equivalent to [`cat`](@ref)`(A...; dims=2)`,
-which is also called by the syntax `[a b c]` or `[a;;]`.
+and to the syntax `[a b c]` or `[a;; b;; c]`.
 
 For a large vector of arrays, `reduce(hcat, A)` calls an efficient method
 when `A isa AbstractVector{<:AbstractVecOrMat}`.
@@ -1894,16 +1889,16 @@ julia> hcat([1,2], [3,4], [5,6])
  1  3  5
  2  4  6
 
-julia> hcat(1, 2, [30 40], [5, 6]')
-1×6 Matrix{Int64}:
- 1  2  30  40  5  6
+julia> hcat(1, 2, [30 40], [5, 6, 7]')  # accepts numbers
+1×7 Matrix{Int64}:
+ 1  2  30  40  5  6  7
 
-julia> ans == [1 2 [30 40] [5, 6]']  # syntax for the same operation
+julia> ans == [1 2 [30 40] [5, 6, 7]']  # syntax for the same operation
 true
 
-julia> Float32[1 2 [30 40] [5, 6]']  # syntax for supplying the eltype
-1×6 Matrix{Float32}:
- 1.0  2.0  30.0  40.0  5.0  6.0
+julia> Float32[1 2 [30 40] [5, 6, 7]']  # syntax for supplying the eltype
+1×7 Matrix{Float32}:
+ 1.0  2.0  30.0  40.0  5.0  6.0  7.0
 
 julia> ms = [zeros(2,2), [1 2; 3 4], [50 60; 70 80]];
 
@@ -1918,13 +1913,10 @@ julia> stack(ms) |> summary  # disagrees on a vector of matrices
 julia> hcat(Int[], Int[], Int[])  # empty vectors, each of size (0,)
 0×3 Matrix{Int64}
 
-julia> col0 = Matrix(undef, 2, 0)  # empty matrix, size (2,0)
-2×0 Matrix{Any}
-
-julia> hcat([1.1, 9.9], col0, ms[3])
-2×3 Matrix{Any}:
- 1.1  50.0  60.0
- 9.9  70.0  80.0
+julia> hcat([1.1, 9.9], Matrix(undef, 2, 0))  # hcat with empty 2×0 Matrix
+2×1 Matrix{Any}:
+ 1.1
+ 9.9
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -1948,23 +1940,23 @@ are increased simultaneously for each input array, filling with zero elsewhere.
 This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(1,2))`,
 and their higher-dimensional analogues.
 
-The keyword also accepts `Val(dims)`.
-
 The special case `dims=1` is [`vcat`](@ref), and `dims=2` is [`hcat`](@ref).
 See also [`hvcat`](@ref), [`stack`](@ref), [`repeat`](@ref).
 
+The keyword also accepts `Val(dims)`.
+
+!!! compat "Julia 1.8"
+    For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
+
 # Examples
 ```jldoctest
-julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
+julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
 
-julia> size([pi, pi], 3)
-1
-
-julia> cat(true, trues(2,2), trues(4)', dims=(1,2))
+julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
