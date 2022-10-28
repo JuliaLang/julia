@@ -185,8 +185,9 @@ determining storage size of a literal. So `0x01` is a `UInt8` while `0x0001` is 
 
 That allows the user to control the size.
 
-Unsigned literals (starting with `0x`) which are too big to fit in a `UInt128` object are
-interpreted as `BigInt`.
+Unsigned literals (starting with `0x`) that encode integers too large to be represented as
+`UInt128` values will construct `BigInt` values instead. This is not an unsigned type but
+it is the only built-in type big enough to represent such large integer values.
 
 Binary, octal, and hexadecimal literals may be signed by a `-` immediately preceding the
 unsigned literal. They produce an unsigned integer of the same size as the unsigned literal
