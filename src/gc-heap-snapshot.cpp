@@ -206,11 +206,16 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
     }
     else if (jl_is_module(a)) {
-        name = "Module";
+        name = jl_symbol_name_(((_jl_module_t*)a)->name);
         self_size = sizeof(jl_module_t);
     }
     else if (jl_is_task(a)) {
         name = "Task";
+        self_size = sizeof(jl_task_t);
+    }
+    else if (jl_is_datatype(a)) {
+        auto type = string("Type{") + string(jl_symbol_name_(((_jl_datatype_t*)a)->name->name)) + string("}");
+        name = StringRef(type);
         self_size = sizeof(jl_task_t);
     }
     else {
@@ -403,12 +408,13 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t pooled) JL_NOTSAFEPOINT
 {
     size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, "<malloc>");
+    auto alloc_type = pooled ? "<pooled>" : "<malloc>";
+    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_type);
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
     from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
