@@ -2221,8 +2221,10 @@ typedef struct {
 
     // controls the emission of debug-info. mirrors the clang options
     int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
-    int debug_info_kind; // Enum for line-table-only, line-directives-only,
+    int debug_info_kind;    // Enum for line-table-only, line-directives-only,
                             // limited, standalone
+
+    int safepoint_on_entry; // Emit a safepoint on entry to each function
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;

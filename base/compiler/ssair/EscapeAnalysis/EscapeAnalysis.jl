@@ -27,7 +27,7 @@ import ._TOP_MOD:     # Base definitions
     pop!, push!, pushfirst!, empty!, delete!, max, min, enumerate, unwrap_unionall,
     ismutabletype
 import Core.Compiler: # Core.Compiler specific definitions
-    Bottom, InferenceResult, IRCode, IR_FLAG_NOTHROW,
+    Bottom, OptimizerLattice, InferenceResult, IRCode, IR_FLAG_NOTHROW,
     isbitstype, isexpr, is_meta_expr_head, println, widenconst, argextype, singleton_type,
     fieldcount_noerror, try_compute_field, try_compute_fieldidx, hasintersect, ⊑,
     intrinsic_nothrow, array_builtin_common_typecheck, arrayset_typecheck,
@@ -1596,12 +1596,16 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     add_escape_change!(astate, val, ssainfo)
     # compute the throwness of this setfield! call here since builtin_nothrow doesn't account for that
     @label add_thrown_escapes
-    argtypes = Any[]
-    for i = 2:length(args)
-        push!(argtypes, argextype(args[i], ir))
+    if length(args) == 4 && setfield!_nothrow(OptimizerLattice(),
+        argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
+        return true
+    elseif length(args) == 3 && setfield!_nothrow(OptimizerLattice(),
+        argextype(args[2], ir), argextype(args[3], ir))
+        return true
+    else
+        add_thrown_escapes!(astate, pc, args, 2)
+        return true
     end
-    setfield!_nothrow(argtypes) || add_thrown_escapes!(astate, pc, args, 2)
-    return true
 end
 
 function escape_builtin!(::typeof(arrayref), astate::AnalysisState, pc::Int, args::Vector{Any})

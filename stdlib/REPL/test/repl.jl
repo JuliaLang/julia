@@ -35,6 +35,33 @@ function kill_timer(delay)
     return Timer(kill_test, delay)
 end
 
+## Debugging toys. Usage:
+##   stdout_read = tee_repr_stdout(stdout_read)
+##   ccall(:jl_breakpoint, Cvoid, (Any,), stdout_read)
+#function tee(f, in::IO)
+#    copy = Base.BufferStream()
+#    t = @async try
+#        while !eof(in)
+#            l = readavailable(in)
+#            f(l)
+#            write(copy, l)
+#        end
+#    catch ex
+#        if !(ex isa Base.IOError && ex.code == Base.UV_EIO)
+#            rethrow() # ignore EIO on `in` stream
+#        end
+#    finally
+#        # TODO: could we call closewrite to propagate an error, instead of always doing a clean close here?
+#        closewrite(copy)
+#    end
+#    Base.errormonitor(t)
+#    return copy
+#end
+#tee(out::IO, in::IO) = tee(l -> write(out, l), in)
+#tee_repr_stdout(io) = tee(io) do x
+#    print(repr(String(copy(x))) * "\n")
+#end
+
 # REPL tests
 function fake_repl(@nospecialize(f); options::REPL.Options=REPL.Options(confirm_exit=false))
     # Use pipes so we can easily do blocking reads
@@ -99,8 +126,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
     end
 
     global inc = false
-    global b = Condition()
-    global c = Condition()
+    global b = Base.Event(true)
+    global c = Base.Event(true)
     let cmd = "\"Hello REPL\""
         write(stdin_write, "$(curmod_prefix)inc || wait($(curmod_prefix)b); r = $cmd; notify($(curmod_prefix)c); r\r")
     end
@@ -709,7 +736,7 @@ fake_repl() do stdin_write, stdout_read, repl
         REPL.run_repl(repl)
     end
 
-    global c = Condition()
+    global c = Base.Event(true)
     function sendrepl2(cmd)
         t = @async readuntil(stdout_read, "\"done\"\n\n")
         write(stdin_write, "$cmd\n notify($(curmod_prefix)c); \"done\"\n")
@@ -1584,30 +1611,35 @@ fake_repl() do stdin_write, stdout_read, repl
 
     REPL.ipython_mode!(repl, backend)
 
-    global c = Condition()
-    sendrepl2(cmd) = write(stdin_write, "$cmd\n notify($(curmod_prefix)c)\n")
+    global c = Base.Event(true)
+    function sendrepl2(cmd, txt)
+        t = @async write(stdin_write, "$cmd\n notify($(curmod_prefix)c); \"done\"\n")
+        r = readuntil(stdout_read, txt, keep=true)
+        readuntil(stdout_read, "\"done\"\n\n", keep=true)
+        wait(c)
+        wait(t)
+        return r
+    end
 
-    t = @async readuntil(stdout_read, "\"zz\""; keep=true)
-    sendrepl2("\"z\" * \"z\"\n")
-    wait(c)
-    s = fetch(t)
-    readuntil(stdout_read, "\n\n")
+    s = sendrepl2("\"z\" * \"z\"\n", "\"zz\"")
     @test contains(s, "In [1]")
-    @test contains(s, "Out[1]: \"zz\"")
+    @test endswith(s, "Out[1]: \"zz\"")
 
-    t = @async readuntil(stdout_read, "\"yy\""; keep=true)
-    sendrepl2("\"y\" * \"y\"\n")
-    wait(c)
-    s = fetch(t)
-    readuntil(stdout_read, "\n\n")
-    @test contains(s, "Out[3]: \"yy\"")
+    s = sendrepl2("\"y\" * \"y\"\n", "\"yy\"")
+    @test endswith(s, "Out[3]: \"yy\"")
 
-    t = @async readuntil(stdout_read, "\"zzyy\""; keep=true)
-    sendrepl2("Out[1] * Out[3]\n")
-    wait(c)
-    s = fetch(t)
-    readuntil(stdout_read, "\n\n")
-    @test contains(s, "Out[5]: \"zzyy\"")
+    s = sendrepl2("Out[1] * Out[3]\n", "\"zzyy\"")
+    @test endswith(s, "Out[5]: \"zzyy\"")
+
+    # test a top-level expression
+    s = sendrepl2("import REPL\n", "In [8]")
+    @test !contains(s, "ERROR")
+    @test !contains(s, "[6]")
+    @test !contains(s, "Out[7]:")
+    @test contains(s, "In [7]: ")
+    @test contains(s, "import REPL")
+    s = sendrepl2("REPL\n", "In [10]")
+    @test contains(s, "Out[9]: REPL")
 
     write(stdin_write, '\x04')
     Base.wait(repltask)

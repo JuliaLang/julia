@@ -162,6 +162,12 @@ function DFS!(D::DFSTree, blocks::Vector{BasicBlock}, is_post_dominator::Bool)
 
             # Push children to the stack
             for succ_bb in edges
+                if succ_bb == 0
+                    # Edge 0 indicates an error entry, but shouldn't affect
+                    # the post-dominator tree.
+                    @assert is_post_dominator
+                    continue
+                end
                 push!(to_visit, (succ_bb, pre_num, false))
             end
 
