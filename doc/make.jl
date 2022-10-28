@@ -24,6 +24,10 @@ cd(joinpath(@__DIR__, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
     mkdir("stdlib")
     for dir in readdir(STDLIB_DIR)
+        if (dir == "SuiteSparse") && (!Base.USE_GPL_LIBS)
+            @info "Excluding SuiteSparse from the docs because Base.USE_GPL_LIBS is false"
+            continue
+        end
         sourcefile = joinpath(STDLIB_DIR, dir, "docs", "src")
         if dir in EXT_STDLIB_DOCS
             sourcefile = joinpath(sourcefile, "basedocs.md")
@@ -236,12 +240,14 @@ DocMeta.setdocmeta!(
     maybe_revise(:(using SparseArrays, LinearAlgebra));
     recursive=true, warn=false,
 )
-DocMeta.setdocmeta!(
-    SuiteSparse,
-    :DocTestSetup,
-    maybe_revise(:(using SparseArrays, LinearAlgebra, SuiteSparse));
-    recursive=true, warn=false,
-)
+if Base.USE_GPL_LIBS
+    DocMeta.setdocmeta!(
+        SuiteSparse,
+        :DocTestSetup,
+        maybe_revise(:(using SparseArrays, LinearAlgebra, SuiteSparse));
+        recursive=true, warn=false,
+    )
+end
 DocMeta.setdocmeta!(
     UUIDs,
     :DocTestSetup,
