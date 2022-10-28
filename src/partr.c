@@ -78,6 +78,7 @@ extern int jl_gc_mark_queue_obj_explicit(jl_gc_mark_cache_t *gc_cache,
 JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
 {
     jl_ptls_t ptls = jl_current_task->ptls;
+    // one-extend unbias back to 64-bits
     return cong(max, -(uint64_t)-unbias, &ptls->rngseed);
 }
 

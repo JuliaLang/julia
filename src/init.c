@@ -733,17 +733,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         post_boot_hooks();
     }
 
-    if (jl_base_module != NULL) {
-        // Do initialization needed before starting child threads
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("__preinit_threads__"));
-        if (f) {
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_get_world_counter();
-            jl_apply(&f, 1);
-            ct->world_age = last_age;
-        }
-    }
-    else {
+    if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
         jl_n_threads = 1;
     }
