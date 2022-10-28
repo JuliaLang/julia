@@ -206,7 +206,7 @@ AbstractMatrix{T}(A::Bidiagonal) where {T} = convert(Bidiagonal{T}, A)
 convert(::Type{T}, m::AbstractMatrix) where {T<:Bidiagonal} = m isa T ? m : T(m)::T
 
 similar(B::Bidiagonal, ::Type{T}) where {T} = Bidiagonal(similar(B.dv, T), similar(B.ev, T), B.uplo)
-similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(B::Bidiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(B.dv, T, dims)
 
 function kron(A::Diagonal, B::Bidiagonal)
     # `_droplast!` is only guaranteed to work with `Vector`
@@ -783,34 +783,34 @@ ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) 
     (_rdiv!(adjoint(c), adjoint(b), adjoint(A)); return c)
 
 ### Generic promotion methods and fallbacks
-\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), size(B)), A, B)
+\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), B), A, B)
 \(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(tA) \ B
 \(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(adjA) \ B
 
 ### Triangular specializations
 for tri in (:UpperTriangular, :UnitUpperTriangular)
     @eval function \(B::Bidiagonal, U::$tri)
-        A = ldiv!(_initarray(\, eltype(B), eltype(U), size(U)), B, U)
+        A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
     @eval function \(U::$tri, B::Bidiagonal)
-        A = ldiv!(_initarray(\, eltype(U), eltype(B), size(U)), U, B)
+        A = ldiv!(_initarray(\, eltype(U), eltype(B), U), U, B)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
 end
 for tri in (:LowerTriangular, :UnitLowerTriangular)
     @eval function \(B::Bidiagonal, L::$tri)
-        A = ldiv!(_initarray(\, eltype(B), eltype(L), size(L)), B, L)
+        A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
     @eval function \(L::$tri, B::Bidiagonal)
-        A = ldiv!(_initarray(\, eltype(L), eltype(B), size(L)), L, B)
+        A = ldiv!(_initarray(\, eltype(L), eltype(B), L), L, B)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
 ### Diagonal specialization
 function \(B::Bidiagonal, D::Diagonal)
-    A = ldiv!(_initarray(\, eltype(B), eltype(D), size(D)), B, D)
+    A = ldiv!(_initarray(\, eltype(B), eltype(D), D), B, D)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
@@ -863,33 +863,33 @@ _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
     (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
 
-/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), size(A)), A, B)
+/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), A), A, B)
 
 ### Triangular specializations
 for tri in (:UpperTriangular, :UnitUpperTriangular)
     @eval function /(U::$tri, B::Bidiagonal)
-        A = _rdiv!(_initarray(/, eltype(U), eltype(B), size(U)), U, B)
+        A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
     @eval function /(B::Bidiagonal, U::$tri)
-        A = _rdiv!(_initarray(/, eltype(B), eltype(U), size(U)), B, U)
+        A = _rdiv!(_initarray(/, eltype(B), eltype(U), U), B, U)
         return B.uplo == 'U' ? UpperTriangular(A) : A
     end
 end
 for tri in (:LowerTriangular, :UnitLowerTriangular)
     @eval function /(L::$tri, B::Bidiagonal)
-        A = _rdiv!(_initarray(/, eltype(L), eltype(B), size(L)), L, B)
+        A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
     @eval function /(B::Bidiagonal, L::$tri)
-        A = _rdiv!(_initarray(/, eltype(B), eltype(L), size(L)), B, L)
+        A = _rdiv!(_initarray(/, eltype(B), eltype(L), L), B, L)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
 
 ### Diagonal specialization
 function /(D::Diagonal, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(D), eltype(B), size(D)), D, B)
+    A = _rdiv!(_initarray(/, eltype(D), eltype(B), D), D, B)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
