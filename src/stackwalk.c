@@ -1051,6 +1051,19 @@ void jl_rec_backtrace(jl_task_t *t)
     (void)mctx;
     (void)c;
   #endif
+ #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+    sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
+    mcontext_t *mc = &c.uc_mcontext;
+    // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
+    mc->mc_rip = ((long*)mctx)[0];
+    mc->mc_rbx = ((long*)mctx)[1];
+    mc->mc_rsp = ((long*)mctx)[2];
+    mc->mc_rbp = ((long*)mctx)[3];
+    mc->mc_r12 = ((long*)mctx)[4];
+    mc->mc_r13 = ((long*)mctx)[5];
+    mc->mc_r14 = ((long*)mctx)[6];
+    mc->mc_r15 = ((long*)mctx)[7];
+    context = &c;
  #else
   #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
   (void)c;

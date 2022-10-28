@@ -24,12 +24,12 @@ function hasuniquerep(@nospecialize t)
 end
 
 """
-    isTypeDataType(@nospecialize t)
+    isTypeDataType(@nospecialize t) -> Bool
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
-(potentially wrapped in some UnionAll), then we are guaranteed that this statement
-will be a DataType at runtime (and not e.g. a Union or UnionAll typeequal to it).
+(potentially wrapped in some `UnionAll`), then we are guaranteed that this statement
+will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
 """
 function isTypeDataType(@nospecialize t)
     isa(t, DataType) || return false
@@ -41,7 +41,7 @@ function isTypeDataType(@nospecialize t)
         # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
         # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
         # is not.
-        return _all(isTypeDataType, t.parameters)
+        return all(isTypeDataType, t.parameters)
     end
     return true
 end
@@ -80,7 +80,7 @@ end
 # (therefore also a lower bound on the number of fields)
 function datatype_min_ninitialized(t::DataType)
     isabstracttype(t) && return 0
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)

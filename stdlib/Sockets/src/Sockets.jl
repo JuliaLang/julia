@@ -727,7 +727,7 @@ function listenany(host::IPAddr, default_port; backlog::Integer=BACKLOG_DEFAULT)
             return (addr.port, sock)
         end
         close(sock)
-        addr = InetAddr(addr.host, addr.port + 1)
+        addr = InetAddr(addr.host, addr.port + UInt16(1))
         if addr.port == default_port
             error("no ports available")
         end

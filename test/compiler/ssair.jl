@@ -173,7 +173,17 @@ let ci = make_ci([
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+let ci = make_ci([
+        Expr(:call, GlobalRef(Main, :cglobal),
+                    Expr(:call, Core.tuple, :(:c)), Nothing),
+                    Core.Compiler.ReturnNode()
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
@@ -495,4 +505,48 @@ end
     @test length(ir.stmts) == instructions
 
     @test show(devnull, ir) === nothing
+end
+
+@testset "IncrementalCompact statefulness" begin
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    compact = Core.Compiler.IncrementalCompact(ir)
+
+    # set up first iterator
+    x = Core.Compiler.iterate(compact)
+    x = Core.Compiler.iterate(compact, x[2])
+
+    # set up second iterator
+    x = Core.Compiler.iterate(compact)
+
+    # consume remainder
+    while x !== nothing
+        x = Core.Compiler.iterate(compact, x[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# insert_node! for pending node
+import Core: SSAValue
+import Core.Compiler: NewInstruction, insert_node!
+let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+        a^b
+    end |> only |> first
+    @test length(ir.stmts) == 2
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+
+    newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+    newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
+
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.stmts) == 4
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+    call1 = ir.stmts[2][:inst]
+    @test iscall((ir,println), call1)
+    @test call1.args[2] === SSAValue(1)
+    call2 = ir.stmts[3][:inst]
+    @test iscall((ir,println), call2)
+    @test call2.args[2] === SSAValue(2)
 end

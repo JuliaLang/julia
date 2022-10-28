@@ -367,7 +367,7 @@ tril(M::AbstractMatrix) = tril!(copy(M))
 """
     triu(M, k::Integer)
 
-Returns the upper triangle of `M` starting from the `k`th superdiagonal.
+Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -398,7 +398,7 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 """
     tril(M, k::Integer)
 
-Returns the lower triangle of `M` starting from the `k`th superdiagonal.
+Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -1419,9 +1419,7 @@ isdiag(x::Number) = true
     axpy!(α, x::AbstractArray, y::AbstractArray)
 
 Overwrite `y` with `x * α + y` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
-
-See also [`BLAS.axpy!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`.
 
 # Examples
 ```jldoctest
@@ -1465,9 +1463,7 @@ end
     axpby!(α, x::AbstractArray, β, y::AbstractArray)
 
 Overwrite `y` with `x * α + y * β` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
-
-See also [`BLAS.axpby!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`.
 
 # Examples
 ```jldoctest

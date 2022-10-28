@@ -100,7 +100,9 @@ since it is not idiomatic to explicitly export names from `Main`.
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+    sort!(unsorted_names(m; all, imported))
+unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -119,10 +121,10 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
-const NamedTuple_typename = NamedTuple.body.body.name
+const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         if t.parameters[1] isa Tuple
             return t.parameters[1]
         else
@@ -498,8 +500,8 @@ end
     ismutable(v) -> Bool
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
-for a discussion of immutability. Note that this function works on values, so if you give it
-a type, it will tell you that a value of `DataType` is mutable.
+for a discussion of immutability. Note that this function works on values, so if you
+give it a `DataType`, it will tell you that a value of the type is mutable.
 
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
@@ -797,7 +799,7 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
@@ -864,7 +866,7 @@ function to_tuple_type(@nospecialize(t))
     if isa(t, Type) && t <: Tuple
         for p in unwrap_unionall(t).parameters
             if isa(p, Core.TypeofVararg)
-                p = p.T
+                p = unwrapva(p)
             end
             if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
@@ -1095,6 +1097,7 @@ struct CodegenParams
     prefer_specsig::Cint
     gnu_pubnames::Cint
     debug_info_kind::Cint
+    safepoint_on_entry::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1103,12 +1106,14 @@ struct CodegenParams
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   safepoint_on_entry::Bool=true,
                    lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
+            Cint(safepoint_on_entry),
             lookup, generic_context)
     end
 end
@@ -1802,7 +1807,7 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_table_for, Any, (Any,), m.sig)::Core.MethodTable
+    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
 end
 
 """

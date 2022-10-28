@@ -191,6 +191,13 @@ let n = 10
     end
 end
 
+@testset "hessenberg(::AbstractMatrix)" begin
+    n = 10
+    A = Tridiagonal(rand(n-1), rand(n), rand(n-1))
+    H = hessenberg(A)
+    @test convert(Array, H) ≈ A
+end
+
 # check logdet on a matrix that has a positive determinant
 let A = [0.5 0.1 0.9 0.4; 0.9 0.7 0.5 0.4; 0.3 0.4 0.9 0.0; 0.4 0.0 0.0 0.5]
     @test logdet(hessenberg(A)) ≈ logdet(A) ≈ -3.5065578973199822
