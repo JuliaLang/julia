@@ -542,6 +542,9 @@ end
     for i in 1:n, j in 1:n
         @test D[i, j] == (i == j ? d[i] : 0)
     end
+    @test D[:] == vec(D)
+    @test D[:,:] == Matrix(D)
+    @test D[:,:,:] == Matrix(D)[:,:,:]
 end
 
 @testset "setindex!" begin

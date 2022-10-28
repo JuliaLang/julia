@@ -121,6 +121,10 @@ end
 diagzero(::Diagonal{T}, i, j) where {T} = zero(T)
 diagzero(D::Diagonal{<:AbstractMatrix{T}}, i, j) where {T} = zeros(T, size(D.diag[i], 1), size(D.diag[j], 2))
 
+# Optimize some indexing methods to take advantage of the structure of the matrix
+getindex(D::Diagonal, ::Colon, ::Colon) = Diagonal(copy(D.diag))
+getindex(D::Diagonal, ::Colon, indsrest::Colon...) = reshape(D[:, :], Val(length(indsrest) + 1))
+
 function setindex!(D::Diagonal, v, i::Int, j::Int)
     @boundscheck checkbounds(D, i, j)
     if i == j
