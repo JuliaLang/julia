@@ -6,14 +6,14 @@
 # strict IEEE semantics.
 
 # This allows the following transformations. For more information see
-# http://llvm.org/docs/LangRef.html#fast-math-flags:
+# http://llvm.org/docs/LangRef.html#fast-math-flags :
 # nnan: No NaNs - Allow optimizations to assume the arguments and
 #       result are not NaN. Such optimizations are required to retain
 #       defined behavior over NaNs, but the value of the result is
 #       undefined.
 # ninf: No Infs - Allow optimizations to assume the arguments and
 #       result are not +/-Inf. Such optimizations are required to
-#       retain defined behavior over +/-Inf, but the value of the
+#       return some value over +/-Inf, but the value of the
 #       result is undefined.
 # nsz:  No Signed Zeros - Allow optimizations to treat the sign of a
 #       zero argument or result as insignificant.
