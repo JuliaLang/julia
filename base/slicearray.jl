@@ -223,11 +223,7 @@ julia> collect.(eachfiber(reshape(1:24,2,2,3,2); dims=3))
 """
 function eachfiber(A; dims=1::Integer)
     pr = Iterators.product(ntuple(n->axes(A, n), dims-1)..., ntuple(n->axes(A, n+dims), ndims(A)-dims)...)
-    map(pr) do x
-        inds_before = ntuple(n -> x[n], dims-1)
-        inds_after = ntuple(n -> x[n-1+dims], ndims(A)-dims)
-        view(A, inds_before..., :, inds_after...)
-    end
+    (view(A, x[1:dims-1]..., :, x[dims:ndims(A)-1]...) for x in pr)
 end
 
 """
