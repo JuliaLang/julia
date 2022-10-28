@@ -976,6 +976,22 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                    jl_ns2ms(gc_postmark_end - gc_premark_end),
                    sweep_full ? "full" : "quick", -gc_num.allocd / 1024);
 }
+
+void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
+                     uint64_t freed, uint64_t live, uint64_t interval,
+                     uint64_t pause)
+{
+    if (sweep_full > 0)
+        jl_safe_printf("%ld Major collection: estimate freed = %ld
+                       live = %ldm new interval = %ldm time = %ldms\n",
+                       end - start, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000 );
+    else
+        jl_safe_printf("%ld Minor collection: estimate freed = %ld live = %ldm
+                       new interval = %ldm time = %ldms\n",
+                       end - start, freed, live/1024/1024,
+                       interval/1024/1024, pause/1000000 );
+}
 #endif
 
 void jl_gc_debug_init(void)
