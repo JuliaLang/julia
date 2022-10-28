@@ -110,7 +110,9 @@ bool lowerCPUFeatures(Module &M)
         for (auto I: Materialized) {
             I->eraseFromParent();
         }
+#ifdef JL_VERIFY_PASSES
         assert(!verifyModule(M, &errs()));
+#endif
         return true;
     } else {
         return false;
