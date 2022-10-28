@@ -1982,19 +1982,19 @@ Signed
 
 Abstract supertype for all unsigned integers.
 
-All are printed in hexadecimal, with prefix `0x`,
+Built-in unsigned integers are printed in hexadecimal, with prefix `0x`,
 and can be entered in the same way.
 
 # Examples
 ```
-julia> unsigned(true)
-0x0000000000000001
-
-julia> Int(0x000a)
-10
-
 julia> typemax(UInt8)
 0xff
+
+julia> Int(0x00d)
+13
+
+julia> unsigned(true)
+0x0000000000000001
 ```
 """
 Unsigned
@@ -2089,6 +2089,7 @@ Float16
 for bit in (8, 16, 32, 64, 128)
     Sys.WORD_SIZE == bit && continue  # Int & UInt have separate, more detailed, descriptions
     type = Symbol(:Int, bit)
+    srange = bit > 31 ? "" : "Represents numbers `n ∈ " * repr(eval(:(typemin($type):typemax($type)))) * "`.\n"
     unshow = repr(eval(Symbol(:UInt, bit))(bit-1))
 
     @eval begin
@@ -2097,8 +2098,9 @@ for bit in (8, 16, 32, 64, 128)
 
         $($bit)-bit signed integer type.
 
-        Note that such integers overflow without warning,
+        $($(srange))Note that such integers overflow without warning,
         thus `typemax($($type)) + $($type)(1) < 0`.
+
         See also [`Int`](@ref $Int), [`widen`](@ref), [`BigInt`](@ref).
         """
         $(Symbol("Int", bit))
@@ -2120,12 +2122,13 @@ end
 
     $(Sys.WORD_SIZE)-bit signed integer type, `$Int <: Signed <: Integer <: Real`.
 
-    This is the default type of most integer literals, and has an alias `Int`.
-    It is the type returned by functions such as [`length`](@ref), and the standard type for indexing arrays.
-    The default (and the alias) may be 32 or 64 bits on different computers, indicated by `Sys.WORD_SIZE`.
+    This is the default type of most integer literals, on computers for which `Sys.WORDSIZE == $(Sys.WORD_SIZE)`,
+    and has an alias `Int`. It is the type returned by functions such as [`length`](@ref), and the
+    standard type for indexing arrays. The default (and the alias) may be 32 or 64 bits on different
+    computers, indicated by `Sys.WORD_SIZE`.
 
     Note that integers overflow without warning, thus `typemax(Int) + 1 < 0` and `10^19 < 0`.
-    Overflow can be avoided by using [`BigInt`](@ref), and is checked by most operations on [`Rational`](@ref).
+    Overflow can be avoided by using [`BigInt`](@ref).
     Very large integer literals will use a wider type, for instance `10_000_000_000_000_000_000 isa Int128`.
 
     Integer division is [`div`](@ref) alias `÷`,
@@ -2136,7 +2139,7 @@ end
     $(Symbol(Int))
 
     """
-        $UInt === UInt
+        $UInt
 
     $(Sys.WORD_SIZE)-bit unsigned integer type, `$UInt <: Unsigned <: Integer`.
 
@@ -2706,7 +2709,10 @@ which by default then calls `(x*y) * z * ...` starting from the left.
 
 Juxtaposition such as `2pi` also calls `*(2, pi)`. Note that this operation
 has higher precedence than a literal `*`, so that for instance `1/2pi == 1/(2 * pi)`,
-but lower than `^`, so that `5x^2 == 5 * (x^2)`.
+but lower precedence than `^`, so that `5x^2 == 5 * (x^2)`.
+
+Note that overflow is possible for most integer types, including the default `Int`,
+when multiplying large numbers.
 
 # Examples
 ```jldoctest
