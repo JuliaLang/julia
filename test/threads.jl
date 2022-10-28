@@ -105,6 +105,33 @@ if AFFINITY_SUPPORTED
     end
 end
 
+function get_nthreads(options = ``; cpus = nothing)
+    cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
+    cmd = `$cmd -e "print(Threads.nthreads())"`
+    cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
+    if cpus !== nothing
+        cmd = setcpuaffinity(cmd, cpus)
+    end
+    return parse(Int, read(cmd, String))
+end
+
+@testset "nthreads determined based on CPU affinity" begin
+    if AFFINITY_SUPPORTED && Sys.CPU_THREADS ≥ 2
+        @test get_nthreads() ≥ 2
+        @test get_nthreads(cpus = [1]) == 1
+        @test get_nthreads(cpus = [2]) == 1
+        @test get_nthreads(cpus = [1, 2]) == 2
+        @test get_nthreads(`-t1`, cpus = [1]) == 1
+        @test get_nthreads(`-t1`, cpus = [2]) == 1
+        @test get_nthreads(`-t1`, cpus = [1, 2]) == 1
+
+        if Sys.CPU_THREADS ≥ 3
+            @test get_nthreads(cpus = [1, 3]) == 2
+            @test get_nthreads(cpus = [2, 3]) == 2
+        end
+    end
+end
+
 # issue #34769
 function idle_callback(handle)
     idle = @Base.handle_as handle UvTestIdle
