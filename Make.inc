@@ -1149,6 +1149,26 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
+# CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
+# the next libstdc++ version would be. This is used for two things.
+# 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL
+# 2. To know which libstdc++ to load at runtime
+# We want whichever libstdc++ library is newer, because if we don't it can cause problems.
+# While what CSL bundles is quite bleeding-edge compared to what most distros shop, if someone
+# tries to build an older branch of Julia, the version of CSL that ships with it may become
+# relatively old. This is not a problem for code that is built in BB, but when we build Julia
+# with the system compiler, that compiler uses the version of `libstdc++` that it is bundled
+# with, and we can get linker errors when trying to run that `julia` executable with the
+# `libstdc++` that comes from the (now old) BB-built CSL.
+# To fix this, we take note when the system `libstdc++.so` is newer than whatever we
+# would get from CSL (by searching for a `GLIBCXX_X.Y.Z` symbol that does not exist
+# in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
+# this case. This ensures that we link against a version with the symbols required.
+# We also check the system libstdc++ at runtime in the cli loader library, and
+# load it if it contains the version symbol that indicates than it is newer than the one
+# shipped with CSL. Although we do not depend on any of the symbols, it is entirely 
+# possible that a user might choose to install a library which depends on symbols provided
+# by a newer libstdc++. Without runtime detection, those libraries would break.
 CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.30|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
