@@ -127,10 +127,7 @@ function retrieve_code_info(linfo::MethodInstance)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
-        if src === nothing
-            # can happen in images built with --strip-ir
-            return nothing
-        elseif isa(src, Array{UInt8,1})
+        if isa(src, Array{UInt8,1})
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
