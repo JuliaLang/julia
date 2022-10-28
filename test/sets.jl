@@ -422,22 +422,37 @@ end
     @test isdisjoint([1, 3, 5, 7, 9], Iterators.filter(iseven, 1:10))
 
     # range fast-path
-    @test isdisjoint(1:10, 11:20)
-    @test !isdisjoint(1:10, 10:20)
-    @test !isdisjoint(1:10, 5:20)
-    @test isdisjoint(11:20, 1:10)
-    @test !isdisjoint(10:20, 1:10)
-    @test !isdisjoint(5:20, 1:10)
-    @test isdisjoint(10:9, 1:10)
-    @test !isdisjoint(10:-1:1, 3:4)
-    @test !isdisjoint(3:4, 10:-1:1)
-    @test !isdisjoint(4:-1:3, 10:-1:1)
-    @test isdisjoint(1:2:5, 6:7)
-    @test isdisjoint(1:2:5, 0:2:6)
-    @test isdisjoint(0:0.4:3, 1:.33:2.5)
-    @test isdisjoint('A':'z', 1:2)
-    @test !isdisjoint('a':'l', 'c':'e')
-    @test isdisjoint('a':'l', 'o':'p')
+    for (truth, a, b) in (
+                   # Integers
+                   (true, 1:10, 11:20), # not overlapping
+                   (false, 1:10, 5:20), # partial overlap
+                   (false, 5:9, 1:10), # complete overlap
+                   # complete overlap, unequal steps
+                   (false, 3:6:60, 9:9:60),
+                   (true, 4:6:60, 9:9:60),
+                   (true, 0:6:12, 9:9:60),
+                   (false, 6:6:18, 9:9:60),
+                   (false, 12:6:18, 9:9:60),
+                   (false, 18:6:18, 9:9:60),
+                   # Chars
+                   (true, 'a':'l', 'o':'p'), # not overlapping
+                   (false, 'a':'l', 'h':'p'), # partial overlap
+                   (false, 'a':'l', 'c':'e'), # complete overlap
+                   # Floats
+                   (true, 1.:10., 11.:20.), # not overlapping
+                   (false, 1.:10., 5.:20.), # partial overlap
+                   (false, 5.:9., 1.:10.), # complete overlap
+                   )
+        @test isdisjoint(a, b) == truth
+        @test isdisjoint(b, a) == truth
+        @test isdisjoint(a, reverse(b)) == truth
+        @test isdisjoint(reverse(a), b) == truth
+        @test isdisjoint(b, reverse(a)) == truth
+        @test isdisjoint(reverse(b), a) == truth
+    end
+    @test isdisjoint(10:9, 1:10) # empty range
+    @test !isdisjoint(1e-100:.1:1, 0:.1:1)
+    @test !isdisjoint(eps()/4:.1:.71, 0:.1:1)
 end
 
 @testset "unique" begin
