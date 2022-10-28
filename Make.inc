@@ -66,6 +66,7 @@ USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_MIMALLOC:=0
 USE_SYSTEM_LLD:=0
 
 # Link to the LLVM shared library
@@ -1103,6 +1104,12 @@ else
   LIBUV := $(build_libdir)/libuv.a
   LIBUV_INC := $(build_includedir)
 endif
+ifeq ($(OS), WINNT)
+MIMALLOC := $(build_libdir)/libmimalloc-static.a
+else
+MIMALLOC := $(build_libdir)/libmimalloc.a
+endif
+MIMALLOC_INC := $(build_includedir)
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC := -lutf8proc
