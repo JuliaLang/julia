@@ -103,6 +103,7 @@
     XX(jl_copy_ast) \
     XX(jl_copy_code_info) \
     XX(jl_cpu_threads) \
+    XX(jl_effective_threads) \
     XX(jl_crc32c_sw) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
