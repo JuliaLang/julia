@@ -307,6 +307,39 @@ Calling [`eval`](@ref) inside a macro is a particularly dangerous warning sign; 
 macro will only work when called at the top level. If such a macro is written as a function instead,
 it will naturally have access to the run-time values it needs.
 
+## Write macro expressions where `@` is unambiguous
+Though the function-like syntax, `@mymacro(arg1, arg2, arg3)`, and statement-like syntax,
+`@mymacro arg1 arg2 arg3`, for macros, are interchangeable, they can be ambiguous in some cases.
+
+For example:
+
+```julia
+@evalpoly 1 2 3 ^ cbrt(27)
+```
+
+is ambiguous, as its unclear on what we want `@evalpoly` for. Do we want it to operate on
+`(1, 2, 3)` and then raise the result to power of `cbrt(27)`? Or we actually want it on
+`(1, 2, 3 ^ cbrt(27))`?
+
+Instead write:
+```julia
+@evalpoly(1, 2, 3) ^ cbrt(27)
+
+@evalpoly(1, 2, 3 ^ cbrt(27))
+```
+
+The function-like form should be use for macros appearing within another expression, to make
+the end of the macro construct clear.
+
+The statement-like form should be used to annotate blocks:
+```julia
+@views for i in 1:n; #= body =#; end
+
+@inline function longdef(x)
+      ...
+end
+```
+
 ## Don't expose unsafe operations at the interface level
 
 If you have a type that uses a native pointer:
