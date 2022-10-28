@@ -1039,26 +1039,6 @@ struct FooTheRef
     x::Ref
     FooTheRef(v) = new(v === nothing ? THE_REF_NULL : THE_REF)
 end
-let src = code_typed1() do
-        FooTheRef(nothing)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        FooTheRef(0)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(nothing::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(0::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
 @test fully_eliminated() do
     FooTheRef(nothing)
     nothing
