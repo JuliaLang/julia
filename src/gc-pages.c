@@ -21,6 +21,30 @@ extern "C" {
 static int block_pg_cnt = DEFAULT_BLOCK_PG_ALLOC;
 static size_t current_pg_count = 0;
 
+// Julia allocates large blocks (64M) with mmap. These are never
+// released back but the underlying physical memory may be released
+// with calls to madvise(MADV_DONTNEED).
+// These large blocks are used to allocated jl_page_size sized
+// pages, that are tracked by current_pg_count.
+static uint64_t poolmem_bytes_allocated = 0;
+static uint64_t poolmem_blocks_allocated_total = 0;
+
+
+JL_DLLEXPORT uint64_t jl_poolmem_blocks_allocated_total()
+{
+    return poolmem_blocks_allocated_total;
+}
+
+JL_DLLEXPORT uint64_t jl_poolmem_bytes_allocated()
+{
+    return poolmem_bytes_allocated;
+}
+
+JL_DLLEXPORT uint64_t jl_current_pg_count()
+{
+    return (uint64_t)current_pg_count;
+}
+
 void jl_gc_init_page(void)
 {
     if (GC_PAGE_SZ * block_pg_cnt < jl_page_size)
@@ -48,6 +72,8 @@ static char *jl_gc_try_alloc_pages(int pg_cnt) JL_NOTSAFEPOINT
                             MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (mem == MAP_FAILED)
         return NULL;
+    poolmem_bytes_allocated += pages_sz;
+    poolmem_blocks_allocated_total++;
 #endif
     if (GC_PAGE_SZ > jl_page_size)
         // round data pointer up to the nearest gc_page_data-aligned
@@ -155,8 +181,11 @@ static jl_gc_pagemeta_t *jl_gc_alloc_new_page(void) JL_NOTSAFEPOINT
         // that we successfully created the metadata for.
         // This is not supported by the Windows kernel,
         // so we have to just skip it there and just lose these virtual addresses.
-        munmap(mem + LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size),
-               GC_PAGE_SZ * pg_cnt - LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size));
+        //
+        //
+        size_t shrink_sz = GC_PAGE_SZ * pg_cnt - LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size);
+        munmap(mem + LLT_ALIGN(GC_PAGE_SZ * pg, jl_page_size), shrink_sz);
+        poolmem_bytes_allocated -= shrink_sz;
 #endif
         if (pg == 0) {
             uv_mutex_unlock(&gc_perm_lock);
