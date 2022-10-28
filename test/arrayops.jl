@@ -2295,6 +2295,15 @@ end
     end
 end
 
+@testset "fibercat undoes eachfiber" begin
+    for dimlens in [[1,1], [1,2], [2,1], [2,2], [1,4,5], [3,1,5], [3,4,1], [3,4,5], [3,2,1,5,4,4]]
+        data = reshape(1:prod(dimlens), dimlens...)
+        for N in 1:ndims(data)
+            @test data == fibercat(eachfiber(data, dims=N), dims=N)
+        end
+    end
+end
+
 ###
 ### IndexCartesian workout
 ###

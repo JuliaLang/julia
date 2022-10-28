@@ -198,6 +198,39 @@ eachcol(A::AbstractMatrix) = _eachslice(A, (2,), true)
 eachcol(A::AbstractVector) = eachcol(reshape(A, size(A, 1), 1))
 
 """
+    eachfiber(A; dims)
+
+Produces an array of vectors, which are views of (one-dimensional) fibers from the input tensor in the dimension `dims`.
+
+See also: [`eachslice`](@ref), [`fibercat`](@ref)
+
+!!! compat "Julia 1.9"
+     This function requires at least Julia 1.9.
+
+# Example
+
+```jldoctest
+julia> collect.(eachfiber(reshape(1:24,2,2,3,2); dims=3))
+2×2×2 Array{Vector{Int64}, 3}:
+[:, :, 1] =
+ [1, 5, 9]   [3, 7, 11]
+ [2, 6, 10]  [4, 8, 12]
+
+[:, :, 2] =
+ [13, 17, 21]  [15, 19, 23]
+ [14, 18, 22]  [16, 20, 24]
+```
+"""
+function eachfiber(A; dims=1::Integer)
+    pr = Iterators.product(ntuple(n->axes(A, n), dims-1)..., ntuple(n->axes(A, n+dims), ndims(A)-dims)...)
+    map(pr) do x
+        inds_before = ntuple(n -> x[n], dims-1)
+        inds_after = ntuple(n -> x[n-1+dims], ndims(A)-dims)
+        view(A, inds_before..., :, inds_after...)
+    end
+end
+
+"""
     RowSlices{M,AX,S}
 
 A special case of [`Slices`](@ref) that is a vector of row slices of a matrix, as

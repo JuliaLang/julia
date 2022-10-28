@@ -2626,6 +2626,48 @@ end
 end
 
 """
+    fibercat(A; dims)
+
+Produces a tensor from an array containing vectors, which are fibers of the tensor in the dimension `dims`.
+
+See also: [`eachfiber`](@ref)
+
+!!! compat "Julia 1.9"
+     This function requires at least Julia 1.9.
+
+# Example
+
+```jldoctest
+julia> jk = fibercat([j,k] for j in 1:4, k in 1:6; dims=3)
+4×6×2 Array{Int64, 3}:
+[:, :, 1] =
+ 1  1  1  1  1  1
+ 2  2  2  2  2  2
+ 3  3  3  3  3  3
+ 4  4  4  4  4  4
+
+[:, :, 2] =
+ 1  2  3  4  5  6
+ 1  2  3  4  5  6
+ 1  2  3  4  5  6
+ 1  2  3  4  5  6
+
+julia> maximum.(eachfiber(jk; dims=3))
+4×6 Matrix{Int64}:
+ 1  2  3  4  5  6
+ 2  2  3  4  5  6
+ 3  3  3  4  5  6
+ 4  4  4  4  5  6
+```
+"""
+function fibercat(A; dims::Integer)
+    sizeA = size(A)
+    newsize = (sizeA[1:dims-1]..., 1, sizeA[dims:end]...)
+    elsize = (ones(Int, dims-1)..., :, ones(Int, ndims(A)-dims+1)...)
+    hvncat(newsize, false, reshape.(A, elsize...)...)
+end
+
+"""
     stack(iter; [dims])
 
 Combine a collection of arrays (or other iterable objects) of equal size
