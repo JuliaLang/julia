@@ -75,7 +75,7 @@ ability to distinguish variables by case, and should beware that setting an oste
 variable may result in an uppercase `ENV` key.)
 
 If you want to create your own `ENV` variable, you can do so by specifying its name in quotation marks as
-is shown below: 
+is shown below:
 
 # Examples
 ```jldoctest ENV
