@@ -1655,5 +1655,8 @@ function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering;
     return v
 end
 
+# Support 3- and 5-argument version of sort! for backwards compatability
+sort!(v::AbstractVector, a::Algorithm, o::Ordering) = _sort!(v, a, o)
+sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering) = _sort!(v, a, o; lo, hi)
 
 end # module Sort
