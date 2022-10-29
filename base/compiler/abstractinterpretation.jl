@@ -932,16 +932,17 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
         end
         frame.parent = sv
         if !typeinf(interp, frame)
-            add_remark!(interp, sv, "[constprop] Constant inference failed")
+            add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
+            return nothing
+        end
+        @assert !isa(inf_result.result, InferenceState)
+    else
+        if isa(inf_result.result, InferenceState)
+            add_remark!(interp, sv, "[constprop] Found cached constant inference in a cycle")
             return nothing
         end
     end
-    result = inf_result.result
-    if isa(result, InferenceState)
-        add_remark!(interp, sv, "[constprop] Constant inference hit a cycle")
-        return nothing
-    end
-    return ConstCallResults(result, ConstPropResult(inf_result), inf_result.ipo_effects, mi)
+    return ConstCallResults(inf_result.result, ConstPropResult(inf_result), inf_result.ipo_effects, mi)
 end
 
 # if there's a possibility we could get a better result with these constant arguments
