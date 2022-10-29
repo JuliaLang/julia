@@ -880,6 +880,7 @@ const _kind_names =
         "tuple"
         "ref"
         "vect"
+        "parens"
         # Concatenation syntax
         "braces"
         "bracescat"

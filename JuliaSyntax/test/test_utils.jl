@@ -259,3 +259,41 @@ function show_green_tree(code; version::VersionNumber=v"1.6")
     t = JuliaSyntax.parseall(GreenNode, code, version=version)
     sprint(show, MIME"text/plain"(), t, code)
 end
+
+#-------------------------------------------------------------------------------
+# Parse s-expressions
+function parse_sexpr(code)
+    st = ParseStream(code)
+    pos_stack = ParseStreamPosition[]
+    while true
+        k = peek(st)
+        if k == K"("
+            push!(pos_stack, position(st))
+            bump(st, TRIVIA_FLAG)
+        elseif k == K")"
+            if isempty(pos_stack)
+                bump(st, error="Mismatched `)` with no opening `(`")
+                break
+            else
+                bump(st, TRIVIA_FLAG)
+            end
+            emit(st, pop!(pos_stack), K"parens")
+        elseif k == K"Identifier" || k == K"Integer"
+            bump(st)
+        elseif k == K"NewlineWs"
+            bump(st, TRIVIA_FLAG)
+        elseif k == K"EndMarker"
+            if !isempty(pos_stack)
+                bump_invisible(st, K"error", error="Mismatched `)`")
+            end
+            break
+        else
+            bump(st, error="Unexpected token")
+        end
+    end
+    if JuliaSyntax.any_error(st)
+        throw(JuliaSyntax.ParseError(st))
+    end
+    st
+end
+
