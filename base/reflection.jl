@@ -350,6 +350,7 @@ objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Core.SimpleVector, (Any,), x)
 
 struct DataTypeLayout
+    size::UInt32
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
@@ -546,8 +547,7 @@ function isstructtype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return hasfield || (t.size == 0 && !isabstracttype(t))
+    return !isprimitivetype(t) && !isabstracttype(t)
 end
 
 """
@@ -561,8 +561,7 @@ function isprimitivetype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return !hasfield && t.size != 0 && !isabstracttype(t)
+    return (t.flags & 0x80) == 0x80
 end
 
 """

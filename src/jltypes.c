@@ -1523,6 +1523,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
 
     // create and initialize new type
     ndt = jl_new_uninitialized_datatype();
+    ndt->isprimitivetype = dt->isprimitivetype;
     // associate these parameters with the new type on
     // the stack, in case one of its field types references it.
     top.tt = (jl_datatype_t*)ndt;
@@ -1567,7 +1568,6 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
 
     jl_datatype_t *primarydt = ((jl_datatype_t*)jl_unwrap_unionall(tn->wrapper));
     jl_precompute_memoized_dt(ndt, cacheable);
-    ndt->size = 0;
     if (primarydt->layout)
         jl_compute_field_offsets(ndt);
 
@@ -2030,18 +2030,17 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_datatype_type->name->wrapper = (jl_value_t*)jl_datatype_type;
     jl_datatype_type->super = (jl_datatype_t*)jl_type_type;
     jl_datatype_type->parameters = jl_emptysvec;
-    jl_datatype_type->name->n_uninitialized = 9 - 3;
-    jl_datatype_type->name->names = jl_perm_symsvec(9,
+    jl_datatype_type->name->n_uninitialized = 8 - 3;
+    jl_datatype_type->name->names = jl_perm_symsvec(8,
             "name",
             "super",
             "parameters",
             "types",
             "instance",
             "layout",
-            "size",
             "hash",
             "flags"); // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "cached_by_hash"
-    jl_datatype_type->types = jl_svec(9,
+    jl_datatype_type->types = jl_svec(8,
             jl_typename_type,
             jl_datatype_type,
             jl_simplevector_type,
@@ -2049,9 +2048,8 @@ void jl_init_types(void) JL_GC_DISABLED
             jl_any_type, // instance
             jl_any_type /*jl_voidpointer_type*/,
             jl_any_type /*jl_int32_type*/,
-            jl_any_type /*jl_int32_type*/,
             jl_any_type /*jl_uint8_type*/);
-    const static uint32_t datatype_constfields[1] = { 0x00000097 }; // (1<<0)|(1<<1)|(1<<2)|(1<<4)|(1<<7)
+    const static uint32_t datatype_constfields[1] = { 0x00000057 }; // (1<<0)|(1<<1)|(1<<2)|(1<<4)|(1<<6)
     jl_datatype_type->name->constfields = datatype_constfields;
     jl_precompute_memoized_dt(jl_datatype_type, 1);
 
@@ -2106,7 +2104,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_symbol_type->name->n_uninitialized = 0;
     jl_symbol_type->name->names = jl_emptysvec;
     jl_symbol_type->types = jl_emptysvec;
-    jl_symbol_type->size = 0;
     jl_precompute_memoized_dt(jl_symbol_type, 1);
 
     jl_simplevector_type->name = jl_new_typename_in(jl_symbol("SimpleVector"), core, 0, 1);
@@ -2160,7 +2157,6 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_tuple_typename->wrapper = (jl_value_t*)jl_anytuple_type; // remove UnionAll wrappers
     jl_anytuple_type->isconcretetype = 0;
     jl_anytuple_type->layout = NULL;
-    jl_anytuple_type->size = 0;
     jl_anytuple_type->cached_by_hash = 0;
 
     jl_tvar_t *tttvar = tvar("T");
@@ -2710,8 +2706,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_uint8pointer_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_uint8_type);
     jl_svecset(jl_datatype_type->types, 5, jl_voidpointer_type);
     jl_svecset(jl_datatype_type->types, 6, jl_int32_type);
-    jl_svecset(jl_datatype_type->types, 7, jl_int32_type);
-    jl_svecset(jl_datatype_type->types, 8, jl_uint8_type);
+    jl_svecset(jl_datatype_type->types, 7, jl_uint8_type);
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
     jl_svecset(jl_typename_type->types, 3, jl_voidpointer_type);
     jl_svecset(jl_typename_type->types, 4, jl_voidpointer_type);
