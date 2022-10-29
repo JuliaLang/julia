@@ -690,7 +690,10 @@ end
 
 @eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
-    return ccall(:jl_svec_len, Int, (Any,), v)
+    t = @_gc_preserve_begin v
+    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return len
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -745,7 +748,7 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    return ccall(:jl_svec_isassigned, Bool, (Any, Int), v, i - 1)
+    return true
 end
 
 
@@ -806,7 +809,7 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end
-    return Core._call_latest(Core.kwfunc(f), kwargs, f, args...)
+    return Core._call_latest(Core.kwcall, kwargs, f, args...)
 end
 
 """
@@ -840,7 +843,7 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)
     end
-    return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
+    return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)

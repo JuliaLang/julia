@@ -718,7 +718,8 @@ end
 f_infer_abstract_fieldtype() = fieldtype(HasAbstractlyTypedField, :x)
 @test Base.return_types(f_infer_abstract_fieldtype, ()) == Any[Type{Union{Int,String}}]
 let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
-    fieldtype_nothrow = Core.Compiler.fieldtype_nothrow
+    fieldtype_nothrow(@nospecialize(s0), @nospecialize(name)) = Core.Compiler.fieldtype_nothrow(
+        Core.Compiler.OptimizerLattice(), s0, name)
     @test fieldtype_tfunc(Union{}, :x) == Union{}
     @test fieldtype_tfunc(Union{Type{Int32}, Int32}, Const(:x)) == Union{}
     @test fieldtype_tfunc(Union{Type{Base.RefValue{T}}, Type{Int32}} where {T<:Array}, Const(:x)) == Type{<:Array}
@@ -746,6 +747,19 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_nothrow(Type{Tuple{Vararg{Int}}}, Const(42))
     @test !fieldtype_nothrow(Type{<:Tuple{Vararg{Int}}}, Const(1))
     @test TypeVar <: fieldtype_tfunc(Any, Any)
+end
+
+import Core.Compiler: MaybeUndef, builtin_nothrow
+let 𝕃ₒ = Core.Compiler.OptimizerLattice()
+    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String)], Any)
+    @test !builtin_nothrow(𝕃ₒ, setfield!, Any[Base.RefValue{String}, Core.Const(:x), MaybeUndef(String), Core.Const(:not_atomic)], Any)
+    @test !builtin_nothrow(𝕃ₒ, isdefined, Any[Any,MaybeUndef(Symbol)], Bool)
+    @test !builtin_nothrow(𝕃ₒ, fieldtype, Any[MaybeUndef(Any),Symbol], Any)
+    @test !builtin_nothrow(𝕃ₒ, isa, Any[Type,MaybeUndef(Type)], Any)
+    @test !builtin_nothrow(𝕃ₒ, <:, Any[MaybeUndef(Any),MaybeUndef(Any)], Any)
+    @test !builtin_nothrow(𝕃ₒ, Core.ifelse, Any[MaybeUndef(Bool),Any,Any], Any)
+    @test !builtin_nothrow(𝕃ₒ, typeassert, Any[MaybeUndef(Any),Type{Symbol}], Any)
+    @test !builtin_nothrow(𝕃ₒ, Core.get_binding_type, Any[Module,MaybeUndef(Symbol)], Any)
 end
 
 # issue #11480
@@ -1526,6 +1540,11 @@ end
 @test nfields_tfunc(Tuple{Int, Vararg{Int}}) === Int
 @test nfields_tfunc(Tuple{Int, Integer}) === Const(2)
 @test nfields_tfunc(Union{Tuple{Int, Float64}, Tuple{Int, Int}}) === Const(2)
+@test nfields_tfunc(@NamedTuple{a::Int,b::Integer}) === Const(2)
+@test nfields_tfunc(NamedTuple{(:a,:b),T} where T<:Tuple{Int,Integer}) === Const(2)
+@test nfields_tfunc(NamedTuple{(:a,:b)}) === Const(2)
+@test nfields_tfunc(NamedTuple{names,Tuple{Any,Any}} where names) === Const(2)
+@test nfields_tfunc(Union{NamedTuple{(:a,:b)},NamedTuple{(:c,:d)}}) === Const(2)
 
 using Core.Compiler: typeof_tfunc
 @test typeof_tfunc(Tuple{Vararg{Int}}) == Type{Tuple{Vararg{Int,N}}} where N
@@ -1752,44 +1771,46 @@ end
 @test setfield!_tfunc(ABCDconst, Const(1), Any) === Union{}
 @test setfield!_tfunc(ABCDconst, Const(2), Any) === Union{}
 @test setfield!_tfunc(ABCDconst, Const(4), Any) === Union{}
-@test setfield!_nothrow(Base.RefValue{Int}, Const(:x), Int)
-@test setfield!_nothrow(Base.RefValue{Int}, Const(1), Int)
-@test setfield!_nothrow(Base.RefValue{Any}, Const(:x), Int)
-@test setfield!_nothrow(Base.RefValue{Any}, Const(1), Int)
-@test setfield!_nothrow(XY{Any,Any}, Const(:x), Int)
-@test setfield!_nothrow(XY{Any,Any}, Const(:x), Any)
-@test setfield!_nothrow(XY{Int,Float64}, Const(:x), Int)
-@test setfield!_nothrow(ABCDconst, Const(:c), Any)
-@test setfield!_nothrow(ABCDconst, Const(3), Any)
-@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Any)
-@test !setfield!_nothrow(XY{Int,Float64}, Int, Any)
-@test !setfield!_nothrow(Base.RefValue{Int}, Const(:x), Any)
-@test !setfield!_nothrow(Base.RefValue{Int}, Const(1), Any)
-@test !setfield!_nothrow(Any[Base.RefValue{Any}, Const(:x), Int, Symbol])
-@test !setfield!_nothrow(Base.RefValue{Any}, Symbol, Int)
-@test !setfield!_nothrow(Base.RefValue{Any}, Int, Int)
-@test !setfield!_nothrow(XY{Int,Float64}, Const(:y), Int)
-@test !setfield!_nothrow(XY{Int,Float64}, Symbol, Int)
-@test !setfield!_nothrow(XY{Int,Float64}, Int, Int)
-@test !setfield!_nothrow(ABCDconst, Const(:a), Any)
-@test !setfield!_nothrow(ABCDconst, Const(:b), Any)
-@test !setfield!_nothrow(ABCDconst, Const(:d), Any)
-@test !setfield!_nothrow(ABCDconst, Symbol, Any)
-@test !setfield!_nothrow(ABCDconst, Const(1), Any)
-@test !setfield!_nothrow(ABCDconst, Const(2), Any)
-@test !setfield!_nothrow(ABCDconst, Const(4), Any)
-@test !setfield!_nothrow(ABCDconst, Int, Any)
-@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
-@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(:x), Int)
-@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
-@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Const(1), Int)
-@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
-@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Symbol, Int)
-@test !setfield!_nothrow(Union{Base.RefValue{Any},Some{Any}}, Int, Int)
-@test !setfield!_nothrow(Union{Base.RefValue,Some{Any}}, Int, Int)
-@test !setfield!_nothrow(Any, Symbol, Int)
-@test !setfield!_nothrow(Any, Int, Int)
-@test !setfield!_nothrow(Any, Any, Int)
+let 𝕃ₒ = Core.Compiler.OptimizerLattice()
+    @test setfield!_nothrow(𝕃ₒ, Base.RefValue{Int}, Const(:x), Int)
+    @test setfield!_nothrow(𝕃ₒ, Base.RefValue{Int}, Const(1), Int)
+    @test setfield!_nothrow(𝕃ₒ, Base.RefValue{Any}, Const(:x), Int)
+    @test setfield!_nothrow(𝕃ₒ, Base.RefValue{Any}, Const(1), Int)
+    @test setfield!_nothrow(𝕃ₒ, XY{Any,Any}, Const(:x), Int)
+    @test setfield!_nothrow(𝕃ₒ, XY{Any,Any}, Const(:x), Any)
+    @test setfield!_nothrow(𝕃ₒ, XY{Int,Float64}, Const(:x), Int)
+    @test setfield!_nothrow(𝕃ₒ, ABCDconst, Const(:c), Any)
+    @test setfield!_nothrow(𝕃ₒ, ABCDconst, Const(3), Any)
+    @test !setfield!_nothrow(𝕃ₒ, XY{Int,Float64}, Symbol, Any)
+    @test !setfield!_nothrow(𝕃ₒ, XY{Int,Float64}, Int, Any)
+    @test !setfield!_nothrow(𝕃ₒ, Base.RefValue{Int}, Const(:x), Any)
+    @test !setfield!_nothrow(𝕃ₒ, Base.RefValue{Int}, Const(1), Any)
+    @test !setfield!_nothrow(𝕃ₒ, Base.RefValue{Any}, Const(:x), Int, Symbol)
+    @test !setfield!_nothrow(𝕃ₒ, Base.RefValue{Any}, Symbol, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Base.RefValue{Any}, Int, Int)
+    @test !setfield!_nothrow(𝕃ₒ, XY{Int,Float64}, Const(:y), Int)
+    @test !setfield!_nothrow(𝕃ₒ, XY{Int,Float64}, Symbol, Int)
+    @test !setfield!_nothrow(𝕃ₒ, XY{Int,Float64}, Int, Int)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Const(:a), Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Const(:b), Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Const(:d), Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Symbol, Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Const(1), Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Const(2), Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Const(4), Any)
+    @test !setfield!_nothrow(𝕃ₒ, ABCDconst, Int, Any)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue{Any},Some{Any}}, Const(:x), Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue,Some{Any}}, Const(:x), Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue{Any},Some{Any}}, Const(1), Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue,Some{Any}}, Const(1), Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue{Any},Some{Any}}, Symbol, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue,Some{Any}}, Symbol, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue{Any},Some{Any}}, Int, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Union{Base.RefValue,Some{Any}}, Int, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Any, Symbol, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Any, Int, Int)
+    @test !setfield!_nothrow(𝕃ₒ, Any, Any, Int)
+end
 
 struct Foo_22708
     x::Ptr{Foo_22708}
@@ -2335,6 +2356,13 @@ end
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
+
+# `apply_type_tfunc` should always return accurate result for empty NamedTuple case
+import Core: Const
+import Core.Compiler: apply_type_tfunc
+@test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple{}) === Const(typeof((;)))
+@test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple) === Const(typeof((;)))
+@test apply_type_tfunc(Const(NamedTuple), Tuple{Vararg{Symbol}}, Type{Tuple{}}) === Const(typeof((;)))
 
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
 @test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
@@ -3054,9 +3082,12 @@ const DenseIdx = Union{IntRange,Integer}
 # Non uniformity in expressions with PartialTypeVar
 @test Core.Compiler.:⊑(Core.Compiler.PartialTypeVar(TypeVar(:N), true, true), TypeVar)
 let N = TypeVar(:N)
-    @test Core.Compiler.apply_type_nothrow([Core.Compiler.Const(NTuple),
+    𝕃 = Core.Compiler.OptimizerLattice()
+    argtypes = Any[Core.Compiler.Const(NTuple),
         Core.Compiler.PartialTypeVar(N, true, true),
-        Core.Compiler.Const(Any)], Type{Tuple{Vararg{Any,N}}})
+        Core.Compiler.Const(Any)]
+    rt = Type{Tuple{Vararg{Any,N}}}
+    @test Core.Compiler.apply_type_nothrow(𝕃, argtypes, rt)
 end
 
 # issue #33768
@@ -3921,10 +3952,6 @@ end
         +(UnhandledVarargCond(false), xs...)
     end |> only === Int
 
-    @test (Base.return_types((Vector{Any},)) do xs
-        Core.kwfunc(xs...)
-    end; true)
-
     @test Base.return_types((Vector{Vector{Int}},)) do xs
         Tuple(xs...)
     end |> only === Tuple{Vararg{Int}}
@@ -4222,3 +4249,25 @@ end |> Core.Compiler.is_foldable
     Base.Experimental.@force_compile
     @invoke invoke_concretized2(42::Integer)
 end === :integer
+
+# Test that abstract_apply doesn't fail to fully infer if the result is unused
+struct FiniteIteration
+    n::Int
+end
+Base.iterate(f::FiniteIteration, i::Int = 0) = i < f.n ? (i, i+1) : nothing
+function unused_apply_iterate()
+    tuple(FiniteIteration(4)...)
+    return nothing
+end
+@test fully_eliminated(unused_apply_iterate, ())
+
+@testset "#45956: non-linearized cglobal needs special treatment for stmt effects" begin
+    function foo()
+        cglobal((a, ))
+        ccall(0, Cvoid, (Nothing,), b)
+    end
+    @test only(code_typed() do
+        cglobal((a, ))
+        ccall(0, Cvoid, (Nothing,), b)
+    end)[2] === Nothing
+end

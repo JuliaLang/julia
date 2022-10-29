@@ -115,7 +115,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 """
     signbit(x)
 
-Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+Return `true` if the value of the sign of `x` is negative, otherwise `false`.
 
 See also [`sign`](@ref) and [`copysign`](@ref).
 
@@ -352,7 +352,7 @@ one(x::T) where {T<:Number} = one(T)
     oneunit(x::T)
     oneunit(T::Type)
 
-Returns `T(one(x))`, where `T` is either the type of the argument or
+Return `T(one(x))`, where `T` is either the type of the argument or
 (if a type is passed) the argument.  This differs from [`one`](@ref) for
 dimensionful quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).

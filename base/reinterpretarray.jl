@@ -640,7 +640,7 @@ function intersect(p1::Padding, p2::Padding)
     Padding(start, max(0, stop-start))
 end
 
-struct PaddingError
+struct PaddingError <: Exception
     S::Type
     T::Type
 end

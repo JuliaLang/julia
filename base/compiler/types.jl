@@ -23,6 +23,14 @@ struct ArgInfo
     argtypes::Vector{Any}
 end
 
+struct StmtInfo
+    """
+    If `used` is false, we know that the return value is statically unused and
+    need thus not be computed.
+    """
+    used::Bool
+end
+
 """
     InferenceResult
 
@@ -33,18 +41,19 @@ mutable struct InferenceResult
     argtypes::Vector{Any}
     overridden_by_const::BitVector
     result                   # ::Type, or InferenceState if WIP
-    src                      # ::Union{CodeInfo, OptimizationState} if inferred copy is available, nothing otherwise
+    src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
     effects::Effects         # if optimization is finished
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
+    must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
     # NOTE the main constructor is defined within inferencestate.jl
     global function _InferenceResult(
         linfo::MethodInstance,
         arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=#)
         argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
         return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing)
+            WorldRange(), Effects(), Effects(), nothing, true)
     end
 end
 
@@ -283,4 +292,18 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(BaseInferenceLattice.instance)
+
+abstract type CallInfo end
+
+@nospecialize
+
+nsplit(info::CallInfo) = nsplit_impl(info)::Union{Nothing,Int}
+getsplit(info::CallInfo, idx::Int) = getsplit_impl(info, idx)::MethodLookupResult
+getresult(info::CallInfo, idx::Int) = getresult_impl(info, idx)
+
+nsplit_impl(::CallInfo) = nothing
+getsplit_impl(::CallInfo, ::Int) = error("unexpected call into `getsplit`")
+getresult_impl(::CallInfo, ::Int) = nothing
+
+@specialize

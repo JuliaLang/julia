@@ -165,7 +165,7 @@ HANDLE hMainThread = INVALID_HANDLE_VALUE;
 // Try to throw the exception in the master thread.
 static void jl_try_deliver_sigint(void)
 {
-    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     jl_lock_profile();
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
@@ -362,12 +362,12 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                     bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)bt_data_prof + bt_size_cur,
                             bt_size_max - bt_size_cur - 1, &ctxThread, NULL);
 
-                    jl_ptls_t ptls = jl_all_tls_states[0]; // given only profiling hMainThread
+                    jl_ptls_t ptls = jl_atomic_load_relaxed(&jl_all_tls_states)[0]; // given only profiling hMainThread
 
                     // store threadid but add 1 as 0 is preserved to indicate end of block
                     bt_data_prof[bt_size_cur++].uintptr = ptls->tid + 1;
 
-                    // store task id
+                    // store task id (never null)
                     bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls->current_task);
 
                     // store cpu cycle clock

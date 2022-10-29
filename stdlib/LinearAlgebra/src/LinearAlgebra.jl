@@ -480,7 +480,7 @@ _droplast!(A) = deleteat!(A, lastindex(A))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
-# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
 # we restrict this method to only the LAPACK factorizations in LinearAlgebra.
 # The definition is put here since it explicitly references all the Factorizion structs so it has
 # to be located after all the files that define the structs.
@@ -570,7 +570,8 @@ function versioninfo(io::IO=stdout)
         println(io, indent, "--> ", lib.libname, " (", interface, ")")
     end
     println(io, "Threading:")
-    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "Threads.threadpoolsize() = ", Threads.threadpoolsize())
+    println(io, indent, "Threads.maxthreadid() = ", Base.Threads.maxthreadid())
     println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
     println(io, "Relevant environment variables:")
     env_var_names = [

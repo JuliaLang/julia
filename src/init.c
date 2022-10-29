@@ -197,12 +197,22 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
+void jl_task_frame_noreturn(jl_task_t *ct);
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
-    if (jl_all_tls_states == NULL)
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = jl_get_current_task();
+
+    // we are about to start tearing everything down, so lets try not to get
+    // upset by the local mess of things when we run the user's _atexit hooks
+    if (ct)
+        jl_task_frame_noreturn(ct);
+
+    if (ct == NULL && jl_base_module)
+        ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
 
     if (exitcode == 0)
         jl_write_compiler_output();
@@ -211,10 +221,16 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
+
+    int8_t old_state;
+    if (ct)
+        old_state = jl_gc_unsafe_enter(ct->ptls);
+
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
+                assert(ct);
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
@@ -234,7 +250,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    jl_gc_run_all_finalizers(ct);
+    if (ct)
+        jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
     if (loop != NULL) {
@@ -242,7 +259,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         JL_UV_LOCK();
         uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
         struct uv_shutdown_queue_item *item = queue.first;
-        if (ct != NULL) {
+        if (ct) {
             while (item) {
                 JL_TRY {
                     while (item) {
@@ -283,11 +300,13 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #endif
 
     jl_teardown_codegen();
+    if (ct)
+        jl_gc_unsafe_leave(ct->ptls, old_state);
 }
 
 JL_DLLEXPORT void jl_postoutput_hook(void)
 {
-    if (jl_all_tls_states == NULL)
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
     if (jl_base_module) {
@@ -766,7 +785,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
-        jl_n_threads = 1;
+        jl_atomic_store_relaxed(&jl_n_threads, 1);
     }
     jl_start_threads();
 
@@ -835,6 +854,9 @@ static void post_boot_hooks(void)
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
     jl_pair_type           = core("Pair");
+    jl_kwcall_func         = core("kwcall");
+    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
+    jl_kwcall_mt->max_args = 0;
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

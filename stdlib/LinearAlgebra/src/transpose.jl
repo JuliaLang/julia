@@ -201,3 +201,12 @@ function copy_transpose!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_de
     end
     return B
 end
+
+function copy_similar(A::AdjointAbsMat, ::Type{T}) where {T}
+    C = similar(A, T, size(A))
+    adjoint!(C, parent(A))
+end
+function copy_similar(A::TransposeAbsMat, ::Type{T}) where {T}
+    C = similar(A, T, size(A))
+    transpose!(C, parent(A))
+end

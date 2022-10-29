@@ -232,12 +232,10 @@ end
 
 function get_updated_dict(p::TOML.Parser, f::CachedTOMLDict)
     s = stat(f.path)
-    time_since_cached = time() - f.mtime
-    rough_mtime_granularity = 0.1 # seconds
-    # In case the file is being updated faster than the mtime granularity,
-    # and have the same size after the update we might miss that it changed. Therefore
-    # always check the hash in case we recently created the cache.
-    if time_since_cached < rough_mtime_granularity || s.inode != f.inode || s.mtime != f.mtime || f.size != s.size
+    # note, this might miss very rapid in-place updates, such that mtime is
+    # identical but that is solvable by not doing in-place updates, and not
+    # rapidly changing these files
+    if s.inode != f.inode || s.mtime != f.mtime || f.size != s.size
         content = read(f.path)
         new_hash = _crc32c(content)
         if new_hash != f.hash
@@ -356,8 +354,7 @@ Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 julia> using LinearAlgebra
 
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
-
-````
+```
 """
 identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
@@ -1595,8 +1592,27 @@ end
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
-and return the value of the last one.
+Load the file into an anonymous module using [`include`](@ref), evaluate all expressions,
+and return the value of the last expression.
+The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
+Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not affect the current module.
+
+# Example
+
+```jldoctest
+julia> write("testfile.jl", \"\"\"
+           @show ARGS
+           1 + 1
+       \"\"\");
+
+julia> x = evalfile("testfile.jl", ["ARG1", "ARG2"]);
+ARGS = ["ARG1", "ARG2"]
+
+julia> x
+2
+
+julia> rm("testfile.jl")
+```
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
     return Core.eval(Module(:__anon__),
