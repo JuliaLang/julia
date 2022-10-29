@@ -408,6 +408,8 @@ widen(::Type{Float32}) = Float64
 *(x::T, y::T) where {T<:IEEEFloat} = mul_float(x, y)
 /(x::T, y::T) where {T<:IEEEFloat} = div_float(x, y)
 
+/(x::Union{Integer, Float64, Float32, Float16}, y::Irrational) = x * inv(Float64(y))
+                    
 muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 
 # TODO: faster floating point div?
