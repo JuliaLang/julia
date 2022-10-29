@@ -6,21 +6,22 @@
 using JuliaSyntax: ParseStream,
     peek, peek_token,
     bump, bump_trivia, bump_invisible,
-    emit, emit_diagnostic, TRIVIA_FLAG, INFIX_FLAG
-
-code = """
-for i = 1:10
-    xx[i] + 2
-    # hi
-    yy
-end
-"""
-
-st = ParseStream(code)
+    emit, emit_diagnostic, TRIVIA_FLAG, INFIX_FLAG,
+    ParseStreamPosition, first_child_position
 
 # Here we manually issue parse events in the order the Julia parser would issue
 # them
 @testset "ParseStream" begin
+    code = """
+    for i = 1:10
+        xx[i] + 2
+        # hi
+        yy
+    end
+    """
+
+    st = ParseStream(code)
+
     p1 = position(st)
         @test peek(st) == K"for"
         bump(st, TRIVIA_FLAG)
@@ -101,4 +102,35 @@ end
             end
         end
     end
+end
+
+@testset "ParseStream tree traversal" begin
+    # NB: ParseStreamPosition.token_index includes an initial sentinel token so
+    # indices here are one more than "might be expected".
+    st = parse_sexpr("((a b) c)")
+    child1_pos = first_child_position(st, position(st))
+    @test child1_pos == ParseStreamPosition(7, 1)
+    child2_pos = first_child_position(st, child1_pos)
+    @test child2_pos == ParseStreamPosition(4, 0)
+
+    st = parse_sexpr("( (a b) c)")
+    child1_pos = first_child_position(st, position(st))
+    @test child1_pos == ParseStreamPosition(8, 1)
+    child2_pos = first_child_position(st, child1_pos)
+    @test child2_pos == ParseStreamPosition(5, 0)
+
+    st = parse_sexpr("(a (b c))")
+    @test first_child_position(st, position(st)) == ParseStreamPosition(3, 0)
+
+    st = parse_sexpr("( a (b c))")
+    @test first_child_position(st, position(st)) == ParseStreamPosition(4, 0)
+
+    st = parse_sexpr("a (b c)")
+    @test first_child_position(st, position(st)) == ParseStreamPosition(5, 0)
+
+    st = parse_sexpr("(a) (b c)")
+    @test first_child_position(st, position(st)) == ParseStreamPosition(7, 0)
+
+    st = parse_sexpr("(() ())")
+    @test first_child_position(st, position(st)) == ParseStreamPosition(4, 1)
 end

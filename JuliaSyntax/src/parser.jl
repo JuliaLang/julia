@@ -306,6 +306,22 @@ function is_valid_identifier(k)
     !(is_syntactic_operator(k) || k in KSet"? .'")
 end
 
+# The expression is a call after stripping `where` and `::`
+function was_eventually_call(ps::ParseState)
+    stream = ps.stream
+    p = position(ps)
+    while true
+        kb = peek_behind(stream, p).kind
+        if kb == K"call"
+            return true
+        elseif kb == K"where" || kb == K"::"
+            p = first_child_position(ps.stream, p)
+        else
+            return false
+        end
+    end
+end
+
 #-------------------------------------------------------------------------------
 # Parser
 #
@@ -1786,7 +1802,26 @@ function parse_resword(ps::ParseState)
             emit(ps, mark, K"error", error="expected assignment after `const`")
         end
     elseif word in KSet"function macro"
-        parse_function(ps)
+        bump(ps, TRIVIA_FLAG)
+        bump_trivia(ps)
+        has_body = parse_function_signature(ps, word == K"function")
+        if has_body
+            # The function body
+            # function f() \n a \n b end  ==> (function (call f) (block a b))
+            # function f() end            ==> (function (call f) (block))
+            parse_block(ps)
+            bump_closing_token(ps, K"end")
+            emit(ps, mark, word)
+        else
+            # Function/macro definition with no methods
+            # function f end       ==> (function f)
+            # (function f \n end)  ==> (function f)
+            # function f \n\n end  ==> (function f)
+            # function $f end      ==> (function ($ f))
+            # macro f end          ==> (macro f)
+            bump(ps, TRIVIA_FLAG, skip_newlines=true)
+            emit(ps, mark, word)
+        end
     elseif word == K"abstract"
         # Abstract type definitions
         # abstract type A end             ==>  (abstract A)
@@ -1968,23 +2003,17 @@ function parse_global_local_const_vars(ps)
 end
 
 # Parse function and macro definitions
-function parse_function(ps::ParseState)
-    mark = position(ps)
-    word = peek(ps)
-    @check word in KSet"macro function"
-    is_function = word == K"function"
+function parse_function_signature(ps::ParseState, is_function::Bool)
     is_anon_func = false
-    bump(ps, TRIVIA_FLAG)
-    bump_trivia(ps)
 
-    def_mark = position(ps)
+    mark = position(ps)
     if !is_function
         # Parse macro name
         parse_identifier_or_interpolate(ps)
         kb = peek_behind(ps).orig_kind
         if is_initial_reserved_word(ps, kb)
             # macro while(ex) end  ==> (macro (call (error while) ex) (block))
-            emit(ps, def_mark, K"error", error="Invalid macro name")
+            emit(ps, mark, K"error", error="Invalid macro name")
         else
             # macro f()     end  ==>  (macro (call f) (block))
             # macro (:)(ex) end  ==>  (macro (call : ex) (block))
@@ -1997,6 +2026,7 @@ function parse_function(ps::ParseState)
             # When an initial parenthesis is present, we might either have
             # * the function name in parens, followed by (args...)
             # * an anonymous function argument list in parens
+            # * the whole function declaration in parens
             #
             # This should somewhat parse as in parse_paren() (this is what
             # the flisp parser does), but that results in weird parsing of
@@ -2005,22 +2035,36 @@ function parse_function(ps::ParseState)
             bump(ps, TRIVIA_FLAG)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do _, _, _, _
-                _is_anon_func = peek(ps, 2) != K"("
+                _parsed_call = was_eventually_call(ps)
+                _is_anon_func = peek(ps, 2) != K"(" && !_parsed_call
                 return (needs_parameters = _is_anon_func,
-                        is_anon_func     = _is_anon_func)
+                        is_anon_func     = _is_anon_func,
+                        parsed_call      = _parsed_call)
             end
             is_anon_func = opts.is_anon_func
+            if opts.parsed_call
+                # Compat: Ugly case where extra parentheses existed and we've
+                # already parsed the whole signature.
+                # function (f() where T) end ==> (function (where (call f) T) (block))
+                # function (f()::S) end ==> (function (:: (call f) S) (block))
+                #
+                # TODO: Warn for use of parens? The precedence of `::` and
+                # `where` don't work inside parens so this is a bit of a syntax
+                # oddity/aberration.
+                return true
+            end
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
+                # function (x::f()) end ==>  (function (tuple (:: x (call f))) (block))
                 # function (x,y) end    ==>  (function (tuple x y) (block))
                 # function (x=1) end    ==>  (function (tuple (= x 1)) (block))
                 # function (;x=1) end   ==>  (function (tuple (parameters (= x 1))) (block))
-                emit(ps, def_mark, K"tuple")
+                emit(ps, mark, K"tuple")
             elseif is_empty_tuple
                 # Weird case which is consistent with parse_paren but will be
                 # rejected in lowering
                 # function ()(x) end  ==> (function (call (tuple) x) (block))
-                emit(ps, def_mark, K"tuple")
+                emit(ps, mark, K"tuple")
             else
                 # function (:)() end    ==> (function (call :) (block))
                 # function (x::T)() end ==> (function (call (:: x T)) (block))
@@ -2033,7 +2077,7 @@ function parse_function(ps::ParseState)
             kb = peek_behind(ps).orig_kind
             if is_reserved_word(kb)
                 # function begin() end  ==>  (function (call (error begin)) (block))
-                emit(ps, def_mark, K"error", error="Invalid function name")
+                emit(ps, mark, K"error", error="Invalid function name")
             else
                 # function f() end     ==>  (function (call f) (block))
                 # function type() end  ==>  (function (call type) (block))
@@ -2045,26 +2089,18 @@ function parse_function(ps::ParseState)
         end
     end
     if peek(ps, skip_newlines=true) == K"end" && !is_anon_func
-        # Function/macro definition with no methods
-        # function f end       ==> (function f)
-        # (function f \n end)  ==> (function f)
-        # function f \n\n end  ==> (function f)
-        # function $f end      ==> (function ($ f))
-        # macro f end          ==> (macro f)
-        bump(ps, TRIVIA_FLAG, skip_newlines=true)
-        emit(ps, mark, word)
-        return
+        return false
     end
     if !is_anon_func
         # Parse function argument list
         # function f(x,y)  end    ==>  (function (call f x y) (block))
         # function f{T}()  end    ==>  (function (call (curly f T)) (block))
         # function A.f()   end    ==>  (function (call (. A (quote f))) (block))
-        parse_call_chain(ps, def_mark)
+        parse_call_chain(ps, mark)
         if peek_behind(ps).kind != K"call"
             # function f body end  ==>  (function (error f) (block body))
-            emit(ps, def_mark, K"error",
-                 error="Invalid signature in $(untokenize(word)) definition")
+            emit(ps, mark, K"error",
+                 error="Invalid signature in $(is_function ? "function" : "macro") definition")
         end
     end
     if is_function && peek(ps) == K"::"
@@ -2073,21 +2109,16 @@ function parse_function(ps::ParseState)
         # function f()::g(T) end   ==>  (function (:: (call f) (call g T)) (block))
         bump(ps, TRIVIA_FLAG)
         parse_call(ps)
-        emit(ps, def_mark, K"::")
+        emit(ps, mark, K"::")
     end
     if peek(ps) == K"where"
         # Function signature where syntax
         # function f() where {T} end   ==>  (function (where (call f) T) (block))
         # function f() where T   end   ==>  (function (where (call f) T) (block))
-        parse_where_chain(ps, def_mark)
+        parse_where_chain(ps, mark)
     end
-
-    # The function body
-    # function f() \n a \n b end  ==> (function (call f) (block a b))
-    # function f() end            ==> (function (call f) (block))
-    parse_block(ps)
-    bump_closing_token(ps, K"end")
-    emit(ps, mark, word)
+    # function f()::S where T end ==> (function (where (:: (call f) S) T) (block))
+    return true
 end
 
 # Parse a try block

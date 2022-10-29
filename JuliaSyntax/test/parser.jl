@@ -444,13 +444,16 @@ tests = [
         "global const x" => "(global (error (const x)))"
         "const global x" => "(error (const (global x)))"
     ],
-    JuliaSyntax.parse_function => [
+    JuliaSyntax.parse_resword => [
+        # Macros and functions
         "macro while(ex) end"  =>  "(macro (call (error while) ex) (block))"
         "macro f()     end"    =>  "(macro (call f) (block))"
         "macro (:)(ex) end"    =>  "(macro (call : ex) (block))"
         "macro (type)(ex) end" =>  "(macro (call type ex) (block))"
         "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
         "macro (\$f)()  end"   =>  "(macro (call (\$ f)) (block))"
+        "function (f() where T) end" => "(function (where (call f) T) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
+        "function (f()::S) end"=>  "(function (:: (call f) S) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
         "function (x) body end"=>  "(function (tuple x) (block body))"
         "function (x,y) end"   =>  "(function (tuple x y) (block))"
         "function (x=1) end"   =>  "(function (tuple (= x 1)) (block))"

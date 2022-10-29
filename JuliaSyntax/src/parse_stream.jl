@@ -528,6 +528,46 @@ function peek_behind(stream::ParseStream, pos::ParseStreamPosition)
     end
 end
 
+function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
+    # Find the first nontrivia range which is a child of this range but not a
+    # child of the child
+    c = 0
+    @assert pos.range_index > 0
+    parent = stream.ranges[pos.range_index]
+    i = pos.range_index-1
+    while i >= 1
+        if stream.ranges[i].first_token >= parent.first_token &&
+               (c == 0 || stream.ranges[i].first_token < stream.ranges[c].first_token) &&
+               !is_trivia(stream.ranges[i])
+            c = i
+        end
+        i -= 1
+    end
+
+    # Find first nontrivia token
+    t = 0
+    for i = parent.first_token:parent.last_token
+        if !is_trivia(stream.tokens[i])
+            t = i
+            break
+        end
+    end
+
+    if c != 0
+        if t != 0
+            if stream.ranges[c].first_token > t
+                return ParseStreamPosition(t, c-1)
+            else
+                return ParseStreamPosition(stream.ranges[c].last_token, c)
+            end
+        else
+            return ParseStreamPosition(stream.ranges[c].last_token, c)
+        end
+    else
+        return ParseStreamPosition(t, c)
+    end
+end
+
 function peek_behind(stream::ParseStream; skip_trivia::Bool=true)
     pos = position(stream)
     if !skip_trivia || !token_is_last(stream, pos)
