@@ -412,10 +412,15 @@ insorted(x, r::AbstractRange) = in(x, r)
 abstract type Algorithm end
 
 
+"""
+    MissingOptimization(next) <: Algorithm
 
-#
-# Missing values always go at the end
-#
+Filter out missing values.
+
+Missing values are placed after other values according to `DirectOrdering`s. This pass puts
+them there and passes on a view into the original vector that excludes the missing values.
+This pass is triggered for both `sort([1, missing, 3])` and `sortperm([1, missing, 3])`.
+"""
 struct MissingOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
@@ -496,10 +501,16 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering;
 end
 
 
+"""
+    IEEEFloatOptimization(next) <: Algorithm
 
-#
-# fast clever sorting for floats
-#
+Move NaN values to the end, partition by sign, and reinterpret the rest as unsigned integers.
+
+IEEE floating point numbers (`Float64`, `Float32`, and `Float16`) compare the same as
+unsigned integers with the bits with a few exceptions. This pass
+
+This pass is triggered for both `sort([1.0, NaN, 3.0])` and `sortperm([1.0, NaN, 3.0])`.
+"""
 struct IEEEFloatOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
@@ -531,10 +542,14 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering;
 end
 
 
+"""
+    BoolOptimization(next) <: Algorithm
 
-# For AbstractVector{Bool}, counting sort is always best.
-# This is an implementation of counting sort specialized for Bools.
-# Accepts unused scratch to avoid method ambiguity.
+Sort `AbstractVector{Bool}`s using a specialized version of counting sort.
+
+Accesses each element at most twice (one read and one write), and performs at most two
+comparisons.
+"""
 struct BoolOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
@@ -553,10 +568,15 @@ function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering; lo::In
 end
 
 
+"""
+    IsUIntMappable(yes, no) <: Algorithm
 
-#
-#
-#
+Determines if the elements of a vector can be mapped to unsigned integers while preserving
+their order under the specified ordering.
+
+If they can be, dispatch to the `yes` algorithm and record the unsigned integer type that
+the elements may be mapped to. Otherwise dispatch to the `no` algorithm.
+"""
 struct IsUIntMappable{T <: Algorithm, U <: Algorithm} <: Algorithm
     yes::T
     no::U
@@ -571,10 +591,12 @@ function _sort!(v::AbstractVector, a::IsUIntMappable, o::Ordering;
 end
 
 
+"""
+    Small{N}(small=SMALL_ALGORITHM, big) <: Algorithm
 
-#
-#
-#
+Sort inputs with `length(lo:hi) <= N` using the `small` algorithm. Otherwise use the `big`
+algorithm.
+"""
 struct Small{N, T <: Algorithm, U <: Algorithm} <: Algorithm
     small::T
     big::U
@@ -590,27 +612,21 @@ function _sort!(v::AbstractVector, a::Small{N}, o::Ordering;
 end
 
 
-
-#
-#
-#
 struct InsertionSortAlg <: Algorithm end
-
 """
-    InsertionSort
+    InseritonSort
 
-Indicate that a sorting function should use the insertion sort algorithm.
+Use the insertion sort algorithm.
 
 Insertion sort traverses the collection one element at a time, inserting
 each element into its correct, sorted position in the output vector.
 
 Characteristics:
-  * *stable*: preserves the ordering of elements which
-    compare equal (e.g. "a" and "A" in a sort of letters
-    which ignores case).
-  * *in-place* in memory.
-  * *quadratic performance* in the number of elements to be sorted:
-    it is well-suited to small collections but should not be used for large ones.
+* *stable*: preserves the ordering of elements which compare equal
+(e.g. "a" and "A" in a sort of letters which ignores case).
+* *in-place* in memory.
+* *quadratic performance* in the number of elements to be sorted:
+it is well-suited to small collections but should not be used for large ones.
 """
 const InsertionSort = InsertionSortAlg()
 const SMALL_ALGORITHM = InsertionSort
@@ -634,24 +650,24 @@ function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering;
 end
 
 
+"""
+    CheckSorted(next) <: Algorithm
 
-#
-#
-#
+Check if the input is already sorted and for large inputs, also check if it is
+reverse-sorted. The reverse-sorted check is unstable.
+"""
 struct CheckSorted{T <: Algorithm} <: Algorithm
     next::T
 end
 function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering;
                 lo=firstindex(v), hi=lastindex(v), lenm1 = hi-lo, kw...)
     # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
-    # arrays it is essentially free (<1%). Insertion sort runs in a fast O(n) on presorted
-    # input and this guarantees presorted input will always be efficiently handled
+    # arrays it is essentially free (<1%).
     _issorted(v, lo, hi, o) && return v
 
-    # For large arrays, a reverse-sorted check is essentially free (overhead < 1%)
+    # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if lenm1 >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
-        # If reversing is valid, do so. This does not violate stability
-        # because being UIntMappable implies a linear order.
+        # If reversing is valid, do so. This does violates stability.
         reverse!(v, lo, hi)
         return v
     end
@@ -660,10 +676,14 @@ function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering;
 end
 
 
+"""
+    ComputeExtrema(next) <: Algorithm
 
-#
-# Prerequisite: region to be sorted [lo, hi] is nonempty
-#
+Compute the extrema of the input under the provided order.
+
+If the minimum is no less than the maximum, then the input is already sorted. Otherwise,
+dispatch to the `next` algorithm.
+"""
 struct ComputeExtrema{T <: Algorithm} <: Algorithm
     next::T
 end
@@ -683,10 +703,16 @@ function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering;
 end
 
 
+"""
+    ConsiderCountingSort(counting=CountingSort(), next) <: Algorithm
 
-#
-# Consider counting sort
-#
+If the input's range is small enough, use the `counting` algorithm. Otherwise, dispatch to
+the `next` algorithm.
+
+For most types, the threshold is if the range is shorter than half the length, but for types
+larger than Int64, bitshifts are expensive and RadixSort is not viable, so the threshold is
+much more generous.
+"""
 struct ConsiderCountingSort{T <: Algorithm, U <: Algorithm} <: Algorithm
     counting::T
     next::U
@@ -706,10 +732,15 @@ end
 _sort!(v::AbstractVector, a::ConsiderCountingSort, o::Ordering; kw...) = _sort!(v, a.next, o; kw...)
 
 
+"""
+    CountingSort <: Algorithm
 
-#
-# Counting sort
-#
+Use the counting sort algorithm.
+
+`CountingSort` is an algorithm for sorting integers that runs in Θ(length + range) time and
+space. It counts the number of occurrences of each value in the input and then iterates
+through those counts repopulating the input with the values in sorted order.
+"""
 struct CountingSort <: Algorithm end
 maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
@@ -737,10 +768,12 @@ function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering;
 end
 
 
+"""
+    ConsiderRadixSort(radix=RadixSort(), next) <: Algorithm
 
-#
-# Consider radix sort
-#
+If the number of bits in the input's range is small enough and the input supports efficient
+bitshifts, use the `radix` algorithm. Otherwise, dispatch to the `next` algorithm.
+"""
 struct ConsiderRadixSort{T <: Algorithm, U <: Algorithm} <: Algorithm
     radix::T
     next::U
@@ -759,10 +792,27 @@ function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering;
 end
 
 
+"""
+    RadixSort <: Algorithm
 
-#
-# Radix sort
-#
+Use the radix sort algorithm.
+
+`RadixSort` is a stable least significant bit first radix sort algorithm that runs in
+`O(length * log(range))` time and linear space.
+
+It first sorts the entire vector by the last `chunk_size` bits, then by the second
+to last `chunk_size` bits, and so on. Stability means that it will not reorder two elements
+that compare equal. This is essential so that the order introduced by earlier,
+less significant passes is preserved by later passes.
+
+Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, it
+ * counts the number of entries that fall into each bucket
+ * uses those counts to compute the indices to move elements of those buckets into
+ * moves elements into the computed indices in the swap array
+ * switches the swap and working array
+
+`chunk_size` is larger for larger inputs and determined by an empirical heuristic.
+"""
 struct RadixSort <: Algorithm end
 function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering;
                 lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
@@ -802,17 +852,13 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering;
 end
 
 
-
-#
-# Quicksort
-#
 """
-    PartialQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing})
+    PartialQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing}, next::Algorithm) <: Algorithm
 
 Indicate that a sorting function should use the partial quick sort algorithm.
 
-Partial quick sort finds and sorts the elements that would end up in positions
-`lo:hi` using [`QuickSort`](@ref).
+Partial quick sort finds and sorts the elements that would end up in positions `lo:hi` using
+[`QuickSort`](@ref). It is recursive and uses the `next` algorithm for small chunks
 
 Characteristics:
   * *stable*: preserves the ordering of elements which compare equal
@@ -928,10 +974,15 @@ function _sort!(v::AbstractVector, a::PartialQuickSort, o::Ordering;
 end
 
 
+"""
+    StableCheckSorted(next) <: Algorithm
 
-#
-# StableCheckSorted
-#
+Check if an input is sorted and/or reverse-sorted.
+
+The definition of reverse-sorted is that for every pair of adjacent elements, the latter is
+less than the former. This is stricter than `issorted(v, Reverse(o))` to avoid swapping pairs
+of elements that compare equal.
+"""
 struct StableCheckSorted{T<:Algorithm} <: Algorithm
     next::T
 end
@@ -948,19 +999,6 @@ function _sort!(v::AbstractVector, a::StableCheckSorted, o::Ordering;
 end
 
 
-# This is a stable least significant bit first radix sort.
-#
-# That is, it first sorts the entire vector by the last chunk_size bits, then by the second
-# to last chunk_size bits, and so on. Stability means that it will not reorder two elements
-# that compare equal. This is essential so that the order introduced by earlier,
-# less significant passes is preserved by later passes.
-#
-# Each pass divides the input into 2^chunk_size == mask+1 buckets. To do this, it
-#  * counts the number of entries that fall into each bucket
-#  * uses those counts to compute the indices to move elements of those buckets into
-#  * moves elements into the computed indices in the swap array
-#  * switches the swap and working array
-#
 # In the case of an odd number of passes, the returned vector will === the input vector t,
 # not v. This is one of the many reasons radix_sort! is not exported.
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
@@ -1033,15 +1071,111 @@ function _issorted(v::AbstractVector, lo::Integer, hi::Integer, o::Ordering)
     true
 end
 
+
 ## default sorting policy ##
 
-InitialOptimizations(x) = MissingOptimization(BoolOptimization(Small{10}(IEEEFloatOptimization(x))))
+"""
+    InitialOptimizations(next) <: Algorithm
+
+Attempt to apply a suite of low-cost optimizations to the input vector before sorting.
+
+`InitialOptimizations` is an implementation detail and subject to change or removal in
+future versions of Julia.
+
+If `next` is stable, then `InitialOptimizations(next)` is also stable.
+
+The specific optimizations attempted by `InitialOptimizations` are
+[`MissingOptimization`](@ref), [`BoolOptimization`](@ref), dispatch to
+[`InsertionSort`](@ref) for inputs with `length <= 10`, and [`IEEEFloatOptimization`](@ref).
+"""
+InitialOptimizations(next) = MissingOptimization(BoolOptimization(Small{10}(IEEEFloatOptimization(next))))
+"""
+    DEFAULT_STABLE
+
+The default sorting algorithm.
+
+This algorithm is guaranteed to be stable (i.e. it will not reorder elements that compare
+equal). It makes an effort to be fast for most inputs.
+
+The algorithms used by `DEFAULT_STABLE` are an implementation detail. See extended help
+for the current dispatch system.
+
+# Extended Help
+
+`DEFAULT_STABLE` is composed of two parts: the [`InitialOptimizations`](@ref) and a hybrid
+of Radix, Insertion, Counting, Quick sorts.
+
+We begin with MissingOptimization because it has no runtime cost when it is not
+triggered and can enable other optimizations to be applied later. For example,
+BoolOptimization cannot apply to an `AbstractVector{Union{Missing, Bool}}`, but after
+[`MissingOptimization`](@ref) is applied, that input will be converted into am
+`AbstractVector{Bool}`.
+
+We next apply [`BoolOptimization`](@ref) because it also has no runtime cost when it is not
+triggered and when it is triggered, it is an incredibly efficient algorithm (sorting `Bool`s
+is quite easy).
+
+Next, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 10`. This dispatch
+occurs before the [`IEEEFloatOptimization`](@ref) pass because the
+[`IEEEFloatOptimization`](@ref)s are not beneficial for very small inputs.
+
+To conclude the [`InitialOptimizations`](@ref), we apply [`IEEEFloatOptimization`](@ref).
+
+After these optimizations, we branch on whether radix sort and related algorithms can be
+applied to the input vector and ordering. We conduct this branch by testing if
+`UIntMappable(v, order) !== nothing`. That is, we see if we know of a reversible mapping
+from `eltype(v)` to `UInt` that preserves the ordering `order`. We perform this check after
+the initial optimizations because they can change the input vector's type and ordering to
+make them `UIntMappable`.
+
+If the input is not [`UIntMappable`](@ref), then we perform a presorted check and dispatch
+to [`QuickSort`](@ref).
+
+Otherwise, we dispatch to [`InsertionSort`](@ref) for inputs with `length <= 40` and then
+perform a presorted check ([`CheckSorted`](@ref)).
+
+We check for short inputs before performing the presorted check to avoid the overhead of the
+check for small inputs. Because the alternate dispatch is to [`InseritonSort`](@ref) which
+has efficient `O(n)` runtime on presorted inputs, the check is not necessary for small
+inputs.
+
+We check if the input is reverse-sorted for long vectors (more than 500 elements) because
+the check is essentially free unless the input is almost entirely reverse sorted.
+
+Note that once the input is determined to be [`UIntMappable`](@ref), we know the order forms
+a [total order](wikipedia.org/wiki/Total_order) over the inputs and so it is impossible to
+perform an unstable sort because no two elements can compare equal unless they _are_ equal,
+in which case switching them is undetectable. We utilize this fact to perform a more
+aggressive reverse sorted check that will reverse the vector `[3, 2, 2, 1]`.
+
+After these potential fast-paths are tried and failed, we [`ComputeExtrema`](@ref) of the
+input. This computation has a fairly fast `O(n)` runtime, but we still try to delay it until
+it is necessary.
+
+Next, we [`ConsiderCountingSort`](@ref). If the range the input is small compared to its
+length, we apply [`CountingSort`](@ref).
+
+Next, we [`ConsiderRadixSort`](@ref). This is similar to the dispatch to counting sort,
+but we conside rthe number of _bits_ in the range, rather than the range itself.
+Consequently, we apply [`RadixSort`](@ref) for any reasonably long inputs that reach this
+stage.
+
+Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
+otherwise we dispatch to [`QuickSort`](@ref).
+"""
 const DEFAULT_STABLE = InitialOptimizations(IsUIntMappable(
     Small{40}(CheckSorted(ComputeExtrema(ConsiderCountingSort(ConsiderRadixSort(Small{80}(QuickSort)))))),
     StableCheckSorted(QuickSort)))
+"""
+    DEFAULT_UNSTABLE
+
+An efficient sorting algorithm.
+
+The algorithms used by `DEFAULT_UNSTABLE` are an implementation detail. They are currently
+the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to change in future.
+"""
 const DEFAULT_UNSTABLE = DEFAULT_STABLE
 const SMALL_THRESHOLD  = 20
-
 
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
