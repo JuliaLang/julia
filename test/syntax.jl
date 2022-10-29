@@ -878,6 +878,12 @@ let f = function (x::T, y::S) where T<:S where S
     @test f(0,1) === (Int,Int)
 end
 
+# issue #45506
+@test :( function (a) where {B, C} end).args[1] == Expr(:where, Expr(:tuple, :a), :B, :C)
+@test (function(::Type{Tuple{A45506, B45506}}) where {A45506 <: Any, B45506 <: Any}
+    B45506
+end)(Tuple{Int8, Int16}) == Int16
+
 # issue #20541
 @test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
