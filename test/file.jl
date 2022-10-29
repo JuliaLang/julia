@@ -771,13 +771,13 @@ end
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
-    files_stat = stat(file)
     close(open(file, "w")) # like touch, but lets the operating system update
+    files_stat = stat(file)
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
-    newfile_stat = stat(file)
+    newfile_stat = stat(newfile)
 
     @test !ispath(file)
     @test isfile(newfile)
