@@ -1166,7 +1166,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # this case. This ensures that we link against a version with the symbols required.
 # We also check the system libstdc++ at runtime in the cli loader library, and
 # load it if it contains the version symbol that indicates than it is newer than the one
-# shipped with CSL. Although we do not depend on any of the symbols, it is entirely 
+# shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.
 CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.30|GLIBCXX_3\.5\.|GLIBCXX_4\.
