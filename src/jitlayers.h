@@ -18,6 +18,9 @@
 #include <llvm/Passes/StandardInstrumentations.h>
 
 #include <llvm/Target/TargetMachine.h>
+
+#include "jitprof.h"
+
 #include "julia_assert.h"
 #include "debug-registry.h"
 #include "platform.h"
@@ -378,7 +381,7 @@ public:
         std::unique_ptr<WNMutex> mutex;
     };
     struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel);
+        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, JITFunctionProfiler &Profiler, int optlevel);
         CompileLayerT CompileLayer;
         OptimizeLayerT OptimizeLayer;
     };
@@ -460,6 +463,10 @@ public:
     jl_locked_stream &get_dump_llvm_opt_stream() JL_NOTSAFEPOINT {
         return dump_llvm_opt_stream;
     }
+
+    void dumpProfileData(raw_ostream &OS) {
+        Profiler.dump(OS);
+    }
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
@@ -485,6 +492,8 @@ private:
     jl_locked_stream dump_llvm_opt_stream;
 
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
+
+    JITFunctionProfiler Profiler;
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;

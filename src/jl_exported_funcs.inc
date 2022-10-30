@@ -546,6 +546,7 @@
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
+    YY(jl_dump_profile_data) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \

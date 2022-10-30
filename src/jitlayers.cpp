@@ -1076,7 +1076,7 @@ namespace {
 #endif
 
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, int optlevel) : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
+        OptimizerT(TargetMachine &TM, int optlevel, JITFunctionProfiler &Profiler) : optlevel(optlevel), PMs(PMCreator(TM, optlevel)), Profiler(Profiler) {}
 
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
             TSM.withModuleDo([&](Module &M) {
@@ -1107,9 +1107,20 @@ namespace {
                 JL_TIMING(LLVM_OPT);
 
                 //Run the optimization
+                auto TM = jl_ExecutionEngine->cloneTargetMachine();
+                PassBuilder PB;
                 assert(!verifyModule(M, &errs()));
+                AnalysisManagers AM(*TM, PB, OptimizationLevel::O0);
+                ModulePassManager MPM;
+                MPM.addPass(createModuleToFunctionPassAdaptor(Profiler.createPreoptimizationProfiler()));
+                MPM.run(M, AM.MAM);
                 (***PMs).run(M);
                 assert(!verifyModule(M, &errs()));
+                MPM = ModulePassManager();
+                PB = PassBuilder();
+                AnalysisManagers AM2(*TM, PB, OptimizationLevel::O0);
+                MPM.addPass(createModuleToFunctionPassAdaptor(Profiler.createPostoptimizationProfiler()));
+                MPM.run(M, AM2.MAM);
 
                 uint64_t end_time = 0;
                 {
@@ -1153,6 +1164,7 @@ namespace {
     private:
         int optlevel;
         JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>> PMs;
+        JITFunctionProfiler &Profiler;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
@@ -1175,10 +1187,10 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     return jl_data_layout;
 }
 
-JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
+JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, JITFunctionProfiler &Profiler, int optlevel)
 : CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
     std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM.Options), TM, optlevel)),
-  OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(TM, optlevel)) {}
+  OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(TM, optlevel, Profiler)) {}
 
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
@@ -1211,10 +1223,10 @@ JuliaOJIT::JuliaOJIT()
         ),
 #endif
     Pipelines{
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 1),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, Profiler, 0),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, Profiler, 1),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, Profiler, 2),
+        std::make_unique<PipelineT>(ObjectLayer, *TM, Profiler, 3),
     },
     OptSelLayer(Pipelines)
 {
@@ -1779,4 +1791,10 @@ extern "C" JL_DLLEXPORT
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+extern "C" JL_DLLEXPORT
+void jl_dump_profile_data_impl(void)
+{
+    jl_ExecutionEngine->dumpProfileData(dbgs());
 }
