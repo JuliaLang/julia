@@ -1115,7 +1115,7 @@ See [`sizehint!`](@ref) for notes about the performance model.
 See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
 and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
-append!(a::Vector{T}, items::AbstractVector{U}) where {U <: T} = unsafe_append!(a, items)
+append!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_append!(a, items)
 append!(a::Vector, items::AbstractVector) = try_append!(a, items)
 
 function try_append!(a::Vector, items::AbstractVector)
@@ -1214,7 +1214,7 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-prepend!(a::Vector{T}, items::AbstractVector{U}) where {U <: T} = unsafe_prepend!(a, items)
+prepend!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_prepend!(a, items)
 prepend!(a::Vector, items::AbstractVector) = try_prepend!(a, items)
 
 function try_prepend!(a::Vector, items::AbstractVector)
