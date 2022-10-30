@@ -344,21 +344,29 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                     if t1 === UnitUpperTriangular && t2 === UnitUpperTriangular
                         @test A1*A2 isa UnitUpperTriangular
                         @test A1/A2 isa UnitUpperTriangular
+                        elty1 == Int && elty2 == Int && @test eltype(A1/A2) == Int
                         @test A1\A2 isa UnitUpperTriangular
+                        elty1 == Int && elty2 == Int && @test eltype(A1\A2) == Int
                     else
                         @test A1*A2 isa UpperTriangular
                         @test A1/A2 isa UpperTriangular
+                        elty1 == Int && elty2 == Int && t2 === UnitUpperTriangular && @test eltype(A1/A2) == Int
                         @test A1\A2 isa UpperTriangular
+                        elty1 == Int && elty2 == Int && t1 === UnitUpperTriangular && @test eltype(A1\A2) == Int
                     end
                 elseif uplo1 === :L && uplo2 === :L
                     if t1 === UnitLowerTriangular && t2 === UnitLowerTriangular
                         @test A1*A2 isa UnitLowerTriangular
                         @test A1/A2 isa UnitLowerTriangular
+                        elty1 == Int && elty2 == Int && @test eltype(A1/A2) == Int
                         @test A1\A2 isa UnitLowerTriangular
+                        elty1 == Int && elty2 == Int && @test eltype(A1\A2) == Int
                     else
                         @test A1*A2 isa LowerTriangular
                         @test A1/A2 isa LowerTriangular
+                        elty1 == Int && elty2 == Int && t2 === UnitLowerTriangular && @test eltype(A1/A2) == Int
                         @test A1\A2 isa LowerTriangular
+                        elty1 == Int && elty2 == Int && t1 === UnitLowerTriangular && @test eltype(A1\A2) == Int
                     end
                 end
                 offsizeA = Matrix{Float64}(I, n+1, n+1)
@@ -680,8 +688,23 @@ isdefined(Main, :Furlongs) || @eval Main include(joinpath($(BASE_TEST_PATH), "te
 using .Main.Furlongs
 LinearAlgebra.sylvester(a::Furlong,b::Furlong,c::Furlong) = -c / (a + b)
 
-let A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
-    @test sqrt(A) == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+@testset "dimensional correctness" begin
+    A = UpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
+    @test sqrt(A)::UpperTriangular == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+    @test inv(A)::UpperTriangular == Furlong{-1}.(UpperTriangular([1 -4; 0 1]))
+    B = UnitUpperTriangular([Furlong(1) Furlong(4); Furlong(0) Furlong(1)])
+    @test sqrt(B)::UnitUpperTriangular == Furlong{1//2}.(UpperTriangular([1 2; 0 1]))
+    @test inv(B)::UnitUpperTriangular == Furlong{-1}.(UpperTriangular([1 -4; 0 1]))
+    b = [Furlong(5), Furlong(8)]
+    @test (A \ b)::Vector{<:Furlong{0}} == (B \ b)::Vector{<:Furlong{0}} == Furlong{0}.([-27, 8])
+    C = LowerTriangular([Furlong(1) Furlong(0); Furlong(4) Furlong(1)])
+    @test sqrt(C)::LowerTriangular == Furlong{1//2}.(LowerTriangular([1 0; 2 1]))
+    @test inv(C)::LowerTriangular == Furlong{-1}.(LowerTriangular([1 0; -4 1]))
+    D = UnitLowerTriangular([Furlong(1) Furlong(0); Furlong(4) Furlong(1)])
+    @test sqrt(D)::UnitLowerTriangular == Furlong{1//2}.(UnitLowerTriangular([1 0; 2 1]))
+    @test inv(D)::UnitLowerTriangular == Furlong{-1}.(UnitLowerTriangular([1 0; -4 1]))
+    b = [Furlong(5), Furlong(8)]
+    @test (C \ b)::Vector{<:Furlong{0}} == (D \ b)::Vector{<:Furlong{0}} == Furlong{0}.([5, -12])
 end
 
 isdefined(Main, :ImmutableArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "ImmutableArrays.jl"))

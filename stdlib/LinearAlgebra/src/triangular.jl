@@ -2093,7 +2093,7 @@ function sqrt(A::UnitUpperTriangular{T}) where T
     n = checksquare(B)
     t = typeof(sqrt(zero(T)))
     R = Matrix{t}(I, n, n)
-    tt = typeof(zero(t)*zero(t))
+    tt = typeof(oneunit(t)*oneunit(t))
     half = inv(R[1,1]+R[1,1]) # for general, algebraic cases. PR#20214
     @inbounds for j = 1:n
         for i = j-1:-1:1
@@ -2101,7 +2101,7 @@ function sqrt(A::UnitUpperTriangular{T}) where T
             @simd for k = i+1:j-1
                 r -= R[i,k]*R[k,j]
             end
-            r==0 || (R[i,j] = half*r)
+            iszero(r) || (R[i,j] = half*r)
         end
     end
     return UnitUpperTriangular(R)
