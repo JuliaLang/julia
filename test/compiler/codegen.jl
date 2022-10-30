@@ -689,12 +689,25 @@ mktempdir() do pfx
     cp(dirname(Sys.BINDIR), pfx; force=true)
     libpath = relpath(dirname(dlpath(libjulia_codegen_name())), dirname(Sys.BINDIR))
     libs_deleted = 0
-    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    libfiles = filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    for f in libfiles
         rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
     @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+
+    # PR #47343
+    libs_emptied = 0
+    for f in libfiles
+        touch(joinpath(pfx, libpath, f))
+        libs_emptied += 1
+    end
+
+    errfile = joinpath(pfx, "stderr.txt")
+    @test libs_emptied > 0
+    @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
+    @test contains(readline(errfile), "ERROR: Unable to load dependent library")
 end
 
 # issue #42645
