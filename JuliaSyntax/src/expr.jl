@@ -30,7 +30,14 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         end
     end
     nodekind = kind(node)
-    if nodekind == K"?"
+    node_args = children(node)
+    if nodekind == K"var"
+        @check length(node_args) == 1
+        return _to_expr(node_args[1])
+    elseif nodekind == K"char"
+        @check length(node_args) == 1
+        return _to_expr(node_args[1])
+    elseif nodekind == K"?"
         headsym = :if
     elseif nodekind == K"=" && !is_decorated(node) && eq_to_kw
         headsym = :kw
@@ -39,7 +46,6 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         headsym = !isnothing(headstr) ? Symbol(headstr) :
             error("Can't untokenize head of kind $(nodekind)")
     end
-    node_args = children(node)
     if headsym == :string || headsym == :cmdstring
         # Julia string literals may be interspersed with trivia in two situations:
         # 1. Triple quoted string indentation is trivia
@@ -240,9 +246,6 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym == :do
         @check length(args) == 3
         return Expr(:do, args[1], Expr(:->, args[2], args[3]))
-    elseif headsym == :char
-        @check length(args) == 1
-        return args[1]
     elseif headsym == :let
         @check Meta.isexpr(args[1], :block)
         a1 = args[1].args
