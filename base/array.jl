@@ -1115,7 +1115,20 @@ See [`sizehint!`](@ref) for notes about the performance model.
 See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
 and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
-function append!(a::Vector, items::AbstractVector)
+append!(a::Vector{T}, items::AbstractVector{U}) where {U <: T} = unsafe_append!(a, items)
+append!(a::Vector, items::AbstractVector) = try_append!(a, items)
+
+function try_append!(a::Vector, items::AbstractVector)
+    n = length(a)
+    try
+        _unsafe_append!(a, items)
+    catch e
+        resize!(a, n)
+        rethrow(e)
+    end
+    return a
+end
+function unsafe_append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
@@ -1123,22 +1136,47 @@ function append!(a::Vector, items::AbstractVector)
     return a
 end
 
-append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
+function append!(a::AbstractVector, iter)
+    if  IteratorEltype(iter) == HasEltype() && eltype(iter) <: eltype(a)
+        _unsafe_append!(a, IteratorSize(iter), iter)
+    else
+        _try_append!(a, IteratorSize(iter), iter)
+    end
+end
 push!(a::AbstractVector, iter...) = append!(a, iter)
 
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
-function _append!(a, ::Union{HasLength,HasShape}, iter)
+function _try_append!(a, sz::Union{HasLength,HasShape}, iter)
+    n = length(a)
+    try
+        _unsafe_append!(a, sz, iter)
+    catch e
+        resize!(a, n)
+        rethrow(e)
+    end
+end
+function _unsafe_append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
     resize!(a, n+Int(length(iter))::Int)
-    @inbounds for (i, item) in zip(i+1:lastindex(a), iter)
-        a[i] = item
+    for (i, item) in zip(i+1:lastindex(a), iter)
+        @inbounds a[i] = item
     end
     a
 end
 
-function _append!(a, ::IteratorSize, iter)
+function _try_append!(a, sz::IteratorSize, iter)
+    n = length(a)
+    try
+        _unsafe_append!(a, sz, iter)
+    catch e
+        resize!(a, n)
+        rethrow(e)
+    end
+    a
+end
+function _unsafe_append!(a, ::IteratorSize, iter)
     for item in iter
         push!(a, item)
     end
@@ -1176,7 +1214,20 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-function prepend!(a::Vector, items::AbstractVector)
+prepend!(a::Vector{T}, items::AbstractVector{U}) where {U <: T} = unsafe_prepend!(a, items)
+prepend!(a::Vector, items::AbstractVector) = try_prepend!(a, items)
+
+function try_prepend!(a::Vector, items::AbstractVector)
+    n = length(itemindices)
+    try
+        unsafe_prepend!(a, items)
+    catch e
+        _deletebeg!(a, n)
+        rethrow(e)
+    end
+    return a
+end
+function unsafe_prepend!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growbeg!(a, n)
@@ -1188,12 +1239,28 @@ function prepend!(a::Vector, items::AbstractVector)
     return a
 end
 
-prepend!(a::Vector, iter) = _prepend!(a, IteratorSize(iter), iter)
+function prepend!(a::AbstractVector, iter)
+    if IteratorEltype(iter) == HasEltype() && eltype(iter) <: eltype(a)
+        _unsafe_prepend!(a, IteratorSize(iter), iter)
+    else
+        _try_prepend!(a, IteratorSize(iter), iter)
+    end
+end
 pushfirst!(a::Vector, iter...) = prepend!(a, iter)
 
 prepend!(a::AbstractVector, iter...) = foldr((v, a) -> prepend!(a, v), iter, init=a)
 
-function _prepend!(a, ::Union{HasLength,HasShape}, iter)
+function _try_prepend!(a, sz::Union{HasLength,HasShape}, iter)
+    n = length(iter)
+    try
+        _unsafe_prepend!(a, sz, iter)
+    catch e
+        _deletebeg!(a, n)
+        rethrow(e)
+    end
+    a
+end
+function _unsafe_prepend!(a, ::Union{HasLength,HasShape}, iter)
     require_one_based_indexing(a)
     n = length(iter)
     _growbeg!(a, n)
@@ -1203,7 +1270,18 @@ function _prepend!(a, ::Union{HasLength,HasShape}, iter)
     end
     a
 end
-function _prepend!(a, ::IteratorSize, iter)
+
+function _try_prepend!(a::Vector, sz::IteratorSize, iter)
+    n = length(a)
+    try
+        unsafe_prepend!(a, sz, iter)
+    catch e
+        _deletebeg!(a, length(a) - n)
+        rethrow(e)
+    end
+    a
+end
+function _unsafe_prepend!(a::Vector, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
