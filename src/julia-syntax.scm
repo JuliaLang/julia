@@ -2910,17 +2910,16 @@
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))
 
-(define (lhs-vars e)
-  (cond ((symdecl? e)   (list (decl-var e)))
-        ((and (pair? e) (eq? (car e) 'tuple))
-         (apply append (map lhs-vars (cdr e))))
-        (else '())))
-
 (define (lhs-decls e)
   (cond ((symdecl? e)   (list e))
-        ((and (pair? e) (eq? (car e) 'tuple))
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
+
+(define (lhs-vars e)
+  (map decl-var (lhs-decls e)))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
@@ -4381,10 +4380,12 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core globalref outerref boundscheck))))
+                                                   (memq (car arg) '(quote inert top core boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
-                                         (not (and (symbol? arg)
+                                         (not (and (or (symbol? arg)
+                                                       (and (pair? arg)
+                                                            (memq (car arg) '(globalref outerref))))
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
                                     (let ((tmp (make-ssavalue)))

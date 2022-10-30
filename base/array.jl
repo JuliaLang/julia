@@ -36,7 +36,7 @@ const AbstractMatrix{T} = AbstractArray{T,2}
 Union type of [`AbstractVector{T}`](@ref) and [`AbstractMatrix{T}`](@ref).
 """
 const AbstractVecOrMat{T} = Union{AbstractVector{T}, AbstractMatrix{T}}
-const RangeIndex = Union{Int, AbstractRange{Int}, AbstractUnitRange{Int}}
+const RangeIndex = Union{<:BitInteger, AbstractRange{<:BitInteger}}
 const DimOrInd = Union{Integer, AbstractUnitRange}
 const IntOrInd = Union{Int, AbstractUnitRange}
 const DimsOrInds{N} = NTuple{N,DimOrInd}
@@ -1259,7 +1259,12 @@ end
 """
     sizehint!(s, n) -> s
 
-Suggest that collection `s` reserve capacity for at least `n` elements. This can improve performance.
+Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
+you expect that you're going to have to push a lot of values onto `s`, you can avoid
+the cost of incremental reallocation by doing it once up front; this can improve
+performance.
+
+See also [`resize!`](@ref).
 
 # Notes on the performance model
 

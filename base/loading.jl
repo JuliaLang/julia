@@ -354,8 +354,7 @@ Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 julia> using LinearAlgebra
 
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
-
-````
+```
 """
 identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
@@ -1593,8 +1592,27 @@ end
 """
     evalfile(path::AbstractString, args::Vector{String}=String[])
 
-Load the file using [`include`](@ref), evaluate all expressions,
-and return the value of the last one.
+Load the file into an anonymous module using [`include`](@ref), evaluate all expressions,
+and return the value of the last expression.
+The optional `args` argument can be used to set the input arguments of the script (i.e. the global `ARGS` variable).
+Note that definitions (e.g. methods, globals) are evaluated in the anonymous module and do not affect the current module.
+
+# Example
+
+```jldoctest
+julia> write("testfile.jl", \"\"\"
+           @show ARGS
+           1 + 1
+       \"\"\");
+
+julia> x = evalfile("testfile.jl", ["ARG1", "ARG2"]);
+ARGS = ["ARG1", "ARG2"]
+
+julia> x
+2
+
+julia> rm("testfile.jl")
+```
 """
 function evalfile(path::AbstractString, args::Vector{String}=String[])
     return Core.eval(Module(:__anon__),
