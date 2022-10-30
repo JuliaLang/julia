@@ -120,7 +120,7 @@ normalize(s::AbstractString; kwargs...) = Base.Unicode.normalize(s; kwargs...)
 """
     Unicode.isassigned(c) -> Bool
 
-Returns `true` if the given char or integer is an assigned Unicode code point.
+Return `true` if the given char or integer is an assigned Unicode code point.
 
 # Examples
 ```jldoctest
@@ -136,7 +136,7 @@ isassigned(c) = Base.Unicode.isassigned(c)
 """
     graphemes(s::AbstractString) -> GraphemeIterator
 
-Returns an iterator over substrings of `s` that correspond to the extended graphemes in the
+Return an iterator over substrings of `s` that correspond to the extended graphemes in the
 string, as defined by Unicode UAX #29. (Roughly, these are what users would perceive as
 single characters, even though they may contain more than one codepoint; for example a
 letter combined with an accent mark is a single grapheme.)
