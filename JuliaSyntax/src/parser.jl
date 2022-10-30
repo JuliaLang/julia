@@ -125,6 +125,10 @@ function textbuf(ps::ParseState)
     textbuf(ps.stream)
 end
 
+function first_child_position(ps::ParseState, pos::ParseStreamPosition)
+    first_child_position(ps.stream, pos)
+end
+
 #-------------------------------------------------------------------------------
 # Parser Utils
 
@@ -315,7 +319,7 @@ function was_eventually_call(ps::ParseState)
         if kb == K"call"
             return true
         elseif kb == K"where" || kb == K"::"
-            p = first_child_position(ps.stream, p)
+            p = first_child_position(ps, p)
         else
             return false
         end
@@ -1363,7 +1367,7 @@ function parse_identifier_or_interpolate(ps::ParseState)
     # export outer  ==> (export outer)
     # export ($f)   ==> (export ($ f))
     ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
-         (!b.is_leaf && b.kind == K"$")
+         (!b.is_leaf && b.kind in KSet"$ var")
     if !ok
         emit(ps, mark, K"error", error="Expected identifier")
     end
@@ -1372,10 +1376,7 @@ end
 function finish_macroname(ps, mark, valid_macroname, macro_name_position,
                           name_kind=nothing)
     if valid_macroname
-        if isnothing(name_kind)
-            name_kind = macro_name_kind(peek_behind(ps, macro_name_position).kind)
-        end
-        reset_node!(ps, macro_name_position, kind = name_kind)
+        fix_macro_name_kind!(ps, macro_name_position, name_kind)
     else
         emit(ps, mark, K"error", error="not a valid macro name or macro module path")
     end
@@ -1396,7 +1397,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
     # source range of the @-prefixed part of a macro
     macro_atname_range = nothing
     # $A.@x  ==>  (macrocall (. ($ A) (quote @x)))
-    valid_macroname = peek_behind(ps, skip_trivia=false).kind in KSet"Identifier . $"
+    # A.@var"#"  ==>  (macrocall (. A (quote @x)))
+    valid_macroname = peek_behind(ps, skip_trivia=false).kind in KSet"Identifier var . $"
     # We record the last component of chains of dot-separated identifiers so we
     # know which identifier was the macro name.
     macro_name_position = position(ps) # points to same output span as peek_behind
@@ -1411,6 +1413,8 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # @foo (x,y)  ==> (macrocall @foo (tuple x y))
             # a().@x y    ==> (macrocall (error (. (call a) (quote x))) y)
             # [@foo x]    ==> (vect (macrocall @foo x))
+            # @var"#" a   ==> (macrocall (var @#) a)
+            # A.@var"#" a ==> (macrocall (. A (quote (var @#))) a)
             finish_macroname(ps, mark, valid_macroname, macro_name_position)
             let ps = with_space_sensitive(ps)
                 # Space separated macro arguments
@@ -2229,10 +2233,18 @@ function parse_do(ps::ParseState, mark)
     emit(ps, mark, K"do")
 end
 
-function macro_name_kind(k)
-    return k == K"Identifier"    ? K"MacroName"    :
-           k == K"."             ? K"@."           :
-           internal_error("unrecognized source kind for macro name ", k)
+function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=nothing)
+    k = peek_behind(ps, macro_name_position).kind
+    if k == K"var"
+        macro_name_position = first_child_position(ps, macro_name_position)
+        k = peek_behind(ps, macro_name_position).kind
+    end
+    if isnothing(name_kind)
+        name_kind = k == K"Identifier" ? K"MacroName" :
+                    k == K"."          ? K"@."        :
+                    internal_error("unrecognized source kind for macro name ", k)
+    end
+    reset_node!(ps, macro_name_position, kind=name_kind)
 end
 
 # If remap_kind is false, the kind will be remapped by parse_call_chain after
@@ -2250,23 +2262,25 @@ function parse_macro_name(ps::ParseState)
         # @! x   ==>  (macrocall @! x)
         # @.. x  ==>  (macrocall @.. x)
         # @$ x   ==>  (macrocall @$ x)
+        # @var"#" x   ==>  (macrocall (var #) @$ x)
         let ps = with_space_sensitive(ps)
             parse_atom(ps, false)
         end
     end
 end
 
-# Parse an identifier, interpolation of @-prefixed symbol
+# Parse an identifier, interpolation or @-prefixed symbol
 #
 # flisp: parse-atsym
 function parse_atsym(ps::ParseState)
     bump_trivia(ps)
     if peek(ps) == K"@"
-        # export @a  ==>  (export @a)
-        # export a, \n @b  ==>  (export a @b)
+        # export @a       ==>  (export @a)
+        # export @var"'"  ==>  (export (var @'))
+        # export a, \n @b ==>  (export a @b)
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
-        reset_node!(ps, position(ps), kind=macro_name_kind(peek_behind(ps).kind))
+        fix_macro_name_kind!(ps, position(ps))
     else
         # export a  ==>  (export a)
         # export \n a  ==>  (export a)
@@ -3322,12 +3336,12 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif is_keyword(leading_kind)
         if leading_kind == K"var" && (t = peek_token(ps,2);
                                       kind(t) == K"\"" && !preceding_whitespace(t))
-            # var"x"     ==> x
+            # var"x"     ==> (var x)
             # Raw mode unescaping
-            # var""     ==>
-            # var"\""   ==> "
-            # var"\\""  ==> \"
-            # var"\\x"  ==> \\x
+            # var""     ==> (var )
+            # var"\""   ==> (var ")
+            # var"\\""  ==> (var \")
+            # var"\\x"  ==> (var \\x)
             #
             # NB: Triple quoted var identifiers are not implemented, but with
             # the complex deindentation rules they seem like a misfeature
@@ -3344,7 +3358,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
                 bump(ps, TRIVIA_FLAG)
             else
                 bump_invisible(ps, K"error", TRIVIA_FLAG,
-                               error="unterminated string literal")
+                               error="unterminated `var\"\"` identifier")
             end
             t = peek_token(ps)
             k = kind(t)
@@ -3354,11 +3368,12 @@ function parse_atom(ps::ParseState, check_identifiers=true)
                 # var"x")  ==>  x
                 # var"x"(  ==>  x
             else
-                # var"x"end  ==>  (error (end))
-                # var"x"1    ==>  (error 1)
-                # var"x"y    ==>  (error y)
-                bump(ps, error="suffix not allowed after var\"...\" syntax")
+                # var"x"end  ==>  (var x (error-t))
+                # var"x"1    ==>  (var x (error-t))
+                # var"x"y    ==>  (var x (error-t))
+                bump(ps, TRIVIA_FLAG, error="suffix not allowed after var\"...\" syntax")
             end
+            emit(ps, mark, K"var")
         elseif check_identifiers && is_closing_token(ps, leading_kind)
             # :(end)  ==>  (quote (error end))
             bump(ps, error="invalid identifier")

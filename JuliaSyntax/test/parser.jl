@@ -258,7 +258,9 @@ tests = [
         "@foo (x,y)"   =>  "(macrocall @foo (tuple x y))"
         "A.@foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
-        "[@foo x]"   =>  "(vect (macrocall @foo x))"
+        "[@foo x]"     =>  "(vect (macrocall @foo x))"
+        "@var\"#\" a"  =>  "(macrocall (var @#) a)"                => Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"  => Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
         "[f (x)]"    =>  "(hcat f x)"
         "[f x]"      =>  "(hcat f x)"
         # Macro names
@@ -402,15 +404,16 @@ tests = [
         "module A \n a \n b \n end"  =>  "(module true A (block a b))"
         """module A \n "x"\na\n end""" => """(module true A (block (macrocall :(Core.var"@doc") (string "x") a)))"""
         # export
-        "export a"  =>  "(export a)"
-        "export @a"  =>  "(export @a)"
-        "export a, \n @b"  =>  "(export a @b)"
-        "export +, =="  =>  "(export + ==)"
-        "export \n a"  =>  "(export a)"
-        "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"
+        "export a"   =>  "(export a)"  => Expr(:export, :a)
+        "export @a"  =>  "(export @a)" => Expr(:export, Symbol("@a"))
+        "export @var\"'\"" =>  "(export (var @'))" => Expr(:export, Symbol("@'"))
+        "export a, \n @b"  =>  "(export a @b)"     => Expr(:export, :a, Symbol("@b"))
+        "export +, =="     =>  "(export + ==)"     => Expr(:export, :+, :(==))
+        "export \n a"      =>  "(export a)"        => Expr(:export, :a)
+        "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"  => Expr(:export, Expr(:$, :a), Expr(:$, Expr(:call, :*, :a, :b)))
         "export (x::T)"  =>  "(export (error (:: x T)))"
-        "export outer"  =>  "(export outer)"
-        "export (\$f)"  =>  "(export (\$ f))"
+        "export outer"  =>  "(export outer)"   =>  Expr(:export, :outer)
+        "export (\$f)"  =>  "(export (\$ f))"  =>  Expr(:export, Expr(:$, :f))
     ],
     JuliaSyntax.parse_if_elseif => [
         "if a xx elseif b yy else zz end" => "(if a (block xx) (elseif b (block yy) (block zz)))"
@@ -612,18 +615,19 @@ tests = [
         "xx"     => "xx"
         "x₁"     => "x₁"
         # var syntax
-        """var"x" """  =>  "x"
-        """var"x"+"""  =>  "x"
-        """var"x")"""  =>  "x"
-        """var"x"("""  =>  "x"
-        """var"x"end"""  =>  "x (error (end))"
-        """var"x"1"""  =>  "x (error 1)"
-        """var"x"y"""  =>  "x (error y)"
+        """var"x" """   =>  "(var x)"  => :x
         # var syntax raw string unescaping
-        "var\"\""          =>  ""
-        "var\"\\\"\""      =>  "\""
-        "var\"\\\\\\\"\""  =>  "\\\""
-        "var\"\\\\x\""     =>  "\\\\x"
+        "var\"\""          =>  "(var )"      => Symbol("")
+        "var\"\\\"\""      =>  "(var \")"    => Symbol("\"")
+        "var\"\\\\\\\"\""  =>  "(var \\\")"  => Symbol("\\\"")
+        "var\"\\\\x\""     =>  "(var \\\\x)" => Symbol("\\\\x")
+        # trailing syntax after var
+        """var"x"+"""   =>  "(var x)" => :x
+        """var"x")"""   =>  "(var x)" => :x
+        """var"x"("""   =>  "(var x)" => :x
+        """var"x"end""" =>  "(var x (error-t))"
+        """var"x"1"""   =>  "(var x (error-t))"
+        """var"x"y"""   =>  "(var x (error-t))"
         # Syntactic operators
         "+="  =>  "(error +=)"
         ".+="  =>  "(error .+=)"
