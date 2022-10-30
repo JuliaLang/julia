@@ -478,20 +478,24 @@ _makevector(x::AbstractVector) = Vector(x)
 _pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
 _droplast!(A) = deleteat!(A, lastindex(A))
 
-zerodefined(::Type) = false
-zerodefined(::Type{<:Number}) = true
 # some trait like this would be cool
-# zerodefined(::Type{T}) where {T} = hasmethod(zero, (T,))
+# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
+# but we are actually asking for oneunit(T), that is, however, defined for generic T as
+# `T(one(T))`, so the question is equivalent for whether one(T) is defined
+onedefined(::Type) = false
+onedefined(::Type{<:Number}) = true
 
 # initialize return array for op(A, B)
+_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(matprod(oneunit(TA), oneunit(TB))) :
+        promote_op(matprod, TA, TB)
 _init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
-    (zerodefined(TA) && zerodefined(TB)) ?
-        typeof(op(zero(TA), zero(TB))) :
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(op(oneunit(TA), oneunit(TB))) :
         promote_op(op, TA, TB)
-_initarray(op, ::Type{TA}, ::Type{TB}, sz) where {TA,TB} =
-    (zerodefined(TA) && zerodefined(TB)) ?
-        zeros(_init_eltype(op, TA, TB), sz) :
-        Array{_init_eltype(op, TA, TB)}(undef, sz)
+_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
+    similar(C, _init_eltype(op, TA, TB), size(C))
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs

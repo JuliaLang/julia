@@ -783,25 +783,25 @@ ldiv!(c::AbstractVecOrMat, A::Adjoint{<:Any,<:Bidiagonal}, b::AbstractVecOrMat) 
     (_rdiv!(adjoint(c), adjoint(b), adjoint(A)); return c)
 
 ### Generic promotion methods and fallbacks
-\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), size(B)), A, B)
+\(A::Bidiagonal, B::AbstractVecOrMat) = ldiv!(_initarray(\, eltype(A), eltype(B), B), A, B)
 \(tA::Transpose{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(tA) \ B
 \(adjA::Adjoint{<:Any,<:Bidiagonal}, B::AbstractVecOrMat) = copy(adjA) \ B
 
 ### Triangular specializations
 function \(B::Bidiagonal, U::UpperTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(U), size(U)), B, U)
+    A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
     return B.uplo == 'U' ? UpperTriangular(A) : A
 end
 function \(B::Bidiagonal, U::UnitUpperTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(U), size(U)), B, U)
+    A = ldiv!(_initarray(\, eltype(B), eltype(U), U), B, U)
     return B.uplo == 'U' ? UpperTriangular(A) : A
 end
 function \(B::Bidiagonal, L::LowerTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(L), size(L)), B, L)
+    A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
     return B.uplo == 'L' ? LowerTriangular(A) : A
 end
 function \(B::Bidiagonal, L::UnitLowerTriangular)
-    A = ldiv!(_initarray(\, eltype(B), eltype(L), size(L)), B, L)
+    A = ldiv!(_initarray(\, eltype(B), eltype(L), L), B, L)
     return B.uplo == 'L' ? LowerTriangular(A) : A
 end
 
@@ -823,7 +823,7 @@ function \(L::UnitLowerTriangular, B::Bidiagonal)
 end
 ### Diagonal specialization
 function \(B::Bidiagonal, D::Diagonal)
-    A = ldiv!(_initarray(\, eltype(B), eltype(D), size(D)), B, D)
+    A = ldiv!(_initarray(\, eltype(B), eltype(D), D), B, D)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
@@ -876,23 +876,23 @@ _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Adjoint{<:Any,<:Bidiagonal}) =
 _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::Transpose{<:Any,<:Bidiagonal}) =
     (ldiv!(transpose(C), transpose(B), transpose(A)); return C)
 
-/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), size(A)), A, B)
+/(A::AbstractMatrix, B::Bidiagonal) = _rdiv!(_initarray(/, eltype(A), eltype(B), A), A, B)
 
 ### Triangular specializations
 function /(U::UpperTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(U), eltype(B), size(U)), U, B)
+    A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
     return B.uplo == 'U' ? UpperTriangular(A) : A
 end
 function /(U::UnitUpperTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(U), eltype(B), size(U)), U, B)
+    A = _rdiv!(_initarray(/, eltype(U), eltype(B), U), U, B)
     return B.uplo == 'U' ? UpperTriangular(A) : A
 end
 function /(L::LowerTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(L), eltype(B), size(L)), L, B)
+    A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
     return B.uplo == 'L' ? LowerTriangular(A) : A
 end
 function /(L::UnitLowerTriangular, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(L), eltype(B), size(L)), L, B)
+    A = _rdiv!(_initarray(/, eltype(L), eltype(B), L), L, B)
     return B.uplo == 'L' ? LowerTriangular(A) : A
 end
 function /(B::Bidiagonal, U::UpperTriangular)
@@ -913,7 +913,7 @@ function /(B::Bidiagonal, L::UnitLowerTriangular)
 end
 ### Diagonal specialization
 function /(D::Diagonal, B::Bidiagonal)
-    A = _rdiv!(_initarray(/, eltype(D), eltype(B), size(D)), D, B)
+    A = _rdiv!(_initarray(/, eltype(D), eltype(B), D), D, B)
     return B.uplo == 'U' ? UpperTriangular(A) : LowerTriangular(A)
 end
 
