@@ -733,7 +733,6 @@ end
     @test issorted(k[idx], rev=true)
 end
 
-# This testset is at the end of the file because it is slow
 @testset "sort(x; scratch)" begin
     for n in [1,10,100,1000]
         v = rand(n)
@@ -766,6 +765,54 @@ end
 
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
+end
+
+@testset "Specific algorithms" begin
+    let
+        requires_uint_mappable = Union{Base.Sort.RadixSort, Base.Sort.ConsiderRadixSort,
+            Base.Sort.CountingSort, Base.Sort.ConsiderCountingSort,
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big),
+            typeof(Base.Sort.DEFAULT_STABLE.next.next.big.next.yes.big.next)}
+
+        function test_alg(kw, alg, float=true)
+            for order in [Base.Forward, Base.Reverse, Base.By(x -> x^2)]
+                order isa Base.By && alg isa requires_uint_mappable && continue
+                for n in [1,7,179,1312]
+
+                    n == 1 && alg isa Base.Sort.RadixSort && continue
+
+                    x = rand(1:n+1, n)
+                    y = sort(x; order)
+                    @test y == Base.Sort._sort!(x, alg, order, (;kw(y)...)) === x
+
+                    alg isa requires_uint_mappable && continue
+
+                    x = randn(n)
+                    y = sort(x; order)
+                    @test y == Base.Sort._sort!(x, alg, order, (;kw(y)...)) === x
+                end
+            end
+        end
+        test_alg(alg) = test_alg(x -> (), alg)
+
+        function test_alg_rec(alg, extrema=false)
+            if extrema
+                test_alg(alg) do y
+                    (;mn=first(y),mx=last(y))
+                end
+            else
+                test_alg(alg)
+            end
+            extrema |= alg isa Base.Sort.ComputeExtrema
+            for name in fieldnames(typeof(alg))
+                a = getfield(alg, name)
+                a isa Base.Sort.Algorithm && test_alg_rec(a, extrema)
+            end
+        end
+
+        test_alg_rec(Base.DEFAULT_STABLE)
+    end
 end
 
 # This testset is at the end of the file because it is slow.

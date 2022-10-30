@@ -720,7 +720,7 @@ end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
 function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering;
                 lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
-                U = UIntMapping(eltype(v), o),
+                U = UIntMappable(eltype(v), o),
                 mn, mx, range=maybe_unsigned(o === Reverse ? mn-mx : mx-mn), kw...)
 
     if range < (sizeof(U) > 8 ? 5lenm1-100 : div(lenm1, 2))
@@ -816,7 +816,7 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 struct RadixSort <: Algorithm end
 function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering;
                 lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
-                mn, mx, umn=uint_mapping(mn, o), umx=uint_mapping(mx, o), urange=umx-umn,
+                mn, mx, umn=uint_map(mn, o), umx=uint_map(mx, o), urange=umx-umn,
                 bits = unsigned(8sizeof(urange) - leading_zeros(urange)),
                 U = UIntMappable(eltype(v), o), scratch=nothing, kw...)
 
