@@ -488,17 +488,14 @@ onedefined(::Type{<:Number}) = true
 # initialize return array for op(A, B)
 _init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
     (onedefined(TA) && onedefined(TB)) ?
-        typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB)) :
-        promote_op(op, TA, TB)
+        typeof(matprod(oneunit(TA), oneunit(TB))) :
+        promote_op(matprod, TA, TB)
 _init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
     (onedefined(TA) && onedefined(TB)) ?
         typeof(op(oneunit(TA), oneunit(TB))) :
         promote_op(op, TA, TB)
 _initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
     similar(C, _init_eltype(op, TA, TB), size(C))
-    # (onedefined(TA) && onedefined(TB)) ?
-    #     zeros(_init_eltype(op, TA, TB), sz) :
-    #     Array{_init_eltype(op, TA, TB)}(undef, sz)
 
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
