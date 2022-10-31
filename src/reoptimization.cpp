@@ -74,7 +74,19 @@ static std::unique_ptr<Module> partitionFunction(Module &M, Function &F) {
 }
 
 extern "C" JITTargetAddress jl_cc_entrypoint(const char *Name, uint32_t Length, void *JD, int32_t Version, uint32_t OptLevel, void *Impl) {
-    return reinterpret_cast<ReoptimizationManager*>(Impl)->optimize(StringRef(Name, Length), *reinterpret_cast<orc::JITDylib*>(JD), Version, OptLevel).Address;
+    auto RJD = reinterpret_cast<orc::JITDylib*>(JD);
+    return reinterpret_cast<ReoptimizationManager*>(Impl)->optimize(RJD->getExecutionSession().intern(StringRef(Name, Length)), *RJD, Version, OptLevel).Address;
+}
+
+//This looks extremely similar to the jl_cc_entrypoint function (and it is, since they have the same arguments)
+//but they serve different purposes. jl_cc_entrypoint's job is to get a valid function pointer ASAP since it's
+//about to be called, while this function's job is to notify the JIT that this function could be reoptimized
+//since it's being called a lot. If the JIT is saturated with compilation already, going through optimize
+//directly would involve a long wait vs queueing the function and letting a background thread do the update
+//and recompilation, which allows this thread to get a move on the actual work the user wants to do.
+extern "C" void jl_reoptimize_entrypoint(const char *Name, uint32_t Length, void *JD, int32_t Version, uint32_t OptLevel, void *Impl) {
+    auto RJD = reinterpret_cast<orc::JITDylib*>(JD);
+    reinterpret_cast<ReoptimizationManager*>(Impl)->profileReentry(RJD->getExecutionSession().intern(StringRef(Name, Length)), RJD, Version, OptLevel);
 }
 
 static Function &createCallback(Module &M, Function &F, const orc::SymbolStringPtr &Name, orc::JITDylib *JD, int32_t Version, uint32_t OptLevel, ReoptimizationManager *Impl) {
@@ -422,6 +434,25 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
     assert(F && "Function not found in module");
     F->setMetadata(ProfMDName, Profiling.toMDNode(M->getContext()));
 
+    if (OptLevel != MaxOptLevel) {
+        //We want to trigger recompilation later, so we add a callback when we get called enough times
+        //let's just start by saying 'enough times' is 10 * (optlevel + 1) ^ 2
+        //this unrolls to {10, 40, 90}
+        F->setMetadata("julia.prof.reporter", MDTuple::get(F->getContext(), {
+            //Limit
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), 10 * (OptLevel + 1) * (OptLevel + 1))),
+            //Function
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), reinterpret_cast<uint64_t>(&jl_reoptimize_entrypoint))),
+            //Args...
+            ConstantAsMetadata::get(literal_static_pointer_val((*Name).data(), Type::getInt8PtrTy(F->getContext()))),
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), (*Name).size())),
+            ConstantAsMetadata::get(literal_static_pointer_val(&JD, Type::getInt8PtrTy(F->getContext()))),
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), Version)),
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), OptLevel)),
+            ConstantAsMetadata::get(literal_static_pointer_val(this, Type::getInt8PtrTy(F->getContext()))),
+        }));
+    }
+
     //Do the actual optimization
     auto &OptJD = *OptJDs[OptLevel - MinOptLevel];
     auto TSM = orc::ThreadSafeModule(std::move(M), *TSCtx);
@@ -456,4 +487,59 @@ void ReoptimizationManager::addToLinkOrder(orc::JITDylib &JD) {
             OptJD->addToLinkOrder(*SubJD, orc::JITDylibLookupFlags::MatchAllSymbols);
         }
     }
+}
+
+bool ReoptimizationQueue::enqueue(orc::SymbolStringPtr Name, orc::JITDylib *JD, int32_t Version, uint16_t Priority) {
+    std::lock_guard<std::mutex> Lock(QueueMutex);
+    if (Dead) {
+        return false;
+    }
+    Queue.push({Name, JD, Version, Idx++, static_cast<int64_t>(Version) << sizeof(Priority) * CHAR_BIT | Priority});
+    QueueCV.notify_one();
+    return true;
+}
+
+Optional<ReoptimizationQueue::Entry> ReoptimizationQueue::try_dequeue() {
+    std::unique_lock<std::mutex> Lock(QueueMutex);
+    if (Queue.empty() || Dead) {
+        return None;
+    }
+    auto Entry = Queue.top();
+    Queue.pop();
+    return Entry;
+}
+
+Optional<ReoptimizationQueue::Entry> ReoptimizationQueue::wait_dequeue() {
+    std::unique_lock<std::mutex> Lock(QueueMutex);
+    if (Dead) {
+        return None;
+    }
+    if (Queue.empty()) {
+        ++Waiters;
+        QueueCV.wait(Lock, [this](){ return !Queue.empty() || Dead; });
+        if (!--Waiters) {
+            DeadCV.notify_one();
+        }
+        if (Dead) {
+            return None;
+        }
+    }
+    auto Entry = Queue.top();
+    Queue.pop();
+    return Entry;
+}
+
+ReoptimizationQueue::~ReoptimizationQueue() {
+    std::unique_lock<std::mutex> Lock(QueueMutex);
+    Dead = true;
+    QueueCV.notify_all();
+    //Delay destruction and deallocation until all of our other threads have exited
+    if (Waiters) {
+        DeadCV.wait(Lock, [this](){ return !Waiters; });
+    }
+}
+
+bool ReoptimizationManager::profileReentry(orc::SymbolStringPtr Name, orc::JITDylib *JD, int32_t Version, uint32_t OptLevel) {
+    //Just directly translate the optlevel to a priority so that bigger optlevels get higher priority
+    return Queue.enqueue(Name, JD, Version, OptLevel);
 }

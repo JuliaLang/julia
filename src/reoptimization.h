@@ -38,6 +38,8 @@ struct SymbolPromoter {
     }
 };
 
+size_t getModuleOptLevel(llvm::Module &M, bool DetermineOptLevel = false);
+
 class ReoptimizationManager;
 
 class FunctionPartitioner {
@@ -91,7 +93,34 @@ private:
     llvm::DenseMap<llvm::orc::ResourceKey, llvm::SmallVector<llvm::JITTargetAddress, 0>> OwnedStubs;
 };
 
-size_t getModuleOptLevel(llvm::Module &M, bool DetermineOptLevel = false);
+class ReoptimizationQueue {
+public:
+    struct Entry {
+        llvm::orc::SymbolStringPtr Name;
+        llvm::orc::JITDylib *JD;
+        int32_t Version;
+        uint32_t Idx;
+        int64_t Priority;
+
+        bool operator<(const Entry &Other) const {
+            return Priority < Other.Priority || (Priority == Other.Priority && Idx < Other.Idx);
+        }
+    };
+
+    bool enqueue(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint16_t Priority);
+    llvm::Optional<Entry> try_dequeue();
+    llvm::Optional<Entry> wait_dequeue();
+
+    ~ReoptimizationQueue();
+private:
+    std::mutex QueueMutex;
+    std::condition_variable QueueCV;
+    std::condition_variable DeadCV;
+    std::priority_queue<Entry> Queue;
+    uint32_t Idx = 0;
+    uint32_t Waiters = 0;
+    bool Dead = false;
+};
 
 class ReoptimizationManager {
 public:
@@ -104,10 +133,8 @@ public:
     };
 
     OptimizationResult optimize(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib &JD, int32_t Version, uint32_t OptLevel);
-    OptimizationResult optimize(llvm::StringRef Name, llvm::orc::JITDylib &JD, int32_t Version, uint32_t OptLevel) {
-        assert(PostPartitioningLayer && "PostPartitioningLayer was not set");
-        return optimize(PostPartitioningLayer->getExecutionSession().intern(Name), JD, Version, OptLevel);
-    }
+
+    bool profileReentry(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint32_t OptLevel);
 
     std::pair<uint32_t, uint32_t> getOptLevelRange() const {
         return std::make_pair(MinOptLevel, MaxOptLevel);
@@ -126,6 +153,7 @@ private:
     llvm::orc::IRLayer *PostPartitioningLayer;
     ResourcePool<llvm::orc::ThreadSafeContext, 0, std::queue<llvm::orc::ThreadSafeContext>> ContextPool;
     llvm::SmallVector<llvm::orc::JITDylib *, 4> OptJDs;
+    ReoptimizationQueue Queue;
     uint32_t MinOptLevel;
     uint32_t MaxOptLevel;
 };
