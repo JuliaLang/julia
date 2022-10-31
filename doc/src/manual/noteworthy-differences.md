@@ -214,6 +214,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     Python's special interpretation of negative indexing, `a[-1]` and `a[-2]`, should be written
     `a[end]` and `a[end-1]` in Julia.
   * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
+  * In Julia, `:` before any object creates a [`Symbol`](@ref) or *quotes* an expression; so, `x[:5]` is same as `x[5]`. If you want to get the first `n` elements of an array, then use range indexing.
   * Julia's range indexing has the format of `x[start:step:stop]`, whereas Python's format is `x[start:(stop+1):step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
   * In Julia, ranges can be constructed independently as `start:step:stop`, the same syntax it uses
     in array-indexing.  The `range` function is also supported.

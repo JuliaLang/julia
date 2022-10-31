@@ -73,6 +73,28 @@ variables.
 all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
+
+If you want to create your own `ENV` variable, you can do so by specifying its name in quotation marks as
+is shown below:
+
+# Examples
+```jldoctest ENV
+julia> ENV["JULIA_EDITOR"] = "vim"
+"vim"
+
+julia> ENV["JULIA_EDITOR"]
+"vim"
+```
+
+To see all of your active `ENV` variables in your current environment, you can simply do the following:
+```julia
+julia> ENV
+Base.EnvDict with "N" entries:
+  "SECURITYSESSIONID"            => "123"
+  "USER"                         => "username"
+  "MallocNanoZone"               => "0"
+  ⋮                              => ⋮
+```
 """
 const ENV = EnvDict()
 

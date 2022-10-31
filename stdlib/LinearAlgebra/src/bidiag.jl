@@ -808,6 +808,7 @@ for tri in (:LowerTriangular, :UnitLowerTriangular)
         return B.uplo == 'L' ? LowerTriangular(A) : A
     end
 end
+
 ### Diagonal specialization
 function \(B::Bidiagonal, D::Diagonal)
     A = ldiv!(_initarray(\, eltype(B), eltype(D), D), B, D)
