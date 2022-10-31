@@ -708,6 +708,13 @@ mktempdir() do pfx
     @test libs_emptied > 0
     @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
     errmsg = ""
+    utf16 = bytes -> begin
+        n = Int(length(bytes)//2)
+        pairs = [bytes[(2i-1):(2i)] for i in 1:n]
+        f = x -> reinterpret(UInt16, x)
+        units = only.(f.(pairs))
+        return transcode(String, units)
+    end
     @static if Sys.iswindows()
         errmsg = open(errfile, "r") do f; utf16(read(f)); end
     else
