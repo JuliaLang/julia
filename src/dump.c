@@ -484,7 +484,6 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         return;
     }
 
-    write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
     write_uint8(s->s, has_layout | (has_instance << 1));
@@ -494,7 +493,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
             | (dt->has_concrete_subtype << 5)
-            | (dt->cached_by_hash << 6));
+            | (dt->cached_by_hash << 6)
+            | (dt->isprimitivetype << 7));
     write_int32(s->s, dt->hash);
 
     if (has_layout) {
@@ -1071,13 +1071,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 return;
             }
         }
-        if (t->size <= 255) {
+        size_t tsz = jl_datatype_size(t);
+        if (tsz <= 255) {
             write_uint8(s->s, TAG_SHORT_GENERAL);
-            write_uint8(s->s, t->size);
+            write_uint8(s->s, tsz);
         }
         else {
             write_uint8(s->s, TAG_GENERAL);
-            write_int32(s->s, t->size);
+            write_int32(s->s, tsz);
         }
         jl_serialize_value(s, t);
         if (t == jl_typename_type) {
@@ -1645,10 +1646,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     backref_list.items[pos] = dt;
     if (loc != NULL && loc != HT_NOTFOUND)
         *loc = (jl_value_t*)dt;
-    size_t size = read_int32(s->s);
     uint8_t flags = read_uint8(s->s);
     uint8_t memflags = read_uint8(s->s);
-    dt->size = size;
     int has_layout = flags & 1;
     int has_instance = (flags >> 1) & 1;
     dt->hasfreetypevars = memflags & 1;
@@ -1658,6 +1657,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->zeroinit = (memflags >> 4) & 1;
     dt->has_concrete_subtype = (memflags >> 5) & 1;
     dt->cached_by_hash = (memflags >> 6) & 1;
+    dt->isprimitivetype = (memflags >> 7) & 1;
     dt->hash = read_int32(s->s);
 
     if (has_layout) {

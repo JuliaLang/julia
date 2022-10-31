@@ -1032,8 +1032,7 @@ static void jl_write_values(jl_serializer_state *s)
         }
         else if (jl_datatype_nfields(t) == 0) {
             assert(t->layout->npointers == 0);
-            if (t->size > 0)
-                ios_write(s->s, (char*)v, t->size);
+            ios_write(s->s, (char*)v, jl_datatype_size(t));
         }
         else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
             // foreign types require special handling
@@ -1225,7 +1224,7 @@ static void jl_write_values(jl_serializer_state *s)
                 arraylist_push(&reinit_list, (void*)1);
             }
             else {
-                write_padding(s->s, t->size - tot);
+                write_padding(s->s, jl_datatype_size(t) - tot);
             }
         }
     }
