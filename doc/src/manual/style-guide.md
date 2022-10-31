@@ -309,7 +309,7 @@ it will naturally have access to the run-time values it needs.
 
 ## Write macro expressions where `@` is unambiguous
 Though the function-like syntax, `@mymacro(arg1, arg2, arg3)`, and statement-like syntax,
-`@mymacro arg1 arg2 arg3`, for macros, are interchangeable, they can be ambiguous in some cases.
+`@mymacro arg1 arg2 arg3`, for macros, are interchangeable, the latter can be ambiguous in some cases.
 
 For example:
 
