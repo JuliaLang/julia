@@ -219,7 +219,7 @@ called code before execution of the top-level expression begins. When that happe
 compilation time will not be counted. To include this time you can run `@time @eval ...`.
 
 See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocs`](@ref).
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 !!! note
     For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
@@ -319,7 +319,7 @@ Optionally provide a description string to print before the time report.
     The option to add a description was introduced in Julia 1.8.
 
 See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocs`](@ref).
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -379,7 +379,7 @@ called code before execution of the top-level expression begins. When that happe
 compilation time will not be counted. To include this time you can run `@elapsed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
-[`@allocated`](@ref), and [`@allocs`](@ref).
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 ```julia-repl
 julia> @elapsed sleep(0.3)
@@ -410,7 +410,7 @@ end
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 total number of bytes allocated during evaluation of the expression.
 
-See also [`@allocs`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+See also [`@allocations`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
 ```julia-repl
@@ -431,7 +431,7 @@ macro allocated(ex)
 end
 
 """
-    @allocs
+    @allocations
 
 A macro to evaluate an expression, discard the resulting value, and instead return the
 total number of allocations during evaluation of the expression.
@@ -440,14 +440,14 @@ See also [`@allocated`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@re
 and [`@elapsed`](@ref).
 
 ```julia-repl
-julia> @allocs rand(10^6)
+julia> @allocations rand(10^6)
 2
 ```
 
 !!! compat "Julia 1.9"
     This macro was added in Julia 1.9.
 """
-macro allocs(ex)
+macro allocations(ex)
     quote
         Experimental.@force_compile
         local stats = Base.gc_num()
@@ -469,7 +469,7 @@ called code before execution of the top-level expression begins. When that happe
 compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
-[`@allocated`](@ref), and [`@allocs`](@ref).
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 ```julia-repl
 julia> stats = @timed rand(10^6);
