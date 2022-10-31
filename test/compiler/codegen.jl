@@ -709,7 +709,7 @@ mktempdir() do pfx
     @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
     errmsg = ""
     @static if Sys.iswindows()
-        errmsg = open(errfile, "r") do f; utf16(readbytes(f)); end
+        errmsg = open(errfile, "r") do f; utf16(read(f)); end
     else
         errmsg = readline(errfile)
     end
