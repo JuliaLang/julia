@@ -125,6 +125,25 @@ system image by running the code in `./sysimage/compile.jl` as a Julia script
 Using a custom sysimage has the advantage that package precompilation will also
 go through the JuliaSyntax parser.
 
+### VSCode
+
+To use JuliaSyntax as the default parser for Julia within VSCode, add the
+following to your `startup.jl` file:
+
+```julia
+atreplinit() do repl
+    @eval begin
+        import JuliaSyntax
+        JuliaSyntax.enable_in_core!(true)
+    end
+end
+```
+
+To reduce startup latency you can combine with a custom system as described in
+the [Julia VScode docs](https://www.julia-vscode.org/docs/dev/userguide/compilesysimage/#Creating-a-sysimage-for-the-active-environment),
+combined with the precompile execution file in [sysimage/precompile_exec.jl](sysimage/precompile_exec.jl).
+For additional detail see the discussion in [issue #128](https://github.com/JuliaLang/JuliaSyntax.jl/issues/128).
+
 # Parser implementation
 
 Our goal is to losslessly represent the source text with a tree; this may be
