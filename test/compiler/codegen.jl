@@ -716,7 +716,7 @@ mktempdir() do pfx
         return transcode(String, units)
     end
     @static if Sys.iswindows()
-        errmsg = open(errfile, "r") do f; utf16(read(f)); end
+        errmsg = utf16(read(errfile))
     else
         errmsg = readline(errfile)
     end
