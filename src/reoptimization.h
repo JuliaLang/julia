@@ -7,6 +7,7 @@
 #include <llvm/Passes/PassBuilder.h>
 
 #include "concurrent-utils.h"
+#include "jitprof.h"
 
 class FunctionCache {
 public:
@@ -124,7 +125,7 @@ private:
 
 class ReoptimizationManager {
 public:
-    ReoptimizationManager(FunctionCache &Cache, llvm::orc::JITDylib &JD, uint32_t MinOptLevel = 0, uint32_t MaxOptLevel = 3);
+    ReoptimizationManager(JITFunctionProfiler &Profiler, FunctionCache &Cache, llvm::orc::JITDylib &JD, uint32_t MinOptLevel = 0, uint32_t MaxOptLevel = 3);
 
     struct OptimizationResult {
         llvm::JITTargetAddress Address;
@@ -147,8 +148,15 @@ public:
 
     void addToLinkOrder(llvm::orc::JITDylib &JD);
 
+    bool blockingRecompileNext();
+
+    void continuousRecompile() {
+        while (blockingRecompileNext());
+    }
+
 private:
 
+    JITFunctionProfiler &Profiler;
     FunctionCache &Cache;
     llvm::orc::IRLayer *PostPartitioningLayer;
     ResourcePool<llvm::orc::ThreadSafeContext, 0, std::queue<llvm::orc::ThreadSafeContext>> ContextPool;

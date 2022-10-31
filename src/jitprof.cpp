@@ -76,30 +76,57 @@ static void addCallInstrumentation(FunctionProfile &Prof, Function &F) {
     }
 }
 
+//Annotate all of the branches so that after serialization we can recover branch->branch
+//mappings even across different deserializations
+void preannotateBranches(Function &F) {
+    //We care only about conditional non-constant branches, everything else is either
+    //easily handled by the optimizer or annoying to store information for (indirect switch jumps)
+    size_t Count = 0;
+    for (auto &BB : F) {
+        auto *Term = BB.getTerminator();
+        if (!isa<BranchInst>(Term))
+            continue;
+        auto *BI = cast<BranchInst>(Term);
+        if (BI->isUnconditional())
+            continue;
+        if (isa<Constant>(BI->getCondition()))
+            continue;
+        BI->setMetadata("julia.prof.branch", MDTuple::get(F.getContext(), {ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F.getContext()), Count++))}));
+    }
+    if (Count == 0)
+        return; //No branches to profile, might as well pretend we didn't ask to profile this function
+    F.setMetadata("julia.prof.branch", MDTuple::get(F.getContext(), {ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F.getContext()), Count))}));
+}
+
 static void addBranchInstrumentation(FunctionProfile &Prof, Function &F) {
     std::lock_guard<std::mutex> Lock(Prof.BranchesMutex);
     if (Prof.BranchProfiles.empty()) {
-        Prof.BranchProfiles.resize(F.size());
-    }
-    assert(Prof.BranchProfiles.size() == F.size());
-    size_t BBidx = 0;
-    for (auto &BB : F) {
-        if (auto Br = dyn_cast<BranchInst>(BB.getTerminator())) {
-            if (Br->isUnconditional() || isa<Constant>(Br->getCondition()))
-                continue;
-            auto &BI = Prof.BranchProfiles[BBidx];
-            if (!BI) {
-                BI = std::make_unique<FunctionProfile::BranchInfo>();
-                BI->Taken = 0;
-                BI->Total = 0;
-            }
-            auto TakenPtr = ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt64Ty(F.getContext()), (uint64_t)&BI->Taken), Type::getInt64PtrTy(F.getContext()));
-            auto TotalPtr = ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt64Ty(F.getContext()), (uint64_t)&BI->Total), Type::getInt64PtrTy(F.getContext()));
-            IRBuilder<> Builder(Br);
-            Builder.CreateAtomicRMW(AtomicRMWInst::Add, TotalPtr, ConstantInt::get(Type::getInt64Ty(F.getContext()), 1), Align(alignof(decltype(BI->Total))), AtomicOrdering::Monotonic);
-            Builder.CreateAtomicRMW(AtomicRMWInst::Add, TakenPtr, Builder.CreateZExt(Br->getCondition(), Type::getInt64Ty(F.getContext())), Align(alignof(decltype(BI->Taken))), AtomicOrdering::Monotonic);
+        auto BranchMD = F.getMetadata("julia.prof.branch");
+        if (!BranchMD)
+            return;
+        auto BranchCount = extractProfNum(cast<MDTuple>(BranchMD), 0);
+        //Neat trick to avoid an extra unique pointer
+        decltype(Prof.BranchProfiles) BranchProfiles(BranchCount->getZExtValue());
+        std::swap(Prof.BranchProfiles, BranchProfiles);
+        for (auto &BI : Prof.BranchProfiles) {
+            BI.Taken = 0;
+            BI.Total = 0;
         }
-        BBidx++;
+    }
+    for (auto &BB : F) {
+        auto Term = BB.getTerminator();
+        auto BranchMD = Term->getMetadata("julia.prof.branch");
+        if (!BranchMD)
+            continue;
+        assert(isa<BranchInst>(Term) && "Branch metadata can only be attached to branches");
+        assert(cast<BranchInst>(Term)->isConditional() && "Branch metadata can only be attached to conditional branches");
+        assert(!isa<Constant>(cast<BranchInst>(Term)->getCondition()) && "Branch metadata can only be attached to branches with non-constant condition");
+        auto &BI = Prof.BranchProfiles[extractProfNum(cast<MDTuple>(BranchMD), 0)->getZExtValue()];
+        auto TakenPtr = ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt64Ty(F.getContext()), (uint64_t)&BI.Taken), Type::getInt64PtrTy(F.getContext()));
+        auto TotalPtr = ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt64Ty(F.getContext()), (uint64_t)&BI.Total), Type::getInt64PtrTy(F.getContext()));
+        IRBuilder<> Builder(Term);
+        Builder.CreateAtomicRMW(AtomicRMWInst::Add, TotalPtr, ConstantInt::get(Type::getInt64Ty(F.getContext()), 1), Align(alignof(decltype(BI.Total))), AtomicOrdering::Monotonic);
+        Builder.CreateAtomicRMW(AtomicRMWInst::Add, TakenPtr, Builder.CreateZExt(cast<BranchInst>(Term)->getCondition(), Type::getInt64Ty(F.getContext())), Align(alignof(decltype(BI.Taken))), AtomicOrdering::Monotonic);
     }
 }
 
@@ -108,16 +135,25 @@ static void applyPGOInstrumentation(FunctionProfile &Prof, Function &F) {
     auto MDB = MDBuilder(F.getContext());
     F.setMetadata(LLVMContext::MD_prof, MDB.createFunctionEntryCount(Calls, false, nullptr));
     std::lock_guard<std::mutex> (Prof.BranchesMutex);
-    uint64_t BBidx = 0;
+    if (Prof.BranchProfiles.empty())
+        return;
     for (auto &BB : F) {
-        auto &Branch = Prof.BranchProfiles[BBidx];
-        auto Taken = Branch->Taken.load(std::memory_order::memory_order_relaxed);
-        auto Total = Branch->Total.load(std::memory_order::memory_order_relaxed);
+        auto Term = BB.getTerminator();
+        auto BranchMD = Term->getMetadata("julia.prof.branch");
+        if (!BranchMD)
+            continue;
+        assert(isa<BranchInst>(Term) && "Branch metadata can only be attached to branches");
+        assert(cast<BranchInst>(Term)->isConditional() && "Branch metadata can only be attached to conditional branches");
+        assert(!isa<Constant>(cast<BranchInst>(Term)->getCondition()) && "Branch metadata can only be attached to branches with non-constant condition");
+        auto &Branch = Prof.BranchProfiles[extractProfNum(cast<MDTuple>(BranchMD), 0)->getZExtValue()];
+        assert(isa<BranchInst>(BB.getTerminator()) && "BB ordering changed!");
+        assert(cast<BranchInst>(BB.getTerminator())->isConditional() && "Branch is not conditional!");
+        auto Taken = Branch.Taken.load(std::memory_order::memory_order_relaxed);
+        auto Total = Branch.Total.load(std::memory_order::memory_order_relaxed);
         if (Total > 0) {
             auto MD = MDB.createBranchWeights(Taken, Total - Taken);
             BB.getTerminator()->setMetadata(LLVMContext::MD_prof, MD);
         }
-        BBidx++;
     }
 }
 
@@ -236,14 +272,12 @@ void JITFunctionProfiler::dump(raw_ostream &OS) const {
                 bool Comma = false;
                 for (size_t Idx = 0; Idx < Count; Idx++) {
                     const auto &Branch = KV.second->BranchProfiles[Idx];
-                    if (!Branch)
-                        continue;
                     if (Comma) {
                         OS << ',';
                     } else {
                         OS << "\"Branches\":[";
                     }
-                    OS << "{\"Idx\":" << Idx << ",\"Taken\":" << Branch->Taken << ",\"Total\":" << Branch->Total << "}";
+                    OS << "{\"Idx\":" << Idx << ",\"Taken\":" << Branch.Taken << ",\"Total\":" << Branch.Total << "}";
                     Comma = true;
                 }
                 if (Comma) {

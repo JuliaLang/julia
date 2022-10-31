@@ -15,6 +15,8 @@ struct ProfilingFlags {
     static ProfilingFlags fromMDNode(llvm::MDNode *MDN);
 };
 
+void preannotateBranches(llvm::Function &F);
+
 struct FunctionProfile {
 
     struct BranchInfo {
@@ -29,7 +31,8 @@ struct FunctionProfile {
 
     std::atomic<uint64_t> CallCount;
     std::mutex BranchesMutex;
-    llvm::SmallVector<std::unique_ptr<BranchInfo>> BranchProfiles;
+    //This is a std::vector to avoid an indirection through a unique_ptr
+    std::vector<BranchInfo> BranchProfiles;
     AllocInfo Preopt;
     AllocInfo Postopt;
 

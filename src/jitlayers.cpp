@@ -1174,7 +1174,7 @@ JuliaOJIT::JuliaOJIT()
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
-    ReoptMgr(JITCache, JD),
+    ReoptMgr(Profiler, JITCache, JD),
 #ifdef JL_USE_JITLINK
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
@@ -1287,6 +1287,13 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin)), JITSymbolFlags::Exported);
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
+
+    for (uint32_t i = 0; i < 4; i++) {
+        std::thread reoptimizer([this]() {
+            ReoptMgr.continuousRecompile();
+        });
+        reoptimizer.detach();
+    }
 }
 
 orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)

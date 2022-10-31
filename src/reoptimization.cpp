@@ -73,6 +73,13 @@ static std::unique_ptr<Module> partitionFunction(Module &M, Function &F) {
     return Mod;
 }
 
+static uint64_t computeOptLevelLimit(uint32_t OptLevel) {
+    //This is essentially 16 * 4^n, so this unrolls to:
+    // { 16, 64, 256 }
+    // for upgrading 0->1, 1->2, 2->3
+    return 16 << (OptLevel * 2);
+}
+
 extern "C" JITTargetAddress jl_cc_entrypoint(const char *Name, uint32_t Length, void *JD, int32_t Version, uint32_t OptLevel, void *Impl) {
     auto RJD = reinterpret_cast<orc::JITDylib*>(JD);
     return reinterpret_cast<ReoptimizationManager*>(Impl)->optimize(RJD->getExecutionSession().intern(StringRef(Name, Length)), *RJD, Version, OptLevel).Address;
@@ -196,7 +203,11 @@ Expected<orc::ThreadSafeModule> FunctionPartitioner::operator()(orc::ThreadSafeM
         for (auto Func : ToPartition) {
             auto &F = *Func;
             auto Name = ES.intern(F.getName());
-            Cache.store(Name, partitionFunction(M, F));
+            auto Partitioned = partitionFunction(M, F);
+            if (EnablePGOProfiling) {
+                preannotateBranches(*Partitioned->getFunction(F.getName()));
+            }
+            Cache.store(Name, std::move(Partitioned));
             auto &CC = createCallback(M, F, Name, &R.getTargetJITDylib(), 0, ReoptMgr.getOptLevelRange().first, &ReoptMgr);
             auto &GV = createStub(M, F, CC);
             Stubs[ES.intern(GV.getName())] = JITSymbolFlags::fromGlobalValue(GV);
@@ -335,7 +346,7 @@ void FunctionCache::store(orc::SymbolStringPtr Name, std::unique_ptr<Module> M) 
     Entry->Stub = nullptr;
     Entry->Module = serializeModule(*M);
     Entry->Version = -1;
-    Entry->NextVersion = 1;
+    Entry->NextVersion = 0;
     Entry->OptLevel = 0;
 }
 
@@ -401,11 +412,12 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
         return {0, 0, 0};
     }
     auto &ES = PostPartitioningLayer->getExecutionSession();
-    assert(Version >= 0 && "Version must be positive");
+    assert(Version >= 0 && "Version must be nonnegative");
+    auto ComputedVersion = Version * int32_t(MaxOptLevel - MinOptLevel) + int32_t(OptLevel - MinOptLevel);
     {
         //Early exit if we already have the version we want
         auto Current = Entry->Version.load(std::memory_order::memory_order_seq_cst);
-        if (Current >= Version) {
+        if (Current >= ComputedVersion) {
             std::lock_guard<std::mutex> Lock(Entry->StubMutex);
             return {*Entry->Stub, Entry->Version.load(std::memory_order_relaxed), Entry->OptLevel};
         }
@@ -420,7 +432,7 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
     //Annotate module with requested optlevel
     M->addModuleFlag(Module::ModFlagBehavior::Error, OptlevelMDName, OptLevel);
     //Annotate module with requested version
-    M->addModuleFlag(Module::ModFlagBehavior::Error, ReoptimizeMDName, Version);
+    M->addModuleFlag(Module::ModFlagBehavior::Error, ReoptimizeMDName, ComputedVersion);
 
     //Add profiling flags
     ProfilingFlags Profiling;
@@ -440,7 +452,7 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
         //this unrolls to {10, 40, 90}
         F->setMetadata("julia.prof.reporter", MDTuple::get(F->getContext(), {
             //Limit
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), 10 * (OptLevel + 1) * (OptLevel + 1))),
+            ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), computeOptLevelLimit(OptLevel))),
             //Function
             ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), reinterpret_cast<uint64_t>(&jl_reoptimize_entrypoint))),
             //Args...
@@ -456,24 +468,28 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
     //Do the actual optimization
     auto &OptJD = *OptJDs[OptLevel - MinOptLevel];
     auto TSM = orc::ThreadSafeModule(std::move(M), *TSCtx);
-    auto Mangled = ES.intern(mangle(*Name, Version));
-    cantFail(OptJD.define(std::make_unique<ReoptimizedMaterializationUnit>(std::move(TSM), Mangled, *PostPartitioningLayer)));
+    auto Mangled = ES.intern(mangle(*Name, ComputedVersion));
+    //This might fail due to a race condition when two threads both attempt to reoptimize the same method. Only one of their
+    //define calls will succeed, and the other will fail, which is ok as long as a registration succeeds. The following
+    //lookup call must succeed, since one of the methods must have registered the MU successfully.
+    consumeError(OptJD.define(std::make_unique<ReoptimizedMaterializationUnit>(std::move(TSM), Mangled, *PostPartitioningLayer)));
     auto Optimized = cantFail(ES.lookup({{&OptJD, orc::JITDylibLookupFlags::MatchAllSymbols}}, Mangled));
     {
         std::lock_guard<std::mutex> Lock(Entry->StubMutex);
         auto Current = Entry->Version.load(std::memory_order::memory_order_relaxed);
-        if (Current >= Version) {
-            return {*Entry->Stub, Current, Entry->OptLevel};
+        if (Current >= ComputedVersion) {
+            //backcompute the version number from the registered best version
+            return {*Entry->Stub, Current - int32_t(Entry->OptLevel) / int32_t(MaxOptLevel - MinOptLevel), Entry->OptLevel};
         }
         *Entry->Stub = Optimized.getAddress();
-        Entry->Version.store(Version, std::memory_order::memory_order_relaxed);
+        Entry->Version.store(ComputedVersion, std::memory_order::memory_order_relaxed);
         Entry->OptLevel = OptLevel;
         return {Optimized.getAddress(), Version, OptLevel};
     }
 }
 
-ReoptimizationManager::ReoptimizationManager(FunctionCache &Cache, orc::JITDylib &JD, uint32_t MinOptLevel, uint32_t MaxOptLevel)
-: Cache(Cache), PostPartitioningLayer(nullptr), ContextPool([](){ return std::make_unique<LLVMContext>(); }), MinOptLevel(MinOptLevel), MaxOptLevel(MaxOptLevel) {
+ReoptimizationManager::ReoptimizationManager(JITFunctionProfiler &Profiler, FunctionCache &Cache, orc::JITDylib &JD, uint32_t MinOptLevel, uint32_t MaxOptLevel)
+: Profiler(Profiler), Cache(Cache), PostPartitioningLayer(nullptr), ContextPool([](){ return std::make_unique<LLVMContext>(); }), MinOptLevel(MinOptLevel), MaxOptLevel(MaxOptLevel) {
     OptJDs.resize(MaxOptLevel - MinOptLevel + 1);
     for (size_t i = 0; i < OptJDs.size(); i++) {
         OptJDs[i] = &cantFail(JD.getExecutionSession().createJITDylib((Twine("__jtier.") + std::to_string(i) + "." + JD.getName()).str()));
@@ -542,4 +558,44 @@ ReoptimizationQueue::~ReoptimizationQueue() {
 bool ReoptimizationManager::profileReentry(orc::SymbolStringPtr Name, orc::JITDylib *JD, int32_t Version, uint32_t OptLevel) {
     //Just directly translate the optlevel to a priority so that bigger optlevels get higher priority
     return Queue.enqueue(Name, JD, Version, OptLevel);
+}
+
+bool ReoptimizationManager::blockingRecompileNext() {
+    auto Entry = Queue.wait_dequeue();
+    if (!Entry) {
+        return false;
+    }
+    auto ReloadOptLevel = [&]() {
+        auto Profile = Profiler.getProfile(*Entry->Name);
+        assert(Profile && "Forgot to profile this function?");
+        auto CallCount = Profile->CallCount.load(std::memory_order::memory_order_relaxed);
+        //The compiler may be able to pull some magic to invert the optlevel to call count mapping,
+        //but in the general case this is more robust. Again, not a bottleneck on a background thread.
+        for (uint32_t i = MinOptLevel; i <= MaxOptLevel; i++) {
+            if (CallCount < computeOptLevelLimit(i)) {
+                return i;
+            }
+        }
+        return MaxOptLevel;
+    };
+    uint32_t OptLevel = ReloadOptLevel();
+    // dbgs() << "Reoptimizing " << *Entry->Name << " to optlevel " << OptLevel << " in " << Entry->JD->getName() << " version " << Entry->Version << "\n";
+    auto Optimized = optimize(Entry->Name, *Entry->JD, Entry->Version, OptLevel);
+    assert((Optimized.Version > Entry->Version || (Optimized.Version == Entry->Version && Optimized.OptLevel >= OptLevel)) && "Optimization failed to improve the version");
+    if (Optimized.Version == Entry->Version) {
+        //If we didn't deoptimize the function, then we might hit a race condition between
+        //updating call count and updating the stub. By now we've updated the stub, so as
+        //long as the optlevel didn't change we won't have to recompile again. If it did,
+        //then it's our responsibility to requeue the function. 
+        uint32_t Current = ReloadOptLevel();
+        if (OptLevel != Current) {
+            //OptLevel changed while we were optimizing, reoptimize because we don't know
+            //if we passed the threshold before or after the stub was updated
+            //worst case, we pop it off the queue and reoptimize it again, but that's
+            //ideally on a background thread and thus doesn't compromise the application
+            // dbgs() << "OptLevel changed while optimizing " << *Entry->Name << " from " << OptLevel << " to " << Current << "\n";
+            profileReentry(std::move(Entry->Name), Entry->JD, Entry->Version, Current);
+        }
+    }
+    return true;
 }
