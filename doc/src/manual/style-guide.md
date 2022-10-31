@@ -328,7 +328,7 @@ Instead write:
 @evalpoly(1, 2, 3 ^ cbrt(27))
 ```
 
-The function-like form should be use for macros appearing within another expression, to make
+The function-like form should be used for macros appearing within another expression, to make
 the end of the macro construct clear.
 
 The statement-like form should be used to annotate blocks:
