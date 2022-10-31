@@ -317,7 +317,7 @@ For example:
 @evalpoly 1 2 3 ^ cbrt(27)
 ```
 
-is ambiguous, as its unclear on what we want `@evalpoly` for. Do we want it to operate on
+is ambiguous, as it's unclear on what we want `@evalpoly` for. Do we want it to operate on
 `(1, 2, 3)` and then raise the result to power of `cbrt(27)`? Or we actually want it on
 `(1, 2, 3 ^ cbrt(27))`?
 
