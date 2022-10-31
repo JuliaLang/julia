@@ -19,6 +19,7 @@
 
 #include <llvm/Target/TargetMachine.h>
 
+#include "reoptimization.h"
 #include "jitprof.h"
 
 #include "julia_assert.h"
@@ -44,7 +45,7 @@
 // and feature support (e.g. Windows, JITEventListeners for various profilers,
 // etc.). Thus, we currently only use JITLink where absolutely required, that is,
 // for Mac/aarch64.
-// #define JL_FORCE_JITLINK
+#define JL_FORCE_JITLINK
 
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_) || defined(JL_FORCE_JITLINK)
 # if JL_LLVM_VERSION < 130000
@@ -273,136 +274,10 @@ public:
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 #endif
     typedef orc::IRCompileLayer CompileLayerT;
+    typedef orc::IRTransformLayer MangleLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
+    typedef orc::IRTransformLayer PartitionLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
-    template
-    <typename ResourceT, size_t max = 0,
-        typename BackingT = std::stack<ResourceT,
-            std::conditional_t<max == 0,
-                SmallVector<ResourceT>,
-                SmallVector<ResourceT, max>
-            >
-        >
-    >
-    struct ResourcePool {
-        public:
-        ResourcePool(std::function<ResourceT()> creator) : creator(std::move(creator)), mutex(std::make_unique<WNMutex>()) {}
-        class OwningResource {
-            public:
-            OwningResource(ResourcePool &pool, ResourceT resource) : pool(pool), resource(std::move(resource)) {}
-            OwningResource(const OwningResource &) = delete;
-            OwningResource &operator=(const OwningResource &) = delete;
-            OwningResource(OwningResource &&) = default;
-            OwningResource &operator=(OwningResource &&) = default;
-            ~OwningResource() {
-                if (resource) pool.release(std::move(*resource));
-            }
-            ResourceT release() {
-                ResourceT res(std::move(*resource));
-                resource.reset();
-                return res;
-            }
-            void reset(ResourceT res) {
-                *resource = std::move(res);
-            }
-            ResourceT &operator*() {
-                return *resource;
-            }
-            ResourceT *operator->() {
-                return get();
-            }
-            ResourceT *get() {
-                return resource.getPointer();
-            }
-            const ResourceT &operator*() const {
-                return *resource;
-            }
-            const ResourceT *operator->() const {
-                return get();
-            }
-            const ResourceT *get() const {
-                return resource.getPointer();
-            }
-            explicit operator bool() const {
-                return resource;
-            }
-            private:
-            ResourcePool &pool;
-            llvm::Optional<ResourceT> resource;
-        };
-
-        OwningResource operator*() {
-            return OwningResource(*this, acquire());
-        }
-
-        OwningResource get() {
-            return **this;
-        }
-
-        ResourceT acquire() {
-            std::unique_lock<std::mutex> lock(mutex->mutex);
-            if (!pool.empty()) {
-                return pop(pool);
-            }
-            if (!max || created < max) {
-                created++;
-                return creator();
-            }
-            mutex->empty.wait(lock, [&](){ return !pool.empty(); });
-            assert(!pool.empty() && "Expected resource pool to have a value!");
-            return pop(pool);
-        }
-        void release(ResourceT &&resource) {
-            std::lock_guard<std::mutex> lock(mutex->mutex);
-            pool.push(std::move(resource));
-            mutex->empty.notify_one();
-        }
-        private:
-        template<typename T, typename Container>
-        static ResourceT pop(std::queue<T, Container> &pool) {
-            ResourceT top = std::move(pool.front());
-            pool.pop();
-            return top;
-        }
-        template<typename PoolT>
-        static ResourceT pop(PoolT &pool) {
-            ResourceT top = std::move(pool.top());
-            pool.pop();
-            return top;
-        }
-        std::function<ResourceT()> creator;
-        size_t created = 0;
-        BackingT pool;
-        struct WNMutex {
-            std::mutex mutex;
-            std::condition_variable empty;
-        };
-
-        std::unique_ptr<WNMutex> mutex;
-    };
-    struct PipelineT {
-        PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, JITFunctionProfiler &Profiler, int optlevel);
-        CompileLayerT CompileLayer;
-        OptimizeLayerT OptimizeLayer;
-    };
-
-    struct OptSelLayerT : orc::IRLayer {
-
-        template<size_t N>
-        OptSelLayerT(const std::array<std::unique_ptr<PipelineT>, N> &optimizers)
-            : orc::IRLayer(optimizers[0]->OptimizeLayer.getExecutionSession(),
-                optimizers[0]->OptimizeLayer.getManglingOptions()),
-            optimizers(optimizers.data()),
-            count(N) {
-            static_assert(N > 0, "Expected array with at least one optimizer!");
-        }
-
-        void emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) override;
-
-        private:
-        const std::unique_ptr<PipelineT> * const optimizers;
-        size_t count;
-    };
 
 private:
     // Custom object emission notification handler for the JuliaOJIT
@@ -494,6 +369,8 @@ private:
     ResourcePool<orc::ThreadSafeContext, 0, std::queue<orc::ThreadSafeContext>> ContextPool;
 
     JITFunctionProfiler Profiler;
+    FunctionCache JITCache;
+    ReoptimizationManager ReoptMgr;
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;
@@ -502,8 +379,10 @@ private:
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
-    const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
-    OptSelLayerT OptSelLayer;
+    CompileLayerT CompileLayer;
+    MangleLayerT MangleLayer;
+    OptimizeLayerT OptimizeLayer;
+    PartitionLayerT PartitionLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
 orc::ThreadSafeModule jl_create_llvm_module(StringRef name, orc::ThreadSafeContext ctx, bool imaging_mode, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple());

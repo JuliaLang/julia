@@ -57,7 +57,7 @@ CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop llvm
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline \
-	jitprof
+	jitprof reoptimization
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)
@@ -282,7 +282,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 	@$(call PRINT_FLISP, $(call spawn,$(FLISP_EXECUTABLE_release)) \
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
-JITLAYERS_HEADERS := $(addprefix $(SRCDIR)/,jitlayers.h debug-registry.h jitprof.h)
+JITLAYERS_HEADERS := $(addprefix $(SRCDIR)/,jitlayers.h debug-registry.h concurrent-utils.h jitprof.h reoptimization.h)
 
 # additional dependency links
 $(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(SRCDIR)/intrinsics.h
@@ -325,6 +325,7 @@ $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h
 $(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(SRCDIR)/passes.h $(JITLAYERS_HEADERS)
 $(BUILDDIR)/jitprof.o $(BUILDDIR)/jitprof.dbg.obj: $(SRCDIR)/jitprof.h $(SRCDIR)/codegen_shared.h
+$(BUILDDIR)/reoptimization.o $(BUILDDIR)/reoptimization.dbg.obj: $(SRCDIR)/codegen_shared.h $(JITLAYERS_HEADERS)
 
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h

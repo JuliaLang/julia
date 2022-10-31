@@ -113,12 +113,12 @@ void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT {
     (**this->sysimg_info) = info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
+Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
 JITDebugInfoRegistry::get_sysimg_info() const JL_NOTSAFEPOINT {
     return *this->sysimg_info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
 JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
     return *this->objfilemap;
 }

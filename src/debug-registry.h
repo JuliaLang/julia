@@ -7,8 +7,9 @@
 #include "processor.h"
 
 #include <map>
-#include <mutex>
 #include <type_traits>
+
+#include "concurrent-utils.h"
 
 typedef struct {
     const llvm::object::ObjectFile *obj;
@@ -26,60 +27,6 @@ typedef struct {
 class JITDebugInfoRegistry
 {
 public:
-    template<typename ResourceT>
-    struct Locked {
-
-        template<typename CResourceT>
-        struct Lock {
-            std::unique_lock<std::mutex> lock;
-            CResourceT &resource;
-
-            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT : lock(mutex), resource(resource) {}
-            Lock(Lock &&) JL_NOTSAFEPOINT = default;
-            Lock &operator=(Lock &&) JL_NOTSAFEPOINT = default;
-
-            CResourceT &operator*() JL_NOTSAFEPOINT {
-                return resource;
-            }
-
-            const CResourceT &operator*() const JL_NOTSAFEPOINT {
-                return resource;
-            }
-
-            CResourceT *operator->() JL_NOTSAFEPOINT {
-                return &**this;
-            }
-
-            const CResourceT *operator->() const JL_NOTSAFEPOINT {
-                return &**this;
-            }
-
-            operator const CResourceT &() const JL_NOTSAFEPOINT {
-                return resource;
-            }
-
-            ~Lock() JL_NOTSAFEPOINT = default;
-        };
-    private:
-
-        mutable std::mutex mutex;
-        ResourceT resource;
-    public:
-        typedef Lock<ResourceT> LockT;
-        typedef Lock<const ResourceT> ConstLockT;
-
-        Locked(ResourceT resource = ResourceT()) JL_NOTSAFEPOINT : mutex(), resource(std::move(resource)) {}
-
-        LockT operator*() JL_NOTSAFEPOINT {
-            return LockT(mutex, resource);
-        }
-
-        ConstLockT operator*() const JL_NOTSAFEPOINT {
-            return ConstLockT(mutex, resource);
-        }
-
-        ~Locked() JL_NOTSAFEPOINT = default;
-    };
 
     struct sysimg_info_t {
         uint64_t jl_sysimage_base;

@@ -19,7 +19,7 @@ static ProfilingFlags fromFunction(Function &F) {
 
     ProfilingFlags Flags = {false, false, false, false};
     if (auto ProfMD = F.getMetadata("julia.prof")) {
-        ProfilingFlags::fromMDNode(ProfMD);
+        return ProfilingFlags::fromMDNode(ProfMD);
     }
     Flags.ProfileAllocations |= ForceProfileAllocations;
     Flags.ProfileBranches |= ForceProfileBranches;
