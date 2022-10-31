@@ -707,7 +707,6 @@ mktempdir() do pfx
     errfile = joinpath(pfx, "stderr.txt")
     @test libs_emptied > 0
     @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
-    errmsg = ""
     utf16 = bytes -> begin
         n = Int(length(bytes)//2)
         pairs = [bytes[(2i-1):(2i)] for i in 1:n]
