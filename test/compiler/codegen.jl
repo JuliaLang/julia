@@ -707,7 +707,13 @@ mktempdir() do pfx
     errfile = joinpath(pfx, "stderr.txt")
     @test libs_emptied > 0
     @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
-    @test contains(readline(errfile), "ERROR: Unable to load dependent library")
+    errmsg = ""
+    @static if Sys.iswindows()
+        errmsg = open(errfile, "r") do f; utf16(readbytes(f)); end
+    else
+        errmsg = readline(errfile)
+    end
+    @test contains(errmsg, "ERROR: Unable to load dependent library")
 end
 
 # issue #42645
