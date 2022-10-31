@@ -195,7 +195,7 @@ function CC.tmerge(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(ty
     if isa(typea, T)
         if isa(typeb, T)
             return T(
-                tmerge(widenlattice(𝕃), typea.typ, typeb),
+                tmerge(widenlattice(𝕃), typea.typ, typeb.typ),
                 typea.slots ∪ typeb.slots)
         else
             typea = typea.typ

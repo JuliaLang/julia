@@ -13,6 +13,11 @@ extern "C" {
 /* Bring in helper functions for windows without libgcc. */
 #ifdef _OS_WINDOWS_
 #include "loader_win_utils.c"
+
+#include <fileapi.h>
+static int win_file_exists(wchar_t* wpath) {
+  return GetFileAttributesW(wpath) == INVALID_FILE_ATTRIBUTES ? 0 : 1;
+}
 #endif
 
 // Save DEP_LIBS to a variable that is explicitly sized for expansion
@@ -31,6 +36,13 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
 }
 
 /* Wrapper around dlopen(), with extra relative pathing thrown in*/
+/* If err, then loads the library successfully or panics.
+ * If !err, then loads the library or returns null if the file does not exist,
+ * or panics if opening failed for any other reason. */
+/* Currently the only use of this function with !err is in opening libjulia-codegen,
+ * which the user can delete to save space if generating new code is not necessary.
+ * However, if it exists and cannot be loaded, that's a problem. So, we alert the user
+ * and abort the process. */
 static void * load_library(const char * rel_path, const char * src_dir, int err) {
     void * handle = NULL;
     // See if a handle is already open to the basename
@@ -54,6 +66,7 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     strncat(path, rel_path, sizeof(path) - 1);
 
 #if defined(_OS_WINDOWS_)
+#define PATH_EXISTS() win_file_exists(wpath)
     wchar_t wpath[2*JL_PATH_MAX + 1] = {0};
     if (!utf8_to_wchar(path, wpath, 2*JL_PATH_MAX)) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", path, " to wide string!\n");
@@ -61,12 +74,13 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
     }
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
+#define PATH_EXISTS() !access(path, F_OK)
     handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
 #endif
-
     if (handle == NULL) {
-        if (!err)
+        if (!err && !PATH_EXISTS())
             return NULL;
+#undef PATH_EXISTS
         jl_loader_print_stderr3("ERROR: Unable to load dependent library ", path, "\n");
 #if defined(_OS_WINDOWS_)
         LPWSTR wmsg = TEXT("");

@@ -2191,6 +2191,58 @@ function cfg_simplify!(ir::IRCode)
                 if isa(node[:inst], GotoNode) && merged_succ[ms] != 0
                     # If we merged a basic block, we need remove the trailing GotoNode (if any)
                     compact.result[compact.result_idx][:inst] = nothing
+                elseif isa(node[:inst], PhiNode)
+                    phi = node[:inst]
+                    values = phi.values
+                    (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
+                    ssa_rename[i] = SSAValue(compact.result_idx)
+                    processed_idx = i
+                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true)
+                    edges = Int32[]
+                    values = Any[]
+                    sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
+                    for old_index in 1:length(phi.edges)
+                        old_edge = phi.edges[old_index]
+                        new_edge = bb_rename_pred[old_edge]
+                        if new_edge > 0
+                            push!(edges, new_edge)
+                            if isassigned(renamed_values, old_index)
+                                push!(values, renamed_values[old_index])
+                            else
+                                resize!(values, length(values)+1)
+                            end
+                        elseif new_edge == -3
+                            # Mutliple predecessors, we need to expand out this phi
+                            all_new_preds = Int32[]
+                            function add_preds!(old_edge)
+                                for old_edge′ in bbs[old_edge].preds
+                                    new_edge = bb_rename_pred[old_edge′]
+                                    if new_edge > 0 && !in(new_edge, all_new_preds)
+                                        push!(all_new_preds, new_edge)
+                                    elseif new_edge == -3
+                                        add_preds!(old_edge′)
+                                    end
+                                end
+                            end
+                            add_preds!(old_edge)
+                            append!(edges, all_new_preds)
+                            if isassigned(renamed_values, old_index)
+                                val = renamed_values[old_index]
+                                for _ in 1:length(all_new_preds)
+                                    push!(values, val)
+                                end
+                                length(all_new_preds) == 0 && kill_current_use!(compact, val)
+                                for _ in 2:length(all_new_preds)
+                                    count_added_node!(compact, val)
+                                end
+                            else
+                                resize!(values, length(values)+length(all_new_preds))
+                            end
+                        else
+                            isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
+                        end
+                    end
+                    compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
                 else
                     ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
                     if ri == compact.result_idx

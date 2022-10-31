@@ -2882,7 +2882,7 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Returns true when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B` in lexicographic order.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
