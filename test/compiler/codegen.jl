@@ -711,7 +711,7 @@ mktempdir() do pfx
     utf16 = bytes -> begin
         n = Int(length(bytes)//2)
         pairs = [bytes[(2i-1):(2i)] for i in 1:n]
-        f = x -> reinterpret(UInt16, x)
+        f = pair -> reinterpret(UInt16, pair)
         units = only.(f.(pairs))
         return transcode(String, units)
     end
