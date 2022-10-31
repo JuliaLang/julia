@@ -2969,7 +2969,7 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
         gc_heap_snapshot_record_root((jl_value_t*)task, "root task");
     }
     task = jl_atomic_load_relaxed(&ptls2->current_task);
-    if (task) {
+    if (task && (jl_atomic_load_relaxed(&task->_state) == JL_TASK_STATE_RUNNABLE)) {
         gc_mark_queue_obj(gc_cache, sp, task);
         gc_heap_snapshot_record_root((jl_value_t*)task, "current task");
     }
@@ -2979,7 +2979,7 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
         gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
     }
     task = ptls2->previous_task;
-    if (task) { // shouldn't be necessary, but no reason not to
+    if (task && (jl_atomic_load_relaxed(&task->_state) == JL_TASK_STATE_RUNNABLE)) { // shouldn't be necessary, but no reason not to
         gc_mark_queue_obj(gc_cache, sp, task);
         gc_heap_snapshot_record_root((jl_value_t*)task, "previous task");
     }
