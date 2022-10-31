@@ -384,7 +384,6 @@ endif
 
 	# Fix rpaths for dependencies. This should be fixed in BinaryBuilder later.
 ifeq ($(OS), Linux)
-	-$(PATCHELF) --set-rpath '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libgfortran.$(SHLIB_EXT)
 	-$(PATCHELF) --set-rpath '$$ORIGIN' $(DESTDIR)$(private_shlibdir)/libLLVM.$(SHLIB_EXT)
 endif
 
