@@ -1128,7 +1128,8 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 // all of Julia's threads are not stopped!
 JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
 {
-    for (size_t i = 0; i < jl_n_threads; i++) {
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (size_t i = 0; i < nthreads; i++) {
         jl_ptls_t ptls2 = jl_all_tls_states[i];
         arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = live_tasks->len;
