@@ -963,7 +963,7 @@ end
     @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
 end
 
-@testset "proper patition for non-1-indexed vector" begin
+@testset "proper partition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end
 

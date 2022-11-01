@@ -2264,7 +2264,7 @@
 ;; `n`:    total nr of lhs args
 ;; `end`:  car collects statements to be executed afterwards.
 ;;         In general, actual assignments should only happen after
-;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+;;         the whole iterator is desctructured (https://github.com/JuliaLang/julia/issues/40574)
 (define (destructure- i lhss xx n st end)
   (if (null? lhss)
       '()

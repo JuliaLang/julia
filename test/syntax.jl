@@ -2326,7 +2326,7 @@ f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
-    # Test these evals shouldnt segfault
+    # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
     eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
