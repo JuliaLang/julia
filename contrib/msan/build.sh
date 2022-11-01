@@ -29,7 +29,7 @@ if [ "$WORKSPACE" = "" ]; then
 fi
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-JULIA_HOME="$HERE/../../"
+JULIA_HOME="$HERE/../.."
 
 echo
 echo "Installing toolchain..."
@@ -62,3 +62,8 @@ LIBFLANGURL=https://github.com/JuliaBinaryWrappers/FlangClassic_RTLib_jll.jl/rel
 
 curl -JL $LIBFLANGURL | tar -xzf - --directory "$BUILD/usr" lib/libflang.so lib/libflangrti.so lib/libomp.so lib/libompstub.so lib/libpgmath.so
 
+JULIA_SYSIMG_BUILD_FLAGS="--emit-sanitizer=msan" make -C "$JULIA_HOME" julia-sysimg-bc -j10
+
+ar -x --output $JULIA_HOME/usr/lib/julia/ $JULIA_HOME/usr/lib/julia/sys-bc.a
+$TOOLCHAIN/usr/tools/opt --passes=msan $JULIA_HOME/usr/lib/julia/text.bc -o $JULIA_HOME/usr/lib/julia/msan-text.bc
+$TOOLCHAIN/usr/tools/clang $JULIA_HOME/usr/lib/julia/msan-text.bc $JULIA_HOME/usr/lib/julia/data.bc -fPIC  -shared -o $BUILD/usr/lib/julia/sys-debug.so
