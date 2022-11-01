@@ -11,6 +11,25 @@ function is_stringchunk(node)
     return k == K"String" || k == K"CmdString"
 end
 
+function reorder_parameters!(args, params_pos)
+    p = 0
+    for i = length(args):-1:1
+        if !Meta.isexpr(args[i], :parameters)
+            break
+        end
+        p = i
+    end
+    if p == 0
+        return
+    end
+    # nest frankentuples parameters sections
+    for i = length(args)-1:-1:p
+        pushfirst!(args[i].args, pop!(args))
+    end
+    # Move parameters to args[params_pos]
+    insert!(args, params_pos, pop!(args))
+end
+
 function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                   eq_to_kw=false, inside_dot_expr=false, inside_vect_or_braces=false)
     if !haschildren(node)
@@ -145,17 +164,11 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             popfirst!(args)
             headsym = Symbol("'")
         end
-        # Move parameters block to args[2]
-        if length(args) > 1 && Meta.isexpr(args[end], :parameters)
-            insert!(args, 2, args[end])
-            pop!(args)
-        end
-    elseif headsym in (:tuple, :parameters, :vect, :braces)
+        # Move parameters blocks to args[2]
+        reorder_parameters!(args, 2)
+    elseif headsym in (:tuple, :vect, :braces)
         # Move parameters blocks to args[1]
-        if length(args) > 1 && Meta.isexpr(args[end], :parameters)
-            pushfirst!(args, args[end])
-            pop!(args)
-        end
+        reorder_parameters!(args, 1)
     elseif headsym in (:try, :try_finally_catch)
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block

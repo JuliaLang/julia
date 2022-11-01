@@ -2934,8 +2934,8 @@ function parse_paren(ps::ParseState, check_identifiers=true)
             # Extra credit: nested parameters and frankentuples
             # (x...;)         ==> (tuple (... x) (parameters))
             # (x...; y)       ==> (tuple (... x) (parameters y))
-            # (; a=1; b=2)    ==> (tuple (parameters (= a 1) (parameters (= b 2))))
-            # (a; b; c,d)     ==> (tuple a (parameters b (parameters c d)))
+            # (; a=1; b=2)    ==> (tuple (parameters (= a 1)) (parameters (= b 2)))
+            # (a; b; c,d)     ==> (tuple a (parameters b) (parameters c d))
             # (a=1, b=2; c=3) ==> (tuple (= a 1) (= b 2) (parameters (= c 3)))
             emit(ps, mark, K"tuple")
         elseif opts.is_block
@@ -2968,7 +2968,7 @@ end
 # syntax so the parse tree is pretty strange in these cases!  Some macros
 # probably use it though.  Example:
 #
-# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (= d 2) (parameters e (= f 3))))
+# (a,b=1; c,d=2; e,f=3)  ==>  (tuple a (= b 1) (parameters c (= d 2)) (parameters e (= f 3)))
 #
 # flisp: parts of parse-paren- and parse-arglist
 function parse_brackets(after_parse::Function,
@@ -2977,12 +2977,13 @@ function parse_brackets(after_parse::Function,
                     space_sensitive=false,
                     where_enabled=true,
                     whitespace_newline=true)
-    params_marks = acquire_positions(ps.stream)
+    params_positions = acquire_positions(ps.stream)
     last_eq_before_semi = 0
     num_subexprs = 0
     num_semis = 0
     had_commas = false
     had_splat = false
+    param_start = nothing
     while true
         bump_trivia(ps)
         k = peek(ps)
@@ -2991,8 +2992,11 @@ function parse_brackets(after_parse::Function,
         elseif k == K";"
             # Start of parameters list
             # a, b; c d  ==>  a b (parameters c d)
-            push!(params_marks, position(ps))
+            if !isnothing(param_start)
+                push!(params_positions, emit(ps, param_start, K"TOMBSTONE"))
+            end
             num_semis += 1
+            param_start = position(ps)
             bump(ps, TRIVIA_FLAG)
             bump_trivia(ps)
         elseif is_closing_token(ps, k)
@@ -3025,14 +3029,17 @@ function parse_brackets(after_parse::Function,
             end
         end
     end
+    if !isnothing(param_start) && position(ps) != param_start
+        push!(params_positions, emit(ps, param_start, K"TOMBSTONE"))
+    end
     opts = after_parse(had_commas, had_splat, num_semis, num_subexprs)
     # Emit nested parameter nodes if necessary
     if opts.needs_parameters
-        for mark in Iterators.reverse(params_marks)
-            emit(ps, mark, K"parameters")
+        for pos in params_positions
+            reset_node!(ps, pos, kind=K"parameters")
         end
     end
-    release_positions(ps.stream, params_marks)
+    release_positions(ps.stream, params_positions)
     bump_closing_token(ps, closing_kind)
     return opts
 end
