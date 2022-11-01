@@ -66,6 +66,7 @@ tests = [
         "a ? b: c"    => "(? a b (error-t) c)"
         "a ? b :c"    => "(? a b (error-t) c)"
         "a ? b c"     => "(? a b (error-t) c)"
+        "A[x ? y : end]" => "(ref A (? x y end))"
     ],
     JuliaSyntax.parse_arrow => [
         "x → y"     =>  "(call-i x → y)"
