@@ -220,6 +220,10 @@ function is_closing_token(ps::ParseState, k)
         (k == K"end" && !ps.end_symbol)
 end
 
+function is_block_continuation_keyword(ps::ParseState, k)
+    is_block_continuation_keyword(k) && !(ps.end_symbol && k == K"end")
+end
+
 function is_closer_or_newline(ps::ParseState, k)
     is_closing_token(ps,k) || k == K"NewlineWs"
 end
@@ -658,7 +662,7 @@ function parse_cond(ps::ParseState)
 
     # FIXME: This is a very specific case. Error recovery should be handled more
     # generally elsewhere.
-    if is_block_continuation_keyword(kind(t))
+    if is_block_continuation_keyword(ps, kind(t))
         # a "continuaton keyword" is likely to belong to the surrounding code, so
         # we abort early
 
@@ -669,6 +673,8 @@ function parse_cond(ps::ParseState)
         bump_invisible(ps, K"error", TRIVIA_FLAG, error="unexpected `$(kind(t))`")
         emit(ps, mark, K"if")
         return
+    else
+        # A[x ? y : end] ==> (ref A (? x y end))
     end
     parse_eq_star(ps)
     emit(ps, mark, K"?")
