@@ -1989,20 +1989,64 @@ The keyword also accepts `Val(dims)`.
     For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
+
+Concatenate two arrays in different dimensions:
+```jldoctest
+julia> a = [1 2 3]
+1×3 Matrix{Int64}:
+ 1  2  3
+
+julia> b = [4 5 6]
+1×3 Matrix{Int64}:
+ 4  5  6
+
+julia> cat(a, b; dims=1)
+2×3 Matrix{Int64}:
+ 1  2  3
+ 4  5  6
+
+julia> cat(a, b; dims=2)
+1×6 Matrix{Int64}:
+ 1  2  3  4  5  6
+
+julia> cat(a, b; dims=(1, 2))
+2×6 Matrix{Int64}:
+ 1  2  3  0  0  0
+ 0  0  0  4  5  6
+```
+
+Concatenate 3D arrays:
+```jldoctest
+julia> a = ones(2, 2, 3);
+
+julia> b = ones(2, 2, 4);
+
+julia> c = cat(a, b; dims=3);
+
+julia> size(c) == (2, 2, 7)
+true
+```
+
+Concatenate arrays of different sizes:
 ```jldoctest
 julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
+```
 
+Construct a block diagonal matrix:
+```
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+```
 
+```
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
