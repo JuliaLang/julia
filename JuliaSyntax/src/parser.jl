@@ -566,7 +566,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         return
     end
     if k == K"~"
-        if ps.space_sensitive && !preceding_whitespace(peek_token(ps, 2))
+        if ps.space_sensitive && preceding_whitespace(t) && !preceding_whitespace(peek_token(ps, 2))
             # Unary ~ in space sensitive context is not assignment precedence
             # [a ~b]  ==>  (hcat a (call-pre ~ b))
             return
@@ -574,6 +574,7 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # ~ is the only non-syntactic assignment-precedence operator.
         # a ~ b      ==>  (call-i a ~ b)
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
+        # [a~b]      ==>  (vect (call-i a ~ b))
         bump(ps)
         parse_assignment(ps, down)
         emit(ps, mark, K"call", INFIX_FLAG)
