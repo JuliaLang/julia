@@ -51,6 +51,7 @@ tests = [
         "[a ~b]"      =>  "(hcat a (call-pre ~ b))"
         "a ~ b"       =>  "(call-i a ~ b)"
         "[a ~ b c]"   =>  "(hcat (call-i a ~ b) c)"
+        "[a~b]"       =>  "(vect (call-i a ~ b))"
     ],
     JuliaSyntax.parse_pair => [
         "a => b"  =>  "(call-i a => b)"
