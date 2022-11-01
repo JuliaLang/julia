@@ -535,11 +535,11 @@ end
     @test issorted(a)
 
     a = view([9:-1:0;], :)::SubArray
-    Base.Sort._sort!(a, Base.Sort.CountingSort(), Base.Forward, mn=0, mx=9)  # test it supports non-Vector
+    Base.Sort._sort!(a, Base.Sort.CountingSort(), Base.Forward, (; mn=0, mx=9))  # test it supports non-Vector
     @test issorted(a)
 
     a = OffsetArray([9:-1:0;], -5)
-    Base.Sort._sort!(a, Base.Sort.CountingSort(), Base.Forward, mn=0, mx=9)
+    Base.Sort._sort!(a, Base.Sort.CountingSort(), Base.Forward, (; mn=0, mx=9))
     @test issorted(a)
 end
 

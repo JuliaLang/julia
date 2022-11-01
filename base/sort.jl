@@ -86,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, _PartialQuickSort(k), o)
+    _sort!(v, _PartialQuickSort(k), o, (;))
     maybeview(v, k)
 end
 
@@ -407,6 +407,42 @@ function insorted end
 insorted(x, v::AbstractVector; kw...) = !isempty(searchsorted(v, x; kw...))
 insorted(x, r::AbstractRange) = in(x, r)
 
+## Alternative keyword management
+
+macro getkw(syms...)
+    usyms = (Symbol(:_, sym) for sym in syms)
+    Expr(:block, (:($(esc(:((kw, $sym) = $usym(v, o, kw))))) for (sym, usym) in zip(syms, usyms))...)
+end
+
+for (sym, deps, exp, type) in [
+        (:lo, (), :(firstindex(v)), Integer),
+        (:hi, (), :(lastindex(v)),  Integer),
+        (:U, (), :(UIntMappable(eltype(v), o)),  Any), #type checking this comes at a runtime performance cost ???
+        (:lenm1, (:lo, :hi), :(hi-lo), Integer),
+        (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
+        (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
+        (:range, (:mn, :mx), quote
+            o isa DirectOrdering || throw(ArgumentError("Cannot compute range under ordering $o"))
+            maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
+        end, Integer),
+        (:umn, (:mn,), :(uint_map(mn, o)), Unsigned),
+        (:umx, (:mx,), :(uint_map(mx, o)), Unsigned),
+        (:urange, (:umn, :umx), :(umx-umn), Unsigned),
+        (:bits, (:urange,), :(unsigned(8sizeof(urange) - leading_zeros(urange))), Unsigned),
+        (:scratch, (), nothing, :(Union{Nothing, AbstractVector})), # could have different eltype
+        (:t, (:lo, :hi, :scratch), quote
+            scratch === nothing ? similar(v) : reinterpret(eltype(v), checkbounds(Bool, scratch, lo:hi) ? scratch : resize!(scratch, length(v)))
+        end, :(AbstractVector{eltype(v)}))]
+    str = string(sym)
+    usym = Symbol(:_, sym)
+    @eval function $usym(v, o, kw)
+        Symbol($str) ∈ keys(kw) && return kw, kw[Symbol($str)]::$type # TODO this interpolation feels too complicated
+        @getkw $(deps...)
+        $sym = $exp
+        (;kw..., $sym), $sym::$type
+    end
+end
+
 ## sorting algorithm components ##
 
 abstract type Algorithm end
@@ -486,17 +522,17 @@ elements that are not
     end_stable ? (send_to_end!(!f, v; lo, hi)+1, hi) : (hi-send_to_end!(f, view(v, hi:-1:lo))+1, hi)
 
 
-function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), kw...)
+function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
+    @getkw lo hi
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
-        _sort!(WithoutMissingVector(v, unsafe=true), a.next, o; lo, hi, kw...)
+        _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
         v
     elseif eltype(v) <: Integer && o isa Perm{DirectOrdering} && nonmissingtype(eltype(o.data)) != eltype(o.data)
         lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
-        _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)); lo, hi, kw...)
+        _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
-        _sort!(v, a.next, o; lo, hi, kw...)
+        _sort!(v, a.next, o, kw)
     end
 end
 
@@ -521,22 +557,22 @@ UIntType(::Type{Float64}) = UInt64
 after_zero(::ForwardOrdering, x) = 0 <= x
 after_zero(::ReverseOrdering, x) = x < 0
 is_concrete_IEEEFloat(T::Type) = T <: Base.IEEEFloat && isconcretetype(T)
-function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), kw...)
+function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
+    @getkw lo hi
     if is_concrete_IEEEFloat(eltype(v)) && o isa DirectOrdering
         lo, hi = send_to_end!(isnan, v, o, true; lo, hi)
         iv = reinterpret(UIntType(eltype(v)), v)
         j = send_to_end!(x -> after_zero(o, x), v; lo, hi)
-        _sort!(iv, a.next, Reverse; lo, hi=j, kw...)
-        _sort!(iv, a.next, Forward; lo=j+1, hi, kw...)
+        _sort!(iv, a.next, Reverse, (;kw..., lo, hi=j))
+        _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi))
     elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
         lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
         j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
-        _sort!(v, a.next, Perm(Reverse, ip); lo, hi=j, kw...)
-        _sort!(v, a.next, Perm(Forward, ip); lo=j+1, hi, kw...)
+        _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
+        _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi))
     else
-        _sort!(v, a.next, o; lo, hi, kw...)
+        _sort!(v, a.next, o, kw)
     end
     v
 end
@@ -553,9 +589,10 @@ comparisons.
 struct BoolOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
-_sort!(v::AbstractVector, a::BoolOptimization, o::Ordering; kw...) = _sort!(v, a.next, o; kw...)
-function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering; lo::Integer, hi::Integer, kw...)
+_sort!(v::AbstractVector, a::BoolOptimization, o::Ordering, kw) = _sort!(v, a.next, o, kw)
+function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering, kw)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
+    @getkw lo hi
     count = 0
     @inbounds for i in lo:hi
         if v[i] == first
@@ -581,12 +618,12 @@ struct IsUIntMappable{T <: Algorithm, U <: Algorithm} <: Algorithm
     yes::T
     no::U
 end
-function _sort!(v::AbstractVector, a::IsUIntMappable, o::Ordering;
-                U = UIntMappable(eltype(v), o), kw...)
+function _sort!(v::AbstractVector, a::IsUIntMappable, o::Ordering, kw)
+    @getkw U
     if U !== nothing
-        _sort!(v, a.yes, o; U, kw...)
+        _sort!(v, a.yes, o, kw)
     else
-        _sort!(v, a.no, o; kw...)
+        _sort!(v, a.no, o, kw)
     end
 end
 
@@ -602,12 +639,12 @@ struct Small{N, T <: Algorithm, U <: Algorithm} <: Algorithm
     big::U
 end
 Small{N}(big) where N = Small{N, typeof(SMALL_ALGORITHM), typeof(big)}(SMALL_ALGORITHM, big)
-function _sort!(v::AbstractVector, a::Small{N}, o::Ordering;
-                lo::Integer=firstindex(v), hi::Integer=lastindex(v), lenm1 = hi-lo, kw...) where N
+function _sort!(v::AbstractVector, a::Small{N}, o::Ordering, kw) where N
+    @getkw lenm1
     if lenm1 < N
-        _sort!(v, a.small, o; lo, hi, lenm1, kw...)
+        _sort!(v, a.small, o, kw)
     else
-        _sort!(v, a.big, o; lo, hi, lenm1, kw...)
+        _sort!(v, a.big, o, kw)
     end
 end
 
@@ -630,8 +667,8 @@ it is well-suited to small collections but should not be used for large ones.
 """
 const InsertionSort = InsertionSortAlg()
 const SMALL_ALGORITHM = InsertionSort
-function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), kw...)
+function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering, kw)
+    @getkw lo hi
     lo_plus_1 = (lo + 1)::Integer
     @inbounds for i = lo_plus_1:hi
         j = i
@@ -659,8 +696,9 @@ reverse-sorted. The reverse-sorted check is unstable.
 struct CheckSorted{T <: Algorithm} <: Algorithm
     next::T
 end
-function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), lenm1 = hi-lo, kw...)
+function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
+    @getkw lo hi lenm1
+
     # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
     # arrays it is essentially free (<1%).
     _issorted(v, lo, hi, o) && return v
@@ -672,7 +710,7 @@ function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering;
         return v
     end
 
-    _sort!(v, a.next, o; lo, hi, lenm1, kw...)
+    _sort!(v, a.next, o, kw)
 end
 
 
@@ -687,8 +725,8 @@ dispatch to the `next` algorithm.
 struct ComputeExtrema{T <: Algorithm} <: Algorithm
     next::T
 end
-function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), kw...)
+function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
+    @getkw lo hi
     mn = mx = v[lo]
     @inbounds for i in (lo+1):hi
         vi = v[i]
@@ -699,7 +737,7 @@ function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering;
 
     lt(o, mn, mx) || return v # all same
 
-    _sort!(v, a.next, o; lo, hi, mn, mx, kw...)
+    _sort!(v, a.next, o, (;kw..., mn, mx))
 end
 
 
@@ -718,18 +756,15 @@ struct ConsiderCountingSort{T <: Algorithm, U <: Algorithm} <: Algorithm
     next::U
 end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
-function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering;
-                lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
-                U = UIntMappable(eltype(v), o),
-                mn, mx, range=maybe_unsigned(o === Reverse ? mn-mx : mx-mn), kw...)
-
+function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering, kw)
+    @getkw lenm1 range U
     if range < (sizeof(U) > 8 ? 5lenm1-100 : div(lenm1, 2))
-        _sort!(v, a.counting, o; lo, hi, lenm1, mn, mx, range, kw...)
+        _sort!(v, a.counting, o, kw)
     else
-        _sort!(v, a.next, o; lo, hi, lenm1, mn, mx, range, kw...)
+        _sort!(v, a.next, o, kw)
     end
 end
-_sort!(v::AbstractVector, a::ConsiderCountingSort, o::Ordering; kw...) = _sort!(v, a.next, o; kw...)
+_sort!(v::AbstractVector, a::ConsiderCountingSort, o::Ordering, kw) = _sort!(v, a.next, o, kw)
 
 
 """
@@ -744,9 +779,8 @@ through those counts repopulating the input with the values in sorted order.
 struct CountingSort <: Algorithm end
 maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
-function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering;
-                lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
-                mn, mx, range=maybe_unsigned(o === Reverse ? mn-mx : mx-mn), kw...)
+function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
+    @getkw lo hi mn mx range
     offs = 1 - (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1)
@@ -779,15 +813,12 @@ struct ConsiderRadixSort{T <: Algorithm, U <: Algorithm} <: Algorithm
     next::U
 end
 ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
-function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering;
-                lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
-                U = UIntMappable(eltype(v), o),
-                mn, mx, umn=uint_map(mn, o), umx=uint_map(mx, o), urange=umx-umn,
-                bits = unsigned(8sizeof(urange) - leading_zeros(urange)), kw...)
-    if sizeof(U) <= 8 && bits+70 < 22log(lenm1) # TODO there are some unexpected allocations here
-        _sort!(v, a.radix, o; lo, hi, lenm1, mn, mx, umn, umx, urange, bits, kw...)
+function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
+    @getkw U bits lenm1
+    if sizeof(U) <= 8 && bits+70 < 22log(lenm1)
+        _sort!(v, a.radix, o, kw)
     else
-        _sort!(v, a.next, o; lo, hi, lenm1, mn, mx, umn, umx, urange, bits, kw...)
+        _sort!(v, a.next, o, kw)
     end
 end
 
@@ -814,11 +845,8 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 `chunk_size` is larger for larger inputs and determined by an empirical heuristic.
 """
 struct RadixSort <: Algorithm end
-function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering;
-                lo=firstindex(v), hi=lastindex(v), lenm1=hi-lo,
-                mn, mx, umn=uint_map(mn, o), umx=uint_map(mx, o), urange=umx-umn,
-                bits = unsigned(8sizeof(urange) - leading_zeros(urange)),
-                U = UIntMappable(eltype(v), o), scratch=nothing, kw...)
+function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
+    @getkw lo hi umn U scratch lenm1 bits
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)
@@ -936,10 +964,9 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v:
     pivot, lo-trues
 end
 
-function _sort!(v::AbstractVector, a::PartialQuickSort, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), scratch=similar(v),
-                t=reinterpret(eltype(v), checkbounds(Bool, scratch, lo:hi) ? scratch : resize!(scratch, length(v))),
-                swap=false, rev=false, kw...)
+function _sort!(v::AbstractVector, a::PartialQuickSort, o::Ordering, kw;
+                t=nothing, swap=false, rev=false)
+    @getkw lo hi t
 
     while lo < hi && hi - lo > SMALL_THRESHOLD
         pivot, j = swap ? partition!(v, lo, hi, o, t, rev) : partition!(t, lo, hi, o, v, rev)
@@ -959,18 +986,18 @@ function _sort!(v::AbstractVector, a::PartialQuickSort, o::Ordering;
         elseif j-lo < hi-j
             # Sort the lower part recursively because it is smaller. Recursing on the
             # smaller part guarantees O(log(n)) stack space even on pathological inputs.
-            _sort!(v, a, o; lo, hi=j-1, scratch, t, swap, rev, kw...)
+            _sort!(v, a, o, (;kw..., lo, hi=j-1); swap, rev)
             lo = j+1
             rev = !rev
         else # Sort the higher part recursively
-            _sort!(v, a, o; lo=j+1, hi, scratch, t, swap, rev=!rev, kw...)
+            _sort!(v, a, o, (;kw..., lo=j+1, hi); swap, rev=!rev)
             hi = j-1
         end
     end
     hi < lo && return v
     swap && copyto!(v, lo, t, lo, hi-lo+1)
     rev && reverse!(v, lo, hi)
-    _sort!(v, a.next, o; lo, hi, scratch, t, kw...)
+    _sort!(v, a.next, o, (;kw..., lo, hi))
 end
 
 
@@ -986,8 +1013,8 @@ of elements that compare equal.
 struct StableCheckSorted{T<:Algorithm} <: Algorithm
     next::T
 end
-function _sort!(v::AbstractVector, a::StableCheckSorted, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), kw...)
+function _sort!(v::AbstractVector, a::StableCheckSorted, o::Ordering, kw)
+    @getkw lo hi
     if _issorted(v, lo, hi, o)
         return v
     elseif _issorted(v, lo, hi, Lt((x, y) -> !lt(o, x, y)))
@@ -995,7 +1022,7 @@ function _sort!(v::AbstractVector, a::StableCheckSorted, o::Ordering;
         return reverse!(v, lo, hi)
     end
 
-    _sort!(v, a.next, o; lo, hi, kw...)
+    _sort!(v, a.next, o, kw)
 end
 
 
@@ -1227,11 +1254,7 @@ function sort!(v::AbstractVector{T};
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
                scratch::Union{AbstractVector{T}, Nothing}=nothing) where T
-    if scratch === nothing # TODO: reduce redundancy
-        _sort!(v, alg, ord(lt,by,rev,order))
-    else
-        _sort!(v, alg, ord(lt,by,rev,order); scratch)
-    end
+    _sort!(v, alg, ord(lt,by,rev,order), (;scratch))
 end
 
 """
@@ -1357,7 +1380,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    _sort!(ix, _PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
+    _sort!(ix, _PartialQuickSort(k), Perm(ord(lt, by, rev, order), v), (;))
 
     maybeview(ix, k)
 end
@@ -1568,15 +1591,7 @@ end
 @noinline function sort_chunks!(Av, n, alg, order, scratch)
     inds = LinearIndices(Av)
     for lo = first(inds):n:last(inds)
-        _sort!(Av, alg, order; lo, hi=lo+n-1, scratch)
-    end
-    Av
-end
-# TODO: reduce redundancy
-@noinline function sort_chunks!(Av, n, alg, order, scratch::Nothing)
-    inds = LinearIndices(Av)
-    for lo = first(inds):n:last(inds)
-        _sort!(Av, alg, order; lo, hi=lo+n-1)
+        _sort!(Av, alg, order, (; lo, hi=lo+n-1, scratch))
     end
     Av
 end
@@ -1748,10 +1763,10 @@ Characteristics:
 const MergeSort = MergeSortAlg(SMALL_ALGORITHM)
 
 
-function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering;
-                lo=firstindex(v), hi=lastindex(v), scratch=nothing)
+function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering, kw)
+    @getkw lo hi scratch
     @inbounds if lo < hi
-        hi-lo <= SMALL_THRESHOLD && return _sort!(v, a.next, o; lo, hi)
+        hi-lo <= SMALL_THRESHOLD && return _sort!(v, a.next, o, kw)
 
         m = midpoint(lo, hi)
 
@@ -1759,8 +1774,8 @@ function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering;
         length(t) < m-lo+1 && resize!(t, m-lo+1)
         Base.require_one_based_indexing(t)
 
-        _sort!(v, a, o; lo, hi=m, scratch=t)
-        _sort!(v, a, o; lo=m+1, hi, scratch=t)
+        _sort!(v, a, o, (;kw..., hi=m, scratch=t))
+        _sort!(v, a, o, (;kw..., lo=m+1, scratch=t))
 
         i, j = 1, lo
         while j <= m
@@ -1791,7 +1806,7 @@ function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering;
 end
 
 # Support 3- and 5-argument version of sort! for backwards compatability
-sort!(v::AbstractVector, a::Algorithm, o::Ordering) = _sort!(v, a, o)
-sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering) = _sort!(v, a, o; lo, hi)
+sort!(v::AbstractVector, a::Algorithm, o::Ordering) = _sort!(v, a, o, (;))
+sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering) = _sort!(v, a, o, (; lo, hi))
 
 end # module Sort
