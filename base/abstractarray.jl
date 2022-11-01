@@ -2051,6 +2051,27 @@ julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
 ```
+
+!!! note
+    `cat` does not join two strings, you may want to use `*`.
+
+```jldoctest
+julia> a = "aaa";
+
+julia> b = "bbb";
+
+julia> cat(a, b; dims=1)
+2-element Vector{String}:
+ "aaa"
+ "bbb"
+
+julia> cat(a, b; dims=2)
+1×2 Matrix{String}:
+ "aaa"  "bbb"
+
+julia> a * b
+"aaabbb"
+```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 # `@constprop :aggressive` allows `catdims` to be propagated as constant improving return type inference
