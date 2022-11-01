@@ -1949,7 +1949,7 @@ This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(
 and their higher-dimensional analogues.
 
 The special case `dims=1` is [`vcat`](@ref), and `dims=2` is [`hcat`](@ref).
-See also [`hvcat`](@ref), [`stack`](@ref), [`repeat`](@ref).
+See also [`hvcat`](@ref), [`hvncat`](@ref), [`stack`](@ref), [`repeat`](@ref).
 
 The keyword also accepts `Val(dims)`.
 
