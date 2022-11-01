@@ -16,16 +16,14 @@ int loader_fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
         // Windows consoles do not support UTF8, only UTF16.
-        size_t wbufsz = nchars * 4 + 1;
-        wchar_t* wstr = (wchar_t*)loader_malloc(wbufsz);
-        if (!utf8_to_wchar(str, wstr, wbufsz)) {
-            loader_free(wstr);
+        wchar_t* wstr = utf8_to_wchar(str);
+        if (!wstr)
             return -1;
-        }
         if (WriteConsole(out->fd, str, wcslen(wstr), &written, NULL)) {
             loader_free(wstr);
             return written;
         }
+        loader_free(wstr);
     } else {
         // However, we want to print utf8 if the output is a file.
         if (WriteFile(out->fd, str, nchars, &written, NULL))
@@ -118,36 +116,36 @@ void loader_exit(int code) {
 
 
 /* Utilities to convert from Windows' wchar_t stuff to UTF-8 */
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen) {
+char *wchar_to_utf8(const wchar_t * wstr) {
     /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
     if (wstr[0] == L'\0') {
+        char *str = malloc(1);
         str[0] = '\0';
-        return 1;
+        return str;
     }
     size_t len = WideCharToMultiByte(CP_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL);
     if (!len)
-        return 0;
-    if (len > maxlen)
-        return 0;
+        return NULL;
+    char *str = (char *)malloc(len + 1);
     if (!WideCharToMultiByte(CP_UTF8, 0, wstr, -1, str, len, NULL, NULL))
-        return 0;
-    return 1;
+        return NULL;
+    return str;
 }
 
-int utf8_to_wchar(const char * str, wchar_t * wstr, size_t maxlen) {
-    /* Fast-path empty strings, as WideCharToMultiByte() returns zero for them. */
+wchar_t *utf8_to_wchar(const char * str) {
+    /* Fast-path empty strings, as MultiByteToWideChar() returns zero for them. */
     if (str[0] == '\0') {
+        wchar_t *wstr = malloc(sizeof(wchar_t));
         wstr[0] = L'\0';
-        return 1;
+        return wstr;
     }
     size_t len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
     if (!len)
-        return 0;
-    if (len > maxlen)
-        return 0;
+        return NULL;
+    wchar_t *wstr = (wchar_t *)malloc(len * sizeof(wchar_t) + sizeof(wchar_t));
     if (!MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr, len))
-        return 0;
-    return 1;
+        return NULL;
+    return wstr;
 }
 
 size_t loader_strlen(const char * x) {

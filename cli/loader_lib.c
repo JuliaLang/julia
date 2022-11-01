@@ -68,12 +68,13 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
 
 #if defined(_OS_WINDOWS_)
 #define PATH_EXISTS() win_file_exists(wpath)
-    wchar_t wpath[2*JL_PATH_MAX + 1] = {0};
-    if (!utf8_to_wchar(path, wpath, 2*JL_PATH_MAX)) {
+    wchar_t *wpath = utf8_to_wchar(path);
+    if (!wpath) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", path, " to wide string!\n");
         exit(1);
     }
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+    free(wpath);
 #else
 #define PATH_EXISTS() !access(path, F_OK)
     handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
@@ -92,9 +93,9 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
                        NULL, GetLastError(),
                        MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
                        (LPWSTR)&wmsg, 0, NULL);
-        char err[256] = {0};
-        wchar_to_utf8(wmsg, err, 255);
-        jl_loader_print_stderr3("Message:", err, "\n");
+        char *errmsg = wchar_to_utf8(wmsg);
+        jl_loader_print_stderr3("Message:", errmsg, "\n");
+        free(errmsg);
 #else
         char *dlerr = dlerror();
         if (dlerr != NULL) {
@@ -115,20 +116,20 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 }
 
 // Find the location of libjulia.
-char lib_dir[JL_PATH_MAX];
+char *lib_dir = NULL;
 JL_DLLEXPORT const char * jl_get_libdir()
 {
     // Reuse the path if this is not the first call.
-    if (lib_dir[0] != 0) {
+    if (lib_dir) {
         return lib_dir;
     }
 #if defined(_OS_WINDOWS_)
     // On Windows, we use GetModuleFileNameW
-    wchar_t libjulia_path[JL_PATH_MAX];
+    wchar_t *libjulia_path = utf8_to_wchar(LIBJULIA_NAME);
     HMODULE libjulia = NULL;
 
     // Get a handle to libjulia.
-    if (!utf8_to_wchar(LIBJULIA_NAME, libjulia_path, JL_PATH_MAX)) {
+    if (!libjulia_path) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
         exit(1);
     }
@@ -141,7 +142,8 @@ JL_DLLEXPORT const char * jl_get_libdir()
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
     }
-    if (!wchar_to_utf8(libjulia_path, lib_dir, JL_PATH_MAX)) {
+    lib_dir = wchar_to_utf8(libjulia_path);
+    if (!lib_dir) {
         jl_loader_print_stderr("ERROR: Unable to convert julia path to UTF-8\n");
         exit(1);
     }
@@ -156,7 +158,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
         }
         exit(1);
     }
-    strcpy(lib_dir, info.dli_fname);
+    lib_dir = strdup(info.dli_fname);
 #endif
     // Finally, convert to dirname
     const char * new_dir = dirname(lib_dir);

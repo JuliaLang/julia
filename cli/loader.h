@@ -93,8 +93,8 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name);
 
 #ifdef _OS_WINDOWS_
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs);
-int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
-int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
+char *wchar_to_utf8(const wchar_t * wstr);
+wchar_t *utf8_to_wchar(const char * str);
 void setup_stdio(void);
 #endif
 
