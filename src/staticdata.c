@@ -857,7 +857,6 @@ static void write_padding(ios_t *s, size_t nb) JL_NOTSAFEPOINT
         ios_write(s, zeros, nb);
 }
 
-
 static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
 {
     assert((ios_pos(s) & (sizeof(void*) - 1)) == 0 && "stream misaligned for writing a word-sized value");
@@ -2585,7 +2584,9 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_mod_list(f, *mod_array);
 }
 
-JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z)
+JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklist, bool_t emit_split,
+                                         ios_t **s, ios_t **z, jl_array_t **udeps,
+                                         int64_t *srctextpos, int64_t *checksumpos, int64_t* datastartpos)
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -2606,16 +2607,13 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         ff = f;
     }
 
-    jl_array_t *mod_array = NULL, *udeps = NULL, *extext_methods = NULL, *new_specializations = NULL;
+    jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
-    JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
-    int64_t srctextpos = 0;
-    int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
-    int64_t datastartpos = 0;
     int64_t datastartpos_ff = 0;
+    JL_GC_PUSH6(&mod_array, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     if (worklist) {
-        jl_write_header_for_incremental(f, worklist, &mod_array, &udeps, &srctextpos, &checksumpos);
+        jl_write_header_for_incremental(f, worklist, &mod_array, udeps, srctextpos, checksumpos);
         if (emit_split) {
             write_header(ff);
             // last word of the header is the checksumpos
@@ -2625,81 +2623,29 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
 
-        write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
-        datastartpos = ios_pos(f);
-        if (emit_split) {
+        if (!emit_split) {
+            write_int32(f, 0); // No clone_targets
+            write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
+        } else {
             write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
             datastartpos_ff = ios_pos(ff);
         }
-    }
-    if (!emit_split) {
-        assert(datastartpos_ff == 0);
-        assert(checksumpos_ff == 0);
+        *datastartpos = ios_pos(f);
     }
     native_functions = _native_data;
     jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
         jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
-        // Go back and update the checksum in the header
-        int64_t dataendpos = ios_pos(f);
-        uint32_t checksum = jl_crc32c(0, &f->buf[datastartpos], dataendpos - datastartpos);
-        ios_seek(f, checksumpos);
-        write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
-        ios_seek(f, srctextpos);
-        write_uint64(f, dataendpos);
-
-        if (emit_split) {
-            // Go back and update the checksum in the header
-            int64_t dataendpos_ff = ios_pos(ff);
-            uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos_ff], dataendpos_ff - datastartpos_ff);
-            ios_seek(ff, checksumpos_ff);
-            write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
-        }
-
-        // Write the source-text for the dependent files
-        // Go back and update the source-text position to point to the current position
-        if (udeps) {
-            ios_seek_end(f);
-            // Each source-text file is written as
-            //   int32: length of abspath
-            //   char*: abspath
-            //   uint64: length of src text
-            //   char*: src text
-            // At the end we write int32(0) as a terminal sentinel.
-            size_t len = jl_array_len(udeps);
-            ios_t srctext;
-            for (size_t i = 0; i < len; i++) {
-                jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-                jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
-                // Dependencies declared with `include_dependency` are excluded
-                // because these may not be Julia code (and could be huge)
-                if (depmod != (jl_value_t*)jl_main_module) {
-                    jl_value_t *dep = jl_fieldref(deptuple, 1);  // file abspath
-                    const char *depstr = jl_string_data(dep);
-                    if (!depstr[0])
-                        continue;
-                    ios_t *srctp = ios_file(&srctext, depstr, 1, 0, 0, 0);
-                    if (!srctp) {
-                        jl_printf(JL_STDERR, "WARNING: could not cache source text for \"%s\".\n",
-                                jl_string_data(dep));
-                        continue;
-                    }
-                    size_t slen = jl_string_len(dep);
-                    write_int32(f, slen);
-                    ios_write(f, depstr, slen);
-                    int64_t posfile = ios_pos(f);
-                    write_uint64(f, 0);   // placeholder for length of this file in bytes
-                    uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);
-                    ios_close(&srctext);
-                    ios_seek(f, posfile);
-                    write_uint64(f, filelen);
-                    ios_seek_end(f);
-                }
-            }
-        }
-        write_int32(f, 0); // mark the end of the source text
         jl_precompile_toplevel_module = NULL;
+    }
+
+    if (emit_split) {
+        // Go back and update the checksum in the header
+        int64_t dataendpos_ff = ios_pos(ff);
+        uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos_ff], dataendpos_ff - datastartpos_ff);
+        ios_seek(ff, checksumpos_ff);
+        write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
     }
 
     JL_GC_POP();

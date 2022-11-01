@@ -1966,7 +1966,10 @@ function parse_cache_header(f::IO)
         build_id |= read(f, UInt64)
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
-    return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash
+    l = read(f, Int32)
+    clone_targets = read(f, l)
+
+    return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets
 end
 
 function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
@@ -1988,8 +1991,6 @@ function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     end
 end
 
-
-
 preferences_hash(f::IO) = parse_cache_header(f)[6]
 function preferences_hash(cachefile::String)
     io = open(cachefile, "r")
@@ -2002,7 +2003,6 @@ function preferences_hash(cachefile::String)
         close(io)
     end
 end
-
 
 function cache_dependencies(f::IO)
     _, (includes, _), modules, _... = parse_cache_header(f)
@@ -2243,9 +2243,15 @@ end
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
-        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = parse_cache_header(io)
+        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash, clone_targets = parse_cache_header(io)
         if isempty(modules)
             return true # ignore empty file
+        end
+        if !isempty(clone_targets)
+            if ccall(:jl_is_pkgimage_viable, Int8, (Ptr{Cchar},), clone_targets) == 0
+                @debug "Rejection cache file $cachefile for $modkey since it can't be loaded on this target"
+                return true
+            end
         end
         id = first(modules)
         if id.first != modkey && modkey != PkgId("")

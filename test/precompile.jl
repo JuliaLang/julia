@@ -343,7 +343,7 @@ precompile_test_harness(false) do dir
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
         @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
-        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+        modules, (deps, requires), required_modules, _ = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
         @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
@@ -378,7 +378,7 @@ precompile_test_harness(false) do dir
             ),
         )
         @test discard_module.(deps) == deps1
-        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        modules, (deps, requires), required_modules, _ = Base.parse_cache_header(cachefile; srcfiles_only=true)
         @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -441,7 +441,7 @@ precompile_test_harness(false) do dir
         """)
     Nest = Base.require(Main, Nest_module)
     cachefile = joinpath(cachedir, "$Nest_module.ji")
-    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    modules, (deps, requires), required_modules, _ = Base.parse_cache_header(cachefile)
     @test last(deps).modpath == ["NestInner"]
 
     UsesB_module = :UsesB4b3a94a1a081a8cb
@@ -463,7 +463,7 @@ precompile_test_harness(false) do dir
         """)
     UsesB = Base.require(Main, UsesB_module)
     cachefile = joinpath(cachedir, "$UsesB_module.ji")
-    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    modules, (deps, requires), required_modules, _ = Base.parse_cache_header(cachefile)
     id1, id2 = only(requires)
     @test Base.pkgorigins[id1].cachepath == cachefile
     @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
