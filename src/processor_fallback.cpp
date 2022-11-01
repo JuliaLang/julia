@@ -170,6 +170,18 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
     jl_safe_printf("Features: %s\n", jl_get_cpu_features_llvm().c_str());
 }
 
+JL_DLLEXPORT int8_t jl_is_pkgimage_viable(char *data)
+{
+    int8_t success = 0;
+    JL_TRY {
+        pkgimg_init_cb(data);
+        success = 1;
+    }
+    JL_CATCH {
+    }
+    return success;
+}
+
 extern "C" int jl_test_cpu_feature(jl_cpu_feature_t)
 {
     return 0;

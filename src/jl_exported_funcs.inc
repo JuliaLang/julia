@@ -118,6 +118,7 @@
     XX(jl_dlopen) \
     XX(jl_dlsym) \
     XX(jl_dump_host_cpu) \
+    XX(jl_is_pkgimage_viable) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \

@@ -173,6 +173,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // Dump the name and feature set of the host CPU
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
+JL_DLLEXPORT int8_t jl_is_pkgimage_viable(char* data);
 
 JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);

@@ -12,7 +12,7 @@
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len) UNAVAILABLE
+        const char *sysimg_data, size_t sysimg_len, ios_t *s) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_gvs_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 JL_DLLEXPORT void jl_get_llvm_external_fns_fallback(void *native_code, arraylist_t *gvs) UNAVAILABLE
 

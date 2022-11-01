@@ -61,6 +61,7 @@
 using namespace llvm;
 
 #include "jitlayers.h"
+#include "serialize.h"
 #include "julia_assert.h"
 
 #define DEBUG_TYPE "julia_aotcompile"
@@ -528,7 +529,7 @@ extern "C" JL_DLLEXPORT
 void jl_dump_native_impl(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname,
         const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len)
+        const char *sysimg_data, size_t sysimg_len, ios_t *s)
 {
     JL_TIMING(NATIVE_DUMP);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
@@ -680,6 +681,17 @@ void jl_dump_native_impl(void *native_code,
         }
 
         postopt.run(M, empty.MAM);
+
+        // Snoop on multiversioning
+        GlobalVariable *target_ids = M.getNamedGlobal("jl_dispatch_target_ids");
+        if (s && target_ids) {
+            if(auto targets = dyn_cast<ConstantDataArray>(target_ids->getInitializer())) {
+                auto rawTargets = targets->getRawDataValues();
+                write_int32(s, rawTargets.size());
+                ios_write(s, rawTargets.data(), rawTargets.size());
+            };
+        }
+
         emitter.run(M);
 
         if (unopt_bc_fname)
