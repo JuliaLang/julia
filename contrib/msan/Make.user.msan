@@ -6,7 +6,7 @@ TOOLDIR=$(TOOLCHAIN)/usr/tools
 USECLANG=1
 override CC=$(TOOLDIR)/clang
 override CXX=$(TOOLDIR)/clang++
-
+export MSAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
 
 USE_BINARYBUILDER_LLVM=0
 LLVM_SANITIZE=1

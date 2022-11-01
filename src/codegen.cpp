@@ -2117,10 +2117,22 @@ static void jl_init_function(Function *F)
     attr.addAttribute("probe-stack", "inline-asm");
     //attr.addAttribute("stack-probe-size", "4096"); // can use this to change the default
 #endif
-#if defined(_COMPILER_ASAN_ENABLED_)
-    attr.addAttribute(Attribute::SanitizeAddress);
-#endif
-    attr.addAttribute(Attribute::SanitizeMemory);
+    int8_t sanitizer_attr = get_sanitizer_attribute();
+    switch (sanitizer_attr) {
+        case 0:
+            break;
+        case JL_OPTIONS_EMIT_ASAN:
+            attr.addAttribute(Attribute::SanitizeAddress);
+            break;
+        case JL_OPTIONS_EMIT_MSAN:
+            attr.addAttribute(Attribute::SanitizeMemory);
+            break;
+        case JL_OPTIONS_EMIT_TSAN:
+        // TODO: enable this only when a argument like `-race` is passed to Julia
+        // add a macro for no_sanitize_thread
+            attr.addAttribute(llvm::Attribute::SanitizeThread);
+            break;
+    }
 #if JL_LLVM_VERSION >= 140000
     F->addFnAttrs(attr);
 #else
@@ -6845,11 +6857,7 @@ static jl_llvm_functions_t
     FnAttrs.addAttribute(Attribute::StackProtectStrong);
 #endif
 
-#ifdef _COMPILER_TSAN_ENABLED_
-    // TODO: enable this only when a argument like `-race` is passed to Julia
-    //       add a macro for no_sanitize_thread
-    FnAttrs.addAttribute(llvm::Attribute::SanitizeThread);
-#endif
+
 
     // add the optimization level specified for this module, if any
     int optlevel = jl_get_module_optlevel(ctx.module);

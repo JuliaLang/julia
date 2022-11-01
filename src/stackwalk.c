@@ -537,20 +537,35 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
 
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *context)
 {
-    return unw_init_local(cursor, context) == 0;
+    int ret = unw_init_local(cursor, context) == 0;
+    msan_unpoison(context, sizeof(bt_context_t));
+    msan_unpoison(cursor, sizeof(bt_cursor_t));
+    return ret;
 }
 
 static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *ip, uintptr_t *sp)
 {
     (void)from_signal_handler; // libunwind also tracks this
     unw_word_t reg;
+
     if (unw_get_reg(cursor, UNW_REG_IP, &reg) < 0)
+    {
+        msan_unpoison(cursor, sizeof(bt_cursor_t));
         return 0;
+    }
+    msan_unpoison(&reg, sizeof(unw_word_t));
     *ip = reg;
     if (unw_get_reg(cursor, UNW_REG_SP, &reg) < 0)
+    {
+        msan_unpoison(cursor, sizeof(bt_cursor_t));
         return 0;
+    }
+    msan_unpoison(&reg, sizeof(unw_word_t));
     *sp = reg;
-    return unw_step(cursor) > 0;
+    int ret = unw_step(cursor) > 0;
+    msan_unpoison(cursor, sizeof(bt_cursor_t));
+    msan_unpoison(&reg, sizeof(unw_word_t));
+    return ret;
 }
 
 #ifdef LLVMLIBUNWIND

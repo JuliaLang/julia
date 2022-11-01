@@ -51,4 +51,14 @@ if [ ! -d "$BUILD" ]; then
     cp "$HERE/Make.user.msan"  "$BUILD/Make.user"
 fi
 
-make -C "$BUILD" "$@" -j10
+make -C "$BUILD" "$@" julia-src-debug -j10
+
+rm -f "$BUILD/usr/lib/libstdc++.so" "$BUILD/usr/lib/libstdc++.so.6" "$BUILD/usr/lib/libstdc++.so.6.0.29"
+
+STDCXXURL=https://github.com/JuliaBinaryWrappers/LibStdCxx_jll.jl/releases/download/LibStdCxx-v12.1.0%2B1/LibStdCxx.v12.1.0.x86_64-linux-gnu-sanitize+memory.tar.gz
+curl -LJ $STDCXXURL | tar -xzf - --directory "$BUILD/usr" lib/libstdc++.so lib/libstdc++.so.6 lib/libstdc++.so.6.0.30
+
+LIBFLANGURL=https://github.com/JuliaBinaryWrappers/FlangClassic_RTLib_jll.jl/releases/download/FlangClassic_RTLib-v13.0.0%2B0/FlangClassic_RTLib.v13.0.0.x86_64-linux-gnu.tar.gz
+
+curl -JL $LIBFLANGURL | tar -xzf - --directory "$BUILD/usr" lib/libflang.so lib/libflangrti.so lib/libomp.so lib/libompstub.so lib/libpgmath.so
+

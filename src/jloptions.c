@@ -85,6 +85,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // rr-detach
                         0, // strip-metadata
                         0, // strip-ir
+                        0, // emit_sanitizer
                         0, // heap-size-hint
     };
     jl_options_initialized = 1;
@@ -194,7 +195,8 @@ static const char opts_hidden[]  =
     " --output-ji <name>       Generate a system image data file (.ji)\n"
     " --strip-metadata         Remove docstrings and source location info from system image\n"
     " --strip-ir               Remove IR (intermediate representation) of compiled functions\n\n"
-
+    " --emit-sanitizer={none*|asan|msan|tsan}\n"
+    "                          Emit functions with the respective sanitizer attributes "
     // compiler debugging (see the devdocs for tips on using these options)
     " --output-unopt-bc <name> Generate unoptimized LLVM bitcode (.bc)\n"
     " --output-bc <name>       Generate LLVM bitcode (.bc)\n"
@@ -246,6 +248,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_rr_detach,
            opt_strip_metadata,
            opt_strip_ir,
+           opt_emit_sanitizer,
            opt_heap_size_hint,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
@@ -302,6 +305,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "rr-detach",       no_argument,       0, opt_rr_detach },
         { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { "strip-ir",        no_argument,       0, opt_strip_ir },
+        { "emit-sanitizer",  required_argument,       0, opt_emit_sanitizer},
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { 0, 0, 0, 0 }
     };
@@ -761,6 +765,18 @@ restart_switch:
             break;
         case opt_strip_ir:
             jl_options.strip_ir = 1;
+            break;
+         case opt_emit_sanitizer:
+            if (!strcmp(optarg,"none"))
+                jl_options.emit_sanitizer = 0;
+            else if (!strcmp(optarg,"asan"))
+                jl_options.emit_sanitizer = 1;
+            else if (!strcmp(optarg,"msan"))
+                jl_options.emit_sanitizer = 2;
+            else if (!strcmp(optarg,"tsan"))
+                jl_options.emit_sanitizer = 3;
+            else
+                jl_errorf("julia: invalid argument to --emit-sanitizer={none*|asan|msan|tsan} (%s)", optarg);
             break;
         case opt_heap_size_hint:
             if (optarg != NULL) {
