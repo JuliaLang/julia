@@ -1129,8 +1129,9 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
     for (size_t i = 0; i < nthreads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        jl_ptls_t ptls2 = allstates[i];
         arraylist_t *live_tasks = &ptls2->heap.live_tasks;
         size_t n = live_tasks->len;
         jl_safe_printf("==== Thread %d created %zu live tasks\n",
