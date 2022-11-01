@@ -16,7 +16,7 @@ int loader_fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
         // Windows consoles do not support UTF-8 (for reading input, though new Windows Terminal does for writing), only UTF-16.
-        size_t wbufsz = ((nchars * 3) >> 1) + 2;  # allocate 50% extra plus 2 bytes
+        size_t wbufsz = nchars * 2 + 2;
         wchar_t* wstr = (wchar_t*)loader_malloc(wbufsz);
         if (WriteConsoleW(out->fd, wstr, wcslen(wstr), &written, NULL)) {
             loader_free(wstr);
