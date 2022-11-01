@@ -1268,6 +1268,7 @@ int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
 // `offset` will be added to `mq->current` for convenience in the debugger.
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset)
 {
+#ifdef GC_VERIFY
     jl_jmp_buf *old_buf = jl_get_safe_restore();
     jl_jmp_buf buf;
     jl_set_safe_restore(&buf);
@@ -1286,6 +1287,7 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int off
         jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
     }
     jl_set_safe_restore(old_buf);
+#endif
 }
 
 static int gc_logging_enabled = 0;

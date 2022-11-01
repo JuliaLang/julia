@@ -4,6 +4,7 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
+#include "idemp-ws-queue.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
@@ -172,14 +173,14 @@ typedef struct {
 } jl_thread_heap_t;
 
 typedef struct {
-#ifndef GC_VERIFY
-    struct _jl_gc_chunk_t *chunk_start;
-    struct _jl_gc_chunk_t *current_chunk;
-    struct _jl_gc_chunk_t *chunk_end;
-#endif
+#ifdef GC_VERIFY
     struct _jl_value_t **start;
     struct _jl_value_t **current;
     struct _jl_value_t **end;
+#else
+    idemp_ws_queue_t q;
+    idemp_ws_queue_t cq;
+#endif
 } jl_gc_markqueue_t;
 
 typedef struct {

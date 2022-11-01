@@ -1789,58 +1789,59 @@ STATIC_INLINE void gc_mark_push_remset(jl_ptls_t ptls, jl_value_t *obj,
     }
 }
 
-// Double the mark queue
-static NOINLINE void gc_markqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
-{
-    jl_value_t **old_start = mq->start;
-    size_t old_queue_size = (mq->end - mq->start);
-    size_t offset = (mq->current - old_start);
-    mq->start = (jl_value_t **)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_value_t *));
-    mq->current = (mq->start + offset);
-    mq->end = (mq->start + 2 * old_queue_size);
-}
-
 // Push a work item to the queue
 STATIC_INLINE void gc_markqueue_push(jl_gc_markqueue_t *mq, jl_value_t *obj) JL_NOTSAFEPOINT
 {
-    if (__unlikely(mq->current == mq->end))
-        gc_markqueue_resize(mq);
+#ifndef GC_VERIFY
+    // Queue overflow
+    if (!idemp_ws_queue_push(&mq->q, obj)) {
+        jl_safe_printf("GC internal error: queue overflow\n");
+        abort();
+    }
+#else
+    if (__unlikely(mq->current == mq->end)) {
+        jl_safe_printf("GC internal error: queue overflow\n");
+        abort();
+    }
     *mq->current = obj;
     mq->current++;
+#endif
 }
 
 // Pop from the mark queue
 STATIC_INLINE jl_value_t *gc_markqueue_pop(jl_gc_markqueue_t *mq)
 {
+#ifndef GC_VERIFY
+    return idemp_ws_queue_pop(&mq->q);
+#else
     jl_value_t *obj = NULL;
     if (mq->current != mq->start) {
-        mq->current--;
         obj = *mq->current;
+        mq->current--;
     }
     return obj;
-}
-
-// Double the chunk queue
-static NOINLINE void gc_chunkqueue_resize(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
-{
-#ifndef GC_VERIFY
-    jl_gc_chunk_t *old_start = mq->chunk_start;
-    size_t old_queue_size = (mq->chunk_end - mq->chunk_start);
-    size_t offset = (mq->current_chunk - old_start);
-    mq->chunk_start = (jl_gc_chunk_t *)realloc_s(old_start, 2 * old_queue_size * sizeof(jl_gc_chunk_t));
-    mq->current_chunk = (mq->chunk_start + offset);
-    mq->chunk_end = (mq->chunk_start + 2 * old_queue_size);
 #endif
 }
+
+// Chunk queue push/pop functions are almost verbatim copied
+// from `idemp-ws-queue.h`. Could be less repetitive with use of macros,
+// at expense of debuggability
 
 // Push chunk `*c` into chunk queue
 STATIC_INLINE void gc_chunkqueue_push(jl_gc_markqueue_t *mq, jl_gc_chunk_t *c) JL_NOTSAFEPOINT
 {
 #ifndef GC_VERIFY
-    if (__unlikely(mq->current_chunk == mq->chunk_end))
-        gc_chunkqueue_resize(mq);
-    *mq->current_chunk = *c;
-    mq->current_chunk++;
+    idemp_ws_queue_t *cq = &mq->cq;
+    ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
+    ws_array_t *ary = jl_atomic_load_relaxed(&cq->array);
+    if (anc.tail == ary->capacity) {
+        jl_safe_printf("GC internal error: chunk-queue overflow");
+        abort();
+    }
+    ((jl_gc_chunk_t *)ary->buffer)[anc.tail] = *c;
+    anc.tail++;
+    anc.tag++;
+    jl_atomic_store_release(&cq->anchor, anc);
 #endif
 }
 
@@ -1849,10 +1850,15 @@ STATIC_INLINE jl_gc_chunk_t gc_chunkqueue_pop(jl_gc_markqueue_t *mq) JL_NOTSAFEP
 {
     jl_gc_chunk_t c = {.cid = GC_empty_chunk};
 #ifndef GC_VERIFY
-    if (mq->current_chunk != mq->chunk_start) {
-        mq->current_chunk--;
-        c = *mq->current_chunk;
-    }
+    idemp_ws_queue_t *cq = &mq->cq;
+    ws_anchor_t anc = jl_atomic_load_acquire(&cq->anchor);
+    ws_array_t *ary = jl_atomic_load_acquire(&cq->array);
+    if (anc.tail == 0)
+        // Empty queue
+        return c;
+    anc.tail--;
+    c = ((jl_gc_chunk_t *)ary->buffer)[anc.tail];
+    jl_atomic_store_release(&cq->anchor, anc);
 #endif
     return c;
 }
@@ -2470,7 +2476,7 @@ STATIC_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *
                 assert(nroots <= UINT32_MAX);
                 gc_mark_stack(ptls, s, (uint32_t)nroots, offset, lb, ub);
             }
-            if (ta->excstack) {
+            if (ta->excstack != NULL) {
                 jl_excstack_t *excstack = ta->excstack;
                 gc_heap_snapshot_record_task_to_frame_edge(ta, excstack);
                 size_t itr = ta->excstack->top;
@@ -3270,16 +3276,22 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->scanned_bytes = 0;
     gc_cache->nbig_obj = 0;
 
-    // Initialize GC mark-queue
-    size_t init_size = (1 << 18);
-    jl_gc_markqueue_t *mq = &ptls->mark_queue;
-    mq->start = (jl_value_t **)malloc_s(init_size * sizeof(jl_value_t *));
-    mq->current = mq->start;
-    mq->end = mq->start + init_size;
+    // Initialize GC mark-queues
 #ifndef GC_VERIFY
-    size_t cq_init_size = (1 << 14);
-    mq->current_chunk = mq->chunk_start = (jl_gc_chunk_t *)malloc_s(cq_init_size * sizeof(jl_gc_chunk_t));
-    mq->chunk_end = mq->chunk_start + cq_init_size;
+    jl_gc_markqueue_t *mq = &ptls->mark_queue;
+    idemp_ws_queue_t *q = &mq->q;
+    ws_anchor_t anc = {0, 0};
+    ws_array_t *wsa = create_ws_array((1 << 20), sizeof(void *));
+    jl_atomic_store_relaxed(&q->anchor, anc);
+    jl_atomic_store_relaxed(&q->array, wsa);
+    idemp_ws_queue_t *cq = &mq->cq;
+    ws_array_t *wsa2 = create_ws_array((1 << 16), sizeof(jl_gc_chunk_t));
+    jl_atomic_store_relaxed(&cq->anchor, anc);
+    jl_atomic_store_relaxed(&cq->array, wsa2);
+#else
+    mq->start = (jl_value_t **)malloc_s((1 << 20) * sizeof(jl_value_t *));
+    mq->current = mq->start;
+    mq->end = mq->start + mq_init_size;
 #endif
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
