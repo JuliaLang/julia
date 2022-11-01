@@ -221,11 +221,12 @@ function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
 end
 
 function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
-        return false
+    if isa(a, MaybeUndef)
+        isa(b, MaybeUndef) || return false
+        a, b = a.typ, b.typ
+    elseif isa(b, MaybeUndef)
+        b = b.typ
     end
-    isa(a, MaybeUndef) && (a = a.typ)
-    isa(b, MaybeUndef) && (b = b.typ)
     return ⊑(widenlattice(lattice), a, b)
 end
 

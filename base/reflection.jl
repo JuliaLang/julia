@@ -350,6 +350,7 @@ objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Core.SimpleVector, (Any,), x)
 
 struct DataTypeLayout
+    size::UInt32
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
@@ -546,8 +547,7 @@ function isstructtype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return hasfield || (t.size == 0 && !isabstracttype(t))
+    return !isprimitivetype(t) && !isabstracttype(t)
 end
 
 """
@@ -561,8 +561,7 @@ function isprimitivetype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return !hasfield && t.size != 0 && !isabstracttype(t)
+    return (t.flags & 0x80) == 0x80
 end
 
 """
@@ -1097,6 +1096,7 @@ struct CodegenParams
     prefer_specsig::Cint
     gnu_pubnames::Cint
     debug_info_kind::Cint
+    safepoint_on_entry::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1105,12 +1105,14 @@ struct CodegenParams
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   safepoint_on_entry::Bool=true,
                    lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
+            Cint(safepoint_on_entry),
             lookup, generic_context)
     end
 end
@@ -1636,41 +1638,41 @@ as written, called after all missing keyword-arguments have been assigned defaul
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
 """
 function bodyfunction(basemethod::Method)
-    function getsym(arg)
-        isa(arg, Symbol) && return arg
-        isa(arg, GlobalRef) && return arg.name
-        return nothing
-    end
-
     fmod = basemethod.module
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
     #        return %1
     # where `mkw` is the name of the "active" keyword body-function.
     ast = uncompressed_ast(basemethod)
-    f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
         if isa(callexpr, Expr) && callexpr.head === :call
             fsym = callexpr.args[1]
-            if isa(fsym, Symbol)
-                f = getfield(fmod, fsym)
-            elseif isa(fsym, GlobalRef)
-                newsym = nothing
-                if fsym.mod === Core && fsym.name === :_apply
-                    newsym = getsym(callexpr.args[2])
-                elseif fsym.mod === Core && fsym.name === :_apply_iterate
-                    newsym = getsym(callexpr.args[3])
-                end
-                if isa(newsym, Symbol)
-                    f = getfield(basemethod.module, newsym)::Function
+            while true
+                if isa(fsym, Symbol)
+                    return getfield(fmod, fsym)
+                elseif isa(fsym, GlobalRef)
+                    if fsym.mod === Core && fsym.name === :_apply
+                        fsym = callexpr.args[2]
+                    elseif fsym.mod === Core && fsym.name === :_apply_iterate
+                        fsym = callexpr.args[3]
+                    end
+                    if isa(fsym, Symbol)
+                        return getfield(basemethod.module, fsym)::Function
+                    elseif isa(fsym, GlobalRef)
+                        return getfield(fsym.mod, fsym.name)::Function
+                    elseif isa(fsym, Core.SSAValue)
+                        fsym = ast.code[fsym.id]
+                    else
+                        return nothing
+                    end
                 else
-                    f = getfield(fsym.mod, fsym.name)::Function
+                    return nothing
                 end
             end
         end
     end
-    return f
+    return nothing
 end
 
 """

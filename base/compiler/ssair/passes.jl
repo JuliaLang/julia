@@ -691,6 +691,7 @@ function perform_lifting!(compact::IncrementalCompact,
         (old_node_ssa, lf) = visited_phinodes[i], lifted_phis[i]
         old_node = compact[old_node_ssa][:inst]::PhiNode
         new_node = lf.node
+        should_count = !isa(lf.ssa, OldSSAValue) || already_inserted(compact, lf.ssa)
         lf.need_argupdate || continue
         for i = 1:length(old_node.edges)
             edge = old_node.edges[i]
@@ -714,15 +715,17 @@ function perform_lifting!(compact::IncrementalCompact,
                     callback = (@nospecialize(pi), @nospecialize(idx)) -> true
                     val = simple_walk(compact, val, callback)
                 end
+                should_count && _count_added_node!(compact, val)
                 push!(new_node.values, val)
             elseif isa(val, AnySSAValue) && val in keys(reverse_mapping)
                 push!(new_node.edges, edge)
-                push!(new_node.values, lifted_phis[reverse_mapping[val]].ssa)
+                newval = lifted_phis[reverse_mapping[val]].ssa
+                should_count && _count_added_node!(compact, newval)
+                push!(new_node.values, newval)
             else
                 # Probably ignored by path condition, skip this
             end
         end
-        count_added_node!(compact, new_node)
     end
 
     # Fixup the stmt itself
@@ -1523,7 +1526,7 @@ function kill_phi!(compact::IncrementalCompact, phi_uses::Vector{Int},
             if !delete_inst
                 # Deleting the inst will update compact's use count, so
                 # don't do it here.
-                kill_current_use(compact, val)
+                kill_current_use!(compact, val)
             end
             if isa(val, SSAValue)
                 phi_uses[val.id] -= 1
@@ -1850,18 +1853,40 @@ function is_legal_bb_drop(ir::IRCode, bbidx::Int, bb::BasicBlock)
         stmt === nothing && return true
         ((stmt::GotoNode).label == bbidx + 1) && return true
     end
-    # Otherwise make sure we're not the fallthrough case of any predecessor
-    for pred in bb.preds
-        if pred == bbidx - 1
-            terminator = ir[SSAValue(first(bb.stmts)-1)][:inst]
-            if isa(terminator, GotoIfNot)
-                if terminator.dest != bbidx
-                    return false
-                end
-            end
-            break
-        end
+    return true
+end
+
+function legalize_bb_drop_pred!(ir::IRCode, bb::BasicBlock, bbidx::Int, bbs::Vector{BasicBlock}, dropped_bbs::Vector{Int})
+    (bbidx-1) in bb.preds || return true
+    last_fallthrough = bbidx-1
+    dbi = length(dropped_bbs)
+    while dbi != 0 && dropped_bbs[dbi] == last_fallthrough && (last_fallthrough-1 in bbs[last_fallthrough].preds)
+        last_fallthrough -= 1
+        dbi -= 1
     end
+    last_fallthrough_term_ssa = SSAValue(last(bbs[last_fallthrough].stmts))
+    terminator = ir[last_fallthrough_term_ssa][:inst]
+    if isa(terminator, GotoIfNot)
+        if terminator.dest != bbidx
+            # The previous terminator's destination matches our fallthrough.
+            # If we're also a fallthrough terminator, then we just have
+            # to delete the GotoIfNot.
+            our_terminator = ir[SSAValue(last(bb.stmts))][:inst]
+            if terminator.dest != (isa(our_terminator, GotoNode) ? our_terminator.label : bbidx + 1)
+                return false
+            end
+        end
+        ir[last_fallthrough_term_ssa] = nothing
+        kill_edge!(bbs, last_fallthrough, terminator.dest)
+    elseif isexpr(terminator, :enter)
+        return false
+    elseif isa(terminator, GotoNode)
+        return true
+    end
+    # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
+    # instruction numbering to merge the blocks now such that below processing will properly
+    # update it.
+    bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
     return true
 end
 
@@ -1927,24 +1952,9 @@ function cfg_simplify!(ir::IRCode)
                     end
                 end
                 @label done
-                if !found_interference
-                    # Hack, but effective. If we have a predecessor with a fall-through terminator, change the
-                    # instruction numbering to merge the blocks now such that below processing will properly
-                    # update it.
-                    if idx-1 in bb.preds
-                        last_fallthrough = idx-1
-                        dbi = length(dropped_bbs)
-                        while dbi != 0 && dropped_bbs[dbi] == last_fallthrough && (last_fallthrough-1 in bbs[last_fallthrough].preds)
-                            last_fallthrough -= 1
-                            dbi -= 1
-                        end
-                        terminator = ir[SSAValue(last(bbs[last_fallthrough].stmts))][:inst]
-                        if !is_terminator(terminator)
-                            bbs[last_fallthrough] = BasicBlock(first(bbs[last_fallthrough].stmts):last(bb.stmts), bbs[last_fallthrough].preds, bbs[last_fallthrough].succs)
-                        end
-                    end
-                    push!(dropped_bbs, idx)
-                end
+                found_interference && continue
+                legalize_bb_drop_pred!(ir, bb, idx, bbs, dropped_bbs) || continue
+                push!(dropped_bbs, idx)
             end
         end
     end
@@ -1990,11 +2000,14 @@ function cfg_simplify!(ir::IRCode)
                         push!(worklist, terminator.dest)
                     end
                 elseif isexpr(terminator, :enter)
-                    push!(worklist, terminator.args[1])
+                    if bb_rename_succ[terminator.args[1]] == 0
+                        push!(worklist, terminator.args[1])
+                    end
                 end
                 ncurr = curr + 1
-                if !isempty(searchsorted(dropped_bbs, ncurr))
-                    break
+                while !isempty(searchsorted(dropped_bbs, ncurr))
+                    bb_rename_succ[ncurr] = -bbs[ncurr].succs[1]
+                    ncurr += 1
                 end
                 curr = ncurr
             end
@@ -2146,7 +2159,7 @@ function cfg_simplify!(ir::IRCode)
         if new_bb.succs[1] == new_bb.succs[2]
             old_bb2 = findfirst(x->x==bbidx, bb_rename_pred)
             terminator = ir[SSAValue(last(bbs[old_bb2].stmts))]
-            @assert isa(terminator[:inst], GotoIfNot)
+            @assert terminator[:inst] isa GotoIfNot
             # N.B.: The dest will be renamed in process_node! below
             terminator[:inst] = GotoNode(terminator[:inst].dest)
             pop!(new_bb.succs)
@@ -2178,6 +2191,58 @@ function cfg_simplify!(ir::IRCode)
                 if isa(node[:inst], GotoNode) && merged_succ[ms] != 0
                     # If we merged a basic block, we need remove the trailing GotoNode (if any)
                     compact.result[compact.result_idx][:inst] = nothing
+                elseif isa(node[:inst], PhiNode)
+                    phi = node[:inst]
+                    values = phi.values
+                    (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
+                    ssa_rename[i] = SSAValue(compact.result_idx)
+                    processed_idx = i
+                    renamed_values = process_phinode_values(values, late_fixup, processed_idx, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true)
+                    edges = Int32[]
+                    values = Any[]
+                    sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
+                    for old_index in 1:length(phi.edges)
+                        old_edge = phi.edges[old_index]
+                        new_edge = bb_rename_pred[old_edge]
+                        if new_edge > 0
+                            push!(edges, new_edge)
+                            if isassigned(renamed_values, old_index)
+                                push!(values, renamed_values[old_index])
+                            else
+                                resize!(values, length(values)+1)
+                            end
+                        elseif new_edge == -3
+                            # Mutliple predecessors, we need to expand out this phi
+                            all_new_preds = Int32[]
+                            function add_preds!(old_edge)
+                                for old_edge′ in bbs[old_edge].preds
+                                    new_edge = bb_rename_pred[old_edge′]
+                                    if new_edge > 0 && !in(new_edge, all_new_preds)
+                                        push!(all_new_preds, new_edge)
+                                    elseif new_edge == -3
+                                        add_preds!(old_edge′)
+                                    end
+                                end
+                            end
+                            add_preds!(old_edge)
+                            append!(edges, all_new_preds)
+                            if isassigned(renamed_values, old_index)
+                                val = renamed_values[old_index]
+                                for _ in 1:length(all_new_preds)
+                                    push!(values, val)
+                                end
+                                length(all_new_preds) == 0 && kill_current_use!(compact, val)
+                                for _ in 2:length(all_new_preds)
+                                    count_added_node!(compact, val)
+                                end
+                            else
+                                resize!(values, length(values)+length(all_new_preds))
+                            end
+                        else
+                            isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
+                        end
+                    end
+                    compact.result[compact.result_idx][:inst] = PhiNode(edges, values)
                 else
                     ri = process_node!(compact, compact.result_idx, node, i, i, ms, true)
                     if ri == compact.result_idx

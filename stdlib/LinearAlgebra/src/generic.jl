@@ -367,7 +367,7 @@ tril(M::AbstractMatrix) = tril!(copy(M))
 """
     triu(M, k::Integer)
 
-Returns the upper triangle of `M` starting from the `k`th superdiagonal.
+Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -398,7 +398,7 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 """
     tril(M, k::Integer)
 
-Returns the lower triangle of `M` starting from the `k`th superdiagonal.
+Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest

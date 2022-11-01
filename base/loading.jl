@@ -354,8 +354,7 @@ Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 julia> using LinearAlgebra
 
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
-
-````
+```
 """
 identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))

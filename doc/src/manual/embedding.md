@@ -670,7 +670,7 @@ int main()
     jl_eval_string("func(i) = ccall(:c_func, Float64, (Int32,), i)");
 
     // Call func() multiple times, using multiple threads to do so
-    jl_eval_string("println(Base.threadpoolsize())");
+    jl_eval_string("println(Threads.threadpoolsize())");
     jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
     jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
 
