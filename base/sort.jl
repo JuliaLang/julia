@@ -1619,9 +1619,9 @@ function sort!(A::AbstractArray{T};
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
                scratch::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
-    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), scratch)
+    __sort!(A, Val(dims), alg, ord(lt, by, rev, order), scratch)
 end
-function _sort!(A::AbstractArray{T}, ::Val{K},
+function __sort!(A::AbstractArray{T}, ::Val{K},
                 alg::Algorithm,
                 order::Ordering,
                 scratch::Union{AbstractVector{T}, Nothing}) where {K,T}
