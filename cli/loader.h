@@ -20,6 +20,7 @@
 #define strchr loader_strchr
 #define malloc loader_malloc
 #define realloc loader_realloc
+#define free loader_free
 #endif
 
 #ifdef _OS_WINDOWS_
