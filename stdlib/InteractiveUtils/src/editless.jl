@@ -124,8 +124,10 @@ function define_default_editors()
         `$cmd $path`
     end
     # vim family
-    for (editors, wait) in  [[Any["vim", "vi", "nvim", "mvim"], true],
-                             [Any["\bgvim"],                    false]]
+    for (editors, wait) in [
+        [["vim", "vi", "nvim", "mvim"], true],
+        [[r"\bgvim"], false],
+    ]
         define_editor(editors; wait) do cmd, path, line, column
             cmd = line == 0 ? `$cmd $path` :
                 column == 0 ? `$cmd +$line $path` :
@@ -135,27 +137,31 @@ function define_default_editors()
     define_editor("nano"; wait=true) do cmd, path, line, column
         cmd = `$cmd +$line,$column $path`
     end
-    # emacs (must check that emacs not running in -t/-nw before regex match for general emacs)
-    for (editors, wait) in [[Any[r"\bemacs"],                                                                           false],
-                            [Any[r"\bemacs\b.*\s(-nw|--no-window-system)\b", r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], true]]
+    # emacs (must check that emacs not running in -t/-nw
+    # before regex match for general emacs)
+    for (editors, wait) in [
+        [[r"\bemacs"], false],
+        [[r"\bemacs\b.*\s(-nw|--no-window-system)\b",
+          r"\bemacsclient\b.\s*-(-?nw|t|-?tty)\b"], true],
+    ]
         define_editor(editors; wait) do cmd, path, line, column
             `$cmd +$line:$column $path`
         end
     end
-    # Other editors
+    # other editors
     define_editor("gedit") do cmd, path, line, column
         `$cmd +$line:$column $path`
     end
-    define_editor(Any["micro", "kak"]; wait=true) do cmd, path, line, column
+    define_editor(["micro", "kak"]; wait=true) do cmd, path, line, column
         `$cmd +$line $path`
     end
-    define_editor(Any["hx", "helix"]; wait=true) do cmd, path, line, column
+    define_editor(["hx", "helix"]; wait=true) do cmd, path, line, column
         `$cmd $path:$line:$column`
     end
     define_editor(["textmate", "mate", "kate"]) do cmd, path, line, column
         `$cmd $path -l $line`
     end
-    define_editor(Any[r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line, column
+    define_editor([r"\bsubl", r"\batom", "pycharm", "bbedit"]) do cmd, path, line, column
         `$cmd $path:$line`
     end
     define_editor(["code", "code-insiders"]) do cmd, path, line, column

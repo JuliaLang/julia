@@ -78,12 +78,8 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    if m.sig === Tuple # OpaqueClosure
-        return Symbol[]
-    end
-    mt = get_methodtable(m)
-    if isdefined(mt, :kwsorter)
-        kwtype = typeof(mt.kwsorter)
+    if m.sig !== Tuple # OpaqueClosure or Builtin
+        kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
@@ -164,7 +160,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 """
     functionloc(m::Method)
 
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+Return a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
     file, ln = updated_methodloc(m)
@@ -177,7 +173,7 @@ end
 """
     functionloc(f::Function, types)
 
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
 

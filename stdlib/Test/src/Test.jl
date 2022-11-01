@@ -1689,7 +1689,7 @@ end
 """
     get_testset_depth()
 
-Returns the number of active test sets, not including the default test set
+Return the number of active test sets, not including the default test set
 """
 function get_testset_depth()
     testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
@@ -1819,7 +1819,7 @@ end
                                       ambiguous_bottom=false,
                                       allowed_undefineds=nothing)
 
-Returns a vector of `(Method,Method)` pairs of ambiguous methods
+Return a vector of `(Method,Method)` pairs of ambiguous methods
 defined in the specified modules.
 Use `recursive=true` to test in all submodules.
 
@@ -1896,7 +1896,7 @@ end
 """
     detect_unbound_args(mod1, mod2...; recursive=false, allowed_undefineds=nothing)
 
-Returns a vector of `Method`s which may have unbound type parameters.
+Return a vector of `Method`s which may have unbound type parameters.
 Use `recursive=true` to test in all submodules.
 
 By default, any undefined symbols trigger a warning. This warning can

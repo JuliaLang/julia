@@ -1662,7 +1662,7 @@
   (define (kwcall-unless-empty f pa kw-container-test kw-container)
     `(if (call (top isempty) ,kw-container-test)
          (call ,f ,@pa)
-         (call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))
+         (call (core kwcall) ,kw-container ,f ,@pa)))
 
   (let ((f            (if (sym-ref? fexpr) fexpr (make-ssavalue)))
         (kw-container (make-ssavalue)))
@@ -1676,7 +1676,7 @@
                                            #t))
       ,(if (every vararg? kw)
            (kwcall-unless-empty f pa kw-container kw-container)
-           `(call (call (core kwfunc) ,f) ,kw-container ,f ,@pa)))))
+           `(call (core kwcall) ,kw-container ,f ,@pa)))))
 
 ;; convert `a+=b` to `a=a+b`
 (define (expand-update-operator- op op= lhs rhs declT)
@@ -2910,17 +2910,16 @@
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))
 
-(define (lhs-vars e)
-  (cond ((symdecl? e)   (list (decl-var e)))
-        ((and (pair? e) (eq? (car e) 'tuple))
-         (apply append (map lhs-vars (cdr e))))
-        (else '())))
-
 (define (lhs-decls e)
   (cond ((symdecl? e)   (list e))
-        ((and (pair? e) (eq? (car e) 'tuple))
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
+
+(define (lhs-vars e)
+  (map decl-var (lhs-decls e)))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
@@ -3348,9 +3347,9 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
-           ;; calls to functions with keyword args go through `kwfunc` first
-           (if (and (length= e 3) (equal? (cadr e) '(core kwfunc)))
-               (let ((vi2 (get tab (caddr e) #f)))
+           ;; calls to functions with keyword args have head of `kwcall` first
+           (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
+               (let ((vi2 (get tab (cadddr e) #f)))
                  (if vi2
                      (vinfo:set-called! vi2 #t))))
            (for-each (lambda (x) (analyze-vars x env captvars sp tab))
@@ -4381,10 +4380,12 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core globalref outerref boundscheck))))
+                                                   (memq (car arg) '(quote inert top core boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
-                                         (not (and (symbol? arg)
+                                         (not (and (or (symbol? arg)
+                                                       (and (pair? arg)
+                                                            (memq (car arg) '(globalref outerref))))
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
                                     (let ((tmp (make-ssavalue)))

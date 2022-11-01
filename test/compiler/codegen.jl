@@ -15,9 +15,12 @@ function libjulia_codegen_name()
     is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
 end
 
-# `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
-    sprint(code_llvm, f, t, raw, dump_module, optimize)
+# The tests below assume a certain format and safepoint_on_entry=true breaks that.
+function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
+    params = Base.CodegenParams(safepoint_on_entry=false)
+    d = InteractiveUtils._dump_function(f, t, false, false, !raw, dump_module, :att, optimize, :none, false, params)
+    sprint(print, d)
+end
 
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
@@ -686,12 +689,25 @@ mktempdir() do pfx
     cp(dirname(Sys.BINDIR), pfx; force=true)
     libpath = relpath(dirname(dlpath(libjulia_codegen_name())), dirname(Sys.BINDIR))
     libs_deleted = 0
-    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    libfiles = filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    for f in libfiles
         rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
     @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+
+    # PR #47343
+    libs_emptied = 0
+    for f in libfiles
+        touch(joinpath(pfx, libpath, f))
+        libs_emptied += 1
+    end
+
+    errfile = joinpath(pfx, "stderr.txt")
+    @test libs_emptied > 0
+    @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
+    @test contains(readline(errfile), "ERROR: Unable to load dependent library")
 end
 
 # issue #42645

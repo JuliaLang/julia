@@ -1134,8 +1134,9 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     // At this point, we should have fixed up all the uses of the cloned functions
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
-
+#ifdef JL_VERIFY_PASSES
     assert(!verifyModule(M, &errs()));
+#endif
 
     return true;
 }

@@ -809,7 +809,7 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end
-    return Core._call_latest(Core.kwfunc(f), kwargs, f, args...)
+    return Core._call_latest(Core.kwcall, kwargs, f, args...)
 end
 
 """
@@ -843,7 +843,7 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)
     end
-    return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
+    return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)

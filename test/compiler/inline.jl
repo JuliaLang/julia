@@ -120,9 +120,7 @@ f29083(;μ,σ) = μ + σ*randn()
 g29083() = f29083(μ=2.0,σ=0.1)
 let c = code_typed(g29083, ())[1][1].code
     # make sure no call to kwfunc remains
-    @test !any(e->(isa(e,Expr) && ((e.head === :invoke && e.args[1].def.name === :kwfunc) ||
-                                   (e.head === :foreigncall && e.args[1] === QuoteNode(:jl_get_keyword_sorter)))),
-               c)
+    @test !any(e->(isa(e,Expr) && (e.head === :invoke && e.args[1].def.name === :kwfunc)), c)
 end
 
 @testset "issue #19122: [no]inline of short func. def. with return type annotation" begin
@@ -1041,26 +1039,6 @@ struct FooTheRef
     x::Ref
     FooTheRef(v) = new(v === nothing ? THE_REF_NULL : THE_REF)
 end
-let src = code_typed1() do
-        FooTheRef(nothing)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        FooTheRef(0)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(nothing::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(0::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
 @test fully_eliminated() do
     FooTheRef(nothing)
     nothing
@@ -1597,44 +1575,44 @@ end
     # @inline, @noinline, @constprop
     let @inline f(::Any; x::Int=1) = 2x
         @test is_inlineable(only(methods(f)).source)
-        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
+        @test is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
     end
     let @noinline f(::Any; x::Int=1) = 2x
         @test !is_inlineable(only(methods(f)).source)
-        @test !is_inlineable(only(methods(Core.kwfunc(f))).source)
+        @test !is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
     end
     let Base.@constprop :aggressive f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     let Base.@constprop :none f(::Any; x::Int=1) = 2x
         @test Core.Compiler.is_no_constprop(only(methods(f)))
-        @test Core.Compiler.is_no_constprop(only(methods(Core.kwfunc(f))))
+        @test Core.Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     # @nospecialize
     let f(@nospecialize(A::Any); x::Int=1) = 2x
         @test only(methods(f)).nospecialize == 1
-        @test only(methods(Core.kwfunc(f))).nospecialize == 4
+        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == 4
     end
     let f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
     end
     # Base.@assume_effects
     let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
         @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
     # propagate multiple metadata also
     let @inline Base.@assume_effects :notaskstate Base.@constprop :aggressive f(::Any; x::Int=1) = (@nospecialize; 2x)
         @test is_inlineable(only(methods(f)).source)
         @test Core.Compiler.is_aggressive_constprop(only(methods(f)))
-        @test is_inlineable(only(methods(Core.kwfunc(f))).source)
-        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwfunc(f))))
+        @test is_inlineable(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).source)
+        @test Core.Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwfunc(f))).nospecialize == -1
+        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
         @test Core.Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
-        @test Core.Compiler.decode_effects_override(only(methods(Core.kwfunc(f))).purity).notaskstate
+        @test Core.Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
 end
 
@@ -1756,8 +1734,85 @@ let interp = Core.Compiler.NativeInterpreter()
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
     inlining = Core.Compiler.InliningState(Core.Compiler.OptimizationParams(interp), nothing,
-        Core.Compiler.code_cache(interp), interp)
+        Core.Compiler.get_world_counter(interp), interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test count(isinvoke(:*), ir.stmts.inst) == 0
     @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1
+end
+
+# Test special purpose inliner for Core.ifelse
+f_ifelse_1(a, b) = Core.ifelse(true, a, b)
+f_ifelse_2(a, b) = Core.ifelse(false, a, b)
+f_ifelse_3(a, b) = Core.ifelse(a, true, b)
+
+@test fully_eliminated(f_ifelse_1, Tuple{Any, Any}; retval=Core.Argument(2))
+@test fully_eliminated(f_ifelse_2, Tuple{Any, Any}; retval=Core.Argument(3))
+@test !fully_eliminated(f_ifelse_3, Tuple{Any, Any})
+
+# inline_splatnew for abstract `NamedTuple`
+@eval construct_splatnew(T, fields) = $(Expr(:splatnew, :T, :fields))
+for tt = Any[(Int,Int), (Integer,Integer), (Any,Any)]
+    let src = code_typed1(tt) do a, b
+            construct_splatnew(NamedTuple{(:a,:b),typeof((a,b))}, (a,b))
+        end
+        @test count(issplatnew, src.code) == 0
+        @test count(isnew, src.code) == 1
+    end
+end
+
+# optimize away `NamedTuple`s used for handling `@nospecialize`d keyword-argument
+# https://github.com/JuliaLang/julia/pull/47059
+abstract type CallInfo end
+struct NewInstruction
+    stmt::Any
+    type::Any
+    info::CallInfo
+    line::Int32
+    flag::UInt8
+    function NewInstruction(@nospecialize(stmt), @nospecialize(type), @nospecialize(info::CallInfo),
+                            line::Int32, flag::UInt8)
+        return new(stmt, type, info, line, flag)
+    end
+end
+@nospecialize
+function NewInstruction(newinst::NewInstruction;
+    stmt=newinst.stmt,
+    type=newinst.type,
+    info::CallInfo=newinst.info,
+    line::Int32=newinst.line,
+    flag::UInt8=newinst.flag)
+    return NewInstruction(stmt, type, info, line, flag)
+end
+@specialize
+let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type, info
+        NewInstruction(newinst; stmt, type, info)
+    end
+    @test count(issplatnew, src.code) == 0
+    @test count(iscall((src,NamedTuple)), src.code) == 0
+    @test count(isnew, src.code) == 1
+end
+
+# Test that inlining can still use nothrow information from concrete-eval
+# even if the result itself is too big to be inlined, and nothrow is not
+# known without concrete-eval
+const THE_BIG_TUPLE = ntuple(identity, 1024)
+function return_the_big_tuple(err::Bool)
+    err && error("BAD")
+    return THE_BIG_TUPLE
+end
+@noinline function return_the_big_tuple_noinline(err::Bool)
+    err && error("BAD")
+    return THE_BIG_TUPLE
+end
+big_tuple_test1() = return_the_big_tuple(false)[1]
+big_tuple_test2() = return_the_big_tuple_noinline(false)[1]
+
+@test fully_eliminated(big_tuple_test2, Tuple{})
+# Currently we don't run these cleanup passes, but let's make sure that
+# if we did, inlining would be able to remove this
+let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
+    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    ir = Core.Compiler.compact!(ir, true)
+    @test length(ir.stmts) == 1
 end
