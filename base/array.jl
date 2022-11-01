@@ -1271,17 +1271,17 @@ function _unsafe_prepend!(a, ::Union{HasLength,HasShape}, iter)
     a
 end
 
-function _try_prepend!(a::Vector, sz::IteratorSize, iter)
+function _try_prepend!(a, sz::IteratorSize, iter)
     n = length(a)
     try
-        unsafe_prepend!(a, sz, iter)
+        _unsafe_prepend!(a, sz, iter)
     catch e
         _deletebeg!(a, length(a) - n)
         rethrow(e)
     end
     a
 end
-function _unsafe_prepend!(a::Vector, ::IteratorSize, iter)
+function _unsafe_prepend!(a, ::IteratorSize, iter)
     n = 0
     for item in iter
         n += 1
