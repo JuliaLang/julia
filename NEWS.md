@@ -78,6 +78,8 @@ New library functions
 * New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
   and allows any iterators of iterators. Method `stack(f, x)` generalises `mapreduce(f, hcat, x)` and
   is efficient. ([#43334])
+* New macro `@allocations` which is similar to `@allocated` except reporting the total number of allocations
+  rather than the total size of memory allocated. ([#47367])
 
 Library changes
 ---------------
