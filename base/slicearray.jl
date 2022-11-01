@@ -106,7 +106,7 @@ julia> m = [1 2 3; 4 5 6; 7 8 9]
  4  5  6
  7  8  9
 
-julia> s = eachslice(m, dims=1)  # same as eachrow(m)
+julia> s = eachslice(m, dims=1)
 3-element eachrow(::Matrix{Int64}) of 3-element slices with eltype Int64:
  [1, 2, 3]
  [4, 5, 6]
@@ -123,6 +123,14 @@ julia> eachslice(m, dims=1, drop=false)  # keyword changes size of container
  [1, 2, 3]
  [4, 5, 6]
  [7, 8, 9]
+
+julia> x3 = rand(Int8, 3,4,5);
+
+julia> eachslice(x3, dims=(3,2)) |> summary  # order of dims matters here
+"5×4 eachslice(::Array{Int8, 3}, dims = (3, 2)) of 3-element slices with eltype Int8"
+
+julia> eachslice(x3, dims=(3,2), drop=false) |> summary
+"1×4×5 eachslice(::Array{Int8, 3}, dims = (2, 3), drop = false) of 3-element slices with eltype Int8"
 
 julia> eachslice(Any[pi, 2pi], dims=1)  # eachrow would produce vector slices
 2-element eachslice(::Vector{Any}, dims = 1) of 0-dimensional slices with eltype Any:
