@@ -244,6 +244,8 @@ tests = [
         "f(a,b)"  => "(call f a b)"
         "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))" =>
             Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
+        "f(a; b; c)" => "(call f a (parameters b) (parameters c))" =>
+            Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
         "(a=1)()" =>  "(call (= a 1))" => Expr(:call, Expr(:(=), :a, 1))
         "f (a)" => "(call f (error-t) a)"
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
@@ -568,13 +570,15 @@ tests = [
         "(x,y)"       =>  "(tuple x y)"
         "(x=1, y=2)"  =>  "(tuple (= x 1) (= y 2))"
         # Named tuples with initial semicolon
-        "(;)"         =>  "(tuple (parameters))"
-        "(; a=1)"     =>  "(tuple (parameters (= a 1)))"
+        "(;)"         =>  "(tuple (parameters))"         =>  Expr(:tuple, Expr(:parameters))
+        "(; a=1)"     =>  "(tuple (parameters (= a 1)))" =>  Expr(:tuple, Expr(:parameters, Expr(:kw, :a, 1)))
         # Extra credit: nested parameters and frankentuples
         "(x...; y)"       => "(tuple (... x) (parameters y))"
         "(x...;)"         => "(tuple (... x) (parameters))"
-        "(; a=1; b=2)"    => "(tuple (parameters (= a 1) (parameters (= b 2))))"
-        "(a; b; c,d)"     => "(tuple a (parameters b (parameters c d)))"
+        "(; a=1; b=2)"    => "(tuple (parameters (= a 1)) (parameters (= b 2)))" =>
+            Expr(:tuple, Expr(:parameters, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
+        "(a; b; c,d)"     => "(tuple a (parameters b) (parameters c d))" =>
+            Expr(:tuple, Expr(:parameters, Expr(:parameters, :c, :d), :b), :a)
         "(a=1, b=2; c=3)" => "(tuple (= a 1) (= b 2) (parameters (= c 3)))"
         # Block syntax
         "(;;)"        =>  "(block)"
@@ -668,7 +672,7 @@ tests = [
         "[x,\n y]"      =>  "(vect x y)"
         "[x\n, y]"      =>  "(vect x y)"
         "[x\n,, y]"     =>  "(vect x (error-t ✘ y))"
-        "[x,y ; z]"     =>  "(vect x y (parameters z))"
+        "[x,y ; z]"     =>  "(vect x y (parameters z))"  => Expr(:vect, Expr(:parameters, :z), :x, :y)
         "[x=1, y=2]"    =>  "(vect (= x 1) (= y 2))"
         "[x=1, ; y=2]"  =>  "(vect (= x 1) (parameters (= y 2)))"
         # parse_paren
