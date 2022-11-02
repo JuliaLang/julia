@@ -22,15 +22,6 @@ extern "C" {
 #include <fenv.h>
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char * __cdecl dirname(char *);
-#else
-#include <libgen.h>
-#endif
-#ifndef _OS_WINDOWS_
-#include <dlfcn.h>
-#endif
-
 JL_DLLEXPORT int jl_is_initialized(void)
 {
     return jl_main_module != NULL;
@@ -57,18 +48,19 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
 }
 
 // First argument is the usr/bin directory where the julia binary is, or NULL to guess.
-// Second argument is the path of a system image file (*.ji) relative to the
-// first argument path, or relative to the default julia home dir.
-// The default is something like ../lib/julia/sys.ji
+// Second argument is the path of a system image file (*.so).
+// A non-absolute path is interpreted as relative to the first argument path, or
+// relative to the default julia home dir.
+// The default is something like ../lib/julia/sys.so
 JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_relative_path)
+                                     const char *image_path)
 {
     if (jl_is_initialized())
         return;
     libsupport_init();
     jl_options.julia_bindir = julia_bindir;
-    if (image_relative_path != NULL)
-        jl_options.image_file = image_relative_path;
+    if (image_path != NULL)
+        jl_options.image_file = image_path;
     else
         jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);
@@ -104,20 +96,26 @@ JL_DLLEXPORT void jl_init_with_image__threading(const char *julia_bindir,
     jl_init_with_image(julia_bindir, image_relative_path);
 }
 
+static void _jl_exception_clear(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    ct->ptls->previous_exception = NULL;
+}
+
 JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
 {
     jl_value_t *r;
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         const char filename[] = "none";
         jl_value_t *ast = jl_parse_all(str, strlen(str),
-                filename, strlen(filename));
+                filename, strlen(filename), 1);
         JL_GC_PUSH1(&ast);
         r = jl_toplevel_eval_in(jl_main_module, ast);
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception();
         r = NULL;
     }
     return r;
@@ -136,7 +134,7 @@ JL_DLLEXPORT jl_value_t *jl_exception_occurred(void)
 
 JL_DLLEXPORT void jl_exception_clear(void)
 {
-    jl_current_task->ptls->previous_exception = NULL;
+    _jl_exception_clear(jl_current_task);
 }
 
 // get the name of a type as a string
@@ -173,7 +171,7 @@ JL_DLLEXPORT const char *jl_string_ptr(jl_value_t *s)
     return jl_string_data(s);
 }
 
-JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     jl_value_t *v;
     jl_task_t *ct = jl_current_task;
@@ -189,7 +187,7 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t na
         v = jl_apply(argv, nargs);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -209,7 +207,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
         v = jl_apply_generic(f, NULL, 0);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -232,7 +230,7 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
         v = jl_apply(argv, 2);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -256,7 +254,7 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
         v = jl_apply(argv, 3);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
         ct->ptls->previous_exception = jl_current_exception();
@@ -269,6 +267,7 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
                                   jl_value_t *b, jl_value_t *c)
 {
     jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t **argv;
         JL_GC_PUSHARGS(argv, 4);
@@ -276,16 +275,15 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         argv[1] = a;
         argv[2] = b;
         argv[3] = c;
-        jl_task_t *ct = jl_current_task;
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
         v = jl_apply(argv, 4);
         ct->world_age = last_age;
         JL_GC_POP();
-        jl_exception_clear();
+        _jl_exception_clear(ct);
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception();
         v = NULL;
     }
     return v;
@@ -411,7 +409,7 @@ JL_DLLEXPORT const char *jl_git_commit(void)
     return commit;
 }
 
-// Create function versions of some useful macros
+// Create function versions of some useful macros for GDB or FFI use
 JL_DLLEXPORT jl_taggedvalue_t *(jl_astaggedvalue)(jl_value_t *v)
 {
     return jl_astaggedvalue(v);
@@ -430,6 +428,11 @@ JL_DLLEXPORT jl_value_t *(jl_typeof)(jl_value_t *v)
 JL_DLLEXPORT jl_value_t *(jl_get_fieldtypes)(jl_value_t *v)
 {
     return (jl_value_t*)jl_get_fieldtypes((jl_datatype_t*)v);
+}
+
+JL_DLLEXPORT int ijl_egal(jl_value_t *a, jl_value_t *b)
+{
+    return jl_egal(a, b);
 }
 
 
@@ -459,7 +462,7 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
 }
 #endif
 
-JL_DLLEXPORT void (jl_gc_safepoint)(void)
+JL_DLLEXPORT void jl_gc_safepoint(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_gc_safepoint_(ct->ptls);
@@ -475,18 +478,26 @@ JL_DLLEXPORT void (jl_cpu_wake)(void)
     jl_cpu_wake();
 }
 
-JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_before(void)
+JL_DLLEXPORT void jl_cumulative_compile_timing_enable(void)
 {
     // Increment the flag to allow reentrant callers to `@time`.
     jl_atomic_fetch_add(&jl_measure_compile_time_enabled, 1);
-    return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
 }
 
-JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns_after(void)
+JL_DLLEXPORT void jl_cumulative_compile_timing_disable(void)
 {
     // Decrement the flag when done measuring, allowing other callers to continue measuring.
     jl_atomic_fetch_add(&jl_measure_compile_time_enabled, -1);
+}
+
+JL_DLLEXPORT uint64_t jl_cumulative_compile_time_ns(void)
+{
     return jl_atomic_load_relaxed(&jl_cumulative_compile_time);
+}
+
+JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
+{
+    return jl_atomic_load_relaxed(&jl_cumulative_recompile_time);
 }
 
 JL_DLLEXPORT void jl_get_fenv_consts(int *ret)
@@ -555,8 +566,8 @@ static NOINLINE int true_main(int argc, char *argv[])
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
+        jl_task_t *ct = jl_current_task;
         JL_TRY {
-            jl_task_t *ct = jl_current_task;
             size_t last_age = ct->world_age;
             ct->world_age = jl_get_world_counter();
             jl_apply(&start_client, 1);

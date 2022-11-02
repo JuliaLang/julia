@@ -13,7 +13,7 @@ share the same `Complex` type name object.
 All objects in Julia are potentially callable, because every object has a type, which in turn
 has a `TypeName`.
 
-## Function calls
+## [Function calls](@id Function-calls)
 
 Given the call `f(x,y)`, the following steps are performed: first, the method table to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
@@ -48,7 +48,7 @@ jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 
 Given the above dispatch process, conceptually all that is needed to add a new method is (1) a
 tuple type, and (2) code for the body of the method. `jl_method_def` implements this operation.
-`jl_first_argument_datatype` is called to extract the relevant method table from what would be
+`jl_method_table_for` is called to extract the relevant method table from what would be
 the type of the first argument. This is much more complicated than the corresponding procedure
 during dispatch, since the argument tuple type might be abstract. For example, we can define:
 
@@ -101,10 +101,30 @@ currently share a method table via special arrangement.
 
 The "builtin" functions, defined in the `Core` module, are:
 
-```
-=== typeof sizeof <: isa typeassert throw tuple getfield setfield! fieldtype
-nfields isdefined arrayref arrayset arraysize applicable invoke apply_type _apply
-_expr svec
+```@eval
+function lines(words)
+    io = IOBuffer()
+    n = 0
+    for w in words
+        if n+length(w) > 80
+            print(io, '\n', w)
+            n = length(w)
+        elseif n == 0
+            print(io, w);
+            n += length(w)
+        else
+            print(io, ' ', w);
+            n += length(w)+1
+        end
+    end
+    String(take!(io))
+end
+import Markdown
+[string(n) for n in names(Core;all=true)
+    if getfield(Core,n) isa Core.Builtin && nameof(getfield(Core,n)) === n] |>
+    lines |>
+    s ->  "```\n$s\n```" |>
+    Markdown.parse
 ```
 
 These are all singleton objects whose types are subtypes of `Builtin`, which is a subtype of
@@ -121,9 +141,9 @@ but works reasonably well.
 
 ## Keyword arguments
 
-Keyword arguments work by associating a special, hidden function object with each method table
-that has definitions with keyword arguments. This function is called the "keyword argument sorter"
-or "keyword sorter", or "kwsorter", and is stored in the `kwsorter` field of `MethodTable` objects.
+Keyword arguments work by adding methods to the kwcall function. This function
+is usually the "keyword argument sorter" or "keyword sorter", which then calls
+the inner body of the function (defined anonymously).
 Every definition in the kwsorter function has the same arguments as some definition in the normal
 method table, except with a single `NamedTuple` argument prepended, which gives
 the names and values of passed keyword arguments. The kwsorter's job is to move keyword arguments
@@ -200,10 +220,10 @@ circle((0,0), 1.0, color = red; other...)
 is lowered to:
 
 ```julia
-kwfunc(circle)(merge((color = red,), other), circle, (0,0), 1.0)
+kwcall(merge((color = red,), other), circle, (0,0), 1.0)
 ```
 
- `kwfunc` (also in`Core`) fetches the kwsorter for the called function.
+ `kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
 The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
 This function further unpacks each *element* of `other`, expecting each one to contain two values
 (a symbol and a value).

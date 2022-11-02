@@ -13,6 +13,11 @@ extern "C" {
 /* Bring in helper functions for windows without libgcc. */
 #ifdef _OS_WINDOWS_
 #include "loader_win_utils.c"
+
+#include <fileapi.h>
+static int win_file_exists(wchar_t* wpath) {
+  return GetFileAttributesW(wpath) == INVALID_FILE_ATTRIBUTES ? 0 : 1;
+}
 #endif
 
 // Save DEP_LIBS to a variable that is explicitly sized for expansion
@@ -31,6 +36,13 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
 }
 
 /* Wrapper around dlopen(), with extra relative pathing thrown in*/
+/* If err, then loads the library successfully or panics.
+ * If !err, then loads the library or returns null if the file does not exist,
+ * or panics if opening failed for any other reason. */
+/* Currently the only use of this function with !err is in opening libjulia-codegen,
+ * which the user can delete to save space if generating new code is not necessary.
+ * However, if it exists and cannot be loaded, that's a problem. So, we alert the user
+ * and abort the process. */
 static void * load_library(const char * rel_path, const char * src_dir, int err) {
     void * handle = NULL;
 
@@ -49,25 +61,27 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
         return handle;
 #endif
 
-    char path[2*PATH_MAX + 1] = {0};
+    char path[2*JL_PATH_MAX + 1] = {0};
     strncat(path, src_dir, sizeof(path) - 1);
     strncat(path, PATHSEPSTRING, sizeof(path) - 1);
     strncat(path, rel_path, sizeof(path) - 1);
 
 #if defined(_OS_WINDOWS_)
-    wchar_t wpath[2*PATH_MAX + 1] = {0};
-    if (!utf8_to_wchar(path, wpath, 2*PATH_MAX)) {
+#define PATH_EXISTS() win_file_exists(wpath)
+    wchar_t wpath[2*JL_PATH_MAX + 1] = {0};
+    if (!utf8_to_wchar(path, wpath, 2*JL_PATH_MAX)) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", path, " to wide string!\n");
         exit(1);
     }
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
+#define PATH_EXISTS() !access(path, F_OK)
     handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
 #endif
-
     if (handle == NULL) {
-        if (!err)
+        if (!err && !PATH_EXISTS())
             return NULL;
+#undef PATH_EXISTS
         jl_loader_print_stderr3("ERROR: Unable to load dependent library ", path, "\n");
 #if defined(_OS_WINDOWS_)
         LPWSTR wmsg = TEXT("");
@@ -82,7 +96,10 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
         wchar_to_utf8(wmsg, err, 255);
         jl_loader_print_stderr3("Message:", err, "\n");
 #else
-        jl_loader_print_stderr3("Message:", dlerror(), "\n");
+        char *dlerr = dlerror();
+        if (dlerr != NULL) {
+            jl_loader_print_stderr3("Message:", dlerr, "\n");
+        }
 #endif
         exit(1);
     }
@@ -98,7 +115,7 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 }
 
 // Find the location of libjulia.
-char lib_dir[PATH_MAX];
+char lib_dir[JL_PATH_MAX];
 JL_DLLEXPORT const char * jl_get_libdir()
 {
     // Reuse the path if this is not the first call.
@@ -107,11 +124,11 @@ JL_DLLEXPORT const char * jl_get_libdir()
     }
 #if defined(_OS_WINDOWS_)
     // On Windows, we use GetModuleFileNameW
-    wchar_t libjulia_path[PATH_MAX];
+    wchar_t libjulia_path[JL_PATH_MAX];
     HMODULE libjulia = NULL;
 
     // Get a handle to libjulia.
-    if (!utf8_to_wchar(LIBJULIA_NAME, libjulia_path, PATH_MAX)) {
+    if (!utf8_to_wchar(LIBJULIA_NAME, libjulia_path, JL_PATH_MAX)) {
         jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
         exit(1);
     }
@@ -120,11 +137,11 @@ JL_DLLEXPORT const char * jl_get_libdir()
         jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
         exit(1);
     }
-    if (!GetModuleFileNameW(libjulia, libjulia_path, PATH_MAX)) {
+    if (!GetModuleFileNameW(libjulia, libjulia_path, JL_PATH_MAX)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
     }
-    if (!wchar_to_utf8(libjulia_path, lib_dir, PATH_MAX)) {
+    if (!wchar_to_utf8(libjulia_path, lib_dir, JL_PATH_MAX)) {
         jl_loader_print_stderr("ERROR: Unable to convert julia path to UTF-8\n");
         exit(1);
     }
@@ -133,7 +150,10 @@ JL_DLLEXPORT const char * jl_get_libdir()
     Dl_info info;
     if (!dladdr(&jl_get_libdir, &info)) {
         jl_loader_print_stderr("ERROR: Unable to dladdr(&jl_get_libdir)!\n");
-        jl_loader_print_stderr3("Message:", dlerror(), "\n");
+        char *dlerr = dlerror();
+        if (dlerr != NULL) {
+            jl_loader_print_stderr3("Message:", dlerr, "\n");
+        }
         exit(1);
     }
     strcpy(lib_dir, info.dli_fname);
@@ -200,13 +220,16 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     libjulia_internal = load_library(special_library_names[0], lib_dir, 1);
     void *libjulia_codegen = load_library(special_library_names[1], lib_dir, 0);
     const char * const * codegen_func_names;
+    const char *codegen_liberr;
     if (libjulia_codegen == NULL) {
         // if codegen is not available, use fallback implementation in libjulia-internal
         libjulia_codegen = libjulia_internal;
         codegen_func_names = jl_codegen_fallback_func_names;
+        codegen_liberr = " from libjulia-internal\n";
     }
     else {
         codegen_func_names = jl_codegen_exported_func_names;
+        codegen_liberr = " from libjulia-codegen\n";
     }
 
     // Once we have libjulia-internal loaded, re-export its symbols:
@@ -220,16 +243,28 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
-    ((void (*)())jl_init_options_addr)();
+    ((void (*)(void))jl_init_options_addr)();
 
     for (unsigned int symbol_idx=0; codegen_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_codegen, codegen_func_names[symbol_idx]);
         if (addr == NULL) {
-            jl_loader_print_stderr3("ERROR: Unable to load ", codegen_func_names[symbol_idx], " from libjulia-codegen\n");
+            jl_loader_print_stderr3("ERROR: Unable to load ", codegen_func_names[symbol_idx], codegen_liberr);
             exit(1);
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
+    // Next, if we're on Linux/FreeBSD, set up fast TLS.
+#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
+    void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
+    if (jl_pgcstack_setkey == NULL) {
+        jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
+        exit(1);
+    }
+    void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
+    void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
+    if (fptr != NULL && key != NULL)
+        jl_pgcstack_setkey(fptr, key);
+#endif
 
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
@@ -247,22 +282,6 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
             exit(1);
         }
     }
-    // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
-    void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
-    if (jl_pgcstack_setkey == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
-        exit(1);
-    }
-    void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
-    void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr == NULL || key == NULL) {
-        jl_loader_print_stderr("ERROR: Cannot find jl_get_pgcstack_static(), must define this symbol within calling executable!\n");
-        exit(1);
-    }
-    jl_pgcstack_setkey(fptr, key);
-#endif
-
     // Load the repl entrypoint symbol and jump into it!
     int (*entrypoint)(int, char **) = (int (*)(int, char **))lookup_symbol(libjulia_internal, "jl_repl_entrypoint");
     if (entrypoint == NULL) {

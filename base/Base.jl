@@ -28,8 +28,7 @@ macro noinline() Expr(:meta, :noinline) end
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
-getproperty(x::Module, f::Symbol) = (@inline; getfield(x, f))
-setproperty!(x::Module, f::Symbol, v) = setfield!(x, f, v) # to get a decent error
+getproperty(x::Module, f::Symbol) = (@inline; getglobal(x, f))
 getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
@@ -40,8 +39,12 @@ setproperty!(x, f::Symbol, v) = setfield!(x, f, convert(fieldtype(typeof(x), f),
 
 dotgetproperty(x, f) = getproperty(x, f)
 
-getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
-setproperty!(x::Module, f::Symbol, v, order::Symbol) = setfield!(x, f, v, order) # to get a decent error
+getproperty(x::Module, f::Symbol, order::Symbol) = (@inline; getglobal(x, f, order))
+function setproperty!(x::Module, f::Symbol, v, order::Symbol=:monotonic)
+    @inline
+    val::Core.get_binding_type(x, f) = v
+    return setglobal!(x, f, val, order)
+end
 getproperty(x::Type, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x::Type, f::Symbol, v, order::Symbol) = error("setfield! fields of Types should not be changed")
 getproperty(x::Tuple, f::Int, order::Symbol) = (@inline; getfield(x, f, order))
@@ -50,14 +53,15 @@ setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # t
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
 
-swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
+swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic) =
     (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
-modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
+modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic) =
     (@inline; Core.modifyfield!(x, f, op, v, order))
-replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
+replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
-
+convert(::Type{Any}, Core.@nospecialize x) = x
+convert(::Type{T}, x::T) where {T} = x
 include("coreio.jl")
 
 eval(x) = Core.eval(Base, x)
@@ -83,7 +87,7 @@ if false
 end
 
 """
-    time_ns()
+    time_ns() -> UInt64
 
 Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 """
@@ -99,13 +103,21 @@ include("generator.jl")
 include("reflection.jl")
 include("options.jl")
 
+# define invoke(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to invoke
+function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+    @inline
+    # prepend kwargs and f to the invoked from the user
+    T = rewrap_unionall(Tuple{Any, Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    return invoke(Core.kwcall, T, kwargs, f, args...)
+end
+# invoke does not have its own call cache, but kwcall for invoke does
+typeof(invoke).name.mt.max_args = 3 # invoke, f, T, args...
+
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
 include("expr.jl")
-Pair{A, B}(@nospecialize(a), @nospecialize(b)) where {A, B} = (@inline; Pair{A, B}(convert(A, a)::A, convert(B, b)::B))
-#Pair{Any, B}(@nospecialize(a::Any), b) where {B} = (@inline; Pair{Any, B}(a, Base.convert(B, b)::B))
-#Pair{A, Any}(a, @nospecialize(b::Any)) where {A} = (@inline; Pair{A, Any}(Base.convert(A, a)::A, b))
 include("pair.jl")
 include("traits.jl")
 include("range.jl")
@@ -120,8 +132,24 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 include("refpointer.jl")
+
+# now replace the Pair constructor (relevant for NamedTuples) with one that calls our Base.convert
+delete_method(which(Pair{Any,Any}, (Any, Any)))
+@eval function (P::Type{Pair{A, B}})(@nospecialize(a), @nospecialize(b)) where {A, B}
+    @inline
+    return $(Expr(:new, :P, :(convert(A, a)), :(convert(B, b))))
+end
+
+# The REPL stdlib hooks into Base using this Ref
+const REPL_MODULE_REF = Ref{Module}()
+
 include("checked.jl")
 using .Checked
+function cld end
+function fld end
+
+# Lazy strings
+include("strings/lazy.jl")
 
 # array structures
 include("indices.jl")
@@ -157,6 +185,10 @@ end
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "build_h.jl"))     # include($BUILDROOT/base/build_h.jl)
 include(strcat((length(Core.ARGS)>=2 ? Core.ARGS[2] : ""), "version_git.jl")) # include($BUILDROOT/base/version_git.jl)
 
+# These used to be in build_h.jl and are retained for backwards compatibility
+const libblas_name = "libblastrampoline"
+const liblapack_name = "libblastrampoline"
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -170,9 +202,10 @@ include("multinverses.jl")
 using .MultiplicativeInverses
 include("abstractarraymath.jl")
 include("arraymath.jl")
+include("slicearray.jl")
 
 # SIMD loops
-@pure sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
+sizeof(s::String) = Core.sizeof(s)  # needed by gensym as called from simdloop
 include("simdloop.jl")
 using .SimdLoop
 
@@ -200,6 +233,7 @@ include("dict.jl")
 include("abstractset.jl")
 include("set.jl")
 
+# Strings
 include("char.jl")
 include("strings/basic.jl")
 include("strings/string.jl")
@@ -212,8 +246,6 @@ let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
             push!(DL_LOAD_PATH, "@loader_path/Frameworks")
-        else
-            push!(DL_LOAD_PATH, "@loader_path/julia")
         end
         push!(DL_LOAD_PATH, "@loader_path")
     end
@@ -267,14 +299,12 @@ include("condition.jl")
 include("threads.jl")
 include("lock.jl")
 include("channels.jl")
+include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
 
 include("env.jl")
-
-# BinaryPlatforms, used by Artifacts
-include("binaryplatforms.jl")
 
 # functions defined in Random
 function rand end
@@ -329,6 +359,9 @@ using .Order
 # Combinatorics
 include("sort.jl")
 using .Sort
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # Fast math
 include("fastmath.jl")
@@ -411,6 +444,7 @@ end
 for m in methods(include)
     delete_method(m)
 end
+
 # These functions are duplicated in client.jl/include(::String) for
 # nicer stacktraces. Modifications here have to be backported there
 include(mod::Module, _path::AbstractString) = _include(identity, mod, _path)
@@ -421,7 +455,7 @@ end_base_include = time_ns()
 const _sysimage_modules = PkgId[]
 in_sysimage(pkgid::PkgId) = pkgid in _sysimage_modules
 
-# Precompiles for Revise
+# Precompiles for Revise and other packages
 # TODO: move these to contrib/generate_precompile.jl
 # The problem is they don't work there
 for match = _methods(+, (Int, Int), -1, get_world_counter())
@@ -455,14 +489,29 @@ for match = _methods(+, (Int, Int), -1, get_world_counter())
 
     # Code loading uses this
     sortperm(mtime.(readdir(".")), rev=true)
+    # JLLWrappers uses these
+    Dict{UUID,Set{String}}()[UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210")] = Set{String}()
+    get!(Set{String}, Dict{UUID,Set{String}}(), UUID("692b3bcd-3c85-4b1f-b108-f13ce0eb3210"))
+    eachindex(IndexLinear(), Expr[])
+    push!(Expr[], Expr(:return, false))
+    vcat(String[], String[])
+    k, v = (:hello => nothing)
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int))
+    precompile(indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int))
+    # Preferences uses these
+    precompile(get_preferences, (UUID,))
+    precompile(record_compiletime_preference, (UUID, String))
+    get(Dict{String,Any}(), "missing", nothing)
+    delete!(Dict{String,Any}(), "missing")
+    for (k, v) in Dict{String,Any}()
+        println(k)
+    end
 
     break   # only actually need to do this once
 end
 
 if is_primary_base_module
 function __init__()
-    # for the few uses of Libc.rand in Base:
-    Libc.srand()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses stdout as fallback
@@ -477,6 +526,10 @@ function __init__()
     nothing
 end
 
+# enable threads support
+@eval PCRE PCRE_COMPILE_LOCK = Threads.SpinLock()
+
 end
+
 
 end # baremodule Base

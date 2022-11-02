@@ -4,6 +4,7 @@
 #include <errno.h>
 
 #include "julia.h"
+#include "julia_internal.h"
 
 #include <unistd.h>
 #include <getopt.h>
@@ -37,7 +38,9 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // cmds
                         NULL, // image_file (will be filled in below)
                         NULL, // cpu_target ("native", "core2", etc...)
+                        0,    // nthreadpools
                         0,    // nthreads
+                        NULL, // nthreads_per_pool
                         0,    // nprocs
                         NULL, // machine_file
                         NULL, // project
@@ -48,6 +51,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                         0,    // code_coverage
                         0,    // malloc_log
+                        NULL, // tracked_path
                         2,    // opt_level
                         0,    // opt_level_min
 #ifdef JL_DEBUG_BUILD
@@ -73,105 +77,133 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // output-o
                         NULL, // output-asm
                         NULL, // output-ji
-                        NULL,    // output-code_coverage
+                        NULL, // output-code_coverage
                         0, // incremental
                         0, // image_file_specified
                         JL_OPTIONS_WARN_SCOPE_ON,  // ambiguous scope warning
                         0, // image-codegen
                         0, // rr-detach
+                        0, // strip-metadata
+                        0, // strip-ir
+                        0, // heap-size-hint
     };
     jl_options_initialized = 1;
 }
 
-static const char usage[] = "julia [switches] -- [programfile] [args...]\n";
+static const char usage[] = "\n    julia [switches] -- [programfile] [args...]\n\n";
 static const char opts[]  =
-    " -v, --version             Display version information\n"
-    " -h, --help                Print this message (--help-hidden for more)\n"
-    " --help-hidden             Uncommon options not shown by `-h`\n\n"
+    "Switches (a '*' marks the default value, if applicable):\n\n"
+    " -v, --version              Display version information\n"
+    " -h, --help                 Print this message (--help-hidden for more)\n"
+    " --help-hidden              Uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@.}]    Set <dir> as the home project/environment\n"
-    " -J, --sysimage <file>     Start up with the given system image file\n"
-    " -H, --home <dir>          Set location of `julia` executable\n"
-    " --startup-file={yes|no}   Load `~/.julia/config/startup.jl`\n"
-    " --handle-signals={yes|no} Enable or disable Julia's default signal handlers\n"
-    " --sysimage-native-code={yes|no}\n"
-    "                           Use native code from system image if available\n"
-    " --compiled-modules={yes|no}\n"
-    "                           Enable or disable incremental precompilation of modules\n\n"
+    " --project[={<dir>|@.}]     Set <dir> as the home project/environment\n"
+    " -J, --sysimage <file>      Start up with the given system image file\n"
+    " -H, --home <dir>           Set location of `julia` executable\n"
+    " --startup-file={yes*|no}   Load `JULIA_DEPOT_PATH/config/startup.jl`; if `JULIA_DEPOT_PATH`\n"
+    "                            environment variable is unset, load `~/.julia/config/startup.jl`\n"
+    " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
+    " --sysimage-native-code={yes*|no}\n"
+    "                            Use native code from system image if available\n"
+    " --compiled-modules={yes*|no}\n"
+    "                            Enable or disable incremental precompilation of modules\n\n"
 
     // actions
-    " -e, --eval <expr>         Evaluate <expr>\n"
-    " -E, --print <expr>        Evaluate <expr> and display the result\n"
-    " -L, --load <file>         Load <file> immediately on all processors\n\n"
+    " -e, --eval <expr>          Evaluate <expr>\n"
+    " -E, --print <expr>         Evaluate <expr> and display the result\n"
+    " -L, --load <file>          Load <file> immediately on all processors\n\n"
 
     // parallel options
-    " -t, --threads {N|auto}    Enable N threads; \"auto\" currently sets N to the number of local\n"
-    "                           CPU threads but this might change in the future\n"
+    " -t, --threads {auto|N[,auto|M]}\n"
+    "                           Enable N[+M] threads; N threads are assigned to the `default`\n"
+    "                           threadpool, and if M is specified, M threads are assigned to the\n"
+    "                           `interactive` threadpool; \"auto\" tries to infer a useful\n"
+    "                           default number of threads to use but the exact behavior might change\n"
+    "                           in the future. Currently sets N to the number of CPUs assigned to\n"
+    "                           this Julia process based on the OS-specific affinity assignment\n"
+    "                           interface if supported (Linux and Windows) or to the number of CPU\n"
+    "                           threads if not supported (MacOS) or if process affinity is not\n"
+    "                           configured, and sets M to 1.\n"
     " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
     "                           \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
-    " -i                        Interactive mode; REPL runs and isinteractive() is true\n"
-    " -q, --quiet               Quiet startup: no banner, suppress REPL warnings\n"
-    " --banner={yes|no|auto}    Enable or disable startup banner\n"
-    " --color={yes|no|auto}     Enable or disable color text\n"
-    " --history-file={yes|no}   Load or save history\n\n"
+    " -i                         Interactive mode; REPL runs and `isinteractive()` is true\n"
+    " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
+    " --banner={yes|no|auto*}    Enable or disable startup banner\n"
+    " --color={yes|no|auto*}     Enable or disable color text\n"
+    " --history-file={yes*|no}   Load or save history\n\n"
 
     // error and warning options
-    " --depwarn={yes|no|error}  Enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)\n"
-    " --warn-overwrite={yes|no} Enable or disable method overwrite warnings\n"
-    " --warn-scope={yes|no}     Enable or disable warning for ambiguous top-level scope\n\n"
+    " --depwarn={yes|no*|error}  Enable or disable syntax and method deprecation warnings (`error` turns warnings into errors)\n"
+    " --warn-overwrite={yes|no*} Enable or disable method overwrite warnings\n"
+    " --warn-scope={yes*|no}     Enable or disable warning for ambiguous top-level scope\n\n"
 
     // code generation options
-    " -C, --cpu-target <target> Limit usage of CPU features up to <target>; set to \"help\" to see the available options\n"
-    " -O, --optimize={0,1,2,3}  Set the optimization level (default level is 2 if unspecified or 3 if used without a level)\n"
-    " --min-optlevel={0,1,2,3}  Set a lower bound on the optimization level (default is 0)\n"
-    " -g, -g <level>            Enable / Set the level of debug info generation"
+    " -C, --cpu-target <target>  Limit usage of CPU features up to <target>; set to `help` to see the available options\n"
+    " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level)\n"
+    " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " (default level for julia-debug is 2 if unspecified or if used without a level)\n"
+        " -g [{0,1,2*}]              Set the level of debug info generation in the julia-debug build\n"
 #else
-        " (default level is 1 if unspecified or 2 if used without a level)\n"
+        " -g [{0,1*,2}]              Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
 #endif
-    " --inline={yes|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
-    " --check-bounds={yes|no|auto}\n"
-    "                           Emit bounds checks always, never, or respect @inbounds declarations\n"
+    " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
+    " --check-bounds={yes|no|auto*}\n"
+    "                            Emit bounds checks always, never, or respect @inbounds declarations\n"
 #ifdef USE_POLLY
-    " --polly={yes|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
+    " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif
-    " --math-mode={ieee,fast}   Disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)\n\n"
 
     // instrumentation options
-    " --code-coverage={none|user|all}, --code-coverage\n"
-    "                           Count executions of source lines (omitting setting is equivalent to \"user\")\n"
+    " --code-coverage[={none*|user|all}]\n"
+    "                            Count executions of source lines (omitting setting is equivalent to `user`)\n"
+    " --code-coverage=@<path>\n"
+    "                            Count executions but only in files that fall under the given file path/directory.\n"
+    "                            The `@` prefix is required to select this option. A `@` with no path will track the\n"
+    "                            current directory.\n"
+
     " --code-coverage=tracefile.info\n"
-    "                           Append coverage information to the LCOV tracefile (filename supports format tokens).\n"
+    "                            Append coverage information to the LCOV tracefile (filename supports format tokens)\n"
 // TODO: These TOKENS are defined in `runtime_ccall.cpp`. A more verbose `--help` should include that list here.
-    " --track-allocation={none|user|all}, --track-allocation\n"
-    "                           Count bytes allocated by each source line (omitting setting is equivalent to \"user\")\n"
-    " --bug-report=KIND         Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
-    "                           expressions. It first tries to use BugReporting.jl installed in current environment and\n"
-    "                           fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
-    "                           --bug-report=help.\n\n"
+    " --track-allocation[={none*|user|all}]\n"
+    "                            Count bytes allocated by each source line (omitting setting is equivalent to `user`)\n"
+    " --track-allocation=@<path>\n"
+    "                            Count bytes but only in files that fall under the given file path/directory.\n"
+    "                            The `@` prefix is required to select this option. A `@` with no path will track the\n"
+    "                            current directory.\n"
+    " --bug-report=KIND          Launch a bug report session. It can be used to start a REPL, run a script, or evaluate\n"
+    "                            expressions. It first tries to use BugReporting.jl installed in current environment and\n"
+    "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
+    "                            --bug-report=help.\n\n"
+
+    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than that value.\n"
+    "                            The memory hint might be specified in megabytes(500M) or gigabytes(1G)\n\n"
 ;
 
 static const char opts_hidden[]  =
+    "Switches (a '*' marks the default value, if applicable):\n\n"
     // code generation options
-    " --compile={yes|no|all|min}Enable or disable JIT compiler, or request exhaustive or minimal compilation\n"
+    " --compile={yes*|no|all|min}\n"
+    "                          Enable or disable JIT compiler, or request exhaustive or minimal compilation\n\n"
 
     // compiler output options
-    " --output-o name           Generate an object file (including system image data)\n"
-    " --output-ji name          Generate a system image data file (.ji)\n"
+    " --output-o <name>        Generate an object file (including system image data)\n"
+    " --output-ji <name>       Generate a system image data file (.ji)\n"
+    " --strip-metadata         Remove docstrings and source location info from system image\n"
+    " --strip-ir               Remove IR (intermediate representation) of compiled functions\n\n"
 
     // compiler debugging (see the devdocs for tips on using these options)
-    " --output-unopt-bc name    Generate unoptimized LLVM bitcode (.bc)\n"
-    " --output-bc name          Generate LLVM bitcode (.bc)\n"
-    " --output-asm name         Generate an assembly file (.s)\n"
-    " --output-incremental=no   Generate an incremental output file (rather than complete)\n"
+    " --output-unopt-bc <name> Generate unoptimized LLVM bitcode (.bc)\n"
+    " --output-bc <name>       Generate LLVM bitcode (.bc)\n"
+    " --output-asm <name>      Generate an assembly file (.s)\n"
+    " --output-incremental={yes|no*}\n"
+    "                          Generate an incremental output file (rather than complete)\n"
     " --trace-compile={stderr,name}\n"
-    "                           Print precompile statements for methods compiled during execution or save to a path\n\n"
-    " --image-codegen           Force generate code in imaging mode\n"
+    "                          Print precompile statements for methods compiled during execution or save to a path\n"
+    " --image-codegen          Force generate code in imaging mode\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -212,12 +244,15 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_bug_report,
            opt_image_codegen,
            opt_rr_detach,
+           opt_strip_metadata,
+           opt_strip_ir,
+           opt_heap_size_hint,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
         // exposed command line options
         // NOTE: This set of required arguments need to be kept in sync
-        // with the required arguments defined in base/client.jl `process_options()`
+        // with the required arguments defined in base/options.jl `struct JLOptions`
         { "version",         no_argument,       0, 'v' },
         { "help",            no_argument,       0, 'h' },
         { "help-hidden",     no_argument,       0, opt_help_hidden },
@@ -230,7 +265,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "bug-report",      required_argument, 0, opt_bug_report },
         { "sysimage",        required_argument, 0, 'J' },
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
-        { "compiled-modules",    required_argument, 0, opt_compiled_modules },
+        { "compiled-modules",required_argument, 0, opt_compiled_modules },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
         { "threads",         required_argument, 0, 't' },
@@ -265,6 +300,9 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "lisp",            no_argument,       0, 1 },
         { "image-codegen",   no_argument,       0, opt_image_codegen },
         { "rr-detach",       no_argument,       0, opt_rr_detach },
+        { "strip-metadata",  no_argument,       0, opt_strip_metadata },
+        { "strip-ir",        no_argument,       0, opt_strip_ir },
+        { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { 0, 0, 0, 0 }
     };
 
@@ -277,17 +315,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     const char **cmds = NULL;
     int codecov = JL_LOG_NONE;
     int malloclog = JL_LOG_NONE;
-    // getopt handles argument parsing up to -- delineator
     int argc = *argcp;
     char **argv = *argvp;
-    if (argc > 0) {
-        for (int i = 0; i < argc; i++) {
-            if (!strcmp(argv[i], "--")) {
-                argc = i;
-                break;
-            }
-        }
-    }
     char *endptr;
     opterr = 0; // suppress getopt warning messages
     while (1) {
@@ -420,24 +449,54 @@ restart_switch:
             break;
         case 't': // threads
             errno = 0;
-            if (!strcmp(optarg,"auto")) {
+            jl_options.nthreadpools = 1;
+            long nthreads = -1, nthreadsi = 0;
+            if (!strncmp(optarg, "auto", 4)) {
                 jl_options.nthreads = -1;
+                if (optarg[4] == ',') {
+                    if (!strncmp(&optarg[5], "auto", 4))
+                        nthreadsi = 1;
+                    else {
+                        errno = 0;
+                        nthreadsi = strtol(&optarg[5], &endptr, 10);
+                        if (errno != 0 || endptr == &optarg[5] || *endptr != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=auto,<m>; m must be an integer >= 1");
+                    }
+                    jl_options.nthreadpools++;
+                }
             }
             else {
-                long nthreads = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *endptr != 0 || nthreads < 1 || nthreads >= INT_MAX)
-                    jl_errorf("julia: -t,--threads=<n> must be an integer >= 1");
-                jl_options.nthreads = (int)nthreads;
+                nthreads = strtol(optarg, &endptr, 10);
+                if (errno != 0 || optarg == endptr || nthreads < 1 || nthreads >= INT16_MAX)
+                    jl_errorf("julia: -t,--threads=<n>[,auto|<m>]; n must be an integer >= 1");
+                if (*endptr == ',') {
+                    if (!strncmp(&endptr[1], "auto", 4))
+                        nthreadsi = 1;
+                    else {
+                        errno = 0;
+                        char *endptri;
+                        nthreadsi = strtol(&endptr[1], &endptri, 10);
+                        if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=<n>,<m>; n and m must be integers >= 1");
+                    }
+                    jl_options.nthreadpools++;
+                }
+                jl_options.nthreads = nthreads + nthreadsi;
             }
+            int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
+            ntpp[0] = (int16_t)nthreads;
+            if (jl_options.nthreadpools == 2)
+                ntpp[1] = (int16_t)nthreadsi;
+            jl_options.nthreads_per_pool = ntpp;
             break;
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_threads();
+                jl_options.nprocs = jl_effective_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);
-                if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT_MAX)
+                if (errno != 0 || optarg == endptr || *endptr != 0 || nprocs < 1 || nprocs >= INT16_MAX)
                     jl_errorf("julia: -p,--procs=<n> must be an integer >= 1");
                 jl_options.nprocs = (int)nprocs;
             }
@@ -502,6 +561,10 @@ restart_switch:
                         codecov = JL_LOG_ALL;
                     jl_options.output_code_coverage = optarg;
                 }
+                else if (!strncmp(optarg, "@", 1)) {
+                    codecov = JL_LOG_PATH;
+                    jl_options.tracked_path = optarg + 1; // skip `@`
+                }
                 else
                     jl_errorf("julia: invalid argument to --code-coverage (%s)", optarg);
                 break;
@@ -518,6 +581,10 @@ restart_switch:
                     malloclog = JL_LOG_ALL;
                 else if (!strcmp(optarg,"none"))
                     malloclog = JL_LOG_NONE;
+                else if (!strncmp(optarg, "@", 1)) {
+                    malloclog = JL_LOG_PATH;
+                    jl_options.tracked_path = optarg + 1; // skip `@`
+                }
                 else
                     jl_errorf("julia: invalid argument to --track-allocation (%s)", optarg);
                 break;
@@ -656,7 +723,7 @@ restart_switch:
             if (!strcmp(optarg,"ieee"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_OFF;
             else if (!strcmp(optarg,"fast"))
-                jl_options.fast_math = JL_OPTIONS_FAST_MATH_ON;
+                jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else if (!strcmp(optarg,"user"))
                 jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
             else
@@ -688,6 +755,48 @@ restart_switch:
             break;
         case opt_rr_detach:
             jl_options.rr_detach = 1;
+            break;
+        case opt_strip_metadata:
+            jl_options.strip_metadata = 1;
+            break;
+        case opt_strip_ir:
+            jl_options.strip_ir = 1;
+            break;
+        case opt_heap_size_hint:
+            if (optarg != NULL) {
+                size_t endof = strlen(optarg);
+                long double value = 0.0;
+                if (sscanf(optarg, "%Lf", &value) == 1 && value > 1e-7) {
+                    char unit = optarg[endof - 1];
+                    uint64_t multiplier = 1ull;
+                    switch (unit) {
+                        case 'k':
+                        case 'K':
+                            multiplier <<= 10;
+                            break;
+                        case 'm':
+                        case 'M':
+                            multiplier <<= 20;
+                            break;
+                        case 'g':
+                        case 'G':
+                            multiplier <<= 30;
+                            break;
+                        case 't':
+                        case 'T':
+                            multiplier <<= 40;
+                            break;
+                        default:
+                            break;
+                    }
+                    jl_options.heap_size_hint = (uint64_t)(value * multiplier);
+
+                    jl_gc_set_max_memory(jl_options.heap_size_hint);
+                }
+            }
+            if (jl_options.heap_size_hint == 0)
+                jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
+
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

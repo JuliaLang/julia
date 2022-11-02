@@ -179,10 +179,8 @@ end
     @test_throws InexactError y * 3//4
     @test (1:1:5)*Second(5) === Second(5)*(1:1:5) === Second(5):Second(5):Second(25) === (1:5)*Second(5)
     @test collect(1:1:5)*Second(5) == Second(5)*collect(1:1:5) == (1:5)*Second(5)
-    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0
-    @test collect(Second(2):Second(2):Second(10))/Second(2) == 1:1:5
-    @test (Second(2):Second(2):Second(10)) / 2 === Second(1):Second(1):Second(5)
-    @test collect(Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5)
+    @test (Second(2):Second(2):Second(10))/Second(2) === 1.0:1.0:5.0 == collect(Second(2):Second(2):Second(10))/Second(2)
+    @test (Second(2):Second(2):Second(10)) / 2 == Second(1):Second(1):Second(5) == collect(Second(2):Second(2):Second(10)) / 2
     @test Dates.Year(4) / 2 == Dates.Year(2)
     @test Dates.Year(4) / 2f0 == Dates.Year(2)
     @test Dates.Year(4) / 0.5 == Dates.Year(8)
@@ -285,7 +283,7 @@ Beat(p::Period) = Beat(Dates.toms(p) ÷ 86400)
     Dates.toms(b::Beat) = Dates.value(b) * 86400
     Dates._units(b::Beat) = " beat" * (abs(Dates.value(b)) == 1 ? "" : "s")
     Base.promote_rule(::Type{Dates.Day}, ::Type{Beat}) = Dates.Millisecond
-    Base.convert(::Type{T}, b::Beat) where {T<:Dates.Millisecond} = T(Dates.toms(b))
+    Base.convert(::Type{T}, b::Beat) where {T<:Dates.Millisecond} = T(Dates.toms(b))::T
 
     @test Beat(1000) == Dates.Day(1)
     @test Beat(1) < Dates.Day(1)
@@ -533,4 +531,3 @@ end
 end
 
 end
-

@@ -56,14 +56,15 @@ bool use_sret(jl_datatype_t *dt, LLVMContext &ctx) override
     return true;
 }
 
-bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx) override
+bool needPassByRef(jl_datatype_t *dt, AttrBuilder &ab, LLVMContext &ctx, Type *Ty) override
 {
     nargs++;
     size_t size = jl_datatype_size(dt);
     if (win64_reg_size(size))
         return false;
-    if (nargs <= 4)
-        ab.addAttribute(Attribute::ByVal);
+    if (nargs <= 4) {
+        ab.addByValAttr(Ty);
+    }
     return true;
 }
 

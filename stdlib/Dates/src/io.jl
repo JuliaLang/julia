@@ -55,7 +55,7 @@ Base.show(io::IO, ::MIME"text/plain", t::Time) = print(io, t)
 Base.print(io::IO, t::Time) = print(io, string(t))
 
 function Base.show(io::IO, t::Time)
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, t)
     else
         values = [
@@ -150,7 +150,7 @@ struct Decimal3 end
     len = ii - i
     if len > 3
         ms, r = divrem(ms0, Int64(10) ^ (len - 3))
-        r == 0 || throw(InexactError(:convert, Decimal3, ms0))
+        r == 0 || return nothing
     else
         ms = ms0 * Int64(10) ^ (3 - len)
     end
@@ -332,6 +332,23 @@ const CONVERSION_TRANSLATIONS = IdDict{Type, Any}(
     Time => (Hour, Minute, Second, Millisecond, Microsecond, Nanosecond, AMPM),
 )
 
+# The `DateFormat(format, locale)` method just below consumes the following Regex.
+# Constructing this Regex is fairly expensive; doing so in the method itself can
+# consume half or better of `DateFormat(format, locale)`'s runtime. So instead we
+# construct and cache it outside the method body. Note, however, that when
+# `keys(CONVERSION_SPECIFIERS)` changes, the cached Regex must be updated accordingly;
+# hence the mutability (Ref-ness) of the cache, the helper method with which to populate
+# the cache, the cache of the hash of `keys(CONVERSION_SPECIFIERS)` (to facilitate checking
+# for changes), and the lock (to maintain consistency of these objects across threads when
+# threads simultaneously modify `CONVERSION_SPECIFIERS` and construct `DateFormat`s).
+function compute_dateformat_regex(conversion_specifiers)
+    letters = String(collect(keys(conversion_specifiers)))
+    return Regex("(?<!\\\\)([\\Q$letters\\E])\\1*")
+end
+const DATEFORMAT_REGEX_LOCK = ReentrantLock()
+const DATEFORMAT_REGEX_HASH = Ref(hash(keys(CONVERSION_SPECIFIERS)))
+const DATEFORMAT_REGEX_CACHE = Ref(compute_dateformat_regex(CONVERSION_SPECIFIERS))
+
 """
     DateFormat(format::AbstractString, locale="english") -> DateFormat
 
@@ -339,23 +356,23 @@ Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
 string:
 
-| Code       | Matches   | Comment                                                      |
-|:-----------|:----------|:-------------------------------------------------------------|
-| `y`        | 1996, 96  | Returns year of 1996, 0096                                   |
-| `Y`        | 1996, 96  | Returns year of 1996, 0096. Equivalent to `y`                |
-| `m`        | 1, 01     | Matches 1 or 2-digit months                                  |
-| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword |
-| `U`        | January   | Matches full month names according to the `locale` keyword   |
-| `d`        | 1, 01     | Matches 1 or 2-digit days                                    |
-| `H`        | 00        | Matches hours (24-hour clock)                                |
-| `I`        | 00        | For outputting hours with 12-hour clock                      |
-| `M`        | 00        | Matches minutes                                              |
-| `S`        | 00        | Matches seconds                                              |
-| `s`        | .500      | Matches milliseconds                                         |
-| `e`        | Mon, Tues | Matches abbreviated days of the week                         |
-| `E`        | Monday    | Matches full name days of the week                           |
-| `p`        | AM        | Matches AM/PM (case-insensitive)                             |
-| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                     |
+| Code       | Matches   | Comment                                                       |
+|:-----------|:----------|:--------------------------------------------------------------|
+| `Y`        | 1996, 96  | Returns year of 1996, 0096                                    |
+| `y`        | 1996, 96  | Same as `Y` on `parse` but discards excess digits on `format` |
+| `m`        | 1, 01     | Matches 1 or 2-digit months                                   |
+| `u`        | Jan       | Matches abbreviated months according to the `locale` keyword  |
+| `U`        | January   | Matches full month names according to the `locale` keyword    |
+| `d`        | 1, 01     | Matches 1 or 2-digit days                                     |
+| `H`        | 00        | Matches hours (24-hour clock)                                 |
+| `I`        | 00        | For outputting hours with 12-hour clock                       |
+| `M`        | 00        | Matches minutes                                               |
+| `S`        | 00        | Matches seconds                                               |
+| `s`        | .500      | Matches milliseconds                                          |
+| `e`        | Mon, Tues | Matches abbreviated days of the week                          |
+| `E`        | Monday    | Matches full name days of the week                            |
+| `p`        | AM        | Matches AM/PM (case-insensitive)                              |
+| `yyyymmdd` | 19960101  | Matches fixed-width year, month, and day                      |
 
 Characters not listed above are normally treated as delimiters between date and time slots.
 For example a `dt` string of "1996-01-15T00:00:00.0" would have a `format` string like
@@ -379,14 +396,24 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
     prev = ()
     prev_offset = 1
 
-    letters = String(collect(keys(CONVERSION_SPECIFIERS)))
-    for m in eachmatch(Regex("(?<!\\\\)([\\Q$letters\\E])\\1*"), f)
+    # To understand this block, please see the comments attached to the definitions of
+    # DATEFORMAT_REGEX_LOCK, DATEFORMAT_REGEX_HASH, and DATEFORMAT_REGEX_CACHE.
+    lock(DATEFORMAT_REGEX_LOCK)
+    try
+        dateformat_regex_hash = hash(keys(CONVERSION_SPECIFIERS))
+        if dateformat_regex_hash != DATEFORMAT_REGEX_HASH[]
+            DATEFORMAT_REGEX_HASH[] = dateformat_regex_hash
+            DATEFORMAT_REGEX_CACHE[] = compute_dateformat_regex(CONVERSION_SPECIFIERS)
+        end
+    finally
+        unlock(DATEFORMAT_REGEX_LOCK)
+    end
+
+    for m in eachmatch(DATEFORMAT_REGEX_CACHE[], f)
         tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
         if !isempty(prev)
             letter, width = prev
-            typ = CONVERSION_SPECIFIERS[letter]
-
             push!(tokens, DatePart{letter}(width, isempty(tran)))
         end
 
@@ -405,8 +432,6 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     if !isempty(prev)
         letter, width = prev
-        typ = CONVERSION_SPECIFIERS[letter]
-
         push!(tokens, DatePart{letter}(width, false))
     end
 

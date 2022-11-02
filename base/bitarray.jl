@@ -458,10 +458,11 @@ function unsafe_copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Arra
     return dest
 end
 
-copyto!(dest::BitArray, doffs::Integer, src::Array, soffs::Integer, n::Integer) =
+copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integer, n::Integer) =
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
-function _copyto_int!(dest::BitArray, doffs::Int, src::Array, soffs::Int, n::Int)
+function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
+    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
@@ -501,38 +502,40 @@ function Array{T,N}(B::BitArray{N}) where {T,N}
 end
 
 BitArray(A::AbstractArray{<:Any,N}) where {N} = BitArray{N}(A)
+
 function BitArray{N}(A::AbstractArray{T,N}) where N where T
     B = BitArray(undef, convert(Dims{N}, size(A)::Dims{N}))
-    Bc = B.chunks
-    l = length(B)
+    _checkaxs(axes(B), axes(A))
+    _copyto_bitarray!(B, A)
+    return B::BitArray{N}
+end
+
+function _copyto_bitarray!(B::BitArray, A::AbstractArray)
+    l = length(A)
     l == 0 && return B
-    ind = 1
+    l > length(B) && throw(BoundsError(B, length(B)+1))
+    Bc = B.chunks
+    nc = num_bit_chunks(l)
+    Ai = first(eachindex(A))
     @inbounds begin
-        for i = 1:length(Bc)-1
+        for i = 1:nc-1
             c = UInt64(0)
             for j = 0:63
-                c |= (UInt64(convert(Bool, A[ind])::Bool) << j)
-                ind += 1
+                c |= (UInt64(convert(Bool, A[Ai])::Bool) << j)
+                Ai = nextind(A, Ai)
             end
             Bc[i] = c
         end
         c = UInt64(0)
-        for j = 0:_mod64(l-1)
-            c |= (UInt64(convert(Bool, A[ind])::Bool) << j)
-            ind += 1
+        tail = _mod64(l - 1) + 1
+        for j = 0:tail-1
+            c |= (UInt64(convert(Bool, A[Ai])::Bool) << j)
+            Ai = nextind(A, Ai)
         end
-        Bc[end] = c
+        msk = _msk_end(tail)
+        Bc[nc] = (c & msk) | (Bc[nc] & ~msk)
     end
     return B
-end
-
-function BitArray{N}(A::Array{Bool,N}) where N
-    B = BitArray(undef, size(A))
-    Bc = B.chunks
-    l = length(B)
-    l == 0 && return B
-    copy_to_bitarray_chunks!(Bc, 1, A, 1, l)
-    return B::BitArray{N}
 end
 
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
@@ -574,7 +577,7 @@ julia> BitArray(x+y == 3 for x = 1:2 for y = 1:3)
 BitArray(itr) = gen_bitarray(IteratorSize(itr), itr)
 BitArray{N}(itr) where N = gen_bitarrayN(BitArray{N}, IteratorSize(itr), itr)
 
-convert(T::Type{<:BitArray}, a::AbstractArray) = a isa T ? a : T(a)
+convert(::Type{T}, a::AbstractArray) where {T<:BitArray} = a isa T ? a : T(a)::T
 
 # generic constructor from an iterable without compile-time info
 # (we pass start(itr) explicitly to avoid a type-instability with filters)
@@ -721,24 +724,25 @@ function _unsafe_setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     lx = length(X)
     last_chunk_len = _mod64(length(B)-1)+1
 
-    c = 1
+    Xi = first(eachindex(X))
+    lastXi = last(eachindex(X))
     for i = 1:lc
         @inbounds Imsk = Ic[i]
         @inbounds C = Bc[i]
         u = UInt64(1)
         for j = 1:(i < lc ? 64 : last_chunk_len)
             if Imsk & u != 0
-                lx < c && throw_setindex_mismatch(X, c)
-                @inbounds x = convert(Bool, X[c])
+                Xi > lastXi && throw_setindex_mismatch(X, count(I))
+                @inbounds x = convert(Bool, X[Xi])
                 C = ifelse(x, C | u, C & ~u)
-                c += 1
+                Xi = nextind(X, Xi)
             end
             u <<= 1
         end
         @inbounds Bc[i] = C
     end
-    if length(X) != c-1
-        throw_setindex_mismatch(X, c-1)
+    if Xi != nextind(X, lastXi)
+        throw_setindex_mismatch(X, count(I))
     end
     return B
 end
@@ -1775,26 +1779,42 @@ end
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
 function bit_map!(f::F, dest::BitArray, A::BitArray) where F
-    size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
+    length(A) <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of collection"))
     isempty(A) && return dest
     destc = dest.chunks
     Ac = A.chunks
-    for i = 1:(length(Ac)-1)
+    len_Ac = length(Ac)
+    for i = 1:(len_Ac-1)
         destc[i] = f(Ac[i])
     end
-    destc[end] = f(Ac[end]) & _msk_end(A)
+    # the last effected UInt64's original content
+    dest_last = destc[len_Ac]
+    _msk = _msk_end(A)
+    # first zero out the bits mask is going to change
+    destc[len_Ac] = (dest_last & (~_msk))
+    # then update bits by `or`ing with a masked RHS
+    destc[len_Ac] |= f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
-    size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
+    min_bitlen = min(length(A), length(B))
+    min_bitlen <= length(dest) || throw(DimensionMismatch("length of destination must be >= length of smallest input collection"))
     isempty(A) && return dest
+    isempty(B) && return dest
     destc = dest.chunks
     Ac = A.chunks
     Bc = B.chunks
-    for i = 1:(length(Ac)-1)
+    len_Ac = min(length(Ac), length(Bc))
+    for i = 1:len_Ac-1
         destc[i] = f(Ac[i], Bc[i])
     end
-    destc[end] = f(Ac[end], Bc[end]) & _msk_end(A)
+    # the last effected UInt64's original content
+    dest_last = destc[len_Ac]
+    _msk = _msk_end(min_bitlen)
+    # first zero out the bits mask is going to change
+    destc[len_Ac] = (dest_last & ~(_msk))
+    # then update bits by `or`ing with a masked RHS
+    destc[len_Ac] |= f(Ac[end], Bc[end]) & _msk
     dest
 end
 
@@ -1812,7 +1832,7 @@ function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
         length(B[j]) == height ||
-            throw(DimensionMismatch("dimensions must match"))
+            throw(DimensionMismatch("dimensions must match: $j-th argument has length $(length(B[j])), should have $height"))
     end
     M = BitMatrix(undef, height, length(B))
     for j = 1:length(B)
@@ -1845,7 +1865,7 @@ function hcat(A::Union{BitMatrix,BitVector}...)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
         size(Aj, 1) == nrows ||
-            throw(DimensionMismatch("row lengths must match"))
+            throw(DimensionMismatch("row lengths must match: $j-th element has first dim $(size(Aj, 1)), should have $nrows"))
     end
 
     B = BitMatrix(undef, nrows, ncols)
@@ -1871,7 +1891,7 @@ function vcat(A::BitMatrix...)
     ncols = size(A[1], 2)
     for j = 2:nargs
         size(A[j], 2) == ncols ||
-            throw(DimensionMismatch("column lengths must match"))
+        throw(DimensionMismatch("column lengths must match: $j-th element has second dim $(size(A[j], 2)), should have $ncols"))
     end
     B = BitMatrix(undef, nrows, ncols)
     Bc = B.chunks
@@ -1913,3 +1933,10 @@ function read!(s::IO, B::BitArray)
 end
 
 sizeof(B::BitArray) = sizeof(B.chunks)
+
+function _split_rest(a::Union{Vector, BitVector}, n::Int)
+    _check_length_split_rest(length(a), n)
+    last_n = a[end-n+1:end]
+    resize!(a, length(a) - n)
+    return a, last_n
+end

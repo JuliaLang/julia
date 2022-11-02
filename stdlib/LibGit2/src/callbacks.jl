@@ -91,12 +91,15 @@ function authenticate_ssh(libgit2credptr::Ptr{Ptr{Cvoid}}, p::CredentialPayload,
             cred.user = unsafe_string(username_ptr)
         end
 
-        cred.prvkey = Base.get(ENV, "SSH_KEY_PATH") do
-            default = joinpath(homedir(), ".ssh", "id_rsa")
-            if isempty(cred.prvkey) && isfile(default)
-                default
-            else
-                cred.prvkey
+        if haskey(ENV, "SSH_KEY_PATH")
+            cred.prvkey = ENV["SSH_KEY_PATH"]
+        elseif isempty(cred.prvkey)
+            for keytype in ("rsa", "ecdsa")
+                private_key_file = joinpath(homedir(), ".ssh", "id_$keytype")
+                if isfile(private_key_file)
+                    cred.prvkey = private_key_file
+                    break
+                end
             end
         end
 
@@ -366,8 +369,8 @@ struct CertHostKey
     sha1    :: NTuple{20,UInt8}
     sha256  :: NTuple{32,UInt8}
     type    :: Cint
+    hostkey :: Ptr{Cchar}
     len     :: Csize_t
-    data    :: NTuple{1024,UInt8}
 end
 
 function verify_host_error(message::AbstractString)
@@ -433,14 +436,14 @@ function ssh_knownhost_check(
     host  :: AbstractString,
     cert  :: CertHostKey,
 )
-    key = collect(cert.data)[1:cert.len]
+    key = unsafe_wrap(Array, cert.hostkey, cert.len)
     return ssh_knownhost_check(files, host, key)
 end
 
 function ssh_knownhost_check(
     files :: AbstractVector{<:AbstractString},
     host  :: AbstractString,
-    key   :: Vector{UInt8},
+    key   :: Vector{Cchar},
 )
     if (m = match(r"^(.+):(\d+)$", host)) !== nothing
         host = m.captures[1]
@@ -476,7 +479,7 @@ function ssh_knownhost_check(
             hosts  :: Ptr{Cvoid},
             host   :: Cstring,
             port   :: Cint,
-            key    :: Ptr{UInt8},
+            key    :: Ptr{Cchar},
             len    :: Csize_t,
             mask   :: Cint,
             C_NULL :: Ptr{Ptr{KnownHost}},
@@ -499,6 +502,11 @@ function ssh_knownhost_check(
     return Consts.LIBSSH2_KNOWNHOST_CHECK_NOTFOUND
 end
 
+function trace_callback(level::Cint, msg::Cstring)::Cint
+    println(stderr, "[$level]: $(unsafe_string(msg))")
+    return 0
+end
+
 "C function pointer for `mirror_callback`"
 mirror_cb() = @cfunction(mirror_callback, Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring, Cstring, Ptr{Cvoid}))
 "C function pointer for `credentials_callback`"
@@ -507,3 +515,5 @@ credentials_cb() = @cfunction(credentials_callback, Cint, (Ptr{Ptr{Cvoid}}, Cstr
 fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, Cstring, Ptr{GitHash}, Cuint, Any))
 "C function pointer for `certificate_callback`"
 certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{CertHostKey}, Cint, Ptr{Cchar}, Ptr{Cvoid}))
+"C function pointer for `trace_callback`"
+trace_cb() = @cfunction(trace_callback, Cint, (Cint, Cstring))

@@ -1,0 +1,7 @@
+# .git-blame-ignore-revs
+# whitespace: end text files with single newlines
+3903fa54a638d4546ef50e56f91f0705a8ab11ef
+# whitespace: use only UNIX line endings (\n)
+e66bfa5dd32f93e76068c00ad882c1fc839c5af8
+# whitespace: replace non-breaking space => space
+100a741e7ab38c91d48cc929bb001afc8e09261f

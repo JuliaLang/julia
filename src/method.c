@@ -17,9 +17,10 @@ extern "C" {
 
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
+jl_methtable_t *jl_kwcall_mt;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci);
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 {
@@ -51,11 +52,14 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         return jl_module_globalref(module, (jl_sym_t*)expr);
     }
     else if (jl_is_returnnode(expr)) {
-        jl_value_t *val = resolve_globals(jl_returnnode_value(expr), module, sparam_vals, binding_effects, eager_resolve);
-        if (val != jl_returnnode_value(expr)) {
-            JL_GC_PUSH1(&val);
-            expr = jl_new_struct(jl_returnnode_type, val);
-            JL_GC_POP();
+        jl_value_t *retval = jl_returnnode_value(expr);
+        if (retval) {
+            jl_value_t *val = resolve_globals(retval, module, sparam_vals, binding_effects, eager_resolve);
+            if (val != retval) {
+                JL_GC_PUSH1(&val);
+                expr = jl_new_struct(jl_returnnode_type, val);
+                JL_GC_POP();
+            }
         }
         return expr;
     }
@@ -76,7 +80,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         if (e->head == jl_global_sym && binding_effects) {
             // execute the side-effects of "global x" decl immediately:
             // creates uninitialized mutable binding in module for each global
-            jl_toplevel_eval_flex(module, expr, 0, 1);
+            jl_eval_global_expr(module, e, 1);
             expr = jl_nothing;
         }
         if (jl_is_toplevel_only_expr(expr) || e->head == jl_const_sym ||
@@ -91,17 +95,19 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
         else {
             size_t i = 0, nargs = jl_array_len(e->args);
             if (e->head == jl_opaque_closure_method_sym) {
-                if (nargs != 4) {
+                if (nargs != 5) {
                     jl_error("opaque_closure_method: invalid syntax");
                 }
                 jl_value_t *name = jl_exprarg(e, 0);
                 jl_value_t *nargs = jl_exprarg(e, 1);
-                jl_value_t *functionloc = jl_exprarg(e, 2);
-                jl_value_t *ci = jl_exprarg(e, 3);
+                int isva = jl_exprarg(e, 2) == jl_true;
+                jl_value_t *functionloc = jl_exprarg(e, 3);
+                jl_value_t *ci = jl_exprarg(e, 4);
                 if (!jl_is_code_info(ci)) {
                     jl_error("opaque_closure_method: lambda should be a CodeInfo");
                 }
-                return (jl_value_t*)jl_make_opaque_closure_method(module, name, nargs, functionloc, (jl_code_info_t*)ci);
+                jl_method_t *m = jl_make_opaque_closure_method(module, name, jl_unbox_long(nargs), functionloc, (jl_code_info_t*)ci, isva);
+                return (jl_value_t*)m;
             }
             if (e->head == jl_cfunction_sym) {
                 JL_NARGS(cfunction method definition, 5, 5); // (type, func, rt, at, cc)
@@ -146,7 +152,7 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 return expr;
             }
             if (e->head == jl_foreigncall_sym) {
-                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, cc, narg)
+                JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
                 jl_value_t *rt = jl_exprarg(e, 1);
                 jl_value_t *at = jl_exprarg(e, 2);
                 if (!jl_is_type(rt)) {
@@ -176,7 +182,15 @@ static jl_value_t *resolve_globals(jl_value_t *expr, jl_module_t *module, jl_sve
                 check_c_types("ccall method definition", rt, at);
                 JL_TYPECHK(ccall method definition, long, jl_exprarg(e, 3));
                 JL_TYPECHK(ccall method definition, quotenode, jl_exprarg(e, 4));
-                JL_TYPECHK(ccall method definition, symbol, *(jl_value_t**)jl_exprarg(e, 4));
+                jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
+                if (!jl_is_symbol(cc)) {
+                    JL_TYPECHK(ccall method definition, tuple, cc);
+                    if (jl_nfields(cc) != 2) {
+                        jl_error("In ccall calling convention, expected two argument tuple or symbol.");
+                    }
+                    JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
+                    JL_TYPECHK(ccall method definition, uint8, jl_get_nth_field(cc, 1));
+                }
                 jl_exprargset(e, 0, resolve_globals(jl_exprarg(e, 0), module, sparam_vals, binding_effects, 1));
                 i++;
             }
@@ -301,13 +315,24 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
                 if (ma == (jl_value_t*)jl_pure_sym)
                     li->pure = 1;
                 else if (ma == (jl_value_t*)jl_inline_sym)
-                    li->inlineable = 1;
+                    li->inlining_cost = 0x10; // This corresponds to MIN_INLINE_COST
                 else if (ma == (jl_value_t*)jl_propagate_inbounds_sym)
                     li->propagate_inbounds = 1;
                 else if (ma == (jl_value_t*)jl_aggressive_constprop_sym)
                     li->constprop = 1;
                 else if (ma == (jl_value_t*)jl_no_constprop_sym)
                     li->constprop = 2;
+                else if (jl_is_expr(ma) && ((jl_expr_t*)ma)->head == jl_purity_sym) {
+                    if (jl_expr_nargs(ma) == 7) {
+                        li->purity.overrides.ipo_consistent = jl_unbox_bool(jl_exprarg(ma, 0));
+                        li->purity.overrides.ipo_effect_free = jl_unbox_bool(jl_exprarg(ma, 1));
+                        li->purity.overrides.ipo_nothrow = jl_unbox_bool(jl_exprarg(ma, 2));
+                        li->purity.overrides.ipo_terminates_globally = jl_unbox_bool(jl_exprarg(ma, 3));
+                        li->purity.overrides.ipo_terminates_locally = jl_unbox_bool(jl_exprarg(ma, 4));
+                        li->purity.overrides.ipo_notaskstate = jl_unbox_bool(jl_exprarg(ma, 5));
+                        li->purity.overrides.ipo_inaccessiblememonly = jl_unbox_bool(jl_exprarg(ma, 6));
+                    }
+                }
                 else
                     jl_array_ptr_set(meta, ins++, ma);
             }
@@ -353,7 +378,9 @@ static void jl_code_info_set_ir(jl_code_info_t *li, jl_expr_t *ir)
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym) {
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
         }
-
+        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym)) {
+            li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint8_set(li->ssaflags, j, 0);
         else {
@@ -420,6 +447,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->callbacks = NULL;
     jl_atomic_store_relaxed(&li->cache, NULL);
     li->inInference = 0;
+    li->precompiled = 0;
     return li;
 }
 
@@ -443,11 +471,13 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->min_world = 1;
     src->max_world = ~(size_t)0;
     src->inferred = 0;
-    src->inlineable = 0;
+    src->inlining_cost = UINT16_MAX;
     src->propagate_inbounds = 0;
     src->pure = 0;
+    src->has_fcall = 0;
     src->edges = jl_nothing;
     src->constprop = 0;
+    src->purity.bits = 0;
     return src;
 }
 
@@ -474,7 +504,7 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
-        jl_value_t *ln_name = (jl_is_long(inl) && jl_unbox_long(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
+        jl_value_t *ln_name = (jl_is_int32(inl) && jl_unbox_int32(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
         rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
@@ -635,6 +665,7 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
     m->called = called;
     m->pure = src->pure;
     m->constprop = src->constprop;
+    m->purity.bits = src->purity.bits;
     jl_add_function_name_to_lineinfo(src, (jl_value_t*)m->name);
 
     jl_array_t *copy = NULL;
@@ -675,6 +706,24 @@ static void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             else if (nargs >= 1 && jl_exprarg(st, 0) == (jl_value_t*)jl_specialize_sym) {
                 if (nargs == 1) // bare `@specialize` is special: it causes specialization on all args
                     m->nospecialize = 0;
+                for (j = 1; j < nargs; j++) {
+                    jl_value_t *aj = jl_exprarg(st, j);
+                    if (!jl_is_slot(aj) && !jl_is_argument(aj))
+                        continue;
+                    int sn = (int)jl_slot_number(aj) - 2;
+                    if (sn < 0) // @specialize on self is valid but currently ignored
+                        continue;
+                    if (sn > (m->nargs - 2)) {
+                        jl_error("@specialize annotation applied to a non-argument");
+                    }
+                    if (sn >= sizeof(m->nospecialize) * 8) {
+                        jl_printf(JL_STDERR,
+                                  "WARNING: @specialize annotation only supported on the first %d arguments.\n",
+                                  (int)(sizeof(m->nospecialize) * 8));
+                        continue;
+                    }
+                    m->nospecialize &= ~(1 << sn);
+                }
                 st = jl_nothing;
             }
             else if (nargs == 2 && jl_exprarg(st, 0) == (jl_value_t*)jl_generated_sym) {
@@ -731,6 +780,8 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->sig = NULL;
     m->slot_syms = NULL;
     m->roots = NULL;
+    m->root_blocks = NULL;
+    m->nroots_sysimg = 0;
     m->ccallable = NULL;
     m->module = module;
     m->external_mt = NULL;
@@ -743,7 +794,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->called = 0xff;
     m->nospecialize = module->nospecialize;
     m->nkw = 0;
-    jl_atomic_store_relaxed(&m->invokes, NULL);
+    jl_atomic_store_relaxed(&m->invokes, jl_nothing);
     m->recursion_relation = NULL;
     m->isva = 0;
     m->nargs = 0;
@@ -755,17 +806,59 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     return m;
 }
 
+// backedges ------------------------------------------------------------------
+
+// Use this in a `while` loop to iterate over the backedges in a MethodInstance.
+// `*invokesig` will be NULL if the call was made by ordinary dispatch, otherwise
+// it will be the signature supplied in an `invoke` call.
+// If you don't need `invokesig`, you can set it to NULL on input.
+// Initialize iteration with `i = 0`. Returns `i` for the next backedge to be extracted.
+int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_method_instance_t **caller) JL_NOTSAFEPOINT
+{
+    jl_value_t *item = jl_array_ptr_ref(list, i);
+    if (jl_is_method_instance(item)) {
+        // Not an `invoke` call, it's just the MethodInstance
+        if (invokesig != NULL)
+            *invokesig = NULL;
+        *caller = (jl_method_instance_t*)item;
+        return i + 1;
+    }
+    assert(jl_is_type(item));
+    // An `invoke` call, it's a (sig, MethodInstance) pair
+    if (invokesig != NULL)
+        *invokesig = item;
+    *caller = (jl_method_instance_t*)jl_array_ptr_ref(list, i + 1);
+    if (*caller)
+        assert(jl_is_method_instance(*caller));
+    return i + 2;
+}
+
+int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, invokesig);
+    jl_array_ptr_set(list, i++, caller);
+    return i;
+}
+
+void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_method_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_1d_push(list, invokesig);
+    jl_array_ptr_1d_push(list, (jl_value_t*)caller);
+    return;
+}
+
 // method definition ----------------------------------------------------------
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
-    jl_value_t *nargs, jl_value_t *functionloc, jl_code_info_t *ci)
+    int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva)
 {
     jl_method_t *m = jl_new_method_uninit(module);
     JL_GC_PUSH1(&m);
     // TODO: Maybe have a signature of (parent method, stmt#)?
     m->sig = (jl_value_t*)jl_anytuple_type;
-    // Unused for opaque closures. va-ness is determined on construction
-    m->isva = 0;
+    m->isva = isva;
     m->is_for_opaque_closure = 1;
     if (name == jl_nothing) {
         m->name = jl_symbol("opaque closure");
@@ -773,7 +866,7 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
         assert(jl_is_symbol(name));
         m->name = (jl_sym_t*)name;
     }
-    m->nargs = jl_unbox_long(nargs) + 1;
+    m->nargs = nargs + 1;
     assert(jl_is_linenode(functionloc));
     jl_value_t *file = jl_linenode_file(functionloc);
     m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
@@ -810,30 +903,30 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
     return gf;
 }
 
-static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
+static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype(a)) {
-        if (got_tuple1) {
+        if (n == 0) {
             jl_methtable_t *mt = ((jl_datatype_t*)a)->name->mt;
             if (mt != NULL)
                 return mt;
         }
         if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) >= 1)
-                return first_methtable(jl_tparam0(a), 1);
+            if (jl_nparams(a) >= n)
+                return nth_methtable(jl_tparam(a, n - 1), 0);
         }
     }
     else if (jl_is_typevar(a)) {
-        return first_methtable(((jl_tvar_t*)a)->ub, got_tuple1);
+        return nth_methtable(((jl_tvar_t*)a)->ub, n);
     }
     else if (jl_is_unionall(a)) {
-        return first_methtable(((jl_unionall_t*)a)->body, got_tuple1);
+        return nth_methtable(((jl_unionall_t*)a)->body, n);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_methtable_t *m1 = first_methtable(u->a, got_tuple1);
+        jl_methtable_t *m1 = nth_methtable(u->a, n);
         if ((jl_value_t*)m1 != jl_nothing) {
-            jl_methtable_t *m2 = first_methtable(u->b, got_tuple1);
+            jl_methtable_t *m2 = nth_methtable(u->b, n);
             if (m1 == m2)
                 return m1;
         }
@@ -844,7 +937,15 @@ static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got
 // get the MethodTable for dispatch, or `nothing` if cannot be determined
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_methtable(argtypes, 0);
+    return nth_methtable(argtypes, 1);
+}
+
+jl_methtable_t *jl_kwmethod_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_methtable_t *kwmt = nth_methtable(argtypes, 3);
+    if ((jl_value_t*)kwmt == jl_nothing)
+        return NULL;
+    return kwmt;
 }
 
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -855,7 +956,7 @@ JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGAT
 // get the MethodTable implied by a single given type, or `nothing`
 JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_methtable(argt, 1);
+    return nth_methtable(argt, 0);
 }
 
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
@@ -883,12 +984,6 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     size_t i, na = jl_svec_len(atypes);
 
     argtype = (jl_value_t*)jl_apply_tuple_type(atypes);
-    for (i = jl_svec_len(tvars); i > 0; i--) {
-        jl_value_t *tv = jl_svecref(tvars, i - 1);
-        if (!jl_is_typevar(tv))
-            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
-        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
-    }
 
     jl_methtable_t *external_mt = mt;
     if (!mt)
@@ -898,12 +993,20 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     if (mt->frozen)
         jl_error("cannot add methods to a builtin function");
 
+    assert(jl_is_linenode(functionloc));
+    jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
+    if (!jl_is_symbol(file))
+        file = jl_empty_sym;
+    int32_t line = jl_linenode_line(functionloc);
+
     // TODO: derive our debug name from the syntax instead of the type
-    name = mt->name;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || external_mt) {
+    jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(argtype) : mt;
+    // if we have a kwcall, try to derive the name from the callee argument method table
+    name = (kwmt ? kwmt : mt)->name;
+    if (kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || external_mt) {
         // our value for `name` is bad, try to guess what the syntax might have had,
         // like `jl_static_show_func_sig` might have come up with
-        jl_datatype_t *dt = jl_first_argument_datatype(argtype);
+        jl_datatype_t *dt = jl_nth_argument_datatype(argtype, mt == jl_kwcall_mt ? 3 : 1);
         if (dt != NULL) {
             name = dt->name->name;
             if (jl_is_type_type((jl_value_t*)dt)) {
@@ -914,6 +1017,29 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
             }
         }
     }
+
+    for (i = jl_svec_len(tvars); i > 0; i--) {
+        jl_value_t *tv = jl_svecref(tvars, i - 1);
+        if (!jl_is_typevar(tv))
+            jl_type_error("method signature", (jl_value_t*)jl_tvar_type, tv);
+        if (!jl_has_typevar(argtype, (jl_tvar_t*)tv)) // deprecate this to an error in v2
+            jl_printf(JL_STDERR,
+                      "WARNING: method definition for %s at %s:%d declares type variable %s but does not use it.\n",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line,
+                      jl_symbol_name(((jl_tvar_t*)tv)->name));
+        argtype = jl_new_struct(jl_unionall_type, tv, argtype);
+    }
+    if (jl_has_free_typevars(argtype)) {
+        jl_exceptionf(jl_argumenterror_type,
+                      "method definition for %s at %s:%d has free type variables",
+                      jl_symbol_name(name),
+                      jl_symbol_name(file),
+                      line);
+    }
+
+
     if (!jl_is_code_info(f)) {
         // this occurs when there is a closure being added to an out-of-scope function
         // the user should only do this at the toplevel
@@ -928,19 +1054,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     m->name = name;
     m->isva = isva;
     m->nargs = nargs;
-    assert(jl_is_linenode(functionloc));
-    jl_value_t *file = jl_linenode_file(functionloc);
-    m->file = jl_is_symbol(file) ? (jl_sym_t*)file : jl_empty_sym;
-    m->line = jl_linenode_line(functionloc);
+    m->file = file;
+    m->line = line;
     jl_method_set_source(m, f);
-
-    if (jl_has_free_typevars(argtype)) {
-        jl_exceptionf(jl_argumenterror_type,
-                      "method definition for %s at %s:%d has free type variables",
-                      jl_symbol_name(name),
-                      jl_symbol_name(m->file),
-                      m->line);
-    }
 
     for (i = 0; i < na; i++) {
         jl_value_t *elt = jl_svecref(atypes, i);
@@ -951,22 +1067,22 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                               "invalid type for argument number %d in method definition for %s at %s:%d",
                               i,
                               jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
+                              jl_symbol_name(file),
+                              line);
             else
                 jl_exceptionf(jl_argumenterror_type,
                               "invalid type for argument %s in method definition for %s at %s:%d",
                               jl_symbol_name(argname),
                               jl_symbol_name(name),
-                              jl_symbol_name(m->file),
-                              m->line);
+                              jl_symbol_name(file),
+                              line);
         }
         if (jl_is_vararg(elt) && i < na-1)
             jl_exceptionf(jl_argumenterror_type,
                           "Vararg on non-final argument in method definition for %s at %s:%d",
                           jl_symbol_name(name),
-                          jl_symbol_name(m->file),
-                          m->line);
+                          jl_symbol_name(file),
+                          line);
     }
 
 #ifdef RECORD_METHOD_ORDER
@@ -985,6 +1101,159 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_POP();
 
     return m;
+}
+
+// root blocks
+
+// This section handles method roots. Roots are GC-preserved items needed to
+// represent lowered, type-inferred, and/or compiled code. These items are
+// stored in a flat list (`m.roots`), and during serialization and
+// deserialization of code we replace C-pointers to these items with a
+// relocatable reference. We use a bipartite reference, `(key, index)` pair,
+// where `key` identifies the module that added the root and `index` numbers
+// just those roots with the same `key`.
+//
+// During precompilation (serialization), we save roots that were added to
+// methods that are tagged with this package's module-key, even for "external"
+// methods not owned by a module currently being precompiled. During
+// deserialization, we load the new roots and append them to the method. When
+// code is deserialized (see ircode.c), we replace the bipartite reference with
+// the pointer to the memory address in the current session. The bipartite
+// reference allows us to cache both roots and references in precompilation .ji
+// files using a naming scheme that is independent of which packages are loaded
+// in arbitrary order.
+//
+// To track the module-of-origin for each root, methods also have a
+// `root_blocks` field that uses run-length encoding (RLE) storing `key` and the
+// (absolute) integer index within `roots` at which a block of roots with that
+// key begins. This makes it possible to look up an individual `(key, index)`
+// pair fairly efficiently. A given `key` may possess more than one block; the
+// `index` continues to increment regardless of block boundaries.
+//
+// Roots with `key = 0` are considered to be of unknown origin, and
+// CodeInstances referencing such roots will remain unserializable unless all
+// such roots were added at the time of system image creation. To track this
+// additional data, we use two fields:
+//
+// - methods have an `nroots_sysimg` field to count the number of roots defined
+//   at the time of writing the system image (such occur first in the list of
+//   roots). These are the cases with `key = 0` that do not prevent
+//   serialization.
+// - CodeInstances have a `relocatability` field which when 1 indicates that
+//   every root is "safe," meaning it was either added at sysimg creation or is
+//   tagged with a non-zero `key`. Even a single unsafe root will cause this to
+//   have value 0.
+
+// Get the key of the current (final) block of roots
+static uint64_t current_root_id(jl_array_t *root_blocks)
+{
+    if (!root_blocks)
+        return 0;
+    assert(jl_is_array(root_blocks));
+    size_t nx2 = jl_array_len(root_blocks);
+    if (nx2 == 0)
+        return 0;
+    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    return blocks[nx2-2];
+}
+
+// Add a new block of `len` roots with key `modid` (module id)
+static void add_root_block(jl_array_t *root_blocks, uint64_t modid, size_t len)
+{
+    assert(jl_is_array(root_blocks));
+    jl_array_grow_end(root_blocks, 2);
+    uint64_t *blocks = (uint64_t*)jl_array_data(root_blocks);
+    int nx2 = jl_array_len(root_blocks);
+    blocks[nx2-2] = modid;
+    blocks[nx2-1] = len;
+}
+
+// Allocate storage for roots
+static void prepare_method_for_roots(jl_method_t *m, uint64_t modid)
+{
+    if (!m->roots) {
+        m->roots = jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->roots);
+    }
+    if (!m->root_blocks && modid != 0) {
+        m->root_blocks = jl_alloc_array_1d(jl_array_uint64_type, 0);
+        jl_gc_wb(m, m->root_blocks);
+    }
+}
+
+// Add a single root with owner `mod` to a method
+JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root)
+{
+    JL_GC_PUSH2(&m, &root);
+    uint64_t modid = 0;
+    if (mod) {
+        assert(jl_is_module(mod));
+        modid = mod->build_id;
+    }
+    assert(jl_is_method(m));
+    prepare_method_for_roots(m, modid);
+    if (current_root_id(m->root_blocks) != modid)
+        add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    jl_array_ptr_1d_push(m->roots, root);
+    JL_GC_POP();
+}
+
+// Add a list of roots with key `modid` to a method
+void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
+{
+    JL_GC_PUSH2(&m, &roots);
+    assert(jl_is_method(m));
+    assert(jl_is_array(roots));
+    prepare_method_for_roots(m, modid);
+    add_root_block(m->root_blocks, modid, jl_array_len(m->roots));
+    jl_array_ptr_1d_append(m->roots, roots);
+    JL_GC_POP();
+}
+
+// given the absolute index i of a root, retrieve its relocatable reference
+// returns 1 if the root is relocatable
+int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i)
+{
+    if (!m->root_blocks) {
+        rr->key = 0;
+        rr->index = i;
+        return i < m->nroots_sysimg;
+    }
+    rle_index_to_reference(rr, i, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    if (rr->key)
+        return 1;
+    return i < m->nroots_sysimg;
+}
+
+// get a root, given its key and index relative to the key
+// this is the relocatable way to get a root from m->roots
+jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index)
+{
+    if (!m->root_blocks) {
+        assert(key == 0);
+        return jl_array_ptr_ref(m->roots, index);
+    }
+    rle_reference rr = {key, index};
+    size_t i = rle_reference_to_index(&rr, (uint64_t*)jl_array_data(m->root_blocks), jl_array_len(m->root_blocks), 0);
+    return jl_array_ptr_ref(m->roots, i);
+}
+
+// Count the number of roots added by module with id `key`
+int nroots_with_key(jl_method_t *m, uint64_t key)
+{
+    size_t nroots = 0;
+    if (m->roots)
+        nroots = jl_array_len(m->roots);
+    if (!m->root_blocks)
+        return key == 0 ? nroots : 0;
+    uint64_t *rletable = (uint64_t*)jl_array_data(m->root_blocks);
+    size_t j, nblocks2 = jl_array_len(m->root_blocks);
+    int nwithkey = 0;
+    for (j = 0; j < nblocks2; j+=2) {
+        if (rletable[j] == key)
+            nwithkey += (j+3 < nblocks2 ? rletable[j+3] : nroots) - rletable[j+1];
+    }
+    return nwithkey;
 }
 
 #ifdef __cplusplus

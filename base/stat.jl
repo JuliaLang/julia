@@ -146,7 +146,7 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 macro stat_call(sym, arg1type, arg)
     return quote
-        stat_buf = zeros(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
+        stat_buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
         if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
             uv_error(string("stat(", repr($(esc(arg))), ")"), r)
@@ -170,7 +170,7 @@ stat(fd::Integer)           = stat(RawFD(fd))
 """
     stat(file)
 
-Returns a structure whose fields contain information about the file.
+Return a structure whose fields contain information about the file.
 The fields of the structure are:
 
 | Name    | Description                                                        |
@@ -353,12 +353,17 @@ Return `true` if `path` is a regular file, `false` otherwise.
 julia> isfile(homedir())
 false
 
-julia> f = open("test_file.txt", "w");
+julia> filename = "test_file.txt";
 
-julia> isfile(f)
+julia> write(filename, "Hello world!");
+
+julia> isfile(filename)
 true
 
-julia> close(f); rm("test_file.txt")
+julia> rm(filename);
+
+julia> isfile(filename)
+false
 ```
 
 See also [`isdir`](@ref) and [`ispath`](@ref).
@@ -459,16 +464,16 @@ end
 islink(path...) = islink(lstat(path...))
 
 # samefile can be used for files and directories: #11145#issuecomment-99511194
-samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
-function samefile(a::AbstractString, b::AbstractString)
-    infoa = stat(a)
-    infob = stat(b)
-    if ispath(infoa) && ispath(infob)
-        samefile(infoa, infob)
-    else
-        return false
-    end
+function samefile(a::StatStruct, b::StatStruct)
+    ispath(a) && ispath(b) && a.device == b.device && a.inode == b.inode
 end
+
+"""
+    samefile(path_a::AbstractString, path_b::AbstractString)
+
+Check if the paths `path_a` and `path_b` refer to the same existing file or directory.
+"""
+samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 """
     ismount(path) -> Bool

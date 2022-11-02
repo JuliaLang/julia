@@ -7,14 +7,13 @@
 
 time() = ccall(:jl_clock_now, Float64, ())
 
-let
-    world = get_world_counter()
-    interp = NativeInterpreter(world)
+let interp = NativeInterpreter()
 
+    analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, Bool, typeof(null_escape_cache)}
     fs = Any[
         # we first create caches for the optimizer, because they contain many loop constructions
         # and they're better to not run in interpreter even during bootstrapping
-        run_passes,
+        #=analyze_escapes_tt,=# run_passes,
         # then we create caches for inference entries
         typeinf_ext, typeinf, typeinf_edge,
     ]
@@ -32,7 +31,12 @@ let
     end
     starttime = time()
     for f in fs
-        for m in _methods_by_ftype(Tuple{typeof(f), Vararg{Any}}, 10, typemax(UInt))
+        if isa(f, DataType) && f.name === typename(Tuple)
+            tt = f
+        else
+            tt = Tuple{typeof(f), Vararg{Any}}
+        end
+        for m in _methods_by_ftype(tt, 10, typemax(UInt))
             # remove any TypeVars from the intersection
             typ = Any[m.spec_types.parameters...]
             for i = 1:length(typ)

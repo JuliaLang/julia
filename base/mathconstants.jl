@@ -76,7 +76,7 @@ julia> Base.MathConstants.eulergamma
 julia> dx = 10^-6;
 
 julia> sum(-exp(-x) * log(x) for x in dx:dx:100) * dx
-0.5772078382499134
+0.5772078382499133
 ```
 """
 γ, const eulergamma = γ

@@ -6,5 +6,5 @@ using Test, Libdl, MbedTLS_jll
     vstr = zeros(UInt8, 32)
     ccall((:mbedtls_version_get_string, libmbedcrypto), Cvoid, (Ref{UInt8},), vstr)
     vn = VersionNumber(unsafe_string(pointer(vstr)))
-    @test vn == v"2.24.0"
+    @test vn == v"2.28.0"
 end

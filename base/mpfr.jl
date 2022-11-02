@@ -16,7 +16,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, lerpi,
         cbrt, typemax, typemin, unsafe_trunc, floatmin, floatmax, rounding,
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
-        isone, big, _string_n, decompose
+        isone, big, _string_n, decompose, minmax
 
 import ..Rounding: rounding_raw, setrounding_raw
 
@@ -294,7 +294,14 @@ function round(::Type{T}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
     end
     return unsafe_trunc(T, res)
 end
-round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode}) = _unchecked_cast(BigInt, x, r)
+
+function round(::Type{BigInt}, x::BigFloat, r::Union{RoundingMode, MPFRRoundingMode})
+    clear_flags()
+    res = _unchecked_cast(BigInt, x, r)
+    had_range_exception() && throw(InexactError(:round, BigInt, x))
+    return res
+end
+
 round(::Type{T}, x::BigFloat, r::RoundingMode) where T<:Union{Signed, Unsigned} =
     invoke(round, Tuple{Type{<:Union{Signed, Unsigned}}, BigFloat, Union{RoundingMode, MPFRRoundingMode}}, T, x, r)
 round(::Type{BigInt}, x::BigFloat, r::RoundingMode) =
@@ -338,8 +345,23 @@ Float32(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]) =
     _cpynansgn(ccall((:mpfr_get_flt,:libmpfr), Float32, (Ref{BigFloat}, MPFRRoundingMode), x, r), x)
 Float32(x::BigFloat, r::RoundingMode) = Float32(x, convert(MPFRRoundingMode, r))
 
-# TODO: avoid double rounding
-Float16(x::BigFloat) = Float16(Float64(x))
+function Float16(x::BigFloat) :: Float16
+    res = Float32(x)
+    resi = reinterpret(UInt32, res)
+    if (resi&0x7fffffff) < 0x38800000 # if Float16(res) is subnormal
+        #shift so that the mantissa lines up where it would for normal Float16
+        shift = 113-((resi & 0x7f800000)>>23)
+        if shift<23
+            resi |= 0x0080_0000 # set implicit bit
+            resi >>= shift
+        end
+    end
+    if (resi & 0x1fff == 0x1000) # if we are halfway between 2 Float16 values
+        # adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
+        res = nextfloat(res, cmp(x, res))
+    end
+    return res
+end
 
 promote_rule(::Type{BigFloat}, ::Type{<:Real}) = BigFloat
 promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
@@ -675,20 +697,21 @@ function log1p(x::BigFloat)
     return z
 end
 
-function max(x::BigFloat, y::BigFloat)
-    isnan(x) && return x
-    isnan(y) && return y
-    z = BigFloat()
-    ccall((:mpfr_max, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, x, y, ROUNDING_MODE[])
-    return z
+# For `min`/`max`, general fallback for `AbstractFloat` is good enough.
+# Only implement `minmax` and `_extrema_rf` to avoid repeated calls.
+function minmax(x::BigFloat, y::BigFloat)
+    isnan(x) && return x, x
+    isnan(y) && return y, y
+    Base.Math._isless(x, y) ? (x, y) : (y, x)
 end
 
-function min(x::BigFloat, y::BigFloat)
-    isnan(x) && return x
-    isnan(y) && return y
-    z = BigFloat()
-    ccall((:mpfr_min, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode), z, x, y, ROUNDING_MODE[])
-    return z
+function Base._extrema_rf(x::NTuple{2,BigFloat}, y::NTuple{2,BigFloat})
+    (x1, x2), (y1, y2) = x, y
+    isnan(x1) && return x
+    isnan(y1) && return y
+    z1 = Base.Math._isless(x1, y1) ? x1 : y1
+    z2 = Base.Math._isless(x2, y2) ? y2 : x2
+    z1, z2
 end
 
 function modf(x::BigFloat)
@@ -1003,7 +1026,7 @@ string(b::BigFloat) = _string(b)
 
 print(io::IO, b::BigFloat) = print(io, string(b))
 function show(io::IO, b::BigFloat)
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, _string(b, 5))
     else
         print(io, _string(b))

@@ -17,7 +17,6 @@
 #endif
 #include "julia.h"
 #include "julia_internal.h"
-#include "uv.h"
 #include "julia_assert.h"
 #include "intrinsics.h"
 #include "builtin_proto.h"
@@ -33,6 +32,9 @@ JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_err
 
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
+
+// During incremental compilation, the following gets set
+JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
 
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
@@ -139,11 +141,16 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
     JL_UNLOCK(&jl_modules_mutex);
 
+    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
+
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
     if (jl_is__toplevel__mod(parent_module)) {
         newm->parent = newm;
         jl_register_root_module(newm);
+        if (jl_options.incremental) {
+            jl_precompile_toplevel_module = newm;
+        }
     }
     else {
         newm->parent = parent_module;
@@ -262,6 +269,8 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
+    jl_precompile_toplevel_module = old_toplevel_module;
+
     JL_GC_POP();
     return (jl_value_t*)newm;
 }
@@ -274,7 +283,7 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
     if (jl_is_module(args[1])) {
-        JL_TYPECHK(getfield, symbol, args[2]);
+        JL_TYPECHK(getglobal, symbol, args[2]);
         args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
     }
     else {
@@ -286,6 +295,33 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     }
     JL_GC_POP();
     return args[0];
+}
+
+void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type) {
+    // create uninitialized mutable binding for "global x" decl sometimes or probably
+    size_t i, l = jl_array_len(ex->args);
+    for (i = 0; i < l; i++) {
+        jl_value_t *arg = jl_exprarg(ex, i);
+        jl_module_t *gm;
+        jl_sym_t *gs;
+        if (jl_is_globalref(arg)) {
+            gm = jl_globalref_mod(arg);
+            gs = jl_globalref_name(arg);
+        }
+        else {
+            assert(jl_is_symbol(arg));
+            gm = m;
+            gs = (jl_sym_t*)arg;
+        }
+        if (!jl_binding_resolved_p(gm, gs)) {
+            jl_binding_t *b = jl_get_binding_wr(gm, gs, 1);
+            if (set_type) {
+                jl_value_t *old_ty = NULL;
+                // maybe set the type too, perhaps
+                jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
+            }
+        }
+    }
 }
 
 // module referenced by (top ...) from within m
@@ -304,7 +340,7 @@ JL_DLLEXPORT jl_module_t *jl_base_relative_to(jl_module_t *m)
     return jl_top_module;
 }
 
-static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, int *has_opaque)
+static void expr_attributes(jl_value_t *v, int *has_ccall, int *has_defs, int *has_opaque)
 {
     if (!jl_is_expr(v))
         return;
@@ -328,11 +364,11 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
         *has_defs = 1;
     }
     else if (head == jl_cfunction_sym) {
-        *has_intrinsics = 1;
+        *has_ccall = 1;
         return;
     }
     else if (head == jl_foreigncall_sym) {
-        *has_intrinsics = 1;
+        *has_ccall = 1;
         return;
     }
     else if (head == jl_new_opaque_closure_sym) {
@@ -347,16 +383,17 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
             jl_sym_t *name = jl_globalref_name(f);
             if (jl_binding_resolved_p(mod, name)) {
                 jl_binding_t *b = jl_get_binding(mod, name);
-                if (b && b->value && b->constp)
-                    called = b->value;
+                if (b && b->constp) {
+                    called = jl_atomic_load_relaxed(&b->value);
+                }
             }
         }
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
         }
-        if (called) {
+        if (called != NULL) {
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
-                *has_intrinsics = 1;
+                *has_ccall = 1;
             }
             if (called == jl_builtin__typebody) {
                 *has_defs = 1;
@@ -368,28 +405,28 @@ static void expr_attributes(jl_value_t *v, int *has_intrinsics, int *has_defs, i
     for (i = 0; i < jl_array_len(e->args); i++) {
         jl_value_t *a = jl_exprarg(e, i);
         if (jl_is_expr(a))
-            expr_attributes(a, has_intrinsics, has_defs, has_opaque);
+            expr_attributes(a, has_ccall, has_defs, has_opaque);
     }
 }
 
-int jl_code_requires_compiler(jl_code_info_t *src)
+int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile)
 {
     jl_array_t *body = src->code;
     assert(jl_typeis(body, jl_array_any_type));
     size_t i;
-    int has_intrinsics = 0, has_defs = 0, has_opaque = 0;
-    if (jl_has_meta(body, jl_force_compile_sym))
+    int has_ccall = 0, has_defs = 0, has_opaque = 0;
+    if (include_force_compile && jl_has_meta(body, jl_force_compile_sym))
         return 1;
     for(i=0; i < jl_array_len(body); i++) {
         jl_value_t *stmt = jl_array_ptr_ref(body,i);
-        expr_attributes(stmt, &has_intrinsics, &has_defs, &has_opaque);
-        if (has_intrinsics)
+        expr_attributes(stmt, &has_ccall, &has_defs, &has_opaque);
+        if (has_ccall)
             return 1;
     }
     return 0;
 }
 
-static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile)
+static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int *has_loops, int *has_opaque, int *forced_compile)
 {
     size_t i;
     *has_loops = 0;
@@ -405,7 +442,7 @@ static void body_attributes(jl_array_t *body, int *has_intrinsics, int *has_defs
                     *has_loops = 1;
             }
         }
-        expr_attributes(stmt, has_intrinsics, has_defs, has_opaque);
+        expr_attributes(stmt, has_ccall, has_defs, has_opaque);
     }
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
@@ -555,8 +592,9 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     jl_binding_t *b;
     if (jl_binding_resolved_p(m, name)) {
         b = jl_get_binding(m, name);
-        if ((!b->constp && b->owner != m) || (b->value && b->value != (jl_value_t*)import)) {
-            jl_errorf("importing %s into %s conflicts with an existing identifier",
+        jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
+        if ((!b->constp && b->owner != m) || (bv && bv != (jl_value_t*)import)) {
+            jl_errorf("importing %s into %s conflicts with an existing global",
                       jl_symbol_name(name), jl_symbol_name(m->name));
         }
     }
@@ -565,7 +603,8 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
         b->imported = 1;
     }
     if (!b->constp) {
-        b->value = (jl_value_t*)import;
+        // TODO: constp is not threadsafe
+        jl_atomic_store_release(&b->value, (jl_value_t*)import);
         b->constp = 1;
         jl_gc_wb(m, (jl_value_t*)import);
     }
@@ -788,23 +827,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return jl_nothing;
     }
     else if (head == jl_global_sym) {
-        // create uninitialized mutable binding for "global x" decl
-        size_t i, l = jl_array_len(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_value_t *arg = jl_exprarg(ex, i);
-            jl_module_t *gm;
-            jl_sym_t *gs;
-            if (jl_is_globalref(arg)) {
-                gm = jl_globalref_mod(arg);
-                gs = jl_globalref_name(arg);
-            }
-            else {
-                assert(jl_is_symbol(arg));
-                gm = m;
-                gs = (jl_sym_t*)arg;
-            }
-            jl_get_binding_wr(gm, gs, 0);
-        }
+        jl_eval_global_expr(m, ex, 0);
         JL_GC_POP();
         return jl_nothing;
     }
@@ -851,16 +874,16 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         return (jl_value_t*)ex;
     }
 
-    int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
+    int has_ccall = 0, has_defs = 0, has_loops = 0, has_opaque = 0, forced_compile = 0;
     assert(head == jl_thunk_sym);
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     assert(jl_is_code_info(thk));
     assert(jl_typeis(thk->code, jl_array_any_type));
-    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &forced_compile);
+    body_attributes((jl_array_t*)thk->code, &has_ccall, &has_defs, &has_loops, &has_opaque, &forced_compile);
 
     jl_value_t *result;
-    if (forced_compile || has_intrinsics ||
-            (!has_defs && fast && has_loops &&
+    if (has_ccall ||
+            ((forced_compile || (!has_defs && fast && has_loops)) &&
             jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
             jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_OFF &&
@@ -995,7 +1018,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     JL_GC_PUSH3(&ast, &result, &expression);
 
     ast = jl_svecref(jl_parse(jl_string_data(text), jl_string_len(text),
-                              filename, 0, (jl_value_t*)jl_all_sym), 0);
+                              filename, 1, 0, (jl_value_t*)jl_all_sym), 0);
     if (!jl_is_expr(ast) || ((jl_expr_t*)ast)->head != jl_toplevel_sym) {
         jl_errorf("jl_parse_all() must generate a top level expression");
     }

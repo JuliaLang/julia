@@ -114,8 +114,6 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 from_signal_handler = 0;
                 continue;
             }
-            if (sp)
-                sp[n] = thesp;
             // For the purposes of looking up debug info for functions, we want
             // to harvest addresses for the *call* instruction `call_ip` during
             // stack walking.  However, this information isn't directly
@@ -168,6 +166,8 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
                 }
             }
             bt_entry->uintptr = call_ip;
+            if (sp)
+                sp[n] = thesp;
             n++;
         }
         // NOTE: if we have some pgcstack entries remaining (because the
@@ -259,8 +259,8 @@ JL_DLLEXPORT jl_value_t *jl_backtrace_from_here(int returnsp, int skip)
             jl_array_grow_end(ip, maxincr);
             uintptr_t *sp_ptr = NULL;
             if (returnsp) {
-                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
                 jl_array_grow_end(sp, maxincr);
+                sp_ptr = (uintptr_t*)jl_array_data(sp) + offset;
             }
             size_t size_incr = 0;
             have_more_frames = jl_unw_stepn(&cursor, (jl_bt_element_t*)jl_array_data(ip) + offset,
@@ -697,9 +697,164 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
     }
 }
 
+
+#ifdef _OS_LINUX_
+#if defined(__GLIBC__) && defined(_CPU_AARCH64_)
+#define LONG_JMP_SP_ENV_SLOT 13
+static uintptr_t julia_longjmp_xor_key;
+// GLIBC mangles the function pointers in jmp_buf (used in {set,long}*jmp
+// functions) by XORing them with a random key.  For AArch64 it is a global
+// variable rather than a TCB one (as for x86_64/powerpc).  We obtain the key by
+// issuing a setjmp and XORing the SP pointer values to derive the key.
+static void JuliaInitializeLongjmpXorKey(void)
+{
+    // 1. Call REAL(setjmp), which stores the mangled SP in env.
+    jmp_buf env;
+    _setjmp(env);
+
+    // 2. Retrieve vanilla/mangled SP.
+    uintptr_t sp;
+    asm("mov  %0, sp" : "=r" (sp));
+    uintptr_t mangled_sp = ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
+
+    // 3. xor SPs to obtain key.
+    julia_longjmp_xor_key = mangled_sp ^ sp;
+}
+#endif
+
+JL_UNUSED static uintptr_t ptr_demangle(uintptr_t p) JL_NOTSAFEPOINT
+{
+#if defined(__GLIBC__)
+#if defined(_CPU_X86_)
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+// last changed for GLIBC_2.6 on 2007-02-01
+    asm(" rorl $9, %0\n"
+        " xorl %%gs:0x18, %0"
+        : "=r"(p) : "0"(p) : );
+#elif defined(_CPU_X86_64_)
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/i386/sysdep.h
+    asm(" rorq $17, %0\n"
+        " xorq %%fs:0x30, %0"
+        : "=r"(p) : "0"(p) : );
+#elif defined(_CPU_AARCH64_)
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/aarch64/sysdep.h
+// We need to use a trick like this (from GCC/LLVM TSAN) to get access to it:
+// https://github.com/llvm/llvm-project/commit/daa3ebce283a753f280c549cdb103fbb2972f08e
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, &JuliaInitializeLongjmpXorKey);
+    p ^= julia_longjmp_xor_key;
+#elif defined(_CPU_ARM_)
+// from https://github.com/bminor/glibc/blame/master/sysdeps/unix/sysv/linux/arm/sysdep.h
+    ; // nothing to do
+#endif
+#endif
+    return p;
+}
+#endif
+
+// n.b. musl does not mangle pointers, but intentionally makes that impossible
+// to determine (https://www.openwall.com/lists/musl/2013/03/29/13) so we do
+// not support musl here.
+
+// n.b. We have not looked at other libc (e.g. ulibc), though they are probably
+// often compatible with glibc (perhaps with or without pointer mangling).
+
+
+#ifdef _OS_DARWIN_
+// from https://github.com/apple/darwin-xnu/blame/main/libsyscall/os/tsd.h
+#define __TSD_PTR_MUNGE 7
+
+#if defined(__i386__) || defined(__x86_64__)
+
+#if defined(__has_attribute)
+#if __has_attribute(address_space)
+#define OS_GS_RELATIVE  __attribute__((address_space(256)))
+#endif
+#endif
+
+#ifdef OS_GS_RELATIVE
+#define _os_tsd_get_base() ((void * OS_GS_RELATIVE *)0)
+#else
+__attribute__((always_inline))
+static __inline__ void*
+_os_tsd_get_direct(unsigned long slot)
+{
+    void *ret;
+    __asm__("mov %%gs:%1, %0" : "=r" (ret) : "m" (*(void **)(slot * sizeof(void *))));
+    return ret;
+}
+#endif
+
+#elif defined(__arm__) || defined(__arm64__)
+// Unconditionally defined ptrauth_strip (instead of using the ptrauth.h header)
+// since libsystem will likely be compiled with -mbranch-protection, and we currently are not.
+// code from https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/compiler-rt/lib/sanitizer_common/sanitizer_ptrauth.h
+static inline uint64_t ptrauth_strip(uint64_t __value, unsigned int __key) {
+  // On the stack the link register is protected with Pointer
+  // Authentication Code when compiled with -mbranch-protection.
+  // Let's strip the PAC unconditionally because xpaclri is in the NOP space,
+  // so will do nothing when it is not enabled or not available.
+  uint64_t ret;
+  asm volatile(
+      "mov x30, %1\n\t"
+      "hint #7\n\t"  // xpaclri
+      "mov %0, x30\n\t"
+      : "=r"(ret)
+      : "r"(__value)
+      : "x30");
+  return ret;
+}
+
+__attribute__((always_inline, pure))
+static __inline__ void**
+_os_tsd_get_base(void)
+{
+#if defined(__arm__)
+    uintptr_t tsd;
+    __asm__("mrc p15, 0, %0, c13, c0, 3\n"
+            "bic %0, %0, #0x3\n" : "=r" (tsd));
+    /* lower 2-bits contain CPU number */
+#elif defined(__arm64__)
+    uint64_t tsd;
+    __asm__("mrs %0, TPIDRRO_EL0\n"
+            "bic %0, %0, #0x7\n" : "=r" (tsd));
+    /* lower 3-bits contain CPU number */
+#endif
+
+    return (void**)(uintptr_t)tsd;
+}
+#define _os_tsd_get_base()  _os_tsd_get_base()
+#endif
+
+#ifdef _os_tsd_get_base
+__attribute__((always_inline))
+static __inline__ void*
+_os_tsd_get_direct(unsigned long slot)
+{
+    return _os_tsd_get_base()[slot];
+}
+#endif
+
+__attribute__((always_inline, pure))
+static __inline__ uintptr_t
+_os_ptr_munge_token(void)
+{
+    return (uintptr_t)_os_tsd_get_direct(__TSD_PTR_MUNGE);
+}
+
+__attribute__((always_inline, pure))
+JL_UNUSED static __inline__ uintptr_t
+_os_ptr_munge(uintptr_t ptr)
+{
+    return ptr ^ _os_ptr_munge_token();
+}
+#define _OS_PTR_UNMUNGE(_ptr) _os_ptr_munge((uintptr_t)(_ptr))
+#endif
+
+
 extern bt_context_t *jl_to_bt_context(void *sigctx);
 
-void jl_rec_backtrace(jl_task_t *t)
+void jl_rec_backtrace(jl_task_t *t) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -740,7 +895,185 @@ void jl_rec_backtrace(jl_task_t *t)
     context = &t->ctx.ctx;
 #elif defined(JL_HAVE_UCONTEXT)
     context = jl_to_bt_context(&t->ctx.ctx);
+#elif defined(JL_HAVE_ASM)
+    bt_context_t c;
+    memset(&c, 0, sizeof(c));
+ #if defined(_OS_LINUX_) && defined(__GLIBC__)
+    __jmp_buf *mctx = &t->ctx.ctx.uc_mcontext->__jmpbuf;
+    mcontext_t *mc = &c.uc_mcontext;
+  #if defined(_CPU_X86_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/i386/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/i386/jmpbuf-offsets.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/i386/longjmp.s
+    mc->gregs[REG_EBX] = (*mctx)[0];
+    mc->gregs[REG_ESI] = (*mctx)[1];
+    mc->gregs[REG_EDI] = (*mctx)[2];
+    mc->gregs[REG_EBP] = (*mctx)[3];
+    mc->gregs[REG_ESP] = (*mctx)[4];
+    mc->gregs[REG_EIP] = (*mctx)[5];
+    // ifdef PTR_DEMANGLE ?
+    mc->gregs[REG_ESP] = ptr_demangle(mc->gregs[REG_ESP]);
+    mc->gregs[REG_EIP] = ptr_demangle(mc->gregs[REG_EIP]);
+    context = &c;
+  #elif defined(_CPU_X86_64_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/x86_64/jmpbuf-offsets.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/x86_64/setjmp.s
+    mc->gregs[REG_RBX] = (*mctx)[0];
+    mc->gregs[REG_RBP] = (*mctx)[1];
+    mc->gregs[REG_R12] = (*mctx)[2];
+    mc->gregs[REG_R13] = (*mctx)[3];
+    mc->gregs[REG_R14] = (*mctx)[4];
+    mc->gregs[REG_R15] = (*mctx)[5];
+    mc->gregs[REG_RSP] = (*mctx)[6];
+    mc->gregs[REG_RIP] = (*mctx)[7];
+    // ifdef PTR_DEMANGLE ?
+    mc->gregs[REG_RBP] = ptr_demangle(mc->gregs[REG_RBP]);
+    mc->gregs[REG_RSP] = ptr_demangle(mc->gregs[REG_RSP]);
+    mc->gregs[REG_RIP] = ptr_demangle(mc->gregs[REG_RIP]);
+    context = &c;
+  #elif defined(_CPU_ARM_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/arm/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/arm/include/bits/setjmp.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/arm/longjmp.S
+    mc->arm_sp = (*mctx)[0];
+    mc->arm_lr = (*mctx)[1];
+    mc->arm_r4 = (*mctx)[2]; // aka v1
+    mc->arm_r5 = (*mctx)[3]; // aka v2
+    mc->arm_r6 = (*mctx)[4]; // aka v3
+    mc->arm_r7 = (*mctx)[5]; // aka v4
+    mc->arm_r8 = (*mctx)[6]; // aka v5
+    mc->arm_r9 = (*mctx)[7]; // aka v6 aka sb
+    mc->arm_r10 = (*mctx)[8]; // aka v7 aka sl
+    mc->arm_fp = (*mctx)[10]; // aka v8 aka r11
+    // ifdef PTR_DEMANGLE ?
+    mc->arm_sp = ptr_demangle(mc->arm_sp);
+    mc->arm_lr = ptr_demangle(mc->arm_lr);
+    mc->arm_pc = mc->arm_lr;
+    context = &c;
+  #elif defined(_CPU_AARCH64_)
+    // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/__longjmp.S
+    // https://github.com/bminor/glibc/blame/master/sysdeps/aarch64/jmpbuf-offsets.h
+    // https://github.com/bminor/musl/blame/master/src/setjmp/aarch64/longjmp.s
+    // https://github.com/libunwind/libunwind/blob/ec171c9ba7ea3abb2a1383cee2988a7abd483a1f/src/aarch64/unwind_i.h#L62
+    unw_fpsimd_context_t *mcfp = (unw_fpsimd_context_t*)&mc->__reserved;
+    mc->regs[19] = (*mctx)[0];
+    mc->regs[20] = (*mctx)[1];
+    mc->regs[21] = (*mctx)[2];
+    mc->regs[22] = (*mctx)[3];
+    mc->regs[23] = (*mctx)[4];
+    mc->regs[24] = (*mctx)[5];
+    mc->regs[25] = (*mctx)[6];
+    mc->regs[26] = (*mctx)[7];
+    mc->regs[27] = (*mctx)[8];
+    mc->regs[28] = (*mctx)[9];
+    mc->regs[29] = (*mctx)[10]; // aka fp
+    mc->regs[30] = (*mctx)[11]; // aka lr
+    // Yes, they did skip 12 why writing the code originally; and, no, I do not know why.
+    mc->sp = (*mctx)[13];
+    mcfp->vregs[7] = (*mctx)[14]; // aka d8
+    mcfp->vregs[8] = (*mctx)[15]; // aka d9
+    mcfp->vregs[9] = (*mctx)[16]; // aka d10
+    mcfp->vregs[10] = (*mctx)[17]; // aka d11
+    mcfp->vregs[11] = (*mctx)[18]; // aka d12
+    mcfp->vregs[12] = (*mctx)[19]; // aka d13
+    mcfp->vregs[13] = (*mctx)[20]; // aka d14
+    mcfp->vregs[14] = (*mctx)[21]; // aka d15
+    // ifdef PTR_DEMANGLE ?
+    mc->sp = ptr_demangle(mc->sp);
+    mc->regs[30] = ptr_demangle(mc->regs[30]);
+    mc->pc = mc->regs[30];
+    context = &c;
+  #else
+   #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown linux")
+   (void)mc;
+   (void)c;
+   (void)mctx;
+  #endif
+ #elif defined(_OS_DARWIN_)
+    sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
+  #if defined(_CPU_X86_64_)
+    // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/x86_64/_setjmp.s
+    x86_thread_state64_t *mc = (x86_thread_state64_t*)&c;
+    mc->__rbx = ((uint64_t*)mctx)[0];
+    mc->__rbp = ((uint64_t*)mctx)[1];
+    mc->__rsp = ((uint64_t*)mctx)[2];
+    mc->__r12 = ((uint64_t*)mctx)[3];
+    mc->__r13 = ((uint64_t*)mctx)[4];
+    mc->__r14 = ((uint64_t*)mctx)[5];
+    mc->__r15 = ((uint64_t*)mctx)[6];
+    mc->__rip = ((uint64_t*)mctx)[7];
+    // added in libsystem_plaform 177.200.16 (macOS Mojave 10.14.3)
+    // prior to that _os_ptr_munge_token was (hopefully) typically 0,
+    // so x ^ 0 == x and this is a no-op
+    mc->__rbp = _OS_PTR_UNMUNGE(mc->__rbp);
+    mc->__rsp = _OS_PTR_UNMUNGE(mc->__rsp);
+    mc->__rip = _OS_PTR_UNMUNGE(mc->__rip);
+    context = &c;
+  #elif defined(_CPU_AARCH64_)
+    // from https://github.com/apple/darwin-libplatform/blob/main/src/setjmp/arm64/setjmp.s
+    // https://github.com/apple/darwin-xnu/blob/main/osfmk/mach/arm/_structs.h
+    // https://github.com/llvm/llvm-project/blob/7714e0317520207572168388f22012dd9e152e9e/libunwind/src/Registers.hpp -> Registers_arm64
+    arm_thread_state64_t *mc = (arm_thread_state64_t*)&c;
+    mc->__x[19] = ((uint64_t*)mctx)[0];
+    mc->__x[20] = ((uint64_t*)mctx)[1];
+    mc->__x[21] = ((uint64_t*)mctx)[2];
+    mc->__x[22] = ((uint64_t*)mctx)[3];
+    mc->__x[23] = ((uint64_t*)mctx)[4];
+    mc->__x[24] = ((uint64_t*)mctx)[5];
+    mc->__x[25] = ((uint64_t*)mctx)[6];
+    mc->__x[26] = ((uint64_t*)mctx)[7];
+    mc->__x[27] = ((uint64_t*)mctx)[8];
+    mc->__x[28] = ((uint64_t*)mctx)[9];
+    mc->__x[10] = ((uint64_t*)mctx)[10];
+    mc->__x[11] = ((uint64_t*)mctx)[11];
+    mc->__x[12] = ((uint64_t*)mctx)[12];
+    // 13 is reserved/unused
+    double *mcfp = (double*)&mc[1];
+    mcfp[7] = ((uint64_t*)mctx)[14]; // aka d8
+    mcfp[8] = ((uint64_t*)mctx)[15]; // aka d9
+    mcfp[9] = ((uint64_t*)mctx)[16]; // aka d10
+    mcfp[10] = ((uint64_t*)mctx)[17]; // aka d11
+    mcfp[11] = ((uint64_t*)mctx)[18]; // aka d12
+    mcfp[12] = ((uint64_t*)mctx)[19]; // aka d13
+    mcfp[13] = ((uint64_t*)mctx)[20]; // aka d14
+    mcfp[14] = ((uint64_t*)mctx)[21]; // aka d15
+    mc->__fp = _OS_PTR_UNMUNGE(mc->__x[10]);
+    mc->__lr = _OS_PTR_UNMUNGE(mc->__x[11]);
+    mc->__x[12] = _OS_PTR_UNMUNGE(mc->__x[12]);
+    mc->__sp = mc->__x[12];
+    // libunwind is broken for signed-pointers, but perhaps best not to leave the signed pointer lying around either
+    mc->__pc = ptrauth_strip(mc->__lr, 0);
+    mc->__pad = 0; // aka __ra_sign_state = not signed
+    context = &c;
+  #else
+   #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown darwin")
+    (void)mctx;
+    (void)c;
+  #endif
+ #elif defined(_OS_FREEBSD_) && defined(_CPU_X86_64_)
+    sigjmp_buf *mctx = &t->ctx.ctx.uc_mcontext;
+    mcontext_t *mc = &c.uc_mcontext;
+    // https://github.com/freebsd/freebsd-src/blob/releng/13.1/lib/libc/amd64/gen/_setjmp.S
+    mc->mc_rip = ((long*)mctx)[0];
+    mc->mc_rbx = ((long*)mctx)[1];
+    mc->mc_rsp = ((long*)mctx)[2];
+    mc->mc_rbp = ((long*)mctx)[3];
+    mc->mc_r12 = ((long*)mctx)[4];
+    mc->mc_r13 = ((long*)mctx)[5];
+    mc->mc_r14 = ((long*)mctx)[6];
+    mc->mc_r15 = ((long*)mctx)[7];
+    context = &c;
+ #else
+  #pragma message("jl_rec_backtrace not defined for ASM/SETJMP on unknown system")
+  (void)c;
+ #endif
+#elif defined(JL_HAVE_ASYNCIFY)
+ #pragma message("jl_rec_backtrace not defined for ASYNCIFY")
+#elif defined(JL_HAVE_SIGALTSTACK)
+ #pragma message("jl_rec_backtrace not defined for SIGALTSTACK")
 #else
+ #pragma message("jl_rec_backtrace not defined for unknown task system")
 #endif
     if (context)
         ptls->bt_size = rec_backtrace_ctx(ptls->bt_data, JL_MAX_BT_SIZE, context, t->gcstack);
@@ -771,7 +1104,9 @@ JL_DLLEXPORT void jlbacktrace(void) JL_NOTSAFEPOINT
         jl_print_bt_entry_codeloc(bt_data + i);
     }
 }
-JL_DLLEXPORT void jlbacktracet(jl_task_t *t)
+
+// Print backtrace for specified task
+JL_DLLEXPORT void jlbacktracet(jl_task_t *t) JL_NOTSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
@@ -786,6 +1121,44 @@ JL_DLLEXPORT void jlbacktracet(jl_task_t *t)
 JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 {
     jlbacktrace();
+}
+
+// Print backtraces for all live tasks, for all threads.
+// WARNING: this is dangerous and can crash if used outside of gdb, if
+// all of Julia's threads are not stopped!
+JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
+{
+    size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (size_t i = 0; i < nthreads; i++) {
+        jl_ptls_t ptls2 = allstates[i];
+        arraylist_t *live_tasks = &ptls2->heap.live_tasks;
+        size_t n = live_tasks->len;
+        jl_safe_printf("==== Thread %d created %zu live tasks\n",
+                ptls2->tid + 1, n + 1);
+        jl_safe_printf("     ---- Root task (%p)\n", ptls2->root_task);
+        jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
+                ptls2->root_task->sticky, ptls2->root_task->started,
+                jl_atomic_load_relaxed(&ptls2->root_task->_state),
+                jl_atomic_load_relaxed(&ptls2->root_task->tid) + 1);
+        jlbacktracet(ptls2->root_task);
+
+        void **lst = live_tasks->items;
+        for (size_t j = 0; j < live_tasks->len; j++) {
+            jl_task_t *t = (jl_task_t *)lst[j];
+            jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
+            jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
+                    t->sticky, t->started, jl_atomic_load_relaxed(&t->_state),
+                    jl_atomic_load_relaxed(&t->tid) + 1);
+            if (t->stkbuf != NULL)
+                jlbacktracet(t);
+            else
+                jl_safe_printf("      no stack\n");
+            jl_safe_printf("     ---- End task %zu\n", j + 1);
+        }
+        jl_safe_printf("==== End thread %d\n", ptls2->tid + 1);
+    }
+    jl_safe_printf("==== Done\n");
 }
 
 #ifdef __cplusplus

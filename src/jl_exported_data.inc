@@ -18,6 +18,7 @@
     XX(jl_array_type) \
     XX(jl_array_typename) \
     XX(jl_array_uint8_type) \
+    XX(jl_array_uint64_type) \
     XX(jl_atomicerror_type) \
     XX(jl_base_module) \
     XX(jl_bool_type) \
@@ -54,6 +55,7 @@
     XX(jl_interconditional_type) \
     XX(jl_interrupt_exception) \
     XX(jl_intrinsic_type) \
+    XX(jl_kwcall_func) \
     XX(jl_lineinfonode_type) \
     XX(jl_linenumbernode_type) \
     XX(jl_llvmpointer_type) \
@@ -67,6 +69,7 @@
     XX(jl_method_type) \
     XX(jl_methtable_type) \
     XX(jl_module_type) \
+    XX(jl_n_threads_per_pool) \
     XX(jl_namedtuple_type) \
     XX(jl_namedtuple_typename) \
     XX(jl_newvarnode_type) \
@@ -123,9 +126,12 @@
     XX(jl_vecelement_typename) \
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
-    XX(jl_weakref_type)
+    XX(jl_weakref_type) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
-    XX(jl_n_threads, int) \
-    XX(jl_options, jl_options_t)
+    XX(jl_n_threadpools, int) \
+    XX(jl_n_threads, _Atomic(int)) \
+    XX(jl_options, jl_options_t) \
+
+// end of file

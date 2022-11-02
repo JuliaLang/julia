@@ -123,7 +123,44 @@ macro optlevel(n::Int)
 end
 
 """
-    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no}
+    Experimental.@max_methods n::Int
+
+Set the maximum number of potentially-matching methods considered when running inference
+for methods defined in the current module. This setting affects inference of calls with
+incomplete knowledge of the argument types.
+
+The benefit of this setting is to avoid excessive compilation and reduce invalidation risks
+in poorly-inferred cases. For example, when `@max_methods 2` is set and there are two
+potentially-matching methods returning different types inside a function body, then Julia
+will compile subsequent calls for both types so that the compiled function body accounts
+for both possibilities. Also the compiled code is vulnerable to invalidations that would
+happen when either of the two methods gets invalidated. This speculative compilation and
+these invalidations can be avoided by setting `@max_methods 1` and allowing the compiled
+code to resort to runtime dispatch instead.
+
+Supported values are `1`, `2`, `3`, `4`, and `default` (currently equivalent to `3`).
+"""
+macro max_methods(n::Int)
+    0 < n < 5 || error("We must have that `1 <= max_methods <= 4`, but `max_methods = $n`.")
+    return Expr(:meta, :max_methods, n)
+end
+
+"""
+    Experimental.@max_methods n::Int function fname end
+
+Set the maximum number of potentially-matching methods considered when running inference
+for the generic function `fname`. Overrides any module-level or global inference settings
+for max_methods. This setting is global for the entire generic function (or more precisely
+the MethodTable).
+"""
+macro max_methods(n::Int, fdef::Expr)
+    0 < n <= 255 || error("We must have that `1 <= max_methods <= 255`, but `max_methods = $n`.")
+    (fdef.head === :function && length(fdef.args) == 1) || error("Second argument must be a function forward declaration")
+    return :(typeof($(esc(fdef))).name.max_methods = $(UInt8(n)))
+end
+
+"""
+    Experimental.@compiler_options optimize={0,1,2,3} compile={yes,no,all,min} infer={yes,no} max_methods={default,1,2,3,...}
 
 Set compiler options for code in the enclosing module. Options correspond directly to
 command-line options with the same name, where applicable. The following options
@@ -133,6 +170,7 @@ are currently supported:
   * `compile`: Toggle native code compilation. Currently only `min` is supported, which
     requests the minimum possible amount of compilation.
   * `infer`: Enable or disable type inference. If disabled, implies [`@nospecialize`](@ref).
+  * `max_methods`: Maximum number of matching methods considered when running type inference.
 """
 macro compiler_options(args...)
     opts = Expr(:block)
@@ -152,6 +190,12 @@ macro compiler_options(args...)
                 a = a === false || a === :no  ? 0 :
                     a === true  || a === :yes ? 1 : error("invalid argument to \"infer\" option")
                 push!(opts.args, Expr(:meta, :infer, a))
+            elseif ex.args[1] === :max_methods
+                a = ex.args[2]
+                a = a === :default ? 3 :
+                  a isa Int ? ((0 < a < 5) ? a : error("We must have that `1 <= max_methods <= 4`, but `max_methods = $a`.")) :
+                  error("invalid argument to \"max_methods\" option")
+                push!(opts.args, Expr(:meta, :max_methods, a))
             else
                 error("unknown option \"$(ex.args[1])\"")
             end
@@ -170,17 +214,18 @@ Force compilation of the block or function (Julia's built-in interpreter is bloc
 # Examples
 
 ```
-module WithPrecompiles
-#=
-    code definitions
-=#
+julia> occursin("interpreter", string(stacktrace(begin
+           # with forced compilation
+           Base.Experimental.@force_compile
+           backtrace()
+       end, true)))
+false
 
-if Sys.iswindows()
-    Experimental.@compile
-    compile_me()  # `compile_me` will be compiled before execution
-end
-
-end
+julia> occursin("interpreter", string(stacktrace(begin
+           # without forced compilation
+           backtrace()
+       end, true)))
+true
 ```
 """
 macro force_compile() Expr(:meta, :force_compile) end
@@ -266,7 +311,8 @@ the handler for that type.
     This interface is experimental and subject to change or removal without notice.
 """
 function show_error_hints(io, ex, args...)
-    hinters = get!(()->[], _hint_handlers, typeof(ex))
+    hinters = get(_hint_handlers, typeof(ex), nothing)
+    isnothing(hinters) && return
     for handler in hinters
         try
             Base.invokelatest(handler, io, ex, args...)

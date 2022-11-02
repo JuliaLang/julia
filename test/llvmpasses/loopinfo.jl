@@ -2,7 +2,8 @@
 
 # RUN: julia --startup-file=no %s %t && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s
-# RUN: cat %t/module.ll | opt -load libjulia-internal%shlibext -LowerSIMDLoop -S - | FileCheck %s -check-prefix=LOWER
+# RUN: cat %t/module.ll | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -LowerSIMDLoop -S - | FileCheck %s -check-prefix=LOWER
+# RUN: cat %t/module.ll | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='LowerSIMDLoop' -S - | FileCheck %s -check-prefix=LOWER
 # RUN: julia --startup-file=no %s %t -O && llvm-link -S %t/* -o %t/module.ll
 # RUN: cat %t/module.ll | FileCheck %s -check-prefix=FINAL
 
@@ -104,7 +105,7 @@ end
 end
 
 # FINAL-LABEL: @julia_notunroll
-function notunroll(J, I)
+@eval function notunroll(J, I)
     for i in 1:10
         for j in J
             1 <= j <= I && continue
@@ -113,6 +114,7 @@ function notunroll(J, I)
 # FINAL: call void @j_iteration
 # FINAL-NOT: call void @j_iteration
         end
+        $(Expr(:loopinfo, (Symbol("llvm.loop.unroll.disable"),)))
     end
 end
 

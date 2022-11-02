@@ -35,7 +35,7 @@ catch err
     @test endswith(string(lkup[2].file), "backtrace.jl")
     @test lkup[2].line == 42
     # TODO: we don't support surface AST locations with inlined function names
-    @test_broken lkup[1].func == :inlfunc
+    @test_broken lkup[1].func === :inlfunc
     @test endswith(string(lkup[1].file), "backtrace.jl")
     @test lkup[1].line == 37
 end
@@ -106,10 +106,10 @@ lkup = map(lookup, bt())
 hasbt = hasbt2 = false
 for sfs in lkup
     for sf in sfs
-        if sf.func == :bt
+        if sf.func === :bt
             global hasbt = true
         end
-        if sf.func == :bt2
+        if sf.func === :bt2
             global hasbt2 = true
         end
     end
@@ -125,10 +125,10 @@ lkup = map(lookup, btmacro())
 hasme = hasbtmacro = false
 for sfs in lkup
     for sf in sfs
-        if sf.func == Symbol("macro expansion")
+        if sf.func === Symbol("macro expansion")
             global hasme = true
         end
-        if sf.func == :btmacro
+        if sf.func === :btmacro
             global hasbtmacro = true
         end
     end
@@ -175,7 +175,7 @@ let bt, found = false
         bt = backtrace()
     end
     for frame in map(lookup, bt)
-        if frame[1].line == @__LINE__() - 3 && frame[1].file == Symbol(@__FILE__)
+        if frame[1].line == @__LINE__() - 3 && frame[1].file === Symbol(@__FILE__)
             found = true; break
         end
     end
@@ -184,10 +184,10 @@ end
 
 # issue 28618
 let bt, found = false
-    @info ""
+    @debug ""
     bt = backtrace()
     for frame in map(lookup, bt)
-        if frame[1].line == @__LINE__() - 2 && frame[1].file == Symbol(@__FILE__)
+        if frame[1].line == @__LINE__() - 2 && frame[1].file === Symbol(@__FILE__)
             found = true; break
         end
     end
@@ -205,8 +205,8 @@ let trace = try
     catch
         stacktrace(catch_backtrace())
     end
-    @test trace[1].func == Symbol("top-level scope")
-    @test trace[1].file == :a_filename
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
     @test trace[1].line == 2
 end
 let trace = try
@@ -219,9 +219,22 @@ let trace = try
     catch
         stacktrace(catch_backtrace())
     end
-    @test trace[1].func == Symbol("top-level scope")
-    @test trace[1].file == :a_filename
+    @test trace[1].func === Symbol("top-level scope")
+    @test trace[1].file === :a_filename
     @test trace[1].line == 2
+end
+
+# issue #45171
+linenum = @__LINE__; function f45171(;kwarg = true)
+    1
+    error()
+end
+let trace = try
+        f45171()
+    catch
+        stacktrace(catch_backtrace())
+    end
+    @test trace[3].line == linenum
 end
 
 # issue #29695 (see also test for #28442)
@@ -258,3 +271,88 @@ let code = """
     @test occursin("InterpreterIP in top-level CodeInfo for Main.A", bt_str)
 end
 
+"""
+    _reformat_sp(bt_data...) -> sp::Vector{Ptr{Cvoid}}
+
+Convert the output `bt_data` of `jl_backtrace_from_here` with `returnsp` flag set to a
+vector of valid stack pointers `sp`; i.e., `sp` is a subset of `bt_data[3]`.
+
+See also `Base._reformat_bt`.
+"""
+function _reformat_sp(
+    bt_raw::Array{Ptr{Cvoid},1},
+    bt2::Array{Any,1},
+    sp_raw::Array{Ptr{Cvoid},1},
+)
+    bt = Base._reformat_bt(bt_raw, bt2)
+    sp = empty!(similar(sp_raw))
+    i = j = 0
+    while true
+        # Advance `i` such that `bt[i] isa Ptr{Cvoid}` (native pointer).
+        local ip
+        while true
+            if i == lastindex(bt)
+                return sp
+            end
+            i += 1
+            x = bt[i]
+            if x isa Ptr{Cvoid}
+                ip = x
+                break
+            end
+        end
+        # Advance `j` such that `bt_raw[j] == bt[i]` to find a valid stack pointer.
+        while true
+            if j == lastindex(bt_raw)
+                return sp
+            end
+            j += 1
+            if bt_raw[j] == ip
+                push!(sp, sp_raw[j])
+                break
+            end
+        end
+    end
+end
+
+"""
+    withframeaddress(f)
+
+Call function `f` with an address `ptr::Ptr{Cvoid}` of an independent frame
+immediately outer to `f`.
+"""
+withframeaddress
+@eval @noinline function withframeaddress(f)
+    sp = Core.Intrinsics.llvmcall(
+        ($"""
+        declare i8* @llvm.frameaddress(i32)
+        define private i$(Sys.WORD_SIZE) @frameaddr() {
+            %1 = call i8* @llvm.frameaddress(i32 0)
+            %2 = ptrtoint i8* %1 to i$(Sys.WORD_SIZE)
+            ret i$(Sys.WORD_SIZE) %2
+        }""", "frameaddr"),
+        UInt,
+        Tuple{},
+    )
+    @noinline f(Ptr{Cvoid}(sp))
+end
+
+function sandwiched_backtrace()
+    local ptr1, ptr2, bt
+    withframeaddress() do p1
+        ptr1 = p1
+        bt = ccall(:jl_backtrace_from_here, Ref{Base.SimpleVector}, (Cint, Cint), true, 0)
+        withframeaddress() do p2
+            ptr2 = p2
+        end
+    end
+    return ptr1, ptr2, bt
+end
+
+@testset "stack pointers" begin
+    ptr1, ptr2, bt_data = sandwiched_backtrace()
+    sp = _reformat_sp(bt_data...)
+    @test ptr2 < sp[2]
+    @test sp[1] < ptr1
+    @test all(diff(Int128.(UInt.(sp))) .> 0)
+end
