@@ -12,10 +12,10 @@ endef
 
 # CSL bundles lots of system compiler libraries, and while it is quite bleeding-edge
 # as compared to what most distros ship, if someone tries to build an older branch,
-# the version of CSL that ships with that branch may become relatively old.  This is
-# not a problem for code that is built in BB, but when we build Julia with the system
+# the version of CSL that ships with that branch may be relatively old. This is not
+# a problem for code that is built in BB, but when we build Julia with the system
 # compiler, that compiler uses the version of `libstdc++` that it is bundled with,
-# and we can get linker errors when trying to run that `julia` executable with the
+# and we can get linker errors when trying to run that 	`julia` executable with the
 # `libstdc++` that comes from the (now old) BB-built CSL.
 #
 # To fix this, we take note when the system `libstdc++.so` is newer than whatever we

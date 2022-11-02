@@ -183,7 +183,7 @@ Deprecated or removed
 
 External dependencies
 ---------------------
-* On linux, now autodetects the system libstdc++ version, and automatically loads the system library if it is newer. The old behavior of loading the bundled libstdc++ regardless of the system version obtained by setting the environment variable `JULIA_PROBE_LIBSTDCXX=0`.
+* On Linux, now autodetects the system libstdc++ version, and automatically loads the system library if it is newer. The old behavior of loading the bundled libstdc++ regardless of the system version obtained by setting the environment variable `JULIA_PROBE_LIBSTDCXX=0`.
 * Removed `RPATH` from the julia binary. On Linux this may break libraries that have failed to set `RUNPATH`.
 
 Tooling Improvements

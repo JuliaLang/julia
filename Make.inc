@@ -1154,8 +1154,8 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL
 # 2. To know which libstdc++ to load at runtime
 # We want whichever libstdc++ library is newer, because if we don't it can cause problems.
-# While what CSL bundles is quite bleeding-edge compared to what most distros shop, if someone
-# tries to build an older branch of Julia, the version of CSL that ships with it may become
+# While what CSL bundles is quite bleeding-edge compared to what most distros ship, if someone
+# tries to build an older branch of Julia, the version of CSL that ships with it may be
 # relatively old. This is not a problem for code that is built in BB, but when we build Julia
 # with the system compiler, that compiler uses the version of `libstdc++` that it is bundled
 # with, and we can get linker errors when trying to run that `julia` executable with the
@@ -1165,7 +1165,7 @@ LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SP
 # in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
 # this case. This ensures that we link against a version with the symbols required.
 # We also check the system libstdc++ at runtime in the cli loader library, and
-# load it if it contains the version symbol that indicates than it is newer than the one
+# load it if it contains the version symbol that indicates that it is newer than the one
 # shipped with CSL. Although we do not depend on any of the symbols, it is entirely
 # possible that a user might choose to install a library which depends on symbols provided
 # by a newer libstdc++. Without runtime detection, those libraries would break.

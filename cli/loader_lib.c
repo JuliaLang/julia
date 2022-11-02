@@ -169,7 +169,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 // On Linux, it can happen that the system has a newer libstdc++ than the one we ship,
 // which can break loading of some system libraries: <https://github.com/JuliaLang/julia/issues/34276>.
 // As a fix, on linux we probe the system libstdc++ to see if it is newer, and then load it if it is.
-// Otherwise, we load the packaged one. This improves compatibility with third party dynamic libs that
+// Otherwise, we load the bundled one. This improves compatibility with third party dynamic libs that
 // may depend on symbols exported by the system libstdxc++.
 #ifdef _OS_LINUX_
 #ifndef GLIBCXX_LEAST_VERSION_SYMBOL
@@ -180,6 +180,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
 #include <link.h>
 #include <sys/wait.h>
 
+// write(), but handle errors and avoid EINTR
 static void write_wrapper(int fd, const char *str, size_t len)
 {
     size_t written_sofar = 0;
@@ -195,7 +196,7 @@ static void write_wrapper(int fd, const char *str, size_t len)
     }
 }
 
-// Where the buf passed in was malloced
+// read(), but handle errors and avoid EINTR
 static void read_wrapper(int fd, char **ret, size_t *ret_len)
 {
     // Allocate an initial buffer
