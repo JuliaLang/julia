@@ -557,7 +557,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     // semi-direct lookup of types
                     // TODO: the possibility of encountering `Type{Union{}}` in this intersection may
                     // be forcing us to do some extra work here whenever we see a typevar, even though
-                    // the likelyhood of that value actually occurring is frequently likely to be
+                    // the likelihood of that value actually occurring is frequently likely to be
                     // zero (or result in an ambiguous match)
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
                     if (jl_type_extract_name_precise(typetype, 1)) {

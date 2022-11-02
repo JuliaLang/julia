@@ -429,7 +429,7 @@ function foo9222()
 end
 @test 0.0 == foo9222()
 
-# branching based on inferrable conditions
+# branching based on inferable conditions
 let f(x) = isa(x,Int) ? 1 : ""
     @test Base.return_types(f, Tuple{Int}) == [Int]
 end
@@ -2105,7 +2105,7 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
-# `PartialStruct` shoudln't wrap `Conditional`
+# `PartialStruct` shouldn't wrap `Conditional`
 let M = Module()
     @eval M begin
         struct BePartialStruct
