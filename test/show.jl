@@ -2380,8 +2380,8 @@ Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
 @test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
 
 # spacing around dots in Diagonal, etc:
-redmiusthree = sprint((io, x) -> printstyled(io, x, color=:red), "-3", context=stdout)
-@test Base.replace_with_centered_mark(redmiusthree) == Base.replace_with_centered_mark("-3")
+redminusthree = sprint((io, x) -> printstyled(io, x, color=:red), "-3", context=stdout)
+@test Base.replace_with_centered_mark(redminusthree) == Base.replace_with_centered_mark("-3")
 
 # `show` implementations for `Method`
 let buf = IOBuffer()
