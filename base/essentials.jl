@@ -516,11 +516,11 @@ julia> reinterpret(Float32, UInt32[1 2 3 4 5])
 ```
 
 Additionally, `reinterpret` does not require the array `A` to have a dense block of memory;
-it can be "lazy" array whose elements are computed until the `getindex` call. For instance,
-`reinterpret` on range `1:6` works the same as the dense vector `collect(1:6)`:
+it can just as well be a "lazy" array whose elements are not computed until they are explicitly retrieved.
+For instance, `reinterpret` on the range `1:6` works similarly as on the dense vector `collect(1:6)`:
 
 ```jldoctest
-julia> reinterpret(Complex{Int}, 1:6) # `UnitRange` does not have a buffer holding array values
+julia> reinterpret(Complex{Int}, 1:6)
 3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
  1 + 2im
  3 + 4im
