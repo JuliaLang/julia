@@ -294,7 +294,7 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[26])
-        @test occursin("Expected: [\"BoundsError\", \"access\", \"1-element\", \"at index [2]\"]", str)
+        @test occursin("Expected: [\"BoundsError\", \"aquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
