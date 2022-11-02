@@ -1305,9 +1305,6 @@ Some collections follow a slightly different definition. For example,
 [`isequal`](@ref). To test for the presence of a key in a dictionary, use [`haskey`](@ref)
 or `k in keys(dict)`. For these collections, the result is always a `Bool` and never `missing`.
 
-To determine whether an item is not in a given collection, see [`∉`](@ref).
-You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
-
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `item` and `collection` are broadcasted over, which is often not what is intended.
 For example, if both arguments are vectors (and the dimensions match), the result is
@@ -1315,6 +1312,8 @@ a vector indicating whether each value in collection `items` is `in` the value a
 corresponding position in `collection`. To get a vector indicating whether each value
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
+See also: [`∉`](@ref).
 
 # Examples
 ```jldoctest
@@ -1339,17 +1338,8 @@ true
 julia> missing in Set([1, 2])
 false
 
-julia> (missing=>1) in Dict(1=>10, 2=>20, missing=>1)
-true
-
-julia> (1=>missing) in Dict(1=>10, 2=>20, missing=>NaN) # value contains missing
+julia> (1=>missing) in Dict(1=>10, 2=>20)
 missing
-
-julia> !(21 in a)
-true
-
-julia> !(19 in a)
-false
 
 julia> [1, 2] .∈ [2, 3]
 2-element BitVector:
