@@ -763,12 +763,13 @@ function lex_digit(l::Lexer, kind)
     accept_number(l, isdigit)
     pc,ppc = dpeekchar(l)
     if pc == '.'
-        if kind === K"Float"
+        if ppc == '.'
+            # Number followed by K".." or K"..."
+            return emit(l, kind)
+        elseif kind === K"Float"
             # If we enter the function with kind == K"Float" then a '.' has been parsed.
             readchar(l)
             return emit_error(l, K"ErrorInvalidNumericConstant")
-        elseif ppc == '.'
-            return emit(l, kind)
         elseif is_operator_start_char(ppc) && ppc !== ':'
             readchar(l)
             return emit_error(l)
@@ -838,7 +839,9 @@ function lex_digit(l::Lexer, kind)
             readchar(l)
             !(ishex(ppc) || ppc == '.') && return emit_error(l, K"ErrorInvalidNumericConstant")
             accept_number(l, ishex)
-            if accept(l, '.')
+            pc,ppc = dpeekchar(l)
+            if pc == '.' && ppc != '.'
+                readchar(l)
                 accept_number(l, ishex)
                 isfloat = true
             end
