@@ -2260,9 +2260,11 @@ end
                 ftime = mtime(f)
                 is_stale = ( ftime != ftime_req ) &&
                            ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                           ( ftime != ceil(ftime_req) ) &&            # Compensate for CirceCI's truncating of timestamps in its caching https://circleci.com/docs/caching/
                            ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
                            ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
                            !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
+
                 if is_stale
                     @debug "Rejecting stale cache file $cachefile (mtime $ftime_req) because file $f (mtime $ftime) has changed"
                     return true
