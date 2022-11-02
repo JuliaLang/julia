@@ -1137,7 +1137,7 @@ function unsafe_append!(a::Vector, items::AbstractVector)
 end
 
 function append!(a::AbstractVector, iter)
-    if  IteratorEltype(iter) == HasEltype() && eltype(iter) <: eltype(a)
+    if  IteratorEltype(iter) === HasEltype() && eltype(iter) <: eltype(a)
         _unsafe_append!(a, IteratorSize(iter), iter)
     else
         _try_append!(a, IteratorSize(iter), iter)
@@ -1240,7 +1240,7 @@ function unsafe_prepend!(a::Vector, items::AbstractVector)
 end
 
 function prepend!(a::AbstractVector, iter)
-    if IteratorEltype(iter) == HasEltype() && eltype(iter) <: eltype(a)
+    if IteratorEltype(iter) === HasEltype() && eltype(iter) <: eltype(a)
         _unsafe_prepend!(a, IteratorSize(iter), iter)
     else
         _try_prepend!(a, IteratorSize(iter), iter)
