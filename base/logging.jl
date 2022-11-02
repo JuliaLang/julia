@@ -42,7 +42,7 @@ function handle_message end
 """
     shouldlog(logger, level, _module, group, id)
 
-Return true when `logger` accepts a message at `level`, generated for
+Return `true` when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
 function shouldlog end
@@ -58,7 +58,7 @@ function min_enabled_level end
 """
     catch_exceptions(logger)
 
-Return true if the logger should catch exceptions which happen during log
+Return `true` if the logger should catch exceptions which happen during log
 record construction.  By default, messages are caught
 
 By default all exceptions are caught to prevent log message generation from
@@ -671,8 +671,8 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
         remaining > 0 || return
     end
     buf = IOBuffer()
-    stream = logger.stream
-    if !isopen(stream)
+    stream::IO = logger.stream
+    if !(isopen(stream)::Bool)
         stream = stderr
     end
     iob = IOContext(buf, stream)

@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, arrayref
+import Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, arrayref
 
 const Callable = Union{Function,Type}
 
@@ -12,6 +12,8 @@ length(a::Array) = arraylen(a)
 # This is more complicated than it needs to be in order to get Win64 through bootstrap
 eval(:(getindex(A::Array, i1::Int) = arrayref($(Expr(:boundscheck)), A, i1)))
 eval(:(getindex(A::Array, i1::Int, i2::Int, I::Int...) = (@inline; arrayref($(Expr(:boundscheck)), A, i1, i2, I...))))
+
+==(a::GlobalRef, b::GlobalRef) = a.mod === b.mod && a.name === b.name
 
 """
     AbstractSet{T}
@@ -451,7 +453,7 @@ end
 """
     oftype(x, y)
 
-Convert `y` to the type of `x` (`convert(typeof(x), y)`).
+Convert `y` to the type of `x` i.e. `convert(typeof(x), y)`.
 
 # Examples
 ```jldoctest
@@ -686,15 +688,12 @@ end
 
 # SimpleVector
 
-function getindex(v::SimpleVector, i::Int)
-    @boundscheck if !(1 <= i <= length(v))
-        throw(BoundsError(v,i))
-    end
-    return ccall(:jl_svec_ref, Any, (Any, Int), v, i - 1)
-end
-
+@eval getindex(v::SimpleVector, i::Int) = Core._svec_ref($(Expr(:boundscheck)), v, i)
 function length(v::SimpleVector)
-    return ccall(:jl_svec_len, Int, (Any,), v)
+    t = @_gc_preserve_begin v
+    len = unsafe_load(Ptr{Int}(pointer_from_objref(v)))
+    @_gc_preserve_end t
+    return len
 end
 firstindex(v::SimpleVector) = 1
 lastindex(v::SimpleVector) = length(v)
@@ -749,7 +748,7 @@ function isassigned end
 
 function isassigned(v::SimpleVector, i::Int)
     @boundscheck 1 <= i <= length(v) || return false
-    return ccall(:jl_svec_isassigned, Bool, (Any, Int), v, i - 1)
+    return true
 end
 
 
@@ -768,6 +767,7 @@ see [`:`](@ref).
 struct Colon <: Function
 end
 const (:) = Colon()
+
 
 """
     Val(c)
@@ -809,7 +809,7 @@ function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
     end
-    return Core._call_latest(Core.kwfunc(f), kwargs, f, args...)
+    return Core._call_latest(Core.kwcall, kwargs, f, args...)
 end
 
 """
@@ -843,11 +843,10 @@ function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; k
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)
     end
-    return Core._call_in_world(world, Core.kwfunc(f), kwargs, f, args...)
+    return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
-# TODO: possibly make this an intrinsic
-inferencebarrier(@nospecialize(x)) = RefValue{Any}(x).x
+inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
     isempty(collection) -> Bool

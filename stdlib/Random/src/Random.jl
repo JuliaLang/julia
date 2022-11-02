@@ -215,7 +215,7 @@ end
 # TODO: make constraining constructors to enforce that those
 # types are <: Sampler{T}
 
-##### Adapter to generate a randome value in [0, n]
+##### Adapter to generate a random value in [0, n]
 
 struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T
@@ -433,5 +433,11 @@ true
 ```
 """
 seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
+
+# Randomize quicksort pivot selection. This code is here because of bootstrapping:
+# we need to sort things before we load this standard library.
+# TODO move this into Sort.jl
+Base.delete_method(only(methods(Base.Sort.select_pivot)))
+Base.Sort.select_pivot(lo::Integer, hi::Integer) = rand(lo:hi)
 
 end # module

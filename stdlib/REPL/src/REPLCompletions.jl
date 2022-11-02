@@ -205,6 +205,7 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
             if isconcretetype(t)
                 fields = fieldnames(t)
                 for field in fields
+                    isa(field, Symbol) || continue # Tuple type has ::Int field name
                     s = string(field)
                     if startswith(s, name)
                         push!(suggestions, FieldCompletion(t, field))
@@ -319,7 +320,12 @@ function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_
 end
 
 function complete_expanduser(path::AbstractString, r)
-    expanded = expanduser(path)
+    expanded =
+        try expanduser(path)
+        catch e
+            e isa ArgumentError || rethrow()
+            path
+        end
     return Completion[PathCompletion(expanded)], r, path != expanded
 end
 
@@ -409,9 +415,9 @@ function get_value(sym::Expr, fn)
     end
     sym.head !== :. && return (nothing, false)
     for ex in sym.args
-        ex, found = get_value(ex, fn)
+        ex, found = get_value(ex, fn)::Tuple{Any, Bool}
         !found && return (nothing, false)
-        fn, found = get_value(ex, fn)
+        fn, found = get_value(ex, fn)::Tuple{Any, Bool}
         !found && return (nothing, false)
     end
     return (fn, true)

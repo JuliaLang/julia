@@ -20,8 +20,8 @@ export
     scal!,
     scal,
     blascopy!,
-    axpy!,
-    axpby!,
+    # xAXPY!,
+    # xAXPBY!,
     # xDOT
     dotc,
     dotu,
@@ -167,7 +167,7 @@ end
 # Level 1
 # A help function to pick the pointer and inc for 1d like inputs.
 @inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
-    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simpify runtime check when possibe
+    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simplify runtime check when possibe
     st, ptr = checkedstride(x), pointer(x)
     isnothing(stride0check) || (st == 0 && throw(stride0check))
     ptr += min(st, 0) * sizeof(eltype(x)) * (length(x) - 1)
@@ -1737,14 +1737,14 @@ hemm!
 
 Rank-k update of the symmetric matrix `C` as `alpha*A*transpose(A) + beta*C` or
 `alpha*transpose(A)*A + beta*C` according to [`trans`](@ref stdlib-blas-trans).
-Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Return `C`.
 """
 function syrk! end
 
 """
     syrk(uplo, trans, alpha, A)
 
-Returns either the upper triangle or the lower triangle of `A`,
+Return either the upper triangle or the lower triangle of `A`,
 according to [`uplo`](@ref stdlib-blas-uplo),
 of `alpha*A*transpose(A)` or `alpha*transpose(A)*A`,
 according to [`trans`](@ref stdlib-blas-trans).
@@ -1916,7 +1916,7 @@ end
 """
     syr2k(uplo, trans, A, B)
 
-Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*transpose(B) + B*transpose(A)`
+Return the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*transpose(B) + B*transpose(A)`
 or `transpose(A)*B + transpose(B)*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
 syr2k(uplo::AbstractChar, trans::AbstractChar, A::AbstractVecOrMat, B::AbstractVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
@@ -1969,14 +1969,14 @@ end
 Rank-2k update of the Hermitian matrix `C` as
 `alpha*A*B' + alpha*B*A' + beta*C` or `alpha*A'*B + alpha*B'*A + beta*C`
 according to [`trans`](@ref stdlib-blas-trans). The scalar `beta` has to be real.
-Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Returns `C`.
+Only the [`uplo`](@ref stdlib-blas-uplo) triangle of `C` is used. Return `C`.
 """
 function her2k! end
 
 """
     her2k(uplo, trans, alpha, A, B)
 
-Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*B' + alpha*B*A'`
+Return the [`uplo`](@ref stdlib-blas-uplo) triangle of `alpha*A*B' + alpha*B*A'`
 or `alpha*A'*B + alpha*B'*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
 her2k(uplo, trans, alpha, A, B)
@@ -1984,7 +1984,7 @@ her2k(uplo, trans, alpha, A, B)
 """
     her2k(uplo, trans, A, B)
 
-Returns the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*B' + B*A'`
+Return the [`uplo`](@ref stdlib-blas-uplo) triangle of `A*B' + B*A'`
 or `A'*B + B'*A`, according to [`trans`](@ref stdlib-blas-trans).
 """
 her2k(uplo, trans, A, B)
@@ -1999,14 +1999,14 @@ Update `B` as `alpha*A*B` or one of the other three variants determined by
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
 are assumed to be all ones.
-Returns the updated `B`.
+Return the updated `B`.
 """
 function trmm! end
 
 """
     trmm(side, ul, tA, dA, alpha, A, B)
 
-Returns `alpha*A*B` or one of the other three variants determined by
+Return `alpha*A*B` or one of the other three variants determined by
 [`side`](@ref stdlib-blas-side) and [`tA`](@ref stdlib-blas-trans).
 Only the [`ul`](@ref stdlib-blas-uplo) triangle of `A` is used.
 [`dA`](@ref stdlib-blas-diag) determines if the diagonal values are read or
