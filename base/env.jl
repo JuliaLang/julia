@@ -97,6 +97,38 @@ See also: [`withenv`](@ref), [`addenv`](@ref).
 """
 const ENV = EnvDict()
 
+"""
+    Base.get_bool_env(name::String, default::Bool = false)::Bool
+
+Evaluate whether the value of environnment variable `name` is truthy or falsy,
+and error if none are recognized. If the variable is not set, or is set to "",
+return `default`.
+
+Recognized values are:
+    truthy: "t", "true", "y", "yes", "1"
+    falsy:  "f", "false", "n", "no", "0"
+"""
+function get_bool_env(name::String, default::Bool = false)
+    haskey(ENV, name) || return default
+    val = lowercase(get(ENV, name, ""))
+    truthy = ("t", "true", "y", "yes", "1")
+    falsy = ("f", "false", "n", "no", "0")
+    if isempty(val)
+        return default
+    elseif val in truthy
+        return true
+    elseif val in falsy
+        return false
+    else
+        error("""
+        Failed to parse the value `$val` of environment variable `$name` as Boolean.
+        Recognized values are:
+            truthy: $(join(repr.(truthy), ", "))
+            falsy:  $(join(repr.(falsy), ", "))
+        """)
+    end
+end
+
 getindex(::EnvDict, k::AbstractString) = access_env(k->throw(KeyError(k)), k)
 get(::EnvDict, k::AbstractString, def) = access_env(Returns(def), k)
 get(f::Callable, ::EnvDict, k::AbstractString) = access_env(k->f(), k)
