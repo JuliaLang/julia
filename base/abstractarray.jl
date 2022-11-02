@@ -323,18 +323,26 @@ end
 
 """
     eachindex(A...)
+    eachindex(::IndexStyle, A::AbstractArray...)
 
 Create an iterable object for visiting each index of an `AbstractArray` `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
-simply the range `1:length(A)`. For other array types, return a specialized Cartesian
-range to efficiently index into the array with indices specified for every dimension. For
-other iterables, including strings and dictionaries, return an iterator object
-supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+simply the range `1:length(A)` if they use 1-based indexing.
+For array types that have not opted into fast linear indexing, a specialized Cartesian
+range is typically returned to efficiently index into the array with indices specified
+for every dimension.
+
+In general `eachindex` accepts arbitrary iterables, including strings and dictionaries, and returns
+an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+
+If `A` is `AbstractArray` it is possible to explicitly specify the style of the indices that
+should be returned by `eachindex` by passing a value having `IndexStyle` type as its first argument
+(typically `IndexLinear()` if linear indices are required or `IndexCartesian()` if Cartesian
+range is wanted).
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a [`UnitRange`](@ref)
-if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
-otherwise).
+iterable object that is fast for all arguments (typically a [`UnitRange`](@ref)
+if all inputs have fast linear indexing, a [`CartesianIndices`](@ref) otherwise).
 If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
 
@@ -1941,7 +1949,7 @@ This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(
 and their higher-dimensional analogues.
 
 The special case `dims=1` is [`vcat`](@ref), and `dims=2` is [`hcat`](@ref).
-See also [`hvcat`](@ref), [`stack`](@ref), [`repeat`](@ref).
+See also [`hvcat`](@ref), [`hvncat`](@ref), [`stack`](@ref), [`repeat`](@ref).
 
 The keyword also accepts `Val(dims)`.
 
