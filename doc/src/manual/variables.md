@@ -201,12 +201,12 @@ julia> b   # b refers to the same array, which has been changed
   3
 ```
 That is, `a[i] = value` (an alias for [`setindex!`](@ref)) *mutates* an existing array object
-in memory, and both names `a` and `b` for this object.     The other main syntax to mutate
+in memory, accessible via either the name `a` or `b`.     The other common syntax to mutate
 an existing object is `a.field = value` (an alias for [`setproperty!`](@ref)), which can
 be used to change a [`mutable struct`](@ref).
 
 When you call a [function](@ref man-functions) in Julia, it behaves as if you *assigned*
-the argument values to new variables corresponding to the function arguments, as discussed
+the argument values to new variable names corresponding to the function arguments, as discussed
 in [Argument-Passing Behavior](@ref man-functions).  (By [convention](@ref man-punctuation),
 functions that mutate one or more of their arguments have names ending with `!`.)
 
