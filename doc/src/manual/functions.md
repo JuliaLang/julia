@@ -716,7 +716,7 @@ from `Dates` module constructs a `Date` type for a given year `y`, month `m` and
 However, `m` and `d` arguments are optional and their default value is `1`.
 This behavior can be expressed concisely as:
 
-```julia-repl
+```jldoctest date_default_args
 julia> using Dates
 
 julia> function date(y::Int64, m::Int64=1, d::Int64=1)
@@ -733,7 +733,7 @@ of type `UTInstant{Day}`.
 With this definition, the function can be called with either one, two or three arguments, and
 `1` is automatically passed when only one or two of the arguments are specified:
 
-```julia-repl
+```jldoctest date_default_args
 julia> date(2000, 12, 12)
 2000-12-12
 
