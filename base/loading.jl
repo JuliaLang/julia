@@ -900,6 +900,7 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
 
     opath = string(chopsuffix(path, ".ji"), ".", Base.Libc.dlext)
     if ispath(opath)
+        # TODO: Handle --pkgimage-native-code confusion
         @debug "Loading object cache file $opath for $pkg"
         sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), opath, depmods)
     else
@@ -1757,6 +1758,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
         # --math-mode :sweat:
         # --inline / --check-bounds
         # --code-coverage / --track-allocation
+        # --use_pkgimage_native_code so that `.ji` and `.so` can co-exist
         crc = _crc32c(prefs_hash, crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
@@ -1805,7 +1807,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = Linking.use_objcache()
+    cache_objects = JLOptions().use_pkgimage_native_code != 0
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects
@@ -2248,8 +2250,13 @@ end
             return true # ignore empty file
         end
         if !isempty(clone_targets)
+            if JLOptions().use_pkgimage_native_code == 0
+                # presence of clone_targets means native code cache
+                @debug "Rejection cache file $cachefile for $modkey since it would require usage of pkgimage"
+                return true
+            end
             if ccall(:jl_is_pkgimage_viable, Int8, (Ptr{Cchar},), clone_targets) == 0
-                @debug "Rejection cache file $cachefile for $modkey since it can't be loaded on this target"
+                @debug "Rejection cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
                 return true
             end
         end

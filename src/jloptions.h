@@ -41,6 +41,7 @@ typedef struct {
     const char *cookie;
     int8_t handle_signals;
     int8_t use_sysimage_native_code;
+    int8_t use_pkgimage_native_code;
     int8_t use_compiled_modules;
     const char *bindto;
     const char *outputbc;
