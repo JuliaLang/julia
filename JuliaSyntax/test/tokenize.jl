@@ -21,6 +21,13 @@ tok(str, i = 1) = collect(tokenize(str))[i]
 
 strtok(str) = untokenize.(collect(tokenize(str)), str)
 
+function toks(str)
+    ts = [untokenize(t, str)=>kind(t) for t in tokenize(str)]
+    @test ts[end] == (""=>K"EndMarker")
+    pop!(ts)
+    ts
+end
+
 @testset "tokens" begin
     for s in ["a", IOBuffer("a")]
         l = tokenize(s)
@@ -553,7 +560,7 @@ end
     @test kind(tok("1234x", 2))        == K"Identifier"
 end
 
-@testset "floats with trailing `.` " begin
+@testset "numbers with trailing `.` " begin
     @test tok("1.0").kind == K"Float"
     @test tok("1.a").kind == K"Float"
     @test tok("1.(").kind == K"Float"
@@ -569,7 +576,10 @@ end
     @test tok("1.").kind == K"Float"
     @test tok("1.\"text\" ").kind == K"Float"
 
-    @test tok("1..").kind  == K"Integer"
+    @test toks("1..")    == ["1"=>K"Integer",   ".."=>K".."]
+    @test toks(".1..")   == [".1"=>K"Float",    ".."=>K".."]
+    @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
+
     @test kind.(collect(tokenize("1f0./1"))) == [K"Float", K"/", K"Integer", K"EndMarker"]
 end
 
