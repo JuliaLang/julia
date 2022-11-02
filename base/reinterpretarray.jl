@@ -111,7 +111,7 @@ of size `n` and `B` lacks `A`'s first dimension. Conversely, if `sizeof(S) = n*s
 
 ```jldoctest
 julia> A = [1 2; 3 4]
-2×2 Matrix{Int64}:
+2×2 Matrix{$Int}:
  1  2
  3  4
 
@@ -121,23 +121,23 @@ julia> reinterpret(reshape, Complex{Int}, A)    # the result is a vector
  2 + 4im
 
 julia> a = [(1,2,3), (4,5,6)]
-2-element Vector{Tuple{Int64, Int64, Int64}}:
+2-element Vector{Tuple{$Int, $Int, $Int}}:
  (1, 2, 3)
  (4, 5, 6)
 
 julia> reinterpret(reshape, Int, a)             # the result is a matrix
-3×2 reinterpret(reshape, Int64, ::Vector{Tuple{Int64, Int64, Int64}}) with eltype Int64:
+3×2 reinterpret(reshape, $Int, ::Vector{Tuple{$Int, $Int, $Int}}) with eltype $Int:
  1  4
  2  5
  3  6
 
 julia> M = LinearIndices((2, 3))
-2×3 LinearIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}:
+2×3 LinearIndices{2, Tuple{$(Base.OneTo{Int}), $(Base.OneTo{Int})}}:
  1  3  5
  2  4  6
 
 julia> reinterpret(reshape, Complex{Int}, M) # `LinearIndices` does not have a buffer holding array values
-3-element reinterpret(reshape, Complex{Int64}, ::LinearIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}) with eltype Complex{Int64}:
+3-element reinterpret(reshape, Complex{$Int}, ::LinearIndices{2, Tuple{$(Base.OneTo{Int}), $(Base.OneTo{Int})}}) with eltype Complex{$Int}:
  1 + 2im
  3 + 4im
  5 + 6im

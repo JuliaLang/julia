@@ -521,11 +521,12 @@ it can be "lazy" array whose elements are computed until the `getindex` call. Fo
 
 ```jldoctest
 julia> reinterpret(Complex{Int}, 1:6) # `UnitRange` does not have a buffer holding array values
-3-element reinterpret(Complex{Int64}, ::UnitRange{Int64}):
+3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
  1 + 2im
  3 + 4im
  5 + 6im
 ```
+
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 
