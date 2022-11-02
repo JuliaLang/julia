@@ -638,7 +638,8 @@ struct Small{N, T <: Algorithm, U <: Algorithm} <: Algorithm
     small::T
     big::U
 end
-Small{N}(big) where N = Small{N, typeof(SMALL_ALGORITHM), typeof(big)}(SMALL_ALGORITHM, big)
+Small{N}(small, big) where N = Small{N, typeof(small), typeof(big)}(small, big)
+Small{N}(big) where N = Small{N}(SMALL_ALGORITHM, big)
 function _sort!(v::AbstractVector, a::Small{N}, o::Ordering, kw) where N
     @getkw lenm1
     if lenm1 < N
@@ -1115,7 +1116,11 @@ The specific optimizations attempted by `InitialOptimizations` are
 [`MissingOptimization`](@ref), [`BoolOptimization`](@ref), dispatch to
 [`InsertionSort`](@ref) for inputs with `length <= 10`, and [`IEEEFloatOptimization`](@ref).
 """
-InitialOptimizations(next) = MissingOptimization(BoolOptimization(Small{10}(IEEEFloatOptimization(next))))
+InitialOptimizations(next) = MissingOptimization(
+    BoolOptimization(
+        Small{10}(
+            IEEEFloatOptimization(
+                next))))
 """
     DEFAULT_STABLE
 
@@ -1190,9 +1195,17 @@ stage.
 Finally, if the input has length less than 80, we dispatch to [`InsertionSort`](@ref) and
 otherwise we dispatch to [`QuickSort`](@ref).
 """
-const DEFAULT_STABLE = InitialOptimizations(IsUIntMappable(
-    Small{40}(CheckSorted(ComputeExtrema(ConsiderCountingSort(ConsiderRadixSort(Small{80}(QuickSort)))))),
-    StableCheckSorted(QuickSort)))
+const DEFAULT_STABLE = InitialOptimizations(
+    IsUIntMappable(
+        Small{40}(
+            CheckSorted(
+                ComputeExtrema(
+                    ConsiderCountingSort(
+                        ConsiderRadixSort(
+                            Small{80}(
+                                QuickSort)))))),
+        StableCheckSorted(
+            QuickSort)))
 """
     DEFAULT_UNSTABLE
 
@@ -1204,6 +1217,28 @@ the same as those used by [`DEFAULT_STABLE`](@ref), but this is subject to chang
 const DEFAULT_UNSTABLE = DEFAULT_STABLE
 const SMALL_THRESHOLD  = 20
 
+function Base.show(io::IO, alg::Algorithm)
+    print_tree(io, alg, 0)
+end
+function print_tree(io::IO, alg::Algorithm, cols::Int)
+    print(io, "    "^cols)
+    show_type(io, alg)
+    print(io, '(')
+    for (i, name) in enumerate(fieldnames(typeof(alg)))
+        arg = getproperty(alg, name)
+        i > 1 && print(io, ',')
+        if arg isa Algorithm
+            println(io)
+            print_tree(io, arg, cols+1)
+        else
+            i > 1 && print(io, ' ')
+            print(io, arg)
+        end
+    end
+    print(io, ')')
+end
+show_type(io::IO, alg::Algorithm) = Base.show_type_name(io, typeof(alg).name)
+show_type(io::IO, alg::Small{N}) where N = print(io, "Base.Sort.Small{$N}")
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
 

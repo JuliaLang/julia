@@ -815,6 +815,13 @@ end
     end
 end
 
+@testset "show(::Algorithm)" begin
+    @test eval(Meta.parse(string(Base.DEFAULT_STABLE))) === Base.DEFAULT_STABLE
+    lines = split(string(Base.DEFAULT_STABLE), '\n')
+    @test 10 < maximum(length, lines) < 100
+    @test 1 < length(lines) < 30
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
