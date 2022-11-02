@@ -31,8 +31,8 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
 """
     (:)(start, [step], stop)
 
-Range operator. `a:b` constructs a range from `a` to `b` with an implicit step size
-of 1 (often a [`UnitRange`](@ref)), and `a:s:b` is similar but uses an explicit step
+Range operator. `a:b` constructs a range from `a` to `b` with a step size
+of 1 (often a [`UnitRange`](@ref)), and `a:s:b` is similar but uses a step
 size of `s` (a [`StepRange`](@ref) or [`StepRangeLen`](@ref)).
 See also [`range`](@ref) for more control.
 
