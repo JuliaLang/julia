@@ -54,14 +54,54 @@ julia> ∑(2, 3)
 5
 ```
 
-## Argument Passing Behavior
+## [Argument Passing Behavior](@id man-argument-passing)
 
 Julia function arguments follow a convention sometimes called "pass-by-sharing", which means that
 values are not copied when they are passed to functions. Function arguments themselves act as
-new variable *bindings* (new locations that can refer to values), but the values they refer to
+new variable *bindings* (new locations that can refer to values), much like
+[assignments](@ref man-assignment-expressions) `argument_name = argument_value`, so that the values they refer to
 are identical to the passed values. Modifications to mutable values (such as `Array`s) made within
-a function will be visible to the caller. This is the same behavior found in Scheme, most Lisps,
-Python, Ruby and Perl, among other dynamic languages.
+a function will be visible to the caller. (This is the same behavior found in Scheme, most Lisps,
+Python, Ruby and Perl, among other dynamic languages.)
+
+For example, in the function
+```
+function f(x, y)
+    y[1] = 2    # mutates y
+    x = 7 + x   # new binding for x, no mutation
+    return x
+end
+```
+The statement `y[1] = 2` *mutates* the object `y`, and hence this change *will* be visible in the array passed
+by the caller for this argument.   On the other hand, the assignment `x = 7 + x` changes the *binding* ("name")
+`x` to refer to a new value `7 + x`, rather than mutating the *original* object referred to by `x`,
+and hence does *not* change the corresponding argument passed by the caller.   This can be seen if we call `f(x, y)`:
+```
+julia> a = 3
+3
+
+julia> b = [4,5,6]
+3-element Vector{Int64}:
+ 4
+ 5
+ 6
+
+julia> f(a, b) # returns 7 + a == 10
+10
+
+julia> a  # not changed
+3
+
+julia> b  # b[1] is changed to 2 by f
+3-element Vector{Int64}:
+ 2
+ 5
+ 6
+```
+As a common convention in Julia (not a syntactic requirement), such a function would
+[typically be named `f!(x, y)`](@ref man-punctuation) rather than `f(x, y)`, as a visual reminder at
+the call site that at least one of the arguments is being mutated.
+
 
 ## Argument-type declarations
 

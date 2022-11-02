@@ -147,6 +147,70 @@ are treated as equivalent to the corresponding Greek letters. The middle dot
 treated as the mathematical dot operator `⋅` (U+22C5).
 The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign `-` (U+002D).
 
+## [Assignment expressions and assignment versus mutation](@id man-assignment-expressions)
+
+An assignment `variable = value` "binds" the name `variable` to the `value` computed
+on the right-hand-side, and the whole assignment is treated by Julia as an expression
+equal to the right-hand-side `value`.  This means that assignments can be *chained*
+(the same `value` assigned to multiple variables with `variable1 = variable2 = value`)
+or used in other expressions, and is also why their result is shown in the REPL as
+the value of the right-hand-side.  (In general, the REPL displays the value of whatever
+expression you evaluate.)  For example, here the right-hand-side `4` of `b = 2+2` is
+used in another arithmetic operation and assignment:
+```jldoctest
+julia> a = (b = 2+2) + 3
+7
+
+julia> a
+7
+
+julia> b
+4
+```
+
+A common confusion is the distinction between *assignment* (giving a new "name" to a value)
+and *mutation* (changing a value).  If you run `a = 2` followed by `a = 3`, you have changed
+the "name" `a` to refer to a new value `3` … you haven't changed the number `2`, so `2+2`
+will still give `4` and not `6`!   This distinction becomes more clear when dealing with
+*mutable* types like [arrays](@ref lib-arrays), whose contents *can* be changed:
+```jldoctest
+julia> a = [1,2,3] # an array of 3 integers
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+
+julia> b = a   # both b and a are names for the same array!
+3-element Vector{Int64}:
+ 1
+ 2
+ 3
+ ```
+ Here, the line `b = a` does *not* make a copy of the array `a`, it simply binds the name
+ `b` to the *same* array `a`: both `b` and `a` "point" to one array `[1,2,3]` in memory.
+ In contrast, an assignment `a[i] = value` *changes* the *contents* of the array, and the
+ results will be visible through either the names `a` or `b`:
+ ```jldoctest
+ julia> a[1] = 42  # change the first element
+42
+
+julia> b   # b refers to the same array, which has been changed
+3-element Vector{Int64}:
+ 42
+  2
+  3
+```
+That is, `a[i] = value` (an alias for [`setindex!`](@ref)) *mutates* an existing array object
+in memory, and both names `a` and `b` for this object.     The other main syntax to mutate
+an existing object is `a.field = value` (an alias for [`setproperty!`](@ref)), which can
+be used to change a [`mutable struct`](@ref).
+
+When you call a [function](@ref man-functions) in Julia, it behaves as if you *assigned*
+the argument values to new variables corresponding to the function arguments, as discussed
+in [Argument-Passing Behavior](@ref man-functions).  (By [convention](@ref man-punctuation),
+functions that mutate one or more of their arguments have names ending with `!`.)
+
+
 ## Stylistic Conventions
 
 While Julia imposes few restrictions on valid names, it has become useful to adopt the following
