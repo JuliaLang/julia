@@ -190,7 +190,7 @@ julia> b = a   # both b and a are names for the same array!
  `b` to the *same* array `a`: both `b` and `a` "point" to one array `[1,2,3]` in memory.
  In contrast, an assignment `a[i] = value` *changes* the *contents* of the array, and the
  results will be visible through either the names `a` or `b`:
- ```jldoctest
+ ```
  julia> a[1] = 42  # change the first element
 42
 
