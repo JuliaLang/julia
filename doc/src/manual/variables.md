@@ -191,19 +191,24 @@ julia> b = a   # both b and a are names for the same array!
  In contrast, an assignment `a[i] = value` *changes* the *contents* of the array, and the
  results will be visible through either the names `a` or `b`:
  ```
- julia> a[1] = 42  # change the first element
+julia> a[1] = 42  # change the first element
 42
 
-julia> b   # b refers to the same array, which has been changed
+julia> a = 3.14159 # a is now the name of a different object
+3.14159
+
+julia> b   # b refers to the original array object, which has been changed
 3-element Vector{Int64}:
  42
   2
   3
 ```
 That is, `a[i] = value` (an alias for [`setindex!`](@ref)) *mutates* an existing array object
-in memory, accessible via either the name `a` or `b`.     The other common syntax to mutate
-an existing object is `a.field = value` (an alias for [`setproperty!`](@ref)), which can
-be used to change a [`mutable struct`](@ref).
+in memory, accessible via either the name `a` or `b`.  Subsequently setting `a = 3.14159`
+does not change this array, it simply binds `a` to a different object; the array is still
+accessible via `b`. The other common syntax to mutate an existing object is
+`a.field = value` (an alias for [`setproperty!`](@ref)), which can be used to change
+a [`mutable struct`](@ref).
 
 When you call a [function](@ref man-functions) in Julia, it behaves as if you *assigned*
 the argument values to new variable names corresponding to the function arguments, as discussed
