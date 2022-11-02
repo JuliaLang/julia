@@ -573,7 +573,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 {
     size_t j;
-    // TOOD: This shouldn't be necessary
+    // TODO: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp)
@@ -609,7 +609,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key, size_t n, int leaf)
 {
     size_t j;
-    // TOOD: This shouldn't be necessary
+    // TODO: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp)

@@ -468,7 +468,7 @@ end
     @test_throws ArgumentError reinterpret(Nothing, 1:6)
     @test_throws ArgumentError reinterpret(reshape, Missing, [0.0])
 
-    # reintepret of empty array
+    # reinterpret of empty array
     @test reinterpret(reshape, Nothing, fill(missing, (1,0,3))) == fill(nothing, (1,0,3))
     @test reinterpret(reshape, Missing, fill((), (0,))) == fill(missing, (0,))
     @test_throws ArgumentError reinterpret(reshape, Nothing, fill(3.2, (0,0)))
