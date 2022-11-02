@@ -190,6 +190,8 @@ Every macro also implicitly gets passed the arguments `__source__`, which contai
 and file name the macro is called from, and `__module__`, which is the module the macro is expanded
 in.
 
+See the manual section on [Metaprogramming](@ref) for more information about how to write a macro.
+
 # Examples
 ```jldoctest
 julia> macro sayhello(name)
@@ -793,7 +795,7 @@ julia> f(2)
 7
 ```
 
-Anonymous functions can also be defined for multiple argumets.
+Anonymous functions can also be defined for multiple arguments.
 ```jldoctest
 julia> g = (x,y) -> x^2 + y^2
 #2 (generic function with 1 method)
@@ -1748,7 +1750,7 @@ A symbol in the current scope is not defined.
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
 
 julia> a = 1;
 
@@ -1771,7 +1773,7 @@ julia> function my_func(;my_arg)
 my_func (generic function with 1 method)
 
 julia> my_func()
-ERROR: UndefKeywordError: keyword argument my_arg not assigned
+ERROR: UndefKeywordError: keyword argument `my_arg` not assigned
 Stacktrace:
  [1] my_func() at ./REPL[1]:2
  [2] top-level scope at REPL[2]:1
@@ -2897,7 +2899,7 @@ Base.setproperty!
     swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic)
 
 The syntax `@atomic a.b, _ = c, a.b` returns `(c, swapproperty!(a, :b, c, :sequentially_consistent))`,
-where there must be one getfield expression common to both sides.
+where there must be one `getproperty` expression common to both sides.
 
 See also [`swapfield!`](@ref Core.swapfield!)
 and [`setproperty!`](@ref Base.setproperty!).
@@ -2907,9 +2909,9 @@ Base.swapproperty!
 """
     modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic)
 
-The syntax `@atomic max(a().b, c)` returns `modifyproperty!(a(), :b,
-max, c, :sequentially_consistent))`, where the first argument must be a
-`getfield` expression and is modified atomically.
+The syntax `@atomic op(x.f, v)` (and its equivalent `@atomic x.f op v`) returns
+`modifyproperty!(x, :f, op, v, :sequentially_consistent)`, where the first argument
+must be a `getproperty` expression and is modified atomically.
 
 Invocation of `op(getproperty(x, f), v)` must return a value that can be stored in the field
 `f` of the object `x` by default.  In particular, unlike the default behavior of
@@ -3059,7 +3061,7 @@ See also [`"`](@ref \")
 kw"\"\"\""
 
 """
-    donotdelete(args...)
+    Base.donotdelete(args...)
 
 This function prevents dead-code elimination (DCE) of itself and any arguments
 passed to it, but is otherwise the lightest barrier possible. In particular,
@@ -3076,16 +3078,17 @@ This is intended for use in benchmarks that want to guarantee that `args` are
 actually computed. (Otherwise DCE may see that the result of the benchmark is
 unused and delete the entire benchmark code).
 
-**Note**: `donotdelete` does not affect constant folding. For example, in
-          `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
-          the code is semantically equivalent to `donotdelete(2).`
+!!! note
+    `donotdelete` does not affect constant folding. For example, in
+    `donotdelete(1+1)`, no add instruction needs to be executed at runtime and
+    the code is semantically equivalent to `donotdelete(2).`
 
 # Examples
 
 ```julia
 function loop()
     for i = 1:1000
-        # The complier must guarantee that there are 1000 program points (in the correct
+        # The compiler must guarantee that there are 1000 program points (in the correct
         # order) at which the value of `i` is in a register, but has otherwise
         # total control over the program.
         donotdelete(i)
@@ -3094,6 +3097,62 @@ end
 ```
 """
 Base.donotdelete
+
+"""
+    Base.compilerbarrier(setting::Symbol, val)
+
+This function puts a barrier at a specified compilation phase.
+It is supposed to only influence the compilation behavior according to `setting`,
+and its runtime semantics is just to return the second argument `val` (except that
+this function will perform additional checks on `setting` in a case when `setting`
+isn't known precisely at compile-time.)
+
+Currently either of the following `setting`s is allowed:
+- Barriers on abstract interpretation:
+  * `:type`: the return type of this function call will be inferred as `Any` always
+    (the strongest barrier on abstract interpretation)
+  * `:const`: the return type of this function call will be inferred with widening
+    constant information on `val`
+  * `:conditional`: the return type of this function call will be inferred with widening
+    conditional information on `val` (see the example below)
+- Any barriers on optimization aren't implemented yet
+
+!!! note
+    This function is supposed to be used _with `setting` known precisely at compile-time_.
+    Note that in a case when the `setting` isn't known precisely at compile-time, the compiler
+    currently will put the most strongest barrier(s) rather than emitting a compile-time warning.
+
+# Examples
+
+```julia
+julia> Base.return_types((Int,)) do a
+           x = compilerbarrier(:type, a) # `x` won't be inferred as `x::Int`
+           return x
+       end |> only
+Any
+
+julia> Base.return_types() do
+           x = compilerbarrier(:const, 42)
+           if x == 42 # no constant information here, so inference also accounts for the else branch
+               return x # but `x` is still inferred as `x::Int` at least here
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+
+julia> Base.return_types((Union{Int,Nothing},)) do a
+           if compilerbarrier(:conditional, isa(a, Int))
+               # the conditional information `a::Int` isn't available here (leading to less accurate return type inference)
+               return a
+           else
+               return nothing
+           end
+       end |> only
+Union{Nothing, Int64}
+```
+"""
+Base.compilerbarrier
 
 """
     Core.finalizer(f, o)
@@ -3108,11 +3167,11 @@ but there are a number of small differences. They are documented here for
 completeness only and (unlike `Base.finalizer`) have no stability guarantees.
 
 The current differences are:
-    - `Core.finalizer` does not check for mutability of `o`. Attempting to register
-      a finalizer for an immutable object is undefined behavior.
-    - The value `f` must be a Julia object. `Core.finalizer` does not support a
-      raw C function pointer.
-    - `Core.finalizer` returns `nothing` rather than `o`.
+- `Core.finalizer` does not check for mutability of `o`. Attempting to register
+  a finalizer for an immutable object is undefined behavior.
+- The value `f` must be a Julia object. `Core.finalizer` does not support a
+  raw C function pointer.
+- `Core.finalizer` returns `nothing` rather than `o`.
 """
 Core.finalizer
 

@@ -75,6 +75,15 @@ end
     @test sum(randperm(6)) == 21
     @test length(reverse(0x1:0x2)) == 2
     @test issorted(sort(rand(UInt64(1):UInt64(2), 7); rev=true); rev=true) # issue #43034
+    @test sort(Union{}[]) == Union{}[] # issue #45280
+end
+
+@testset "stability" begin
+    for Alg in [InsertionSort, MergeSort, QuickSort, Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE,
+        PartialQuickSort(missing, 1729), PartialQuickSort(1729, missing)]
+        @test issorted(sort(1:2000, alg=Alg, by=x->0))
+        @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
+    end
 end
 
 @testset "partialsort" begin
@@ -119,9 +128,11 @@ Base.step(r::ConstantRange) = 0
     @test searchsortedlast(r, 1.0, Forward) == 5
     @test searchsortedlast(r, 1, Forward) == 5
     @test searchsortedlast(r, UInt(1), Forward) == 5
+end
 
+@testset "Each sorting algorithm individually" begin
     a = rand(1:10000, 1000)
-    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
         b = sort(a, alg=alg)
         @test issorted(b)
@@ -186,18 +197,16 @@ Base.step(r::ConstantRange) = 0
         @test b == c
     end
 
-    @testset "unstable algorithms" begin
-        for alg in [QuickSort, Base.DEFAULT_UNSTABLE]
-            b = sort(a, alg=alg)
-            @test issorted(b)
-            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
-            b = sort(a, alg=alg, rev=true)
-            @test issorted(b, rev=true)
-            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
-            b = sort(a, alg=alg, by=x->1/x)
-            @test issorted(b, by=x->1/x)
-            @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
-        end
+    @testset "PartialQuickSort" begin
+        b = sort(a)
+        @test issorted(b)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a))))
+        b = sort(a, rev=true)
+        @test issorted(b, rev=true)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), rev=true))
+        b = sort(a, by=x->1/x)
+        @test issorted(b, by=x->1/x)
+        @test last(b) == last(sort(a, alg=PartialQuickSort(length(a)), by=x->1/x))
     end
 end
 @testset "insorted" begin
@@ -258,8 +267,8 @@ end
 @testset "PartialQuickSort" begin
     a = rand(1:10000, 1000)
     # test PartialQuickSort only does a partial sort
-    let alg = PartialQuickSort(1:div(length(a), 10))
-        k = alg.k
+    let k = 1:div(length(a), 10)
+        alg = PartialQuickSort(k)
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
@@ -270,8 +279,8 @@ end
         @test !issorted(c, by=x->1/x)
         @test !issorted(d, rev=true)
     end
-    let alg = PartialQuickSort(div(length(a), 10))
-        k = alg.k
+    let k = div(length(a), 10)
+        alg = PartialQuickSort(k)
         b = sort(a, alg=alg)
         c = sort(a, alg=alg, by=x->1/x)
         d = sort(a, alg=alg, rev=true)
@@ -288,6 +297,7 @@ end
     @test partialsortperm([3,6,30,1,9], 2, rev=true) == 5
     @test partialsortperm([3,6,30,1,9], 2, by=x->1/x) == 5
 end
+
 ## more advanced sorting tests ##
 
 randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
@@ -323,7 +333,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, Base.DEFAULT_STABLE]
+            for alg in [MergeSort, QuickSort, PartialQuickSort(1:n), Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -333,6 +343,10 @@ end
                 @test s == si
                 invpermute!(s, p)
                 @test s == v
+
+                # Ensure stability, even with reverse short circuit
+                @test all(sort!(Real[fill(2.0, 15); fill(2, 15); fill(1.0, 15); fill(1, 15)])
+                           .=== Real[fill(1.0, 15); fill(1, 15); fill(2.0, 15); fill(2, 15)])
             end
 
             # unstable algorithms
@@ -367,8 +381,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        # TODO: alg = PartialQuickSort(n) fails here
-        for alg in [InsertionSort, QuickSort, MergeSort, Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -430,7 +443,7 @@ end
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
 
-    for alg in [InsertionSort, MergeSort, Base.DEFAULT_STABLE]
+    for alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE]
         sp = sortperm(inds, alg=alg)
         @test all(issorted, [sp[inds.==x] for x in 1:200])
     end
@@ -651,8 +664,7 @@ end
         T = eltype(x)
         U = UIntN(Val(sizeof(T)))
         for order in [Forward, Reverse, Base.Sort.Float.Left(), Base.Sort.Float.Right(), By(Forward, identity)]
-            if order isa Base.Order.By || T === Float16 ||
-                ((T <: AbstractFloat) == (order isa DirectOrdering))
+            if order isa Base.Order.By || ((T <: AbstractFloat) == (order isa DirectOrdering))
                 @test Base.Sort.UIntMappable(T, order) === nothing
                 continue
             end
@@ -678,8 +690,56 @@ end
             end
         end
     end
+
+    @test Base.Sort.UIntMappable(Union{Int, UInt}, Base.Forward) === nothing # issue #45280
 end
 
+@testset "invalid lt (#11429)" begin
+    # lt must be a total linear order (e.g. < not <=) so this usage is
+    # not allowed. Consequently, none of the behavior tested in this
+    # testset is gaurunteed to work in future minor versions of Julia.
+
+    n = 1000
+    v = rand(1:5, n);
+    s = sort(v);
+
+    # Nevertheless, it still works...
+    for alg in [InsertionSort, MergeSort, QuickSort,
+            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        @test sort(v, alg=alg, lt = <=) == s
+    end
+    @test partialsort(v, 172, lt = <=) == s[172]
+    @test partialsort(v, 315:415, lt = <=) == s[315:415]
+
+    # ...and it is consistantly reverse stable. All these algorithms swap v[i] and v[j]
+    # where i < j if and only if lt(o, v[j], v[i]). This invariant holds even for
+    # this invalid lt order.
+    perm = reverse(sortperm(v, rev=true))
+    for alg in [InsertionSort, MergeSort, QuickSort,
+            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
+    end
+    @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
+    @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
+
+    # lt can be very poorly behaved and sort will still permute its input in some way.
+    for alg in [InsertionSort, MergeSort, QuickSort,
+            Base.Sort.AdaptiveSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        @test sort!(sort(v, alg=alg, lt = (x,y) -> rand([false, true]))) == s
+    end
+    @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
+    @test all(partialsort(v, 315:415, lt = (x,y) -> rand([false, true])) .∈ (1:5,))
+
+    # issue #32675
+    k = [38, 18, 38, 38, 3, 37, 26, 26, 6, 29, 38, 36, 38, 1, 38, 36, 38, 38, 38, 36, 36,
+        36, 28, 34, 35, 38, 25, 20, 38, 1, 1, 5, 38, 38, 3, 34, 16, 38, 4, 10, 35, 37, 38,
+        38, 2, 38, 25, 35, 38, 1, 35, 36, 20, 33, 36, 18, 38, 1, 24, 4, 38, 18, 12, 38, 34,
+        35, 36, 38, 26, 31, 36, 38, 38, 30, 36, 35, 35, 7, 22, 35, 38, 35, 30, 21, 37]
+    idx = sortperm(k; lt=!isless)
+    @test issorted(k[idx], rev=true)
+end
+
+# This testset is at the end of the file because it is slow
 @testset "sort(x; buffer)" begin
     for n in [1,10,100,1000]
         v = rand(n)
@@ -693,6 +753,20 @@ end
         M = rand(n, n)
         @test sort(M; dims=2) == sort(M; dims=2, buffer)
         @test sort!(copy(M); dims=1) == sort!(copy(M); dims=1, buffer)
+    end
+end
+
+@testset "sorting preserves identity" begin
+    a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
+    sort!(a)
+    @test length(IdDict(a .=> a)) == 6
+
+    for v in [BigInt.(rand(1:5, 40)), BigInt.(rand(Int, 70)), BigFloat.(rand(52))]
+        hashes = Set(hash.(v))
+        ids = Set(objectid.(v))
+        sort!(v)
+        @test hashes == Set(hash.(v))
+        @test ids == Set(objectid.(v))
     end
 end
 

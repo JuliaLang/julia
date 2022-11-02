@@ -6,7 +6,8 @@ module PCRE
 
 import ..RefValue
 
-include("../pcre_h.jl")
+# include($BUILDROOT/base/pcre_h.jl)
+include(string(length(Core.ARGS) >= 2 ? Core.ARGS[2] : "", "pcre_h.jl"))
 
 const PCRE_LIB = "libpcre2-8"
 
@@ -28,7 +29,7 @@ THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 PCRE_COMPILE_LOCK = nothing
 
 _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
-_nth() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+_mth() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
 
 function get_local_match_context()
     tid = _tid()
@@ -40,7 +41,7 @@ function get_local_match_context()
         try
             ctxs = THREAD_MATCH_CONTEXTS
             if length(ctxs) < tid
-                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, _nth()), ctxs)
+                global THREAD_MATCH_CONTEXTS = ctxs = copyto!(fill(C_NULL, length(ctxs) + _mth()), ctxs)
             end
         finally
             unlock(l)

@@ -459,8 +459,10 @@ For empty collections, providing `init` will be necessary, except for some speci
 neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
-should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
- `any(itr)`, `all(itr)`.
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
+There are efficient methods for concatenating certain arrays of arrays
+by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
@@ -530,7 +532,7 @@ sum(f, a; kw...) = mapreduce(f, add_sum, a; kw...)
 """
     sum(itr; [init])
 
-Returns the sum of all elements in a collection.
+Return the sum of all elements in a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -562,7 +564,7 @@ sum(a::AbstractArray{Bool}; kw...) =
 """
     prod(f, itr; [init])
 
-Returns the product of `f` applied to each element of `itr`.
+Return the product of `f` applied to each element of `itr`.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -586,7 +588,7 @@ prod(f, a; kw...) = mapreduce(f, mul_prod, a; kw...)
 """
     prod(itr; [init])
 
-Returns the product of all elements of a collection.
+Return the product of all elements of a collection.
 
 The return type is `Int` for signed integers of less than system word size, and
 `UInt` for unsigned integers of less than system word size.  For all other
@@ -673,7 +675,7 @@ end
 """
     maximum(f, itr; [init])
 
-Returns the largest result of calling function `f` on each element of `itr`.
+Return the largest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
@@ -700,7 +702,7 @@ maximum(f, a; kw...) = mapreduce(f, max, a; kw...)
 """
     minimum(f, itr; [init])
 
-Returns the smallest result of calling function `f` on each element of `itr`.
+Return the smallest result of calling function `f` on each element of `itr`.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
@@ -727,7 +729,7 @@ minimum(f, a; kw...) = mapreduce(f, min, a; kw...)
 """
     maximum(itr; [init])
 
-Returns the largest element in a collection.
+Return the largest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `max` (i.e. which is less than or equal to any
@@ -759,7 +761,7 @@ maximum(a; kw...) = mapreduce(identity, max, a; kw...)
 """
     minimum(itr; [init])
 
-Returns the smallest element in a collection.
+Return the smallest element in a collection.
 
 The value returned for empty `itr` can be specified by `init`. It must be
 a neutral element for `min` (i.e. which is greater than or equal to any
@@ -855,15 +857,22 @@ end
 ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
-# TODO: optimize for inputs <: AbstractFloat
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
+# optimization for IEEEFloat
+function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
+    (x1, x2), (y1, y2) = x, y
+    anynan = isnan(x1)|isnan(y1)
+    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
+    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
+    z1, z2
+end
 
 ## findmax, findmin, argmax & argmin
 
 """
     findmax(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is maximised.
 If there are multiple maximal points, then the first one will be returned.
 
@@ -922,7 +931,7 @@ _findmax(a, ::Colon) = findmax(identity, a)
 """
     findmin(f, domain) -> (f(x), index)
 
-Returns a pair of a value in the codomain (outputs of `f`) and the index of
+Return a pair of a value in the codomain (outputs of `f`) and the index of
 the corresponding value in the `domain` (inputs to `f`) such that `f(x)` is minimised.
 If there are multiple minimal points, then the first one will be returned.
 
@@ -982,7 +991,7 @@ _findmin(a, ::Colon) = findmin(identity, a)
 """
     argmax(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is maximised.
+Return a value `x` from `domain` for which `f(x)` is maximised.
 If there are multiple maximal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.
@@ -1034,7 +1043,7 @@ argmax(itr) = findmax(itr)[2]
 """
     argmin(f, domain)
 
-Return a value `x` in the domain of `f` for which `f(x)` is minimised.
+Return a value `x` from `domain` for which `f(x)` is minimised.
 If there are multiple minimal values for `f(x)` then the first one will be found.
 
 `domain` must be a non-empty iterable.

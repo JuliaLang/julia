@@ -139,7 +139,7 @@ julia> test(1,2)
 x is less than y.
 
 julia> test(2,1)
-ERROR: UndefVarError: relation not defined
+ERROR: UndefVarError: `relation` not defined
 Stacktrace:
  [1] test(::Int64, ::Int64) at ./none:7
 ```
@@ -433,7 +433,7 @@ julia> for j = 1:3
 3
 
 julia> j
-ERROR: UndefVarError: j not defined
+ERROR: UndefVarError: `j` not defined
 ```
 
 ```jldoctest
@@ -669,7 +669,7 @@ Additionally, some exception types take one or more arguments that are used for 
 
 ```jldoctest
 julia> throw(UndefVarError(:x))
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 This mechanism can be implemented easily by custom exception types following the way [`UndefVarError`](@ref)

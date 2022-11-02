@@ -23,10 +23,7 @@ appended to an internal buffer of backtraces.
 macro profile(ex)
     return quote
         try
-            status = start_timer()
-            if status < 0
-                error(error_codes[status])
-            end
+            start_timer()
             $(esc(ex))
         finally
             stop_timer()
@@ -91,17 +88,17 @@ stored per thread. Each instruction pointer corresponds to a single line of code
 list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
 NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
 using keywords or in the order `(n, delay)`.
-
-!!! compat "Julia 1.8"
-    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
-    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    if n_cur == 0 && isnothing(n) && isnothing(delay)
+        # indicates that the buffer hasn't been initialized at all, so set the default
+        default_init()
+        n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
+    end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-        return round(Int, n_cur / nthreads), delay_cur
+        return n_cur, delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -109,24 +106,21 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
-    buffer_samples = n * nthreads
+    buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
-        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
-        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
-        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_samples = floor(Int, 2^29 / sample_size_bytes)
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
     end
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
+        error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
     end
 end
 
-function __init__()
+function default_init()
     # init with default values
     # Use a max size of 10M profile samples, and fire timer every 1ms
     # (that should typically give around 100 seconds of record)
@@ -136,10 +130,25 @@ function __init__()
         n = 1_000_000
         delay = 0.01
     else
+        # Keep these values synchronized with trigger_profile_peek
         n = 10_000_000
         delay = 0.001
     end
     init(n, delay, limitwarn = false)
+end
+
+# Checks whether the profile buffer has been initialized. If not, initializes it with the default size.
+function check_init()
+    buffer_size = @ccall jl_profile_maxlen_data()::Int
+    if buffer_size == 0
+        default_init()
+    end
+end
+
+function __init__()
+    # Note: The profile buffer is no longer initialized during __init__ because Profile is in the sysimage,
+    # thus __init__ is called every startup. The buffer is lazily initialized the first time `@profile` is
+    # used, if not manually initialized before that.
     @static if !Sys.iswindows()
         # triggering a profile via signals is not implemented on windows
         PROFILE_PRINT_COND[] = Base.AsyncCondition()
@@ -410,7 +419,7 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
-    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.nthreads(), RoundUp))
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
         Threads.@spawn begin
             for i in indexes_part
                 iplookups[i] = _lookup_corrected(unique_ips[i])
@@ -504,7 +513,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, String})
                 end
             end
             return path
-        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "src", "base", path))
+        elseif isfile(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "base", path))
             # do the same mechanic for Base (or Core/Compiler) files as above,
             # but they start from a relative path
             return joinpath("@Base", normpath(path))
@@ -567,7 +576,14 @@ Julia, and examine the resulting `*.mem` files.
 clear_malloc_data() = ccall(:jl_clear_malloc_data, Cvoid, ())
 
 # C wrappers
-start_timer() = ccall(:jl_profile_start_timer, Cint, ())
+function start_timer()
+    check_init() # if the profile buffer hasn't been initialized, initialize with default size
+    status = ccall(:jl_profile_start_timer, Cint, ())
+    if status < 0
+        error(error_codes[status])
+    end
+end
+
 
 stop_timer() = ccall(:jl_profile_stop_timer, Cvoid, ())
 
@@ -591,7 +607,7 @@ error_codes = Dict(
 """
     fetch(;include_meta = true) -> data
 
-Returns a copy of the buffer of profile backtraces. Note that the
+Return a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
@@ -599,6 +615,9 @@ By default metadata such as threadid and taskid is included. Set `include_meta` 
 """
 function fetch(;include_meta = true, limitwarn = true)
     maxlen = maxlen_data()
+    if maxlen == 0
+        error("The profiling data buffer is not initialized. A profile has not been requested this session.")
+    end
     len = len_data()
     if limitwarn && is_buffer_full()
         @warn """The profile data buffer is full; profiling probably terminated
@@ -965,8 +984,8 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
             root.count += 1
             startframe = i
         elseif !skip
-            pushfirst!(build, parent)
             if recur === :flat || recur === :flatc
+                pushfirst!(build, parent)
                 # Rewind the `parent` tree back, if this exact ip was already present *higher* in the current tree
                 found = false
                 for j in 1:(startframe - i)
@@ -1211,6 +1230,34 @@ function warning_empty(;summary = false)
         or adjust the delay between samples with `Profile.init()`."""
     end
 end
+
+
+"""
+    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false)
+
+Write a snapshot of the heap, in the JSON format expected by the Chrome
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory, or the given
+file path, or IO stream. If `all_one` is true, then report the size of
+every object as one so they can be easily counted. Otherwise, report the
+actual size.
+"""
+function take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+end
+function take_heap_snapshot(filepath::String, all_one::Bool=false)
+    open(filepath, "w") do io
+        take_heap_snapshot(io, all_one)
+    end
+    return filepath
+end
+function take_heap_snapshot(all_one::Bool=false)
+    f = abspath("$(getpid())_$(time_ns()).heapsnapshot")
+    return take_heap_snapshot(f, all_one)
+end
+
 
 include("Allocs.jl")
 

@@ -34,10 +34,8 @@ end
 
 convert(::Type{T}, x::T) where {T>:Nothing} = x
 convert(::Type{T}, x) where {T>:Nothing} = convert(nonnothingtype_checked(T), x)
-convert(::Type{Nothing}, x) = throw(MethodError(convert, (Nothing, x)))
-convert(::Type{Nothing}, ::Nothing) = nothing
 convert(::Type{Some{T}}, x::Some{T}) where {T} = x
-convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))
+convert(::Type{Some{T}}, x::Some) where {T} = Some{T}(convert(T, x.value))::Some{T}
 
 function show(io::IO, x::Some)
     if get(io, :typeinfo, Any) == typeof(x)

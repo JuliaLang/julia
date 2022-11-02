@@ -456,6 +456,8 @@ end # module ReflectionTest
 
 @test_throws ArgumentError("argument is not a generic function") code_llvm(===, Tuple{Int, Int})
 @test_throws ArgumentError("argument is not a generic function") code_native(===, Tuple{Int, Int})
+@test_throws ErrorException("argument tuple type must contain only types") code_native(sum, (Int64,1))
+@test_throws ErrorException("expected tuple type") code_native(sum, Vector{Int64})
 
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
@@ -703,6 +705,17 @@ end
         let io = IOBuffer()
             code_llvm(io, oc, Tuple{})
             @test occursin(InteractiveUtils.OC_MISMATCH_WARNING, String(take!(io)))
+        end
+    end
+end
+
+@testset "begin/end in gen_call_with_extracted_types users" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            a = [1,2]
+            @test (@code_typed a[1:end]).second == Vector{Int}
+            @test (@code_llvm a[begin:2]) === nothing
+            @test (@code_native a[begin:end]) === nothing
         end
     end
 end

@@ -90,7 +90,14 @@ On the first call (`@time sum_global()`) the function gets compiled. (If you've 
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
 indicated that a significant amount of memory was allocated. We are here just computing a sum over all elements in
-a vector of 64-bit floats so there should be no need to allocate memory (at least not on the heap which is what `@time` reports).
+a vector of 64-bit floats so there should be no need to allocate (heap) memory.
+
+We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either
+mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable"
+objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive
+system call (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register
+memory, so one doesn’t typically worry about the performance cost of "allocating" them.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability or creating many small temporary arrays.
@@ -98,8 +105,8 @@ Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
-If we instead pass `x` as an argument to the function it no longer allocates memory
-(the allocation reported below is due to running the `@time` macro in global scope)
+In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
+(the remaining allocation reported below is due to running the `@time` macro in global scope)
 and is significantly faster after the first call:
 
 ```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
@@ -1475,11 +1482,13 @@ julia> function f(x)
        end;
 
 julia> @code_warntype f(3.2)
-Variables
+MethodInstance for f(::Float64)
+  from f(x) @ Main REPL[9]:1
+Arguments
   #self#::Core.Const(f)
   x::Float64
-  y::UNION{FLOAT64, INT64}
-
+Locals
+  y::Union{Float64, Int64}
 Body::Float64
 1 ─      (y = Main.pos(x))
 │   %2 = (y * x)::Float64
@@ -1500,7 +1509,7 @@ At the top, the inferred return type of the function is shown as `Body::Float64`
 The next lines represent the body of `f` in Julia's SSA IR form.
 The numbered boxes are labels and represent targets for jumps (via `goto`) in your code.
 Looking at the body, you can see that the first thing that happens is that `pos` is called and the
-return value has been inferred as the `Union` type `UNION{FLOAT64, INT64}` shown in uppercase since
+return value has been inferred as the `Union` type `Union{Float64, Int64}` shown in uppercase since
 it is a non-concrete type. This means that we cannot know the exact return type of `pos` based on the
 input types. However, the result of `y*x`is a `Float64` no matter if `y` is a `Float64` or `Int64`
 The net result is that `f(x::Float64)` will not be type-unstable
@@ -1522,20 +1531,20 @@ are color highlighted in yellow, instead of red.
 
 The following examples may help you interpret expressions marked as containing non-leaf types:
 
-  * Function body starting with `Body::UNION{T1,T2})`
+  * Function body starting with `Body::Union{T1,T2})`
       * Interpretation: function with unstable return type
       * Suggestion: make the return value type-stable, even if you have to annotate it
 
-  * `invoke Main.g(%%x::Int64)::UNION{FLOAT64, INT64}`
+  * `invoke Main.g(%%x::Int64)::Union{Float64, Int64}`
       * Interpretation: call to a type-unstable function `g`.
       * Suggestion: fix the function, or if necessary annotate the return value
 
-  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::ANY`
+  * `invoke Base.getindex(%%x::Array{Any,1}, 1::Int64)::Any`
       * Interpretation: accessing elements of poorly-typed arrays
       * Suggestion: use arrays with better-defined types, or if necessary annotate the type of individual
         element accesses
 
-  * `Base.getfield(%%x, :(:data))::ARRAY{FLOAT64,N} WHERE N`
+  * `Base.getfield(%%x, :(:data))::Array{Float64,N} where N`
       * Interpretation: getting a field that is of non-leaf type. In this case, the type of `x`, say `ArrayContainer`, had a
         field `data::Array{T}`. But `Array` needs the dimension `N`, too, to be a concrete type.
       * Suggestion: use concrete types like `Array{T,3}` or `Array{T,N}`, where `N` is now a parameter

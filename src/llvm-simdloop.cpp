@@ -38,6 +38,7 @@ STATISTIC(SimdLoops, "Number of loops with SIMD instructions");
 STATISTIC(IVDepInstructions, "Number of instructions marked ivdep");
 STATISTIC(ReductionChains, "Number of reduction chains folded");
 STATISTIC(ReductionChainLength, "Total sum of instructions folded from reduction chain");
+STATISTIC(MaxChainLength, "Max length of reduction chain");
 STATISTIC(AddChains, "Addition reduction chains");
 STATISTIC(MulChains, "Multiply reduction chains");
 
@@ -119,11 +120,14 @@ static void enableUnsafeAlgebraIfReduction(PHINode *Phi, Loop *L)
             break;
     }
     ++ReductionChains;
+    int length = 0;
     for (chainVector::const_iterator K=chain.begin(); K!=chain.end(); ++K) {
         LLVM_DEBUG(dbgs() << "LSL: marking " << **K << "\n");
         (*K)->setFast(true);
-        ++ReductionChainLength;
+        ++length;
     }
+    ReductionChainLength += length;
+    MaxChainLength.updateMax(length);
 }
 
 static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Function &)> GetLI)
@@ -228,8 +232,9 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
     for (Instruction *I : ToDelete)
         I->deleteValue();
     marker->eraseFromParent();
-
-    assert(!verifyModule(M));
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
     return Changed;
 }
 

@@ -9,6 +9,8 @@ New language features
   handled via `Base.split_rest`. ([#42902])
 * Character literals now support the same syntax allowed in string literals; i.e. the syntax can
   represent invalid UTF-8 sequences as allowed by the `Char` type ([#44989]).
+* Support for Unicode 15 ([#47392]).
+* Nested combinations of tuples and named tuples of symbols are now allowed as type parameters ([#46300]).
 
 Language changes
 ----------------
@@ -16,14 +18,10 @@ Language changes
 * New builtins `getglobal(::Module, ::Symbol[, order])` and `setglobal!(::Module, ::Symbol, x[, order])`
   for reading from and writing to globals. `getglobal` should now be preferred for accessing globals over
   `getfield`. ([#44137])
-* A few basic operators have been generalized to more naturally support vector space structures:
-  unary minus falls back to scalar multiplication with -1, `-(x) = Int8(-1)*x`,
-  binary minus falls back to addition `-(x, y) = x + (-y)`, and, at the most generic level,
-  left- and right-division fall back to multiplication with the inverse from left and right,
-  respectively, as stated in the docstring. ([#44564])
 * The `@invoke` macro introduced in 1.7 is now exported. Additionally, it now uses `Core.Typeof(x)`
   rather than `Any` when a type annotation is omitted for an argument `x` so that types passed
   as arguments are handled correctly. ([#45807])
+* The `invokelatest` function and `@invokelatest` macro introduced in 1.7 are now exported. ([#45831])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -39,6 +37,8 @@ Compiler/Runtime improvements
   `@nospecialize`-d call sites and avoiding excessive compilation. ([#44512])
 * All the previous usages of `@pure`-macro in `Base` has been replaced with the preferred
   `Base.@assume_effects`-based annotations. ([#44776])
+* `invoke(f, invokesig, args...)` calls to a less-specific method than would normally be chosen
+  for `f(args...)` are no longer spuriously invalidated when loading package precompile files. ([#46010])
 
 Command-line option changes
 ---------------------------
@@ -59,6 +59,10 @@ Multi-threading changes
   An interactive task desires low latency and implicitly agrees to be short duration or to
   yield frequently. Interactive tasks will run on interactive threads, if any are specified
   when Julia is started ([#42302]).
+* Threads started outside the Julia runtime (e.g. from C or Java) can now become able to
+  call into Julia code by calling `jl_adopt_thread`. This is done automatically when
+  entering Julia code via `cfunction` or a `@ccallable` entry point. As a consequence, the
+  number of threads can now change during execution ([#46609]).
 
 Build system changes
 --------------------
@@ -72,6 +76,9 @@ New library functions
   inspecting which function `f` was originally wrapped. ([#42717])
 * New `pkgversion(m::Module)` function to get the version of the package that loaded
   a given module, similar to `pkgdir(m::Module)`. ([#45607])
+* New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
+  and allows any iterators of iterators. Method `stack(f, x)` generalises `mapreduce(f, hcat, x)` and
+  is efficient. ([#43334])
 
 Library changes
 ---------------
@@ -84,9 +91,11 @@ Library changes
 * `RoundFromZero` now works for non-`BigFloat` types ([#41246]).
 * `Dict` can be now shrunk manually by `sizehint!` ([#45004]).
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
-* `@time_imports` now shows any compilation and recompilation time percentages per import ([#45064]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* `@kwdef` is now exported and added to the public API ([#46273])
+* An issue with order of operations in `fld1` is now fixed ([#28973]).
+* Sorting is now always stable by default as `QuickSort` was stabilized in ([#45222]).
 
 Standard library changes
 ------------------------
@@ -127,6 +136,9 @@ Standard library changes
   via the `REPL.activate(::Module)` function or via typing the module in the REPL and pressing
   the keybinding Alt-m ([#33872]).
 
+* An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
+  activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
+
 #### SparseArrays
 
 #### Test
@@ -162,6 +174,8 @@ Standard library changes
 #### Mmap
 
 #### DelimitedFiles
+
+* DelimitedFiles has been promoted from being a standard library to a separate package. It now has to be explicitly installed to be used.
 
 
 Deprecated or removed

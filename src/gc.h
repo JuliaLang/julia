@@ -24,6 +24,7 @@
 #endif
 #endif
 #include "julia_assert.h"
+#include "gc-heap-snapshot.h"
 #include "gc-alloc-profiler.h"
 
 #ifdef __cplusplus
@@ -393,6 +394,8 @@ extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
+extern int gc_n_threads;
+extern jl_ptls_t* gc_all_tls_states;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
@@ -646,8 +649,10 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
-int gc_slot_to_fieldidx(void *_obj, void *slot);
-int gc_slot_to_arrayidx(void *_obj, void *begin);
+
+
+int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
+int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset);
 
 #ifdef GC_DEBUG_ENV

@@ -173,6 +173,19 @@ function will block to wait for more data if necessary, and then return `false`.
 it is always safe to read one byte after seeing `eof` return `false`. `eof` will return
 `false` as long as buffered data is still available, even if the remote end of a connection
 is closed.
+
+# Examples
+```jldoctest
+julia> b = IOBuffer("my buffer");
+
+julia> eof(b)
+false
+
+julia> seekend(b);
+
+julia> eof(b)
+true
+```
 """
 function eof end
 
@@ -988,7 +1001,7 @@ function read(s::IO, nb::Integer = typemax(Int))
     return resize!(b, nr)
 end
 
-read(s::IO, ::Type{String}) = String(read(s))
+read(s::IO, ::Type{String}) = String(read(s)::Vector{UInt8})
 read(s::IO, T::Type) = error("The IO stream does not support reading objects of type $T.")
 
 ## high-level iterator interfaces ##

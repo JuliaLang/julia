@@ -107,8 +107,8 @@ showerror(io::IO, ex::InitError) = showerror(io, ex, [])
 
 function showerror(io::IO, ex::DomainError)
     if isa(ex.val, AbstractArray)
-        compact = get(io, :compact, true)
-        limit = get(io, :limit, true)
+        compact = get(io, :compact, true)::Bool
+        limit = get(io, :limit, true)::Bool
         print(IOContext(io, :compact => compact, :limit => limit),
               "DomainError with ", ex.val)
     else
@@ -157,10 +157,10 @@ showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: ", ex.msg)
 showerror(io::IO, ex::OverflowError) = print(io, "OverflowError: ", ex.msg)
 
 showerror(io::IO, ex::UndefKeywordError) =
-    print(io, "UndefKeywordError: keyword argument $(ex.var) not assigned")
+    print(io, "UndefKeywordError: keyword argument `$(ex.var)` not assigned")
 
 function showerror(io::IO, ex::UndefVarError)
-    print(io, "UndefVarError: $(ex.var) not defined")
+    print(io, "UndefVarError: `$(ex.var)` not defined")
     Experimental.show_error_hints(io, ex)
 end
 
@@ -235,17 +235,16 @@ function showerror(io::IO, ex::MethodError)
     show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
-    name = ft.name.mt.name
     f_is_function = false
     kwargs = ()
-    if endswith(string(ft.name.name), "##kw")
-        f = ex.args[2]
+    if f === Core.kwcall && !is_arg_types
+        f = (ex.args::Tuple)[2]
         ft = typeof(f)
-        name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end::Int])
     end
+    name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
@@ -346,7 +345,7 @@ function showerror_ambiguous(io::IO, meths, f, args)
     sigfix = Any
     for m in meths
         print(io, "  ")
-        show(io, m; digit_align_width=-2)
+        show_method(io, m; digit_align_width=0)
         println(io)
         sigfix = typeintersect(m.sig, sigfix)
     end
@@ -400,7 +399,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isa(at1,DataType) && (at1::DataType).name === Type.body.name && !Core.Compiler.has_free_typevars(at1)
+        if isType(at1) && !Core.Compiler.has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -451,7 +450,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 # the type of the first argument is not matched.
                 t_in === Union{} && special && i == 1 && break
                 if t_in === Union{}
-                    if get(io, :color, false)
+                    if get(io, :color, false)::Bool
                         let sigstr=sigstr
                             Base.with_output_color(Base.error_color(), iob) do iob
                                 print(iob, "::", sigstr...)
@@ -495,7 +494,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                         if !((min(length(t_i), length(sig)) == 0) && k==1)
                             print(iob, ", ")
                         end
-                        if get(io, :color, false)
+                        if get(io, :color, false)::Bool
                             let sigstr=sigstr
                                 Base.with_output_color(Base.error_color(), iob) do iob
                                     print(iob, "::", sigstr...)
@@ -543,8 +542,8 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 println(iob)
 
                 m = parentmodule_before_main(method.module)
-                color = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
-                print_module_path_file(iob, m, string(file), line, color, 1)
+                modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
+                print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
 
                 # TODO: indicate if it's in the wrong world
                 push!(lines, (buf, right_matches))
@@ -685,7 +684,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -693,7 +692,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     else
         :default
     end
-    print_stackframe(io, i, frame, n, digit_align_width, modulecolor)
+    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -707,7 +706,7 @@ function parentmodule_before_main(m)
 end
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
     file, line = string(frame.file), frame.line
     file = fixup_stdlib_path(file)
     stacktrace_expand_basepaths() && (file = something(find_source_file(file), file))
@@ -722,8 +721,10 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     inlined = getfield(frame, :inlined)
     modul = parentmodule(frame)
 
+    digit_align_width = ndigits_max + 2
+
     # frame number
-    print(io, " ", lpad("[" * string(i) * "]", digit_align_width + 2))
+    print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
     StackTraces.show_spec_linfo(IOContext(io, :backtrace=>true), frame)
@@ -733,14 +734,14 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, digit_align_width, m
     println(io)
 
     # @ Module path / file : line
-    print_module_path_file(io, modul, file, line, modulecolor, digit_align_width)
+    print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
     # inlined
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line, modulecolor = :light_black, digit_align_width = 0)
-    printstyled(io, " " ^ (digit_align_width + 2) * "@", color = :light_black)
+function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+    printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
     if modul !== nothing && modulecolor !== nothing
@@ -791,11 +792,6 @@ function show_backtrace(io::IO, t::Vector)
     return
 end
 
-
-function is_kw_sorter_name(name::Symbol)
-    sn = string(name)
-    return !startswith(sn, '#') && endswith(sn, "##kw")
-end
 
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
@@ -848,15 +844,27 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 continue
             end
 
-            if (lkup.from_c && skipC) || is_kw_sorter_name(lkup.func)
+            if (lkup.from_c && skipC)
                 continue
+            end
+            code = lkup.linfo
+            if code isa MethodInstance
+                def = code.def
+                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),Any,Any,Vararg}
+                    # hide kwcall() methods, which are probably internal keyword sorter methods
+                    # (we print the internal method instead, after demangling
+                    # the argument list, since it has the right line number info)
+                    continue
+                end
+            elseif !lkup.from_c
+                lkup.func === :kwcall && continue
             end
             count += 1
             if count > limit
                 break
             end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== last_frame.linfo
                 if n > 0
                     push!(ret, (last_frame, n))
                 end
@@ -912,6 +920,19 @@ function noncallable_number_hint_handler(io, ex, arg_types, kwargs)
 end
 
 Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
+
+# Display a hint in case the user tries to use the + operator on strings
+# (probably attempting concatenation)
+function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
+    @nospecialize
+    if (ex.f == +) && all(i -> i <: AbstractString, arg_types)
+        print(io, "\nString concatenation is performed with ")
+        printstyled(io, "*", color=:cyan)
+        print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
+    end
+end
+
+Experimental.register_error_hint(string_concatenation_hint_handler, MethodError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

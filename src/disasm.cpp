@@ -111,8 +111,6 @@
 
 #include <llvm-c/Disassembler.h>
 
-#include "julia.h"
-#include "julia_internal.h"
 #include "jitlayers.h"
 #include "processor.h"
 
@@ -482,9 +480,11 @@ void jl_strip_llvm_debug(Module *m)
 
 void jl_strip_llvm_addrspaces(Module *m)
 {
-    legacy::PassManager PM;
-    PM.add(createRemoveJuliaAddrspacesPass());
-    PM.run(*m);
+    PassBuilder PB;
+    AnalysisManagers AM(PB);
+    ModulePassManager MPM;
+    MPM.addPass(RemoveJuliaAddrspacesPass());
+    MPM.run(*m, AM.MAM);
 }
 
 // print an llvm IR acquired from jl_get_llvmf
@@ -794,7 +794,13 @@ static const char *SymbolLookup(void *DisInfo, uint64_t ReferenceValue, uint64_t
     return NULL;
 }
 
-static int OpInfoLookup(void *DisInfo, uint64_t PC, uint64_t Offset, uint64_t Size,
+static int OpInfoLookup(void *DisInfo, uint64_t PC,
+                        uint64_t Offset,
+#if JL_LLVM_VERSION < 150000
+                        uint64_t Size,
+#else
+                        uint64_t OpSize, uint64_t InstSize,
+#endif
                         int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
@@ -1048,10 +1054,14 @@ static void jl_dump_asm_internal(
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
             FuncMCView view = memoryObject.slice(Index);
+#if JL_LLVM_VERSION < 150000
+#define getCommentOS() GetCommentOS()
+#endif
             S = DisAsm->getInstruction(Inst, insSize, view, 0,
-                                      /*CStream*/ pass != 0 ? Streamer->GetCommentOS() : nulls());
-            if (pass != 0 && Streamer->GetCommentOS().tell() > 0)
-                Streamer->GetCommentOS() << '\n';
+                                      /*CStream*/ pass != 0 ? Streamer->getCommentOS () : nulls());
+            if (pass != 0 && Streamer->getCommentOS ().tell() > 0)
+                Streamer->getCommentOS () << '\n';
+#undef GetCommentOS
             switch (S) {
             case MCDisassembler::Fail:
                 if (insSize == 0) // skip illegible bytes
