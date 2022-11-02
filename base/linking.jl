@@ -62,14 +62,9 @@ function __init_lld_path()
     return
 end
 
-const DISABLE_OBJCACHE = Ref{Bool}(false)
 const VERBOSE = Ref{Bool}(false)
-function use_objcache()
-    return !DISABLE_OBJCACHE[]
-end
 
 function __init__()
-    DISABLE_OBJCACHE[] = parse(Bool, get(ENV, "JULIA_DISABLE_OBJCACHE", "false"))
     VERBOSE[] = parse(Bool, get(ENV, "JULIA_VERBOSE_LINKING", "false"))
 
     __init_lld_path()
