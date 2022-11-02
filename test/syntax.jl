@@ -381,7 +381,9 @@ add_method_to_glob_fn!()
 @test Meta.lower(Main, Meta.parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
 
 # issue #16355
-@test Meta.lower(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
+@test Meta.lower(Main, :(f(d:Int...) = nothing)) == Expr(:error, """
+    "d:Int" is not a valid function argument name inside the function definition for "f". \
+    Perhaps you meant to write "==" instead of "=\"""")
 
 # issue #16517
 @test (try error(); catch; 0; end) === 0
@@ -2281,6 +2283,11 @@ end
 # Syntax desugaring pass errors contain line numbers
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
     Expr(:error, "function argument name not unique: \"x\" around some_file:101")
+
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(foo(bar(a))=42))) ==
+    Expr(:error, """
+        "bar(a)" is not a valid function argument name inside the function definition for "foo". \
+        Perhaps you meant to write "==" instead of "=" around some_file:101""")
 
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))

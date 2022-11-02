@@ -359,7 +359,7 @@
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
-          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl name)))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
           (ename (if (nodot-sym-ref? name) name
                     (if (overlay? name) (cadr name) `(null)))))
@@ -391,7 +391,7 @@
                                                       (false))))))
                              (list gf))
                            '()))
-            (types (llist-types argl))
+            (types (llist-types argl name))
             (body  (method-lambda-expr argl body rett))
             ;; HACK: the typevars need to be bound to ssavalues, since this code
             ;; might be moved to a different scope by closure-convert.
@@ -448,7 +448,7 @@
 
 (define (keywords-method-def-expr name sparams argl body rett)
   (let* ((kargl (cdar argl))  ;; keyword expressions (= k v)
-         (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)))))
+         (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (cadr (caddr a)) name)))
                            (filter nospecialize-meta? kargl)))
          (kargl (map (lambda (a)
                        (if (nospecialize-meta? a) (caddr a) a))
@@ -464,7 +464,7 @@
                        (list l) '())))
          ;; expression to forward varargs to another call
          (splatted-vararg (if (null? vararg) '()
-                              (list `(... ,(arg-name (car vararg))))))
+                              (list `(... ,(arg-name (car vararg) name)))))
          ;; positional args with vararg
          (pargl-all pargl)
          ;; positional args without vararg
@@ -548,7 +548,7 @@
                    (ret `(return (call ,mangled
                                        ,@(if ordered-defaults keynames vals)
                                        ,@(if (null? restkw) '() `((call (top pairs) (call (core NamedTuple)))))
-                                       ,@(map arg-name pargl)
+                                       ,@(map (arg-name-🍛 name) pargl)
                                        ,@splatted-vararg))))
                (if ordered-defaults
                    (scopenest keynames vals ret)
@@ -624,7 +624,7 @@
                 (return (call ,mangled  ;; finally, call the core function
                               ,@keyvars
                               ,@(if (null? restkw) '() (list rkw))
-                              ,@(map arg-name pargl)
+                              ,@(map (arg-name-🍛 name) pargl)
                               ,@splatted-vararg))))))
         ;; return primary function
         ,(if (not (symbol? name))
@@ -681,11 +681,11 @@
                            ;; then add only one next argument
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,(car vals)))
+                             (call ,(arg-name (car req) name) ,@(map (arg-name-🍛 name) (cdr passed)) ,(car vals)))
                            ;; otherwise add all
                            `(block
                              ,@prologue
-                             (call ,(arg-name (car req)) ,@(map arg-name (cdr passed)) ,@vals)))))
+                             (call ,(arg-name (car req) name) ,@(map (arg-name-🍛 name) (cdr passed)) ,@vals)))))
                  (method-def-expr- name sp passed body)))
              (iota (length opt)))
       ,(method-def-expr- name sparams overall-argl body rett))))
@@ -1197,7 +1197,7 @@
                   (sparams (map analyze-typevar raw-typevars))
                   (argl    (cdr name))
                   ;; strip @nospecialize
-                  (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (caddr a))))
+                  (annotations (map (lambda (a) `(meta ,(cadr a) ,(arg-name (caddr a) name)))
                                     (filter nospecialize-meta? argl)))
                   (body (insert-after-meta (caddr e) annotations))
                   (argl (map (lambda (a)
@@ -2388,7 +2388,7 @@
                          (lastarg (and (pair? arglist) (last arglist))))
                     (if (and ty (any (lambda (arg)
                                        (let ((arg (if (vararg? arg) (cadr arg) arg)))
-                                         (not (equal? (arg-type arg) '(core Any)))))
+                                         (not (equal? (arg-type arg '|#opaque-closure|) '(core Any)))))
                                      arglist))
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
