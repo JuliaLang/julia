@@ -94,7 +94,6 @@ JL_DLLEXPORT uint32_t jl_rand_ptls(uint32_t max, uint32_t unbias)
 // (called only by the main thread)
 void jl_init_threadinginfra(void)
 {
-    /* initialize the synchronization trees pool */
     sleep_threshold = DEFAULT_THREAD_SLEEP_THRESHOLD;
     char *cp = getenv(THREAD_SLEEP_THRESHOLD_NAME);
     if (cp) {
@@ -208,6 +207,7 @@ static void wake_libuv(void)
     JULIA_DEBUG_SLEEPWAKE( io_wakeup_leave = cycleclock() );
 }
 
+
 /* ensure thread tid is awake if necessary */
 JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
 {
@@ -260,6 +260,22 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid)
         }
     }
     JULIA_DEBUG_SLEEPWAKE( wakeup_leave = cycleclock() );
+}
+
+
+JL_DLLEXPORT void jl_wakeup_some_threads(void)
+{
+    jl_task_t *ct = jl_current_task;
+    int16_t i, nwoken = 0, self = jl_atomic_load_relaxed(&ct->tid);
+    for (i = 1; i < jl_n_threads; i++) {
+        int16_t tid = (self + i) % jl_n_threads;
+        jl_ptls_t other = jl_all_tls_states[tid];
+        if (jl_atomic_load_relaxed(&other->sleep_check_state) == sleeping) {
+            wake_thread(tid);
+            nwoken++;
+        }
+        if (nwoken == 2) break;
+    }
 }
 
 
