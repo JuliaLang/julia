@@ -120,11 +120,10 @@ end
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
     sample_size_bytes = sizeof(Ptr)
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (def_n * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == def_n
     end
@@ -133,8 +132,8 @@ end
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (1_000_001 * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == 1_000_001
     end
@@ -273,12 +272,15 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    fname = tempname()
-    Profile.take_heap_snapshot(fname)
+    fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+
+    @test isfile(fname)
 
     open(fname) do fs
         @test readline(fs) != ""
     end
+
+    rm(fname)
 end
 
 include("allocs.jl")

@@ -152,6 +152,7 @@ DevDocs = [
         "devdocs/ssair.md",
         "devdocs/EscapeAnalysis.md",
         "devdocs/gc-sa.md",
+        "devdocs/gc.md",
     ],
     "Developing/debugging Julia's C code" => [
         "devdocs/backtraces.md",

@@ -475,40 +475,6 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         tag = 12;
     }
 
-    char *dtname = jl_symbol_name(dt->name->name);
-    size_t dtnl = strlen(dtname);
-    if (dtnl > 4 && strcmp(&dtname[dtnl - 4], "##kw") == 0 && !internal && tag != 0) {
-        /* XXX: yuck, this is horrible, but the auto-generated kw types from the serializer isn't a real type, so we *must* be very careful */
-        assert(tag == 6); // other struct types should never exist
-        tag = 9;
-        if (jl_type_type_mt->kwsorter != NULL && dt == (jl_datatype_t*)jl_typeof(jl_type_type_mt->kwsorter)) {
-            dt = jl_datatype_type; // any representative member with this MethodTable
-        }
-        else if (jl_nonfunction_mt->kwsorter != NULL && dt == (jl_datatype_t*)jl_typeof(jl_nonfunction_mt->kwsorter)) {
-            dt = jl_symbol_type; // any representative member with this MethodTable
-        }
-        else {
-            // search for the representative member of this MethodTable
-            jl_methtable_t *mt = dt->name->mt;
-            size_t l = strlen(jl_symbol_name(mt->name));
-            char *prefixed;
-            prefixed = (char*)malloc_s(l + 2);
-            prefixed[0] = '#';
-            strcpy(&prefixed[1], jl_symbol_name(mt->name));
-            // remove ##kw suffix
-            prefixed[l-3] = 0;
-            jl_sym_t *tname = jl_symbol(prefixed);
-            free(prefixed);
-            jl_value_t *primarydt = jl_get_global(mt->module, tname);
-            if (!primarydt)
-                primarydt = jl_get_global(mt->module, mt->name);
-            primarydt = jl_unwrap_unionall(primarydt);
-            assert(jl_is_datatype(primarydt));
-            assert(primarydt == (jl_value_t*)jl_any_type || jl_typeof(((jl_datatype_t*)primarydt)->name->mt->kwsorter) == (jl_value_t*)dt);
-            dt = (jl_datatype_t*)primarydt;
-        }
-    }
-
     write_uint8(s->s, TAG_DATATYPE);
     write_uint8(s->s, tag);
     if (tag == 6 || tag == 7) {
@@ -517,12 +483,7 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
         jl_serialize_value(s, dt->parameters);
         return;
     }
-    if (tag == 9) {
-        jl_serialize_value(s, dt);
-        return;
-    }
 
-    write_int32(s->s, dt->size);
     int has_instance = (dt->instance != NULL);
     int has_layout = (dt->layout != NULL);
     write_uint8(s->s, has_layout | (has_instance << 1));
@@ -532,7 +493,8 @@ static void jl_serialize_datatype(jl_serializer_state *s, jl_datatype_t *dt) JL_
             | (dt->isbitstype << 3)
             | (dt->zeroinit << 4)
             | (dt->has_concrete_subtype << 5)
-            | (dt->cached_by_hash << 6));
+            | (dt->cached_by_hash << 6)
+            | (dt->isprimitivetype << 7));
     write_int32(s->s, dt->hash);
 
     if (has_layout) {
@@ -1109,13 +1071,14 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                 return;
             }
         }
-        if (t->size <= 255) {
+        size_t tsz = jl_datatype_size(t);
+        if (tsz <= 255) {
             write_uint8(s->s, TAG_SHORT_GENERAL);
-            write_uint8(s->s, t->size);
+            write_uint8(s->s, tsz);
         }
         else {
             write_uint8(s->s, TAG_GENERAL);
-            write_int32(s->s, t->size);
+            write_int32(s->s, tsz);
         }
         jl_serialize_value(s, t);
         if (t == jl_typename_type) {
@@ -1675,12 +1638,6 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
         backref_list.items[pos] = dtv;
         return dtv;
     }
-    if (tag == 9) {
-        jl_datatype_t *primarydt = (jl_datatype_t*)jl_deserialize_value(s, NULL);
-        jl_value_t *dtv = jl_typeof(jl_get_kwsorter((jl_value_t*)primarydt));
-        backref_list.items[pos] = dtv;
-        return dtv;
-    }
     if (!(tag == 0 || tag == 5 || tag == 10 || tag == 11 || tag == 12)) {
         assert(0 && "corrupt deserialization state");
         abort();
@@ -1689,10 +1646,8 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     backref_list.items[pos] = dt;
     if (loc != NULL && loc != HT_NOTFOUND)
         *loc = (jl_value_t*)dt;
-    size_t size = read_int32(s->s);
     uint8_t flags = read_uint8(s->s);
     uint8_t memflags = read_uint8(s->s);
-    dt->size = size;
     int has_layout = flags & 1;
     int has_instance = (flags >> 1) & 1;
     dt->hasfreetypevars = memflags & 1;
@@ -1702,6 +1657,7 @@ static jl_value_t *jl_deserialize_datatype(jl_serializer_state *s, int pos, jl_v
     dt->zeroinit = (memflags >> 4) & 1;
     dt->has_concrete_subtype = (memflags >> 5) & 1;
     dt->cached_by_hash = (memflags >> 6) & 1;
+    dt->isprimitivetype = (memflags >> 7) & 1;
     dt->hash = read_int32(s->s);
 
     if (has_layout) {
@@ -2425,17 +2381,18 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
             jl_methtable_t *mt = jl_method_get_table(((jl_method_instance_t*)callee)->def.method);
             if ((jl_value_t*)mt == jl_nothing) {
                 valid = 0;
-                break;
             }
-            matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, world, &min_valid, &max_valid);
-            if (matches == jl_nothing) {
-                 valid = 0;
-                 break;
-            }
-            matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
-            if (matches != expected) {
-                valid = 0;
-                break;
+            else {
+                matches = jl_gf_invoke_lookup_worlds(invokesig, (jl_value_t*)mt, world, &min_valid, &max_valid);
+                if (matches == jl_nothing) {
+                     valid = 0;
+                }
+                else {
+                    matches = (jl_value_t*)((jl_method_match_t*)matches)->method;
+                    if (matches != expected) {
+                        valid = 0;
+                    }
+                }
             }
         }
         else {
@@ -2451,30 +2408,32 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
                     -1, 0, world, &min_valid, &max_valid, &ambig);
             if (matches == jl_false) {
                 valid = 0;
-                break;
             }
-            // setdiff!(matches, expected)
-            size_t j, k, ins = 0;
-            if (jl_array_len(matches) != jl_array_len(expected)) {
-                valid = 0;
-                if (!_jl_debug_method_invalidation)
-                    break;
-            }
-            for (k = 0; k < jl_array_len(matches); k++) {
-                jl_method_t *match = ((jl_method_match_t*)jl_array_ptr_ref(matches, k))->method;
-                size_t l = jl_array_len(expected);
-                for (j = 0; j < l; j++)
-                    if (match == (jl_method_t*)jl_array_ptr_ref(expected, j))
-                        break;
-                if (j == l) {
-                    // intersection has a new method or a method was
-                    // deleted--this is now probably no good, just invalidate
-                    // everything about it now
+            else {
+                // setdiff!(matches, expected)
+                size_t j, k, ins = 0;
+                if (jl_array_len(matches) != jl_array_len(expected)) {
                     valid = 0;
-                    jl_array_ptr_set(matches, ins++, match);
                 }
+                for (k = 0; k < jl_array_len(matches); k++) {
+                    jl_method_t *match = ((jl_method_match_t*)jl_array_ptr_ref(matches, k))->method;
+                    size_t l = jl_array_len(expected);
+                    for (j = 0; j < l; j++)
+                        if (match == (jl_method_t*)jl_array_ptr_ref(expected, j))
+                            break;
+                    if (j == l) {
+                        // intersection has a new method or a method was
+                        // deleted--this is now probably no good, just invalidate
+                        // everything about it now
+                        valid = 0;
+                        if (!_jl_debug_method_invalidation)
+                            break;
+                        jl_array_ptr_set(matches, ins++, match);
+                    }
+                }
+                if (!valid && _jl_debug_method_invalidation)
+                    jl_array_del_end((jl_array_t*)matches, jl_array_len(matches) - ins);
             }
-            jl_array_del_end((jl_array_t*)matches, jl_array_len(matches) - ins);
         }
         jl_array_uint8_set(valids, i, valid);
         if (!valid && _jl_debug_method_invalidation) {

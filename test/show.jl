@@ -2502,10 +2502,20 @@ end
     # compact
     compact = Core.Compiler.IncrementalCompact(ir)
     verify_display(compact)
+
+    # Compact the first instruction
     state = Core.Compiler.iterate(compact)
-    while state !== nothing
+
+    # Insert some instructions here
+    for i in 1:2
+        inst = Core.Compiler.NewInstruction(Expr(:call, :identity, i), Int, Int32(1))
+        Core.Compiler.insert_node_here!(compact, inst)
         verify_display(compact)
+    end
+
+    while state !== nothing
         state = Core.Compiler.iterate(compact, state[2])
+        verify_display(compact)
     end
 
     # complete
