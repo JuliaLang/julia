@@ -716,12 +716,15 @@ from `Dates` module constructs a `Date` type for a given year `y`, month `m` and
 However, `m` and `d` arguments are optional and their default value is `1`.
 This behavior can be expressed concisely as:
 
-```julia
-function Date(y::Int64, m::Int64=1, d::Int64=1)
-    err = validargs(Date, y, m, d)
-    err === nothing || throw(err)
-    return Date(UTD(totaldays(y, m, d)))
-end
+```jldoctest date_default_args
+julia> using Dates
+
+julia> function date(y::Int64, m::Int64=1, d::Int64=1)
+           err = Dates.validargs(Date, y, m, d)
+           err === nothing || throw(err)
+           return Date(Dates.UTD(Dates.totaldays(y, m, d)))
+       end
+date (generic function with 3 methods)
 ```
 
 Observe, that this definition calls another method of the `Date` function that takes one argument
@@ -730,22 +733,28 @@ of type `UTInstant{Day}`.
 With this definition, the function can be called with either one, two or three arguments, and
 `1` is automatically passed when only one or two of the arguments are specified:
 
-```jldoctest
-julia> using Dates
-
-julia> Date(2000, 12, 12)
+```jldoctest date_default_args
+julia> date(2000, 12, 12)
 2000-12-12
 
-julia> Date(2000, 12)
+julia> date(2000, 12)
 2000-12-01
 
-julia> Date(2000)
+julia> date(2000)
 2000-01-01
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
-This can be checked for our `Date` function example by calling `methods` function.
+This can be checked for our `date` function example by calling the `methods` function:
+
+```julia-repl
+julia> methods(date)
+# 3 methods for generic function "date":
+[1] date(y::Int64) in Main at REPL[1]:1
+[2] date(y::Int64, m::Int64) in Main at REPL[1]:1
+[3] date(y::Int64, m::Int64, d::Int64) in Main at REPL[1]:1
+```
 
 ## Keyword Arguments
 
