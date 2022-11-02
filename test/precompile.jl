@@ -159,10 +159,9 @@ precompile_test_harness(false) do dir
               # issue 16529 (adding a method to a type with no instances)
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
-              # issue 16471 (capturing references to a kwfunc)
-              Test.@test !isdefined(typeof(sin).name.mt, :kwsorter)
+              # issue 16471
               Base.sin(::UInt8, ::UInt16, ::UInt32; x = 52) = x
-              const sinkw = Core.kwfunc(Base.sin)
+              const sinkw = Core.kwcall
 
               # issue 16908 (some complicated types and external method definitions)
               abstract type CategoricalPool{T, R <: Integer, V} end
@@ -253,9 +252,6 @@ precompile_test_harness(false) do dir
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
           """)
-    # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
-    @test !isdefined(typeof(sin).name.mt, :kwsorter)
-
     # Issue #12623
     @test __precompile__(false) === nothing
 
@@ -387,7 +383,7 @@ precompile_test_harness(false) do dir
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test sin(0x01, 0x4000, 0x30031234) == 52
         @test sin(0x01, 0x4000, 0x30031234; x = 9142) == 9142
-        @test Foo.sinkw === Core.kwfunc(Base.sin)
+        @test Foo.sinkw === Core.kwcall
 
         @test Foo.NominalValue() == 1
         @test Foo.OrdinalValue() == 1
@@ -642,16 +638,11 @@ precompile_test_harness("code caching") do dir
     msize = which(size, (Vector{<:Any},))
     hasspec = false
     for i = 1:length(msize.specializations)
-        if isassigned(msize.specializations, i)
-            mi = msize.specializations[i]
-            if isa(mi, Core.MethodInstance)
-                tt = Base.unwrap_unionall(mi.specTypes)
-                if tt.parameters[2] == Vector{Cacheb8321416e8a3e2f1.X}
-                    if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
-                        hasspec = true
-                        break
-                    end
-                end
+        mi = msize.specializations[i]
+        if isa(mi, Core.MethodInstance) && mi.specTypes == Tuple{typeof(size),Vector{Cacheb8321416e8a3e2f1.X}}
+            if isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) && mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing
+                hasspec = true
+                break
             end
         end
     end
@@ -671,7 +662,7 @@ precompile_test_harness("code caching") do dir
     # Check that internal methods and their roots are accounted appropriately
     minternal = which(M.getelsize, (Vector,))
     mi = minternal.specializations[1]
-    @test Base.unwrap_unionall(mi.specTypes).parameters[2] == Vector{Int32}
+    @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
     ci = mi.cache
     @test ci.relocatability == 1
     @test ci.inferred !== nothing
@@ -787,7 +778,7 @@ precompile_test_harness("code caching") do dir
         end
     end
 
-    # Invalidations (this test is adapted from from SnoopCompile)
+    # Invalidations (this test is adapted from SnoopCompile)
     function hasvalid(mi, world)
         isdefined(mi, :cache) || return false
         ci = mi.cache
@@ -817,6 +808,10 @@ precompile_test_harness("code caching") do dir
         build_stale(37)
         stale('c')
 
+        ## Reporting tests (unrelated to the above)
+        nbits(::Int8) = 8
+        nbits(::Int16) = 16
+
         end
         """
     )
@@ -834,6 +829,11 @@ precompile_test_harness("code caching") do dir
 
         # force precompilation
         useA()
+
+        ## Reporting tests
+        call_nbits(x::Integer) = $StaleA.nbits(x)
+        map_nbits() = map(call_nbits, Integer[Int8(1), Int16(1)])
+        map_nbits()
 
         end
         """
@@ -856,9 +856,12 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    @eval using $StaleC
-    @eval using $StaleB
     MA = getfield(@__MODULE__, StaleA)
+    Base.eval(MA, :(nbits(::UInt8) = 8))
+    @eval using $StaleC
+    invalidations = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+    @eval using $StaleB
+    ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     MB = getfield(@__MODULE__, StaleB)
     MC = getfield(@__MODULE__, StaleC)
     world = Base.get_world_counter()
@@ -883,6 +886,32 @@ precompile_test_harness("code caching") do dir
     m = only(methods(MC.call_buildstale))
     mi = m.specializations[1]
     @test hasvalid(mi, world)       # was compiled with the new method
+
+    # Reporting test
+    @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
+    m = only(methods(MB.call_nbits))
+    for mi in m.specializations
+        mi === nothing && continue
+        hv = hasvalid(mi, world)
+        @test mi.specTypes.parameters[end] === Integer ? !hv : hv
+    end
+
+    setglobal!(Main, :inval, invalidations)
+    idxs = findall(==("verify_methods"), invalidations)
+    idxsbits = filter(idxs) do i
+        mi = invalidations[i-1]
+        mi.def == m
+    end
+    idx = only(idxsbits)
+    tagbad = invalidations[idx+1]
+    @test isa(tagbad, Int32)
+    j = findfirst(==(tagbad), invalidations)
+    @test invalidations[j-1] == "insert_backedges_callee"
+    @test isa(invalidations[j-2], Type)
+    @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+
+    m = only(methods(MB.map_nbits))
+    @test !hasvalid(m.specializations[1], world+1) # insert_backedges invalidations also trigger their backedges
 end
 
 precompile_test_harness("invoke") do dir
@@ -892,6 +921,8 @@ precompile_test_harness("invoke") do dir
           """
           module $InvokeModule
               export f, g, h, q, fnc, gnc, hnc, qnc   # nc variants do not infer to a Const
+              export f44320, g44320
+              export getlast
               # f is for testing invoke that occurs within a dependency
               f(x::Real) = 0
               f(x::Int) = x < 5 ? 1 : invoke(f, Tuple{Real}, x)
@@ -910,6 +941,21 @@ precompile_test_harness("invoke") do dir
               # q will have some callers invalidated
               q(x::Integer) = 0
               qnc(x::Integer) = rand()-1
+              # Issue #44320
+              f44320(::Int) = 1
+              f44320(::Any) = 2
+              g44320() = invoke(f44320, Tuple{Any}, 0)
+              g44320()
+
+              # Adding new specializations should not invalidate `invoke`s
+              function getlast(itr)
+                  x = nothing
+                  for y in itr
+                      x = y
+                  end
+                  return x
+              end
+              getlast(a::AbstractArray) = invoke(getlast, Tuple{Any}, a)
           end
           """)
           write(joinpath(dir, "$CallerModule.jl"),
@@ -934,6 +980,11 @@ precompile_test_harness("invoke") do dir
               internalnc(x::Real) = rand()-1
               internalnc(x::Int) = x < 5 ? rand()+1 : invoke(internalnc, Tuple{Real}, x)
 
+              # Issue #44320
+              f44320(::Real) = 3
+
+              call_getlast(x) = getlast(x)
+
               # force precompilation
               begin
                   Base.Experimental.@force_compile
@@ -949,6 +1000,7 @@ precompile_test_harness("invoke") do dir
                   callqnci(3)
                   internal(3)
                   internalnc(3)
+                  call_getlast([1,2,3])
               end
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
@@ -960,6 +1012,9 @@ precompile_test_harness("invoke") do dir
           end
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
+    @eval using $InvokeModule: $InvokeModule
+    MI = getfield(@__MODULE__, InvokeModule)
+    @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     M = getfield(@__MODULE__, CallerModule)
 
@@ -1009,6 +1064,12 @@ precompile_test_harness("invoke") do dir
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqi), Int}
     m = only(methods(M.callqnci))
     @test m.specializations[1].specTypes == Tuple{typeof(M.callqnci), Int}
+
+    m = only(methods(M.g44320))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
+
+    m = which(MI.getlast, (Any,))
+    @test m.specializations[1].cache.max_world == typemax(UInt)
 
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1
@@ -1474,6 +1535,23 @@ precompile_test_harness("Issue #46558") do load_path
     @eval ($Foo.foo)(x::Int) = 2
     Bar = (@eval (using Bar46558; Bar46558))
     @test (@eval $Foo.foo(1)) == 2
+end
+
+precompile_test_harness("issue #46296") do load_path
+    write(joinpath(load_path, "CodeInstancePrecompile.jl"),
+        """
+        module CodeInstancePrecompile
+
+        mi = first(methods(identity)).specializations[1]
+        ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
+                               typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
+
+        __init__() = @assert ci isa Core.CodeInstance
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("CodeInstancePrecompile"))
+    (@eval (using CodeInstancePrecompile))
 end
 
 empty!(Base.DEPOT_PATH)

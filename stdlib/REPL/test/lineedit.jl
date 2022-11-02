@@ -376,6 +376,8 @@ let buf = IOBuffer()
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "βγαδε"
 
+
+    # Transposing a one-char buffer should behave like Emacs
     seek(buf, 0)
     @inferred(LineEdit.edit_clear(buf))
     edit_insert(buf, "a")
@@ -384,6 +386,13 @@ let buf = IOBuffer()
     seekend(buf)
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "a"
+    @test position(buf) == 0
+
+    # Transposing an empty buffer shouldn't implode
+    seek(buf, 0)
+    LineEdit.edit_clear(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == ""
     @test position(buf) == 0
 end
 
@@ -465,7 +474,8 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-let buf = IOBuffer(
+withenv("COLUMNS"=>"80") do
+    buf = IOBuffer(
         "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
     seek(buf, 4)
     outbuf = IOBuffer()

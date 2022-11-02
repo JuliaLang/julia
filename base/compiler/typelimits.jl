@@ -321,7 +321,7 @@ function issimplertype(lattice::AbstractLattice, @nospecialize(typea), @nospecia
                 bi = (tni.val::Core.TypeName).wrapper
                 is_lattice_equal(lattice, ai, bi) && continue
             end
-            bi = getfield_tfunc(typeb, Const(i))
+            bi = getfield_tfunc(lattice, typeb, Const(i))
             is_lattice_equal(lattice, ai, bi) && continue
             # It is not enough for ai to be simpler than bi: it must exactly equal
             # (for this, an invariant struct field, by contrast to
@@ -433,6 +433,8 @@ function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecializ
         end
         return Bool
     end
+    typea = widenconditional(typea)
+    typeb = widenconditional(typeb)
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
@@ -466,13 +468,16 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
         end
         return Bool
     end
+    typea = widenconditional(typea)
+    typeb = widenconditional(typeb)
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
 function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     # type-lattice for Const and PartialStruct wrappers
-    if ((isa(typea, PartialStruct) || isa(typea, Const)) &&
-        (isa(typeb, PartialStruct) || isa(typeb, Const)))
+    acp = isa(typea, Const) || isa(typea, PartialStruct)
+    bcp = isa(typeb, Const) || isa(typeb, PartialStruct)
+    if acp && bcp
         aty = widenconst(typea)
         bty = widenconst(typeb)
         if aty === bty
@@ -487,8 +492,8 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
             fields = Vector{Any}(undef, type_nfields)
             anyrefine = false
             for i = 1:type_nfields
-                ai = getfield_tfunc(typea, Const(i))
-                bi = getfield_tfunc(typeb, Const(i))
+                ai = getfield_tfunc(lattice, typea, Const(i))
+                bi = getfield_tfunc(lattice, typeb, Const(i))
                 ft = fieldtype(aty, i)
                 if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
                     # Since ai===bi, the given type has no restrictions on complexity.
@@ -522,21 +527,45 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
         end
     end
 
+
+    # Don't widen const here - external AbstractInterpreter might insert lattice
+    # layers between us and `ConstsLattice`.
+    wl = widenlattice(lattice)
+    isa(typea, PartialStruct) && (typea = widenlattice(wl, typea))
+    isa(typeb, PartialStruct) && (typeb = widenlattice(wl, typeb))
+
     # type-lattice for PartialOpaque wrapper
-    if isa(typea, PartialOpaque) && isa(typeb, PartialOpaque) && widenconst(typea) == widenconst(typeb)
-        if !(typea.source === typeb.source &&
-             typea.parent === typeb.parent)
-            return widenconst(typea)
+    apo = isa(typea, PartialOpaque)
+    bpo = isa(typeb, PartialOpaque)
+    if apo && bpo
+        aty = widenconst(typea)
+        bty = widenconst(typeb)
+        if aty == bty
+            if !(typea.source === typeb.source &&
+                typea.parent === typeb.parent)
+                return widenconst(typea)
+            end
+            return PartialOpaque(typea.typ, tmerge(lattice, typea.env, typeb.env),
+                typea.parent, typea.source)
         end
-        return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
-            typea.parent, typea.source)
+        typea = aty
+        typeb = bty
+    elseif apo
+        typea = widenlattice(wl, typea)
+    elseif bpo
+        typeb = widenlattice(wl, typeb)
     end
 
-    # no special type-inference lattice, join the types
-    typea, typeb = widenconst(typea), widenconst(typeb)
-    @assert isa(typea, Type); @assert isa(typeb, Type)
+    return tmerge(wl, typea, typeb)
+end
 
-    return tmerge(JLTypeLattice(), typea, typeb)
+function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
+    # the equality of the constants can be checked here, but the equivalent check is usually
+    # done by `tmerge_fast_path` at earlier lattice stage
+    wl = widenlattice(lattice)
+    (isa(typea, Const) || isa(typea, PartialTypeVar)) && (typea = widenlattice(wl, typea))
+    (isa(typeb, Const) || isa(typeb, PartialTypeVar)) && (typeb = widenlattice(wl, typeb))
+    return tmerge(wl, typea, typeb)
 end
 
 function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))

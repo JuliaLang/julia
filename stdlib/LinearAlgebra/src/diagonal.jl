@@ -252,36 +252,17 @@ end
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
 lmul!(D::Diagonal, B::AbstractVecOrMat) = @inline mul!(B, D, B)
 
-#TODO: It seems better to call (D' * adjA')' directly?
-function *(adjA::Adjoint{<:Any,<:AbstractMatrix}, D::Diagonal)
-    A = adjA.parent
-    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    adjoint!(Ac, A)
+function *(A::AdjOrTransAbsMat, D::Diagonal)
+    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     rmul!(Ac, D)
-end
-
-function *(transA::Transpose{<:Any,<:AbstractMatrix}, D::Diagonal)
-    A = transA.parent
-    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    transpose!(At, A)
-    rmul!(At, D)
 end
 
 *(D::Diagonal, adjQ::Adjoint{<:Any,<:Union{QRCompactWYQ,QRPackedQ}}) =
     rmul!(Array{promote_type(eltype(D), eltype(adjQ))}(D), adjQ)
 
-function *(D::Diagonal, adjA::Adjoint{<:Any,<:AbstractMatrix})
-    A = adjA.parent
-    Ac = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    adjoint!(Ac, A)
+function *(D::Diagonal, A::AdjOrTransAbsMat)
+    Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     lmul!(D, Ac)
-end
-
-function *(D::Diagonal, transA::Transpose{<:Any,<:AbstractMatrix})
-    A = transA.parent
-    At = similar(A, promote_op(*, eltype(A), eltype(D.diag)), (size(A, 2), size(A, 1)))
-    transpose!(At, A)
-    lmul!(D, At)
 end
 
 @inline function __muldiag!(out, D::Diagonal, B, alpha, beta)
@@ -396,11 +377,8 @@ end
 mul!(C::AbstractMatrix, Da::Diagonal, Db::Diagonal, alpha::Number, beta::Number) =
     _muldiag!(C, Da, Db, alpha, beta)
 
-_init(op, A::AbstractArray{<:Number}, B::AbstractArray{<:Number}) =
-    (_ -> zero(typeof(op(oneunit(eltype(A)), oneunit(eltype(B))))))
-_init(op, A::AbstractArray, B::AbstractArray) = promote_op(op, eltype(A), eltype(B))
-
-/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(_init(/, A, D).(A), A, D)
+/(A::AbstractVecOrMat, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D))), A, D)
+/(A::HermOrSym, D::Diagonal) = _rdiv!(similar(A, _init_eltype(/, eltype(A), eltype(D)), size(A)), A, D)
 rdiv!(A::AbstractVecOrMat, D::Diagonal) = @inline _rdiv!(A, A, D)
 # avoid copy when possible via internal 3-arg backend
 function _rdiv!(B::AbstractVecOrMat, A::AbstractVecOrMat, D::Diagonal)
@@ -425,8 +403,8 @@ function \(D::Diagonal, B::AbstractVector)
     isnothing(j) || throw(SingularException(j))
     return D.diag .\ B
 end
-\(D::Diagonal, B::AbstractMatrix) =
-    ldiv!(_init(\, D, B).(B), D, B)
+\(D::Diagonal, B::AbstractMatrix) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B))), D, B)
+\(D::Diagonal, B::HermOrSym) = ldiv!(similar(B, _init_eltype(\, eltype(D), eltype(B)), size(B)), D, B)
 
 ldiv!(D::Diagonal, B::AbstractVecOrMat) = @inline ldiv!(B, D, B)
 function ldiv!(B::AbstractVecOrMat, D::Diagonal, A::AbstractVecOrMat)
@@ -605,9 +583,10 @@ function kron(A::Diagonal, B::SymTridiagonal)
     SymTridiagonal(kdv, kev)
 end
 function kron(A::Diagonal, B::Tridiagonal)
-    kd = kron(diag(A), B.d)
-    kdl = _droplast!(kron(diag(A), _pushzero(B.dl)))
-    kdu = _droplast!(kron(diag(A), _pushzero(B.du)))
+    # `_droplast!` is only guaranteed to work with `Vector`
+    kd = _makevector(kron(diag(A), B.d))
+    kdl = _droplast!(_makevector(kron(diag(A), _pushzero(B.dl))))
+    kdu = _droplast!(_makevector(kron(diag(A), _pushzero(B.du))))
     Tridiagonal(kdl, kd, kdu)
 end
 
@@ -751,7 +730,7 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
     λ = eigvals(D)
     if !isnothing(sortby)
         p = sortperm(λ; alg=QuickSort, by=sortby)
-        λ = λ[p] # make a copy, otherwise this permutes D.diag
+        λ = λ[p]
         evecs = zeros(Td, size(D))
         @inbounds for i in eachindex(p)
             evecs[p[i],i] = one(Td)
@@ -760,6 +739,29 @@ function eigen(D::Diagonal; permute::Bool=true, scale::Bool=true, sortby::Union{
         evecs = Matrix{Td}(I, size(D))
     end
     Eigen(λ, evecs)
+end
+function eigen(Da::Diagonal, Db::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(!isfinite, Da.diag) || any(!isfinite, Db.diag)
+        throw(ArgumentError("matrices contain Infs or NaNs"))
+    end
+    if any(iszero, Db.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    return GeneralizedEigen(eigen(Db \ Da; sortby)...)
+end
+function eigen(A::AbstractMatrix, D::Diagonal; sortby::Union{Function,Nothing}=nothing)
+    if any(iszero, D.diag)
+        throw(ArgumentError("right-hand side diagonal matrix is singular"))
+    end
+    if size(A, 1) == size(A, 2) && isdiag(A)
+        return eigen(Diagonal(A), D; sortby)
+    elseif ishermitian(A)
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(Hermitian(A), S), Diagonal{S}(D); sortby)
+    else
+        S = promote_type(eigtype(eltype(A)), eltype(D))
+        return eigen!(eigencopy_oftype(A, S), Diagonal{S}(D); sortby)
+    end
 end
 
 #Singular system
@@ -803,6 +805,9 @@ end
 dot(A::AbstractMatrix, B::Diagonal) = conj(dot(B, A))
 
 function _mapreduce_prod(f, x, D::Diagonal, y)
+    if !(length(x) == length(D.diag) == length(y))
+        throw(DimensionMismatch("x has length $(length(x)), D has size $(size(D)), and y has $(length(y))"))
+    end
     if isempty(x) && isempty(D) && isempty(y)
         return zero(promote_op(f, eltype(x), eltype(D), eltype(y)))
     else
@@ -827,8 +832,10 @@ end
 @deprecate cholesky!(A::Diagonal, ::Val{false}; check::Bool = true) cholesky!(A::Diagonal, NoPivot(); check) false
 @deprecate cholesky(A::Diagonal, ::Val{false}; check::Bool = true) cholesky(A::Diagonal, NoPivot(); check) false
 
-@inline cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
-@inline cholcopy(A::RealHermSymComplexHerm{<:Real,<:Diagonal}) = copymutable_oftype(A, choltype(A))
+inv(C::Cholesky{<:Any,<:Diagonal}) = Diagonal(map(inv∘abs2, C.factors.diag))
+
+cholcopy(A::Diagonal) = copymutable_oftype(A, choltype(A))
+cholcopy(A::RealHermSymComplexHerm{<:Any,<:Diagonal}) = Diagonal(copy_similar(diag(A), choltype(A)))
 
 function getproperty(C::Cholesky{<:Any,<:Diagonal}, d::Symbol)
     Cfactors = getfield(C, :factors)

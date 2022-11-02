@@ -658,9 +658,9 @@ end
     >>(x, n)
 
 Right bit shift operator, `x >> n`. For `n >= 0`, the result is `x` shifted
-right by `n` bits, where `n >= 0`, filling with `0`s if `x >= 0`, `1`s if `x <
-0`, preserving the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n <
-0`, this is equivalent to `x << -n`.
+right by `n` bits, filling with `0`s if `x >= 0`, `1`s if `x < 0`, preserving
+the sign of `x`. This is equivalent to `fld(x, 2^n)`. For `n < 0`, this is
+equivalent to `x << -n`.
 
 # Examples
 ```jldoctest
@@ -699,8 +699,8 @@ end
     >>>(x, n)
 
 Unsigned right bit shift operator, `x >>> n`. For `n >= 0`, the result is `x`
-shifted right by `n` bits, where `n >= 0`, filling with `0`s. For `n < 0`, this
-is equivalent to `x << -n`.
+shifted right by `n` bits, filling with `0`s. For `n < 0`, this is equivalent
+to `x << -n`.
 
 For [`Unsigned`](@ref) integer types, this is equivalent to [`>>`](@ref). For
 [`Signed`](@ref) integer types, this is equivalent to `signed(unsigned(x) >> n)`.
@@ -842,7 +842,7 @@ julia> x == (fld1(x, y) - 1) * y + mod1(x, y)
 true
 ```
 """
-fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld(x + y - m, y))
+fld1(x::T, y::T) where {T<:Real} = (m = mod1(x, y); fld((x - m) + y, y))
 function fld1(x::T, y::T) where T<:Integer
     d = div(x, y)
     return d + (!signbit(x ⊻ y) & (d * y != x))
@@ -887,13 +887,21 @@ widen(x::Type{T}) where {T} = throw(MethodError(widen, (T,)))
 """
     |>(x, f)
 
-Applies a function to the preceding argument. This allows for easy function chaining.
-When used with anonymous functions, parentheses are typically required around the definition to get the intended chain.
+Infix operator which applies function `f` to the argument `x`.
+This allows `f(g(x))` to be written `x |> g |> f`.
+When used with anonymous functions, parentheses are typically required around
+the definition to get the intended chain.
 
 # Examples
 ```jldoctest
-julia> [1:5;] .|> (x -> x^2) |> sum |> inv
-0.01818181818181818
+julia> 4 |> inv
+0.25
+
+julia> [2, 3, 5] |> sum |> inv
+0.1
+
+julia> [0 1; 2 3] .|> (x -> x^2) |> sum
+14
 ```
 """
 |>(x, f) = f(x)
@@ -961,15 +969,21 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'B': ASCII/Unicode U+0042 (category Lu: Letter, uppercase)
  'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
+julia> (==(6)∘length).(["apple", "banana", "carrot"])
+3-element BitVector:
+ 0
+ 1
+ 1
+
 julia> fs = [
            x -> 2x
-           x -> x/2
            x -> x-1
+           x -> x/2
            x -> x+1
        ];
 
 julia> ∘(fs...)(3)
-3.0
+2.0
 ```
 See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
@@ -1306,7 +1320,7 @@ Some collections follow a slightly different definition. For example,
 use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
 is always a `Bool` and never `missing`.
 
-To determine whether an item is not in a given collection, see [`:∉`](@ref).
+To determine whether an item is not in a given collection, see [`∉`](@ref).
 You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both

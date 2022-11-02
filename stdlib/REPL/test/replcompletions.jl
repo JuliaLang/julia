@@ -293,6 +293,12 @@ let
     @test isempty(c)
 end
 
+# issue 46800: (3,2).<TAB> errors in the REPL
+let
+    c, r = test_complete("(3,2).")
+    @test isempty(c)
+end
+
 # inexistent completion inside a string
 @test_nocompletion("Base.print(\"lol")
 
@@ -1093,6 +1099,9 @@ let s, c, r
             s = "\"~"
             @test "tmpfoobar/" in c
             c,r = test_complete(s)
+            s = "\"~user"
+            c, r = test_complete(s)
+            @test isempty(c)
             rm(dir)
         end
     end

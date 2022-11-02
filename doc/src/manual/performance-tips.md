@@ -90,7 +90,14 @@ On the first call (`@time sum_global()`) the function gets compiled. (If you've 
 in this session, it will also compile functions needed for timing.)  You should not take the results
 of this run seriously. For the second run, note that in addition to reporting the time, it also
 indicated that a significant amount of memory was allocated. We are here just computing a sum over all elements in
-a vector of 64-bit floats so there should be no need to allocate memory (at least not on the heap which is what `@time` reports).
+a vector of 64-bit floats so there should be no need to allocate (heap) memory.
+
+We should clarify that what `@time` reports is specifically *heap* allocations, which are typically needed for either
+mutable objects or for creating/growing variable-sized containers (such as `Array` or `Dict`, strings, or "type-unstable"
+objects whose type is only known at runtime).  Allocating (or deallocating) such blocks of memory may require an expensive
+system call (e.g. via `malloc` in C), and they must be tracked for garbage collection.  In contrast, immutable values like
+numbers (except bignums), tuples, and immutable `struct`s can be stored much more cheaply, e.g. in stack or CPU-register
+memory, so one doesn’t typically worry about the performance cost of "allocating" them.
 
 Unexpected memory allocation is almost always a sign of some problem with your code, usually a
 problem with type-stability or creating many small temporary arrays.
@@ -98,8 +105,8 @@ Consequently, in addition to the allocation itself, it's very likely
 that the code generated for your function is far from optimal. Take such indications seriously
 and follow the advice below.
 
-If we instead pass `x` as an argument to the function it no longer allocates memory
-(the allocation reported below is due to running the `@time` macro in global scope)
+In this particular case, the memory allocation is due to the usage of a type-unstable global variable `x`, so if we instead pass `x` as an argument to the function it no longer allocates memory
+(the remaining allocation reported below is due to running the `@time` macro in global scope)
 and is significantly faster after the first call:
 
 ```jldoctest sumarg; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
@@ -824,10 +831,10 @@ This might be worthwhile when either of the following are true:
   * You require CPU-intensive processing on each `Car`, and it becomes vastly more efficient if you
     know the `Make` and `Model` at compile time and the total number of different `Make` or `Model`
     that will be used is not too large.
-  * You have homogenous lists of the same type of `Car` to process, so that you can store them all
+  * You have homogeneous lists of the same type of `Car` to process, so that you can store them all
     in an `Array{Car{:Honda,:Accord},N}`.
 
-When the latter holds, a function processing such a homogenous array can be productively specialized:
+When the latter holds, a function processing such a homogeneous array can be productively specialized:
 Julia knows the type of each element in advance (all objects in the container have the same concrete
 type), so Julia can "look up" the correct method calls when the function is being compiled (obviating
 the need to check at run-time) and thereby emit efficient code for processing the whole list.

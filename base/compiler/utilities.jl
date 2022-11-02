@@ -128,7 +128,10 @@ function retrieve_code_info(linfo::MethodInstance)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
-        if isa(src, Array{UInt8,1})
+        if src === nothing
+            # can happen in images built with --strip-ir
+            return nothing
+        elseif isa(src, Array{UInt8,1})
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
@@ -143,7 +146,7 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atype, sparams, method)
@@ -235,9 +238,9 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
 which will be one of the following:
 
-- `(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
-- `(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
-- `(specsig, mt::MethodTable)`: an abstract call
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
+- `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
+- `BackedgePair(specsig, mt::MethodTable)`: an abstract call
 
 # Examples
 
@@ -254,7 +257,7 @@ julia> callyou(2.0)
 julia> mi = first(which(callme, (Any,)).specializations)
 MethodInstance for callme(::Float64)
 
-julia> @eval Core.Compiler for (sig, caller) in BackedgeIterator(Main.mi.backedges)
+julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
            println(sig)
            println(caller)
        end
@@ -268,8 +271,11 @@ end
 
 const empty_backedge_iter = BackedgeIterator(Any[])
 
-const MethodInstanceOrTable = Union{MethodInstance, Core.MethodTable}
-const BackedgePair = Pair{Union{Type, Nothing, MethodInstanceOrTable}, MethodInstanceOrTable}
+struct BackedgePair
+    sig # ::Union{Nothing,Type}
+    caller::Union{MethodInstance,Core.MethodTable}
+    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,Core.MethodTable}) = new(sig, caller)
+end
 
 function iterate(iter::BackedgeIterator, i::Int=1)
     backedges = iter.backedges
@@ -331,6 +337,16 @@ function foreachssa(@specialize(f), @nospecialize(stmt))
     end
 end
 
+function foreach_anyssa(@specialize(f), @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, AnySSAValue)
+            f(val)
+        end
+    end
+end
+
 function find_ssavalue_uses(body::Vector{Any}, nvals::Int)
     uses = BitSet[ BitSet() for i = 1:nvals ]
     for line in 1:length(body)
@@ -378,7 +394,7 @@ function is_throw_call(e::Expr)
     if e.head === :call
         f = e.args[1]
         if isa(f, GlobalRef)
-            ff = abstract_eval_global(f.mod, f.name)
+            ff = abstract_eval_globalref(f)
             if isa(ff, Const) && ff.val === Core.throw
                 return true
             end
@@ -435,38 +451,6 @@ end
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
     isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
-
-######################
-# IncrementalCompact #
-######################
-
-# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
-function find_ssavalue_uses1(compact)
-    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
-    nvals = length(compact.used_ssas)
-    nbody1 = length(body1)
-    nbody2 = length(body2)
-
-    uses = zeros(Int, nvals)
-    function increment_uses(ssa::SSAValue)
-        uses[ssa.id] += 1
-    end
-
-    for line in 1:(nbody1 + nbody2)
-        # index into the right body
-        if line <= nbody1
-            isassigned(body1, line) || continue
-            e = body1[line]
-        else
-            line -= nbody1
-            isassigned(body2, line) || continue
-            e = body2[line]
-        end
-
-        foreachssa(increment_uses, e)
-    end
-    return uses
-end
 
 ###########
 # options #

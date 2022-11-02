@@ -1026,7 +1026,7 @@ string(b::BigFloat) = _string(b)
 
 print(io::IO, b::BigFloat) = print(io, string(b))
 function show(io::IO, b::BigFloat)
-    if get(io, :compact, false)
+    if get(io, :compact, false)::Bool
         print(io, _string(b, 5))
     else
         print(io, _string(b))
