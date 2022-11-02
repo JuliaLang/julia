@@ -67,12 +67,12 @@ Python, Ruby and Perl, among other dynamic languages.)
 For example, in the function
 ```
 function f(x, y)
-    x[1] = 2    # mutates x
-    y = 7 + y   # new binding for y, no mutation
+    x[1] = 42    # mutates x
+    y = 7 + y    # new binding for y, no mutation
     return y
 end
 ```
-The statement `x[1] = 2` *mutates* the object `x`, and hence this change *will* be visible in the array passed
+The statement `x[1] = 42` *mutates* the object `x`, and hence this change *will* be visible in the array passed
 by the caller for this argument.   On the other hand, the assignment `y = 7 + y` changes the *binding* ("name")
 `y` to refer to a new value `7 + y`, rather than mutating the *original* object referred to by `y`,
 and hence does *not* change the corresponding argument passed by the caller.   This can be seen if we call `f(x, y)`:
@@ -89,11 +89,11 @@ julia> b = 3
 julia> f(a, b) # returns 7 + b == 10
 10
 
-julia> a  # a[1] is changed to 2 by f
+julia> a  # a[1] is changed to 42 by f
 3-element Vector{Int64}:
- 2
- 5
- 6
+ 42
+  5
+  6
  
 julia> b  # not changed
 3
