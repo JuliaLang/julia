@@ -95,6 +95,7 @@ Library changes
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
 * `@kwdef` is now exported and added to the public API ([#46273])
 * An issue with order of operations in `fld1` is now fixed ([#28973]).
+* Sorting is now always stable by default as `QuickSort` was stabilized in ([#45222]).
 
 Standard library changes
 ------------------------
