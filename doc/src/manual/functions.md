@@ -243,31 +243,24 @@ variable they have been assigned to. They can be used as arguments, and they can
 values. They can also be created anonymously, without being given a name, using either of these
 syntaxes:
 
-```jldoctest fofxyz
-julia> x -> x^2 + 2x - 1
+```jldoctest
+julia> g = x -> x^2 + 2x - 1
 #1 (generic function with 1 method)
 
-julia> function (x)
+julia> h = function (x)
            x^2 + 2x - 1
        end
 #3 (generic function with 1 method)
+
+julia> g(3) + h(2)
+21
 ```
 
 This creates a function taking one argument `x` and returning the value of the polynomial `x^2 +
 2x - 1` at that value. Notice that the result is a generic function, but with a compiler-generated
 name based on consecutive numbering.
 
-And because they're first class objects, we can assign them to a variable and then call them using
-the variable assigned to as a function:
-```jldoctest fofxyz
-julia> A = x -> x^2 + 2x - 1
-#5 (generic function with 1 method)
-
-julia> A(10)
-119
-```
-
-However, the primary use for anonymous functions is passing them to functions which take other functions
+The primary use for anonymous functions is passing them to functions which take other functions
 as arguments. A classic example is [`map`](@ref), which applies a function to each value of
 an array and returns a new array containing the resulting values:
 
