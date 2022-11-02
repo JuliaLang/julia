@@ -104,7 +104,7 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr)
 // returns. `fptr` will execute on the signal stack, and must not return.
 // jl_call_in_ctx is also currently executing on that signal stack,
 // so be careful not to smash it
-static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
+JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_ctx)
 {
     // Modifying the ucontext should work but there is concern that
     // sigreturn oriented programming mitigation can work against us
@@ -190,7 +190,7 @@ static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int sig, void *_c
     ctx->uc_mcontext64->__ss.__lr = 0;
 #endif
 #else
-#warning "julia: throw-in-context not supported on this platform"
+#pragma message("julia: throw-in-context not supported on this platform")
     // TODO Add support for PowerPC(64)?
     sigset_t sset;
     sigemptyset(&sset);
@@ -298,7 +298,7 @@ int is_write_fault(void *context) {
     return exc_reg_is_write_fault(ctx->uc_mcontext.mc_err);
 }
 #else
-#warning Implement this query for consistent PROT_NONE handling
+#pragma message("Implement this query for consistent PROT_NONE handling")
 int is_write_fault(void *context) {
     return 0;
 }
@@ -310,7 +310,7 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
             is_addr_on_sigstack(ptls, (void*)jl_get_rsp_from_ctx(context)));
 }
 
-static void segv_handler(int sig, siginfo_t *info, void *context)
+JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 {
     if (jl_get_safe_restore()) { // restarting jl_ or profile
         jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
@@ -361,8 +361,8 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
 }
 
 #if !defined(JL_DISABLE_LIBUNWIND)
-static unw_context_t *volatile signal_context;
-static pthread_mutex_t in_signal_lock;
+static unw_context_t *signal_context;
+pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
 
@@ -372,7 +372,14 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_sec += 1;
     pthread_mutex_lock(&in_signal_lock);
-    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+    jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
+    if (ct2 == NULL) {
+        // this thread is not alive or already dead
+        *ctx = NULL;
+        pthread_mutex_unlock(&in_signal_lock);
+        return;
+    }
     jl_atomic_store_release(&ptls2->signal_request, 1);
     pthread_kill(ptls2->system_id, SIGUSR2);
     // wait for thread to acknowledge
@@ -384,20 +391,34 @@ static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
             pthread_mutex_unlock(&in_signal_lock);
             return;
         }
-        err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+        // Request is either now 0 (meaning the other thread is waiting for
+        //   exit_signal_cond already),
+        // Or it is now -1 (meaning the other thread
+        //   is waiting for in_signal_lock, and we need to release that lock
+        //   here for a bit, until the other thread has a chance to get to the
+        //   exit_signal_cond)
+        if (request == -1) {
+            err = pthread_cond_wait(&signal_caught_cond, &in_signal_lock);
+            assert(!err);
+        }
     }
-    assert(!err);
-    assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
+    // Now the other thread is waiting on exit_signal_cond (verify that here by
+    // checking it is 0, and add an acquire barrier for good measure)
+    int request = jl_atomic_load_acquire(&ptls2->signal_request);
+    assert(request == 0); (void) request;
     *ctx = signal_context;
 }
 
 static void jl_thread_resume(int tid, int sig)
 {
-    jl_ptls_t ptls2 = jl_all_tls_states[tid];
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     jl_atomic_store_release(&ptls2->signal_request, sig == -1 ? 3 : 1);
     pthread_cond_broadcast(&exit_signal_cond);
     pthread_cond_wait(&signal_caught_cond, &in_signal_lock); // wait for thread to acknowledge
-    assert(jl_atomic_load_acquire(&ptls2->signal_request) == 0);
+    // The other thread is waiting to leave exit_signal_cond (verify that here by
+    // checking it is 0, and add an acquire barrier for good measure)
+    int request = jl_atomic_load_acquire(&ptls2->signal_request);
+    assert(request == 0); (void) request;
     pthread_mutex_unlock(&in_signal_lock);
 }
 #endif
@@ -406,7 +427,7 @@ static void jl_thread_resume(int tid, int sig)
 // or if SIGINT happens too often.
 static void jl_try_deliver_sigint(void)
 {
-    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     jl_safepoint_enable_sigint();
     jl_wake_libuv();
     jl_atomic_store_release(&ptls2->signal_request, 2);
@@ -437,7 +458,7 @@ CFI_NORETURN
 
 static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
 {
-    jl_ptls_t ptls2 = jl_all_tls_states[0];
+    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     if (thread0_exit_count <= 1) {
         unw_context_t *signal_context;
         jl_thread_suspend_and_get_state(0, &signal_context);
@@ -456,11 +477,12 @@ static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
 }
 
 // request:
-// 0: nothing
-// 1: get state
-// 2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
-//    is reached
-// 3: exit with `thread0_exit_state`
+// -1: beginning processing [invalid outside here]
+//  0: nothing [not from here]
+//  1: get state
+//  2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
+//     is reached
+//  3: exit with `thread0_exit_state`
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -470,20 +492,26 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (ptls == NULL)
         return;
     int errno_save = errno;
-    sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, 0);
+    // acknowledge that we saw the signal_request
+    sig_atomic_t request = jl_atomic_exchange(&ptls->signal_request, -1);
 #if !defined(JL_DISABLE_LIBUNWIND)
     if (request == 1) {
-        signal_context = jl_to_bt_context(ctx);
-
         pthread_mutex_lock(&in_signal_lock);
+        signal_context = jl_to_bt_context(ctx);
+        // acknowledge that we set the signal_caught_cond broadcast
+        request = jl_atomic_exchange(&ptls->signal_request, 0);
+        assert(request == -1); (void) request;
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_cond_wait(&exit_signal_cond, &in_signal_lock);
         request = jl_atomic_exchange(&ptls->signal_request, 0);
         assert(request == 1 || request == 3);
+        // acknowledge that we got the resume signal
         pthread_cond_broadcast(&signal_caught_cond);
         pthread_mutex_unlock(&in_signal_lock);
     }
+    else
 #endif
+    jl_atomic_exchange(&ptls->signal_request, 0); // returns -1
     if (request == 2) {
         int force = jl_check_force_sigint();
         if (force || (!ptls->defer_signal && ptls->io_wait)) {
@@ -630,6 +658,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
     if (sigaltstack(&ss, NULL) < 0) {
         jl_errorf("fatal error: sigaltstack: %s", strerror(errno));
     }
+
+#ifdef HAVE_MACH
+    attach_exception_port(pthread_mach_thread_np(ptls->system_id), 0);
+#endif
 }
 
 static void jl_sigsetset(sigset_t *sset)
@@ -673,6 +705,14 @@ void trigger_profile_peek(void)
     jl_safe_printf("\n======================================================================================\n");
     jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
     jl_safe_printf("======================================================================================\n");
+    if (bt_size_max == 0){
+        // If the buffer hasn't been initialized, initialize with default size
+        // Keep these values synchronized with Profile.default_init()
+        if (jl_profile_init(10000000, 1000000) == -1) {
+            jl_safe_printf("ERROR: could not initialize the profile buffer");
+            return;
+        }
+    }
     bt_size_cur = 0; // clear profile buffer
     if (jl_profile_start_timer() < 0)
         jl_safe_printf("ERROR: Could not start profile timer\n");
@@ -798,6 +838,7 @@ static void *signal_listener(void *arg)
         }
 #endif
 
+        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
         unw_context_t *signal_context;
@@ -805,11 +846,12 @@ static void *signal_listener(void *arg)
         // (so that thread zero gets notified last)
         if (critical || profile) {
             jl_lock_profile();
-            if (!critical)
-                jl_shuffle_int_array_inplace(profile_round_robin_thread_order, jl_n_threads, &profile_cong_rng_seed);
-            for (int idx = jl_n_threads; idx-- > 0; ) {
-                // Stop the threads in the random round-robin order.
-                int i = critical ? idx : profile_round_robin_thread_order[idx];
+            int *randperm;
+            if (profile)
+                 randperm = profile_get_randperm(nthreads);
+            for (int idx = nthreads; idx-- > 0; ) {
+                // Stop the threads in the random or reverse round-robin order.
+                int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
                 jl_thread_suspend_and_get_state(i, &signal_context);
                 if (signal_context == NULL)
@@ -819,7 +861,7 @@ static void *signal_listener(void *arg)
                 // this part must be signal-handler safe
                 if (critical) {
                     bt_size += rec_backtrace_ctx(bt_data + bt_size,
-                            JL_MAX_BT_SIZE / jl_n_threads - 1,
+                            JL_MAX_BT_SIZE / nthreads - 1,
                             signal_context, NULL);
                     bt_data[bt_size++].uintptr = 0;
                 }
@@ -846,12 +888,12 @@ static void *signal_listener(void *arg)
                         }
                         jl_set_safe_restore(old_buf);
 
-                        jl_ptls_t ptls2 = jl_all_tls_states[i];
+                        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[i];
 
                         // store threadid but add 1 as 0 is preserved to indicate end of block
                         bt_data_prof[bt_size_cur++].uintptr = ptls2->tid + 1;
 
-                        // store task id
+                        // store task id (never null)
                         bt_data_prof[bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
 
                         // store cpu cycle clock
@@ -893,11 +935,11 @@ static void *signal_listener(void *arg)
             else {
 #ifndef SIGINFO // SIGINFO already prints this automatically
                 int nrunning = 0;
-                for (int idx = jl_n_threads; idx-- > 0; ) {
-                    jl_ptls_t ptls2 = jl_all_tls_states[idx];
+                for (int idx = nthreads; idx-- > 0; ) {
+                    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
                     nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
                 }
-                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, jl_n_threads);
+                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
 #endif
 
                 jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));

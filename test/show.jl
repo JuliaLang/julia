@@ -603,7 +603,7 @@ let q1 = Meta.parse(repr(:("$(a)b"))),
     @test q1.args[1].args == [:a, "b"]
 
     @test isa(q2, Expr)
-    @test q2.args[1].head == :string
+    @test q2.args[1].head === :string
     @test q2.args[1].args == [:ab,]
 end
 
@@ -769,10 +769,23 @@ let repr = sprint(show, "text/html", methods(f16580))
     @test occursin("f16580(x, y...; <i>z, w, q...</i>)", repr)
 end
 
+# Just check it doesn't error
+f46594(::Vararg{T, 2}) where T = 1
+let repr = sprint(show, "text/html", first(methods(f46594)))
+    @test occursin("f46594(::Vararg{T, 2}) where T", replace(repr, r"</?[A-Za-z]>"=>""))
+end
+
 function triangular_methodshow(x::T1, y::T2) where {T2<:Integer, T1<:T2}
 end
 let repr = sprint(show, "text/plain", methods(triangular_methodshow))
     @test occursin("where {T2<:Integer, T1<:T2}", repr)
+end
+
+struct S45879{P} end
+let ms = methods(S45879)
+    @test ms isa Base.MethodList
+    @test length(ms) == 0
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
 end
 
 if isempty(Base.GIT_VERSION_INFO.commit)
@@ -1262,12 +1275,6 @@ end
 let repr = sprint(dump, Core.svec())
     @test repr == "empty SimpleVector\n"
 end
-let sv = Core.svec(:a, :b, :c)
-    # unsafe replacement of :c with #undef to test handling of incomplete SimpleVectors
-    unsafe_store!(convert(Ptr{Ptr{Cvoid}}, Base.pointer_from_objref(sv)) + 3 * sizeof(Ptr), C_NULL)
-    repr = sprint(dump, sv)
-    @test repr == "SimpleVector\n  1: Symbol a\n  2: Symbol b\n  3: #undef\n"
-end
 let repr = sprint(dump, sin)
     @test repr == "sin (function of type typeof(sin))\n"
 end
@@ -1431,7 +1438,7 @@ struct var"#X#" end
 var"#f#"() = 2
 struct var"%X%" end  # Invalid name without '#'
 
-# (Just to make this test more sustainable,) we don't necesssarily need to test the exact
+# (Just to make this test more sustainable,) we don't necessarily need to test the exact
 # output format, just ensure that it prints at least the parts we expect:
 @test occursin(".var\"#X#\"", static_shown(var"#X#"))  # Leading `.` tests it printed a module name.
 @test occursin(r"Set{var\"[^\"]+\"} where var\"[^\"]+\"", static_shown(Set{<:Any}))
@@ -1891,16 +1898,16 @@ function _methodsstr(@nospecialize f)
 end
 
 @testset "show function methods" begin
-    @test occursin("methods for generic function \"sin\":\n", _methodsstr(sin))
+    @test occursin("methods for generic function \"sin\" from Base:\n", _methodsstr(sin))
 end
 @testset "show macro methods" begin
-    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\":\n")
+    @test startswith(_methodsstr(getfield(Base,Symbol("@show"))), "# 1 method for macro \"@show\" from Base:\n")
 end
 @testset "show constructor methods" begin
     @test occursin(" methods for type constructor:\n", _methodsstr(Vector))
 end
 @testset "show builtin methods" begin
-    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\":\n")
+    @test startswith(_methodsstr(typeof), "# 1 method for builtin function \"typeof\" from Core:\n")
 end
 @testset "show callable object methods" begin
     @test occursin("methods for callable object:\n", _methodsstr(:))
@@ -2029,21 +2036,17 @@ let src = code_typed(my_fun28173, (Int,), debuginfo=:source)[1][1]
     lines2 = split(repr(ir), '\n')
     @test all(isspace, pop!(lines2))
     @test popfirst!(lines2) == "2  1 ──       $(QuoteNode(1))"
-    @test popfirst!(lines2) == "   │          $(QuoteNode(2))" # TODO: this should print after the next statement
     let line1 = popfirst!(lines1)
         line2 = popfirst!(lines2)
         @test startswith(line1, "2  1 ── ")
         @test startswith(line2, "   │    ")
         @test line2[12:end] == line2[12:end]
     end
-    let line1 = pop!(lines1)
-        line2 = pop!(lines2)
-        @test startswith(line1, "17 ")
-        @test startswith(line2, "   ")
-        @test line1[3:end] == line2[3:end]
-    end
-    @test pop!(lines2) == "   │          \$(QuoteNode(4))"
-    @test pop!(lines2) == "17 │          \$(QuoteNode(3))" # TODO: this should print after the next statement
+    @test popfirst!(lines2) == "   │          $(QuoteNode(2))"
+    @test pop!(lines2) == "   └───       \$(QuoteNode(4))"
+    @test pop!(lines1) == "17 └───       return %18"
+    @test pop!(lines2) == "   │          return %18"
+    @test pop!(lines2) == "17 │          \$(QuoteNode(3))"
     @test lines1 == lines2
 
     # verbose linetable
@@ -2292,6 +2295,8 @@ end
     @eval f1(var"a.b") = 3
     @test occursin("f1(var\"a.b\")", sprint(_show, methods(f1)))
 
+    @test sprint(_show, Method[]) == "0-element Vector{Method}"
+
     italic(s) = mime == MIME("text/html") ? "<i>$s</i>" : s
 
     @eval f2(; var"123") = 5
@@ -2359,4 +2364,230 @@ end
     @test sprint(show, setcpuaffinity(`true`, [1, 2])) == "setcpuaffinity(`true`, [1, 2])"
     @test sprint(show, setenv(setcpuaffinity(`true`, [1, 2]), "A" => "B")) ==
           """setenv(setcpuaffinity(`true`, [1, 2]),["A=B"])"""
+end
+
+# Test that alignment takes into account unicode and computes alignment without
+# color/formatting.
+
+struct ColoredLetter; end
+Base.show(io::IO, ces::ColoredLetter) = Base.printstyled(io, 'A'; color=:red)
+
+struct ⛵; end
+Base.show(io::IO, ces::⛵) = Base.print(io, '⛵')
+
+@test Base.alignment(stdout, ⛵()) == (0, 2)
+@test Base.alignment(IOContext(IOBuffer(), :color=>true), ColoredLetter()) == (0, 1)
+@test Base.alignment(IOContext(IOBuffer(), :color=>false), ColoredLetter()) == (0, 1)
+
+# `show` implementations for `Method`
+let buf = IOBuffer()
+
+    # single line printing by default
+    show(buf, only(methods(sin, (Float64,))))
+    @test !occursin('\n', String(take!(buf)))
+
+    # two-line printing for rich display
+    show(buf, MIME("text/plain"), only(methods(sin, (Float64,))))
+    @test occursin('\n', String(take!(buf)))
+end
+
+@testset "basic `show_ir` functionality tests" begin
+    mktemp() do f, io
+        redirect_stdout(io) do
+            let io = IOBuffer()
+                for i = 1:10
+                    # make sure we don't error on printing IRs at any optimization level
+                    ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
+                    @test try; show(io, ir); true; catch; false; end
+                    compact = Core.Compiler.IncrementalCompact(ir)
+                    @test try; show(io, compact); true; catch; false; end
+                end
+            end
+        end
+        close(io)
+        @test isempty(read(f, String)) # make sure we don't unnecessarily lean anything into `stdout`
+    end
+end
+
+@testset "IRCode: fix coloring of invalid SSA values" begin
+    # get some ir
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # replace an instruction
+    add_stmt = ir.stmts[1]
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    node = Core.Compiler.insert_node!(ir, 1, inst)
+    Core.Compiler.setindex!(add_stmt, node, :inst)
+
+    # the new node should be colored green (as it's uncompacted IR),
+    # and its uses shouldn't be colored at all (since they're just plain valid references)
+    str = sprint(; context=:color=>true) do io
+        show(io, ir)
+    end
+    @test contains(str, "\e[32m%6 =")
+    @test contains(str, "%1 = %6")
+
+    # if we insert an invalid node, it should be colored appropriately
+    Core.Compiler.setindex!(add_stmt, Core.Compiler.SSAValue(node.id+1), :inst)
+    str = sprint(; context=:color=>true) do io
+        show(io, ir)
+    end
+    @test contains(str, "%1 = \e[31m%7")
+end
+
+@testset "issue #46947: IncrementalCompact double display of just-compacted nodes" begin
+    # get some IR
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    instructions = length(ir.stmts)
+    lines_shown(obj) = length(findall('\n', sprint(io->show(io, obj))))
+    @test lines_shown(ir) == instructions
+
+    # insert a couple of instructions
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 1), Nothing)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 2), Nothing)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+    let inst = Core.Compiler.NewInstruction(Expr(:identity, 3), Nothing)
+        Core.Compiler.insert_node!(ir, 4, inst)
+    end
+    instructions += 3
+    @test lines_shown(ir) == instructions
+
+    # compact the IR, ensuring we always show the same number of lines
+    # (the instructions + a separator line)
+    compact = Core.Compiler.IncrementalCompact(ir)
+    @test lines_shown(compact) == instructions + 1
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        @test lines_shown(compact) == instructions + 1
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+    @test lines_shown(compact) == instructions + 1
+
+    ir = Core.Compiler.complete(compact)
+    @test lines_shown(compact) == instructions + 1
+end
+
+@testset "#46424: IncrementalCompact displays wrong basic-block boundaries" begin
+    # get some cfg
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # at every point we should be able to observe these three basic blocks
+    function verify_display(ir)
+        str = sprint(io->show(io, ir))
+        @test contains(str, "1 ─ %1 = ")
+        @test contains(str, r"2 ─ \s+ return 1")
+        @test contains(str, r"3 ─ \s+ return 2")
+    end
+    verify_display(ir)
+
+    # insert some instructions
+    for i in 1:3
+        inst = Core.Compiler.NewInstruction(Expr(:call, :identity, i), Int)
+        Core.Compiler.insert_node!(ir, 2, inst)
+    end
+
+    # compact
+    compact = Core.Compiler.IncrementalCompact(ir)
+    verify_display(compact)
+
+    # Compact the first instruction
+    state = Core.Compiler.iterate(compact)
+
+    # Insert some instructions here
+    for i in 1:2
+        inst = Core.Compiler.NewInstruction(Expr(:call, :identity, i), Int, Int32(1))
+        Core.Compiler.insert_node_here!(compact, inst)
+        verify_display(compact)
+    end
+
+    while state !== nothing
+        state = Core.Compiler.iterate(compact, state[2])
+        verify_display(compact)
+    end
+
+    # complete
+    ir = Core.Compiler.complete(compact)
+    verify_display(ir)
+end
+
+@testset "IRCode: CFG display" begin
+    # get a cfg
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    cfg = ir.cfg
+
+    str = sprint(io->show(io, cfg))
+    @test contains(str, r"CFG with \d+ blocks")
+    @test contains(str, r"bb 1 \(stmt.+\) → bb.*")
+end
+
+@testset "IncrementalCompact: correctly display attach-after nodes" begin
+    # set some IR
+    function foo(i)
+        j = i+42
+        return j
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+
+    # insert a bunch of nodes, inserting both before and after instruction 1
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 1), Int)
+    Core.Compiler.insert_node!(ir, 1, inst)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 2), Int)
+    Core.Compiler.insert_node!(ir, 1, inst)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 3), Int)
+    Core.Compiler.insert_node!(ir, 1, inst, true)
+    inst = Core.Compiler.NewInstruction(Expr(:call, :identity, 4), Int)
+    Core.Compiler.insert_node!(ir, 1, inst, true)
+
+    # at every point we should be able to observe these instructions (in order)
+    function verify_display(ir)
+        str = sprint(io->show(io, ir))
+        lines = split(str, '\n')
+        patterns = ["identity(1)",
+                    "identity(2)",
+                    "add_int",
+                    "identity(3)",
+                    "identity(4)",
+                    "return"]
+        line_idx = 1
+        pattern_idx = 1
+        while pattern_idx <= length(patterns) && line_idx <= length(lines)
+            # we test pattern-per-pattern, in order,
+            # so that we skip e.g. the compaction boundary
+            if contains(lines[line_idx], patterns[pattern_idx])
+                pattern_idx += 1
+            end
+            line_idx += 1
+        end
+        @test pattern_idx > length(patterns)
+    end
+    verify_display(ir)
+
+    compact = Core.Compiler.IncrementalCompact(ir)
+    verify_display(compact)
+
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        verify_display(compact)
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    verify_display(ir)
 end

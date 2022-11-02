@@ -79,7 +79,7 @@ const TAGS = Any[
 
 @assert length(TAGS) == 255
 
-const ser_version = 18 # do not make changes without bumping the version #!
+const ser_version = 20 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -364,7 +364,8 @@ function serialize_mod_names(s::AbstractSerializer, m::Module)
     p = parentmodule(m)
     if p === m || m === Base
         key = Base.root_module_key(m)
-        serialize(s, key.uuid === nothing ? nothing : key.uuid.value)
+        uuid = key.uuid
+        serialize(s, uuid === nothing ? nothing : uuid.value)
         serialize(s, Symbol(key.name))
     else
         serialize_mod_names(s, p)
@@ -519,10 +520,11 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
         serialize(s, t.mt.name)
         serialize(s, collect(Base.MethodList(t.mt)))
         serialize(s, t.mt.max_args)
-        if isdefined(t.mt, :kwsorter)
-            serialize(s, t.mt.kwsorter)
-        else
+        kws = collect(methods(Core.kwcall, (Any, t.wrapper, Vararg)))
+        if isempty(kws)
             writetag(s.io, UNDEFREF_TAG)
+        else
+            serialize(s, kws)
         end
     else
         writetag(s.io, UNDEFREF_TAG)
@@ -660,8 +662,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         return write_as_tag(s.io, tag)
     end
     t = typeof(x)::DataType
-    nf = nfields(x)
-    if nf == 0 && t.size > 0
+    if isprimitivetype(t)
         serialize_type(s, t)
         write(s.io, x)
     else
@@ -671,6 +672,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         else
             serialize_type(s, t, false)
         end
+        nf = nfields(x)
         for i in 1:nf
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
@@ -1112,7 +1114,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.LineInfoNode})
         method = mod
         mod = Main
     end
-    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, deserialize(s)::Int, deserialize(s)::Int)
+    return Core.LineInfoNode(mod, method, deserialize(s)::Symbol, Int32(deserialize(s)::Union{Int32, Int}), Int32(deserialize(s)::Union{Int32, Int}))
 end
 
 function deserialize(s::AbstractSerializer, ::Type{PhiNode})
@@ -1183,9 +1185,17 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         end
     end
     ci.inferred = deserialize(s)
-    ci.inlineable = deserialize(s)
+    inlining = deserialize(s)
+    if isa(inlining, Bool)
+        Core.Compiler.set_inlineable!(ci, inlining)
+    else
+        ci.inlining_cost = inlining
+    end
     ci.propagate_inbounds = deserialize(s)
     ci.pure = deserialize(s)
+    if format_version(s) >= 20
+        ci.has_fcall = deserialize(s)
+    end
     if format_version(s) >= 14
         ci.constprop = deserialize(s)::UInt8
     end
@@ -1346,7 +1356,15 @@ function deserialize_typename(s::AbstractSerializer, number)
         if tag != UNDEFREF_TAG
             kws = handle_deserialize(s, tag)
             if makenew
-                tn.mt.kwsorter = kws
+                if kws isa Vector{Method}
+                    for def in kws
+                        kwmt = typeof(Core.kwcall).name.mt
+                        ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
+                    end
+                else
+                    # old object format -- try to forward from old to new
+                    @eval Core.kwcall(kwargs, f::$ty, args...) = $kws(kwargs, f, args...)
+                end
             end
         end
     elseif makenew
@@ -1458,8 +1476,7 @@ end
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
     nf = length(t.types)
-    if nf == 0 && t.size > 0
-        # bits type
+    if isprimitivetype(t)
         return read(s.io, t)
     elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)

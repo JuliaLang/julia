@@ -23,11 +23,12 @@ JuliaPassContext::JuliaPassContext()
 
         tbaa_gcframe(nullptr), tbaa_tag(nullptr),
 
-        pgcstack_getter(nullptr), gc_flush_func(nullptr),
+        pgcstack_getter(nullptr), adoptthread_func(nullptr), gc_flush_func(nullptr),
         gc_preserve_begin_func(nullptr), gc_preserve_end_func(nullptr),
         pointer_from_objref_func(nullptr), alloc_obj_func(nullptr),
         typeof_func(nullptr), write_barrier_func(nullptr),
-        write_barrier_binding_func(nullptr), module(nullptr)
+        write_barrier_binding_func(nullptr), call_func(nullptr),
+        call2_func(nullptr), module(nullptr)
 {
 }
 
@@ -43,6 +44,7 @@ void JuliaPassContext::initFunctions(Module &M)
     tbaa_tag = tbaa_make_child_with_context(llvmctx, "jtbaa_tag", tbaa_data_scalar).first;
 
     pgcstack_getter = M.getFunction("julia.get_pgcstack");
+    adoptthread_func = M.getFunction("julia.get_pgcstack_or_new");
     gc_flush_func = M.getFunction("julia.gcroot_flush");
     gc_preserve_begin_func = M.getFunction("llvm.julia.gc_preserve_begin");
     gc_preserve_end_func = M.getFunction("llvm.julia.gc_preserve_end");
@@ -51,6 +53,8 @@ void JuliaPassContext::initFunctions(Module &M)
     write_barrier_func = M.getFunction("julia.write_barrier");
     write_barrier_binding_func = M.getFunction("julia.write_barrier_binding");
     alloc_obj_func = M.getFunction("julia.gc_alloc_obj");
+    call_func = M.getFunction("julia.call");
+    call2_func = M.getFunction("julia.call2");
 }
 
 void JuliaPassContext::initAll(Module &M)
@@ -67,10 +71,13 @@ void JuliaPassContext::initAll(Module &M)
 
 llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    for (auto I = F.getEntryBlock().begin(), E = F.getEntryBlock().end();
-         pgcstack_getter && I != E; ++I) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&*I)) {
-            if (callInst->getCalledOperand() == pgcstack_getter) {
+    if (!pgcstack_getter && !adoptthread_func)
+        return nullptr;
+    for (auto &I : F.getEntryBlock()) {
+        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+            Value *callee = callInst->getCalledOperand();
+            if ((pgcstack_getter && callee == pgcstack_getter) ||
+                (adoptthread_func && callee == adoptthread_func)) {
                 return callInst;
             }
         }

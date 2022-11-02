@@ -20,9 +20,8 @@
 #define strchr loader_strchr
 #define malloc loader_malloc
 #define realloc loader_realloc
+#define free loader_free
 #endif
-
-#include <stdint.h>
 
 #ifdef _OS_WINDOWS_
 
@@ -48,6 +47,8 @@
 #include <dlfcn.h>
 
 #endif
+
+#include <stdint.h>
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_

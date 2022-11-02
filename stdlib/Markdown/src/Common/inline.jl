@@ -112,7 +112,7 @@ function footnote_link(stream::IO, md::MD)
         if isempty(str)
             return
         else
-            ref = match(regex, str).captures[1]
+            ref = (match(regex, str)::AbstractMatch).captures[1]
             return Footnote(ref, nothing)
         end
     end

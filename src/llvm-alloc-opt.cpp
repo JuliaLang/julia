@@ -27,12 +27,12 @@
 
 #include <llvm/InitializePasses.h>
 
+#include "passes.h"
 #include "codegen_shared.h"
 #include "julia.h"
 #include "julia_internal.h"
 #include "llvm-pass-helpers.h"
 #include "llvm-alloc-helpers.h"
-#include "passes.h"
 
 #include <map>
 #include <set>
@@ -231,8 +231,8 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
-        bool has_ref = false;
-        bool has_refaggr = false;
+        bool has_ref = use_info.has_unknown_objref;
+        bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
             if (field.hasobjref) {
@@ -312,7 +312,10 @@ ssize_t Optimizer::getGCAllocSize(Instruction *I)
     if (call->getCalledOperand() != pass.alloc_obj_func)
         return -1;
     assert(call->arg_size() == 3);
-    size_t sz = (size_t)cast<ConstantInt>(call->getArgOperand(1))->getZExtValue();
+    auto CI = dyn_cast<ConstantInt>(call->getArgOperand(1));
+    if (!CI)
+        return -1;
+    size_t sz = (size_t)CI->getZExtValue();
     if (sz < IntegerType::MAX_INT_BITS / 8 && sz < INT32_MAX)
         return sz;
     return -1;
@@ -573,7 +576,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         // treat this as a non-mem2reg'd alloca
         // The ccall root and GC preserve handling below makes sure that
         // the alloca isn't optimized out.
-        buff = prolog_builder.CreateAlloca(pass.T_prjlvalue);
+        const DataLayout &DL = F.getParent()->getDataLayout();
+        auto asize = ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz / DL.getTypeAllocSize(pass.T_prjlvalue));
+        buff = prolog_builder.CreateAlloca(pass.T_prjlvalue, asize);
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
     }
@@ -585,10 +590,12 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             buffty = ArrayType::get(Type::getInt8Ty(pass.getLLVMContext()), sz);
         buff = prolog_builder.CreateAlloca(buffty);
         buff->setAlignment(Align(align));
-        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
+        ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
     }
     insertLifetime(ptr, ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz), orig_inst);
-    auto new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext())));
+    Instruction *new_inst = cast<Instruction>(prolog_builder.CreateBitCast(ptr, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), buff->getType()->getPointerAddressSpace())));
+    if (orig_inst->getModule()->getDataLayout().getAllocaAddrSpace() != 0)
+        new_inst = cast<Instruction>(prolog_builder.CreateAddrSpaceCast(new_inst, JuliaType::get_pjlvalue_ty(prolog_builder.getContext(), orig_inst->getType()->getPointerAddressSpace())));
     new_inst->takeName(orig_inst);
 
     auto simple_replace = [&] (Instruction *orig_i, Instruction *new_i) {
@@ -671,7 +678,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
             user->replaceUsesOfWith(orig_i, replace);
         }
         else if (isa<AddrSpaceCastInst>(user) || isa<BitCastInst>(user)) {
-            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), AddressSpace::Generic);
+            auto cast_t = PointerType::getWithSamePointeeType(cast<PointerType>(user->getType()), new_i->getType()->getPointerAddressSpace());
             auto replace_i = new_i;
             Type *new_t = new_i->getType();
             if (cast_t != new_t) {
@@ -1163,8 +1170,8 @@ bool AllocOpt::doInitialization(Module &M)
 
     DL = &M.getDataLayout();
 
-    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { Type::getInt8PtrTy(M.getContext()) });
-    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { Type::getInt8PtrTy(M.getContext()) });
+    lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { Type::getInt8PtrTy(M.getContext(), DL->getAllocaAddrSpace()) });
+    lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { Type::getInt8PtrTy(M.getContext(), DL->getAllocaAddrSpace()) });
 
     return true;
 }
@@ -1177,7 +1184,9 @@ bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
     optimizer.initialize();
     optimizer.optimizeAll();
     bool modified = optimizer.finalize();
-    assert(!verifyFunction(F));
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
     return modified;
 }
 

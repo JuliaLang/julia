@@ -69,14 +69,18 @@ $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 ifeq ($(OS),WINNT)
-# Windwos has special gcc_s names
+# Windows has special gcc_s names
 ifeq ($(ARCH),i686)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_sjlj,1)))
 else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_seh,1)))
 endif
 else
+ifeq ($(APPLE_ARCH),arm64)
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1.1)))
+else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
+endif
 endif
 # winpthread is only Windows, pthread is only others
 ifeq ($(OS),WINNT)

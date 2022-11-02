@@ -235,6 +235,8 @@ end
     @test norm(NaN, 0) === NaN
 end
 
+@test rank(zeros(4)) == 0
+@test rank(1:10) == 1
 @test rank(fill(0, 0, 0)) == 0
 @test rank([1.0 0.0; 0.0 0.9],0.95) == 1
 @test rank([1.0 0.0; 0.0 0.9],rtol=0.95) == 1
@@ -443,11 +445,13 @@ Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
 Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
 
+Base.isfinite(a::ModInt{n}) where {n} = isfinite(a.k)
 Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
 Base.one(::ModInt{n}) where {n} = ModInt{n}(1)
 Base.conj(a::ModInt{n}) where {n} = a
+LinearAlgebra.lupivottype(::Type{ModInt{n}}) where {n} = RowNonZero()
 Base.adjoint(a::ModInt{n}) where {n} = ModInt{n}(conj(a))
 Base.transpose(a::ModInt{n}) where {n} = a  # see Issue 20978
 LinearAlgebra.Adjoint(a::ModInt{n}) where {n} = adjoint(a)
@@ -457,13 +461,22 @@ LinearAlgebra.Transpose(a::ModInt{n}) where {n} = transpose(a)
     A = [ModInt{2}(1) ModInt{2}(0); ModInt{2}(1) ModInt{2}(1)]
     b = [ModInt{2}(1), ModInt{2}(0)]
 
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
     @test A*(lu(A, NoPivot())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
+    @test_throws MethodError lu(A, RowMaximum())
 
     # Needed for pivoting:
     Base.abs(a::ModInt{n}) where {n} = a
     Base.:<(a::ModInt{n}, b::ModInt{n}) where {n} = a.k < b.k
-
     @test A*(lu(A, RowMaximum())\b) == b
+
+    A = [ModInt{2}(0) ModInt{2}(1); ModInt{2}(1) ModInt{2}(1)]
+    @test A*(A\b) == b
+    @test A*(lu(A)\b) == b
+    @test A*(lu(A, RowMaximum())\b) == b
+    @test A*(lu(A, RowNonZero())\b) == b
 end
 
 @testset "Issue 18742" begin
@@ -531,6 +544,13 @@ end
 
 @testset "missing values" begin
     @test ismissing(norm(missing))
+    x = [5, 6, missing]
+    y = [missing, 5, 6]
+    for p in (-Inf, -1, 1, 2, 3, Inf)
+        @test ismissing(norm(x, p))
+        @test ismissing(norm(y, p))
+    end
+    @test_broken ismissing(norm(x, 0))
 end
 
 @testset "peakflops" begin

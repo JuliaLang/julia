@@ -100,7 +100,9 @@ since it is not idiomatic to explicitly export names from `Main`.
 See also: [`@locals`](@ref Base.@locals), [`@__MODULE__`](@ref).
 """
 names(m::Module; all::Bool = false, imported::Bool = false) =
-    sort!(ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported))
+    sort!(unsorted_names(m; all, imported))
+unsorted_names(m::Module; all::Bool = false, imported::Bool = false) =
+    ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint), m, all, imported)
 
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
@@ -119,10 +121,10 @@ function resolve(g::GlobalRef; force::Bool=false)
     return g
 end
 
-const NamedTuple_typename = NamedTuple.body.body.name
+const _NAMEDTUPLE_NAME = NamedTuple.body.body.name
 
 function _fieldnames(@nospecialize t)
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         if t.parameters[1] isa Tuple
             return t.parameters[1]
         else
@@ -265,6 +267,11 @@ Determine whether a global is declared `const` in a given module `m`.
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
 
+function isconst(g::GlobalRef)
+    g.binding != C_NULL && return ccall(:jl_binding_is_const, Cint, (Ptr{Cvoid},), g.binding) != 0
+    return isconst(g.mod, g.name)
+end
+
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
 
@@ -330,7 +337,9 @@ end
 """
     objectid(x) -> UInt
 
-Get a hash value for `x` based on object identity. `objectid(x)==objectid(y)` if `x === y`.
+Get a hash value for `x` based on object identity.
+
+If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
 See also [`hash`](@ref), [`IdDict`](@ref).
 """
@@ -341,6 +350,7 @@ objectid(@nospecialize(x)) = ccall(:jl_object_id, UInt, (Any,), x)
 datatype_fieldtypes(x::DataType) = ccall(:jl_get_fieldtypes, Core.SimpleVector, (Any,), x)
 
 struct DataTypeLayout
+    size::UInt32
     nfields::UInt32
     npointers::UInt32
     firstptr::Int32
@@ -357,7 +367,7 @@ Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`.
 """
 function datatype_alignment(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     alignment = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).alignment
     return Int(alignment)
@@ -374,7 +384,7 @@ LLT_ALIGN(x, sz) = (x + sz - 1) & -sz
 
 # amount of total space taken by T when stored in a container
 function aligned_sizeof(@nospecialize T::Type)
-    @_total_may_throw_meta
+    @_foldable_meta
     if isbitsunion(T)
         _, sz, al = uniontype_layout(T)
         return LLT_ALIGN(sz, al)
@@ -397,7 +407,7 @@ with no intervening padding bytes.
 Can be called on any `isconcretetype`.
 """
 function datatype_haspadding(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return flags & 1 == 1
@@ -410,7 +420,7 @@ Return the number of fields known to this datatype's layout.
 Can be called on any `isconcretetype`.
 """
 function datatype_nfields(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     return unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).nfields
 end
@@ -422,7 +432,7 @@ Return whether instances of this type can contain references to gc-managed memor
 Can be called on any `isconcretetype`.
 """
 function datatype_pointerfree(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     npointers = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).npointers
     return npointers == 0
@@ -438,7 +448,7 @@ Can be called on any `isconcretetype`.
 See also [`fieldoffset`](@ref).
 """
 function datatype_fielddesc_type(dt::DataType)
-    @_total_may_throw_meta
+    @_foldable_meta
     dt.layout == C_NULL && throw(UndefRefError())
     flags = unsafe_load(convert(Ptr{DataTypeLayout}, dt.layout)).flags
     return (flags >> 1) & 3
@@ -491,8 +501,8 @@ end
     ismutable(v) -> Bool
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
-for a discussion of immutability. Note that this function works on values, so if you give it
-a type, it will tell you that a value of `DataType` is mutable.
+for a discussion of immutability. Note that this function works on values, so if you
+give it a `DataType`, it will tell you that a value of the type is mutable.
 
 See also [`isbits`](@ref), [`isstructtype`](@ref).
 
@@ -537,23 +547,21 @@ function isstructtype(@nospecialize t)
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return hasfield || (t.size == 0 && !isabstracttype(t))
+    return !isprimitivetype(t) && !isabstracttype(t)
 end
 
 """
     isprimitivetype(T) -> Bool
 
 Determine whether type `T` was declared as a primitive type
-(i.e. using the `primitive` keyword).
+(i.e. using the `primitive type` syntax).
 """
 function isprimitivetype(@nospecialize t)
     @_total_meta
     t = unwrap_unionall(t)
     # TODO: what to do for `Union`?
     isa(t, DataType) || return false
-    hasfield = !isdefined(t, :types) || !isempty(t.types)
-    return !hasfield && t.size != 0 && !isabstracttype(t)
+    return (t.flags & 0x80) == 0x80
 end
 
 """
@@ -586,7 +594,7 @@ isbitstype(@nospecialize t) = (@_total_meta; isa(t, DataType) && (t.flags & 0x8)
 
 Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 """
-isbits(@nospecialize x) = (@_total_meta; typeof(x).flags & 0x8 == 0x8)
+isbits(@nospecialize x) = isbitstype(typeof(x))
 
 """
     isdispatchtuple(T)
@@ -603,11 +611,13 @@ has_free_typevars(@nospecialize(t)) = ccall(:jl_has_free_typevars, Cint, (Any,),
 
 # equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isleaftype` query
-const _TYPE_NAME = Type.body.name
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
-        (isa(v, DataType) && v.name === _TYPE_NAME && !has_free_typevars(v)) # isType(v)
+        (isType(v) && !has_free_typevars(v))
 end
+
+const _TYPE_NAME = Type.body.name
+isType(@nospecialize t) = isa(t, DataType) && t.name === _TYPE_NAME
 
 """
     isconcretetype(T)
@@ -644,7 +654,7 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
     isabstracttype(T)
 
 Determine whether type `T` was declared as an abstract type
-(i.e. using the `abstract` keyword).
+(i.e. using the `abstract type` syntax).
 
 # Examples
 ```jldoctest
@@ -706,7 +716,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000060, :ctime, Float64)
 ```
 """
-fieldoffset(x::DataType, idx::Integer) = (@_total_may_throw_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -752,7 +762,7 @@ julia> Base.fieldindex(Foo, :z, false)
 ```
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
-    @_total_may_throw_meta
+    @_foldable_meta
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
@@ -776,7 +786,7 @@ Get the number of fields that an instance of the given type would have.
 An error is thrown if the type is too abstract to determine this.
 """
 function fieldcount(@nospecialize t)
-    @_total_may_throw_meta
+    @_foldable_meta
     if t isa UnionAll || t isa Union
         t = argument_datatype(t)
         if t === nothing
@@ -788,7 +798,7 @@ function fieldcount(@nospecialize t)
     if !(t isa DataType)
         throw(TypeError(:fieldcount, DataType, t))
     end
-    if t.name === NamedTuple_typename
+    if t.name === _NAMEDTUPLE_NAME
         names, types = t.parameters[1], t.parameters[2]
         if names isa Tuple
             return length(names)
@@ -828,7 +838,7 @@ julia> fieldtypes(Foo)
 (Int64, String)
 ```
 """
-fieldtypes(T::Type) = (@_total_may_throw_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
+fieldtypes(T::Type) = (@_foldable_meta; ntupleany(i -> fieldtype(T, i), fieldcount(T)))
 
 # return all instances, for types that can be enumerated
 
@@ -853,9 +863,9 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t, Type) && t <: Tuple
-        for p in unwrap_unionall(t).parameters
+        for p in (unwrap_unionall(t)::DataType).parameters
             if isa(p, Core.TypeofVararg)
-                p = p.T
+                p = unwrapva(p)
             end
             if !(isa(p, Type) || isa(p, TypeVar))
                 error("argument tuple type must contain only types")
@@ -867,14 +877,11 @@ function to_tuple_type(@nospecialize(t))
     t
 end
 
-function signature_type(@nospecialize(f), @nospecialize(args))
-    f_type = isa(f, Type) ? Type{f} : typeof(f)
-    if isa(args, Type)
-        u = unwrap_unionall(args)
-        return rewrap_unionall(Tuple{f_type, u.parameters...}, args)
-    else
-        return Tuple{f_type, args...}
-    end
+function signature_type(@nospecialize(f), @nospecialize(argtypes))
+    argtypes = to_tuple_type(argtypes)
+    ft = Core.Typeof(f)
+    u = unwrap_unionall(argtypes)::DataType
+    return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
 end
 
 """
@@ -980,7 +987,6 @@ See also: [`which`](@ref) and `@which`.
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
-    t = to_tuple_type(t)
     world = get_world_counter()
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
@@ -1086,6 +1092,7 @@ struct CodegenParams
     prefer_specsig::Cint
     gnu_pubnames::Cint
     debug_info_kind::Cint
+    safepoint_on_entry::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1094,12 +1101,14 @@ struct CodegenParams
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
+                   safepoint_on_entry::Bool=true,
                    lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
+            Cint(safepoint_on_entry),
             lookup, generic_context)
     end
 end
@@ -1108,10 +1117,10 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atype, sparams)
+    may_invoke_generator(method, atype, sparams) -> Bool
 
 Computes whether or not we may invoke the generator for the given `method` on
-the given atype and sparams. For correctness, all generated function are
+the given `atype` and `sparams`. For correctness, all generated function are
 required to return monotonic answers. However, since we don't expect users to
 be able to successfully implement this criterion, we only call generated
 functions on concrete types. The one exception to this is that we allow calling
@@ -1122,8 +1131,8 @@ computes whether we are in either of these cases.
 Unlike normal functions, the compilation heuristics still can't generate good dispatch
 in some cases, but this may still allow inference not to fall over in some limited cases.
 """
-function may_invoke_generator(method::MethodInstance)
-    return may_invoke_generator(method.def::Method, method.specTypes, method.sparam_vals)
+function may_invoke_generator(mi::MethodInstance)
+    return may_invoke_generator(mi.def::Method, mi.specTypes, mi.sparam_vals)
 end
 function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
@@ -1217,13 +1226,7 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.OpaqueClosure)
         return code_typed_opaque_closure(f; optimize, debuginfo, interp)
     end
-    ft = Core.Typeof(f)
-    if isa(types, Type)
-        u = unwrap_unionall(types)
-        tt = rewrap_unionall(Tuple{ft, u.parameters...}, types)
-    else
-        tt = Tuple{ft, types...}
-    end
+    tt = signature_type(f, types)
     return code_typed_by_type(tt; optimize, debuginfo, world, interp)
 end
 
@@ -1291,6 +1294,98 @@ function code_typed_opaque_closure(@nospecialize(oc::Core.OpaqueClosure);
     end
 end
 
+"""
+    code_ircode(f, [types])
+
+Return an array of pairs of `IRCode` and inferred return type if type inference succeeds.
+The `Method` is included instead of `IRCode` otherwise.
+
+See also: [`code_typed`](@ref)
+
+# Internal Keyword Arguments
+
+This section should be considered internal, and is only for who understands Julia compiler
+internals.
+
+- `world=Base.get_world_counter()`: optional, controls the world age to use when looking up
+  methods, use current world age if not specified.
+- `interp=Core.Compiler.NativeInterpreter(world)`: optional, controls the interpreter to
+  use, use the native interpreter Julia uses if not specified.
+- `optimize_until`: optional, controls the optimization passes to run.  If it is a string,
+  it specifies the name of the pass up to which the optimizer is run.  If it is an integer,
+  it specifies the number of passes to run.  If it is `nothing` (default), all passes are
+  run.
+
+# Example
+
+One can put the argument types in a tuple to get the corresponding `code_ircode`.
+
+```julia
+julia> Base.code_ircode(+, (Float64, Int64))
+1-element Vector{Any}:
+ 388 1 ─ %1 = Base.sitofp(Float64, _3)::Float64
+    │   %2 = Base.add_float(_2, %1)::Float64
+    └──      return %2
+     => Float64
+
+julia> Base.code_ircode(+, (Float64, Int64); optimize_until = "compact 1")
+1-element Vector{Any}:
+ 388 1 ─ %1 = Base.promote(_2, _3)::Tuple{Float64, Float64}
+    │   %2 = Core._apply_iterate(Base.iterate, Base.:+, %1)::Float64
+    └──      return %2
+     => Float64
+```
+"""
+function code_ircode(
+    @nospecialize(f),
+    @nospecialize(types = default_tt(f));
+    world = get_world_counter(),
+    interp = Core.Compiler.NativeInterpreter(world),
+    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
+)
+    if isa(f, Core.OpaqueClosure)
+        error("OpaqueClosure not supported")
+    end
+    tt = signature_type(f, types)
+    return code_ircode_by_type(tt; world, interp, optimize_until)
+end
+
+"""
+    code_ircode_by_type(types::Type{<:Tuple}; ...)
+
+Similar to [`code_ircode`](@ref), except the argument is a tuple type describing
+a full signature to query.
+"""
+function code_ircode_by_type(
+    @nospecialize(tt::Type);
+    world = get_world_counter(),
+    interp = Core.Compiler.NativeInterpreter(world),
+    optimize_until::Union{Integer,AbstractString,Nothing} = nothing,
+)
+    ccall(:jl_is_in_pure_context, Bool, ()) &&
+        error("code reflection cannot be used from generated functions")
+    tt = to_tuple_type(tt)
+    matches = _methods_by_ftype(tt, -1, world)::Vector
+    asts = []
+    for match in matches
+        match = match::Core.MethodMatch
+        meth = func_for_method_checked(match.method, tt, match.sparams)
+        (code, ty) = Core.Compiler.typeinf_ircode(
+            interp,
+            meth,
+            match.spec_types,
+            match.sparams,
+            optimize_until,
+        )
+        if code === nothing
+            push!(asts, meth => Any)
+        else
+            push!(asts, code => ty)
+        end
+    end
+    return asts
+end
+
 function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
                       world = get_world_counter(),
                       interp = Core.Compiler.NativeInterpreter(world))
@@ -1299,44 +1394,52 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
         _, rt = only(code_typed_opaque_closure(f))
         return Any[rt]
     end
-    types = to_tuple_type(types)
-    rt = []
+
+    if isa(f, Core.Builtin)
+        argtypes = Any[to_tuple_type(types).parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Any[rt]
+    end
+    rts = []
     for match in _methods(f, types, -1, world)::Vector
         match = match::Core.MethodMatch
         meth = func_for_method_checked(match.method, types, match.sparams)
         ty = Core.Compiler.typeinf_type(interp, meth, match.spec_types, match.sparams)
-        push!(rt, something(ty, Any))
+        push!(rts, something(ty, Any))
     end
-    return rt
+    return rts
 end
 
 function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
                        interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    types = to_tuple_type(types)
     if isa(f, Core.Builtin)
-        args = Any[types.parameters...]
-        rt = Core.Compiler.builtin_tfunction(interp, f, args, nothing)
-        return Core.Compiler.builtin_effects(f, args, rt)
-    else
-        effects = Core.Compiler.EFFECTS_TOTAL
-        matches = _methods(f, types, -1, world)::Vector
-        if isempty(matches)
-            # although this call is known to throw MethodError (thus `nothrow=ALWAYS_FALSE`),
-            # still mark it `TRISTATE_UNKNOWN` just in order to be consistent with a result
-            # derived by the effect analysis, which can't prove guaranteed throwness at this moment
-            return Core.Compiler.Effects(effects; nothrow=Core.Compiler.TRISTATE_UNKNOWN)
-        end
-        for match in matches
-            match = match::Core.MethodMatch
-            frame = Core.Compiler.typeinf_frame(interp,
-                match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
-            frame === nothing && return Core.Compiler.Effects()
-            effects = Core.Compiler.tristate_merge(effects, frame.ipo_effects)
-        end
-        return effects
+        types = to_tuple_type(types)
+        argtypes = Any[types.parameters...]
+        rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
+        return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
     end
+    tt = signature_type(f, types)
+    result = Core.Compiler.findall(tt, Core.Compiler.method_table(interp))
+    if result === missing
+        # unanalyzable call, return the unknown effects
+        return Core.Compiler.Effects()
+    end
+    (; matches) = result
+    effects = Core.Compiler.EFFECTS_TOTAL
+    if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
+        # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+        effects = Core.Compiler.Effects(effects; nothrow=false)
+    end
+    for match in matches.matches
+        match = match::Core.MethodMatch
+        frame = Core.Compiler.typeinf_frame(interp,
+            match.method, match.spec_types, match.sparams, #=run_optimizer=#false)
+        frame === nothing && return Core.Compiler.Effects()
+        effects = Core.Compiler.merge_effects(effects, frame.ipo_effects)
+    end
+    return effects
 end
 
 """
@@ -1398,7 +1501,6 @@ If `types` is an abstract type, then the method that would be called by `invoke`
 See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
 """
 function which(@nospecialize(f), @nospecialize(t))
-    t = to_tuple_type(t)
     tt = signature_type(f, t)
     return which(tt)
 end
@@ -1506,7 +1608,6 @@ true
 ```
 """
 function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
-    t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
 end
@@ -1531,41 +1632,41 @@ as written, called after all missing keyword-arguments have been assigned defaul
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
 """
 function bodyfunction(basemethod::Method)
-    function getsym(arg)
-        isa(arg, Symbol) && return arg
-        isa(arg, GlobalRef) && return arg.name
-        return nothing
-    end
-
     fmod = basemethod.module
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
     #        return %1
     # where `mkw` is the name of the "active" keyword body-function.
     ast = uncompressed_ast(basemethod)
-    f = nothing
     if isa(ast, Core.CodeInfo) && length(ast.code) >= 2
         callexpr = ast.code[end-1]
-        if isa(callexpr, Expr) && callexpr.head == :call
+        if isa(callexpr, Expr) && callexpr.head === :call
             fsym = callexpr.args[1]
-            if isa(fsym, Symbol)
-                f = getfield(fmod, fsym)
-            elseif isa(fsym, GlobalRef)
-                newsym = nothing
-                if fsym.mod === Core && fsym.name === :_apply
-                    newsym = getsym(callexpr.args[2])
-                elseif fsym.mod === Core && fsym.name === :_apply_iterate
-                    newsym = getsym(callexpr.args[3])
-                end
-                if isa(newsym, Symbol)
-                    f = getfield(basemethod.module, newsym)::Function
+            while true
+                if isa(fsym, Symbol)
+                    return getfield(fmod, fsym)
+                elseif isa(fsym, GlobalRef)
+                    if fsym.mod === Core && fsym.name === :_apply
+                        fsym = callexpr.args[2]
+                    elseif fsym.mod === Core && fsym.name === :_apply_iterate
+                        fsym = callexpr.args[3]
+                    end
+                    if isa(fsym, Symbol)
+                        return getfield(basemethod.module, fsym)::Function
+                    elseif isa(fsym, GlobalRef)
+                        return getfield(fsym.mod, fsym.name)::Function
+                    elseif isa(fsym, Core.SSAValue)
+                        fsym = ast.code[fsym.id]
+                    else
+                        return nothing
+                    end
                 else
-                    f = getfield(fsym.mod, fsym.name)::Function
+                    return nothing
                 end
             end
         end
     end
-    return f
+    return nothing
 end
 
 """
@@ -1699,7 +1800,7 @@ function delete_method(m::Method)
 end
 
 function get_methodtable(m::Method)
-    return ccall(:jl_method_table_for, Any, (Any,), m.sig)::Core.MethodTable
+    return ccall(:jl_method_get_table, Any, (Any,), m)::Core.MethodTable
 end
 
 """
@@ -1735,7 +1836,7 @@ as well to get the properties of an instance of the type.
 
 `propertynames(x)` may return only "public" property names that are part
 of the documented interface of `x`.   If you want it to also return "private"
-fieldnames intended for internal use, pass `true` for the optional second argument.
+property names intended for internal use, pass `true` for the optional second argument.
 REPL tab completion on `x.` shows only the `private=false` properties.
 
 See also: [`hasproperty`](@ref), [`hasfield`](@ref).
@@ -1759,30 +1860,45 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 """
     @invoke f(arg::T, ...; kwargs...)
 
-Provides a convenient way to call [`invoke`](@ref);
-`@invoke f(arg1::T1, arg2::T2; kwargs...)` will be expanded into `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
-When an argument's type annotation is omitted, it's specified as `Any` argument, e.g.
-`@invoke f(arg1::T, arg2)` will be expanded into `invoke(f, Tuple{T,Any}, arg1, arg2)`.
+Provides a convenient way to call [`invoke`](@ref) by expanding
+`@invoke f(arg1::T1, arg2::T2; kwargs...)` to `invoke(f, Tuple{T1,T2}, arg1, arg2; kwargs...)`.
+When an argument's type annotation is omitted, it's replaced with `Core.Typeof` that argument.
+To invoke a method where an argument is untyped or explicitly typed as `Any`, annotate the
+argument with `::Any`.
+
+# Examples
+
+```jldoctest
+julia> @macroexpand @invoke f(x::T, y)
+:(Core.invoke(f, Tuple{T, Core.Typeof(y)}, x, y))
+
+julia> @invoke 420::Integer % Unsigned
+0x00000000000001a4
+```
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
+
+!!! compat "Julia 1.9"
+    This macro is exported as of Julia 1.9.
 """
 macro invoke(ex)
     f, args, kwargs = destructure_callex(ex)
-    newargs, newargtypes = Any[], Any[]
-    for i = 1:length(args)
-        x = args[i]
-        if isexpr(x, :(::))
-            a = x.args[1]
-            t = x.args[2]
+    types = Expr(:curly, :Tuple)
+    out = Expr(:call, GlobalRef(Core, :invoke))
+    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
+    push!(out.args, f)
+    push!(out.args, types)
+    for arg in args
+        if isexpr(arg, :(::))
+            push!(out.args, arg.args[1])
+            push!(types.args, arg.args[2])
         else
-            a = x
-            t = GlobalRef(Core, :Any)
+            push!(out.args, arg)
+            push!(types.args, Expr(:call, GlobalRef(Core, :Typeof), arg))
         end
-        push!(newargs, a)
-        push!(newargtypes, t)
     end
-    return esc(:($(GlobalRef(Core, :invoke))($(f), Tuple{$(newargtypes...)}, $(newargs...); $(kwargs...))))
+    return esc(out)
 end
 
 """

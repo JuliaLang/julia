@@ -29,7 +29,7 @@ function transform!(f, s, i = -1) # i is char-based (not bytes) buffer position
     # simulate what happens in LineEdit.set_action!
     s isa LineEdit.MIState && (s.current_action = :unknown)
     status = f(s)
-    if s isa LineEdit.MIState && status != :ignore
+    if s isa LineEdit.MIState && status !== :ignore
         # simulate what happens in LineEdit.prompt!
         s.last_action = s.current_action
     end
@@ -375,6 +375,25 @@ let buf = IOBuffer()
     @test content(buf) == "βγαεδ"
     LineEdit.edit_transpose_chars(buf)
     @test content(buf) == "βγαδε"
+
+
+    # Transposing a one-char buffer should behave like Emacs
+    seek(buf, 0)
+    @inferred(LineEdit.edit_clear(buf))
+    edit_insert(buf, "a")
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    seekend(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == "a"
+    @test position(buf) == 0
+
+    # Transposing an empty buffer shouldn't implode
+    seek(buf, 0)
+    LineEdit.edit_clear(buf)
+    LineEdit.edit_transpose_chars(buf)
+    @test content(buf) == ""
+    @test position(buf) == 0
 end
 
 @testset "edit_word_transpose" begin
@@ -455,7 +474,8 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-let buf = IOBuffer(
+withenv("COLUMNS"=>"80") do
+    buf = IOBuffer(
         "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
     seek(buf, 4)
     outbuf = IOBuffer()
@@ -895,4 +915,18 @@ end
     @test get_last_word("a[1]") == "1"
     @test get_last_word("a[b[]]") == "b"
     @test get_last_word("a[]") == "a[]"
+end
+
+@testset "issue #45836" begin
+    term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+    strings = ["abcdef", "123456", "ijklmn"]
+    REPL.LineEdit.show_completions(promptstate, strings)
+    completion = String(take!(term.out_stream))
+    @test completion == "\033[0B\n\rabcdef\r\033[8C123456\r\033[16Cijklmn\n"
+    strings2 = ["abcdef", "123456\nijklmn"]
+    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+    REPL.LineEdit.show_completions(promptstate, strings2)
+    completion2 = String(take!(term.out_stream))
+    @test completion2 == "\033[0B\nabcdef\n123456\nijklmn\n"
 end

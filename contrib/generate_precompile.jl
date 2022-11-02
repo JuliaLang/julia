@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-if Threads.nthreads() != 1
-    @warn "Running this file with multiple Julia threads may lead to a build error" Threads.nthreads()
+if Threads.maxthreadid() != 1
+    @warn "Running this file with multiple Julia threads may lead to a build error" Base.maxthreadid()
 end
 
 if Base.isempty(Base.ARGS) || Base.ARGS[1] !== "0"
@@ -212,7 +212,6 @@ if Test !== nothing
     precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
     precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
     precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
     precompile(Tuple{typeof(Test.detect_ambiguities), Any})
     precompile(Tuple{typeof(Test.collect_test_logs), Function})
     precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
@@ -340,7 +339,7 @@ function generate_precompile_statements()
                 # wait for the next prompt-like to appear
                 readuntil(output_copy, "\n")
                 strbuf = ""
-                while true
+                while !eof(output_copy)
                     strbuf *= String(readavailable(output_copy))
                     occursin(JULIA_PROMPT, strbuf) && break
                     occursin(PKG_PROMPT, strbuf) && break
@@ -372,9 +371,9 @@ function generate_precompile_statements()
         end
     end
 
-    # Execute the collected precompile statements
+    # Execute the precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in sort!(collect(statements))
+    include_time = @elapsed for statement in statements
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
         occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
@@ -421,13 +420,14 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
-    tot_time = time_ns() - start_time
     include_time *= 1e9
-    gen_time = tot_time - include_time
+    gen_time = (time_ns() - start_time) - include_time
+    tot_time = time_ns() - start_time
+
     println("Precompilation complete. Summary:")
-    print("Total ─────── "); Base.time_print(tot_time); println()
-    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100); println("%")
+    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100);     println("%")
     print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
+    print("Total ─────── "); Base.time_print(tot_time);     println()
 
     return
 end
@@ -446,4 +446,13 @@ empty!(Base.ARGS)
 empty!(Core.ARGS)
 
 end # @eval
+end # if
+
+println("Outputting sysimage file...")
+let pre_output_time = time_ns()
+    # Print report after sysimage has been saved so all time spent can be captured
+    Base.postoutput() do
+        output_time = time_ns() - pre_output_time
+        print("Output ────── "); Base.time_print(output_time); println()
+    end
 end

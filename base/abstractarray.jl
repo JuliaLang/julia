@@ -14,8 +14,8 @@ See also: [`AbstractVector`](@ref), [`AbstractMatrix`](@ref), [`eltype`](@ref), 
 AbstractArray
 
 convert(::Type{T}, a::T) where {T<:AbstractArray} = a
-convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)
-convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)
+convert(::Type{AbstractArray{T}}, a::AbstractArray) where {T} = AbstractArray{T}(a)::AbstractArray{T}
+convert(::Type{AbstractArray{T,N}}, a::AbstractArray{<:Any,N}) where {T,N} = AbstractArray{T,N}(a)::AbstractArray{T,N}
 
 """
     size(A::AbstractArray, [dim])
@@ -55,6 +55,9 @@ julia> A = fill(1, (5,6,7));
 
 julia> axes(A, 2)
 Base.OneTo(6)
+
+julia> axes(A, 4) == 1:1  # all dimensions d > ndims(A) have size 1
+true
 ```
 
 # Usage note
@@ -101,12 +104,26 @@ end
 
 Return `true` if the indices of `A` start with something other than 1 along any axis.
 If multiple arguments are passed, equivalent to `has_offset_axes(A) | has_offset_axes(B) | ...`.
+
+See also [`require_one_based_indexing`](@ref).
 """
-has_offset_axes(A) = _tuple_any(x->Int(first(x))::Int != 1, axes(A))
+has_offset_axes(A) = _any_tuple(x->Int(first(x))::Int != 1, false, axes(A)...)
 has_offset_axes(A::AbstractVector) = Int(firstindex(A))::Int != 1 # improve performance of a common case (ranges)
-has_offset_axes(A...) = _tuple_any(has_offset_axes, A)
+# Use `_any_tuple` to avoid unneeded invoke.
+# note: this could call `any` directly if the compiler can infer it
+has_offset_axes(As...) = _any_tuple(has_offset_axes, false, As...)
 has_offset_axes(::Colon) = false
 
+"""
+    require_one_based_indexing(A::AbstractArray)
+    require_one_based_indexing(A,B...)
+
+Throw an `ArgumentError` if the indices of any argument start with something other than `1` along any axis.
+See also [`has_offset_axes`](@ref).
+
+!!! compat "Julia 1.2"
+     This function requires at least Julia 1.2.
+"""
 require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
 
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
@@ -121,13 +138,25 @@ axes1(iter) = oneto(length(iter))
 
 Return an efficient array describing all valid indices for `a` arranged in the shape of `a` itself.
 
-They keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
+The keys of 1-dimensional arrays (vectors) are integers, whereas all other N-dimensional
 arrays use [`CartesianIndex`](@ref) to describe their locations.  Often the special array
 types [`LinearIndices`](@ref) and [`CartesianIndices`](@ref) are used to efficiently
 represent these arrays of integers and `CartesianIndex`es, respectively.
 
 Note that the `keys` of an array might not be the most efficient index type; for maximum
 performance use  [`eachindex`](@ref) instead.
+
+# Examples
+```jldoctest
+julia> keys([4, 5, 6])
+3-element LinearIndices{1, Tuple{Base.OneTo{Int64}}}:
+ 1
+ 2
+ 3
+
+julia> keys([4 5; 6 7])
+CartesianIndices((2, 2))
+```
 """
 keys(a::AbstractArray) = CartesianIndices(axes(a))
 keys(a::AbstractVector) = LinearIndices(a)
@@ -137,7 +166,7 @@ keys(a::AbstractVector) = LinearIndices(a)
     keytype(A::AbstractArray)
 
 Return the key type of an array. This is equal to the
-`eltype` of the result of `keys(...)`, and is provided
+[`eltype`](@ref) of the result of `keys(...)`, and is provided
 mainly for compatibility with the dictionary interface.
 
 # Examples
@@ -163,7 +192,7 @@ valtype(a::AbstractArray) = valtype(typeof(a))
     valtype(T::Type{<:AbstractArray})
     valtype(A::AbstractArray)
 
-Return the value type of an array. This is identical to `eltype` and is
+Return the value type of an array. This is identical to [`eltype`](@ref) and is
 provided mainly for compatibility with the dictionary interface.
 
 # Examples
@@ -209,7 +238,7 @@ eltype(::Type{<:AbstractArray{E}}) where {E} = @isdefined(E) ? E : Any
 """
     elsize(type)
 
-Compute the memory stride in bytes between consecutive elements of `eltype`
+Compute the memory stride in bytes between consecutive elements of [`eltype`](@ref)
 stored inside the given `type`, if the array elements are stored densely with a
 uniform linear stride.
 
@@ -294,31 +323,43 @@ end
 
 """
     eachindex(A...)
+    eachindex(::IndexStyle, A::AbstractArray...)
 
 Create an iterable object for visiting each index of an `AbstractArray` `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
-simply the range `1:length(A)`. For other array types, return a specialized Cartesian
-range to efficiently index into the array with indices specified for every dimension. For
-other iterables, including strings and dictionaries, return an iterator object
-supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+simply the range `1:length(A)` if they use 1-based indexing.
+For array types that have not opted into fast linear indexing, a specialized Cartesian
+range is typically returned to efficiently index into the array with indices specified
+for every dimension.
+
+In general `eachindex` accepts arbitrary iterables, including strings and dictionaries, and returns
+an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+
+If `A` is `AbstractArray` it is possible to explicitly specify the style of the indices that
+should be returned by `eachindex` by passing a value having `IndexStyle` type as its first argument
+(typically `IndexLinear()` if linear indices are required or `IndexCartesian()` if Cartesian
+range is wanted).
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a [`UnitRange`](@ref)
-if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
-otherwise).
+iterable object that is fast for all arguments (typically a [`UnitRange`](@ref)
+if all inputs have fast linear indexing, a [`CartesianIndices`](@ref) otherwise).
 If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
+
+See also [`pairs`](@ref)`(A)` to iterate over indices and values together,
+and [`axes`](@ref)`(A, 2)` for valid indices along one dimension.
+
 # Examples
 ```jldoctest
-julia> A = [1 2; 3 4];
+julia> A = [10 20; 30 40];
 
 julia> for i in eachindex(A) # linear indexing
-           println(i)
+           println("A[", i, "] == ", A[i])
        end
-1
-2
-3
-4
+A[1] == 10
+A[2] == 30
+A[3] == 20
+A[4] == 40
 
 julia> for i in eachindex(view(A, 1:2, 1:1)) # Cartesian indexing
            println(i)
@@ -879,13 +920,12 @@ See also [`copyto!`](@ref).
     is available from the `Future` standard library as `Future.copy!`.
 """
 function copy!(dst::AbstractVector, src::AbstractVector)
+    firstindex(dst) == firstindex(src) || throw(ArgumentError(
+        "vectors must have the same offset for copy! (consider using `copyto!`)"))
     if length(dst) != length(src)
         resize!(dst, length(src))
     end
-    for i in eachindex(dst, src)
-        @inbounds dst[i] = src[i]
-    end
-    dst
+    copyto!(dst, src)
 end
 
 function copy!(dst::AbstractArray, src::AbstractArray)
@@ -914,9 +954,17 @@ end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src)
     i = Int(dstart)
-    for x in src
-        dest[i] = x
-        i += 1
+    if haslength(src) && length(dest) > 0
+        @boundscheck checkbounds(dest, i:(i + length(src) - 1))
+        for x in src
+            @inbounds dest[i] = x
+            i += 1
+        end
+    else
+        for x in src
+            dest[i] = x
+            i += 1
+        end
     end
     return dest
 end
@@ -1015,6 +1063,10 @@ julia> y
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
     isempty(src) && return dest
+    if dest isa BitArray
+        # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
+        return _copyto_bitarray!(dest, src)
+    end
     src′ = unalias(dest, src)
     copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
@@ -1056,7 +1108,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
             # Dual-iterator implementation
             ret = iterate(iterdest)
             @inbounds for a in src
-                idx, state = ret
+                idx, state = ret::NTuple{2,Any}
                 dest[idx] = a
                 ret = iterate(iterdest, state)
             end
@@ -1084,8 +1136,9 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
     (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
-    @inbounds for i = 0:(n-1)
-        dest[dstart+i] = src[sstart+i]
+    src′ = unalias(dest, src)
+    @inbounds for i = 0:n-1
+        dest[dstart+i] = src′[sstart+i]
     end
     return dest
 end
@@ -1107,11 +1160,12 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
+    A′ = unalias(B, A)
     jdest = first(jr_dest)
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            @inbounds B[idest,jdest] = A[isrc,jsrc]
+            @inbounds B[idest,jdest] = A′[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -1119,10 +1173,10 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     return B
 end
 
-function copyto_axcheck!(dest, src)
-    @noinline checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))
+@noinline _checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))
 
-    checkaxs(axes(dest), axes(src))
+function copyto_axcheck!(dest, src)
+    _checkaxs(axes(dest), axes(src))
     copyto!(dest, src)
 end
 
@@ -1248,7 +1302,7 @@ function unsafe_getindex(A::AbstractArray, I...)
     r
 end
 
-struct CanonicalIndexError
+struct CanonicalIndexError <: Exception
     func::String
     type::Any
     CanonicalIndexError(func::String, @nospecialize(type)) = new(func, type)
@@ -1685,7 +1739,7 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
-# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+# The new way to compute the shape (more inferable than combining cat_size & cat_shape, due to Varargs + issue#36454)
 cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
 @inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
 _cat_size_shape(dims, shape) = shape
@@ -1767,41 +1821,50 @@ end
 """
     vcat(A...)
 
-Concatenate along dimension 1. To efficiently concatenate a large vector of arrays,
-use `reduce(vcat, x)`.
+Concatenate arrays or numbers vertically. Equivalent to [`cat`](@ref)`(A...; dims=1)`,
+and to the syntax `[a; b; c]`.
+
+To concatenate a large vector of arrays, `reduce(vcat, A)` calls an efficient method
+when `A isa AbstractVector{<:AbstractVecOrMat}`, rather than working pairwise.
+
+See also [`hcat`](@ref), [`Iterators.flatten`](@ref), [`stack`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1 2 3 4 5]
-1×5 Matrix{Int64}:
- 1  2  3  4  5
+julia> v = vcat([1,2], [3,4])
+4-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
 
-julia> b = [6 7 8 9 10; 11 12 13 14 15]
-2×5 Matrix{Int64}:
-  6   7   8   9  10
- 11  12  13  14  15
+julia> v == vcat(1, 2, [3,4])  # accepts numbers
+true
 
-julia> vcat(a,b)
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> v == [1; 2; [3,4]]  # syntax for the same operation
+true
 
-julia> c = ([1 2 3], [4 5 6])
-([1 2 3], [4 5 6])
+julia> summary(ComplexF64[1; 2; [3,4]])  # syntax for supplying the element type
+"4-element Vector{ComplexF64}"
 
-julia> vcat(c...)
-2×3 Matrix{Int64}:
- 1  2  3
- 4  5  6
+julia> vcat(range(1, 2, length=3))  # collects lazy ranges
+3-element Vector{Float64}:
+ 1.0
+ 1.5
+ 2.0
 
-julia> vs = [[1, 2], [3, 4], [5, 6]]
-3-element Vector{Vector{Int64}}:
- [1, 2]
- [3, 4]
- [5, 6]
+julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
+([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
 
-julia> reduce(vcat, vs)
+julia> vcat(two...)
+3×3 Matrix{Float64}:
+ 10.0  20.0  30.0
+  4.0   5.0   6.0
+  7.0   8.0   9.0
+
+julia> vs = [[1, 2], [3, 4], [5, 6]];
+
+julia> reduce(vcat, vs)  # more efficient than vcat(vs...)
 6-element Vector{Int64}:
  1
  2
@@ -1809,69 +1872,59 @@ julia> reduce(vcat, vs)
  4
  5
  6
+
+julia> ans == collect(Iterators.flatten(vs))
+true
 ```
 """
 vcat(X...) = cat(X...; dims=Val(1))
 """
     hcat(A...)
 
-Concatenate along dimension 2. To efficiently concatenate a large vector of arrays,
-use `reduce(hcat, x)`.
+Concatenate arrays or numbers horizontally. Equivalent to [`cat`](@ref)`(A...; dims=2)`,
+and to the syntax `[a b c]` or `[a;; b;; c]`.
+
+For a large vector of arrays, `reduce(hcat, A)` calls an efficient method
+when `A isa AbstractVector{<:AbstractVecOrMat}`.
+For a vector of vectors, this can also be written [`stack`](@ref)`(A)`.
+
+See also [`vcat`](@ref), [`hvcat`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1; 2; 3; 4; 5]
-5-element Vector{Int64}:
- 1
- 2
- 3
- 4
- 5
-
-julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
-5×2 Matrix{Int64}:
-  6   7
-  8   9
- 10  11
- 12  13
- 14  15
-
-julia> hcat(a,b)
-5×3 Matrix{Int64}:
- 1   6   7
- 2   8   9
- 3  10  11
- 4  12  13
- 5  14  15
-
-julia> c = ([1; 2; 3], [4; 5; 6])
-([1, 2, 3], [4, 5, 6])
-
-julia> hcat(c...)
-3×2 Matrix{Int64}:
- 1  4
- 2  5
- 3  6
-
-julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
-3×0 Matrix{Any}
-
-julia> hcat(x, [1; 2; 3])
-3×1 Matrix{Any}:
- 1
- 2
- 3
-
-julia> vs = [[1, 2], [3, 4], [5, 6]]
-3-element Vector{Vector{Int64}}:
- [1, 2]
- [3, 4]
- [5, 6]
-
-julia> reduce(hcat, vs)
+julia> hcat([1,2], [3,4], [5,6])
 2×3 Matrix{Int64}:
  1  3  5
  2  4  6
+
+julia> hcat(1, 2, [30 40], [5, 6, 7]')  # accepts numbers
+1×7 Matrix{Int64}:
+ 1  2  30  40  5  6  7
+
+julia> ans == [1 2 [30 40] [5, 6, 7]']  # syntax for the same operation
+true
+
+julia> Float32[1 2 [30 40] [5, 6, 7]']  # syntax for supplying the eltype
+1×7 Matrix{Float32}:
+ 1.0  2.0  30.0  40.0  5.0  6.0  7.0
+
+julia> ms = [zeros(2,2), [1 2; 3 4], [50 60; 70 80]];
+
+julia> reduce(hcat, ms)  # more efficient than hcat(ms...)
+2×6 Matrix{Float64}:
+ 0.0  0.0  1.0  2.0  50.0  60.0
+ 0.0  0.0  3.0  4.0  70.0  80.0
+
+julia> stack(ms) |> summary  # disagrees on a vector of matrices
+"2×2×3 Array{Float64, 3}"
+
+julia> hcat(Int[], Int[], Int[])  # empty vectors, each of size (0,)
+0×3 Matrix{Int64}
+
+julia> hcat([1.1, 9.9], Matrix(undef, 2, 0))  # hcat with empty 2×0 Matrix
+2×1 Matrix{Any}:
+ 1.1
+ 9.9
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -1882,34 +1935,45 @@ typed_hcat(::Type{T}, X...) where T = _cat_t(Val(2), T, X...)
 """
     cat(A...; dims)
 
-Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
-dimensions not in `dims`, all input arrays should have the same size, which will also be the
-size of the output array along that dimension. For dimensions in `dims`, the size of the
-output array is the sum of the sizes of the input arrays along that dimension. If `dims` is
-a single number, the different arrays are tightly stacked along that dimension. If `dims` is
-an iterable containing several dimensions, this allows one to construct block diagonal
-matrices and their higher-dimensional analogues by simultaneously increasing several
-dimensions for every new input array and putting zero blocks elsewhere. For example,
-`cat(matrices...; dims=(1,2))` builds a block diagonal matrix, i.e. a block matrix with
-`matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
-diagonal.
+Concatenate the input arrays along the dimensions specified in `dims`.
 
-See also [`hcat`](@ref), [`vcat`](@ref), [`hvcat`](@ref), [`repeat`](@ref).
+Along a dimension `d in dims`, the size of the output array is `sum(size(a,d) for
+a in A)`.
+Along other dimensions, all input arrays should have the same size,
+which will also be the size of the output array along those dimensions.
+
+If `dims` is a single number, the different arrays are tightly packed along that dimension.
+If `dims` is an iterable containing several dimensions, the positions along these dimensions
+are increased simultaneously for each input array, filling with zero elsewhere.
+This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(1,2))`,
+and their higher-dimensional analogues.
+
+The special case `dims=1` is [`vcat`](@ref), and `dims=2` is [`hcat`](@ref).
+See also [`hvcat`](@ref), [`hvncat`](@ref), [`stack`](@ref), [`repeat`](@ref).
+
+The keyword also accepts `Val(dims)`.
+
+!!! compat "Julia 1.8"
+    For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
 ```jldoctest
-julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
+julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
 
-julia> cat(true, trues(2,2), trues(4)', dims=(1,2))
+julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+
+julia> cat(1, [2], [3;;]; dims=Val(2))
+1×3 Matrix{Int64}:
+ 1  2  3
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
@@ -1938,7 +2002,7 @@ typed_hcat(T::Type, A::AbstractArray...) = _cat_t(Val(2), T, A...)
 hvcat_rows(rows::Tuple...) = hvcat(map(length, rows), (rows...)...)
 typed_hvcat_rows(T::Type, rows::Tuple...) = typed_hvcat(T, map(length, rows), (rows...)...)
 
-function hvcat(nbc::Integer, as...)
+function hvcat(nbc::Int, as...)
     # nbc = # of block columns
     n = length(as)
     mod(n,nbc) != 0 &&
@@ -1948,11 +2012,12 @@ function hvcat(nbc::Integer, as...)
 end
 
 """
-    hvcat(rows::Tuple{Vararg{Int}}, values...)
+    hvcat(blocks_per_row::Union{Tuple{Vararg{Int}}, Int}, values...)
 
 Horizontal and vertical concatenation in one call. This function is called for block matrix
 syntax. The first argument specifies the number of arguments to concatenate in each block
-row.
+row. If the first argument is a single integer `n`, then all block rows are assumed to have `n`
+block columns.
 
 # Examples
 ```jldoctest
@@ -1980,10 +2045,9 @@ julia> hvcat((2,2,2), a,b,c,d,e,f)
  1  2
  3  4
  5  6
+julia> hvcat((2,2,2), a,b,c,d,e,f) == hvcat(2, a,b,c,d,e,f)
+true
 ```
-
-If the first argument is a single integer `n`, then all block rows are assumed to have `n`
-block columns.
 """
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractVecOrMat{T}...) where {T} = typed_hvcat(T, rows, xs...)
@@ -2163,14 +2227,13 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4  5  6
 ```
 
-
-# Examples for construction of the arguments:
-```julia
+# Examples for construction of the arguments
+```
 [a b c ; d e f ;;;
  g h i ; j k l ;;;
  m n o ; p q r ;;;
  s t u ; v w x]
-=> dims = (2, 3, 4)
+⇒ dims = (2, 3, 4)
 
 [a b ; c ;;; d ;;;;]
  ___   _     _
@@ -2181,7 +2244,7 @@ julia> hvncat(((3, 3), (3, 3), (6,)), true, a, b, c, d, e, f)
  4             = elements in each 3d slice (4,)
  _____________
  4             = elements in each 4d slice (4,)
- => shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `rowfirst` = true
+⇒ shape = ((2, 1, 1), (3, 1), (4,), (4,)) with `row_first` = true
 ```
 """
 hvncat(dimsshape::Tuple, row_first::Bool, xs...) = _hvncat(dimsshape, row_first, xs...)
@@ -2211,7 +2274,8 @@ _typed_hvncat(::Type, ::Val{0}, ::AbstractArray...) = _typed_hvncat_0d_only_one(
 _typed_hvncat_0d_only_one() =
     throw(ArgumentError("a 0-dimensional array may only contain exactly one element"))
 
-_typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
+# `@constprop :aggressive` here to form constant `Val(dim)` type to get type stability
+@constprop :aggressive _typed_hvncat(T::Type, dim::Int, ::Bool, xs...) = _typed_hvncat(T, Val(dim), xs...) # catches from _hvncat type promoters
 
 function _typed_hvncat(::Type{T}, ::Val{N}) where {T, N}
     N < 0 &&
@@ -2376,6 +2440,9 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     # validate shapes for lowest level of concatenation
     d = findfirst(>(1), dims)
     if d !== nothing # all dims are 1
+        if row_first && d < 3
+            d = d == 1 ? 2 : 1
+        end
         nblocks = length(as) ÷ dims[d]
         for b ∈ 1:nblocks
             offset = ((b - 1) * dims[d])
@@ -2383,7 +2450,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
             for i ∈ offset .+ (2:dims[d])
                 for dd ∈ 1:N
                     dd == d && continue
-                    if size(as[startelementi], dd) != size(as[i], dd)
+                    if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
                         throw(ArgumentError("incompatible shape in element $i"))
                     end
                 end
@@ -2476,7 +2543,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     shapelength == lengthas || throw(ArgumentError("number of elements does not match shape; expected $(shapelength), got $lengthas)"))
     # discover dimensions
     nd = max(N, cat_ndims(as[1]))
-    outdims = zeros(Int, nd)
+    outdims = fill(-1, nd)
     currentdims = zeros(Int, nd)
     blockcounts = zeros(Int, nd)
     shapepos = ones(Int, nd)
@@ -2501,7 +2568,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
 
             isendblock = blockcounts[d] == shapev[d][shapepos[d]]
             if isendblock
-                if outdims[d] == 0
+                if outdims[d] == -1
                     outdims[d] = currentdims[d]
                 elseif outdims[d] != currentdims[d]
                     throw(ArgumentError("argument $i has a mismatched number of elements along axis $ad; \
@@ -2576,6 +2643,236 @@ end
     Ai
 end
 
+"""
+    stack(iter; [dims])
+
+Combine a collection of arrays (or other iterable objects) of equal size
+into one larger array, by arranging them along one or more new dimensions.
+
+By default the axes of the elements are placed first,
+giving `size(result) = (size(first(iter))..., size(iter)...)`.
+This has the same order of elements as [`Iterators.flatten`](@ref)`(iter)`.
+
+With keyword `dims::Integer`, instead the `i`th element of `iter` becomes the slice
+[`selectdim`](@ref)`(result, dims, i)`, so that `size(result, dims) == length(iter)`.
+In this case `stack` reverses the action of [`eachslice`](@ref) with the same `dims`.
+
+The various [`cat`](@ref) functions also combine arrays. However, these all
+extend the arrays' existing (possibly trivial) dimensions, rather than placing
+the arrays along new dimensions.
+They also accept arrays as separate arguments, rather than a single collection.
+
+!!! compat "Julia 1.9"
+    This function requires at least Julia 1.9.
+
+# Examples
+```jldoctest
+julia> vecs = (1:2, [30, 40], Float32[500, 600]);
+
+julia> mat = stack(vecs)
+2×3 Matrix{Float32}:
+ 1.0  30.0  500.0
+ 2.0  40.0  600.0
+
+julia> mat == hcat(vecs...) == reduce(hcat, collect(vecs))
+true
+
+julia> vec(mat) == vcat(vecs...) == reduce(vcat, collect(vecs))
+true
+
+julia> stack(zip(1:4, 10:99))  # accepts any iterators of iterators
+2×4 Matrix{Int64}:
+  1   2   3   4
+ 10  11  12  13
+
+julia> vec(ans) == collect(Iterators.flatten(zip(1:4, 10:99)))
+true
+
+julia> stack(vecs; dims=1)  # unlike any cat function, 1st axis of vecs[1] is 2nd axis of result
+3×2 Matrix{Float32}:
+   1.0    2.0
+  30.0   40.0
+ 500.0  600.0
+
+julia> x = rand(3,4);
+
+julia> x == stack(eachcol(x)) == stack(eachrow(x), dims=1)  # inverse of eachslice
+true
+```
+
+Higher-dimensional examples:
+
+```jldoctest
+julia> A = rand(5, 7, 11);
+
+julia> E = eachslice(A, dims=2);  # a vector of matrices
+
+julia> (element = size(first(E)), container = size(E))
+(element = (5, 11), container = (7,))
+
+julia> stack(E) |> size
+(5, 11, 7)
+
+julia> stack(E) == stack(E; dims=3) == cat(E...; dims=3)
+true
+
+julia> A == stack(E; dims=2)
+true
+
+julia> M = (fill(10i+j, 2, 3) for i in 1:5, j in 1:7);
+
+julia> (element = size(first(M)), container = size(M))
+(element = (2, 3), container = (5, 7))
+
+julia> stack(M) |> size  # keeps all dimensions
+(2, 3, 5, 7)
+
+julia> stack(M; dims=1) |> size  # vec(container) along dims=1
+(35, 2, 3)
+
+julia> hvcat(5, M...) |> size  # hvcat puts matrices next to each other
+(14, 15)
+```
+"""
+stack(iter; dims=:) = _stack(dims, iter)
+
+"""
+    stack(f, args...; [dims])
+
+Apply a function to each element of a collection, and `stack` the result.
+Or to several collections, [`zip`](@ref)ped together.
+
+The function should return arrays (or tuples, or other iterators) all of the same size.
+These become slices of the result, each separated along `dims` (if given) or by default
+along the last dimensions.
+
+See also [`mapslices`](@ref), [`eachcol`](@ref).
+
+# Examples
+```jldoctest
+julia> stack(c -> (c, c-32), "julia")
+2×5 Matrix{Char}:
+ 'j'  'u'  'l'  'i'  'a'
+ 'J'  'U'  'L'  'I'  'A'
+
+julia> stack(eachrow([1 2 3; 4 5 6]), (10, 100); dims=1) do row, n
+         vcat(row, row .* n, row ./ n)
+       end
+2×9 Matrix{Float64}:
+ 1.0  2.0  3.0   10.0   20.0   30.0  0.1   0.2   0.3
+ 4.0  5.0  6.0  400.0  500.0  600.0  0.04  0.05  0.06
+```
+"""
+stack(f, iter; dims=:) = _stack(dims, f(x) for x in iter)
+stack(f, xs, yzs...; dims=:) = _stack(dims, f(xy...) for xy in zip(xs, yzs...))
+
+_stack(dims::Union{Integer, Colon}, iter) = _stack(dims, IteratorSize(iter), iter)
+
+_stack(dims, ::IteratorSize, iter) = _stack(dims, collect(iter))
+
+function _stack(dims, ::Union{HasShape, HasLength}, iter)
+    S = @default_eltype iter
+    T = S != Union{} ? eltype(S) : Any  # Union{} occurs for e.g. stack(1,2), postpone the error
+    if isconcretetype(T)
+        _typed_stack(dims, T, S, iter)
+    else  # Need to look inside, but shouldn't run an expensive iterator twice:
+        array = iter isa Union{Tuple, AbstractArray} ? iter : collect(iter)
+        isempty(array) && return _empty_stack(dims, T, S, iter)
+        T2 = mapreduce(eltype, promote_type, array)
+        _typed_stack(dims, T2, eltype(array), array)
+    end
+end
+
+function _typed_stack(::Colon, ::Type{T}, ::Type{S}, A, Aax=_iterator_axes(A)) where {T, S}
+    xit = iterate(A)
+    nothing === xit && return _empty_stack(:, T, S, A)
+    x1, _ = xit
+    ax1 = _iterator_axes(x1)
+    B = similar(_ensure_array(x1), T, ax1..., Aax...)
+    off = firstindex(B)
+    len = length(x1)
+    while xit !== nothing
+        x, state = xit
+        _stack_size_check(x, ax1)
+        copyto!(B, off, x)
+        off += len
+        xit = iterate(A, state)
+    end
+    B
+end
+
+_iterator_axes(x) = _iterator_axes(x, IteratorSize(x))
+_iterator_axes(x, ::HasLength) = (OneTo(length(x)),)
+_iterator_axes(x, ::IteratorSize) = axes(x)
+
+# For some dims values, stack(A; dims) == stack(vec(A)), and the : path will be faster
+_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S} =
+    _typed_stack(dims, T, S, IteratorSize(S), A)
+_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasLength, A) where {T,S} =
+    _typed_stack(dims, T, S, HasShape{1}(), A)
+function _typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::HasShape{N}, A) where {T,S,N}
+    if dims == N+1
+        _typed_stack(:, T, S, A, (_vec_axis(A),))
+    else
+        _dim_stack(dims, T, S, A)
+    end
+end
+_typed_stack(dims::Integer, ::Type{T}, ::Type{S}, ::IteratorSize, A) where {T,S} =
+    _dim_stack(dims, T, S, A)
+
+_vec_axis(A, ax=_iterator_axes(A)) = length(ax) == 1 ? only(ax) : OneTo(prod(length, ax; init=1))
+
+@constprop :aggressive function _dim_stack(dims::Integer, ::Type{T}, ::Type{S}, A) where {T,S}
+    xit = Iterators.peel(A)
+    nothing === xit && return _empty_stack(dims, T, S, A)
+    x1, xrest = xit
+    ax1 = _iterator_axes(x1)
+    N1 = length(ax1)+1
+    dims in 1:N1 || throw(ArgumentError(LazyString("cannot stack slices ndims(x) = ", N1-1, " along dims = ", dims)))
+
+    newaxis = _vec_axis(A)
+    outax = ntuple(d -> d==dims ? newaxis : ax1[d - (d>dims)], N1)
+    B = similar(_ensure_array(x1), T, outax...)
+
+    if dims == 1
+        _dim_stack!(Val(1), B, x1, xrest)
+    elseif dims == 2
+        _dim_stack!(Val(2), B, x1, xrest)
+    else
+        _dim_stack!(Val(dims), B, x1, xrest)
+    end
+    B
+end
+
+function _dim_stack!(::Val{dims}, B::AbstractArray, x1, xrest) where {dims}
+    before = ntuple(d -> Colon(), dims - 1)
+    after = ntuple(d -> Colon(), ndims(B) - dims)
+
+    i = firstindex(B, dims)
+    copyto!(view(B, before..., i, after...), x1)
+
+    for x in xrest
+        _stack_size_check(x, _iterator_axes(x1))
+        i += 1
+        @inbounds copyto!(view(B, before..., i, after...), x)
+    end
+end
+
+@inline function _stack_size_check(x, ax1::Tuple)
+    if _iterator_axes(x) != ax1
+        uax1 = map(UnitRange, ax1)
+        uaxN = map(UnitRange, axes(x))
+        throw(DimensionMismatch(
+            LazyString("stack expects uniform slices, got axes(x) == ", uaxN, " while first had ", uax1)))
+    end
+end
+
+_ensure_array(x::AbstractArray) = x
+_ensure_array(x) = 1:0  # passed to similar, makes stack's output an Array
+
+_empty_stack(_...) = throw(ArgumentError("`stack` on an empty collection is not allowed"))
+
+
 ## Reductions and accumulates ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
@@ -2603,7 +2900,7 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Returns true when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B` in lexicographic order.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
@@ -2778,72 +3075,127 @@ foreach(f, itrs...) = (for z in zip(itrs...); f(z...); end; nothing)
 """
     mapslices(f, A; dims)
 
-Transform the given dimensions of array `A` using function `f`. `f` is called on each slice
-of `A` of the form `A[...,:,...,:,...]`. `dims` is an integer vector specifying where the
-colons go in this expression. The results are concatenated along the remaining dimensions.
-For example, if `dims` is `[1,2]` and `A` is 4-dimensional, `f` is called on `A[:,:,i,j]`
-for all `i` and `j`.
+Transform the given dimensions of array `A` by applying a function `f` on each slice
+of the form `A[..., :, ..., :, ...]`, with a colon at each `d` in `dims`. The results are
+concatenated along the remaining dimensions.
 
-See also [`eachcol`](@ref), [`eachslice`](@ref).
+For example, if `dims = [1,2]` and `A` is 4-dimensional, then `f` is called on `x = A[:,:,i,j]`
+for all `i` and `j`, and `f(x)` becomes `R[:,:,i,j]` in the result `R`.
+
+See also [`eachcol`](@ref) or [`eachslice`](@ref), used with [`map`](@ref) or [`stack`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = reshape(Vector(1:16),(2,2,2,2))
-2×2×2×2 Array{Int64, 4}:
-[:, :, 1, 1] =
- 1  3
- 2  4
+julia> A = reshape(1:30,(2,5,3))
+2×5×3 reshape(::UnitRange{$Int}, 2, 5, 3) with eltype $Int:
+[:, :, 1] =
+ 1  3  5  7   9
+ 2  4  6  8  10
 
-[:, :, 2, 1] =
- 5  7
- 6  8
+[:, :, 2] =
+ 11  13  15  17  19
+ 12  14  16  18  20
 
-[:, :, 1, 2] =
-  9  11
- 10  12
+[:, :, 3] =
+ 21  23  25  27  29
+ 22  24  26  28  30
 
-[:, :, 2, 2] =
- 13  15
- 14  16
+julia> f(x::Matrix) = fill(x[1,1], 1,4);  # returns a 1×4 matrix
 
-julia> mapslices(sum, a, dims = [1,2])
-1×1×2×2 Array{Int64, 4}:
-[:, :, 1, 1] =
- 10
+julia> B = mapslices(f, A, dims=(1,2))
+1×4×3 Array{$Int, 3}:
+[:, :, 1] =
+ 1  1  1  1
 
-[:, :, 2, 1] =
- 26
+[:, :, 2] =
+ 11  11  11  11
 
-[:, :, 1, 2] =
- 42
+[:, :, 3] =
+ 21  21  21  21
 
-[:, :, 2, 2] =
- 58
+julia> f2(x::AbstractMatrix) = fill(x[1,1], 1,4);
+
+julia> B == stack(f2, eachslice(A, dims=3))
+true
+
+julia> g(x) = x[begin] // x[end-1];  # returns a number
+
+julia> mapslices(g, A, dims=[1,3])
+1×5×1 Array{Rational{$Int}, 3}:
+[:, :, 1] =
+ 1//21  3//23  1//5  7//27  9//29
+
+julia> map(g, eachslice(A, dims=2))
+5-element Vector{Rational{$Int}}:
+ 1//21
+ 3//23
+ 1//5
+ 7//27
+ 9//29
+
+julia> mapslices(sum, A; dims=(1,3)) == sum(A; dims=(1,3))
+true
 ```
+
+Notice that in `eachslice(A; dims=2)`, the specified dimension is the
+one *without* a colon in the slice. This is `view(A,:,i,:)`, whereas
+`mapslices(f, A; dims=(1,3))` uses `A[:,i,:]`. The function `f` may mutate
+values in the slice without affecting `A`.
 """
 function mapslices(f, A::AbstractArray; dims)
-    if isempty(dims)
-        return map(f,A)
-    end
-    if !isa(dims, AbstractVector)
-        dims = [dims...]
-    end
+    isempty(dims) && return map(f, A)
 
-    dimsA = [axes(A)...]
-    ndimsA = ndims(A)
-    alldims = [1:ndimsA;]
-
-    otherdims = setdiff(alldims, dims)
-
-    idx = Any[first(ind) for ind in axes(A)]
-    itershape   = tuple(dimsA[otherdims]...)
     for d in dims
-        idx[d] = Slice(axes(A, d))
+        d isa Integer || throw(ArgumentError("mapslices: dimension must be an integer, got $d"))
+        d >= 1 || throw(ArgumentError("mapslices: dimension must be ≥ 1, got $d"))
+        # Indexing a matrix M[:,1,:] produces a 1-column matrix, but dims=(1,3) here
+        # would otherwise ignore 3, and slice M[:,i]. Previously this gave error:
+        # BoundsError: attempt to access 2-element Vector{Any} at index [3]
+        d > ndims(A) && throw(ArgumentError("mapslices does not accept dimensions > ndims(A) = $(ndims(A)), got $d"))
     end
+    dim_mask = ntuple(d -> d in dims, ndims(A))
 
     # Apply the function to the first slice in order to determine the next steps
-    Aslice = A[idx...]
+    idx1 = ntuple(d -> d in dims ? (:) : firstindex(A,d), ndims(A))
+    Aslice = A[idx1...]
     r1 = f(Aslice)
+
+    res1 = if r1 isa AbstractArray && ndims(r1) > 0
+        n = sum(dim_mask)
+        if ndims(r1) > n && any(ntuple(d -> size(r1,d+n)>1, ndims(r1)-n))
+            s = size(r1)[1:n]
+            throw(DimensionMismatch("mapslices cannot assign slice f(x) of size $(size(r1)) into output of size $s"))
+        end
+        r1
+    else
+        # If the result of f on a single slice is a scalar then we add singleton
+        # dimensions. When adding the dimensions, we have to respect the
+        # index type of the input array (e.g. in the case of OffsetArrays)
+        _res1 = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
+        _res1[begin] = r1
+        _res1
+    end
+
+    # Determine result size and allocate. We always pad ndims(res1) out to length(dims):
+    din = Ref(0)
+    Rsize = ntuple(ndims(A)) do d
+        if d in dims
+            axes(res1, din[] += 1)
+        else
+            axes(A,d)
+        end
+    end
+    R = similar(res1, Rsize)
+
+    # Determine iteration space. It will be convenient in the loop to mask N-dimensional
+    # CartesianIndices, with some trivial dimensions:
+    itershape = ntuple(d -> d in dims ? Base.OneTo(1) : axes(A,d), ndims(A))
+    indices = Iterators.drop(CartesianIndices(itershape), 1)
+
+    # That skips the first element, which we already have:
+    ridx = ntuple(d -> d in dims ? Slice(axes(R,d)) : firstindex(A,d), ndims(A))
+    concatenate_setindex!(R, res1, ridx...)
+
     # In some cases, we can re-use the first slice for a dramatic performance
     # increase. The slice itself must be mutable and the result cannot contain
     # any mutable containers. The following errs on the side of being overly
@@ -2851,60 +3203,34 @@ function mapslices(f, A::AbstractArray; dims)
     safe_for_reuse = isa(Aslice, StridedArray) &&
                      (isa(r1, Number) || (isa(r1, AbstractArray) && eltype(r1) <: Number))
 
-    # determine result size and allocate
-    Rsize = copy(dimsA)
-    # TODO: maybe support removing dimensions
-    if !isa(r1, AbstractArray) || ndims(r1) == 0
-        # If the result of f on a single slice is a scalar then we add singleton
-        # dimensions. When adding the dimensions, we have to respect the
-        # index type of the input array (e.g. in the case of OffsetArrays)
-        tmp = similar(Aslice, typeof(r1), reduced_indices(Aslice, 1:ndims(Aslice)))
-        tmp[firstindex(tmp)] = r1
-        r1 = tmp
-    end
-    nextra = max(0, length(dims)-ndims(r1))
-    if eltype(Rsize) == Int
-        Rsize[dims] = [size(r1)..., ntuple(Returns(1), nextra)...]
-    else
-        Rsize[dims] = [axes(r1)..., ntuple(Returns(OneTo(1)), nextra)...]
-    end
-    R = similar(r1, tuple(Rsize...,))
-
-    ridx = Any[map(first, axes(R))...]
-    for d in dims
-        ridx[d] = axes(R,d)
-    end
-
-    concatenate_setindex!(R, r1, ridx...)
-
-    nidx = length(otherdims)
-    indices = Iterators.drop(CartesianIndices(itershape), 1) # skip the first element, we already handled it
-    inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
+    _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
+    return R
 end
 
-@noinline function inner_mapslices!(safe_for_reuse, indices, nidx, idx, otherdims, ridx, Aslice, A, f, R)
+@noinline function _inner_mapslices!(R, indices, f, A, dim_mask, Aslice, safe_for_reuse)
+    must_extend = any(dim_mask .& size(R) .> 1)
     if safe_for_reuse
         # when f returns an array, R[ridx...] = f(Aslice) line copies elements,
         # so we can reuse Aslice
         for I in indices
-            replace_tuples!(nidx, idx, ridx, otherdims, I)
+            idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
             _unsafe_getindex!(Aslice, A, idx...)
-            concatenate_setindex!(R, f(Aslice), ridx...)
+            r = f(Aslice)
+            if r isa AbstractArray || must_extend
+                ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
+                R[ridx...] = r
+            else
+                ridx = ifelse.(dim_mask, first.(axes(R)), Tuple(I))
+                R[ridx...] = r
+            end
         end
     else
         # we can't guarantee safety (#18524), so allocate new storage for each slice
         for I in indices
-            replace_tuples!(nidx, idx, ridx, otherdims, I)
+            idx = ifelse.(dim_mask, Slice.(axes(A)), Tuple(I))
+            ridx = ifelse.(dim_mask, Slice.(axes(R)), Tuple(I))
             concatenate_setindex!(R, f(A[idx...]), ridx...)
         end
-    end
-
-    return R
-end
-
-function replace_tuples!(nidx, idx, ridx, otherdims, I)
-    for i in 1:nidx
-        idx[otherdims[i]] = ridx[otherdims[i]] = I.I[i]
     end
 end
 
@@ -3183,8 +3509,9 @@ function circshift!(a::AbstractVector, shift::Integer)
     n == 0 && return
     shift = mod(shift, n)
     shift == 0 && return
-    reverse!(a, 1, shift)
-    reverse!(a, shift+1, length(a))
+    l = lastindex(a)
+    reverse!(a, firstindex(a), l-shift)
+    reverse!(a, l-shift+1, lastindex(a))
     reverse!(a)
     return a
 end
