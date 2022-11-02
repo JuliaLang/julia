@@ -943,10 +943,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
-
-When splatting an iterable collection of functions, `∘(fs...)`, notice that
-`fs[end]` is executed first, followed by the next function behind it i.e.
-`fs[end-1]`; this order is followed, till the last function, `fs[begin]`, is called.
+The last argument to `∘` execute first.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
@@ -966,24 +963,21 @@ julia> map(uppercase∘first, ["apple", "banana", "carrot"])
  'C': ASCII/Unicode U+0043 (category Lu: Letter, uppercase)
 
 julia> fs = [
-           x -> 2x
-           x -> x/2
-           x -> x-1
-           x -> x+1
+             ys -> ys[1] + ys[2]^2,
+             x -> [x, 10x, x/10]
        ];
 
-julia> ∘(fs...)(3)
-3.0
+julia> ∘(fs...)(2)
+402.0
 
 julia> fs = [
-           x -> rpad(x, 20)
-           x -> "$x is a fruit"
-           uppercase
-           first
+            x -> "$x is a fruit"
+            uppercase
+            first
        ];
 
 julia> ∘(fs...)(["apple", "banana", "carrot"])
-"APPLE is a fruit    "
+"APPLE is a fruit"
 ```
 See also [`ComposedFunction`](@ref), [`!f::Function`](@ref).
 """
