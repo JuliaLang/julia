@@ -565,6 +565,7 @@ end
     @test tok("1.,").kind == K"Float"
     @test tok("1.;").kind == K"Float"
     @test tok("1.@").kind == K"Float"
+    @test tok("1.#").kind == K"Float"
     @test tok("1.").kind == K"Float"
     @test tok("1.\"text\" ").kind == K"Float"
 

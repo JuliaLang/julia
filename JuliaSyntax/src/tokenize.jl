@@ -788,6 +788,7 @@ function lex_digit(l::Lexer, kind)
             || ppc == '"'
             || ppc == ':'
             || ppc == '?'
+            || ppc == '#'
             || ppc == EOF_CHAR))
             kind = K"Integer"
 
