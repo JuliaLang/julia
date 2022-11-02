@@ -417,7 +417,6 @@ end
 for (sym, deps, exp, type) in [
         (:lo, (), :(firstindex(v)), Integer),
         (:hi, (), :(lastindex(v)),  Integer),
-        (:U, (), :(UIntMappable(eltype(v), o)),  Any), #type checking this comes at a runtime performance cost ???
         (:lenm1, (:lo, :hi), :(hi-lo), Integer),
         (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
@@ -619,8 +618,7 @@ struct IsUIntMappable{T <: Algorithm, U <: Algorithm} <: Algorithm
     no::U
 end
 function _sort!(v::AbstractVector, a::IsUIntMappable, o::Ordering, kw)
-    @getkw U
-    if U !== nothing
+    if UIntMappable(eltype(v), o) !== nothing
         _sort!(v, a.yes, o, kw)
     else
         _sort!(v, a.no, o, kw)
@@ -758,8 +756,8 @@ struct ConsiderCountingSort{T <: Algorithm, U <: Algorithm} <: Algorithm
 end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
 function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering, kw)
-    @getkw lenm1 range U
-    if range < (sizeof(U) > 8 ? 5lenm1-100 : div(lenm1, 2))
+    @getkw lenm1 range
+    if range < (sizeof(eltype(v)) > 8 ? 5lenm1-100 : div(lenm1, 2))
         _sort!(v, a.counting, o, kw)
     else
         _sort!(v, a.next, o, kw)
@@ -815,8 +813,8 @@ struct ConsiderRadixSort{T <: Algorithm, U <: Algorithm} <: Algorithm
 end
 ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
 function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
-    @getkw U bits lenm1
-    if sizeof(U) <= 8 && bits+70 < 22log(lenm1)
+    @getkw bits lenm1
+    if sizeof(eltype(v)) <= 8 && bits+70 < 22log(lenm1)
         _sort!(v, a.radix, o, kw)
     else
         _sort!(v, a.next, o, kw)
@@ -847,7 +845,7 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 """
 struct RadixSort <: Algorithm end
 function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
-    @getkw lo hi umn U scratch lenm1 bits
+    @getkw lo hi umn scratch lenm1 bits
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)
@@ -866,6 +864,7 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
     end
 
     len = lenm1 + 1
+    U = UIntMappable(eltype(v), o)
     if scratch !== nothing && checkbounds(Bool, scratch, lo:hi) # Fully preallocated and aligned scratch
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, scratch))
         uint_unmap!(v, u2, lo, hi, o, umn)
