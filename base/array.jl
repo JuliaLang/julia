@@ -1115,24 +1115,26 @@ See [`sizehint!`](@ref) for notes about the performance model.
 See also [`vcat`](@ref) for vectors, [`union!`](@ref) for sets,
 and [`prepend!`](@ref) and [`pushfirst!`](@ref) for the opposite order.
 """
-append!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_append!(a, items)
-append!(a::Vector, items::AbstractVector) = try_append!(a, items)
+function append! end
 
-function try_append!(a::Vector, items::AbstractVector)
-    n = length(a)
-    try
-        _unsafe_append!(a, items)
-    catch e
-        resize!(a, n)
-        rethrow(e)
-    end
-    return a
-end
+append!(a::Vector, items::AbstractVector) = try_append!(a, items)
+append!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_append!(a, items)
+
 function unsafe_append!(a::Vector, items::AbstractVector)
     itemindices = eachindex(items)
     n = length(itemindices)
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, first(itemindices), n)
+    return a
+end
+function try_append!(a::Vector, items::AbstractVector)
+    n = length(a)
+    try
+        unsafe_append!(a, items)
+    catch e
+        resize!(a, n)
+        rethrow(e)
+    end
     return a
 end
 
@@ -1147,15 +1149,6 @@ push!(a::AbstractVector, iter...) = append!(a, iter)
 
 append!(a::AbstractVector, iter...) = foldl(append!, iter, init=a)
 
-function _try_append!(a, sz::Union{HasLength,HasShape}, iter)
-    n = length(a)
-    try
-        _unsafe_append!(a, sz, iter)
-    catch e
-        resize!(a, n)
-        rethrow(e)
-    end
-end
 function _unsafe_append!(a, ::Union{HasLength,HasShape}, iter)
     n = length(a)
     i = lastindex(a)
@@ -1165,8 +1158,7 @@ function _unsafe_append!(a, ::Union{HasLength,HasShape}, iter)
     end
     a
 end
-
-function _try_append!(a, sz::IteratorSize, iter)
+function _try_append!(a, sz::Union{HasLength,HasShape}, iter)
     n = length(a)
     try
         _unsafe_append!(a, sz, iter)
@@ -1174,11 +1166,21 @@ function _try_append!(a, sz::IteratorSize, iter)
         resize!(a, n)
         rethrow(e)
     end
-    a
 end
+
 function _unsafe_append!(a, ::IteratorSize, iter)
     for item in iter
         push!(a, item)
+    end
+    a
+end
+function _try_append!(a, sz::IteratorSize, iter)
+    n = length(a)
+    try
+        _unsafe_append!(a, sz, iter)
+    catch e
+        resize!(a, n)
+        rethrow(e)
     end
     a
 end
@@ -1214,8 +1216,8 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-prepend!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_prepend!(a, items)
 prepend!(a::Vector, items::AbstractVector) = try_prepend!(a, items)
+prepend!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_prepend!(a, items)
 
 function try_prepend!(a::Vector, items::AbstractVector)
     n = length(itemindices)
