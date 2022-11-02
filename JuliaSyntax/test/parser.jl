@@ -459,8 +459,6 @@ tests = [
         "macro (type)(ex) end" =>  "(macro (call type ex) (block))"
         "macro \$f()    end"   =>  "(macro (call (\$ f)) (block))"
         "macro (\$f)()  end"   =>  "(macro (call (\$ f)) (block))"
-        "function (f() where T) end" => "(function (where (call f) T) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
-        "function (f()::S) end"=>  "(function (:: (call f) S) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
         "function (x) body end"=>  "(function (tuple x) (block body))"
         "function (x,y) end"   =>  "(function (tuple x y) (block))"
         "function (x=1) end"   =>  "(function (tuple (= x 1)) (block))"
@@ -488,8 +486,17 @@ tests = [
         "function f body end"    =>  "(function (error f) (block body))"
         "function f()::T    end" =>  "(function (:: (call f) T) (block))"
         "function f()::g(T) end" =>  "(function (:: (call f) (call g T)) (block))"
-        "function f() where {T} end"  =>  "(function (where (call f) T) (block))"
-        "function f() where T   end"  =>  "(function (where (call f) T) (block))"
+        "function f() where {T} end"  => "(function (where (call f) T) (block))"
+        "function f() where T   end"  => "(function (where (call f) T) (block))"
+        "function f()::S where T end" => "(function (where (:: (call f) S) T) (block))"
+        # Ugly cases for compat where extra parentheses existed and we've
+        # already parsed at least the call part of the signature
+        "function (f() where T) end" => "(function (where (call f) T) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
+        "function (f()) where T end" => "(function (where (call f) T) (block))"
+        "function (f() where T) where U end" => "(function (where (where (call f) T) U) (block))"
+        "function (f()::S) end"=>  "(function (:: (call f) S) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
+        "function ((f()::S) where T) end" => "(function (where (:: (call f) S) T) (block))"
+        # body
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
         # Errors

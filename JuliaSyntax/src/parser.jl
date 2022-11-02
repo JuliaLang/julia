@@ -2016,6 +2016,7 @@ end
 # Parse function and macro definitions
 function parse_function_signature(ps::ParseState, is_function::Bool)
     is_anon_func = false
+    parsed_call = false
 
     mark = position(ps)
     if !is_function
@@ -2053,17 +2054,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                         parsed_call      = _parsed_call)
             end
             is_anon_func = opts.is_anon_func
-            if opts.parsed_call
-                # Compat: Ugly case where extra parentheses existed and we've
-                # already parsed the whole signature.
-                # function (f() where T) end ==> (function (where (call f) T) (block))
-                # function (f()::S) end ==> (function (:: (call f) S) (block))
-                #
-                # TODO: Warn for use of parens? The precedence of `::` and
-                # `where` don't work inside parens so this is a bit of a syntax
-                # oddity/aberration.
-                return true
-            end
+            parsed_call = opts.parsed_call
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
                 # function (x::f()) end ==>  (function (tuple (:: x (call f))) (block))
@@ -2099,10 +2090,10 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             end
         end
     end
-    if peek(ps, skip_newlines=true) == K"end" && !is_anon_func
+    if peek(ps, skip_newlines=true) == K"end" && !is_anon_func && !parsed_call
         return false
     end
-    if !is_anon_func
+    if !is_anon_func && !parsed_call
         # Parse function argument list
         # function f(x,y)  end    ==>  (function (call f x y) (block))
         # function f{T}()  end    ==>  (function (call (curly f T)) (block))
@@ -2129,6 +2120,19 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
         parse_where_chain(ps, mark)
     end
     # function f()::S where T end ==> (function (where (:: (call f) S) T) (block))
+    #
+    # Ugly cases for compat where extra parentheses existed and we've
+    # already parsed at least the call part of the signature
+    #
+    # function (f() where T) end         ==> (function (where (call f) T) (block))
+    # function (f()) where T end         ==> (function (where (call f) T) (block))
+    # function (f() where T) where U end ==> (function (where (where (call f) T) U) (block))
+    # function (f()::S) end              ==> (function (:: (call f) S) (block))
+    # function ((f()::S) where T) end    ==> (function (where (:: (call f) S) T) (block))
+    #
+    # TODO: Warn for use of parens? The precedence of `::` and
+    # `where` don't work inside parens so this is a bit of a syntax
+    # oddity/aberration.
     return true
 end
 
