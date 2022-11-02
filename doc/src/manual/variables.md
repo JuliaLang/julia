@@ -150,12 +150,12 @@ The minus sign `−` (U+2212) is treated as equivalent to the hyphen-minus sign 
 ## [Assignment expressions and assignment versus mutation](@id man-assignment-expressions)
 
 An assignment `variable = value` "binds" the name `variable` to the `value` computed
-on the right-hand-side, and the whole assignment is treated by Julia as an expression
+on the right-hand side, and the whole assignment is treated by Julia as an expression
 equal to the right-hand-side `value`.  This means that assignments can be *chained*
 (the same `value` assigned to multiple variables with `variable1 = variable2 = value`)
 or used in other expressions, and is also why their result is shown in the REPL as
-the value of the right-hand-side.  (In general, the REPL displays the value of whatever
-expression you evaluate.)  For example, here the right-hand-side `4` of `b = 2+2` is
+the value of the right-hand side.  (In general, the REPL displays the value of whatever
+expression you evaluate.)  For example, here the value `4` of `b = 2+2` is
 used in another arithmetic operation and assignment:
 ```jldoctest
 julia> a = (b = 2+2) + 3
