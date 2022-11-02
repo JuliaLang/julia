@@ -162,7 +162,7 @@ let fails = @testset NoThrowTestSet begin
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
-        @test_throws ["BoundsError", "access", "1-element", "at index [2]"] [1][2]
+        @test_throws ["BoundsError", "aquire", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
