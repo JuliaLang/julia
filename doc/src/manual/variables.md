@@ -173,7 +173,7 @@ and *mutation* (changing a value).  If you run `a = 2` followed by `a = 3`, you 
 the "name" `a` to refer to a new value `3` … you haven't changed the number `2`, so `2+2`
 will still give `4` and not `6`!   This distinction becomes more clear when dealing with
 *mutable* types like [arrays](@ref lib-arrays), whose contents *can* be changed:
-```jldoctest
+```jldoctest mutation_vs_rebind
 julia> a = [1,2,3] # an array of 3 integers
 3-element Vector{Int64}:
  1
