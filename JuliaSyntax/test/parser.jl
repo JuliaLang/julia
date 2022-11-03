@@ -240,23 +240,14 @@ tests = [
         "\$\$a"  => "(\$ (\$ a))"
     ],
     JuliaSyntax.parse_call => [
-        # Mostly parse_call_chain
+        # parse_call
         "f(x)"    =>  "(call f x)"
         "\$f(x)"  =>  "(call (\$ f) x)"
-        "f(a,b)"  => "(call f a b)"
-        "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))" =>
-            Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
-        "f(a; b; c)" => "(call f a (parameters b) (parameters c))" =>
-            Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
-        "(a=1)()" =>  "(call (= a 1))" => Expr(:call, Expr(:(=), :a, 1))
-        "f (a)" => "(call f (error-t) a)"
+        # parse_call_chain
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"
-        # do
-        "f() do\nend"         =>  "(do (call f) (tuple) (block))"
-        "f() do ; body end"   =>  "(do (call f) (tuple) (block body))"
-        "f() do x, y\n body end"  =>  "(do (call f) (tuple x y) (block body))"
-        "f(x) do y body end"  =>  "(do (call f x) (tuple y) (block body))"
+
+        # space separated macro calls
         "@foo a b"     =>  "(macrocall @foo a b)"
         "@foo (x)"     =>  "(macrocall @foo x)"
         "@foo (x,y)"   =>  "(macrocall @foo (tuple x y))"
@@ -264,9 +255,8 @@ tests = [
         "@A.foo a b"   =>  "(macrocall (. A (quote @foo)) a b)"
         "[@foo x]"     =>  "(vect (macrocall @foo x))"
         "@var\"#\" a"  =>  "(macrocall (var @#) a)"                => Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        "A.@x y"       =>  "(macrocall (. A (quote @x)) y)"
         "A.@var\"#\" a"=>  "(macrocall (. A (quote (var @#))) a)"  => Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
-        "[f (x)]"    =>  "(hcat f x)"
-        "[f x]"      =>  "(hcat f x)"
         # Macro names
         "@! x"  => "(macrocall @! x)"
         "@.. x" => "(macrocall @.. x)"
@@ -278,24 +268,35 @@ tests = [
         "@doc x y\nz"  =>  "(macrocall @doc x y)"
         "@doc x\n\ny"  =>  "(macrocall @doc x)"
         "@doc x\nend"  =>  "(macrocall @doc x)"
-        # .' discontinued
-        "f.'"    =>  "f (error-t . ')"
-        # Allow `@` in macrocall only in first and last position
-        "A.B.@x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
-        "@A.B.x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
-        "A.@B.x"    =>  "(macrocall (. (. A (quote B)) (error-t) (quote @x)))"
-        "A.@. y"    =>  "(macrocall (. A (quote @__dot__)) y)"
-        "a().@x(y)" =>  "(macrocall (error (. (call a) (quote x))) y)"
-        "a().@x y"  =>  "(macrocall (error (. (call a) (quote x))) y)"
-        "a().@x{y}" =>  "(macrocall (error (. (call a) (quote x))) (braces y))"
+
+        # non-errors in space sensitive contexts
+        "[f (x)]"    =>  "(hcat f x)"
+        "[f x]"      =>  "(hcat f x)"
+        # calls with brackets
+        "f(a,b)"  => "(call f a b)"
+        "f(a=1; b=2)" => "(call f (= a 1) (parameters (= b 2)))" =>
+            Expr(:call, :f, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1))
+        "f(a; b; c)" => "(call f a (parameters b) (parameters c))" =>
+            Expr(:call, :f, Expr(:parameters, Expr(:parameters, :c), :b), :a)
+        "(a=1)()" =>  "(call (= a 1))" => Expr(:call, Expr(:(=), :a, 1))
+        "f (a)" => "(call f (error-t) a)"
+        "A.@x(y)"    =>  "(macrocall (. A (quote @x)) y)"
+        "A.@x(y).z"  =>  "(. (macrocall (. A (quote @x)) y) (quote z))"
+        # do
+        "f() do\nend"         =>  "(do (call f) (tuple) (block))"
+        "f() do ; body end"   =>  "(do (call f) (tuple) (block body))"
+        "f() do x, y\n body end"  =>  "(do (call f) (tuple x y) (block body))"
+        "f(x) do y body end"  =>  "(do (call f x) (tuple y) (block body))"
+
         # square brackets
-        "a().@x[1]" => "(macrocall (error (. (call a) (quote x))) (vect 1))"
         "@S[a,b]"  => "(macrocall @S (vect a b))" =>
             Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vect, :a, :b))
         "@S[a b]"  => "(macrocall @S (hcat a b))" =>
             Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:hcat, :a, :b))
         "@S[a; b]" => "(macrocall @S (vcat a b))" =>
             Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:vcat, :a, :b))
+        "A.@S[a]"  =>  "(macrocall (. A (quote @S)) (vect a))"
+        "@S[a].b"  =>  "(. (macrocall @S (vect a)) (quote b))"
         ((v=v"1.7",), "@S[a ;; b]")  =>  "(macrocall @S (ncat-2 a b))" =>
             Expr(:macrocall, Symbol("@S"), LineNumberNode(1), Expr(:ncat, 2, :a, :b))
         ((v=v"1.6",), "@S[a ;; b]")  =>  "(macrocall @S (error (ncat-2 a b)))"
@@ -308,6 +309,13 @@ tests = [
         "T[a b; c d]"  =>  "(typed_vcat T (row a b) (row c d))"
         "T[x for x in xs]"  =>  "(typed_comprehension T (generator x (= x xs)))"
         ((v=v"1.8",), "T[a ; b ;; c ; d]") => "(typed_ncat-2 T (nrow-1 a b) (nrow-1 c d))"
+
+        # Dotted forms
+        # Allow `@` in macrocall only in first and last position
+        "A.B.@x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
+        "@A.B.x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
+        "A.@B.x"    =>  "(macrocall (. (. A (quote B)) (error-t) (quote @x)))"
+        "@. y"      =>  "(macrocall @__dot__ y)"
         "f.(a,b)"   =>  "(. f (tuple a b))"
         "f.(a=1; b=2)" => "(. f (tuple (= a 1) (parameters (= b 2))))" =>
             Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
@@ -319,6 +327,11 @@ tests = [
         "f.\$x"     =>  "(. f (inert (\$ x)))"
         "f.\$(x+y)" =>  "(. f (inert (\$ (call-i x + y))))"
         "A.\$B.@x"  =>  "(macrocall (. (. A (inert (\$ B))) (quote @x)))"
+        "A.@x"      =>  "(macrocall (. A (quote @x)))"
+        "A.@x a"    =>  "(macrocall (. A (quote @x)) a)"
+        "@A.B.@x a" =>  "(macrocall (. (. A (quote B)) (quote (error-t) @x)) a)"
+        # .' discontinued
+        "f.'"    =>  "f (error-t ')"
         # Field/property syntax
         "f.x.y"  =>  "(. (. f (quote x)) (quote y))"
         "x .y"   =>  "(. x (error-t) (quote y))"
@@ -326,9 +339,12 @@ tests = [
         "f'"  => "(call-post f ')"
         "f'ᵀ" => "(call-post f 'ᵀ)"
         # Curly calls
+        "S {a}"   => "(curly S (error-t) a)"
+        "A.@S{a}" => "(macrocall (. A (quote @S)) (braces a))"
         "@S{a,b}" => "(macrocall @S (braces a b))"
+        "A.@S{a}" => "(macrocall (. A (quote @S)) (braces a))"
+        "@S{a}.b" => "(. (macrocall @S (braces a)) (quote b))"
         "S{a,b}"  => "(curly S a b)"
-        "S {a}"   =>  "(curly S (error-t) a)"
         # String macros
         "x\"str\""   => """(macrocall @x_str (string-r "str"))"""
         "x`str`"     => """(macrocall @x_cmd (cmdstring-r "str"))"""
