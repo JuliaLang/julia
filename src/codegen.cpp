@@ -588,6 +588,11 @@ static const auto jlpgcstack_func = new JuliaFunction{
     nullptr,
 };
 
+static const auto jladoptthread_func = new JuliaFunction{
+    "julia.get_pgcstack_or_new",
+    jlpgcstack_func->_type,
+    jlpgcstack_func->_attrs,
+};
 
 
 // important functions
@@ -1169,7 +1174,6 @@ static const auto &builtin_func_map() {
           { jl_f_svec_addr,               new JuliaFunction{XSTR(jl_f_svec), get_func_sig, get_func_attrs} },
           { jl_f_applicable_addr,         new JuliaFunction{XSTR(jl_f_applicable), get_func_sig, get_func_attrs} },
           { jl_f_invoke_addr,             new JuliaFunction{XSTR(jl_f_invoke), get_func_sig, get_func_attrs} },
-          { jl_f_invoke_kwsorter_addr,    new JuliaFunction{XSTR(jl_f_invoke_kwsorter), get_func_sig, get_func_attrs} },
           { jl_f_isdefined_addr,          new JuliaFunction{XSTR(jl_f_isdefined), get_func_sig, get_func_attrs} },
           { jl_f_getfield_addr,           new JuliaFunction{XSTR(jl_f_getfield), get_func_sig, get_func_attrs} },
           { jl_f_setfield_addr,           new JuliaFunction{XSTR(jl_f_setfield), get_func_sig, get_func_attrs} },
@@ -1205,6 +1209,7 @@ extern "C" {
         1,
 #endif
         (int) DICompileUnit::DebugEmissionKind::FullDebug,
+        1,
         jl_rettype_inferred, NULL };
 }
 
@@ -1492,11 +1497,9 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, bool isvol, MDNode *tbaa);
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const std::string &msg);
-static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0);
 static Value *get_current_task(jl_codectx_t &ctx);
 static Value *get_current_ptls(jl_codectx_t &ctx);
 static Value *get_last_age_field(jl_codectx_t &ctx);
-static Value *get_current_signal_page(jl_codectx_t &ctx);
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block = true);
 static CallInst *emit_jlcall(jl_codectx_t &ctx, Function *theFptr, Value *theF,
                              const jl_cgval_t *args, size_t nargs, JuliaFunction *trampoline);
@@ -2144,12 +2147,7 @@ static void jl_init_function(Function *F)
 
 static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t *rettype, bool prefer_specsig)
 {
-    size_t nreq = jl_is_method(lam->def.method) ? lam->def.method->nargs : 0;
-    int va = 0;
-    if (nreq > 0 && lam->def.method->isva) {
-        nreq--;
-        va = 1;
-    }
+    int va = lam->def.method->isva;
     jl_value_t *sig = lam->specTypes;
     bool needsparams = false;
     if (jl_is_method(lam->def.method)) {
@@ -3473,7 +3471,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             *ret = jl_cgval_t(); // unreachable
                             return true;
                         }
-                        // Determine which was the type that was homogenous
+                        // Determine which was the type that was homogeneous
                         jl_value_t *jt = jl_tparam0(utt);
                         if (jl_is_vararg(jt))
                             jt = jl_unwrap_vararg(jt);
@@ -5319,21 +5317,17 @@ JL_GCC_IGNORE_STOP
 // --- generate function bodies ---
 
 // gc frame emission
-static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0)
+static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=false)
 {
     // allocate a placeholder gc instruction
     // this will require the runtime, but it gets deleted later if unused
-    ctx.topalloca = ctx.builder.CreateCall(prepare_call(jlpgcstack_func));
+    ctx.topalloca = ctx.builder.CreateCall(prepare_call(or_new ? jladoptthread_func : jlpgcstack_func));
     ctx.pgcstack = ctx.topalloca;
 }
 
 static Value *get_current_task(jl_codectx_t &ctx)
 {
-    const int ptls_offset = offsetof(jl_task_t, gcstack);
-    return ctx.builder.CreateInBoundsGEP(
-        ctx.types().T_pjlvalue, emit_bitcast(ctx, ctx.pgcstack, ctx.types().T_ppjlvalue),
-        ConstantInt::get(getSizeTy(ctx.builder.getContext()), -(ptls_offset / sizeof(void *))),
-        "current_task");
+    return get_current_task_from_pgcstack(ctx.builder, ctx.pgcstack);
 }
 
 // Get PTLS through current task.
@@ -5351,15 +5345,6 @@ static Value *get_last_age_field(jl_codectx_t &ctx)
             ctx.builder.CreateBitCast(ct, getSizePtrTy(ctx.builder.getContext())),
             ConstantInt::get(getSizeTy(ctx.builder.getContext()), offsetof(jl_task_t, world_age) / sizeof(size_t)),
             "world_age");
-}
-
-// Get signal page through current task.
-static Value *get_current_signal_page(jl_codectx_t &ctx)
-{
-    // return ctx.builder.CreateCall(prepare_call(reuse_signal_page_func));
-    Value *ptls = get_current_ptls(ctx);
-    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
-    return emit_nthptr_recast(ctx, ptls, nthfield, ctx.tbaa().tbaa_const, getSizePtrTy(ctx.builder.getContext()));
 }
 
 static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_codegen_params_t &params)
@@ -5646,19 +5631,11 @@ static Function* gen_cfun_wrapper(
     ctx.builder.SetInsertPoint(b0);
     DebugLoc noDbg;
     ctx.builder.SetCurrentDebugLocation(noDbg);
-    allocate_gc_frame(ctx, b0);
+    allocate_gc_frame(ctx, b0, true);
 
-    Value *dummy_world = ctx.builder.CreateAlloca(getSizeTy(ctx.builder.getContext()));
-    Value *have_tls = ctx.builder.CreateIsNotNull(ctx.pgcstack);
-    // TODO: in the future, initialize a full TLS context here
     Value *world_age_field = get_last_age_field(ctx);
-    world_age_field = ctx.builder.CreateSelect(have_tls, world_age_field, dummy_world);
     Value *last_age = tbaa_decorate(ctx.tbaa().tbaa_gcframe,
             ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()), world_age_field, Align(sizeof(size_t))));
-    Value *last_gc_state = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), JL_GC_STATE_SAFE);
-    last_gc_state = emit_guarded_test(ctx, have_tls, last_gc_state, [&] {
-        return emit_gc_unsafe_enter(ctx);
-    });
 
     Value *world_v = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
         prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
@@ -5673,12 +5650,7 @@ static Function* gen_cfun_wrapper(
                     emit_bitcast(ctx, literal_pointer_val(ctx, (jl_value_t*)codeinst), getSizePtrTy(ctx.builder.getContext())),
                     offsetof(jl_code_instance_t, max_world) / sizeof(size_t)),
                 Align(sizeof(size_t)));
-        // XXX: age is always OK if we don't have a TLS. This is a hack required due to `@threadcall` abuse.
-        // and adds quite a bit of complexity here, even though it's still wrong
-        // (anything that tries to interact with the runtime will fault)
         age_ok = ctx.builder.CreateICmpUGE(lam_max, world_v);
-        world_v = ctx.builder.CreateSelect(ctx.builder.CreateOr(have_tls, age_ok), world_v, lam_max);
-        age_ok = ctx.builder.CreateOr(ctx.builder.CreateNot(have_tls), age_ok);
     }
     ctx.builder.CreateStore(world_v, world_age_field);
 
@@ -6035,12 +6007,6 @@ static Function* gen_cfun_wrapper(
     }
 
     ctx.builder.CreateStore(last_age, world_age_field);
-    if (!sig.retboxed) {
-        emit_guarded_test(ctx, have_tls, nullptr, [&] {
-            emit_gc_unsafe_leave(ctx, last_gc_state);
-            return nullptr;
-        });
-    }
     ctx.builder.CreateRet(r);
 
     ctx.builder.SetCurrentDebugLocation(noDbg);
@@ -6594,6 +6560,7 @@ get_specsig_di(jl_codectx_t &ctx, jl_debugcache_t &debuginfo, jl_value_t *rt, jl
     return dbuilder.createSubroutineType(dbuilder.getOrCreateTypeArray(ditypes));
 }
 
+/* aka Core.Compiler.tuple_tfunc */
 static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
 {
     size_t nvargs = jl_nparams(lam->specTypes)-nreq;
@@ -6601,6 +6568,12 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
     JL_GC_PUSH1(&tupargs);
     for (size_t i = nreq; i < jl_nparams(lam->specTypes); ++i) {
         jl_value_t *argType = jl_nth_slot_type(lam->specTypes, i);
+        if (is_uniquerep_Type(argType))
+            argType = jl_typeof(jl_tparam0(argType));
+        else if (jl_has_intersect_type_not_kind(argType)) {
+            jl_value_t *ts[2] = {argType, (jl_value_t*)jl_type_type};
+            argType = jl_type_union(ts, 2);
+        }
         jl_svecset(tupargs, i-nreq, argType);
     }
     jl_datatype_t *typ = jl_apply_tuple_type(tupargs);
@@ -7484,8 +7457,11 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
+    // step 11a. Emit the entry safepoint
+    if (JL_FEAT_TEST(ctx, safepoint_on_entry))
+        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
-    // step 11. Do codegen in control flow order
+    // step 11b. Do codegen in control flow order
     std::vector<int> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
@@ -8456,6 +8432,7 @@ static void init_jit_functions(void)
     add_named_global(jl_write_barrier_func, (void*)NULL);
     add_named_global(jl_write_barrier_binding_func, (void*)NULL);
     add_named_global(jldlsym_func, &jl_load_and_lookup);
+    add_named_global("jl_adopt_thread", &jl_adopt_thread);
     add_named_global(jlgetcfunctiontrampoline_func, &jl_get_cfunction_trampoline);
     add_named_global(jlgetnthfieldchecked_func, &jl_get_nth_field_checked);
     add_named_global(diff_gc_total_bytes_func, &jl_gc_diff_total_bytes);

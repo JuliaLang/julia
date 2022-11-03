@@ -1183,7 +1183,7 @@ end
 end
 Base.@propagate_inbounds dotview(B::BitArray, i::BitArray) = BitMaskedBitArray(B, i)
 Base.show(io::IO, B::BitMaskedBitArray) = foreach(arg->show(io, arg), (typeof(B), (B.parent, B.mask)))
-# Override materialize! to prevent the BitMaskedBitArray from escaping to an overrideable method
+# Override materialize! to prevent the BitMaskedBitArray from escaping to an overridable method
 @inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any,<:Any,typeof(identity),Tuple{Bool}}) = fill!(B, bc.args[1])
 @inline materialize!(B::BitMaskedBitArray, bc::Broadcasted{<:Any}) = materialize!(@inbounds(view(B.parent, B.mask)), bc)
 function Base.fill!(B::BitMaskedBitArray, b::Bool)

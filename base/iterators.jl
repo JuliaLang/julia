@@ -338,6 +338,10 @@ the `zip` iterator is a tuple of values of its subiterators.
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
 
+!!! note
+
+    `zip()` with no arguments yields an infinite iterator of empty tuples.
+
 See also: [`enumerate`](@ref), [`Splat`](@ref Base.Splat).
 
 # Examples
@@ -1079,6 +1083,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
     done1 === true || return done1 # false or missing
     return _pisdone(tail(iters), tail(states)) # check tail
 end
+@inline isdone(::ProductIterator{Tuple{}}, states) = true
 @inline isdone(P::ProductIterator, states) = _pisdone(P.iterators, states)
 
 @inline _piterate() = ()

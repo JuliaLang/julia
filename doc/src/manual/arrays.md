@@ -1,4 +1,4 @@
-# [Multi-dimensional Arrays](@id man-multi-dim-arrays)
+# [Single- and multi-dimensional Arrays](@id man-multi-dim-arrays)
 
 Julia, like most technical computing languages, provides a first-class array implementation. Most
 technical computing languages pay a lot of attention to their array implementation at the expense
@@ -653,7 +653,7 @@ indices and can be converted to such by [`to_indices`](@ref):
     * [`CartesianIndex{N}`](@ref)s, which behave like an `N`-tuple of integers spanning multiple dimensions (see below for more details)
 2. An array of scalar indices. This includes:
     * Vectors and multidimensional arrays of integers
-    * Empty arrays like `[]`, which select no elements
+    * Empty arrays like `[]`, which select no elements e.g. `A[[]]` (not to be confused with `A[]`)
     * Ranges like `a:c` or `a:b:c`, which select contiguous or strided subsections from `a` to `c` (inclusive)
     * Any custom array of scalar indices that is a subtype of `AbstractArray`
     * Arrays of `CartesianIndex{N}` (see below for more details)

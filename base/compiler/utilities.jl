@@ -128,7 +128,10 @@ function retrieve_code_info(linfo::MethodInstance)
     end
     if c === nothing && isdefined(m, :source)
         src = m.source
-        if isa(src, Array{UInt8,1})
+        if src === nothing
+            # can happen in images built with --strip-ir
+            return nothing
+        elseif isa(src, Array{UInt8,1})
             c = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), m, C_NULL, src)
         else
             c = copy(src::CodeInfo)
@@ -143,7 +146,7 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
+    mt = ccall(:jl_method_get_table, Any, (Any,), method)
     mt === nothing && return nothing
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any),
         mt, atype, sparams, method)
@@ -235,7 +238,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
 which will be one of the following:
 
-- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
 - `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
 - `BackedgePair(specsig, mt::MethodTable)`: an abstract call
 
@@ -329,6 +332,16 @@ function foreachssa(@specialize(f), @nospecialize(stmt))
     for op in urs
         val = op[]
         if isa(val, SSAValue)
+            f(val)
+        end
+    end
+end
+
+function foreach_anyssa(@specialize(f), @nospecialize(stmt))
+    urs = userefs(stmt)
+    for op in urs
+        val = op[]
+        if isa(val, AnySSAValue)
             f(val)
         end
     end
@@ -438,38 +451,6 @@ end
 # using a function to ensure we can infer this
 @inline slot_id(s) = isa(s, SlotNumber) ? (s::SlotNumber).id :
     isa(s, Argument) ? (s::Argument).n : (s::TypedSlot).id
-
-######################
-# IncrementalCompact #
-######################
-
-# specifically meant to be used with body1 = compact.result and body2 = compact.new_new_nodes, with nvals == length(compact.used_ssas)
-function find_ssavalue_uses1(compact)
-    body1, body2 = compact.result.inst, compact.new_new_nodes.stmts.inst
-    nvals = length(compact.used_ssas)
-    nbody1 = length(body1)
-    nbody2 = length(body2)
-
-    uses = zeros(Int, nvals)
-    function increment_uses(ssa::SSAValue)
-        uses[ssa.id] += 1
-    end
-
-    for line in 1:(nbody1 + nbody2)
-        # index into the right body
-        if line <= nbody1
-            isassigned(body1, line) || continue
-            e = body1[line]
-        else
-            line -= nbody1
-            isassigned(body2, line) || continue
-            e = body2[line]
-        end
-
-        foreachssa(increment_uses, e)
-    end
-    return uses
-end
 
 ###########
 # options #

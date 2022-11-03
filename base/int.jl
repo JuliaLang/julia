@@ -514,11 +514,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
     if !(to === from)
-        if to.size < from.size
+        if Core.sizeof(to) < Core.sizeof(from)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
         elseif from === Bool
             @eval rem(x::($from), ::Type{$to}) = convert($to, x)
-        elseif from.size < to.size
+        elseif Core.sizeof(from) < Core.sizeof(to)
             if from <: Signed
                 @eval rem(x::($from), ::Type{$to}) = sext_int($to, x)
             else
@@ -578,8 +578,17 @@ if nameof(@__MODULE__) === :Base
 
         # Examples
         ```jldoctest
-        julia> 129 % Int8
+        julia> x = 129 % Int8
         -127
+
+        julia> typeof(x)
+        Int8
+
+        julia> x = 129 % BigInt
+        129
+
+        julia> typeof(x)
+        BigInt
         ```
         """ $fname(x::Integer, T::Type{<:Integer})
     end

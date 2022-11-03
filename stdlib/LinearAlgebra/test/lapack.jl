@@ -24,10 +24,10 @@ using LinearAlgebra: BlasInt
         vals, Z = LAPACK.syevr!('V', copy(Asym))
         @test Z*(Diagonal(vals)*Z') ≈ Asym
         @test all(vals .> 0.0)
-        @test LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[vals .< 1.0]
-        @test LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] ≈ vals[4:5]
-        @test vals ≈ LAPACK.syev!('N','U',copy(Asym))
-        @test_throws DimensionMismatch LAPACK.sygvd!(1,'V','U',copy(Asym),Matrix{elty}(undef,6,6))
+        @test LAPACK.syevr!('N', 'V', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[vals .< 1.0]
+        @test LAPACK.syevr!('N', 'I', 'U', copy(Asym), 0.0, 1.0, 4, 5, -1.0)[1] ≈ vals[4:5]
+        @test vals ≈ LAPACK.syev!('N', 'U', copy(Asym))
+        @test_throws DimensionMismatch LAPACK.sygvd!(1, 'V', 'U', copy(Asym), zeros(elty, 6, 6))
     end
 end
 
