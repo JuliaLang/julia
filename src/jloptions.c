@@ -322,6 +322,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
     const char **cmds = NULL;
     int codecov = JL_LOG_NONE;
     int malloclog = JL_LOG_NONE;
+    int pkgimage_explicit = 0;
     int argc = *argcp;
     char **argv = *argvp;
     char *endptr;
@@ -442,6 +443,7 @@ restart_switch:
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
             break;
         case opt_pkgimage_native_code:
+            pkgimage_explicit = 1;
             if (!strcmp(optarg,"yes"))
                 jl_options.use_pkgimage_native_code = JL_OPTIONS_USE_PKGIMAGE_NATIVE_CODE_YES;
             else if (!strcmp(optarg,"no"))
@@ -815,6 +817,13 @@ restart_switch:
             jl_errorf("julia: unhandled option -- %c\n"
                       "This is a bug, please report it.", c);
         }
+    }
+    if (codecov || malloclog) {
+        if (pkgimage_explicit && jl_options.use_pkgimage_native_code) {
+            jl_errorf("julia: Can't use --pkgimage-native-code=yes together "
+                      "with --track-allocation or --code-coverage.");
+        }
+        jl_options.use_pkgimage_native_code = 0;
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
