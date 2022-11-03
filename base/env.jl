@@ -186,7 +186,7 @@ been restored.
 
     !!! warning
     Changing the environment is not thread-safe. For running external commands with a different
-    environment than the parent process, prefer using [`addenv`](@ref) over `withenv`.
+    environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """
 function withenv(f, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()
