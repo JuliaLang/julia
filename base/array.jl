@@ -1133,7 +1133,7 @@ function try_append!(a::Vector, items::AbstractVector)
         unsafe_append!(a, items)
     catch e
         resize!(a, n)
-        rethrow(e)
+        rethrow()
     end
     return a
 end
@@ -1164,7 +1164,7 @@ function _try_append!(a, sz::Union{HasLength,HasShape}, iter)
         _unsafe_append!(a, sz, iter)
     catch e
         resize!(a, n)
-        rethrow(e)
+        rethrow()
     end
 end
 
@@ -1180,7 +1180,7 @@ function _try_append!(a, sz::IteratorSize, iter)
         _unsafe_append!(a, sz, iter)
     catch e
         resize!(a, n)
-        rethrow(e)
+        rethrow()
     end
     a
 end
@@ -1225,7 +1225,7 @@ function try_prepend!(a::Vector, items::AbstractVector)
         unsafe_prepend!(a, items)
     catch e
         _deletebeg!(a, n)
-        rethrow(e)
+        rethrow()
     end
     return a
 end
@@ -1258,7 +1258,7 @@ function _try_prepend!(a, sz::Union{HasLength,HasShape}, iter)
         _unsafe_prepend!(a, sz, iter)
     catch e
         _deletebeg!(a, n)
-        rethrow(e)
+        rethrow()
     end
     a
 end
@@ -1279,7 +1279,7 @@ function _try_prepend!(a, sz::IteratorSize, iter)
         _unsafe_prepend!(a, sz, iter)
     catch e
         _deletebeg!(a, length(a) - n)
-        rethrow(e)
+        rethrow()
     end
     a
 end
