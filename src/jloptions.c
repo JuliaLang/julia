@@ -146,9 +146,9 @@ static const char opts[]  =
     " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level)\n"
     " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " -g, --debuginfo=[{0,1,2*}] Set the level of debug info generation in the julia-debug build\n"
+        " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build\n"
 #else
-        " -g, --debuginfo=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
+        " -g, --debug-info=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
 #endif
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
@@ -280,7 +280,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
-        { "debuginfo",       optional_argument, 0, 'g' },
+        { "debug-info",      optional_argument, 0, 'g' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
