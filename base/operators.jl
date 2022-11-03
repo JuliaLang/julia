@@ -1305,7 +1305,8 @@ Some collections follow a slightly different definition. For example,
 [`isequal`](@ref).
 
 To test for the presence of a key in a dictionary, use [`haskey`](@ref)
-or `k in keys(dict)`. For these collections, the result is always a `Bool` and never `missing`.
+or `k in keys(dict)`. For the collections mentioned above,
+the result is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `item` and `collection` are broadcasted over, which is often not what is intended.
