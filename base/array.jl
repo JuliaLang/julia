@@ -1220,7 +1220,7 @@ prepend!(a::Vector, items::AbstractVector) = try_prepend!(a, items)
 prepend!(a::Vector{T}, items::AbstractVector{U}) where {T, U <: T} = unsafe_prepend!(a, items)
 
 function try_prepend!(a::Vector, items::AbstractVector)
-    n = length(itemindices)
+    n = length(items)
     try
         unsafe_prepend!(a, items)
     catch e
