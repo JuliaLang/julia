@@ -498,35 +498,17 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 """
     reinterpret(type, A)
 
-Change the type-interpretation of a block of memory.
-For arrays, this constructs a view of the array with the same binary data as the given
-array, but with the specified element type.
-For example,
-`reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
+Change the type-interpretation of the binary data in the primitive type `A`
+to that of the primitive type `type`.
+The size of `type` has to be the same as that of the type of `A`.
+For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
 
 # Examples
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
-
-julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-1×5 reinterpret(Float32, ::Matrix{UInt32}):
- 1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
-
-Additionally, `reinterpret` does not require the array `A` to have a dense block of memory;
-it can just as well be a "lazy" array whose elements are not computed until they are explicitly retrieved.
-For instance, `reinterpret` on the range `1:6` works similarly as on the dense vector `collect(1:6)`:
-
-```jldoctest
-julia> reinterpret(Complex{Int}, 1:6)
-3-element reinterpret(Complex{$Int}, ::UnitRange{$Int}):
- 1 + 2im
- 3 + 4im
- 5 + 6im
-```
-
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
 
