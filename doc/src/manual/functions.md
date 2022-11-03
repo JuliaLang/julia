@@ -76,7 +76,7 @@ The statement `x[1] = 42` *mutates* the object `x`, and hence this change *will*
 by the caller for this argument.   On the other hand, the assignment `y = 7 + y` changes the *binding* ("name")
 `y` to refer to a new value `7 + y`, rather than mutating the *original* object referred to by `y`,
 and hence does *not* change the corresponding argument passed by the caller.   This can be seen if we call `f(x, y)`:
-```
+```julia-repl
 julia> a = [4,5,6]
 3-element Vector{Int64}:
  4
