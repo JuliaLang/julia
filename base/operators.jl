@@ -951,6 +951,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
+The last argument to `∘` execute first.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
