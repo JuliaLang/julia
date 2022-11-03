@@ -74,7 +74,8 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
 once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
-[`isopen`](@ref) to check whether a timer is still active.
+[`isopen`](@ref) to check whether a timer is still active. Use `interrupt` to wake up waiting tasks
+early (e.g. to test a terminate condition).
 
 !!! note
     `interval` is subject to accumulating time skew. If you need precise events at a particular
@@ -156,6 +157,13 @@ function wait(t::Union{Timer, AsyncCondition})
     nothing
 end
 
+function interrupt(t::Timer)
+    t.isopen || return nothing
+    iolock_begin()
+    @lock t.cond notify(t.cond, true)
+    iolock_end()
+    nothing
+end
 
 isopen(t::Union{Timer, AsyncCondition}) = t.isopen && t.handle != C_NULL
 
