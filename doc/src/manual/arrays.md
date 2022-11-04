@@ -410,22 +410,36 @@ julia> sum(1/n^2 for n=1:1000)
 1.6439345666815615
 ```
 
-When writing a generator expression with multiple dimensions inside an argument list, parentheses
-are needed to separate the generator from subsequent arguments:
-
-```julia-repl
-julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
-ERROR: syntax: invalid iteration specification
-```
-
-All comma-separated expressions after `for` are interpreted as ranges. Adding parentheses lets
-us add a third argument to [`map`](@ref):
+When writing a generator expression in an argument list, parentheses can be omitted, provided the
+generator is the last argument:
 
 ```jldoctest
-julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
-2×2 Matrix{Tuple{Float64, Int64}}:
- (0.5, 1)       (0.333333, 3)
- (0.333333, 2)  (0.25, 4)
+julia> map(Tuple, i for i=1:2)
+4-element Vector{Tuple{Int64}}:
+ (1,)
+ (2,)
+
+julia> map(Tuple, (i,j) for i=1:2 for j=3:4) # result is always a 1D array with multiple `for` keywords
+4-element Vector{Tuple{Int64, Int64}}:
+ (1, 3)
+ (1, 4)
+ (2, 3)
+ (2, 4)
+
+julia> map(Tuple, (i,j) for i=1:2, j=3:4)
+2×2 Matrix{Tuple{Int64, Int64}}:
+ (1, 3)  (1, 4)
+ (2, 3)  (2, 4)
+```
+
+If the generator is not the last in the argument list, then parentheses must be used to seperate it from
+subsequent arguments:
+
+```jldoctest
+julia> map(tuple, (i for i=1:2), 3:4)
+2-element Vector{Tuple{Int64, Int64}}:
+ (1, 3)
+ (2, 4)
 ```
 
 Generators are implemented via inner functions. Just like
