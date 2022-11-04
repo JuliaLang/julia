@@ -65,7 +65,7 @@ a function will be visible to the caller. (This is the same behavior found in Sc
 Python, Ruby and Perl, among other dynamic languages.)
 
 For example, in the function
-```
+```julia
 function f(x, y)
     x[1] = 42    # mutates x
     y = 7 + y    # new binding for y, no mutation
