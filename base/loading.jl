@@ -882,6 +882,8 @@ function find_all_in_cache_path(pkg::PkgId)
     end
 end
 
+ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
+
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 
@@ -898,11 +900,10 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
         t_comp_before = cumulative_compile_time_ns()
     end
 
-    opath = string(chopsuffix(path, ".ji"), ".", Base.Libc.dlext)
-    if ispath(opath)
-        # TODO: Handle --pkgimage-native-code confusion
-        @debug "Loading object cache file $opath for $pkg"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), opath, depmods)
+    ocachepath = ocachefile_from_cachefile(path)
+    if isfile(ocachepath)
+        @debug "Loading object cache file $ocachepath for $pkg"
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), ocachepath, depmods)
     else
         @debug "Loading cache file $path for $pkg"
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
@@ -1835,18 +1836,30 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # we don't actually know what the list of compile-time preferences are without compiling)
             prefs_hash = preferences_hash(tmppath)
             cachefile = compilecache_path(pkg, prefs_hash)
-            ocachefile = string(chopsuffix(cachefile, ".ji"), ".", Base.Libc.dlext)
+            ocachefile = ocachefile_from_cachefile(cachefile)
+
+            # append checksum for so to the end of the .ji file:
+            crc_so = UInt32(0)
+            if cache_objects
+                crc_so = open(_crc32c, tmppath_so, "r")
+            end
 
             # append extra crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if iszero(isvalid_cache_header(f))
                     error("Invalid header for $pkg in new cache file $(repr(tmppath)).")
                 end
+                seekend(f)
+                write(f, crc_so)
                 seekstart(f)
                 write(f, _crc32c(f))
             end
+
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(path) & 0o777 | 0o200)
+            if cache_objects
+                chmod(tmppath_so, filemode(path) & 0o777 | 0o200)
+            end
 
             # prune the directory with cache files
             if pkg.uuid !== nothing
@@ -1886,6 +1899,14 @@ end
 
 isvalid_cache_header(f::IOStream) = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid},), f.ios) # returns checksum id or zero
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
+
+function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
+    seekstart(f) # TODO necessary
+    seek(f, filesize(f) - 8)
+    expected_crc_so = read(f, UInt32)
+    crc_so = open(_crc32c, ocachefile, "r")
+    expected_crc_so == crc_so
+end
 
 struct CacheHeaderIncludes
     id::PkgId
@@ -2239,6 +2260,7 @@ get_compiletime_preferences(::Nothing) = String[]
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false)
     io = open(cachefile, "r")
+    ocachefile = ocachefile_from_cachefile(cachefile)
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
@@ -2249,14 +2271,19 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
-        if !isempty(clone_targets)
+        pkgimage = !isempty(clone_targets)
+        if pkgimage
             if JLOptions().use_pkgimage_native_code == 0
                 # presence of clone_targets means native code cache
-                @debug "Rejection cache file $cachefile for $modkey since it would require usage of pkgimage"
+                @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 return true
             end
             if ccall(:jl_is_pkgimage_viable, Int8, (Ptr{Cchar},), clone_targets) == 0
-                @debug "Rejection cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
+                @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
+                return true
+            end
+            if !isfile(ocachefile)
+                @debug "Rejection cache file $cachefile for $modkey since pkgimage $ocachefile was expected to exist"
                 return true
             end
         end
@@ -2352,6 +2379,13 @@ end
         if !isvalid_file_crc(io)
             @debug "Rejecting cache file $cachefile because it has an invalid checksum"
             return true
+        end
+
+        if pkgimage
+            if !isvalid_pkgimage_crc(io, ocachefile)
+                @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
+                return true
+            end
         end
 
         curr_prefs_hash = get_preferences_hash(id.uuid, prefs)
