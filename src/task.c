@@ -320,7 +320,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
             jl_apply(args, 2);
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception());
+            jl_no_exc_handler(jl_current_exception(), ct);
         }
     }
     jl_gc_debug_critical_error();
@@ -696,7 +696,7 @@ JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
     jl_switch();
 }
 
-JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
+JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e, jl_task_t *ct)
 {
     // NULL exception objects are used when rethrowing. we don't have a handler to process
     // the exception stack, so at least report the exception at the top of the stack.
@@ -707,6 +707,8 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
     jl_static_show((JL_STREAM*)STDERR_FILENO, e);
     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
     jlbacktrace(); // written to STDERR_FILENO
+    if (ct == NULL)
+        jl_raise(6);
     jl_exit(1);
 }
 
@@ -745,7 +747,7 @@ JL_DLLEXPORT JL_NORETURN void jl_no_exc_handler(jl_value_t *e)
         jl_longjmp(eh->eh_ctx, 1);                                             \
     }                                                                          \
     else {                                                                     \
-        jl_no_exc_handler(exception);                                          \
+        jl_no_exc_handler(exception, ct);                                      \
     }                                                                          \
     assert(0);
 
@@ -780,8 +782,8 @@ JL_DLLEXPORT void jl_throw(jl_value_t *e JL_MAYBE_UNROOTED)
         asan_unpoison_task_stack(ct, safe_restore);
         jl_longjmp(*safe_restore, 1);
     }
-    if (ct == NULL) // During startup
-        jl_no_exc_handler(e);
+    if (ct == NULL) // During startup, or on other threads
+        jl_no_exc_handler(e, ct);
     record_backtrace(ct->ptls, 1);
     throw_internal(ct, e);
 }
@@ -1381,9 +1383,9 @@ static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
     _jl_ucontext_t base_ctx;
     memcpy(&base_ctx, &ptls->base_ctx, sizeof(base_ctx));
     sigfillset(&set);
-    if (sigprocmask(SIG_BLOCK, &set, &oset) != 0) {
+    if (pthread_sigmask(SIG_BLOCK, &set, &oset) != 0) {
        jl_free_stack(stk, *ssize);
-       jl_error("sigprocmask failed");
+       jl_error("pthread_sigmask failed");
     }
     uc_stack.ss_sp = stk;
     uc_stack.ss_size = *ssize;
@@ -1415,9 +1417,9 @@ static char *jl_alloc_fiber(_jl_ucontext_t *t, size_t *ssize, jl_task_t *owner)
        jl_free_stack(stk, *ssize);
        jl_error("sigaltstack failed");
     }
-    if (sigprocmask(SIG_SETMASK, &oset, NULL) != 0) {
+    if (pthread_sigmask(SIG_SETMASK, &oset, NULL) != 0) {
        jl_free_stack(stk, *ssize);
-       jl_error("sigprocmask failed");
+       jl_error("pthread_sigmask failed");
     }
     if (&ptls->base_ctx != t) {
         memcpy(&t, &ptls->base_ctx, sizeof(base_ctx));
