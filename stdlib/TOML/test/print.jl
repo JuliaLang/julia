@@ -71,3 +71,43 @@ end
     d = Dict("str" => string(Char(0xd800)))
     @test_throws ErrorException TOML.print(devnull, d)
 end
+
+str = """
+[[dataset.loader]]
+driver = "nested"
+loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
+"""
+@test roundtrip(str)
+
+
+struct Foo
+    a::Int64
+    b::Float64
+end
+
+struct Bar
+    c::Float64
+    d::String
+end
+
+
+f = Foo(2,9.9)
+b = Bar(1.345, "hello")
+
+dd = Dict("hello"=>"world", "f"=>f,  "b"=>b)
+
+to_dict(foo::Foo) = Dict("a"=>foo.a, "b"=>foo.b)
+to_dict(bar::Bar) = Dict("c"=>bar.c, "d"=>bar.d)
+
+@test toml_str(to_dict, dd) ==
+"""
+hello = "world"
+
+[f]
+b = 9.9
+a = 2
+
+[b]
+c = 1.345
+d = "hello"
+"""
