@@ -81,6 +81,7 @@ New library functions
   is efficient. ([#43334])
 * New macro `@allocations` which is similar to `@allocated` except reporting the total number of allocations
   rather than the total size of memory allocated. ([#47367])
+* `findextrema(f, itr; [dims])` which computes `findmin(f, itr; [dims]), findmax(f, itr; [dims])` in a single pass. ([#45783])
 
 Library changes
 ---------------
