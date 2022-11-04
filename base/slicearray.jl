@@ -73,10 +73,11 @@ end
     _eachslice(A, (dim,), drop)
 end
 Slices(A::AbstractArray, args...) = _eachslice(A, args, true)
+Slices(A::AbstractArray, args) = _eachslice(A, args, true)
 
 """
     eachslice(A::AbstractArray; dims, drop=true)
-    eachslice(A::AbstractArray, dims; drop=true)
+    eachslice(A::AbstractArray, dims...; drop=true)
 
 Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
 views that select all the data from the other dimensions in `A`. `dims` can either by an
@@ -129,6 +130,7 @@ julia> eachslice(m, dims=1, drop=false)
     _eachslice(A, dims, drop)
 end
 @inline eachslice(A, dims; drop=true) = _eachslice(A, dims, drop)
+@inline eachslice(A, dims...; drop=true) = _eachslice(A, dims, drop)
 
 """
     eachrow(A::AbstractVecOrMat) <: AbstractVector
