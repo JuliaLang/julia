@@ -1234,4 +1234,8 @@ end
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
+
+    # sanity check `@allocations` returns what we expect in some very simple cases
+    @test (@allocations "a") == 0
+    @test (@allocations "a" * "b") == 1
 end

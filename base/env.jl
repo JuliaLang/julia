@@ -73,6 +73,27 @@ variables.
 all keys to uppercase for display, iteration, and copying. Portable code should not rely on the
 ability to distinguish variables by case, and should beware that setting an ostensibly lowercase
 variable may result in an uppercase `ENV` key.)
+
+    !!! warning
+    Mutating the environment is not thread-safe.
+
+# Examples
+```julia-repl
+julia> ENV
+Base.EnvDict with "50" entries:
+  "SECURITYSESSIONID"            => "123"
+  "USER"                         => "username"
+  "MallocNanoZone"               => "0"
+  ⋮                              => ⋮
+
+julia> ENV["JULIA_EDITOR"] = "vim"
+"vim"
+
+julia> ENV["JULIA_EDITOR"]
+"vim"
+```
+
+See also: [`withenv`](@ref), [`addenv`](@ref).
 """
 const ENV = EnvDict()
 
@@ -162,6 +183,10 @@ by zero or more `"var"=>val` arguments `kv`. `withenv` is generally used via the
 `withenv(kv...) do ... end` syntax. A value of `nothing` can be used to temporarily unset an
 environment variable (if it is set). When `withenv` returns, the original environment has
 been restored.
+
+    !!! warning
+    Changing the environment is not thread-safe. For running external commands with a different
+    environment from the parent process, prefer using [`addenv`](@ref) over `withenv`.
 """
 function withenv(f, keyvals::Pair{T}...) where T<:AbstractString
     old = Dict{T,Any}()

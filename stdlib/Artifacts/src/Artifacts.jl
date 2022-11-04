@@ -242,7 +242,7 @@ end
 """
     artifact_exists(hash::SHA1; honor_overrides::Bool=true)
 
-Returns whether or not the given artifact (identified by its sha1 git tree hash) exists
+Return whether or not the given artifact (identified by its sha1 git tree hash) exists
 on-disk.  Note that it is possible that the given artifact exists in multiple locations
 (e.g. within multiple depots).
 
@@ -455,7 +455,7 @@ end
                                   include_lazy = false,
                                   pkg_uuid = nothing)
 
-Returns a dictionary where every entry is an artifact from the given `Artifacts.toml`
+Return a dictionary where every entry is an artifact from the given `Artifacts.toml`
 that should be downloaded for the requested platform.  Lazy artifacts are included if
 `include_lazy` is set.
 """
@@ -611,7 +611,7 @@ end
     artifact_slash_lookup(name::String, atifact_dict::Dict,
                           artifacts_toml::String, platform::Platform)
 
-Returns `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in
+Return `artifact_name`, `artifact_path_tail`, and `hash` by looking the results up in
 the given `artifacts_toml`, first extracting the name and path tail from the given `name`
 to support slash-indexing within the given artifact.
 """

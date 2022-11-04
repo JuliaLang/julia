@@ -367,7 +367,7 @@ tril(M::AbstractMatrix) = tril!(copy(M))
 """
     triu(M, k::Integer)
 
-Returns the upper triangle of `M` starting from the `k`th superdiagonal.
+Return the upper triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -398,7 +398,7 @@ triu(M::AbstractMatrix,k::Integer) = triu!(copy(M),k)
 """
     tril(M, k::Integer)
 
-Returns the lower triangle of `M` starting from the `k`th superdiagonal.
+Return the lower triangle of `M` starting from the `k`th superdiagonal.
 
 # Examples
 ```jldoctest
@@ -461,7 +461,7 @@ norm_sqr(x::Union{T,Complex{T},Rational{T}}) where {T<:Integer} = abs2(float(x))
 
 function generic_norm2(x)
     maxabs = normInf(x)
-    (iszero(maxabs) || isinf(maxabs)) && return maxabs
+    (ismissing(maxabs) || iszero(maxabs) || isinf(maxabs)) && return maxabs
     (v, s) = iterate(x)::Tuple
     T = typeof(maxabs)
     if isfinite(length(x)*maxabs*maxabs) && !iszero(maxabs*maxabs) # Scaling not necessary
@@ -472,6 +472,7 @@ function generic_norm2(x)
             (v, s) = y
             sum += norm_sqr(v)
         end
+        ismissing(sum) && return missing
         return convert(T, sqrt(sum))
     else
         sum = abs2(norm(v)/maxabs)
@@ -481,6 +482,7 @@ function generic_norm2(x)
             (v, s) = y
             sum += (norm(v)/maxabs)^2
         end
+        ismissing(sum) && return missing
         return convert(T, maxabs*sqrt(sum))
     end
 end
@@ -491,7 +493,7 @@ function generic_normp(x, p)
     (v, s) = iterate(x)::Tuple
     if p > 1 || p < -1 # might need to rescale to avoid overflow
         maxabs = p > 1 ? normInf(x) : normMinusInf(x)
-        (iszero(maxabs) || isinf(maxabs)) && return maxabs
+        (ismissing(maxabs) || iszero(maxabs) || isinf(maxabs)) && return maxabs
         T = typeof(maxabs)
     else
         T = typeof(float(norm(v)))
@@ -503,15 +505,18 @@ function generic_normp(x, p)
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
+            ismissing(v) && return missing
             sum += norm(v)^spp
         end
         return convert(T, sum^inv(spp))
     else # rescaling
         sum = (norm(v)/maxabs)^spp
+        ismissing(sum) && return missing
         while true
             y = iterate(x, s)
             y === nothing && break
             (v, s) = y
+            ismissing(v) && return missing
             sum += (norm(v)/maxabs)^spp
         end
         return convert(T, maxabs*sum^inv(spp))
@@ -1419,9 +1424,7 @@ isdiag(x::Number) = true
     axpy!(α, x::AbstractArray, y::AbstractArray)
 
 Overwrite `y` with `x * α + y` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`
-
-See also [`BLAS.axpy!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .+= x .* a`.
 
 # Examples
 ```jldoctest
@@ -1465,9 +1468,7 @@ end
     axpby!(α, x::AbstractArray, β, y::AbstractArray)
 
 Overwrite `y` with `x * α + y * β` and return `y`.
-If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`
-
-See also [`BLAS.axpby!`](@ref)
+If `x` and `y` have the same axes, it's equivalent with `y .= x .* a .+ y .* β`.
 
 # Examples
 ```jldoctest

@@ -240,7 +240,7 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-split_rest(t::Tuple, n::Int, i=1) = t[i:end-n], t[end-n+1:end]
+@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:end-n], t[end-n+1:end]))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -588,7 +588,7 @@ isless(::Tuple, ::Tuple{}) = false
 """
     isless(t1::Tuple, t2::Tuple)
 
-Returns true when t1 is less than t2 in lexicographic order.
+Return `true` when `t1` is less than `t2` in lexicographic order.
 """
 function isless(t1::Tuple, t2::Tuple)
     a, b = t1[1], t2[1]
@@ -649,7 +649,7 @@ in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 """
     empty(x::Tuple)
 
-Returns an empty tuple, `()`.
+Return an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
 

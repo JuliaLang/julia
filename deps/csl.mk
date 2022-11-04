@@ -22,7 +22,7 @@ endef
 # would get from CSL (by searching for a `GLIBCXX_3.4.X` symbol that does not exist
 # in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
 # this case.
-CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.30|GLIBCXX_3\.5\.|GLIBCXX_4\.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
 
 # First, check to see if BB is disabled on a global setting
 ifeq ($(USE_BINARYBUILDER),0)
@@ -69,7 +69,7 @@ $(eval $(call copy_csl,$(call versioned_libname,libatomic,1)))
 $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 
 ifeq ($(OS),WINNT)
-# Windwos has special gcc_s names
+# Windows has special gcc_s names
 ifeq ($(ARCH),i686)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_sjlj,1)))
 else

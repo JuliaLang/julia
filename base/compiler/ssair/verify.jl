@@ -20,7 +20,7 @@ if !isdefined(@__MODULE__, Symbol("@verify_error"))
     end
 end
 
-function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
+function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, use_idx::Int, printed_use_idx::Int, print::Bool, isforeigncall::Bool, arg_idx::Int, allow_frontend_forms::Bool)
     if isa(op, SSAValue)
         if op.id > length(ir.stmts)
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
@@ -39,7 +39,7 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
         else
             if !dominates(domtree, def_bb, use_bb) && !(bb_unreachable(domtree, def_bb) && bb_unreachable(domtree, use_bb))
                 # At the moment, we allow GC preserve tokens outside the standard domination notion
-                @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value $(op.id))"
+                @verify_error "Basic Block $def_bb does not dominate block $use_bb (tried to use value %$(op.id) at %$(printed_use_idx))"
                 error("")
             end
         end
@@ -85,6 +85,39 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
     # @assert isempty(ir.new_nodes)
     # Verify CFG
     last_end = 0
+    # Verify CFG graph. Must be well formed to construct domtree
+    for (idx, block) in pairs(ir.cfg.blocks)
+        for p in block.preds
+            p == 0 && continue
+            if !(1 <= p <= length(ir.cfg.blocks))
+                @verify_error "Predecessor $p of block $idx out of bounds for IR"
+                error("")
+            end
+            c = count_int(idx, ir.cfg.blocks[p].succs)
+            if c == 0
+                @verify_error "Predecessor $p of block $idx not in successor list"
+                error("")
+            elseif c == 2
+                if count_int(p, block.preds) != 2
+                    @verify_error "Double edge from $p to $idx not correctly accounted"
+                    error("")
+                end
+            end
+        end
+        for s in block.succs
+            if !(1 <= s <= length(ir.cfg.blocks))
+                @verify_error "Successor $s of block $idx out of bounds for IR"
+                error("")
+            end
+            if !(idx in ir.cfg.blocks[s].preds)
+                #@Base.show ir.cfg
+                #@Base.show ir
+                #@Base.show ir.argtypes
+                @verify_error "Successor $s of block $idx not in predecessor list"
+                error("")
+            end
+        end
+    end
     # Verify statements
     domtree = construct_domtree(ir.cfg.blocks)
     for (idx, block) in pairs(ir.cfg.blocks)
@@ -97,19 +130,6 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
         terminator = ir.stmts[last_end][:inst]
 
         bb_unreachable(domtree, idx) && continue
-        for p in block.preds
-            p == 0 && continue
-            c = count_int(idx, ir.cfg.blocks[p].succs)
-            if c == 0
-                @verify_error "Predecessor $p of block $idx not in successor list"
-                error("")
-            elseif c == 2
-                if count_int(p, block.preds) != 2
-                    @verify_error "Double edge from $p to $idx not correctly accounted"
-                    error("")
-                end
-            end
-        end
         if isa(terminator, ReturnNode)
             if !isempty(block.succs)
                 @verify_error "Block $idx ends in return or unreachable, but has successors"
@@ -151,15 +171,6 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 error("")
             end
         end
-        for s in block.succs
-            if !(idx in ir.cfg.blocks[s].preds)
-                #@Base.show ir.cfg
-                #@Base.show ir
-                #@Base.show ir.argtypes
-                @verify_error "Successor $s of block $idx not in predecessor list"
-                error("")
-            end
-        end
     end
     for (bb, idx) in bbidxiter(ir)
         # We allow invalid IR in dead code to avoid passes having to detect when
@@ -186,6 +197,12 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                     error("")
                 end
                 edge == 0 && continue
+                if bb_unreachable(domtree, Int(edge))
+                    # TODO: Disallow?
+                    #@verify_error "Unreachable edge from #$edge should have been cleaned up at idx $idx"
+                    #error("")
+                    continue
+                end
                 isassigned(stmt.values, i) || continue
                 val = stmt.values[i]
                 phiT = ir.stmts[idx][:type]
@@ -199,7 +216,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                         #error("")
                     end
                 end
-                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, print, false, i, allow_frontend_forms)
+                check_op(ir, domtree, val, Int(edge), last(ir.cfg.blocks[stmt.edges[i]].stmts)+1, idx, print, false, i, allow_frontend_forms)
             end
         elseif isa(stmt, PhiCNode)
             for i = 1:length(stmt.values)
@@ -213,11 +230,21 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                     error("")
                 end
             end
+        elseif (isa(stmt, GotoNode) || isa(stmt, GotoIfNot) || isexpr(stmt, :enter)) && idx != last(ir.cfg.blocks[bb].stmts)
+            @verify_error "Terminator $idx in bb $bb is not the last statement in the block"
+            error("")
         else
             if isa(stmt, Expr) || isa(stmt, ReturnNode) # TODO: make sure everything has line info
+                if (stmt isa ReturnNode)
+                    if isdefined(stmt, :val)
+                        # TODO: Disallow unreachable returns?
+                        # bb_unreachable(domtree, Int64(edge))
+                    else
+                        #@verify_error "Missing line number information for statement $idx of $ir"
+                    end
+                end
                 if !(stmt isa ReturnNode && !isdefined(stmt, :val)) # not actually a return node, but an unreachable marker
                     if ir.stmts[idx][:line] <= 0
-                        #@verify_error "Missing line number information for statement $idx of $ir"
                     end
                 end
             end
@@ -254,7 +281,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
             n = 1
             for op in userefs(stmt)
                 op = op[]
-                check_op(ir, domtree, op, bb, idx, print, isforeigncall, n, allow_frontend_forms)
+                check_op(ir, domtree, op, bb, idx, idx, print, isforeigncall, n, allow_frontend_forms)
                 n += 1
             end
         end

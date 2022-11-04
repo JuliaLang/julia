@@ -300,7 +300,7 @@ end
     @test eltype([tryparse(Complex{Int}, s) for s in String[]]) == Union{Nothing, Complex{Int}}
 end
 
-@testset "isssue #29980" begin
+@testset "issue #29980" begin
     @test parse(Bool, "1") === true
     @test parse(Bool, "01") === true
     @test parse(Bool, "0") === false
