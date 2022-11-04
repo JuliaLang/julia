@@ -777,6 +777,8 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
             immediate = 1;
         else if (jl_is_datatype(v))
             immediate = 1;
+        else if (jl_isbits(jl_typeof(v)))
+            immediate = 1;
         else if (s->incremental && needs_uniquing(v)) {
             immediate = 1;
             if (jl_is_method_instance(v)) {
