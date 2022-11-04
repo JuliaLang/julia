@@ -2238,7 +2238,6 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
     end
     if isnothing(name_kind)
         name_kind = k == K"Identifier" ? K"MacroName" :
-                    k == K"."          ? K"@."        :
                     internal_error("unrecognized source kind for macro name ", k)
     end
     reset_node!(ps, macro_name_position, kind=name_kind)
@@ -2249,21 +2248,13 @@ end
 #
 # flisp: parse-macro-name
 function parse_macro_name(ps::ParseState)
+    # @! x   ==>  (macrocall @! x)
+    # @.. x  ==>  (macrocall @.. x)
+    # @$ x   ==>  (macrocall @$ x)
+    # @var"#" x   ==>  (macrocall (var #) @$ x)
     bump_disallowed_space(ps)
-    mark = position(ps)
-    k = peek(ps)
-    if k == K"."
-        # TODO: deal with __dot__ lowering in Expr conversion?
-        # @. y  ==>  (macrocall @__dot__ y)
-        bump(ps)
-    else
-        # @! x   ==>  (macrocall @! x)
-        # @.. x  ==>  (macrocall @.. x)
-        # @$ x   ==>  (macrocall @$ x)
-        # @var"#" x   ==>  (macrocall (var #) @$ x)
-        let ps = with_space_sensitive(ps)
-            parse_atom(ps, false)
-        end
+    let ps = with_space_sensitive(ps)
+        parse_atom(ps, false)
     end
 end
 
@@ -3402,7 +3393,6 @@ function parse_atom(ps::ParseState, check_identifiers=true)
     elseif leading_kind == K"@" # macro call
         # Macro names can be keywords
         # @end x  ==> (macrocall @end x)
-        # @. x y  ==> (macrocall @__dot__ x y)
         bump(ps, TRIVIA_FLAG)
         parse_macro_name(ps)
         parse_call_chain(ps, mark, true)

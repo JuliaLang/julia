@@ -852,7 +852,6 @@ const _kind_names =
         # like CORE_DOC_MACRO_NAME)
         "BEGIN_MACRO_NAMES"
             "MacroName"
-            "@."
             "StringMacroName"
             "CmdMacroName"
             "core_@doc"

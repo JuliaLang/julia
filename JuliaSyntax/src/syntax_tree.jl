@@ -74,8 +74,6 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
             nothing
         elseif k == K"error"
             ErrorVal()
-        elseif k == K"@."
-            :var"@__dot__"
         elseif k == K"MacroName"
             Symbol("@$(normalize_identifier(val_str))")
         elseif k == K"StringMacroName"
