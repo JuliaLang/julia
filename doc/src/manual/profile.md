@@ -303,8 +303,8 @@ provides several tools measure this:
 
 ### `@time`
 
-The total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
-specific lines triggering allocation can often be inferred from profiling via the cost of garbage
+The total amount of allocation can be measured with [`@time`](@ref), [`@allocated`](@ref) and [`@allocations`](@ref),
+and specific lines triggering allocation can often be inferred from profiling via the cost of garbage
 collection that these lines incur. However, sometimes it is more efficient to directly measure
 the amount of memory allocated by each line of code.
 
