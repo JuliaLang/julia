@@ -1398,7 +1398,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.Builtin)
         argtypes = Any[to_tuple_type(types).parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Any[rt]
+        return Any[Core.Compiler.widenconst(rt)]
     end
     rts = []
     for match in _methods(f, types, -1, world)::Vector
