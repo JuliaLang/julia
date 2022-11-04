@@ -2,21 +2,12 @@
 
 module Sort
 
-import ..@__MODULE__, ..parentmodule
-const Base = parentmodule(@__MODULE__)
-using .Base.Order
+using Base.Order
 
-using .Base: length, first, last, axes, firstindex, lastindex, eltype,
-    similar, iterate, keytype, copymutable, fill, eachindex, zip,
-    copyto!, reverse!, resize!, require_one_based_indexing,
-    AbstractVector, Vector, AbstractRange, OrdinalRange, UnitRange, LinearIndices, OneTo,
-    identity, isless, min, max, extrema, sub_with_overflow, add_with_overflow, oneunit,
-    reinterpret, signed, unsigned, Signed, Unsigned, typemin, Type, BitSigned, Val,
-    Missing, missing, ismissing, @eval, @inbounds, @inline, @noinline,
-    (:), >, <, <=, >=, ==, !=, ===, |, +, -, *, !, <<, >>, &, >>>, !==, div, xor,
-    midpoint, @boundscheck, checkbounds, hash
+using Base: copymutable, midpoint, require_one_based_indexing,
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType
 
-import .Base:
+import Base:
     sort,
     sort!,
     issorted,
@@ -95,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    sort!(v, PartialQuickSort(k), o)
+    sort!(v, _PartialQuickSort(k), o)
     maybeview(v, k)
 end
 
@@ -107,10 +98,9 @@ maybeview(v, k::Integer) = v[k]
 
 Partially sort the vector `v` in place, according to the order specified by `by`, `lt` and
 `rev` so that the value at index `k` (or range of adjacent values if `k` is a range) occurs
-at the position where it would appear if the array were fully sorted via a non-stable
-algorithm. If `k` is a single index, that value is returned; if `k` is a range, an array of
-values at those indices is returned. Note that `partialsort!` does not fully sort the input
-array.
+at the position where it would appear if the array were fully sorted. If `k` is a single
+index, that value is returned; if `k` is a range, an array of values at those indices is
+returned. Note that `partialsort!` may not fully sort the input array.
 
 # Examples
 ```jldoctest
@@ -445,6 +435,8 @@ struct PartialQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}} <:
 end
 PartialQuickSort(k::Integer) = PartialQuickSort(missing, k)
 PartialQuickSort(k::OrdinalRange) = PartialQuickSort(first(k), last(k))
+_PartialQuickSort(k::Integer) = PartialQuickSort(k, k)
+_PartialQuickSort(k::OrdinalRange) = PartialQuickSort(k)
 
 """
     InsertionSort
@@ -634,7 +626,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, a::MergeSortAlg, 
 
         t = t0 === nothing ? similar(v, m-lo+1) : t0
         length(t) < m-lo+1 && resize!(t, m-lo+1)
-        Base.require_one_based_indexing(t)
+        require_one_based_indexing(t)
 
         sort!(v, lo,  m,  a, o, t)
         sort!(v, m+1, hi, a, o, t)
@@ -881,9 +873,6 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 function sort!(v::AbstractVector{T}, alg::Algorithm,
                order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
@@ -898,15 +887,15 @@ end
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. [`QuickSort`](@ref) is used by default for numeric arrays while
-[`MergeSort`](@ref) is used for other arrays. You can specify an algorithm to use via the `alg`
-keyword (see [Sorting Algorithms](@ref) for available algorithms). The `by` keyword lets you provide
-a function that will be applied to each element before comparison; the `lt` keyword allows
-providing a custom "less than" function (note that for every `x` and `y`, only one of `lt(x,y)`
-and `lt(y,x)` can return `true`); use `rev=true` to reverse the sorting order. These
-options are independent and can be used together in all possible combinations: if both `by`
-and `lt` are specified, the `lt` function is applied to the result of the `by` function;
-`rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
+Sort the vector `v` in place. A stable algorithm is used by default. You can select a
+specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for
+available algorithms). The `by` keyword lets you provide a function that will be applied to
+each element before comparison; the `lt` keyword allows providing a custom "less than"
+function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
+`true`); use `rev=true` to reverse the sorting order. These options are independent and can
+be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
+function is applied to the result of the `by` function; `rev=true` reverses whatever
+ordering specified via the `by` and `lt` keywords.
 
 # Examples
 ```jldoctest
@@ -1091,7 +1080,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
+    sort!(ix, _PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
 
     maybeview(ix, k)
 end
@@ -1249,7 +1238,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -1277,7 +1266,7 @@ julia> sort(A, dims = 2)
 """
 function sort(A::AbstractArray{T};
               dims::Integer,
-              alg::Algorithm=DEFAULT_UNSTABLE,
+              alg::Algorithm=defalg(A),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
@@ -1411,10 +1400,7 @@ uint_map(x::Signed, ::ForwardOrdering) =
 uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
-# unsigned(Int) is not available during bootstrapping.
-for (U, S) in [(UInt8, Int8), (UInt16, Int16), (UInt32, Int32), (UInt64, Int64), (UInt128, Int128)]
-    @eval UIntMappable(::Union{Type{$U}, Type{$S}}, ::ForwardOrdering) = $U
-end
+UIntMappable(T::BitIntegerType, ::ForwardOrdering) = unsigned(T)
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
 # uint mappings for floats are defined in Float, where the Left and Right orderings
@@ -1456,14 +1442,12 @@ end
 module Float
 using ..Sort
 using ...Order
-using ..Base: @inbounds, AbstractVector, Vector, last, firstindex, lastindex, Missing, Type, reinterpret
+using Base: IEEEFloat
 
 import Core.Intrinsics: slt_int
 import ..Sort: sort!, UIntMappable, uint_map, uint_unmap
 import ...Order: lt, DirectOrdering
 
-# IEEEFloat is not available in Core.Compiler
-const Floats = Union{Float16, Float32, Float64}
 # fpsort is not safe for vectors of mixed bitwidth such as Vector{Union{Float32, Float64}}.
 # This type allows us to dispatch only when it is safe to do so. See #42739 for more info.
 const FPSortable = Union{
@@ -1484,8 +1468,8 @@ right(::DirectOrdering) = Right()
 left(o::Perm) = Perm(left(o.order), o.data)
 right(o::Perm) = Perm(right(o.order), o.data)
 
-lt(::Left, x::T, y::T) where {T<:Floats} = slt_int(y, x)
-lt(::Right, x::T, y::T) where {T<:Floats} = slt_int(x, y)
+lt(::Left, x::T, y::T) where {T<:IEEEFloat} = slt_int(y, x)
+lt(::Right, x::T, y::T) where {T<:IEEEFloat} = slt_int(x, y)
 
 uint_map(x::Float16, ::Left) = ~reinterpret(UInt16, x)
 uint_unmap(::Type{Float16}, u::UInt16, ::Left) = reinterpret(Float16, ~u)
@@ -1505,11 +1489,11 @@ uint_map(x::Float64, ::Right) = reinterpret(UInt64, x)
 uint_unmap(::Type{Float64}, u::UInt64, ::Right) = reinterpret(Float64, u)
 UIntMappable(::Type{Float64}, ::Union{Left, Right}) = UInt64
 
-isnan(o::DirectOrdering, x::Floats) = (x!=x)
+isnan(o::DirectOrdering, x::IEEEFloat) = (x!=x)
 isnan(o::DirectOrdering, x::Missing) = false
 isnan(o::Perm, i::Integer) = isnan(o.order,o.data[i])
 
-ismissing(o::DirectOrdering, x::Floats) = false
+ismissing(o::DirectOrdering, x::IEEEFloat) = false
 ismissing(o::DirectOrdering, x::Missing) = true
 ismissing(o::Perm, i::Integer) = ismissing(o.order,o.data[i])
 
@@ -1581,8 +1565,8 @@ specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ForwardOrder
 specials2end!(v::AbstractVector{<:Integer}, a::Algorithm, o::Perm{<:ReverseOrdering}) =
     specials2left!(v, a, o)
 
-issignleft(o::ForwardOrdering, x::Floats) = lt(o, x, zero(x))
-issignleft(o::ReverseOrdering, x::Floats) = lt(o, x, -zero(x))
+issignleft(o::ForwardOrdering, x::IEEEFloat) = lt(o, x, zero(x))
+issignleft(o::ReverseOrdering, x::IEEEFloat) = lt(o, x, -zero(x))
 issignleft(o::Perm, i::Integer) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector{T}, a::Algorithm, o::Ordering,

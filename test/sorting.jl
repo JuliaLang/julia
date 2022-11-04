@@ -711,7 +711,7 @@ end
     @test partialsort(v, 172, lt = <=) == s[172]
     @test partialsort(v, 315:415, lt = <=) == s[315:415]
 
-    # ...and it is consistantly reverse stable. All these algorithms swap v[i] and v[j]
+    # ...and it is consistently reverse stable. All these algorithms swap v[i] and v[j]
     # where i < j if and only if lt(o, v[j], v[i]). This invariant holds even for
     # this invalid lt order.
     perm = reverse(sortperm(v, rev=true))

@@ -327,7 +327,7 @@ typedef struct _jl_method_t {
     // A function that compares two specializations of this method, returning
     // `true` if the first signature is to be considered "smaller" than the
     // second for purposes of recursion analysis. Set to NULL to use
-    // the default recusion relation.
+    // the default recursion relation.
     jl_value_t *recursion_relation;
 
     uint32_t nargs;
@@ -516,6 +516,7 @@ typedef struct {
 } jl_fielddesc32_t;
 
 typedef struct {
+    uint32_t size;
     uint32_t nfields;
     uint32_t npointers; // number of pointers embedded inside
     int32_t first_ptr; // index of the first pointer (or -1)
@@ -542,7 +543,6 @@ typedef struct _jl_datatype_t {
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
-    int32_t size; // TODO: move to _jl_datatype_layout_t
     // memoized properties
     uint32_t hash;
     uint8_t hasfreetypevars:1; // majority part of isconcrete computation
@@ -552,6 +552,7 @@ typedef struct _jl_datatype_t {
     uint8_t zeroinit:1; // if one or more fields requires zero-initialization
     uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
     uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
+    uint8_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -656,7 +657,6 @@ typedef struct _jl_methtable_t {
     _Atomic(jl_array_t*) leafcache;
     _Atomic(jl_typemap_t*) cache;
     intptr_t max_args;  // max # of non-vararg arguments in a signature
-    jl_value_t *kwsorter;  // keyword argument sorter function
     jl_module_t *module; // used for incremental serialization to locate original binding
     jl_array_t *backedges; // (sig, caller::MethodInstance) pairs
     jl_mutex_t writelock;
@@ -806,6 +806,7 @@ extern JL_DLLIMPORT jl_value_t *jl_emptytuple JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_true JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_false JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_nothing JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_value_t *jl_kwcall_func JL_GLOBALLY_ROOTED;
 
 // gc -------------------------------------------------------------------------
 
@@ -1097,9 +1098,9 @@ STATIC_INLINE jl_value_t *jl_field_type_concrete(jl_datatype_t *st JL_PROPAGATES
     return jl_svecref(st->types, i);
 }
 
-#define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
+#define jl_datatype_size(t)    (((jl_datatype_t*)t)->layout->size)
 #define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
-#define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
+#define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->layout->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
@@ -1276,17 +1277,14 @@ STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT
 
 STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
 {
-    return (jl_is_datatype(v) && jl_is_immutable(v) &&
-            ((jl_datatype_t*)(v))->layout &&
-            jl_datatype_nfields(v) == 0 &&
-            jl_datatype_size(v) > 0);
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->isprimitivetype);
 }
 
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
             !((jl_datatype_t*)(v))->name->abstract &&
-            !jl_is_primitivetype(v));
+            !((jl_datatype_t*)(v))->isprimitivetype);
 }
 
 STATIC_INLINE int jl_isbits(void *t) JL_NOTSAFEPOINT // corresponding to isbitstype() in julia
@@ -1496,7 +1494,6 @@ JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, 
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
 JL_DLLEXPORT size_t jl_get_world_counter(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_function_t *jl_get_kwsorter(jl_value_t *ty);
 JL_DLLEXPORT jl_value_t *jl_box_bool(int8_t x) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_int8(int8_t x) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x) JL_NOTSAFEPOINT;
@@ -2222,8 +2219,10 @@ typedef struct {
 
     // controls the emission of debug-info. mirrors the clang options
     int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
-    int debug_info_kind; // Enum for line-table-only, line-directives-only,
+    int debug_info_kind;    // Enum for line-table-only, line-directives-only,
                             // limited, standalone
+
+    int safepoint_on_entry; // Emit a safepoint on entry to each function
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;

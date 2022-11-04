@@ -26,7 +26,7 @@ for i1 = 1:length(u8str2)
 end
 
 # tests that SubString of a single multibyte `Char` string, like "∀" which takes 3 bytes
-# gives the same result as `getindex` (except that it is a veiw not a copy)
+# gives the same result as `getindex` (except that it is a view not a copy)
 for idx in 0:1
     @test SubString("∀", 1, idx) == "∀"[1:idx]
 end

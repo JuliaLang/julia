@@ -2,8 +2,8 @@
 
 import re, sys
 
-# This script designed to mimick `src/PlatformNames.jl` in `BinaryProvider.jl`, which has
-# a method `platform_key_abi()` to parse uname-like output into something standarized.
+# This script designed to mimic `src/PlatformNames.jl` in `BinaryProvider.jl`, which has
+# a method `platform_key_abi()` to parse uname-like output into something standardized.
 
 if len(sys.argv) < 2:
     print("Usage: {} <host triplet> [<gcc version>] [<cxxabi11>]".format(sys.argv[0]))

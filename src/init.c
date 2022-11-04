@@ -854,6 +854,9 @@ static void post_boot_hooks(void)
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
     jl_pair_type           = core("Pair");
+    jl_kwcall_func         = core("kwcall");
+    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
+    jl_kwcall_mt->max_args = 0;
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

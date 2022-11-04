@@ -24,12 +24,12 @@ function hasuniquerep(@nospecialize t)
 end
 
 """
-    isTypeDataType(@nospecialize t)
+    isTypeDataType(@nospecialize t) -> Bool
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
-(potentially wrapped in some UnionAll), then we are guaranteed that this statement
-will be a DataType at runtime (and not e.g. a Union or UnionAll typeequal to it).
+(potentially wrapped in some `UnionAll`), then we are guaranteed that this statement
+will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
 """
 function isTypeDataType(@nospecialize t)
     isa(t, DataType) || return false
@@ -41,7 +41,7 @@ function isTypeDataType(@nospecialize t)
         # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
         # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
         # is not.
-        return _all(isTypeDataType, t.parameters)
+        return all(isTypeDataType, t.parameters)
     end
     return true
 end
@@ -369,7 +369,7 @@ function _is_mutation_free_type(@nospecialize ty)
     if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
         return true
     end
-    # this is okay as access and modifcation on global state are tracked separately
+    # this is okay as access and modification on global state are tracked separately
     ty === Module && return true
     # TODO improve this analysis, e.g. allow `Some{Symbol}`
     return isbitstype(ty)

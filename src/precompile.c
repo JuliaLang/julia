@@ -268,7 +268,7 @@ static void jl_compile_all_defs(jl_array_t *mis)
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
         if (jl_isa_compileable_sig((jl_tupletype_t*)m->sig, m)) {
-            // method has a single compileable specialization, e.g. its definition
+            // method has a single compilable specialization, e.g. its definition
             // signature is concrete. in this case we can just hint it.
             jl_compile_hint((jl_tupletype_t*)m->sig);
         }

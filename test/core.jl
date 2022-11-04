@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :min_world, :max_world, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
+        (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
         (Core.MethodTable, [:module]),
@@ -4858,6 +4858,13 @@ let a = Any[]
     @test (push!(a,10); f()) - (push!(a,2); f()) == 8
     @test a == [10, 2]
 end
+
+# issue 47209
+struct f47209
+    x::Int
+    f47209()::Nothing = new(1)
+end
+@test_throws MethodError f47209()
 
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},

@@ -121,7 +121,7 @@ end
     struct NotFound end
     const NOT_FOUND = NotFound()
 
-A special sigleton that represents a variable has not been analyzed yet.
+A special singleton that represents a variable has not been analyzed yet.
 Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a new `InferenceState`.
 Note that this is only used for `smerge`, which updates abstract state `VarTable`,
 and thus we don't define the lattice for this.
@@ -221,11 +221,12 @@ function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
 end
 
 function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
-        return false
+    if isa(a, MaybeUndef)
+        isa(b, MaybeUndef) || return false
+        a, b = a.typ, b.typ
+    elseif isa(b, MaybeUndef)
+        b = b.typ
     end
-    isa(a, MaybeUndef) && (a = a.typ)
-    isa(b, MaybeUndef) && (b = b.typ)
     return ⊑(widenlattice(lattice), a, b)
 end
 
@@ -235,15 +236,15 @@ function ⊑(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b)
     a === Any && return false
     a === Union{} && return true
     b === Union{} && return false
-    T = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
-    if isa(a, T)
-        if isa(b, T)
+    ConditionalT = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
+    if isa(a, ConditionalT)
+        if isa(b, ConditionalT)
             return issubconditional(lattice, a, b)
         elseif isa(b, Const) && isa(b.val, Bool)
             return maybe_extract_const_bool(a) === b.val
         end
         a = Bool
-    elseif isa(b, T)
+    elseif isa(b, ConditionalT)
         return false
     end
     return ⊑(widenlattice(lattice), a, b)
@@ -348,7 +349,8 @@ function is_lattice_equal(lattice::OptimizerLattice, @nospecialize(a), @nospecia
 end
 
 function is_lattice_equal(lattice::AnyConditionalsLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, AnyConditional) || isa(b, AnyConditional)
+    ConditionalT = isa(lattice, ConditionalsLattice) ? Conditional : InterConditional
+    if isa(a, ConditionalT) || isa(b, ConditionalT)
         # TODO: Unwrap these and recurse to is_lattice_equal
         return ⊑(lattice, a, b) && ⊑(lattice, b, a)
     end

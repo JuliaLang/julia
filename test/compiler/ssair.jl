@@ -527,3 +527,26 @@ end
     ir = Core.Compiler.complete(compact)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
+
+# insert_node! for pending node
+import Core: SSAValue
+import Core.Compiler: NewInstruction, insert_node!
+let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+        a^b
+    end |> only |> first
+    @test length(ir.stmts) == 2
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+
+    newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+    newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
+
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.stmts) == 4
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+    call1 = ir.stmts[2][:inst]
+    @test iscall((ir,println), call1)
+    @test call1.args[2] === SSAValue(1)
+    call2 = ir.stmts[3][:inst]
+    @test iscall((ir,println), call2)
+    @test call2.args[2] === SSAValue(2)
+end

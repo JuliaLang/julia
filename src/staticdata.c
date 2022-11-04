@@ -81,7 +81,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    156
+#define NUM_TAGS    157
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -223,6 +223,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_typeinf_func);
         INSERT_TAG(jl_type_type_mt);
         INSERT_TAG(jl_nonfunction_mt);
+        INSERT_TAG(jl_kwcall_func);
 
         // some Core.Builtin Functions that we want to be able to reference:
         INSERT_TAG(jl_builtin_throw);
@@ -310,7 +311,7 @@ static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
     &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
     &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
-    &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call, &jl_f_invoke_kwsorter,
+    &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields,
     &jl_f_arrayref, &jl_f_const_arrayref, &jl_f_arrayset, &jl_f_arraysize, &jl_f_apply_type,
@@ -365,12 +366,12 @@ typedef enum {
 } jl_callingconv_t;
 
 
-//#ifdef _P64
-//#define RELOC_TAG_OFFSET 61
-//#else
+#ifdef _P64
+#define RELOC_TAG_OFFSET 61
+#else
 // this supports up to 8 RefTags, 512MB of pointer data, and 4/2 (64/32-bit) GB of constant data.
 #define RELOC_TAG_OFFSET 29
-//#endif
+#endif
 
 #if RELOC_TAG_OFFSET <= 32
 typedef uint32_t reloc_t;
@@ -1031,8 +1032,7 @@ static void jl_write_values(jl_serializer_state *s)
         }
         else if (jl_datatype_nfields(t) == 0) {
             assert(t->layout->npointers == 0);
-            if (t->size > 0)
-                ios_write(s->s, (char*)v, t->size);
+            ios_write(s->s, (char*)v, jl_datatype_size(t));
         }
         else if (jl_bigint_type && jl_typeis(v, jl_bigint_type)) {
             // foreign types require special handling
@@ -1132,7 +1132,7 @@ static void jl_write_values(jl_serializer_state *s)
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
                                     ios_seek(s->fptr_record, (invokeptr_id - 1) * sizeof(void*));
-                                    write_reloc_t(s->fptr_record, (uint32_t)~reloc_offset);
+                                    write_reloc_t(s->fptr_record, (reloc_t)~reloc_offset);
 #ifdef _P64
                                     if (sizeof(reloc_t) < 8)
                                         write_padding(s->fptr_record, 8 - sizeof(reloc_t));
@@ -1224,7 +1224,7 @@ static void jl_write_values(jl_serializer_state *s)
                 arraylist_push(&reinit_list, (void*)1);
             }
             else {
-                write_padding(s->s, t->size - tot);
+                write_padding(s->s, jl_datatype_size(t) - tot);
             }
         }
     }
@@ -1408,41 +1408,71 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
 }
 
 
-static void jl_write_skiplist(ios_t *s, char *base, size_t size, arraylist_t *list)
+static void jl_write_reloclist(ios_t *s, char *base, size_t size, arraylist_t *list)
 {
-    size_t i;
-    for (i = 0; i < list->len; i += 2) {
+    for (size_t i = 0; i < list->len; i += 2) {
+        size_t last_pos = i ? (size_t)list->items[i - 2] : 0;
         size_t pos = (size_t)list->items[i];
         size_t item = (size_t)list->items[i + 1];
         uintptr_t *pv = (uintptr_t*)(base + pos);
         assert(pos < size && pos != 0);
         *pv = get_reloc_for_item(item, *pv);
-        // record pos in relocations list
-        // TODO: save space by using delta-compression
-        write_reloc_t(s, pos);
+
+        // write pos as compressed difference.
+        size_t pos_diff = pos - last_pos;
+        while (pos_diff) {
+            assert(pos_diff >= 0);
+            if (pos_diff <= 127) {
+                write_int8(s, pos_diff);
+                break;
+            }
+            else {
+                // Extract the next 7 bits
+                int8_t ns = pos_diff & (int8_t)0x7F;
+                pos_diff >>= 7;
+                // Set the high bit if there's still more
+                ns |= (!!pos_diff) << 7;
+                write_int8(s, ns);
+            }
+        }
     }
-    write_reloc_t(s, 0);
+    write_int8(s, 0);
 }
 
 
 static void jl_write_relocations(jl_serializer_state *s)
 {
     char *base = &s->s->buf[0];
-    jl_write_skiplist(s->relocs, base, s->s->size, &s->gctags_list);
-    jl_write_skiplist(s->relocs, base, s->s->size, &s->relocs_list);
+    jl_write_reloclist(s->relocs, base, s->s->size, &s->gctags_list);
+    jl_write_reloclist(s->relocs, base, s->s->size, &s->relocs_list);
 }
 
-
-static void jl_read_relocations(jl_serializer_state *s, uint8_t bits)
+static void jl_read_reloclist(jl_serializer_state *s, uint8_t bits)
 {
-    uintptr_t base = (uintptr_t)&s->s->buf[0];
+    uintptr_t base = (uintptr_t)s->s->buf;
     size_t size = s->s->size;
+    uintptr_t last_pos = 0;
+    uint8_t *current = (uint8_t *)(s->relocs->buf + s->relocs->bpos);
     while (1) {
-        uintptr_t offset = *(reloc_t*)&s->relocs->buf[(uintptr_t)s->relocs->bpos];
-        s->relocs->bpos += sizeof(reloc_t);
-        if (offset == 0)
+        // Read the offset of the next object
+        size_t pos_diff = 0;
+        size_t cnt = 0;
+        while (1) {
+            assert(s->relocs->bpos <= s->relocs->size);
+            assert((char *)current <= (char *)(s->relocs->buf + s->relocs->size));
+            int8_t c = *current++;
+            s->relocs->bpos += 1;
+
+            pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
+            if ((c >> 7) == 0)
+                break;
+        }
+        if (pos_diff == 0)
             break;
-        uintptr_t *pv = (uintptr_t*)(base + offset);
+
+        uintptr_t pos = last_pos + pos_diff;
+        last_pos = pos;
+        uintptr_t *pv = (uintptr_t *)(base + pos);
         uintptr_t v = *pv;
         v = get_item_for_reloc(s, base, size, v);
         *pv = v | bits;
@@ -1453,16 +1483,27 @@ static char *sysimg_base;
 static char *sysimg_relocs;
 void gc_sweep_sysimg(void)
 {
-    char *base = sysimg_base;
-    reloc_t *relocs = (reloc_t*)sysimg_relocs;
-    if (relocs == NULL)
+    if (!sysimg_relocs)
         return;
+    uintptr_t base = (uintptr_t)sysimg_base;
+    uintptr_t last_pos = 0;
+    uint8_t *current = (uint8_t *)sysimg_relocs;
     while (1) {
-        uintptr_t offset = *relocs;
-        relocs++;
-        if (offset == 0)
+        // Read the offset of the next object
+        size_t pos_diff = 0;
+        size_t cnt = 0;
+        while (1) {
+            int8_t c = *current++;
+            pos_diff |= ((size_t)c & 0x7F) << (7 * cnt++);
+            if ((c >> 7) == 0)
+                break;
+        }
+        if (pos_diff == 0)
             break;
-        jl_taggedvalue_t *o = (jl_taggedvalue_t*)(base + offset);
+
+        uintptr_t pos = last_pos + pos_diff;
+        last_pos = pos;
+        jl_taggedvalue_t *o = (jl_taggedvalue_t *)(base + pos);
         o->bits.gc = GC_OLD;
     }
 }
@@ -2219,15 +2260,17 @@ static void jl_restore_system_image_from_stream(ios_t *f) JL_GC_DISABLED
     jl_gc_set_permalloc_region((void*)sysimg_base, (void*)(sysimg_base + sysimg.size));
 
     s.s = &sysimg;
-    jl_read_relocations(&s, GC_OLD); // gctags
+    jl_read_reloclist(&s, GC_OLD); // gctags
     size_t sizeof_tags = ios_pos(&relocs);
     (void)sizeof_tags;
-    jl_read_relocations(&s, 0); // general relocs
+    jl_read_reloclist(&s, 0); // general relocs
     ios_close(&relocs);
     ios_close(&const_data);
     jl_update_all_gvars(&s); // gvars relocs
     ios_close(&gvar_record);
     s.s = NULL;
+
+    jl_kwcall_mt = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
 
     s.s = f;
     // reinit items except ccallables
