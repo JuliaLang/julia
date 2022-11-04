@@ -235,6 +235,7 @@
     XX(jl_get_ptls_states) \
     XX(jl_get_root_symbol) \
     XX(jl_get_safe_restore) \
+    XX(jl_get_sanitizer_attr) \
     XX(jl_get_size) \
     XX(jl_get_task_tid) \
     XX(jl_get_task_threadpoolid) \

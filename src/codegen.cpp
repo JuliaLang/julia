@@ -2117,7 +2117,7 @@ static void jl_init_function(Function *F)
     attr.addAttribute("probe-stack", "inline-asm");
     //attr.addAttribute("stack-probe-size", "4096"); // can use this to change the default
 #endif
-    int8_t sanitizer_attr = get_sanitizer_attribute();
+    int sanitizer_attr = jl_get_sanitizer_attr();
     switch (sanitizer_attr) {
         case 0:
             break;

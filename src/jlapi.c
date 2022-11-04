@@ -330,6 +330,20 @@ JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT
 #endif
 }
 
+
+JL_DLLEXPORT int jl_get_sanitizer_attr(void) JL_NOTSAFEPOINT
+{
+#if defined(_COMPILER_ASAN_ENABLED_)
+    return 1;
+#elif defined(_COMPILER_MSAN_ENABLED_)
+    return 2;
+#elif defined(_COMPILER_TSAN_ENABLED_)
+    return 3;
+#else
+    return jl_options.emit_sanitizer;
+#endif
+}
+
 JL_DLLEXPORT int8_t jl_is_memdebug(void) JL_NOTSAFEPOINT {
 #ifdef MEMDEBUG
     return 1;

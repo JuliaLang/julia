@@ -1576,17 +1576,6 @@ static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const std::string 
     error_unless(ctx, emit_isconcrete(ctx, typ), msg);
 }
 
-static int8_t get_sanitizer_attribute() {
-#if defined(_COMPILER_ASAN_ENABLED_)
-    return 1;
-#elif defined(_COMPILER_MSAN_ENABLED_)
-    return 2;
-#elif defined(_COMPILER_TSAN_ENABLED_)
-    return 3;
-#else
-    return jl_options.emit_sanitizer;
-#endif
-}
 
 #define CHECK_BOUNDS 1
 static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {

@@ -6,6 +6,7 @@ include("pcre.jl")
 
 const DEFAULT_COMPILER_OPTS = PCRE.UTF | PCRE.MATCH_INVALID_UTF | PCRE.ALT_BSUX | PCRE.UCP
 const DEFAULT_MATCH_OPTS = PCRE.NO_UTF_CHECK
+const SHOULD_JIT = ccall(:jl_get_sanitizer_attr, Cint, ()) != 2
 
 """
     Regex(pattern[, flags])
@@ -66,14 +67,14 @@ function compile(regex::Regex)
     if regex.regex == C_NULL
         if PCRE.PCRE_COMPILE_LOCK === nothing
             regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
-            # PCRE.jit_compile(regex.regex)
+            SHOULD_JIT && PCRE.jit_compile(regex.regex)
         else
             l = PCRE.PCRE_COMPILE_LOCK::Threads.SpinLock
             lock(l)
             try
                 if regex.regex == C_NULL
                     regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
-                    # PCRE.jit_compile(regex.regex)
+                    SHOULD_JIT && PCRE.jit_compile(regex.regex)
                 end
             finally
                 unlock(l)
