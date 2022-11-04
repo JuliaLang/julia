@@ -157,6 +157,7 @@ or used in other expressions, and is also why their result is shown in the REPL 
 the value of the right-hand side.  (In general, the REPL displays the value of whatever
 expression you evaluate.)  For example, here the value `4` of `b = 2+2` is
 used in another arithmetic operation and assignment:
+
 ```jldoctest
 julia> a = (b = 2+2) + 3
 7
@@ -173,6 +174,7 @@ and *mutation* (changing a value).  If you run `a = 2` followed by `a = 3`, you 
 the "name" `a` to refer to a new value `3` … you haven't changed the number `2`, so `2+2`
 will still give `4` and not `6`!   This distinction becomes more clear when dealing with
 *mutable* types like [arrays](@ref lib-arrays), whose contents *can* be changed:
+
 ```jldoctest mutation_vs_rebind
 julia> a = [1,2,3] # an array of 3 integers
 3-element Vector{Int64}:
@@ -185,12 +187,14 @@ julia> b = a   # both b and a are names for the same array!
  1
  2
  3
- ```
- Here, the line `b = a` does *not* make a copy of the array `a`, it simply binds the name
- `b` to the *same* array `a`: both `b` and `a` "point" to one array `[1,2,3]` in memory.
- In contrast, an assignment `a[i] = value` *changes* the *contents* of the array, and the
- modified array will be visible through both the names `a` and `b`:
- ```jldoctest mutation_vs_rebind
+```
+
+Here, the line `b = a` does *not* make a copy of the array `a`, it simply binds the name
+`b` to the *same* array `a`: both `b` and `a` "point" to one array `[1,2,3]` in memory.
+In contrast, an assignment `a[i] = value` *changes* the *contents* of the array, and the
+modified array will be visible through both the names `a` and `b`:
+
+```jldoctest mutation_vs_rebind
 julia> a[1] = 42     # change the first element
 42
 
