@@ -409,14 +409,28 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t pooled) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    auto alloc_type = pooled ? "<pooled>" : "<malloc>";
-    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_type);
-
+    const char *alloc_kind;
+    switch (alloc_type)
+    {
+    case 0:
+        alloc_kind = "<malloc>";
+        break;
+    case 1:
+        alloc_kind = "<pooled>";
+        break;
+    case 2:
+        alloc_kind = "<inline>";
+        break;
+    default:
+        alloc_kind = "<undef>";
+        break;
+    }
+    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
     auto &from_node = g_snapshot->nodes[from_node_idx];
     from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
 
