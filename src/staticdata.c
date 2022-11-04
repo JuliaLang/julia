@@ -1797,7 +1797,7 @@ static uintptr_t jl_read_offset(jl_serializer_state *s)
     return offset;
 }
 
-static jl_value_t *jl_delayed_reloc(jl_serializer_state *s, uintptr_t offset)
+static jl_value_t *jl_delayed_reloc(jl_serializer_state *s, uintptr_t offset) JL_GC_DISABLED
 {
     if (!offset)
         return NULL;
