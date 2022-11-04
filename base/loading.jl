@@ -890,7 +890,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any})
+function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any})
     assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
     try
@@ -900,7 +900,6 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
         t_comp_before = cumulative_compile_time_ns()
     end
 
-    ocachepath = ocachefile_from_cachefile(path)
     if isfile(ocachepath)
         @debug "Loading object cache file $ocachepath for $pkg"
         sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), ocachepath, depmods)
@@ -1016,7 +1015,7 @@ end
 
 # loads a precompile cache file, ignoring stale_cachefile tests
 # assuming all depmods are already loaded and everything is valid
-function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::String, depmods::Vector{Any})
+function _tryrequire_from_serialized(modkey::PkgId, path::String, ocachepath::Union{Nothing, String}, sourcepath::String, depmods::Vector{Any})
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
@@ -1038,7 +1037,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::St
             package_locks[modkey] = Threads.Condition(require_lock)
             try
                 set_pkgorigin_version_path(modkey, sourcepath)
-                loaded = _include_from_serialized(modkey, path, depmods)
+                loaded = _include_from_serialized(modkey, path, ocachepath, depmods)
             finally
                 loading = pop!(package_locks, modkey)
                 notify(loading, loaded, all=true)
@@ -1056,13 +1055,23 @@ end
 
 # loads a precompile cache file, ignoring stale_cachefile tests
 # load the best available (non-stale) version of all dependent modules first
-function _tryrequire_from_serialized(pkg::PkgId, path::String)
+function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String})
     assert_havelock(require_lock)
     local depmodnames
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
-        depmodnames = parse_cache_header(io)[3]
+        iszero(isvalid_cache_header(io)) || return ArgumentError("Invalid header in cache file $path.")
+        depmodnames, clone_targets = parse_cache_header(io)[3, 7]
+        pkgimage = !isempty(clone_targets)
+        if pkgimage
+            ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
+            isfile(ocachepath) || return ArgumentError("Ocachepath $ocachpath is not a file.")
+            ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
+            # TODO: Check for valid clone_targets?
+            isvalid_pkgimage_crc(io, ocachepath) || return ArgumentError("Invalid checksum in cache file $ocachepath.")
+        else
+            @assert ocachepath === nothing
+        end
         isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
     finally
         close(io)
@@ -1078,7 +1087,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String)
         depmods[i] = dep
     end
     # then load the file
-    return _include_from_serialized(pkg, path, depmods)
+    return _include_from_serialized(pkg, path, ocachepath, depmods)
 end
 
 # returns `nothing` if require found a precompile cache for this sourcepath, but couldn't load it
@@ -1086,12 +1095,13 @@ end
 @constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, build_id::UInt128)
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg)
+    ocachefile = nothing
     for path_to_try in paths::Vector{String}
         staledeps = stale_cachefile(pkg, build_id, sourcepath, path_to_try)
         if staledeps === true
             continue
         end
-        staledeps = staledeps::Vector{Any}
+        staledeps, ocachefile = staledeps::Tuple{Vector{Any}, Union{Nothing, String}}
         # finish checking staledeps module graph
         for i in 1:length(staledeps)
             dep = staledeps[i]
@@ -1104,8 +1114,8 @@ end
                 if modstaledeps === true
                     continue
                 end
-                modstaledeps = modstaledeps::Vector{Any}
-                staledeps[i] = (modpath, modkey, modpath_to_try, modstaledeps)
+                modstaledeps, modocachepath = modstaledeps::Tuple{Vector{Any}, Union{Nothing, String}}
+                staledeps[i] = (modpath, modkey, modpath_to_try, modstaledeps, modocachepath)
                 modfound = true
                 break
             end
@@ -1116,6 +1126,7 @@ end
             end
         end
         if staledeps === true
+            ocachefile = nothing
             continue
         end
         try
@@ -1127,19 +1138,20 @@ end
         for i in 1:length(staledeps)
             dep = staledeps[i]
             dep isa Module && continue
-            modpath, modkey, modpath_to_try, modstaledeps = dep::Tuple{String, PkgId, String, Vector{Any}}
-            dep = _tryrequire_from_serialized(modkey, modpath_to_try, modpath, modstaledeps)
+            modpath, modkey, modcachepath, modstaledeps, modocachepath = dep::Tuple{String, PkgId, String, Vector{Any}, Union{Nothing, String}}
+            dep = _tryrequire_from_serialized(modkey, modcachepath, modocachepath, modpath, modstaledeps)
             if !isa(dep, Module)
-                @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modpath." exception=dep
+                @debug "Rejecting cache file $path_to_try because required dependency $modkey failed to load from cache file for $modcachepath." exception=dep
                 staledeps = true
                 break
             end
             staledeps[i] = dep
         end
         if staledeps === true
+            ocachefile = nothing
             continue
         end
-        restored = _include_from_serialized(pkg, path_to_try, staledeps)
+        restored = _include_from_serialized(pkg, path_to_try, ocachefile, staledeps)
         if !isa(restored, Module)
             @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
         else
@@ -1447,7 +1459,8 @@ function _require(pkg::PkgId, env=nothing)
                     end
                     # fall-through to loading the file locally
                 else
-                    m = _tryrequire_from_serialized(pkg, cachefile)
+                    cachefile, ocachefile = cachefile::Tuple{String, Union{Nothing, String}}
+                    m = _tryrequire_from_serialized(pkg, cachefile, ocachefile)
                     if !isa(m, Module)
                         @warn "The call to compilecache failed to create a usable precompiled cache file for $pkg" exception=m
                     else
@@ -1483,10 +1496,11 @@ function _require(pkg::PkgId, env=nothing)
     return loaded
 end
 
-function _require_from_serialized(uuidkey::PkgId, path::String)
+# Only used from test/precompile.jl
+function _require_from_serialized(uuidkey::PkgId, path::String, ocachepath::Union{String, Nothing})
     @lock require_lock begin
     set_pkgorigin_version_path(uuidkey, nothing)
-    newm = _tryrequire_from_serialized(uuidkey, path)
+    newm = _tryrequire_from_serialized(uuidkey, path, ocachepath)
     newm isa Module || throw(newm)
     # After successfully loading, notify downstream consumers
     run_package_callbacks(uuidkey)
@@ -1876,7 +1890,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             if cache_objects
                 rename(tmppath_so, ocachefile; force=true)
             end
-            return cachefile
+            return cachefile, ocachefile
         end
     finally
         rm(tmppath, force=true)
@@ -2260,7 +2274,6 @@ get_compiletime_preferences(::Nothing) = String[]
 end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false)
     io = open(cachefile, "r")
-    ocachefile = ocachefile_from_cachefile(cachefile)
     try
         checksum = isvalid_cache_header(io)
         if iszero(checksum)
@@ -2273,6 +2286,7 @@ end
         end
         pkgimage = !isempty(clone_targets)
         if pkgimage
+            ocachefile = ocachefile_from_cachefile(cachefile)
             if JLOptions().use_pkgimage_native_code == 0
                 # presence of clone_targets means native code cache
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
@@ -2286,6 +2300,8 @@ end
                 @debug "Rejection cache file $cachefile for $modkey since pkgimage $ocachefile was expected to exist"
                 return true
             end
+        else
+            ocachefile = nothing
         end
         id = first(modules)
         if id.first != modkey && modkey != PkgId("")
@@ -2382,7 +2398,7 @@ end
         end
 
         if pkgimage
-            if !isvalid_pkgimage_crc(io, ocachefile)
+            if !isvalid_pkgimage_crc(io, ocachefile::String)
                 @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
                 return true
             end
@@ -2394,7 +2410,7 @@ end
             return true
         end
 
-        return depmods # fresh cachefile
+        return depmods, ocachefile # fresh cachefile
     finally
         close(io)
     end
