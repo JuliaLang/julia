@@ -82,7 +82,7 @@ julia> a = [4,5,6]
  4
  5
  6
- 
+
 julia> b = 3
 3
 
@@ -94,7 +94,7 @@ julia> a  # a[1] is changed to 42 by f
  42
   5
   6
- 
+
 julia> b  # not changed
 3
 ```
