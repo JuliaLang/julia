@@ -1014,9 +1014,8 @@ Also, *every* binary operator supports a [dot version](@ref man-dot-operators)
 that can be applied to arrays (and combinations of arrays and scalars) in such
 [fused broadcasting operations](@ref man-vectorized), e.g. `z .== sin.(x .* y)`.
 
-Note that comparisons such as `==` operate on whole arrays, giving a single boolean
-answer. Use dot operators like `.==` for elementwise comparisons. (For comparison
-operations like `<`, *only* the elementwise `.<` version is applicable to arrays.)
+Note that comparison operations such as `==`, `<`, etc., operate on whole arrays, giving a
+single boolean answer. Use dot operators like `.==`, `.<`, etc., for elementwise comparisons.
 
 Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max`](@ref)
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
