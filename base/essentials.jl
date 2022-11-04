@@ -498,21 +498,16 @@ unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
 """
     reinterpret(type, A)
 
-Change the type-interpretation of a block of memory.
-For arrays, this constructs a view of the array with the same binary data as the given
-array, but with the specified element type.
-For example,
-`reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
+Change the type-interpretation of the binary data in the primitive type `A`
+to that of the primitive type `type`.
+The size of `type` has to be the same as that of the type of `A`.
+For example, `reinterpret(Float32, UInt32(7))` interprets the 4 bytes corresponding to `UInt32(7)` as a
 [`Float32`](@ref).
 
 # Examples
 ```jldoctest
 julia> reinterpret(Float32, UInt32(7))
 1.0f-44
-
-julia> reinterpret(Float32, UInt32[1 2 3 4 5])
-1×5 reinterpret(Float32, ::Matrix{UInt32}):
- 1.0f-45  3.0f-45  4.0f-45  6.0f-45  7.0f-45
 ```
 """
 reinterpret(::Type{T}, x) where {T} = bitcast(T, x)
