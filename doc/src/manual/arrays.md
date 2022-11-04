@@ -414,28 +414,39 @@ When writing a generator expression in an argument list, parentheses can be omit
 generator is the last argument:
 
 ```jldoctest
-julia> map(join, (i,j) for i=1:2, j=3:4)
-2×2 Matrix{String}:
- "13"  "14"
- "23"  "24"
+julia> map(Tuple, i for i=1:4)
+4-element Vector{Tuple{Int64}}:
+ (1,)
+ (2,)
+ (3,)
+ (4,)
 
-julia> map(+, 1:2, i for i=3:4)
-2-element Vector{Int64}:
- 4
- 6
+julia> map(Tuple, (i,j) for i=1:2, j=3:4)
+2×2 Matrix{Tuple{Int64, Int64}}:
+ (1, 3)  (1, 4)
+ (2, 3)  (2, 4)
+
+julia> map(tuple, 1:4, i for i=5:8)
+4-element Vector{Tuple{Int64, Int64}}:
+ (1, 5)
+ (2, 6)
+ (3, 7)
+ (4, 8)
 ```
 
 If the generator is not the last in the argument list, then parentheses must be used to seperate it from
 subsequent arguments:
 
 ```jldoctest
-julia> map(+, i for i=3:4, 1:2)
+julia> map(tuple, i for i=1:4, 5:8)
 ERROR: syntax: invalid iteration specification
 
-julia> map(+, (i for i=3:4), 1:2)
-2-element Vector{Int64}:
- 4
- 6
+julia> map(tuple, (i for i=1:4), 5:8)
+4-element Vector{Tuple{Int64, Int64}}:
+ (1, 5)
+ (2, 6)
+ (3, 7)
+ (4, 8)
 ```
 
 Generators are implemented via inner functions. Just like
