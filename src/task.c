@@ -837,7 +837,7 @@ JL_DLLEXPORT void jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED)
    ACM Trans. Math. Softw., 2021.
 
    There is a pure Julia implementation in stdlib that tends to be faster when used from
-   within Julia, due to inlining and more agressive architecture-specific optimizations.
+   within Julia, due to inlining and more aggressive architecture-specific optimizations.
 */
 uint64_t jl_genrandom(uint64_t rngState[4]) JL_NOTSAFEPOINT
 {

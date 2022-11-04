@@ -9,7 +9,7 @@ import Base: copyto!
 using Base: require_one_based_indexing, USE_BLAS64
 
 export
-# Note: `xFUNC_NAME` is a placeholder for not exported BLAS fucntions
+# Note: `xFUNC_NAME` is a placeholder for not exported BLAS functions
 #   ref: http://www.netlib.org/blas/blasqr.pdf
 # Level 1
     # xROTG
@@ -167,7 +167,7 @@ end
 # Level 1
 # A help function to pick the pointer and inc for 1d like inputs.
 @inline function vec_pointer_stride(x::AbstractArray, stride0check = nothing)
-    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simplify runtime check when possibe
+    Base._checkcontiguous(Bool, x) && return pointer(x), 1 # simplify runtime check when possible
     st, ptr = checkedstride(x), pointer(x)
     isnothing(stride0check) || (st == 0 && throw(stride0check))
     ptr += min(st, 0) * sizeof(eltype(x)) * (length(x) - 1)

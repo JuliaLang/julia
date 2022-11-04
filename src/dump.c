@@ -88,7 +88,7 @@ extern "C" {
 // - we have to check for invalidation---the user might have loaded other
 //   packages that define methods that supersede some of the dispatches chosen
 //   when the package was precompiled, or this package might define methods that
-//   supercede dispatches for previously-loaded packages. These two
+//   supersede dispatches for previously-loaded packages. These two
 //   possibilities are checked during backedge and method insertion,
 //   respectively.
 // Both of these mean that deserialization requires one to look up a lot of
@@ -902,7 +902,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                     rletable = (uint64_t*)jl_array_data(m->root_blocks);
                     nblocks2 = jl_array_len(m->root_blocks);
                 }
-                // this visits every item, if it becomes a bottlneck we could hop blocks
+                // this visits every item, if it becomes a bottleneck we could hop blocks
                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
                     if (rootiter.key == key)
                         jl_serialize_value(s, jl_array_ptr_ref(m->roots, rootiter.i));

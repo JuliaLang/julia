@@ -3471,7 +3471,7 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                             *ret = jl_cgval_t(); // unreachable
                             return true;
                         }
-                        // Determine which was the type that was homogenous
+                        // Determine which was the type that was homogeneous
                         jl_value_t *jt = jl_tparam0(utt);
                         if (jl_is_vararg(jt))
                             jt = jl_unwrap_vararg(jt);

@@ -539,6 +539,17 @@ julia> sizeof(1.0)
 
 julia> sizeof(collect(1.0:10.0))
 80
+
+julia> struct StructWithPadding
+           x::Int64
+           flag::Bool
+       end
+
+julia> sizeof(StructWithPadding) # not the sum of `sizeof` of fields due to padding
+16
+
+julia> sizeof(Int64) + sizeof(Bool) # different from above
+9
 ```
 
 If `DataType` `T` does not have a specific size, an error is thrown.

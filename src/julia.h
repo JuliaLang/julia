@@ -327,7 +327,7 @@ typedef struct _jl_method_t {
     // A function that compares two specializations of this method, returning
     // `true` if the first signature is to be considered "smaller" than the
     // second for purposes of recursion analysis. Set to NULL to use
-    // the default recusion relation.
+    // the default recursion relation.
     jl_value_t *recursion_relation;
 
     uint32_t nargs;
