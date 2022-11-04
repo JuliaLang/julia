@@ -72,9 +72,11 @@ end
 @inline function _eachslice(A::AbstractArray, dim::Integer, drop::Bool)
     _eachslice(A, (dim,), drop)
 end
+Slices(A::AbstractArray, args...) = _eachslice(A, args, true)
 
 """
     eachslice(A::AbstractArray; dims, drop=true)
+    eachslice(A::AbstractArray, dims; drop=true)
 
 Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
 views that select all the data from the other dimensions in `A`. `dims` can either by an
@@ -85,7 +87,7 @@ the ordering of the dimensions will match those in `dims`. If `drop = false`, th
 `Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
-See [`stack`](@ref)`(slices; dims)` for the inverse of `eachcol(A; dims::Integer, drop=true)`.
+See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
 
 See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
 
@@ -126,6 +128,7 @@ julia> eachslice(m, dims=1, drop=false)
 @inline function eachslice(A; dims, drop=true)
     _eachslice(A, dims, drop)
 end
+@inline eachslice(A, dims; drop=true) = _eachslice(A, dims, drop)
 
 """
     eachrow(A::AbstractVecOrMat) <: AbstractVector

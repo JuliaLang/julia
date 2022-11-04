@@ -2293,6 +2293,8 @@ end
         f2(a) = eachslice(a, dims=2)
         @test (@inferred f2(a)) == eachcol(a)
     end
+    @test eachslice(M, (3, 2)) == eachslice(M; dims=(3, 2))
+    @test eachslice(M, (2, 3)) == Slices(M, (2, 3))
 end
 
 ###
