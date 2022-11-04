@@ -152,6 +152,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     loc = source_location(LineNumberNode, node.source, node.position)
     if headsym == :macrocall
         insert!(args, 2, loc)
+        if args[1] == Symbol("@.")
+            args[1] = Symbol("@__dot__")
+        end
     elseif headsym in (:call, :ref)
         # Julia's standard `Expr` ASTs have children stored in a canonical
         # order which is often not always source order. We permute the children

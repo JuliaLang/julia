@@ -315,7 +315,6 @@ tests = [
         "A.B.@x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
         "@A.B.x"    =>  "(macrocall (. (. A (quote B)) (quote @x)))"
         "A.@B.x"    =>  "(macrocall (. (. A (quote B)) (error-t) (quote @x)))"
-        "@. y"      =>  "(macrocall @__dot__ y)"
         "f.(a,b)"   =>  "(. f (tuple a b))"
         "f.(a=1; b=2)" => "(. f (tuple (= a 1) (parameters (= b 2))))" =>
             Expr(:., :f, Expr(:tuple, Expr(:parameters, Expr(:kw, :b, 2)), Expr(:kw, :a, 1)))
@@ -710,7 +709,7 @@ tests = [
         # Macro names can be keywords
         "@end x" => "(macrocall @end x)"
         # __dot__ macro
-        "@. x y" => "(macrocall @__dot__ x y)"
+        "@. x" => "(macrocall @. x)" => Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1), :x)
         # cmd strings
         "``"         =>  "(macrocall :(Core.var\"@cmd\") (cmdstring-r \"\"))"
         "`cmd`"      =>  "(macrocall :(Core.var\"@cmd\") (cmdstring-r \"cmd\"))"
