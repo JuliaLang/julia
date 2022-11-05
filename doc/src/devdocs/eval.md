@@ -59,7 +59,7 @@ The 10,000 foot view of the whole process is as follows:
 
 ## [Parsing](@id dev-parsing)
 
-The Julia parser is a small lisp program written in femtolisp, the source-code for which is distributed
+The Julia parser is a small Scheme program written for the (lisp-1) FemtoLisp implementation, the source-code for which is distributed
 inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
 
 The interface functions for this are primarily defined in [`jlfrontend.scm`](https://github.com/JuliaLang/julia/blob/master/src/jlfrontend.scm).
