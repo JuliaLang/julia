@@ -1223,9 +1223,12 @@ function _any(f, itr, ::Colon)
 end
 
 # Specialized versions of any(f, ::Tuple)
-# We fall back to the for loop implementation if the tuple is too large.
-function any(f, itr::Tuple)            # case of tuple with mixed types
-    length(itr) > 32 && return _any(f, itr, :)
+# We fall back to the for loop implementation all elements have the same type or
+# if the tuple is too large.
+function any(f, itr::Tuple)
+    if itr isa NTuple || length(itr) > 32
+        return _any(f, itr, :)
+    end
     _any_tuple(f, false, itr...)
 end
 
@@ -1293,7 +1296,9 @@ end
 # Specialized versions of all(f, ::Tuple),
 # This is similar to any(f, ::Tuple) defined above.
 function all(f, itr::Tuple)
-    length(itr) > 32 && return _all(f, itr, :)
+    if itr isa NTuple || length(itr) > 32
+        return _all(f, itr, :)
+    end
     _all_tuple(f, false, itr...)
 end
 
