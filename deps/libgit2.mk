@@ -13,7 +13,7 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON -DBUILD_CLI=OFF
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifneq ($(ARCH),x86_64)
@@ -45,12 +45,12 @@ $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-a
 		patch -p1 -f < $(SRCDIR)/patches/libgit2-hostkey.patch
 	echo 1 > $@
 
-$(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
+$(LIBGIT2_SRC_PATH)/libgit2-lowercase-windows-h.patch-applied: $(LIBGIT2_SRC_PATH)/libgit2-hostkey.patch-applied
 	cd $(LIBGIT2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libgit2-win32-ownership.patch
+		patch -p1 -f < $(SRCDIR)/patches/libgit2-lowercase-windows-h.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/libgit2-win32-ownership.patch-applied
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/libgit2-lowercase-windows-h.patch-applied
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)

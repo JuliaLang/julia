@@ -220,7 +220,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
     # it anyway for users like typeinf_ext. Do that here.
     opt = caller.src
-    if opt isa OptimizationState # implies `may_optimize(interp) === true`
+    if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
             if caller.must_be_codeinf
                 caller.src = ir_to_codeinf!(opt)
@@ -267,7 +267,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     empty!(frames)
     for (caller, _, _) in results
         opt = caller.src
-        if opt isa OptimizationState # implies `may_optimize(interp) === true`
+        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
             analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
             if isa(analyzed, ConstAPI)
                 # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
@@ -367,7 +367,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     inferred_result = result.src
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
-    if inferred_result isa OptimizationState
+    if inferred_result isa OptimizationState{typeof(interp)}
         inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo

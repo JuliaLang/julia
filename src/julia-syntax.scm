@@ -366,9 +366,9 @@
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
-         (error "function static parameter names not unique"))
+         (error (string "function static parameter name not unique: \"" (car (has-dups names)) "\"")))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
-         (error "function argument and static parameter names must be distinct"))
+         (error (string "function argument and static parameter name not distinct: \"" (car (intersect names unused_anames)) "\"")))
      (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
@@ -2264,7 +2264,7 @@
 ;; `n`:    total nr of lhs args
 ;; `end`:  car collects statements to be executed afterwards.
 ;;         In general, actual assignments should only happen after
-;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+;;         the whole iterator is desctructured (https://github.com/JuliaLang/julia/issues/40574)
 (define (destructure- i lhss xx n st end)
   (if (null? lhss)
       '()
@@ -2910,17 +2910,16 @@
          ,(construct-loops (reverse itrs) (reverse iv))
          ,result)))))
 
-(define (lhs-vars e)
-  (cond ((symdecl? e)   (list (decl-var e)))
-        ((and (pair? e) (eq? (car e) 'tuple))
-         (apply append (map lhs-vars (cdr e))))
-        (else '())))
-
 (define (lhs-decls e)
   (cond ((symdecl? e)   (list e))
-        ((and (pair? e) (eq? (car e) 'tuple))
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
          (apply append (map lhs-decls (cdr e))))
         (else '())))
+
+(define (lhs-vars e)
+  (map decl-var (lhs-decls e)))
 
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
@@ -4381,10 +4380,12 @@ f(x) = yt(x)
                                          (not (simple-atom? arg))
                                          (not (simple-atom? aval))
                                          (not (and (pair? arg)
-                                                   (memq (car arg) '(quote inert top core globalref outerref boundscheck))))
+                                                   (memq (car arg) '(quote inert top core boundscheck))))
                                          (not (and (symbol? aval) ;; function args are immutable and always assigned
                                                    (memq aval (lam:args lam))))
-                                         (not (and (symbol? arg)
+                                         (not (and (or (symbol? arg)
+                                                       (and (pair? arg)
+                                                            (memq (car arg) '(globalref outerref))))
                                                    (or (null? (cdr lst))
                                                        (null? vals)))))
                                     (let ((tmp (make-ssavalue)))

@@ -1354,7 +1354,7 @@ over the dimensions of the array, collecting the offset in each dimension into t
 
 However, all the information we need for the loop is embedded in the type information of the arguments.
 This allows the compiler to move the iteration to compile time and eliminate the runtime loops
-altogether. We can utilize generated functions to achieve a simmilar effect; in compiler parlance,
+altogether. We can utilize generated functions to achieve a similar effect; in compiler parlance,
 we use generated functions to manually unroll the loop. The body becomes almost identical, but
 instead of calculating the linear index, we build up an *expression* that calculates the index:
 

@@ -1018,6 +1018,7 @@ export
     @timev,
     @elapsed,
     @allocated,
+    @allocations,
 
     # tasks
     @sync,
