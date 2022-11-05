@@ -1111,7 +1111,9 @@ let didthrow =
             @__MODULE__,
             """
             module TestInitError
-                __init__() = error()
+                atinit() do
+                    error()
+                end
             end
             """)
         false

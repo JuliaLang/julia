@@ -149,7 +149,7 @@ module TestGeneratedThrow
 
     foo() = (bar(rand() > 0.5 ? 1 : 1.0); error("foo"))
     inited = false
-    function __init__()
+    atinit() do
         code_typed(foo, (); optimize = false)
         @cfunction(foo, Cvoid, ())
         global inited = true

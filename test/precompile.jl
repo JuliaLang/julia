@@ -1329,7 +1329,9 @@ precompile_test_harness("Issues #19030 and #25279") do load_path
     write(joinpath(load_path, "$ModuleA.jl"),
         """
         module $ModuleA
-            __init__() = push!(Base.package_callbacks, sym->nothing)
+            atinit() do
+                push!(Base.package_callbacks, sym->nothing)
+            end
         end
         """)
     l0 = length(Base.package_callbacks)
@@ -1367,7 +1369,7 @@ precompile_test_harness("Issue #26028") do load_path
         module Bar26028
             x = 0
         end
-        function __init__()
+        atinit() do
             include(joinpath(@__DIR__, "Baz26028.jl"))
         end
         end
@@ -1503,11 +1505,13 @@ end
 
 # Test that the cachepath is available in pkgorigins during the
 # __init__ callback
-precompile_test_harness("__init__ cachepath") do load_path
+precompile_test_harness("atinit cachepath") do load_path
     write(joinpath(load_path, "InitCachePath.jl"),
           """
           module InitCachePath
-            __init__() = Base.pkgorigins[Base.PkgId(InitCachePath)]
+            atinit() do
+                Base.pkgorigins[Base.PkgId(InitCachePath)]
+            end
           end
           """)
     @test isa((@eval (using InitCachePath; InitCachePath)), Module)
@@ -1546,7 +1550,9 @@ precompile_test_harness("issue #46296") do load_path
         ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
-        __init__() = @assert ci isa Core.CodeInstance
+        atinit() do
+            @assert ci isa Core.CodeInstance
+        end
 
         end
         """)
