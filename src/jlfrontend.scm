@@ -201,7 +201,11 @@
        (= (call include (:: ,mex (top Function)) ,x)
           (block
            ,@loc
-           (call (core _call_latest) (top include) ,mex ,name ,x)))))
+           (call (core _call_latest) (top include) ,mex ,name ,x)))
+       (= (call atinit (:: ,x (top Function)))
+          (block
+           ,@loc
+           (call (core _call_latest) (top atinit) ,name ,x)))))
    'none 0))
 
 ; run whole frontend on a string. useful for testing.

@@ -378,6 +378,26 @@ function _atexit()
     end
 end
 
+function atinit(m::Module, f::Function)
+    # could be moved to module-default-defs?
+    if !isdefined(m, :__init_hooks__)
+        if isdefined(m, :__init__)
+            error("atinit cannot be used with __init__")
+        end
+        eval(m, :(const __init_hooks__ = $Callable[]))
+        eval(m, :(__init__() = $_atinit($m)))
+    end
+    (push!(m.__init_hooks__, f); nothing)
+end
+function _atinit(m::Module)
+    if isdefined(m, :__init_hooks__)
+        for f in m.__init_hooks__
+            f()
+        end
+    end
+end
+
+
 ## postoutput: register post output hooks ##
 ## like atexit but runs after any requested output.
 ## any hooks saved in the sysimage are cleared in Base._start
