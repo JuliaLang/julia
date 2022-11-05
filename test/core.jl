@@ -1104,6 +1104,22 @@ end
 @test Module(:anonymous, false, true).Core == Core
 @test_throws UndefVarError Module(:anonymous, false, false).Core
 
+# atinit FIFO
+include_string(
+    @__MODULE__,
+    """
+    module TestInitFIFO
+        str = ""
+        atinit() do
+            global str = str*"a"
+        end
+        atinit() do
+            global str = str*"b"
+        end
+    end
+    """)
+@test TestInitFIFO.str == "ab"
+
 # exception from __init__()
 let didthrow =
     try
