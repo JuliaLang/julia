@@ -1767,12 +1767,13 @@ promote_leaf_eltypes(x::Union{AbstractArray,Tuple}) = mapreduce(promote_leaf_elt
 # Supports nested arrays; e.g., for `a = [[1,2, [3,4]], 5.0, [6im, [7.0, 8.0]]]`
 # `a ≈ a` is `true`.
 function isapprox(x::AbstractArray, y::AbstractArray;
-    atol::Real=0,
+    atol::Real=zero(promote_type(real(promote_leaf_eltypes(x)),real(promote_leaf_eltypes(y)))),
     rtol::Real=Base.rtoldefault(promote_leaf_eltypes(x),promote_leaf_eltypes(y),atol),
     nans::Bool=false, norm::Function=norm)
     d = norm(x - y)
     if isfinite(d)
-        return d <= max(atol, rtol*max(norm(x), norm(y)))
+        tol = iszero(rtol) ? atol : max(atol, rtol*max(norm(x), norm(y)))
+        return d <= tol
     else
         # Fall back to a component-wise approximate comparison
         # (mapreduce instead of all for greater generality [#44893])
