@@ -11,6 +11,14 @@ code in Julia are represented by Julia data structures, powerful [reflection](ht
 capabilities are available to explore the internals of a program and its types just like any other
 data.
 
+!!! warning
+    Metaprogramming is a powerfull tool, but introduces complexity that makes it more difficult
+    to understand source code. It should typically be used only when other approaches scuch as 
+    [higher order faunctions](@ref man-anonymous-functions) cannot be applied.
+    
+    `eval`, `Meta.parse`, and defining new macros should only be used as last resorts. It
+    is almost never a good idea to convert a string into julia code.
+    
 ## Program representation
 
 Every Julia program starts life as a string:
