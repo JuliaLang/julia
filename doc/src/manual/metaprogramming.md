@@ -12,8 +12,8 @@ capabilities are available to explore the internals of a program and its types j
 data.
 
 !!! warning
-    Metaprogramming is a powerful tool, but introduces complexity that makes it more difficult
-    to understand code. It should typically be used only when other approaches such as 
+    Metaprogramming is a powerful tool, but it introduces complexity that can make code more 
+    difficult to understand. It should typically be used only when other approaches such as 
     [higher order functions](@ref man-anonymous-functions) cannot be applied.
     
     `eval`, `Meta.parse`, and defining new macros should be typically used as a last resort. It
