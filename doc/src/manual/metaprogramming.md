@@ -12,12 +12,12 @@ capabilities are available to explore the internals of a program and its types j
 data.
 
 !!! warning
-    Metaprogramming is a powerfull tool, but introduces complexity that makes it more difficult
-    to understand source code. It should typically be used only when other approaches scuch as 
+    Metaprogramming is a powerful tool, but introduces complexity that makes it more difficult
+    to understand code. It should typically be used only when other approaches such as 
     [higher order functions](@ref man-anonymous-functions) cannot be applied.
     
     `eval`, `Meta.parse`, and defining new macros should be typically used as a last resort. It
-    is almost never a good idea to convert a string into julia code.
+    is generally not a good idea to convert an arbitrary string into julia code.
     
 ## Program representation
 
