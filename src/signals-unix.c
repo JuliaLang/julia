@@ -231,12 +231,28 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     uv_tty_reset_mode();
     if (sig == SIGILL)
         jl_show_sigill(context);
-    jl_critical_error(sig, jl_to_bt_context(context), jl_get_current_task());
+    jl_critical_error(sig, info->si_code, jl_to_bt_context(context), jl_get_current_task());
+    if (info->si_code == SI_USER ||
+#ifdef SI_KERNEL
+        info->si_code == SI_KERNEL ||
+#endif
+        info->si_code == SI_QUEUE ||
+        info->si_code == SI_MESGQ ||
+        info->si_code == SI_ASYNCIO ||
+#ifdef SI_SIGIO
+        info->si_code == SI_SIGIO ||
+#endif
+#ifdef SI_TKILL
+        info->si_code == SI_TKILL ||
+#endif
+        info->si_code == SI_TIMER)
+        raise(sig);
     if (sig != SIGSEGV &&
         sig != SIGBUS &&
-        sig != SIGILL) {
+        sig != SIGILL &&
+        sig != SIGFPE &&
+        sig != SIGTRAP)
         raise(sig);
-    }
     // fall-through return to re-execute faulting statement (but without the error handler)
 }
 
@@ -244,7 +260,7 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
 enum x86_trap_flags {
     USER_MODE = 0x4,
     WRITE_FAULT = 0x2,
-    PAGE_PRESENT = 0x1
+    PAGE_PRESENT = 0x1 // whether this page is currently mapped into memory
 };
 
 int exc_reg_is_write_fault(uintptr_t err) {
@@ -254,11 +270,21 @@ int exc_reg_is_write_fault(uintptr_t err) {
 enum aarch64_esr_layout {
     EC_MASK = ((uint32_t)0b111111) << 26,
     EC_DATA_ABORT = ((uint32_t)0b100100) << 26,
+    DFSC_MASK = ((uint32_t)0b111111) << 0,
     ISR_DA_WnR = ((uint32_t)1) << 6
 };
 
 int exc_reg_is_write_fault(uintptr_t esr) {
-    return (esr & EC_MASK) == EC_DATA_ABORT && (esr & ISR_DA_WnR);
+    // n.b. we check that DFSC is either a permission fault (page in memory but not writable) or a translation fault (page not in memory)
+    // but because of info->si_code == SEGV_ACCERR, we know the kernel could have brought the page into memory.
+    // Access faults happen when trying to write to code or secure memory, which is a more severe violation, so we ignore those.
+    // AArch64 appears to leaves it up to a given implementer whether atomic update errors are reported as read or write faults.
+    return (esr & EC_MASK) == EC_DATA_ABORT &&
+           (((esr & DFSC_MASK) >= 0b000100 &&   // Translation flag fault, level 0.
+             (esr & DFSC_MASK) <= 0b000111) ||  // Translation fault, level 3.
+            ((esr & DFSC_MASK) >= 0b001100 &&   // Permission flag fault, level 0.
+             (esr & DFSC_MASK) <= 0b001111)) && // Permission fault, level 3.
+           (esr & ISR_DA_WnR); // Attempted write
 }
 #endif
 
@@ -312,17 +338,17 @@ static int jl_is_on_sigstack(jl_ptls_t ptls, void *ptr, void *context)
 
 JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 {
+    assert(sig == SIGSEGV || sig == SIGBUS);
     if (jl_get_safe_restore()) { // restarting jl_ or profile
         jl_call_in_ctx(NULL, &jl_sig_throw, sig, context);
         return;
     }
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL) {
+    if (ct == NULL || ct->ptls == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING) {
         sigdie_handler(sig, info, context);
         return;
     }
-    assert(sig == SIGSEGV || sig == SIGBUS);
-    if (jl_addr_is_safepoint((uintptr_t)info->si_addr)) {
+    if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && jl_addr_is_safepoint((uintptr_t)info->si_addr) && !is_write_fault(context)) {
         jl_set_gc_and_wait();
         // Do not raise sigint on worker thread
         if (jl_atomic_load_relaxed(&ct->tid) != 0)
@@ -336,7 +362,9 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         }
         return;
     }
-    if (is_addr_on_stack(ct, info->si_addr)) { // stack overflow
+    if (ct->eh == NULL)
+        sigdie_handler(sig, info, context);
+    if ((sig != SIGBUS || info->si_code == BUS_ADRERR) && is_addr_on_stack(ct, info->si_addr)) { // stack overflow and not a BUS_ADRALN (alignment error)
         jl_throw_in_ctx(ct, jl_stackovf_exception, sig, context);
     }
     else if (jl_is_on_sigstack(ct->ptls, info->si_addr, context)) {
@@ -352,11 +380,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
     }
     else {
-#ifdef SEGV_EXCEPTION
-        jl_throw_in_ctx(ct, jl_segv_exception, sig, context);
-#else
         sigdie_handler(sig, info, context);
-#endif
     }
 }
 
@@ -445,7 +469,7 @@ CFI_NORETURN
     // (unavoidable due to its async nature).
     // Try harder to exit each time if we get multiple exit requests.
     if (thread0_exit_count <= 1) {
-        jl_critical_error(thread0_exit_state - 128, NULL, jl_current_task);
+        jl_critical_error(thread0_exit_state - 128, 0, NULL, jl_current_task);
         jl_exit(thread0_exit_state);
     }
     else if (thread0_exit_count == 2) {
@@ -983,7 +1007,7 @@ static void fpe_handler(int sig, siginfo_t *info, void *context)
         return;
     }
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL) // exception on foreign thread is fatal
+    if (ct == NULL || ct->eh == NULL) // exception on foreign thread is fatal
         sigdie_handler(sig, info, context);
     else
         jl_throw_in_ctx(ct, jl_diverror_exception, sig, context);
