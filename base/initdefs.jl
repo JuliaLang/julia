@@ -378,6 +378,25 @@ function _atexit()
     end
 end
 
+# make this a callable struct so that attempting to define `__init__()` will
+# trigger an error.
+struct AtInit
+    mod::Module
+end
+(init::AtInit)() = _atinit(init.mod)
+
+
+"""
+    Base.atinit(m::Module, f::Function)
+
+Register a zero-argument function `f()` to be called when a module is
+initialized. `atinit()` hooks are called in first in first out (FIFO) order.
+
+This cannot be used in conjunction with an `__init__` function.
+
+The `@atinit` macro is a convenience macro for defining initializer hooks for
+the current module.
+"""
 function atinit(m::Module, f::Function)
     # could be moved to module-default-defs?
     if !isdefined(m, :__init_hooks__)
@@ -385,7 +404,7 @@ function atinit(m::Module, f::Function)
             error("atinit cannot be used with __init__")
         end
         eval(m, :(const __init_hooks__ = $Callable[]))
-        eval(m, :(__init__() = $_atinit($m)))
+        eval(m, :(__init__ = $AtInit($m)))
     end
     (push!(m.__init_hooks__, f); nothing)
 end
@@ -395,6 +414,18 @@ function _atinit(m::Module)
             f()
         end
     end
+end
+
+"""
+    @atinit(f)
+
+Register a zero-argument function `f()` to be called when the current module is
+initialized. `atinit()` hooks are called in first in first out (FIFO) order.
+
+See [`Base.atinit`](@ref) for the function version.
+"""
+macro atinit(f)
+    :(atinit($__module__, $f))
 end
 
 

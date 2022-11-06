@@ -812,6 +812,7 @@ export
     precompile,
 
 # misc
+    @atinit,
     atexit,
     atreplinit,
     exit,

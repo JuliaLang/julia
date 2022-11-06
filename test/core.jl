@@ -1110,15 +1110,58 @@ include_string(
     """
     module TestInitFIFO
         str = ""
-        atinit() do
+        @atinit() do
             global str = str*"a"
         end
-        atinit() do
+        @atinit() do
             global str = str*"b"
+        end
+        Base.atinit(@__MODULE__) do
+            global str = str*"c"
         end
     end
     """)
-@test TestInitFIFO.str == "ab"
+@test TestInitFIFO.str == "abc"
+
+# attempt to define both atinit and __init__
+let didthrow =
+    try
+        include_string(
+            @__MODULE__,
+            """
+            module TestInitError
+                __init__() = println("b")
+                @atinit() do
+                    println("a")
+                end
+            end
+            """)
+        false
+    catch ex
+        @test isa(ex, ErrorException)
+        true
+    end
+    @test didthrow
+end
+let didthrow =
+    try
+        include_string(
+            @__MODULE__,
+            """
+            module TestInitError
+                @atinit() do
+                    println("a")
+                end
+                __init__() = println("b")
+            end
+            """)
+        false
+    catch ex
+        @test isa(ex, ErrorException)
+        true
+    end
+    @test didthrow
+end
 
 # exception from __init__()
 let didthrow =
@@ -1127,7 +1170,7 @@ let didthrow =
             @__MODULE__,
             """
             module TestInitError
-                atinit() do
+                @atinit() do
                     error()
                 end
             end

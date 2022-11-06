@@ -1329,7 +1329,7 @@ precompile_test_harness("Issues #19030 and #25279") do load_path
     write(joinpath(load_path, "$ModuleA.jl"),
         """
         module $ModuleA
-            atinit() do
+            @atinit() do
                 push!(Base.package_callbacks, sym->nothing)
             end
         end
@@ -1369,7 +1369,7 @@ precompile_test_harness("Issue #26028") do load_path
         module Bar26028
             x = 0
         end
-        atinit() do
+        @atinit() do
             include(joinpath(@__DIR__, "Baz26028.jl"))
         end
         end
@@ -1509,7 +1509,7 @@ precompile_test_harness("atinit cachepath") do load_path
     write(joinpath(load_path, "InitCachePath.jl"),
           """
           module InitCachePath
-            atinit() do
+            @atinit() do
                 Base.pkgorigins[Base.PkgId(InitCachePath)]
             end
           end
@@ -1550,7 +1550,7 @@ precompile_test_harness("issue #46296") do load_path
         ci = Core.CodeInstance(mi, Any, nothing, nothing, zero(Int32), typemin(UInt),
                                typemax(UInt), zero(UInt32), zero(UInt32), nothing, 0x00)
 
-        atinit() do
+        @atinit() do
             @assert ci isa Core.CodeInstance
         end
 
