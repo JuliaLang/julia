@@ -622,10 +622,10 @@ det(A::RealHermSymComplexHerm) = real(det(_factorize(A; check=false)))
 det(A::Symmetric{<:Real}) = det(_factorize(A; check=false))
 det(A::Symmetric) = det(_factorize(A; check=false))
 
-\(A::HermOrSym{<:Any,<:AbstractMatrix}, B::AbstractVector) = \(factorize(A), B)
+\(A::HermOrSym, B::AbstractVector) = \(factorize(A), B)
 # Bunch-Kaufman solves can not utilize BLAS-3 for multiple right hand sides
 # so using LU is faster for AbstractMatrix right hand side
-\(A::HermOrSym{<:Any,<:AbstractMatrix}, B::AbstractMatrix) = \(lu(A), B)
+\(A::HermOrSym, B::AbstractMatrix) = \(lu(A), B)
 
 function _inv(A::HermOrSym)
     n = checksquare(A)
