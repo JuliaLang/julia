@@ -417,7 +417,6 @@ end
 for (sym, deps, exp, type) in [
         (:lo, (), :(firstindex(v)), Integer),
         (:hi, (), :(lastindex(v)),  Integer),
-        (:lenm1, (:lo, :hi), :(hi-lo), Integer),
         (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:range, (:mn, :mx), quote
@@ -639,8 +638,8 @@ end
 Small{N}(small, big) where N = Small{N, typeof(small), typeof(big)}(small, big)
 Small{N}(big) where N = Small{N}(SMALL_ALGORITHM, big)
 function _sort!(v::AbstractVector, a::Small{N}, o::Ordering, kw) where N
-    @getkw lenm1
-    if lenm1 < N
+    @getkw lo hi
+    if (hi-lo) < N
         _sort!(v, a.small, o, kw)
     else
         _sort!(v, a.big, o, kw)
@@ -696,14 +695,14 @@ struct CheckSorted{T <: Algorithm} <: Algorithm
     next::T
 end
 function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
-    @getkw lo hi lenm1
+    @getkw lo hi
 
     # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
     # arrays it is essentially free (<1%).
     _issorted(v, lo, hi, o) && return v
 
     # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
-    if lenm1 >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
+    if hi-lo >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
         # If reversing is valid, do so. This does violates stability.
         reverse!(v, lo, hi)
         return v
@@ -756,8 +755,8 @@ struct ConsiderCountingSort{T <: Algorithm, U <: Algorithm} <: Algorithm
 end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
 function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering, kw)
-    @getkw lenm1 range
-    if range < (sizeof(eltype(v)) > 8 ? 5lenm1-100 : div(lenm1, 2))
+    @getkw lo hi range
+    if range < (sizeof(eltype(v)) > 8 ? 5(hi-lo)-100 : div(hi-lo, 2))
         _sort!(v, a.counting, o, kw)
     else
         _sort!(v, a.next, o, kw)
@@ -813,8 +812,8 @@ struct ConsiderRadixSort{T <: Algorithm, U <: Algorithm} <: Algorithm
 end
 ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
 function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
-    @getkw bits lenm1
-    if sizeof(eltype(v)) <= 8 && bits+70 < 22log(lenm1)
+    @getkw bits lo hi
+    if sizeof(eltype(v)) <= 8 && bits+70 < 22log(hi-lo)
         _sort!(v, a.radix, o, kw)
     else
         _sort!(v, a.next, o, kw)
@@ -845,7 +844,7 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 """
 struct RadixSort <: Algorithm end
 function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
-    @getkw lo hi umn scratch lenm1 bits
+    @getkw lo hi umn scratch bits
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)
@@ -863,7 +862,7 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
         u[i] -= umn
     end
 
-    len = lenm1 + 1
+    len = hi-lo + 1
     U = UIntMappable(eltype(v), o)
     if scratch !== nothing && checkbounds(Bool, scratch, lo:hi) # Fully preallocated and aligned scratch
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, scratch))
