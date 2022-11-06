@@ -727,7 +727,7 @@ end
 
 # For AbstractVector{Bool}, counting sort is always best.
 # This is an implementation of counting sort specialized for Bools.
-# Accepts unused buffer to avoid method ambiguity.
+# Accepts unused scratch space to avoid method ambiguity.
 function sort!(v::AbstractVector{Bool}, lo::Integer, hi::Integer, ::AdaptiveSortAlg, o::Ordering,
         t::Union{AbstractVector{Bool}, Nothing}=nothing)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
@@ -856,15 +856,15 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
     end
 
     len = lenm1 + 1
-    if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned buffer
+    if t !== nothing && checkbounds(Bool, t, lo:hi) # Fully preallocated and aligned scratch space
         u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, t))
         uint_unmap!(v, u2, lo, hi, o, u_min)
-    elseif t !== nothing && (applicable(resize!, t, len) || length(t) >= len) # Viable buffer
+    elseif t !== nothing && (applicable(resize!, t, len) || length(t) >= len) # Viable scratch space
         length(t) >= len || resize!(t, len)
         t1 = axes(t, 1) isa OneTo ? t : view(t, firstindex(t):lastindex(t))
         u2 = radix_sort!(view(u, lo:hi), 1, len, bits, reinterpret(U, t1))
         uint_unmap!(view(v, lo:hi), u2, 1, len, o, u_min)
-    else # No viable buffer
+    else # No viable scratch space
         u2 = radix_sort!(u, lo, hi, bits, similar(u))
         uint_unmap!(v, u2, lo, hi, o, u_min)
     end
@@ -873,9 +873,6 @@ end
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
-defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
-defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
-defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 function sort!(v::AbstractVector{T}, alg::Algorithm,
                order::Ordering, t::Union{AbstractVector{T}, Nothing}=nothing) where T
@@ -890,15 +887,15 @@ end
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
-Sort the vector `v` in place. [`QuickSort`](@ref) is used by default for numeric arrays while
-[`MergeSort`](@ref) is used for other arrays. You can specify an algorithm to use via the `alg`
-keyword (see [Sorting Algorithms](@ref) for available algorithms). The `by` keyword lets you provide
-a function that will be applied to each element before comparison; the `lt` keyword allows
-providing a custom "less than" function (note that for every `x` and `y`, only one of `lt(x,y)`
-and `lt(y,x)` can return `true`); use `rev=true` to reverse the sorting order. These
-options are independent and can be used together in all possible combinations: if both `by`
-and `lt` are specified, the `lt` function is applied to the result of the `by` function;
-`rev=true` reverses whatever ordering specified via the `by` and `lt` keywords.
+Sort the vector `v` in place. A stable algorithm is used by default. You can select a
+specific algorithm to use via the `alg` keyword (see [Sorting Algorithms](@ref) for
+available algorithms). The `by` keyword lets you provide a function that will be applied to
+each element before comparison; the `lt` keyword allows providing a custom "less than"
+function (note that for every `x` and `y`, only one of `lt(x,y)` and `lt(y,x)` can return
+`true`); use `rev=true` to reverse the sorting order. These options are independent and can
+be used together in all possible combinations: if both `by` and `lt` are specified, the `lt`
+function is applied to the result of the `by` function; `rev=true` reverses whatever
+ordering specified via the `by` and `lt` keywords.
 
 # Examples
 ```jldoctest
@@ -933,8 +930,8 @@ function sort!(v::AbstractVector{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               buffer::Union{AbstractVector{T}, Nothing}=nothing) where T
-    sort!(v, alg, ord(lt,by,rev,order), buffer)
+               scratch::Union{AbstractVector{T}, Nothing}=nothing) where T
+    sort!(v, alg, ord(lt,by,rev,order), scratch)
 end
 
 # sort! for vectors of few unique integers
@@ -1073,7 +1070,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
                           order::Ordering=Forward,
                           initialized::Bool=false)
     if axes(ix,1) != axes(v,1)
-        throw(ArgumentError("The index vector is used as a buffer and must have the " *
+        throw(ArgumentError("The index vector is used as scratch space and must have the " *
                             "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
     end
     if !initialized
@@ -1140,7 +1137,7 @@ function sortperm(A::AbstractArray;
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward,
-                  buffer::Union{AbstractVector{<:Integer}, Nothing}=nothing,
+                  scratch::Union{AbstractVector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
@@ -1155,7 +1152,7 @@ function sortperm(A::AbstractArray;
         end
     end
     ix = copymutable(LinearIndices(A))
-    sort!(ix; alg, order = Perm(ordr, vec(A)), buffer, dims...)
+    sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
 end
 
 
@@ -1201,7 +1198,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false,
-                   buffer::Union{AbstractVector{T}, Nothing}=nothing,
+                   scratch::Union{AbstractVector{T}, Nothing}=nothing,
                    dims...) where T <: Integer #to optionally specify dims argument
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
@@ -1209,7 +1206,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     if !initialized
         ix .= LinearIndices(A)
     end
-    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), buffer, dims...)
+    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
 end
 
 # sortperm for vectors of few unique integers
@@ -1241,7 +1238,7 @@ end
 ## sorting multi-dimensional arrays ##
 
 """
-    sort(A; dims::Integer, alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
+    sort(A; dims::Integer, alg::Algorithm=defalg(A), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
 
 Sort a multidimensional array `A` along the given dimension.
 See [`sort!`](@ref) for a description of possible
@@ -1269,12 +1266,12 @@ julia> sort(A, dims = 2)
 """
 function sort(A::AbstractArray{T};
               dims::Integer,
-              alg::Algorithm=DEFAULT_UNSTABLE,
+              alg::Algorithm=defalg(A),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              buffer::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+              scratch::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
     dim = dims
     order = ord(lt,by,rev,order)
     n = length(axes(A, dim))
@@ -1282,11 +1279,11 @@ function sort(A::AbstractArray{T};
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
-        sort_chunks!(Av, n, alg, order, buffer)
+        sort_chunks!(Av, n, alg, order, scratch)
         permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
-        sort_chunks!(Av, n, alg, order, buffer)
+        sort_chunks!(Av, n, alg, order, scratch)
         reshape(Av, axes(A))
     end
 end
@@ -1335,13 +1332,13 @@ function sort!(A::AbstractArray{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               buffer::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
-    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), buffer)
+               scratch::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+    _sort!(A, Val(dims), alg, ord(lt, by, rev, order), scratch)
 end
 function _sort!(A::AbstractArray{T}, ::Val{K},
                 alg::Algorithm,
                 order::Ordering,
-                buffer::Union{AbstractVector{T}, Nothing}) where {K,T}
+                scratch::Union{AbstractVector{T}, Nothing}) where {K,T}
     nd = ndims(A)
 
     1 <= K <= nd || throw(ArgumentError("dimension out of range"))
@@ -1349,7 +1346,7 @@ function _sort!(A::AbstractArray{T}, ::Val{K},
     remdims = ntuple(i -> i == K ? 1 : axes(A, i), nd)
     for idx in CartesianIndices(remdims)
         Av = view(A, ntuple(i -> i == K ? Colon() : idx[i], nd)...)
-        sort!(Av, alg, order, buffer)
+        sort!(Av, alg, order, scratch)
     end
     A
 end

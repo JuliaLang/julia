@@ -52,7 +52,7 @@ static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
     if (!ct)
         return;
     /* Unpoison everything from the base of the stack allocation to the address
-       that we're resetting to. The idea is to remove the posion from the frames
+       that we're resetting to. The idea is to remove the poison from the frames
        that we're skipping over, since they won't be unwound. */
     uintptr_t top = jmpbuf_sp(buf);
     uintptr_t bottom = (uintptr_t)ct->stkbuf;
@@ -1130,7 +1130,7 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
-void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct);
+void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
@@ -1246,10 +1246,6 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
-
-#ifdef SEGV_EXCEPTION
-extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
-#endif
 
 // -- Runtime intrinsics -- //
 JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;
@@ -1601,7 +1597,7 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #endif // _COMPILER_GCC_
 
 #ifdef __clang_gcanalyzer__
-  // Not a safepoint (so it dosn't free other values), but an artificial use.
+  // Not a safepoint (so it doesn't free other values), but an artificial use.
   // Usually this is unnecessary because the analyzer can see all real uses,
   // but sometimes real uses are harder for the analyzer to see, or it may
   // give up before it sees it, so this can be helpful to be explicit.

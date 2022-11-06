@@ -351,3 +351,7 @@ let NoinlineModule = Module()
         @test count(iscall((src, inlined_usually)), src.code) == 0
     end
 end
+
+# Issue #46839
+@test code_typed(()->invoke(BitSet, Any, x), ())[1][2] === Union{}
+@test code_typed(()->invoke(BitSet, Union{Tuple{Int32},Tuple{Int64}}, 1), ())[1][2] === Union{}

@@ -1947,7 +1947,7 @@ static void JL_NORETURN jl_method_error_bare(jl_function_t *f, jl_value_t *args,
         jl_static_show((JL_STREAM*)STDERR_FILENO,args); jl_printf((JL_STREAM*)STDERR_FILENO,"\n");
         jl_ptls_t ptls = jl_current_task->ptls;
         ptls->bt_size = rec_backtrace(ptls->bt_data, JL_MAX_BT_SIZE, 0);
-        jl_critical_error(0, NULL, jl_current_task);
+        jl_critical_error(0, 0, NULL, jl_current_task);
         abort();
     }
     // not reached
@@ -2000,7 +2000,7 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
 //
 // lim is the max # of methods to return. if there are more, returns jl_false.
 // Negative values stand for no limit.
-// Unless lim == -1, remove matches that are unambiguously covered by earler ones
+// Unless lim == -1, remove matches that are unambiguously covered by earlier ones
 JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *mt, int lim, int include_ambiguous,
                                              size_t world, size_t *min_valid, size_t *max_valid, int *ambig)
 {

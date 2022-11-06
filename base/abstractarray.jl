@@ -323,18 +323,26 @@ end
 
 """
     eachindex(A...)
+    eachindex(::IndexStyle, A::AbstractArray...)
 
 Create an iterable object for visiting each index of an `AbstractArray` `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
-simply the range `1:length(A)`. For other array types, return a specialized Cartesian
-range to efficiently index into the array with indices specified for every dimension. For
-other iterables, including strings and dictionaries, return an iterator object
-supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+simply the range `1:length(A)` if they use 1-based indexing.
+For array types that have not opted into fast linear indexing, a specialized Cartesian
+range is typically returned to efficiently index into the array with indices specified
+for every dimension.
+
+In general `eachindex` accepts arbitrary iterables, including strings and dictionaries, and returns
+an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+
+If `A` is `AbstractArray` it is possible to explicitly specify the style of the indices that
+should be returned by `eachindex` by passing a value having `IndexStyle` type as its first argument
+(typically `IndexLinear()` if linear indices are required or `IndexCartesian()` if Cartesian
+range is wanted).
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a [`UnitRange`](@ref)
-if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
-otherwise).
+iterable object that is fast for all arguments (typically a [`UnitRange`](@ref)
+if all inputs have fast linear indexing, a [`CartesianIndices`](@ref) otherwise).
 If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
 
@@ -488,7 +496,7 @@ first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[begin:min(begin + n - 1, end)]
+    v[range(begin, length=min(n, checked_length(v)))]
 end
 
 """
@@ -538,7 +546,7 @@ last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), 
 # Faster method for arrays
 function last(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[max(begin, end - n + 1):end]
+    v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
 """
@@ -1731,7 +1739,7 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
-# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+# The new way to compute the shape (more inferable than combining cat_size & cat_shape, due to Varargs + issue#36454)
 cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
 @inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
 _cat_size_shape(dims, shape) = shape
@@ -1941,7 +1949,7 @@ This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(
 and their higher-dimensional analogues.
 
 The special case `dims=1` is [`vcat`](@ref), and `dims=2` is [`hcat`](@ref).
-See also [`hvcat`](@ref), [`stack`](@ref), [`repeat`](@ref).
+See also [`hvcat`](@ref), [`hvncat`](@ref), [`stack`](@ref), [`repeat`](@ref).
 
 The keyword also accepts `Val(dims)`.
 
