@@ -224,7 +224,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
 end
 
 function julia_exename()
-    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+    if !Base.isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
