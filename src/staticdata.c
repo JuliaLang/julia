@@ -600,8 +600,8 @@ static uintptr_t jl_fptr_id(void *fptr)
 }
 
 // `jl_queue_for_serialization` adds items to `serialization_order`
-#define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
-static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate);
+#define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v))
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v);
 
 
 static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m)
@@ -633,6 +633,105 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     }
 }
 
+static void mark_(void **bp)
+{
+    *bp = (void*)(uintptr_t)-1;
+}
+
+static int has_mark(void *b)  // b = *bp
+{
+    return b == (void*)(uintptr_t)-1;
+}
+
+static int not_serialized(void *b)
+{
+    return b == HT_NOTFOUND || has_mark(b);
+}
+
+// static void **mark(jl_serializer_state *s, jl_value_t *v)
+// {
+//     void **bp = ptrhash_bp(&serialization_order, v);
+//     assert(not_serialized(*bp));
+//     mark_(bp);
+//     return bp;
+// }
+
+// static int ismarked(jl_serializer_state *s, jl_value_t *v)
+// {
+//     void **bp = ptrhash_bp(&serialization_order, v);
+//     return has_mark(*bp);
+// }
+
+static void queue_now_(jl_serializer_state *s, jl_value_t *v, void **bp)
+{
+    assert(not_serialized(*bp));
+    arraylist_push(&serialization_queue, (void*) v);
+    size_t idx = serialization_queue.len - 1;
+    assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
+    *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
+}
+
+static void queue_now(jl_serializer_state *s, jl_value_t *v)
+{
+    void **bp = ptrhash_bp(&serialization_order, v);
+    queue_now_(s, v, bp);
+}
+
+static void queue_if_needed(jl_serializer_state *s, jl_value_t *v)
+{
+    if (jl_needs_serialization(s, v)) {
+        void **bp = ptrhash_bp(&serialization_order, v);
+        if (not_serialized(*bp))
+            queue_now_(s, v, bp);
+    }
+}
+
+static void *tag_recursive(void *v)
+{
+    return (void*)((uintptr_t)v | (uintptr_t)1);
+}
+
+static void *tag_postorder(void *v)
+{
+    return (void*)((uintptr_t)v | (uintptr_t)2);
+}
+
+static int has_recursive_tag(void *v)
+{
+    return (uintptr_t)v & 1;
+}
+
+static int has_postorder_tag(void *v)
+{
+    return ((uintptr_t)v & 2) > 0;
+}
+
+static jl_value_t *strip_queue_tags(void *v)
+{
+    return (jl_value_t*)((uintptr_t)v & ~(uintptr_t)3);
+}
+
+static void add_to_worklist(jl_serializer_state *s, jl_value_t *v, int recursive, int postorder)
+{
+    void *vv = (void*)v;
+    if (recursive)
+        vv = tag_recursive(vv);
+    if (postorder)
+        vv = tag_postorder(vv);
+    arraylist_push(&object_worklist, vv);
+}
+
+static void add_object_and_type(jl_serializer_state *s, jl_value_t *v, int recursive, int postorder)
+{
+    if (v) {
+        add_to_worklist(s, v, recursive, postorder);
+        jl_value_t *t = jl_typeof(v);
+        if (t != v) {   // typeof(DataType) === DataType
+            add_to_worklist(s, t, recursive, jl_object_in_image(t) ? 0 : needs_uniquing(t));
+        }
+    }
+}
+
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
 // in serialization (i.e., have its own entry in `serialization_order`). Consequently,
 // objects that act as containers for other potentially-"problematic" objects must add such "children"
@@ -641,190 +740,123 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 // you want to handle uniquing of `Dict{String,Float64}` before you tackle `Vector{Dict{String,Float64}}`.
 // Uniquing is done in `serialization_order`, so the very first mention of such an object must
 // be the "source" rather than merely a cross-reference.
-static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive)
+static void process_queue(jl_serializer_state *s)
 {
-    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    jl_queue_for_serialization(s, t);
-
-    if (!recursive)
-        goto done_fields;
-
-    if (s->incremental) {
-        if (jl_is_datatype(v)) {
-            jl_datatype_t *dt = (jl_datatype_t*)v;
-            jl_svec_t *tt = dt->parameters;
-            // ensure all type parameters are recached
-            size_t i, l = jl_svec_len(tt);
-            for (i = 0; i < l; i++)
-                jl_queue_for_serialization_(s, jl_svecref(tt, i), 1, 1);
-            jl_queue_for_serialization_(s, (jl_value_t*)tt, 0, 1);
-            jl_value_t *singleton = dt->instance;
-            if (singleton && needs_uniquing(singleton)) {
-                assert(jl_needs_serialization(s, singleton)); // should be true, since we visited dt
-                // do not visit dt->instance for our template object as it leads to cycles
-                record_field_change(&dt->instance, jl_nothing);
-            }
+    while (object_worklist.len > 0) {
+        void *vv = arraylist_pop(&object_worklist);
+        jl_value_t *v = strip_queue_tags(vv);
+        if (!jl_needs_serialization(s, v))
+            continue;
+        void **bp = ptrhash_bp(&serialization_order, v);
+        if (!not_serialized(*bp))
+            continue;
+        int recursive = has_recursive_tag(vv);
+        int postorder = has_postorder_tag(vv);
+        if (!jl_object_in_image(v) && needs_uniquing(v))
+            postorder = 1;
+        if (!postorder || has_mark(*bp))
+            queue_now_(s, v, bp);
+        else {
+            mark_(bp);
+            add_to_worklist(s, v, 0, 0);  // put it back on the stack; fields will be added below
         }
-        else if (jl_is_typename(v)) {
-            jl_typename_t *tn = (jl_typename_t*)v;
-            (void)tn;
-            assert(!jl_object_in_image((jl_value_t*)tn->module));
-            assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
-        }
-        else if (jl_is_method_instance(v) && needs_recaching(v)) {
-            // we only need 3 specific fields of this
-            jl_method_instance_t *mi = (jl_method_instance_t*)v;
-            record_field_change((jl_value_t**)&mi->uninferred, NULL);
-            record_field_change((jl_value_t**)&mi->backedges, NULL);
-            record_field_change((jl_value_t**)&mi->callbacks, NULL);
-            record_field_change((jl_value_t**)&mi->cache, NULL);
-        }
-    }
-
-    if (jl_is_typename(v)) {
-        jl_typename_t *tn = (jl_typename_t*)v;
-        // don't recurse into several fields (yet)
-        jl_queue_for_serialization_(s, (jl_value_t*)tn->cache, 0, 1);
-        jl_queue_for_serialization_(s, (jl_value_t*)tn->linearcache, 0, 1);
-    }
-
-    const jl_datatype_layout_t *layout = t->layout;
-    if (layout->npointers == 0) {
-        // bitstypes do not require recursion
-    }
-    else if (jl_is_svec(v)) {
-        size_t i, l = jl_svec_len(v);
-        jl_value_t **data = jl_svec_data(v);
-        for (i = 0; i < l; i++) {
-            jl_queue_for_serialization(s, data[i]);
-        }
-    }
-    else if (jl_is_array(v)) {
-        jl_array_t *ar = (jl_array_t*)v;
-        jl_queue_for_serialization(s, jl_typeof(ar));
-        const char *data = (const char*)jl_array_data(ar);
-        if (ar->flags.ptrarray) {
-            size_t i, l = jl_array_len(ar);
-            for (i = 0; i < l; i++) {
-                jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[i], 1);
-                jl_queue_for_serialization(s, fld);
-            }
-        }
-        else if (ar->flags.hasptr) {
-            uint16_t elsz = ar->elsize;
-            size_t i, l = jl_array_len(ar);
-            jl_datatype_t *et = (jl_datatype_t*)jl_tparam0(jl_typeof(ar));
-            size_t j, np = et->layout->npointers;
-            for (i = 0; i < l; i++) {
-                for (j = 0; j < np; j++) {
-                    uint32_t ptr = jl_ptr_offset(et, j);
-                    jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], 1);
-                    jl_queue_for_serialization(s, fld);
+        if (!recursive)
+            continue;
+        if (s->incremental) {
+            if (jl_is_datatype(v)) {
+                jl_datatype_t *dt = (jl_datatype_t*)v;
+                jl_svec_t *tt = dt->parameters;
+                add_to_worklist(s, (jl_value_t*)tt, 0, 0);
+                // ensure all type parameters are recached
+                size_t i, l = jl_svec_len(tt);
+                for (i = 0; i < l; i++)
+                    add_to_worklist(s, jl_svecref(tt, i), 1, 1);
+                jl_value_t *singleton = dt->instance;
+                if (singleton && needs_uniquing(singleton)) {
+                    assert(jl_needs_serialization(s, singleton)); // should be true, since we visited dt
+                    // do not visit dt->instance for our template object as it leads to cycles
+                    record_field_change(&dt->instance, jl_nothing);
                 }
-                data += elsz;
+            }
+            else if (jl_is_typename(v)) {
+                jl_typename_t *tn = (jl_typename_t*)v;
+                (void)tn;
+                assert(!jl_object_in_image((jl_value_t*)tn->module));
+                assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
+            }
+            else if (jl_is_method_instance(v) && needs_recaching(v)) {
+                // we only need def, specTypes, and sparam_vals (backedges handled separately)
+                jl_method_instance_t *mi = (jl_method_instance_t*)v;
+                record_field_change((jl_value_t**)&mi->uninferred, NULL);
+                record_field_change((jl_value_t**)&mi->backedges, NULL);
+                record_field_change((jl_value_t**)&mi->callbacks, NULL);
+                record_field_change((jl_value_t**)&mi->cache, NULL);
+            }
+        }
+        if (jl_is_typename(v)) {
+            jl_typename_t *tn = (jl_typename_t*)v;
+            // don't recurse into several fields (yet)
+            queue_if_needed(s, (jl_value_t*)tn->cache);
+            queue_if_needed(s, (jl_value_t*)tn->linearcache);
+        }
+        jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+        const jl_datatype_layout_t *layout = t->layout;
+        if (layout->npointers == 0) {
+            // bitstypes do not require recursion
+        }
+        else if (jl_is_svec(v)) {
+            size_t i, l = jl_svec_len(v);
+            jl_value_t **data = jl_svec_data(v);
+            for (i = 0; i < l; i++) {
+                add_object_and_type(s, data[i], recursive, postorder);
+            }
+        }
+        else if (jl_is_array(v)) {
+            jl_array_t *ar = (jl_array_t*)v;
+            const char *data = (const char*)jl_array_data(ar);
+            if (ar->flags.ptrarray) {
+                size_t i, l = jl_array_len(ar);
+                for (i = 0; i < l; i++) {
+                    jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[i], 1);
+                    add_object_and_type(s, fld, 1, 0);
+                }
+            }
+            else if (ar->flags.hasptr) {
+                uint16_t elsz = ar->elsize;
+                size_t i, l = jl_array_len(ar);
+                jl_datatype_t *et = (jl_datatype_t*)jl_tparam0(jl_typeof(ar));
+                size_t j, np = et->layout->npointers;
+                for (i = 0; i < l; i++) {
+                    for (j = 0; j < np; j++) {
+                        uint32_t ptr = jl_ptr_offset(et, j);
+                        jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], 1);
+                        add_object_and_type(s, fld, 1, 0);
+                    }
+                    data += elsz;
+                }
+            }
+        }
+        else if (jl_typeis(v, jl_module_type)) {
+            jl_queue_module_for_serialization(s, (jl_module_t*)v);
+        }
+        else if (layout->nfields > 0) {
+            char *data = (char*)jl_data_ptr(v);
+            size_t i, np = layout->npointers;
+            for (i = 0; i < np; i++) {
+                uint32_t ptr = jl_ptr_offset(t, i);
+                jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], t->name->mutabl);
+                add_object_and_type(s, fld, recursive, postorder);
             }
         }
     }
-    else if (jl_typeis(v, jl_module_type)) {
-        jl_queue_module_for_serialization(s, (jl_module_t*)v);
-    }
-    else if (layout->nfields > 0) {
-        char *data = (char*)jl_data_ptr(v);
-        size_t i, np = layout->npointers;
-        for (i = 0; i < np; i++) {
-            uint32_t ptr = jl_ptr_offset(t, i);
-            jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], t->name->mutabl);
-            jl_queue_for_serialization(s, fld);
-        }
-    }
-
-done_fields:
-
-    // We've encountered an item we need to cache
-    arraylist_push(&serialization_queue, (void*) v);
-    size_t idx = serialization_queue.len - 1;
-    assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
-
-    void **bp = ptrhash_bp(&serialization_order, v);
-    assert(*bp == (void*)(uintptr_t)-1);
-    *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
 }
 
-static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate)
+static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v)
 {
     if (!jl_needs_serialization(s, v))
         return;
-
-    void **bp = ptrhash_bp(&serialization_order, v);
-    if (*bp != HT_NOTFOUND) {
-        if (!s->incremental)
-            return;
-        if (*bp != (void*)(uintptr_t)-1 || !immediate)
-            return;
-    }
-    *bp = (void*)(uintptr_t)-1;
-
-    // Items that require postorder traversal must visit their children prior to insertion into
-    // the worklist/serialization_order
-    if (s->incremental && !immediate) {
-        if (jl_is_uniontype(v))
-            immediate = 1;
-        else if (jl_is_unionall(v))
-            immediate = 1;
-        else if (jl_is_typevar(v))
-            immediate = 1;
-        else if (jl_is_vararg(v))
-            immediate = 1;
-        else if (jl_is_datatype(v))
-            immediate = 1;
-        else if (jl_isbits(jl_typeof(v)))
-            immediate = 1;
-        else if (s->incremental && needs_uniquing(v)) {
-            immediate = 1;
-            if (jl_is_method_instance(v)) {
-                // we only need 3 specific fields of this
-                jl_method_instance_t *mi = (jl_method_instance_t*)v;
-                jl_queue_for_serialization(s, mi->def.value);
-                jl_queue_for_serialization(s, mi->specTypes);
-                jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
-                recursive = 0;
-            }
-            else  {
-                assert(jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(v)));
-            }
-        }
-    }
-
-    if (immediate)
-        jl_insert_into_serialization_queue(s, v, recursive);
-    else
-        arraylist_push(&object_worklist, (void*)v);
-}
-
-// Do a pre-order traversal of the to-serialize worklist, in the identical order
-// to the calls to jl_queue_for_serialization would occur in a purely recursive
-// implementation, but without potentially running out of stack.
-static void jl_serialize_reachable(jl_serializer_state *s)
-{
-    size_t i, prevlen = 0;
-    while (object_worklist.len) {
-        // reverse!(object_worklist.items, prevlen:end);
-        // prevlen is the index of the first new object
-        for (i = prevlen; i < object_worklist.len; i++) {
-            size_t j = object_worklist.len - i + prevlen - 1;
-            void *tmp = object_worklist.items[i];
-            object_worklist.items[i] = object_worklist.items[j];
-            object_worklist.items[j] = tmp;
-        }
-        prevlen = --object_worklist.len;
-        jl_value_t *v = (jl_value_t*)object_worklist.items[prevlen];
-        void *idx = ptrhash_get(&serialization_order, (void*)v);
-        assert(idx != HT_NOTFOUND);
-        if (idx == (void*)(uintptr_t)-1) // might have been eagerly handled for post-order while in the lazy pre-order queue
-            jl_insert_into_serialization_queue(s, v, 1);
-        else
-            assert(s->incremental);
-    }
+    add_object_and_type(s, v, 1, jl_object_in_image(v) ? 0 : needs_uniquing(v));
+    process_queue(s);
 }
 
 static void ios_ensureroom(ios_t *s, size_t newsize) JL_NOTSAFEPOINT
@@ -2337,10 +2369,8 @@ static void jl_save_system_image_to_stream(ios_t *f,
             jl_queue_for_serialization(&s, ext_targets);
             jl_queue_for_serialization(&s, edges);
         }
-        jl_serialize_reachable(&s);
         // step 1.2: now that we have marked all bindings (badly), ensure all gvars are part of the sysimage
         record_gvars(&s, &gvars);
-        jl_serialize_reachable(&s);
         // step 1.3: prune (garbage collect) some special weak references from
         // built-in type caches
         for (i = 0; i < serialization_queue.len; i++) {
