@@ -4,6 +4,7 @@
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include "codegen_shared.h"
+#include "julia_internal.h"
 
 cl::opt<bool> ForceProfileAllocations("julia-force-profile-allocations", cl::init(false), cl::Hidden);
 cl::opt<bool> ForceProfileCalls("julia-force-profile-calls", cl::init(false), cl::Hidden);
@@ -19,7 +20,7 @@ static ProfilingFlags fromFunction(Function &F) {
 
     ProfilingFlags Flags = {false, false, false, false};
     if (auto ProfMD = F.getMetadata("julia.prof")) {
-        return ProfilingFlags::fromMDNode(ProfMD);
+        Flags = ProfilingFlags::fromMDNode(ProfMD);
     }
     Flags.ProfileAllocations |= ForceProfileAllocations;
     Flags.ProfileBranches |= ForceProfileBranches;
@@ -164,20 +165,38 @@ static void addAllocInstrumentation(FunctionProfile::AllocInfo &Prof, Function &
         for (auto &I : BB) {
             if (auto CI = dyn_cast<CallInst>(&I)) {
                 if (CI->getCalledFunction()) {
-                    bool Match = false;
+                    Value *AllocSize = nullptr;
+                    auto T_int64 = Type::getInt64Ty(F.getContext());
+                    IRBuilder<> Builder(CI);
                     if (Preopt) {
-                        Match = CI->getCalledFunction()->getName() == "julia.gc_alloc_obj";
+                        if (CI->getCalledFunction()->getName() == "julia.gc_alloc_obj") {
+                            //Duplicates the pool/big sizing logic from final-lowering, since
+                            //that can significantly change the size of the allocation
+                            auto sz = cast<ConstantInt>(CI->getArgOperand(1))->getZExtValue();
+                            int osize;
+                            int offset = jl_gc_classify_pools(sz, &osize);
+                            if (offset < 0) {
+                                AllocSize = ConstantInt::get(T_int64, sz + sizeof(void*));
+                            } else {
+                                AllocSize = ConstantInt::get(T_int64, osize);
+                            }
+                        }
                     }
                     else {
                         auto Name = CI->getCalledFunction()->getName();
-                        Match = Name.contains("jl_gc_pool_alloc") || Name.contains("jl_gc_big_alloc");
+                        if (Name.contains("jl_gc_pool_alloc")) {
+                            //size is argument 2 of gc_pool_alloc
+                            AllocSize = Builder.CreateIntCast(CI->getArgOperand(2), T_int64, false);
+                        } else if (Name.contains("jl_gc_big_alloc")) {
+                            //size is argument 1 of gc_big_alloc
+                            AllocSize = Builder.CreateIntCast(CI->getArgOperand(1), T_int64, false);
+                        }
                     }
-                    if (Match) {
-                        IRBuilder<> Builder(CI);
+                    if (AllocSize) {
                         //Increment size by the size of the allocation
-                        Builder.CreateAtomicRMW(AtomicRMWInst::Add, Size, Builder.CreateIntCast(CI->getArgOperand(1), Type::getInt64Ty(F.getContext()), false), Align(alignof(decltype(Prof.Size))), AtomicOrdering::Monotonic);
+                        Builder.CreateAtomicRMW(AtomicRMWInst::Add, Size, Builder.CreateIntCast(AllocSize, T_int64, false), Align(alignof(decltype(Prof.Size))), AtomicOrdering::Monotonic);
                         //Increment count by one
-                        Builder.CreateAtomicRMW(AtomicRMWInst::Add, Count, ConstantInt::get(Type::getInt64Ty(F.getContext()), 1), Align(alignof(decltype(Prof.Count))), AtomicOrdering::Monotonic);
+                        Builder.CreateAtomicRMW(AtomicRMWInst::Add, Count, ConstantInt::get(T_int64, 1), Align(alignof(decltype(Prof.Count))), AtomicOrdering::Monotonic);
                     }
                 }
             }
@@ -194,7 +213,7 @@ PreservedAnalyses JITPostoptimizationProfiler::run(Function &F, FunctionAnalysis
 
     if (!Flags.ProfileAllocations && !Flags.ProfileCalls)
         return PreservedAnalyses::all();
-    
+
     auto Prof = JITProf->getProfile(F.getName());
     if (!Prof)
         return PreservedAnalyses::all();
@@ -220,7 +239,7 @@ PreservedAnalyses JITPreoptimizationProfiler::run(Function &F, FunctionAnalysisM
 
     if (!Flags.ProfileBranches && !Flags.ProfileAllocations && !Flags.ApplyPGO)
         return PreservedAnalyses::all();
-    
+
     auto &Prof = JITProf->getOrCreateProfile(F.getName(), [&]() {
         auto FP = std::make_unique<FunctionProfile>();
         FP->Loops = FAM.getResult<LoopAnalysis>(F).getLoopsInPreorder().size();

@@ -303,6 +303,7 @@ public:
     uint64_t getGlobalValueAddress(StringRef Name);
     uint64_t getFunctionAddress(StringRef Name);
     StringRef getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *codeinst);
+    JITTargetAddress getAssemblyPointer(JITTargetAddress Addr);
     auto getContext() {
         return *ContextPool;
     }
@@ -371,6 +372,7 @@ private:
     JITFunctionProfiler Profiler;
     FunctionCache JITCache;
     ReoptimizationManager ReoptMgr;
+    StubDisassemblerPlugin *StubDisassembler;
 
 #ifndef JL_USE_JITLINK
     const std::shared_ptr<RTDyldMemoryManager> MemMgr;

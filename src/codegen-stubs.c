@@ -65,7 +65,8 @@ JL_DLLEXPORT size_t jl_jit_total_bytes_fallback(void)
 {
     return 0;
 }
-JL_DLLEXPORT void jl_dump_profile_data_impl(void)
+
+JL_DLLEXPORT void jl_dump_profile_data_fallback(void)
 {
 }
 

@@ -41,6 +41,8 @@ struct SymbolPromoter {
 
 size_t getModuleOptLevel(llvm::Module &M, bool DetermineOptLevel = false);
 
+llvm::StringRef getBaseName(llvm::StringRef Name);
+
 class ReoptimizationManager;
 
 class FunctionPartitioner {
@@ -125,7 +127,7 @@ private:
 
 class ReoptimizationManager {
 public:
-    ReoptimizationManager(JITFunctionProfiler &Profiler, FunctionCache &Cache, llvm::orc::JITDylib &JD, uint32_t MinOptLevel = 0, uint32_t MaxOptLevel = 3);
+    ReoptimizationManager(JITFunctionProfiler &Profiler, FunctionCache &Cache, uint32_t MinOptLevel = 0, uint32_t MaxOptLevel = 3);
 
     struct OptimizationResult {
         llvm::JITTargetAddress Address;
@@ -146,8 +148,6 @@ public:
         PostPartitioningLayer = Layer;
     }
 
-    void addToLinkOrder(llvm::orc::JITDylib &JD);
-
     bool blockingRecompileNext();
 
     void continuousRecompile() {
@@ -160,7 +160,6 @@ private:
     FunctionCache &Cache;
     llvm::orc::IRLayer *PostPartitioningLayer;
     ResourcePool<llvm::orc::ThreadSafeContext, 0, std::queue<llvm::orc::ThreadSafeContext>> ContextPool;
-    llvm::SmallVector<llvm::orc::JITDylib *, 4> OptJDs;
     ReoptimizationQueue Queue;
     uint32_t MinOptLevel;
     uint32_t MaxOptLevel;

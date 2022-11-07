@@ -358,10 +358,10 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         {
             auto lock = *this->codeinst_in_flight;
             auto &codeinst_in_flight = *lock;
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(getBaseName(sName));
             if (codeinst_it != codeinst_in_flight.end()) {
                 codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
+                // codeinst_in_flight.erase(codeinst_it);
             }
         }
         jl_profile_atomic([&]() {

@@ -502,7 +502,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
         if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(jl_ExecutionEngine->getAssemblyPointer(fptr), raw_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -541,7 +541,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             JL_UNLOCK(&jl_codegen_lock);
         }
         if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(jl_ExecutionEngine->getAssemblyPointer(specfptr), raw_mc, asm_variant, debuginfo, binary);
     }
 
     // whatever, that didn't work - use the assembler output instead
@@ -1174,7 +1174,7 @@ JuliaOJIT::JuliaOJIT()
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
-    ReoptMgr(Profiler, JITCache, JD),
+    ReoptMgr(Profiler, JITCache, 1, 2),
 #ifdef JL_USE_JITLINK
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
@@ -1207,7 +1207,8 @@ JuliaOJIT::JuliaOJIT()
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(total_size));
-    ObjectLayer.addPlugin(std::make_unique<StubDisassemblerPlugin>(ES, JD, ReoptMgr));
+    StubDisassembler = new StubDisassemblerPlugin(ES, JD, ReoptMgr);
+    ObjectLayer.addPlugin(std::unique_ptr<StubDisassemblerPlugin>(StubDisassembler));
 #else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
@@ -1255,7 +1256,6 @@ JuliaOJIT::JuliaOJIT()
     }
 
     JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchAllSymbols);
-    ReoptMgr.addToLinkOrder(JD);
 
     orc::SymbolAliasMap jl_crt = {
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
@@ -1414,6 +1414,10 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
     return *fname;
 }
 
+JITTargetAddress JuliaOJIT::getAssemblyPointer(JITTargetAddress MaybeStub) {
+    assert(StubDisassembler);
+    return StubDisassembler->launderStub(MaybeStub);
+}
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION < 140000
@@ -1771,5 +1775,7 @@ size_t jl_jit_total_bytes_impl(void)
 extern "C" JL_DLLEXPORT
 void jl_dump_profile_data_impl(void)
 {
+    dbgs() << "\nJIT PROFILE DATA START\n";
     jl_ExecutionEngine->dumpProfileData(dbgs());
+    dbgs() << "\nJIT PROFILE DATA END\n";
 }
