@@ -1,10 +1,24 @@
 #include "jitprof.h"
 
+#include <llvm/ADT/Statistic.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include "codegen_shared.h"
 #include "julia_internal.h"
+
+#define DEBUG_TYPE "jitprof"
+
+STATISTIC(NumPreoptAllocs, "Number of preoptimization allocations instrumented");
+STATISTIC(NumPostoptAllocs, "Number of preoptimization allocations instrumented");
+STATISTIC(NumBranches, "Number of branches instrumented");
+STATISTIC(NumCalls, "Number of calls instrumented");
+STATISTIC(NumPGO, "Number of PGO branches");
+STATISTIC(NumReporters, "Number of reporters instrumented");
+STATISTIC(NumAllocFunctions, "Number of functions alloc instrumented");
+STATISTIC(NumBranchFunctions, "Number of functions branch instrumented");
+STATISTIC(NumPGOFunctions, "Number of functions PGO instrumented");
+STATISTIC(NumProfiles, "Number of profiles collected");
 
 cl::opt<bool> ForceProfileAllocations("julia-force-profile-allocations", cl::init(false), cl::Hidden);
 cl::opt<bool> ForceProfileCalls("julia-force-profile-calls", cl::init(false), cl::Hidden);
@@ -53,6 +67,7 @@ static void addCallInstrumentation(FunctionProfile &Prof, Function &F) {
     auto CallPtr = ConstantExpr::getIntToPtr(ConstantInt::get(Type::getInt64Ty(F.getContext()), (uint64_t)&Prof.CallCount), Type::getInt64PtrTy(F.getContext()));
     //Increment call count by one
     auto CallCount = Builder.CreateAtomicRMW(AtomicRMWInst::Add, CallPtr, ConstantInt::get(Type::getInt64Ty(F.getContext()), 1), Align(alignof(decltype(Prof.CallCount))), AtomicOrdering::Monotonic);
+    ++NumCalls;
 
     //We might also care about reporting when we hit a certain threshold of calls, so we add an additional piece of metadata
     //for threshold, function, and arguments
@@ -74,6 +89,7 @@ static void addCallInstrumentation(FunctionProfile &Prof, Function &F) {
         auto ReporterFT = FunctionType::get(Type::getVoidTy(F.getContext()), Types, false);
         auto ReporterF = ConstantExpr::getIntToPtr(extractProfNum(ReporterMD, 1), ReporterFT->getPointerTo());
         Builder.CreateCall(ReporterFT, ReporterF, Args);
+        ++NumReporters;
     }
 }
 
@@ -114,6 +130,7 @@ static void addBranchInstrumentation(FunctionProfile &Prof, Function &F) {
             BI.Total = 0;
         }
     }
+    assert(!Prof.BranchProfiles.empty() && Prof.BranchProfiles.size() == extractProfNum(cast<MDTuple>(F.getMetadata("julia.prof.branch")), 0)->getZExtValue() && "Branch profile count mismatch");
     for (auto &BB : F) {
         auto Term = BB.getTerminator();
         auto BranchMD = Term->getMetadata("julia.prof.branch");
@@ -128,7 +145,9 @@ static void addBranchInstrumentation(FunctionProfile &Prof, Function &F) {
         IRBuilder<> Builder(Term);
         Builder.CreateAtomicRMW(AtomicRMWInst::Add, TotalPtr, ConstantInt::get(Type::getInt64Ty(F.getContext()), 1), Align(alignof(decltype(BI.Total))), AtomicOrdering::Monotonic);
         Builder.CreateAtomicRMW(AtomicRMWInst::Add, TakenPtr, Builder.CreateZExt(cast<BranchInst>(Term)->getCondition(), Type::getInt64Ty(F.getContext())), Align(alignof(decltype(BI.Taken))), AtomicOrdering::Monotonic);
+        ++NumBranches;
     }
+    ++NumBranchFunctions;
 }
 
 static void applyPGOInstrumentation(FunctionProfile &Prof, Function &F) {
@@ -154,8 +173,10 @@ static void applyPGOInstrumentation(FunctionProfile &Prof, Function &F) {
         if (Total > 0) {
             auto MD = MDB.createBranchWeights(Taken, Total - Taken);
             BB.getTerminator()->setMetadata(LLVMContext::MD_prof, MD);
+            ++NumPGO;
         }
     }
+    ++NumPGOFunctions;
 }
 
 static void addAllocInstrumentation(FunctionProfile::AllocInfo &Prof, Function &F, bool Preopt) {
@@ -197,11 +218,14 @@ static void addAllocInstrumentation(FunctionProfile::AllocInfo &Prof, Function &
                         Builder.CreateAtomicRMW(AtomicRMWInst::Add, Size, Builder.CreateIntCast(AllocSize, T_int64, false), Align(alignof(decltype(Prof.Size))), AtomicOrdering::Monotonic);
                         //Increment count by one
                         Builder.CreateAtomicRMW(AtomicRMWInst::Add, Count, ConstantInt::get(T_int64, 1), Align(alignof(decltype(Prof.Count))), AtomicOrdering::Monotonic);
+                        ++(Preopt ? NumPreoptAllocs : NumPostoptAllocs);
                     }
                 }
             }
         }
     }
+    if (Preopt)
+        ++NumAllocFunctions;
 }
 
 PreservedAnalyses JITPostoptimizationProfiler::run(Function &F, FunctionAnalysisManager &FAM) {
@@ -330,6 +354,7 @@ FunctionProfile &JITFunctionProfiler::getOrCreateProfile(StringRef Name, unique_
     if (It == FunctionProfiles.end()) {
         auto Prof = Create();
         It = FunctionProfiles.insert(std::make_pair(Name, std::move(Prof))).first;
+        ++NumProfiles;
     }
     return *It->second;
 }

@@ -5,6 +5,7 @@
 #include <llvm/ExecutionEngine/Orc/IRTransformLayer.h>
 #include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #include <llvm/Passes/PassBuilder.h>
+#include <llvm/Support/BranchProbability.h>
 
 #include "concurrent-utils.h"
 #include "jitprof.h"
@@ -16,6 +17,7 @@ public:
         //The stub must be written at the same time the version and optlevel are written,
         //so that future optimize operations can update the stub safely
         std::mutex StubMutex;
+        std::condition_variable StubCV; // Wait for raced updates to finish
         llvm::JITTargetAddress *Stub;
         std::atomic<int32_t> Version;
         uint32_t OptLevel;
@@ -98,19 +100,27 @@ private:
 
 class ReoptimizationQueue {
 public:
+
     struct Entry {
         llvm::orc::SymbolStringPtr Name;
         llvm::orc::JITDylib *JD;
-        int32_t Version;
-        uint32_t Idx;
         int64_t Priority;
+        int32_t Version;
+        int32_t OptLevel;
+        uint32_t Idx;
+
+        bool speculative() const {
+            return OptLevel >= 0;
+        }
 
         bool operator<(const Entry &Other) const {
-            return Priority < Other.Priority || (Priority == Other.Priority && Idx < Other.Idx);
+            //Speculation has lower priority than non-speculation, otherwise we sort by priority, otherwise older entries get priority
+            return speculative() != Other.speculative() ? speculative() : Priority < Other.Priority || (Priority == Other.Priority && Idx > Other.Idx);
         }
     };
 
     bool enqueue(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint16_t Priority);
+    bool speculate(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint32_t OptLevel, llvm::BranchProbability Probability);
     llvm::Optional<Entry> try_dequeue();
     llvm::Optional<Entry> wait_dequeue();
 
@@ -123,6 +133,20 @@ private:
     uint32_t Idx = 0;
     uint32_t Waiters = 0;
     bool Dead = false;
+};
+
+
+// Try to identify functions that could be speculatively optimized
+class SpeculationPass : public llvm::PassInfoMixin<SpeculationPass> {
+public:
+    SpeculationPass() : JD(nullptr), ReoptMgr(nullptr) {}
+    SpeculationPass(llvm::orc::JITDylib &JD, ReoptimizationManager &ReoptMgr)
+        : JD(&JD), ReoptMgr(&ReoptMgr) {}
+
+    llvm::PreservedAnalyses run(llvm::Function &F, llvm::FunctionAnalysisManager &FAM);
+private:
+    llvm::orc::JITDylib *JD;
+    ReoptimizationManager *ReoptMgr;
 };
 
 class ReoptimizationManager {
@@ -138,6 +162,9 @@ public:
     OptimizationResult optimize(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib &JD, int32_t Version, uint32_t OptLevel);
 
     bool profileReentry(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint32_t OptLevel);
+    bool speculate(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint32_t OptLevel, llvm::BranchProbability Probability) {
+        return Queue.speculate(Name, JD, Version, OptLevel, Probability);
+    }
 
     std::pair<uint32_t, uint32_t> getOptLevelRange() const {
         return std::make_pair(MinOptLevel, MaxOptLevel);
@@ -152,6 +179,14 @@ public:
 
     void continuousRecompile() {
         while (blockingRecompileNext());
+    }
+
+    JITFunctionProfiler &getProfiler() {
+        return Profiler;
+    }
+
+    FunctionCache &getCache() {
+        return Cache;
     }
 
 private:

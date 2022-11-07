@@ -343,6 +343,11 @@ public:
     void dumpProfileData(raw_ostream &OS) {
         Profiler.dump(OS);
     }
+
+    void speculateInitial(StringRef Name) {
+        ReoptMgr.speculate(ES.intern(Name), &JD, 0, 1, {1, 1});
+    }
+
 private:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);

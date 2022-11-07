@@ -197,6 +197,7 @@ static jl_callptr_t _jl_compile_codeinst(
         orc::ThreadSafeModule result_m =
             jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
+        auto SpeculateName = decls.specFunctionObject;
         if (result_m)
             emitted[codeinst] = {std::move(result_m), std::move(decls)};
         {
@@ -232,6 +233,9 @@ static jl_callptr_t _jl_compile_codeinst(
             // Add the results to the execution engine now
             orc::ThreadSafeModule &M = std::get<0>(def.second);
             jl_add_to_ee(M, NewExports);
+        }
+        if (!SpeculateName.empty()) {
+            jl_ExecutionEngine->speculateInitial(SpeculateName);
         }
         ++CompiledCodeinsts;
         MaxWorkqueueSize.updateMax(emitted.size());
@@ -1048,7 +1052,7 @@ namespace {
 #endif
 
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, JITFunctionProfiler &Profiler) : Profiler(Profiler) {
+        OptimizerT(TargetMachine &TM, ReoptimizationManager &ReoptMgr) : ReoptMgr(ReoptMgr) {
             for (size_t i = 0; i < PMs.size(); i++) {
                 PMs[i] = std::make_unique<ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i));
             }
@@ -1091,13 +1095,16 @@ namespace {
                 assert(!verifyModule(M, &errs()));
                 AnalysisManagers AM(*TM, PB, OptimizationLevel::O0);
                 ModulePassManager MPM;
-                MPM.addPass(createModuleToFunctionPassAdaptor(Profiler.createPreoptimizationProfiler()));
+                MPM.addPass(createModuleToFunctionPassAdaptor(ReoptMgr.getProfiler().createPreoptimizationProfiler()));
                 MPM.run(M, AM.MAM);
                 (****PMs[optlevel]).run(M);
                 MPM = ModulePassManager();
                 PB = PassBuilder();
                 AnalysisManagers AM2(*TM, PB, OptimizationLevel::O0);
-                MPM.addPass(createModuleToFunctionPassAdaptor(Profiler.createPostoptimizationProfiler()));
+                FunctionPassManager FPM;
+                FPM.addPass(ReoptMgr.getProfiler().createPostoptimizationProfiler());
+                FPM.addPass(SpeculationPass(R.getTargetJITDylib(), ReoptMgr));
+                MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
                 MPM.run(M, AM2.MAM);
                 assert(!verifyModule(M, &errs()));
 
@@ -1126,7 +1133,7 @@ namespace {
         }
     private:
         std::array<std::unique_ptr<ResourcePool<std::unique_ptr<PassManager>>>, 4> PMs;
-        JITFunctionProfiler &Profiler;
+        ReoptimizationManager &ReoptMgr;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
@@ -1146,7 +1153,8 @@ namespace {
     };
 
     bool shouldReoptimize(const Function &F) {
-        return F.getName().startswith("julia_");
+        auto Name = F.getName();
+        return Name.startswith("julia_") || Name.startswith("japi");
     }
 }
 
@@ -1191,7 +1199,7 @@ JuliaOJIT::JuliaOJIT()
     CompileLayer(ES, ObjectLayer,
     std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
     MangleLayer(CompileLayer.getExecutionSession(), CompileLayer, FunctionMangler),
-    OptimizeLayer(MangleLayer.getExecutionSession(), MangleLayer, OptimizerT(*TM, Profiler)),
+    OptimizeLayer(MangleLayer.getExecutionSession(), MangleLayer, OptimizerT(*TM, ReoptMgr)),
     PartitionLayer(OptimizeLayer.getExecutionSession(), OptimizeLayer, FunctionPartitioner(ES, JITCache, ReoptMgr, *OptimizeLayer.getManglingOptions(), shouldReoptimize))
 {
 #ifdef JL_USE_JITLINK
