@@ -1138,7 +1138,8 @@ let didthrow =
             """)
         false
     catch ex
-        @test isa(ex, ErrorException)
+        @test isa(ex, LoadError)
+        @test isa(ex.error, ErrorException)
         true
     end
     @test didthrow
@@ -1157,7 +1158,8 @@ let didthrow =
             """)
         false
     catch ex
-        @test isa(ex, ErrorException)
+        @test isa(ex, LoadError)
+        @test isa(ex.error, ErrorException)
         true
     end
     @test didthrow
