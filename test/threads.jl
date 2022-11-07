@@ -255,7 +255,7 @@ cmd = """
     sleep(100)
     isopen(stdin) || exit()
     println(stderr, "ERROR: Killing threads test due to watchdog expiry")
-    ccall(:uv_kill, Cint, (Cint, Cint), $(getpid()), Base.SIGTERM)
+    ccall(:uv_kill, Cint, (Cint, Cint), $(getpid()), Base.SIGQUIT)
 """
 proc = open(pipeline(`$(Base.julia_cmd()) -e $cmd`; stderr=stderr); write=true)
 

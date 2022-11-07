@@ -63,7 +63,7 @@ function challenge_prompt(cmd::Cmd, challenges)
             end
 
             if process_running(p)
-                kill(p)
+                kill(p, Base.SIGQUIT)
                 put!(timer, :timeout)
             elseif success(p)
                 put!(timer, :success)
