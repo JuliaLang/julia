@@ -864,17 +864,30 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
 
     len = hi-lo + 1
     U = UIntMappable(eltype(v), o)
+    # A large if-else chain to avoid type instabilities and dynamic dispatch
     if scratch !== nothing && checkbounds(Bool, scratch, lo:hi) # Fully preallocated and aligned scratch
-        u2 = radix_sort!(u, lo, hi, bits, reinterpret(U, scratch))
-        uint_unmap!(v, u2, lo, hi, o, umn)
+        t = reinterpret(U, scratch)
+        if radix_sort!(u, lo, hi, bits, t)
+            uint_unmap!(v, u, lo, hi, o, umn)
+        else
+            uint_unmap!(v, t, lo, hi, o, umn)
+        end
     elseif scratch !== nothing && (applicable(resize!, scratch, len) || length(scratch) >= len) # Viable scratch
         length(scratch) >= len || resize!(scratch, len)
         t1 = axes(scratch, 1) isa OneTo ? scratch : view(scratch, firstindex(scratch):lastindex(scratch))
-        u2 = radix_sort!(view(u, lo:hi), 1, len, bits, reinterpret(U, t1))
-        uint_unmap!(view(v, lo:hi), u2, 1, len, o, umn)
+        t = reinterpret(U, t1)
+        if radix_sort!(view(u, lo:hi), 1, len, bits, t)
+            uint_unmap!(view(v, lo:hi), view(u, lo:hi), 1, len, o, umn)
+        else
+            uint_unmap!(view(v, lo:hi), t, 1, len, o, umn)
+        end
     else # No viable scratch
-        u2 = radix_sort!(u, lo, hi, bits, similar(u))
-        uint_unmap!(v, u2, lo, hi, o, umn)
+        t = similar(u)
+        if radix_sort!(u, lo, hi, bits, t)
+            uint_unmap!(v, u, lo, hi, o, umn)
+        else
+            uint_unmap!(v, t, lo, hi, o, umn)
+        end
     end
 end
 
@@ -1025,16 +1038,28 @@ function _sort!(v::AbstractVector, a::StableCheckSorted, o::Ordering, kw)
 end
 
 
-# In the case of an odd number of passes, the returned vector will === the input vector t,
-# not v. This is one of the many reasons radix_sort! is not exported.
+# The return value indicates whether v is sorted (true) or t is sorted (false)
+# This is one of the many reasons radix_sort! is not exported.
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
                      t::AbstractVector{U}, chunk_size=radix_chunk_size_heuristic(lo, hi, bits)) where U <: Unsigned
     # bits is unsigned for performance reasons.
-    mask = UInt(1) << chunk_size - 1
-    counts = Vector{Int}(undef, mask+2)
+    counts = Vector{Int}(undef, 1 << chunk_size + 1)
 
-    @inbounds for shift in 0:chunk_size:bits-1
-
+    shift = 0
+    while true
+        @noinline radix_sort_pass!(t, lo, hi, counts, v, shift, chunk_size)
+        # the latest data resides in t
+        shift += chunk_size
+        shift < bits || return false
+        @noinline radix_sort_pass!(v, lo, hi, counts, t, shift, chunk_size)
+        # the latest data resides in v
+        shift += chunk_size
+        shift < bits || return true
+    end
+end
+function radix_sort_pass!(t, lo, hi, counts, v, shift, chunk_size)
+    mask = UInt(1) << chunk_size - 1  # mask is defined in pass so that the compiler
+    @inbounds begin                   #  ↳ knows it's shape
         # counts[2:mask+2] will store the number of elements that fall into each bucket.
         # if chunk_size = 8, counts[2] is bucket 0x00 and counts[257] is bucket 0xff.
         counts .= 0
@@ -1058,12 +1083,7 @@ function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsig
             t[j] = x                  # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
-
-        v, t = t, v # swap the now sorted destination vector t back into primary vector v
-
     end
-
-    v
 end
 function radix_chunk_size_heuristic(lo::Integer, hi::Integer, bits::Unsigned)
     # chunk_size is the number of bits to radix over at once.
