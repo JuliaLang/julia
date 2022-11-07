@@ -33,6 +33,8 @@ Base.MainInclude.include
 Base.include_string
 Base.include_dependency
 __init__
+Base.atinit
+Base.@atinit
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show
