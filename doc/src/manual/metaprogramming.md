@@ -12,12 +12,17 @@ capabilities are available to explore the internals of a program and its types j
 data.
 
 !!! warning
-    Metaprogramming is a powerful tool, but it introduces complexity that can make code more 
-    difficult to understand. It should typically be used only when other approaches such as 
-    [higher order functions](@ref man-anonymous-functions) cannot be applied.
+    Metaprogramming is a powerful tool, but it introduces complexity that can make code more
+    difficult to understand. For example, it can be surprisingly hard to get scope rules
+    correct. Metaprogramming should typically be used only when other approaches such as
+    [higher order functions](@ref man-anonymous-functions) and
+    [closures](https://en.wikipedia.org/wiki/Closure_(computer_programming)) cannot be applied.
     
-    `eval`, `Meta.parse`, and defining new macros should be typically used as a last resort. It
-    is generally not a good idea to convert an arbitrary string into julia code.
+    `eval`, `Meta.parse`, and defining new macros should be typically used as a last resort.
+    It is almost never a good idea to convert an arbitrary string into julia code.
+    
+    The best uses of metaprogramming often implement most of their functionality in runtime
+    helper functions, striving to minimize the amount of code they generate.
     
 ## Program representation
 
