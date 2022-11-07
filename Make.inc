@@ -1485,11 +1485,17 @@ else
 LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
 endif
 endif
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
 ifeq ($(OS),Darwin)
 ifeq ($(ARCH),aarch64)
 LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
 else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
+else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
 endif
 endif
 ifneq ($(findstring $(OS),Linux FreeBSD),)

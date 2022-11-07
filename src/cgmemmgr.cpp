@@ -300,7 +300,7 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
         // However, it seems possible to change this at kernel compile time.
 
         // pwrite doesn't support offset with sign bit set but lseek does.
-        // This is obviously not thread safe but none of the mem manager does anyway...
+        // This is obviously not thread-safe but none of the mem manager does anyway...
         // From the kernel code, `lseek` with `SEEK_SET` can't fail.
         // However, this can possibly confuse the glibc wrapper to think that
         // we have invalid input value. Use syscall directly to be sure.

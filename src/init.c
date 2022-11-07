@@ -846,9 +846,6 @@ static void post_boot_hooks(void)
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
     jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-#ifdef SEGV_EXCEPTION
-    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
-#endif
     jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
