@@ -154,8 +154,6 @@ end
 
 notify_error(c::GenericCondition, err) = notify(c, err, true, true)
 
-n_waiters(c::GenericCondition) = length(c.waitq)
-
 """
     isempty(condition)
 

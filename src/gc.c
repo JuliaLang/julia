@@ -2288,7 +2288,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 // This way the scan "loop" gets exactly what it expects after a stack pop.
 // Additional optimizations are done for some of the common cases by skipping
 // the unnecessary data stack pointer increment and the load from the stack
-// (i.e. store to load forwaring). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
+// (i.e. store to load forwarding). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
 JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
 {
     if (__unlikely(ptls == NULL)) {

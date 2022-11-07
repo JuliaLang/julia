@@ -459,8 +459,10 @@ For empty collections, providing `init` will be necessary, except for some speci
 neutral element of `op`.
 
 Reductions for certain commonly-used operators may have special implementations, and
-should be used instead: `maximum(itr)`, `minimum(itr)`, `sum(itr)`, `prod(itr)`,
- `any(itr)`, `all(itr)`.
+should be used instead: [`maximum`](@ref)`(itr)`, [`minimum`](@ref)`(itr)`, [`sum`](@ref)`(itr)`,
+[`prod`](@ref)`(itr)`, [`any`](@ref)`(itr)`, [`all`](@ref)`(itr)`.
+There are efficient methods for concatenating certain arrays of arrays
+by calling `reduce(`[`vcat`](@ref)`, arr)` or `reduce(`[`hcat`](@ref)`, arr)`.
 
 The associativity of the reduction is implementation dependent. This means that you can't
 use non-associative operations like `-` because it is undefined whether `reduce(-,[1,2,3])`
@@ -1220,13 +1222,13 @@ function _any(f, itr, ::Colon)
     return anymissing ? missing : false
 end
 
-# Specialized versions of any(f, ::Tuple), avoiding type instabilities for small tuples
-# containing mixed types.
+# Specialized versions of any(f, ::Tuple)
 # We fall back to the for loop implementation all elements have the same type or
 # if the tuple is too large.
-any(f, itr::NTuple) = _any(f, itr, :)  # case of homogeneous tuple
-function any(f, itr::Tuple)            # case of tuple with mixed types
-    length(itr) > 32 && return _any(f, itr, :)
+function any(f, itr::Tuple)
+    if itr isa NTuple || length(itr) > 32
+        return _any(f, itr, :)
+    end
     _any_tuple(f, false, itr...)
 end
 
@@ -1291,11 +1293,12 @@ function _all(f, itr, ::Colon)
     return anymissing ? missing : true
 end
 
-# Specialized versions of all(f, ::Tuple), avoiding type instabilities for small tuples
-# containing mixed types. This is similar to any(f, ::Tuple) defined above.
-all(f, itr::NTuple) = _all(f, itr, :)
+# Specialized versions of all(f, ::Tuple),
+# This is similar to any(f, ::Tuple) defined above.
 function all(f, itr::Tuple)
-    length(itr) > 32 && return _all(f, itr, :)
+    if itr isa NTuple || length(itr) > 32
+        return _all(f, itr, :)
+    end
     _all_tuple(f, false, itr...)
 end
 
