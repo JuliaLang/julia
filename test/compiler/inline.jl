@@ -1039,26 +1039,6 @@ struct FooTheRef
     x::Ref
     FooTheRef(v) = new(v === nothing ? THE_REF_NULL : THE_REF)
 end
-let src = code_typed1() do
-        FooTheRef(nothing)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        FooTheRef(0)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(nothing::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(0::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
 @test fully_eliminated() do
     FooTheRef(nothing)
     nothing
@@ -1810,4 +1790,29 @@ let src = code_typed1((NewInstruction,Any,Any,CallInfo)) do newinst, stmt, type,
     @test count(issplatnew, src.code) == 0
     @test count(iscall((src,NamedTuple)), src.code) == 0
     @test count(isnew, src.code) == 1
+end
+
+# Test that inlining can still use nothrow information from concrete-eval
+# even if the result itself is too big to be inlined, and nothrow is not
+# known without concrete-eval
+const THE_BIG_TUPLE = ntuple(identity, 1024)
+function return_the_big_tuple(err::Bool)
+    err && error("BAD")
+    return THE_BIG_TUPLE
+end
+@noinline function return_the_big_tuple_noinline(err::Bool)
+    err && error("BAD")
+    return THE_BIG_TUPLE
+end
+big_tuple_test1() = return_the_big_tuple(false)[1]
+big_tuple_test2() = return_the_big_tuple_noinline(false)[1]
+
+@test fully_eliminated(big_tuple_test2, Tuple{})
+# Currently we don't run these cleanup passes, but let's make sure that
+# if we did, inlining would be able to remove this
+let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
+    ir = Core.Compiler.compact!(ir, true)
+    ir = Core.Compiler.cfg_simplify!(ir)
+    ir = Core.Compiler.compact!(ir, true)
+    @test length(ir.stmts) == 1
 end

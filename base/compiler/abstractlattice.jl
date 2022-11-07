@@ -9,7 +9,8 @@ extensions.
 """
 struct JLTypeLattice <: AbstractLattice; end
 widenlattice(::JLTypeLattice) = error("Type lattice is the least-precise lattice available")
-is_valid_lattice(::JLTypeLattice, @nospecialize(elem)) = isa(elem, Type)
+is_valid_lattice(lattice::JLTypeLattice, @nospecialize(elem)) = is_valid_lattice_norec(lattice, elem)
+is_valid_lattice_norec(::JLTypeLattice, @nospecialize(elem)) = isa(elem, Type)
 
 """
     struct ConstsLattice
@@ -18,8 +19,7 @@ A lattice extending `JLTypeLattice` and adjoining `Const` and `PartialTypeVar`.
 """
 struct ConstsLattice <: AbstractLattice; end
 widenlattice(::ConstsLattice) = JLTypeLattice()
-is_valid_lattice(lattice::ConstsLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, Const) || isa(elem, PartialTypeVar)
+is_valid_lattice_norec(lattice::ConstsLattice, @nospecialize(elem)) = isa(elem, Const) || isa(elem, PartialTypeVar)
 
 """
     struct PartialsLattice{L}
@@ -30,9 +30,7 @@ struct PartialsLattice{L <: AbstractLattice} <: AbstractLattice
     parent::L
 end
 widenlattice(L::PartialsLattice) = L.parent
-is_valid_lattice(lattice::PartialsLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) ||
-    isa(elem, PartialStruct) || isa(elem, PartialOpaque)
+is_valid_lattice_norec(lattice::PartialsLattice, @nospecialize(elem)) = isa(elem, PartialStruct) || isa(elem, PartialOpaque)
 
 """
     struct ConditionalsLattice{L}
@@ -43,15 +41,13 @@ struct ConditionalsLattice{L <: AbstractLattice} <: AbstractLattice
     parent::L
 end
 widenlattice(L::ConditionalsLattice) = L.parent
-is_valid_lattice(lattice::ConditionalsLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, Conditional)
+is_valid_lattice_norec(lattice::ConditionalsLattice, @nospecialize(elem)) = isa(elem, Conditional)
 
 struct InterConditionalsLattice{L <: AbstractLattice} <: AbstractLattice
     parent::L
 end
 widenlattice(L::InterConditionalsLattice) = L.parent
-is_valid_lattice(lattice::InterConditionalsLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, InterConditional)
+is_valid_lattice_norec(lattice::InterConditionalsLattice, @nospecialize(elem)) = isa(elem, InterConditional)
 
 const AnyConditionalsLattice{L} = Union{ConditionalsLattice{L}, InterConditionalsLattice{L}}
 const BaseInferenceLattice = typeof(ConditionalsLattice(PartialsLattice(ConstsLattice())))
@@ -67,8 +63,7 @@ struct InferenceLattice{L} <: AbstractLattice
     parent::L
 end
 widenlattice(L::InferenceLattice) = L.parent
-is_valid_lattice(lattice::InferenceLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, LimitedAccuracy)
+is_valid_lattice_norec(lattice::InferenceLattice, @nospecialize(elem)) = isa(elem, LimitedAccuracy)
 
 """
     struct OptimizerLattice
@@ -76,10 +71,12 @@ is_valid_lattice(lattice::InferenceLattice, @nospecialize(elem)) =
 The lattice used by the optimizer. Extends
 `BaseInferenceLattice` with `MaybeUndef`.
 """
-struct OptimizerLattice <: AbstractLattice; end
-widenlattice(L::OptimizerLattice) = BaseInferenceLattice.instance
-is_valid_lattice(lattice::OptimizerLattice, @nospecialize(elem)) =
-    is_valid_lattice(widenlattice(lattice), elem) || isa(elem, MaybeUndef)
+struct OptimizerLattice{L} <: AbstractLattice
+    parent::L
+end
+OptimizerLattice() = OptimizerLattice(BaseInferenceLattice.instance)
+widenlattice(L::OptimizerLattice) = L.parent
+is_valid_lattice_norec(lattice::OptimizerLattice, @nospecialize(elem)) = isa(elem, MaybeUndef)
 
 """
     tmeet(lattice, a, b::Type)
@@ -171,3 +168,13 @@ tmerge(@nospecialize(a), @nospecialize(b)) = tmerge(fallback_lattice, a, b)
 ⊏(@nospecialize(a), @nospecialize(b)) = ⊏(fallback_lattice, a, b)
 ⋤(@nospecialize(a), @nospecialize(b)) = ⋤(fallback_lattice, a, b)
 is_lattice_equal(@nospecialize(a), @nospecialize(b)) = is_lattice_equal(fallback_lattice, a, b)
+
+is_valid_lattice(lattice::AbstractLattice, @nospecialize(elem)) = is_valid_lattice_norec(lattice, elem) &&
+    is_valid_lattice(widenlattice(lattice), elem)
+
+# Widenlattice with argument
+widenlattice(::JLTypeLattice, @nospecialize(t)) = widenconst(t)
+function widenlattice(lattice::AbstractLattice, @nospecialize(t))
+    is_valid_lattice_norec(lattice, t) && return t
+    widenlattice(widenlattice(lattice), t)
+end

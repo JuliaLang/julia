@@ -951,6 +951,7 @@ entered in the Julia REPL (and most editors, appropriately configured) by typing
 Function composition also works in prefix form: `∘(f, g)` is the same as `f ∘ g`.
 The prefix form supports composition of multiple functions: `∘(f, g, h) = f ∘ g ∘ h`
 and splatting `∘(fs...)` for composing an iterable collection of functions.
+The last argument to `∘` execute first.
 
 !!! compat "Julia 1.4"
     Multiple function composition requires at least Julia 1.4.
@@ -1314,14 +1315,13 @@ contains `missing` but not `item`, in which case `missing` is returned
 matching the behavior of [`any`](@ref) and [`==`](@ref)).
 
 Some collections follow a slightly different definition. For example,
-[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements.
-[`Dict`](@ref)s look for `key=>value` pairs, and the key is compared using
-[`isequal`](@ref). To test for the presence of a key in a dictionary,
-use [`haskey`](@ref) or `k in keys(dict)`. For these collections, the result
-is always a `Bool` and never `missing`.
+[`Set`](@ref)s check whether the item [`isequal`](@ref) to one of the elements;
+[`Dict`](@ref)s look for `key=>value` pairs, and the `key` is compared using
+[`isequal`](@ref).
 
-To determine whether an item is not in a given collection, see [`∉`](@ref).
-You may also negate the `in` by doing `!(a in b)` which is logically similar to "not in".
+To test for the presence of a key in a dictionary, use [`haskey`](@ref)
+or `k in keys(dict)`. For the collections mentioned above,
+the result is always a `Bool`.
 
 When broadcasting with `in.(items, collection)` or `items .∈ collection`, both
 `item` and `collection` are broadcasted over, which is often not what is intended.
@@ -1330,6 +1330,8 @@ a vector indicating whether each value in collection `items` is `in` the value a
 corresponding position in `collection`. To get a vector indicating whether each value
 in `items` is in `collection`, wrap `collection` in a tuple or a `Ref` like this:
 `in.(items, Ref(collection))` or `items .∈ Ref(collection)`.
+
+See also: [`∉`](@ref).
 
 # Examples
 ```jldoctest
@@ -1354,11 +1356,8 @@ true
 julia> missing in Set([1, 2])
 false
 
-julia> !(21 in a)
-true
-
-julia> !(19 in a)
-false
+julia> (1=>missing) in Dict(1=>10, 2=>20)
+missing
 
 julia> [1, 2] .∈ [2, 3]
 2-element BitVector:

@@ -33,7 +33,7 @@ You can wait for a remote call to finish by calling [`wait`](@ref) on the return
 and you can obtain the full value of the result using [`fetch`](@ref).
 
 On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
-co-ordinate their processing by referencing the same remote `Channel`.
+coordinate their processing by referencing the same remote `Channel`.
 
 Each process has an associated identifier. The process providing the interactive Julia prompt
 always has an `id` equal to 1. The processes used by default for parallel operations are referred

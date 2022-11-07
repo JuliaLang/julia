@@ -1,6 +1,6 @@
 # [Interactive Utilities](@id man-interactive-utils)
 
-This module is intended for interactive work. It is loaded automaticaly in [interactive mode](@ref command-line-interface).
+This module is intended for interactive work. It is loaded automatically in [interactive mode](@ref command-line-interface).
 
 ```@docs
 InteractiveUtils.apropos

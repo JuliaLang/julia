@@ -168,8 +168,6 @@ typedef arm_exception_state64_t host_exception_state_t;
 #define HOST_EXCEPTION_STATE_COUNT ARM_EXCEPTION_STATE64_COUNT
 #endif
 
-#define MIG_DESTROY_REQUEST -309
-
 static void jl_call_in_state(jl_ptls_t ptls2, host_thread_state_t *state,
                              void (*fptr)(void))
 {
@@ -216,14 +214,13 @@ int is_write_fault(host_exception_state_t exc_state) {
 }
 #endif
 
-static void jl_throw_in_thread(int tid, mach_port_t thread, jl_value_t *exception)
+static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *exception)
 {
     unsigned int count = MACH_THREAD_STATE_COUNT;
     host_thread_state_t state;
     kern_return_t ret = thread_get_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, &count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-    if (!jl_get_safe_restore()) {
+    if (1) { // XXX: !jl_has_safe_restore(ptls2)
         assert(exception);
         ptls2->bt_size =
             rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, (bt_context_t *)&state,
@@ -248,7 +245,19 @@ static void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
-//mach_exc_server expects us to define this symbol locally
+// n.b. mach_exc_server expects us to define this symbol locally
+/* The documentation for catch_exception_raise says: A return value of
+ * KERN_SUCCESS indicates that the thread is to continue from the point of
+ * exception. A return value of MIG_NO_REPLY indicates that the exception was
+ * handled directly and the thread was restarted or terminated by the exception
+ * handler. A return value of MIG_DESTROY_REQUEST causes the kernel to try
+ * another exception handler (or terminate the thread). Any other value will
+ * cause mach_msg_server to remove the task and thread port references.
+ *
+ * However MIG_DESTROY_REQUEST does not exist, not does it appear the source
+ * code for mach_msg_server ever destroy those references (only the message
+ * itself).
+ */
 kern_return_t catch_mach_exception_raise(
     mach_port_t exception_port,
     mach_port_t thread,
@@ -281,19 +290,25 @@ kern_return_t catch_mach_exception_raise(
         jl_safe_printf("ERROR: Exception handler triggered on unmanaged thread.\n");
         return KERN_INVALID_ARGUMENT;
     }
+    // XXX: jl_throw_in_thread or segv_handler will eventually check this, but
+    //      we would like to avoid some of this work if we could detect this earlier
+    // if (jl_has_safe_restore(ptls2)) {
+    //     jl_throw_in_thread(ptls2, thread, jl_stackovf_exception);
+    //     return KERN_SUCCESS;
+    // }
+    if (ptls2->gc_state == JL_GC_STATE_WAITING)
+        return KERN_FAILURE;
     if (exception == EXC_ARITHMETIC) {
-        jl_throw_in_thread(tid, thread, jl_diverror_exception);
+        jl_throw_in_thread(ptls2, thread, jl_diverror_exception);
         return KERN_SUCCESS;
     }
-    assert(exception == EXC_BAD_ACCESS);
+    assert(exception == EXC_BAD_ACCESS); // SIGSEGV or SIGBUS
+    if (codeCnt < 2 || code[0] != KERN_PROTECTION_FAILURE) // SEGV_ACCERR or BUS_ADRERR or BUS_ADRALN
+        return KERN_FAILURE;
+    uint64_t fault_addr = code[1];
     kern_return_t ret = thread_get_state(thread, HOST_EXCEPTION_STATE, (thread_state_t)&exc_state, &exc_count);
     HANDLE_MACH_ERROR("thread_get_state", ret);
-#ifdef _CPU_X86_64_
-    uint64_t fault_addr = exc_state.__faultvaddr;
-#else
-    uint64_t fault_addr = exc_state.__far;
-#endif
-    if (jl_addr_is_safepoint(fault_addr)) {
+    if (jl_addr_is_safepoint(fault_addr) && !is_write_fault(exc_state)) {
         if (jl_mach_gc_wait(ptls2, thread, tid))
             return KERN_SUCCESS;
         if (ptls2->tid != 0)
@@ -303,41 +318,22 @@ kern_return_t catch_mach_exception_raise(
         }
         else if (jl_safepoint_consume_sigint()) {
             jl_clear_force_sigint();
-            jl_throw_in_thread(tid, thread, jl_interrupt_exception);
+            jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
         }
         return KERN_SUCCESS;
     }
-    if (jl_get_safe_restore()) {
-        jl_throw_in_thread(tid, thread, jl_stackovf_exception);
-        return KERN_SUCCESS;
+    if (ptls2->current_task->eh == NULL)
+        return KERN_FAILURE;
+    jl_value_t *excpt;
+    if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
+        excpt = jl_stackovf_exception;
     }
-#ifdef SEGV_EXCEPTION
-    if (1) {
-#else
-    if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) == 0) { // check if this was a valid address
-#endif
-        jl_value_t *excpt;
-        if (is_addr_on_stack(jl_atomic_load_relaxed(&ptls2->current_task), (void*)fault_addr)) {
-            excpt = jl_stackovf_exception;
-        }
-#ifdef SEGV_EXCEPTION
-        else if (msync((void*)(fault_addr & ~(jl_page_size - 1)), 1, MS_ASYNC) != 0) {
-            // no page mapped at this address
-            excpt = jl_segv_exception;
-        }
-#endif
-        else {
-            if (!is_write_fault(exc_state))
-                return KERN_INVALID_ARGUMENT;
-            excpt = jl_readonlymemory_exception;
-        }
-        jl_throw_in_thread(tid, thread, excpt);
-
-        return KERN_SUCCESS;
-    }
-    else {
-        return MIG_DESTROY_REQUEST;
-    }
+    else if (is_write_fault(exc_state)) // false for alignment errors
+        excpt = jl_readonlymemory_exception;
+    else
+        return KERN_FAILURE;
+    jl_throw_in_thread(ptls2, thread, excpt);
+    return KERN_SUCCESS;
 }
 
 //mach_exc_server expects us to define this symbol locally
@@ -445,7 +441,7 @@ static void jl_try_deliver_sigint(void)
         if (force)
             jl_safe_printf("WARNING: Force throwing a SIGINT\n");
         jl_clear_force_sigint();
-        jl_throw_in_thread(0, thread, jl_interrupt_exception);
+        jl_throw_in_thread(ptls2, thread, jl_interrupt_exception);
     }
     else {
         jl_wake_libuv();
@@ -458,7 +454,7 @@ static void jl_try_deliver_sigint(void)
 static void JL_NORETURN jl_exit_thread0_cb(int exitstate)
 {
 CFI_NORETURN
-    jl_critical_error(exitstate - 128, NULL, jl_current_task);
+    jl_critical_error(exitstate - 128, 0, NULL, jl_current_task);
     jl_exit(exitstate);
 }
 
@@ -537,7 +533,7 @@ static kern_return_t profiler_segv_handler(
 
     // Not currently unwinding. Raise regular segfault
     if (forceDwarf == -2)
-        return KERN_INVALID_ARGUMENT;
+        return KERN_FAILURE;
 
     if (forceDwarf == 0)
         forceDwarf = 1;

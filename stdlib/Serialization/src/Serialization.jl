@@ -662,8 +662,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         return write_as_tag(s.io, tag)
     end
     t = typeof(x)::DataType
-    nf = nfields(x)
-    if nf == 0 && t.size > 0
+    if isprimitivetype(t)
         serialize_type(s, t)
         write(s.io, x)
     else
@@ -673,6 +672,7 @@ function serialize_any(s::AbstractSerializer, @nospecialize(x))
         else
             serialize_type(s, t, false)
         end
+        nf = nfields(x)
         for i in 1:nf
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
@@ -1476,8 +1476,7 @@ end
 # default DataType deserializer
 function deserialize(s::AbstractSerializer, t::DataType)
     nf = length(t.types)
-    if nf == 0 && t.size > 0
-        # bits type
+    if isprimitivetype(t)
         return read(s.io, t)
     elseif ismutabletype(t)
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)

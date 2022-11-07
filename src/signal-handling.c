@@ -434,7 +434,7 @@ void jl_task_frame_noreturn(jl_task_t *ct)
 }
 
 // what to do on a critical error on a thread
-void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
+void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct)
 {
     jl_bt_element_t *bt_data = ct ? ct->ptls->bt_data : NULL;
     size_t *bt_size = ct ? &ct->ptls->bt_size : NULL;
@@ -462,7 +462,10 @@ void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct)
             sigaddset(&sset, sig);
         pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
 #endif
-        jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
+        if (si_code)
+            jl_safe_printf("\n[%d] signal (%d.%d): %s\n", getpid(), sig, si_code, strsignal(sig));
+        else
+            jl_safe_printf("\n[%d] signal (%d): %s\n", getpid(), sig, strsignal(sig));
     }
     jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
     if (context && ct) {

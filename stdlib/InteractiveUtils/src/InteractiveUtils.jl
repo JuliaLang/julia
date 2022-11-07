@@ -11,7 +11,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
-    to_tuple_type, signature_type, format_bytes
+    signature_type, format_bytes
 
 using Markdown
 
@@ -183,7 +183,7 @@ The optional second argument restricts the search to a particular module or func
 If keyword `supertypes` is `true`, also return arguments with a parent type of `typ`,
 excluding type `Any`.
 """
-function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type), @nospecialize(f::Base.Callable), meths = Method[]; supertypes::Bool=false)
     for d in methods(f)
         if any(function (x)
                    let x = rewrap_unionall(x, d.sig)
@@ -200,7 +200,7 @@ function methodswith(t::Type, f::Base.Callable, meths = Method[]; supertypes::Bo
     return meths
 end
 
-function _methodswith(t::Type, m::Module, supertypes::Bool)
+function _methodswith(@nospecialize(t::Type), m::Module, supertypes::Bool)
     meths = Method[]
     for nm in names(m)
         if isdefined(m, nm)
@@ -213,9 +213,9 @@ function _methodswith(t::Type, m::Module, supertypes::Bool)
     return unique(meths)
 end
 
-methodswith(t::Type, m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
+methodswith(@nospecialize(t::Type), m::Module; supertypes::Bool=false) = _methodswith(t, m, supertypes)
 
-function methodswith(t::Type; supertypes::Bool=false)
+function methodswith(@nospecialize(t::Type); supertypes::Bool=false)
     meths = Method[]
     for mod in Base.loaded_modules_array()
         append!(meths, _methodswith(t, mod, supertypes))
