@@ -1,3 +1,4 @@
+# -*- makefile -*-
 ## jll artifact
 MIMALLOC_JLL_NAME := mimalloc
 

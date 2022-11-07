@@ -222,7 +222,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
 
-#if defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_) && 0
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
     return _aligned_malloc(sz ? sz : 1, align);
