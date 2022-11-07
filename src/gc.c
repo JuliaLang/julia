@@ -1248,7 +1248,7 @@ static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
             }
             else {
                 *pma = nxt;
-                assert(ma->a->flags.how == 2);
+                assert(ma->a->flags.how == 2 || ma->a->flags.how == 4);
                 jl_gc_free_array(ma->a);
                 ma->next = ptls2->heap.mafreelist;
                 ptls2->heap.mafreelist = ma;
