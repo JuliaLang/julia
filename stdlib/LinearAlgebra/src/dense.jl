@@ -823,8 +823,8 @@ function log(A::AbstractMatrix)
     end
 end
 
-log(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(log(parent(A)))
-log(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(log(parent(A)))
+log(A::AdjointAbsMat) = adjoint(log(parent(A)))
+log(A::TransposeAbsMat) = transpose(log(parent(A)))
 
 """
     sqrt(A::AbstractMatrix)
@@ -902,8 +902,8 @@ function sqrt(A::AbstractMatrix{T}) where {T<:Union{Real,Complex}}
     end
 end
 
-sqrt(A::Adjoint{<:Any,<:AbstractMatrix}) = adjoint(sqrt(parent(A)))
-sqrt(A::Transpose{<:Any,<:AbstractMatrix}) = transpose(sqrt(parent(A)))
+sqrt(A::AdjointAbsMat) = adjoint(sqrt(parent(A)))
+sqrt(A::TransposeAbsMat) = transpose(sqrt(parent(A)))
 
 function inv(A::StridedMatrix{T}) where T
     checksquare(A)

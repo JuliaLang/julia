@@ -555,7 +555,7 @@ issuccess(C::Union{Cholesky,CholeskyPivoted}) = C.info == 0
 
 adjoint(C::Union{Cholesky,CholeskyPivoted}) = C
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky)
     if issuccess(C)
         summary(io, C); println(io)
         println(io, "$(C.uplo) factor:")
@@ -565,7 +565,7 @@ function show(io::IO, mime::MIME{Symbol("text/plain")}, C::Cholesky{<:Any,<:Abst
     end
 end
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted{<:Any,<:AbstractMatrix})
+function show(io::IO, mime::MIME{Symbol("text/plain")}, C::CholeskyPivoted)
     summary(io, C); println(io)
     println(io, "$(C.uplo) factor with rank $(rank(C)):")
     show(io, mime, C.uplo == 'U' ? C.U : C.L)
@@ -576,7 +576,7 @@ end
 ldiv!(C::Cholesky{T,<:StridedMatrix}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
     LAPACK.potrs!(C.uplo, C.factors, B)
 
-function ldiv!(C::Cholesky{<:Any,<:AbstractMatrix}, B::AbstractVecOrMat)
+function ldiv!(C::Cholesky, B::AbstractVecOrMat)
     if C.uplo == 'L'
         return ldiv!(adjoint(LowerTriangular(C.factors)), ldiv!(LowerTriangular(C.factors), B))
     else
@@ -628,7 +628,7 @@ function ldiv!(C::CholeskyPivoted, B::AbstractMatrix)
     B
 end
 
-function rdiv!(B::AbstractMatrix, C::Cholesky{<:Any,<:AbstractMatrix})
+function rdiv!(B::AbstractMatrix, C::Cholesky)
     if C.uplo == 'L'
         return rdiv!(rdiv!(B, adjoint(LowerTriangular(C.factors))), LowerTriangular(C.factors))
     else
