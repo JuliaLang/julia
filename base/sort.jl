@@ -1259,6 +1259,9 @@ show_type(io::IO, alg::Algorithm) = Base.show_type_name(io, typeof(alg).name)
 show_type(io::IO, alg::Small{N}) where N = print(io, "Base.Sort.Small{$N}")
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
+defalg(v::AbstractArray{<:Union{Number, Missing}}) = DEFAULT_UNSTABLE
+defalg(v::AbstractArray{Missing}) = DEFAULT_UNSTABLE # for method disambiguation
+defalg(v::AbstractArray{Union{}}) = DEFAULT_UNSTABLE # for method disambiguation
 
 """
     sort!(v; alg::Algorithm=defalg(v), lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward)
