@@ -2260,66 +2260,78 @@ function _g_ifelse_isa_()
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
 
-@testset "Conditional forwarding" begin
-    # forward `Conditional` if it conveys a constraint on any other argument
-    ifelselike(cnd, x, y) = cnd ? x : y
+# Conditional forwarding
+# ======================
 
-    @test Base.return_types((Any,Int,)) do x, y
-        ifelselike(isa(x, Int), x, y)
-    end |> only == Int
+# forward `Conditional` if it conveys a constraint on any other argument
+ifelselike(cnd, x, y) = cnd ? x : y
 
-    # should work nicely with union-split
-    @test Base.return_types((Union{Int,Nothing},)) do x
-        ifelselike(isa(x, Int), x, 0)
-    end |> only == Int
+@test Base.return_types((Any,Int,)) do x, y
+    ifelselike(isa(x, Int), x, y)
+end |> only == Int
 
-    @test Base.return_types((Any,Int)) do x, y
-        ifelselike(!isa(x, Int), y, x)
-    end |> only == Int
+# should work nicely with union-split
+@test Base.return_types((Union{Int,Nothing},)) do x
+    ifelselike(isa(x, Int), x, 0)
+end |> only == Int
 
-    @test Base.return_types((Any,Int)) do x, y
-        a = ifelselike(x === 0, x, 0) # ::Const(0)
-        if a == 0
-            return y
-        else
-            return nothing # dead branch
-        end
-    end |> only == Int
+@test Base.return_types((Any,Int)) do x, y
+    ifelselike(!isa(x, Int), y, x)
+end |> only == Int
 
-    # pick up the first if there are multiple constrained arguments
-    @test Base.return_types((Any,)) do x
-        ifelselike(isa(x, Int), x, x)
-    end |> only == Any
+@test Base.return_types((Any,Int)) do x, y
+    a = ifelselike(x === 0, x, 0) # ::Const(0)
+    if a == 0
+        return y
+    else
+        return nothing # dead branch
+    end
+end |> only == Int
 
-    # just propagate multiple constraints
-    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
-    @test Base.return_types((Any,Any)) do x, y
-        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
-    end |> only == Int
+# pick up the first if there are multiple constrained arguments
+@test Base.return_types((Any,)) do x
+    ifelselike(isa(x, Int), x, x)
+end |> only == Any
 
-    # work with `invoke`
-    @test Base.return_types((Any,Any)) do x, y
-        Base.@invoke ifelselike(isa(x, Int), x, y::Int)
-    end |> only == Int
+# just propagate multiple constraints
+ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+@test Base.return_types((Any,Any)) do x, y
+    ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+end |> only == Int
 
-    # don't be confused with vararg method
-    vacond(cnd, va...) = cnd ? va : 0
-    @test Base.return_types((Any,)) do x
-        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
-        vacond(isa(x, Tuple{Int,Int}), x, x)
-    end |> only == Union{Int,Tuple{Any,Any}}
+# work with `invoke`
+@test Base.return_types((Any,Any)) do x, y
+    Base.@invoke ifelselike(isa(x, Int), x::Any, y::Int)
+end |> only == Int
 
-    # demonstrate extra constraint propagation for Base.ifelse
-    @test Base.return_types((Any,Int,)) do x, y
-        ifelse(isa(x, Int), x, y)
-    end |> only == Int
+# don't be confused with vararg method
+vacond(cnd, va...) = cnd ? va : 0
+@test Base.return_types((Any,)) do x
+    # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+    vacond(isa(x, Tuple{Int,Int}), x, x)
+end |> only == Union{Int,Tuple{Any,Any}}
 
-    # slot as SSA
-    @test Base.return_types((Any,Vector{Any})) do x, y
-        z = x
-        ifelselike(isa(z, Int), z, length(y))
-    end |> only === Int
+# https://github.com/JuliaLang/julia/issues/47435
+is_closed_ex(e::InvalidStateException) = true
+is_closed_ex(e) = false
+function issue47435()
+    try
+    catch e
+        println("caught $e: $(is_closed_ex(e))")
+    end
 end
+@test only(Base.return_types(issue47435)) === Nothing
+
+# demonstrate extra constraint propagation for Base.ifelse
+@test Base.return_types((Any,Int,)) do x, y
+    ifelse(isa(x, Int), x, y)
+end |> only == Int
+
+# forward conditional information imposed on SSA that is alised to a slot
+@test Base.return_types((Any,Vector{Any})) do x, y
+    z = x
+    ifelselike(isa(z, Int), z, length(y))
+end |> only === Int
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
