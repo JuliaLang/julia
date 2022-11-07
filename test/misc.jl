@@ -149,7 +149,7 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    if Base.isdebugbuild()
         # Note this warning only exists in debug builds
         @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
     end
