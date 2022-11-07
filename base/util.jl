@@ -670,7 +670,7 @@ end
 """
     isdebugbuild()
 
-Return `true` is julia is a debug version.
+Return `true` if julia is a debug version.
 """
 function isdebugbuild()
     return ccall(:jl_is_debugbuild, Cint, ()) != 0
