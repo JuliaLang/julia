@@ -584,10 +584,10 @@ function ldiv!(C::Cholesky, B::AbstractVecOrMat)
     end
 end
 
-function ldiv!(C::CholeskyPivoted{T}, B::StridedVector{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T,<:StridedMatrix}, B::StridedVector{T}) where T<:BlasFloat
     invpermute!(LAPACK.potrs!(C.uplo, C.factors, permute!(B, C.piv)), C.piv)
 end
-function ldiv!(C::CholeskyPivoted{T}, B::StridedMatrix{T}) where T<:BlasFloat
+function ldiv!(C::CholeskyPivoted{T,<:StridedMatrix}, B::StridedMatrix{T}) where T<:BlasFloat
     n = size(C, 1)
     for i=1:size(B, 2)
         permute!(view(B, 1:n, i), C.piv)
@@ -703,7 +703,7 @@ inv!(C::Cholesky{<:BlasFloat,<:StridedMatrix}) =
 
 inv(C::Cholesky{<:BlasFloat,<:StridedMatrix}) = inv!(copy(C))
 
-function inv(C::CholeskyPivoted)
+function inv(C::CholeskyPivoted{<:BlasFloat,<:StridedMatrix})
     ipiv = invperm(C.piv)
     copytri!(LAPACK.potri!(C.uplo, copy(C.factors)), C.uplo, true)[ipiv, ipiv]
 end

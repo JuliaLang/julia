@@ -740,7 +740,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
             LAPACK.trrfs!($uploc, 'N', $isunitc, A.data, B, X)
 
         # Condition numbers
-        function cond(A::$t{<:BlasFloat}, p::Real=2)
+        function cond(A::$t{<:BlasFloat,<:StridedMatrix}, p::Real=2)
             checksquare(A)
             if p == 1
                 return inv(LAPACK.trcon!('O', $uploc, $isunitc, A.data))
