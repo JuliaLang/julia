@@ -123,6 +123,9 @@ function __init__()
     nothing
 end
 ```
+
+# See also
+- [`@atinit`](@ref) and [`Base.atinit`](@ref) for defining multiple initializers.
 """
 kw"__init__"
 

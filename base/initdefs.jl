@@ -378,42 +378,41 @@ function _atexit()
     end
 end
 
-# make this a callable struct so that attempting to define `__init__()` will
-# trigger an error.
+# defined as a callable struct so that attempting to also define `__init__()`
+# will trigger an error.
 struct AtInit
-    mod::Module
+    hooks::Vector{Callable}
+    AtInit() = new(Callable[])
 end
-(init::AtInit)() = _atinit(init.mod)
-
+function (init::AtInit)()
+    for f in init.hooks
+        f()
+    end
+end
 
 """
-    Base.atinit(m::Module, f::Function)
+    Base.atinit(f::Function, m::Module)
 
-Register a zero-argument function `f()` to be called when a module is
+Register a zero-argument function `f()` to be called when `m` is
 initialized. `atinit()` hooks are called in first in first out (FIFO) order.
 
-This cannot be used in conjunction with an `__init__` function.
+This cannot be used in conjunction with an `__init__` function in the same module.
 
 The `@atinit` macro is a convenience macro for defining initializer hooks for
 the current module.
+
+!!! compat "Julia 1.9"
+    `Base.atinit` requires at least Julia 1.9
 """
-function atinit(m::Module, f::Function)
+function atinit(f::Function, m::Module)
     # could be moved to module-default-defs?
-    if !isdefined(m, :__init_hooks__)
-        if isdefined(m, :__init__)
-            error("atinit cannot be used with __init__")
-        end
-        eval(m, :(const __init_hooks__ = $Callable[]))
-        eval(m, :(__init__ = $AtInit($m)))
+    if !isdefined(m, :__init__)
+        eval(m, :(__init__ = $AtInit()))
+    elseif !(m.__init__ isa AtInit)
+        error("atinit cannot be used in conjunction with module __init__")
     end
-    (push!(m.__init_hooks__, f); nothing)
-end
-function _atinit(m::Module)
-    if isdefined(m, :__init_hooks__)
-        for f in m.__init_hooks__
-            f()
-        end
-    end
+    push!(m.__init__.hooks, f)
+    return nothing
 end
 
 """
@@ -422,10 +421,23 @@ end
 Register a zero-argument function `f()` to be called when the current module is
 initialized. `atinit()` hooks are called in first in first out (FIFO) order.
 
+This cannot be used in conjunction with an `__init__` function in the same module.
+
+```julia
+foo_data_ptr::Ptr{Cvoid} = C_NULL
+@atinit() do
+    ccall((:foo_init, :libfoo), Cvoid, ())
+    global foo_data_ptr = ccall((:foo_data, :libfoo), Ptr{Cvoid}, ())
+end
+```
+
 See [`Base.atinit`](@ref) for the function version.
+
+!!! compat "Julia 1.9"
+    `@atinit` requires at least Julia 1.9
 """
 macro atinit(f)
-    :(atinit($__module__, $f))
+    :(atinit($(esc(f)), $__module__))
 end
 
 
