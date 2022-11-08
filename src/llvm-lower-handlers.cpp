@@ -17,6 +17,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -234,7 +235,11 @@ static bool lowerExcHandlers(Function &F) {
 
 PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
 {
-    if (lowerExcHandlers(F)) {
+    bool modified = lowerExcHandlers(F);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
@@ -246,7 +251,11 @@ struct LowerExcHandlersLegacy : public FunctionPass {
     LowerExcHandlersLegacy() : FunctionPass(ID)
     {}
     bool runOnFunction(Function &F) {
-        return lowerExcHandlers(F);
+        bool modified = lowerExcHandlers(F);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyFunction(F, &errs()));
+#endif
+        return modified;
     }
 };
 

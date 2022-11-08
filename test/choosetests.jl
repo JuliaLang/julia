@@ -159,7 +159,12 @@ function choosetests(choices = [])
         filter!(x -> (x != "Profile"), tests)
     end
 
-    net_required_for = [
+    if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
+        @warn "Running under valgrind: Skipping rounding tests"
+        filter!(x -> x != "rounding", tests)
+    end
+
+    net_required_for = filter!(in(tests), [
         "Artifacts",
         "Downloads",
         "LazyArtifacts",
@@ -167,7 +172,8 @@ function choosetests(choices = [])
         "LibGit2",
         "Sockets",
         "download",
-    ]
+        "TOML",
+    ])
     net_on = true
     JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
                                       strip |>
@@ -179,21 +185,20 @@ function choosetests(choices = [])
     # Otherwise, we set `net_on` to true if and only if networking is actually available.
     if !JULIA_TEST_NETWORKING_AVAILABLE
         try
-            ipa = getipaddr()
+            getipaddr()
         catch
             if ci_option_passed
                 @error("Networking unavailable, but `--ci` was passed")
                 rethrow()
             end
             net_on = false
-            @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
-            filter!(!in(net_required_for), tests)
+            if isempty(net_required_for)
+                @warn "Networking unavailable"
+            else
+                @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
+                filter!(!in(net_required_for), tests)
+            end
         end
-    end
-
-    if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
-        @warn "Running under valgrind: Skipping rounding tests"
-        filter!(x -> x != "rounding", tests)
     end
 
     filter!(!in(tests), unhandled)
