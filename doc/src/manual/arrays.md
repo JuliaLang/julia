@@ -1025,7 +1025,7 @@ julia> [1, 2] == [2, 1]
 false
 ```
 
-Use dot operators like `.==`, `.<`, etc., for elementwise comparisons.
+Use dot operators like `.==`, `.<`, etc. for elementwise comparisons.
 
 Also notice the difference between `max.(a,b)`, which [`broadcast`](@ref)s [`max`](@ref)
 elementwise over `a` and `b`, and [`maximum(a)`](@ref), which finds the largest value within
