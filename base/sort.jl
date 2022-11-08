@@ -414,6 +414,8 @@ abstract type Algorithm end
 struct InsertionSortAlg <: Algorithm end
 struct MergeSortAlg     <: Algorithm end
 struct AdaptiveSortAlg  <: Algorithm end
+struct QuickSortAlg     <: Algorithm end # Exists for backward compatability
+# and redirects to PartialQuickSort(missing, missing).
 
 """
     PartialQuickSort(lo::Union{Integer, Missing}, hi::Union{Integer, Missing})
@@ -473,7 +475,7 @@ Characteristics:
   * *quadratic worst case runtime* in pathological cases
     (vanishingly rare for non-malicious input)
 """
-const QuickSort = PartialQuickSort(missing, missing)
+const QuickSort = QuickSortAlg()
 
 """
     MergeSort
@@ -570,6 +572,12 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v:
     pivot, lo-trues
 end
 
+# This method exists for backwards compatability with dispatch on sort!(..., ::QuickSortAlg, ...)
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, 
+               o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false;
+               check_presorted=true)
+    sort!(v, lo, hi, PartialQuickSort(missing, missing), o, t, swap, rev; check_presorted)
+end
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::PartialQuickSort,
                o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false;
                check_presorted=true)
