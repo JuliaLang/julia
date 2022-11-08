@@ -384,7 +384,7 @@ For users coming to Julia from R, these are some noteworthy differences:
       in its `Manifest.toml` file by `Pkg.resolve()`.
   * Packages ("software modules") available to the "Project Environment" are loaded with
     `import` or `using`.
-    * In C/C++, you `#include <moduleheader>` to get object/function delarations, and link in
+    * In C/C++, you `#include <moduleheader>` to get object/function declarations, and link in
       libraries when you build the executable.
     * In Julia, calling using/import again just brings the existing module into scope, but does not load it again
       (similar to adding the non-standard `#pragma once` to C/C++).
@@ -439,7 +439,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 \* The Julia package manager supports registering multiple packages from a single Git repository.<br>
 \* This allows users to house a library of related packages in a single repository.<br>
-\*\* Julia registries are primarily designed to provide versionning \& distribution of packages.<br>
+\*\* Julia registries are primarily designed to provide versioning \& distribution of packages.<br>
 \*\* Custom package registries can be used to create a type of module library.
 
 

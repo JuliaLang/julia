@@ -2,6 +2,37 @@
 
 ## Standard Numeric Types
 
+A type tree for all subtypes of `Number` in `Base` is shown below.
+Abstract types have been marked, the rest are concrete types.
+```
+Number  (Abstract Type)
+├─ Complex
+└─ Real  (Abstract Type)
+   ├─ AbstractFloat  (Abstract Type)
+   │  ├─ Float16
+   │  ├─ Float32
+   │  ├─ Float64
+   │  └─ BigFloat
+   ├─ Integer  (Abstract Type)
+   │  ├─ Bool
+   │  ├─ Signed  (Abstract Type)
+   │  │  ├─ Int8
+   │  │  ├─ Int16
+   │  │  ├─ Int32
+   │  │  ├─ Int64
+   │  │  ├─ Int128
+   │  │  └─ BigInt
+   │  └─ Unsigned  (Abstract Type)
+   │     ├─ UInt8
+   │     ├─ UInt16
+   │     ├─ UInt32
+   │     ├─ UInt64
+   │     └─ UInt128
+   ├─ Rational
+   └─ AbstractIrrational  (Abstract Type)
+      └─ Irrational
+```
+
 ### Abstract number types
 
 ```@docs
