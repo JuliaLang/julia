@@ -634,13 +634,6 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     errno = last_errno;
 }
 
-JL_DLLEXPORT void jl_exit(int exitcode)
-{
-    uv_tty_reset_mode();
-    jl_atexit_hook(exitcode);
-    exit(exitcode);
-}
-
 typedef union {
     struct sockaddr in;
     struct sockaddr_in v4;

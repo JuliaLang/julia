@@ -17,7 +17,7 @@ function shell_escape(str)
 end
 
 function libDir()
-    return if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    return if Base.isdebugbuild()
         if Base.DARWIN_FRAMEWORK
             joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug"))),"lib")
         else
@@ -33,7 +33,7 @@ function libDir()
 end
 
 function frameworkDir()
-    libjulia = ccall(:jl_is_debugbuild, Cint, ()) != 0 ?
+    libjulia = Base.isdebugbuild() ?
         Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug") :
         Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME)
     normpath(joinpath(dirname(abspath(libjulia)),"..","..",".."))
@@ -61,7 +61,7 @@ function ldlibs(doframework)
     # If the user wants the debug framework, DYLD_IMAGE_SUFFIX=_debug
     # should be used (refer to man 1 dyld).
     doframework && return "-framework $(Base.DARWIN_FRAMEWORK_NAME)"
-    libname = if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    libname = if Base.isdebugbuild()
         "julia-debug"
     else
         "julia"

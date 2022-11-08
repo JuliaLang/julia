@@ -346,7 +346,9 @@ isless(a::AbstractString, b::AbstractString) = cmp(a, b) < 0
 
 # faster comparisons for symbols
 
-cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
+@assume_effects :total function cmp(a::Symbol, b::Symbol)
+    Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
+end
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 

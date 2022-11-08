@@ -496,7 +496,7 @@ first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[begin:min(begin + n - 1, end)]
+    v[range(begin, length=min(n, checked_length(v)))]
 end
 
 """
@@ -546,7 +546,7 @@ last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), 
 # Faster method for arrays
 function last(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[max(begin, end - n + 1):end]
+    v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
 """
@@ -1739,7 +1739,7 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
-# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+# The new way to compute the shape (more inferable than combining cat_size & cat_shape, due to Varargs + issue#36454)
 cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
 @inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
 _cat_size_shape(dims, shape) = shape

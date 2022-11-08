@@ -1679,15 +1679,18 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ft = widenconst(ft′)
     ft === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
-    types === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     isexact || return CallMeta(Any, Effects(), NoCallInfo())
+    unwrapped = unwrap_unionall(types)
+    if types === Bottom || types === Any || !(unwrapped isa DataType)
+        return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+    end
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
     nargtype === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     nargtype isa DataType || return CallMeta(Any, Effects(), NoCallInfo()) # other cases are not implemented below
     isdispatchelem(ft) || return CallMeta(Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
-    lookupsig = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
+    lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
     match, valid_worlds, overlayed = findsup(lookupsig, method_table(interp))

@@ -1083,6 +1083,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
     done1 === true || return done1 # false or missing
     return _pisdone(tail(iters), tail(states)) # check tail
 end
+@inline isdone(::ProductIterator{Tuple{}}, states) = true
 @inline isdone(P::ProductIterator, states) = _pisdone(P.iterators, states)
 
 @inline _piterate() = ()

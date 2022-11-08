@@ -2121,7 +2121,7 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         emit_lockstate_value(ctx, parent, false);
     if (parent != NULL) {
         if (isreplacefield) {
-            // TOOD: avoid this branch if we aren't making a write barrier
+            // TODO: avoid this branch if we aren't making a write barrier
             BasicBlock *BB = BasicBlock::Create(ctx.builder.getContext(), "xchg_wb", ctx.f);
             DoneBB = BasicBlock::Create(ctx.builder.getContext(), "done_xchg_wb", ctx.f);
             ctx.builder.CreateCondBr(Success, BB, DoneBB);

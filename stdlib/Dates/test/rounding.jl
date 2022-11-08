@@ -189,7 +189,7 @@ end
     @test round(x, Dates.Nanosecond) == x
 end
 
-@testset "Rouding DateTime to Date" begin
+@testset "Rounding DateTime to Date" begin
     now_ = DateTime(2020, 9, 1, 13)
     for p in (Year, Month, Day)
         for r in (RoundUp, RoundDown)
