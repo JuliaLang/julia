@@ -294,4 +294,3 @@ end
     n, y = @noinline paynehanek(xd)
     return n, DoubleFloat32(y.hi)
 end
-
