@@ -46,6 +46,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
 {
     auto replace = Constant::getNullValue(val->getType());
     call->replaceUsesOfWith(val, replace);
+    call->setAttributes(AttributeList());
     for (auto &arg: call->arg_operands()) {
         if (!isa<Constant>(arg.get())) {
             return;
@@ -1426,7 +1427,6 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 }
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
-                new_call->setAttributes(call->getAttributes());
                 call->replaceAllUsesWith(new_call);
                 call->eraseFromParent();
                 return;
