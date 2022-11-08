@@ -1546,10 +1546,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 # f.$x      ==>  (. f (inert ($ x)))
                 # f.$(x+y)  ==>  (. f (inert ($ (call + x y))))
                 # A.$B.@x   ==>  (macrocall (. (. A (inert ($ B))) (quote @x)))
+                # @A.$x a   ==>  (macrocall (. A (inert (error x))) a)
                 m = position(ps)
                 bump(ps, TRIVIA_FLAG)
                 parse_atom(ps)
                 emit(ps, m, K"$")
+                macro_name_position = position(ps)
                 emit(ps, m, K"inert")
                 emit(ps, mark, K".")
             elseif k == K"@"
@@ -2235,10 +2237,31 @@ function fix_macro_name_kind!(ps::ParseState, macro_name_position, name_kind=not
     if k == K"var"
         macro_name_position = first_child_position(ps, macro_name_position)
         k = peek_behind(ps, macro_name_position).kind
+    elseif k == K")"
+        # @(A) x =>  (macrocall @A x)
+        # TODO: Clean this up when K"parens" is implemented
+        while true
+            macro_name_position = ParseStreamPosition(macro_name_position.token_index-1,
+                                                      macro_name_position.range_index)
+            b = peek_behind(ps, macro_name_position)
+            k = b.kind
+            if !has_flags(b.flags, TRIVIA_FLAG)
+                break
+            end
+        end
+    elseif k == K"error"
+        # Error already reported in parse_macro_name
+        return
     end
     if isnothing(name_kind)
-        name_kind = k == K"Identifier" ? K"MacroName" :
-                    internal_error("unrecognized source kind for macro name ", k)
+        name_kind = (k == K"Identifier") ? K"MacroName" : K"error"
+        if name_kind == K"error"
+            # Hack to handle bad but unusual syntax like `@A.$x a`
+            ri = macro_name_position.range_index
+            startpos = ParseStreamPosition(ps.stream.ranges[ri].first_token, ri)
+            # This isn't quite accurate
+            emit_diagnostic(ps, startpos, macro_name_position, error="Invalid macro name")
+        end
     end
     reset_node!(ps, macro_name_position, kind=name_kind)
 end
@@ -2253,8 +2276,14 @@ function parse_macro_name(ps::ParseState)
     # @$ x   ==>  (macrocall @$ x)
     # @var"#" x   ==>  (macrocall (var #) @$ x)
     bump_disallowed_space(ps)
-    let ps = with_space_sensitive(ps)
-        parse_atom(ps, false)
+    mark = position(ps)
+    k = peek(ps)
+    parse_atom(ps, false)
+    if k == K"("
+        emit_diagnostic(ps, mark, warning="parenthesizing macro names is unnecessary")
+    elseif !(peek_behind(ps).kind in KSet"Identifier var")
+        # @[x] y z  ==>  (macrocall (error (vect x)) y z)
+        emit(ps, mark, K"error", error="Invalid macro name")
     end
 end
 

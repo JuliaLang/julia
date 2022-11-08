@@ -261,6 +261,7 @@ tests = [
         "@! x"  => "(macrocall @! x)"
         "@.. x" => "(macrocall @.. x)"
         "@\$ y"  => "(macrocall @\$ y)"
+        "@[x] y z" => "(macrocall (error (vect x)) y z)"
         # Special @doc parsing rules
         "@doc x\ny"    =>  "(macrocall @doc x y)"
         "A.@doc x\ny"  =>  "(macrocall (. A (quote @doc)) x y)"
@@ -326,6 +327,7 @@ tests = [
         "f.\$x"     =>  "(. f (inert (\$ x)))"
         "f.\$(x+y)" =>  "(. f (inert (\$ (call-i x + y))))"
         "A.\$B.@x"  =>  "(macrocall (. (. A (inert (\$ B))) (quote @x)))"
+        "@A.\$x a"  =>  "(macrocall (. A (inert (error x))) a)"
         "A.@x"      =>  "(macrocall (. A (quote @x)))"
         "A.@x a"    =>  "(macrocall (. A (quote @x)) a)"
         "@A.B.@x a" =>  "(macrocall (. (. A (quote B)) (quote (error-t) @x)) a)"
