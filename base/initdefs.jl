@@ -365,11 +365,15 @@ LIFO order, "last called" is equivalent to "first registered".)
 """
 atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
-function _atexit()
+function _atexit(exitcode::Cint)
     while !isempty(atexit_hooks)
         f = popfirst!(atexit_hooks)
         try
-            f()
+            if hasmethod(f, (Cint,))
+                f(exitcode)
+            else
+                f()
+            end
         catch ex
             showerror(stderr, ex)
             Base.show_backtrace(stderr, catch_backtrace())
