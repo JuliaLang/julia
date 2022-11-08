@@ -1573,15 +1573,16 @@ function getindex(r::LogRange, i::Int)
         return r.start
     end
     if eltype(r) <: Real && r.start < 0  # constructor guarantees r.stop < 0 too
-        -loginterp(-r.start, -r.stop, Int(i), r.len)
+        -loginterp(-r.start, -r.stop, i, r.len)
     else
-        loginterp(r.start, r.stop, Int(i), r.len)
+        loginterp(r.start, r.stop, i, r.len)
     end
 end
 
 function loginterp(lo::T, hi::T, j::Int, n::Int) where {T}
     @inline
-    convert(T, lo^((n-j)/(n-1)) * hi^((j-1)/(n-1)))
+    S = promote_type(Float64, T)
+    convert(T, lo^(S(n-j)/S(n-1)) * hi^(S(j-1)/S(n-1)))
 end
 
 function show(io::IO, r::LogRange)  # compact
