@@ -637,6 +637,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 // be the "source" rather than merely a cross-reference.
 static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
+    void **bp = NULL;
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_queue_for_serialization(s, t);
 
@@ -735,12 +736,16 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
 done_fields:
 
     // We've encountered an item we need to cache
+    bp = ptrhash_bp(&serialization_order, v);
+    if (jl_is_type(v) && *bp != (void*)(uintptr_t)-1) {
+        // This is a recursive typedef
+        return;
+    }
+    assert(*bp == (void*)(uintptr_t)-1);
     arraylist_push(&serialization_queue, (void*) v);
     size_t idx = serialization_queue.len - 1;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
 
-    void **bp = ptrhash_bp(&serialization_order, v);
-    assert(*bp == (void*)(uintptr_t)-1);
     *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
 }
 

@@ -1555,6 +1555,24 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
+precompile_test_harness("Recursive types") do load_path
+    write(joinpath(load_path, "RecursiveTypeDef.jl"),
+        """
+        module RecursiveTypeDef
+
+        struct C{T,O} end
+        struct A{T,N,O} <: AbstractArray{C{T,A{T,N,O}},N}
+            sz::NTuple{N,Int}
+        end
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("RecursiveTypeDef"))
+    (@eval (using RecursiveTypeDef))
+    a = Base.invokelatest(RecursiveTypeDef.A{Float64,2,String}, (3, 3))
+    @test isa(a, AbstractArray)
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
