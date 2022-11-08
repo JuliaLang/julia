@@ -573,7 +573,7 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v:
 end
 
 # This method exists for backwards compatability with dispatch on sort!(..., ::QuickSortAlg, ...)
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg, 
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::QuickSortAlg,
                o::Ordering, t::AbstractVector=similar(v), swap=false, rev=false;
                check_presorted=true)
     sort!(v, lo, hi, PartialQuickSort(missing, missing), o, t, swap, rev; check_presorted)
