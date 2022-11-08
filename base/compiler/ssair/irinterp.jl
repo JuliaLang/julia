@@ -401,7 +401,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         end
     end
 
-    return ultimate_rt
+    return maybe_singleton_const(ultimate_rt)
 end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)
