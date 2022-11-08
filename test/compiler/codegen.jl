@@ -783,5 +783,5 @@ f_isa_type(@nospecialize(x)) = isa(x, Type)
 @test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
 
 # Issue #47247
-f47247(a::Ref{Int64}, b::Nothing) = setfield!(a, :x, b)
+f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
