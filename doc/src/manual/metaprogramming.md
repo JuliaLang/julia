@@ -19,7 +19,9 @@ data.
     [closures](https://en.wikipedia.org/wiki/Closure_(computer_programming)) cannot be applied.
 
     `eval` and defining new macros should be typically used as a last resort. It is almost
-    never a good idea to use `Meta.parse` or convert an arbitrary string into julia code.
+    never a good idea to use `Meta.parse` or convert an arbitrary string into Julia code. For
+    manipulating Julia code, use the `Expr` data structure directly to avoid the complexity 
+    of how Julia syntax is parsed.
 
     The best uses of metaprogramming often implement most of their functionality in runtime
     helper functions, striving to minimize the amount of code they generate.
