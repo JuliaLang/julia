@@ -1545,11 +1545,13 @@ struct LogRange{T} <: AbstractArray{T,1}
         lo = iszero(start) ? T(NaN) : T(start)
         hi = iszero(stop) ? T(NaN) : T(stop)
         if len < 0
-            throw(ArgumentError("LogRange can't have negative length"))
+            throw(ArgumentError(LazyString(
+                "LogRange(", start, ", ", stop, ", ", len, "): can't have negative length")))
         elseif len == 0
             return new{T}(lo, hi, len)
         elseif len == 1 && start != stop
-            throw(ArgumentError("LogRange($start, $stop, $len): endpoints differ"))
+            throw(ArgumentError(LazyString(
+                "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
         end
         if T <: Real && (start<0) ⊻ (stop<0)
             throw(DomainError((start, stop),
@@ -1564,14 +1566,9 @@ size(r::LogRange) = (r.len,)
 first(r::LogRange) = r.start
 last(r::LogRange) = r.stop
 
-function getindex(r::LogRange, i::Integer)
+function getindex(r::LogRange, i::Int)
     @inline
     @boundscheck checkbounds(r, i)
-    unsafe_getindex(r, i)
-end
-
-function unsafe_getindex(r::LogRange, i::Integer)
-    i isa Bool && throw(ArgumentError("invalid index: $i of type Bool"))
     if r.len == 1
         return r.start
     end
