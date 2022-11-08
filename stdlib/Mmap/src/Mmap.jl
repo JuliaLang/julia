@@ -220,8 +220,7 @@ function mmap(io::IO,
                 else
                     throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
                 end
-            end
-            if !iswrite
+            else
                 throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
             end
         end
@@ -234,8 +233,7 @@ function mmap(io::IO,
         if requestedSizeLarger
             if readonly
                 throw(ArgumentError("unable to increase file size to $szfile due to read-only permissions"))
-            end
-            if !readonly && !grow
+            elseif !grow
                 throw(ArgumentError("requested size $szfile larger than file size $(filesize(io)), but requested not to grow"))
             end
         end
