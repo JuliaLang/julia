@@ -26,7 +26,9 @@ STATISTIC(NumPartitioned, "Number of partitioned functions");
 
 using namespace llvm;
 
-cl::opt<bool> EnablePGOProfiling("julia-enable-pgo-profiling", cl::init(true),
+//Profiling the profiling (heh) reveals this is actually really bad for unoptimized functions,
+//which is the common case, so we turn this off by default
+cl::opt<bool> EnablePGOProfiling("julia-enable-pgo-profiling", cl::init(false),
                                   cl::desc("Enable PGO profiling"), cl::Hidden);
 cl::opt<bool> EnableReoptimization("julia-enable-reoptimization", cl::init(true),
                                    cl::desc("Enable reoptimization"), cl::Hidden);
@@ -34,6 +36,8 @@ cl::opt<bool> EnableSpeculation("julia-enable-speculation", cl::init(true),
                                 cl::desc("Enable speculation"), cl::Hidden);
 cl::opt<bool> EnablePartitionSimplification("julia-enable-partition-simplification", cl::init(true),
                                 cl::desc("Enable pre-partition simplification"), cl::Hidden);
+cl::opt<bool> EnablePartitioning("julia-enable-partitioning", cl::init(true),
+                                 cl::desc("Enable partitioning"), cl::Hidden);
 
 static constexpr auto OptlevelMDName = "julia.optlevel";
 static constexpr auto ReoptimizeMDName = "julia.reoptimize";
@@ -71,25 +75,7 @@ size_t getModuleOptLevel(Module &M, bool DetermineOptLevel) {
 static std::unique_ptr<Module> partitionFunction(Module &M, Function &F) {
     assert(!F.isDeclaration() && "Cannot partition a declaration");
     ValueToValueMapTy VMap;
-    SmallSet<GlobalAlias*, 2> MovedAliases;
-    auto Mod = CloneModule(M, VMap, [&MovedAliases, F = &F](const GlobalValue *GV) {
-        if (auto GA = dyn_cast<GlobalAlias>(GV)) {
-            if (GA->getAliaseeObject() == F) {
-                MovedAliases.insert(const_cast<GlobalAlias*>(GA));
-                return true;
-            }
-            return false;
-        } else {
-            return GV == F;
-        }
-    });
-    // Aliases cannot refer to a declaration, so pretend they're actual function declarations
-    for (auto GA : MovedAliases) {
-        Function *NewF = Function::Create(cast<FunctionType>(F.getValueType()), F.getLinkage(), "", M);
-        NewF->copyAttributesFrom(&F);
-        NewF->takeName(GA);
-        GA->eraseFromParent();
-    }
+    auto Mod = CloneModule(M, VMap, [F = &F](const GlobalValue *GV) { return GV == F; });
     F.deleteBody();
     return Mod;
 }
@@ -221,6 +207,9 @@ static void simplifyModule(Module &M) {
 
 Expected<orc::ThreadSafeModule> FunctionPartitioner::operator()(orc::ThreadSafeModule TSM,
                                                         orc::MaterializationResponsibility &R) {
+    if (!EnablePartitioning) {
+        return std::move(TSM);
+    }
     auto Promoted = TSM.withModuleDo([this, JD=&R.getTargetJITDylib()](Module &M) {
         orc::SymbolFlagsMap NewSymbols;
         if (EnablePartitionSimplification)
@@ -268,9 +257,13 @@ static std::string mangle(StringRef Name, uint32_t version) {
 static StringRef demangle(StringRef Name) {
     if (Name.consume_front(ManglePrefix)) {
         int32_t version;
-        assert(!Name.consumeInteger(10, version) && "Invalid version number");
-        assert(Name.consume_front(".") && "Invalid mangled name");
+        bool valid = !Name.consumeInteger(10, version);
+        assert(valid && "Invalid version number");
+        bool dot = Name.consume_front(".");
+        assert(dot && "Invalid mangled name");
         (void) version;
+        (void) valid;
+        (void) dot;
     }
     return Name;
 }
@@ -381,7 +374,7 @@ JITTargetAddress StubDisassemblerPlugin::launderStub(JITTargetAddress MaybeStub)
         Name = It->second;
     }
     //This thing has an early exit anyways, just let it handle the address lookup by name
-    return Manager.optimize(std::move(Name), JD, 0, 1).Address;
+    return Manager.optimize(std::move(Name), JD, 0, 0).Address;
 }
 
 void FunctionCache::store(orc::SymbolStringPtr Name, std::unique_ptr<Module> M) {
@@ -452,6 +445,7 @@ private:
 
 ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::SymbolStringPtr Name, orc::JITDylib &JD, int32_t Version, uint32_t OptLevel) {
     ++NumReoptimized;
+    OptLevel = std::min(std::max(OptLevel, MinOptLevel), MaxOptLevel);
     assert(OptLevel <= MaxOptLevel && OptLevel >= MinOptLevel && "Invalid optimization level");
     assert(PostPartitioningLayer && "ReoptimizationManager PostPartitioningLayer not set");
     auto *Entry = Cache.lookup(Name);
@@ -460,7 +454,7 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
     }
     auto &ES = PostPartitioningLayer->getExecutionSession();
     assert(Version >= 0 && "Version must be nonnegative");
-    auto ComputedVersion = Version * int32_t(MaxOptLevel - MinOptLevel) + int32_t(OptLevel - MinOptLevel);
+    auto ComputedVersion = Version * int32_t(MaxOptLevel) + int32_t(OptLevel);
     {
         //Early exit if we already have the version we want
         auto Current = Entry->Version.load(std::memory_order::memory_order_seq_cst);
@@ -472,51 +466,55 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
     }
     //We need to reoptimize, but we know that the stub pointer is definitely valid
     auto TSCtx = ContextPool.get();
-    auto M = deserializeModule(Entry->Module, *TSCtx->getContext());
-    //Annotate module with requested optlevel
-    M->addModuleFlag(Module::ModFlagBehavior::Error, OptlevelMDName, OptLevel);
-    //Annotate module with requested version
-    M->addModuleFlag(Module::ModFlagBehavior::Error, ReoptimizeMDName, ComputedVersion);
+    orc::ThreadSafeModule TSM;
+    {
+        auto Lock = TSCtx->getLock();
+        auto M = deserializeModule(Entry->Module, *TSCtx->getContext());
+        //Annotate module with requested optlevel
+        M->addModuleFlag(Module::ModFlagBehavior::Error, OptlevelMDName, OptLevel);
+        //Annotate module with requested version
+        M->addModuleFlag(Module::ModFlagBehavior::Error, ReoptimizeMDName, ComputedVersion);
 
-    //Add profiling flags
-    ProfilingFlags Profiling;
-    Profiling.ApplyPGO = OptLevel == MaxOptLevel && EnablePGOProfiling && EnableReoptimization;
-    Profiling.ProfileAllocations = false;
-    //Branch profiling is heavy, so don't do it when we enable vectorization
-    Profiling.ProfileBranches = OptLevel <= 1 && EnablePGOProfiling && EnableReoptimization;
-    Profiling.ProfileCalls = OptLevel != MaxOptLevel && EnableReoptimization;
+        //Add profiling flags
+        ProfilingFlags Profiling;
+        Profiling.ApplyPGO = OptLevel == MaxOptLevel && EnablePGOProfiling && EnableReoptimization;
+        Profiling.ProfileAllocations = false;
+        //Branch profiling is heavy, so don't do it when we enable vectorization
+        Profiling.ProfileBranches = OptLevel <= 1 && EnablePGOProfiling && EnableReoptimization;
+        Profiling.ProfileCalls = OptLevel != MaxOptLevel && EnableReoptimization;
 
-    auto F = M->getFunction(*Name);
-    assert(F && "Function not found in module");
-    F->setMetadata(ProfMDName, Profiling.toMDNode(M->getContext()));
+        auto F = M->getFunction(*Name);
+        assert(F && "Function not found in module");
+        F->setMetadata(ProfMDName, Profiling.toMDNode(M->getContext()));
 
-    if (OptLevel != MaxOptLevel && EnableReoptimization) {
-        //We want to trigger recompilation later, so we add a callback when we get called enough times
-        //let's just start by saying 'enough times' is 10 * (optlevel + 1) ^ 2
-        //this unrolls to {10, 40, 90}
-        F->setMetadata("julia.prof.reporter", MDTuple::get(F->getContext(), {
-            //Limit
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), computeOptLevelLimit(OptLevel))),
-            //Function
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), reinterpret_cast<uint64_t>(&jl_reoptimize_entrypoint))),
-            //Args...
-            ConstantAsMetadata::get(literal_static_pointer_val((*Name).data(), Type::getInt8PtrTy(F->getContext()))),
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), (*Name).size())),
-            ConstantAsMetadata::get(literal_static_pointer_val(&JD, Type::getInt8PtrTy(F->getContext()))),
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), Version)),
-            ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), OptLevel)),
-            ConstantAsMetadata::get(literal_static_pointer_val(this, Type::getInt8PtrTy(F->getContext()))),
-        }));
+        if (OptLevel != MaxOptLevel && EnableReoptimization) {
+            //We want to trigger recompilation later, so we add a callback when we get called enough times
+            //let's just start by saying 'enough times' is 10 * (optlevel + 1) ^ 2
+            //this unrolls to {10, 40, 90}
+            F->setMetadata("julia.prof.reporter", MDTuple::get(F->getContext(), {
+                //Limit
+                ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), computeOptLevelLimit(OptLevel))),
+                //Function
+                ConstantAsMetadata::get(ConstantInt::get(Type::getInt64Ty(F->getContext()), reinterpret_cast<uint64_t>(&jl_reoptimize_entrypoint))),
+                //Args...
+                ConstantAsMetadata::get(literal_static_pointer_val((*Name).data(), Type::getInt8PtrTy(F->getContext()))),
+                ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), (*Name).size())),
+                ConstantAsMetadata::get(literal_static_pointer_val(&JD, Type::getInt8PtrTy(F->getContext()))),
+                ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), Version)),
+                ConstantAsMetadata::get(ConstantInt::get(Type::getInt32Ty(F->getContext()), OptLevel)),
+                ConstantAsMetadata::get(literal_static_pointer_val(this, Type::getInt8PtrTy(F->getContext()))),
+            }));
+        }
+        TSM = orc::ThreadSafeModule(std::move(M), *TSCtx);
     }
 
     //Do the actual optimization
-    auto TSM = orc::ThreadSafeModule(std::move(M), *TSCtx);
     auto Mangled = ES.intern(mangle(*Name, ComputedVersion));
     auto GetBetterVersion = [&]() -> Optional<OptimizationResult> {
         auto Current = Entry->Version.load(std::memory_order::memory_order_relaxed);
         if (Current >= ComputedVersion) {
             //backcompute the version number from the registered best version
-            return OptimizationResult{*Entry->Stub, Current - int32_t(Entry->OptLevel - MinOptLevel) / int32_t(MaxOptLevel - MinOptLevel), Entry->OptLevel};
+            return OptimizationResult{*Entry->Stub, (Current - int32_t(Entry->OptLevel)) / int32_t(MaxOptLevel), Entry->OptLevel};
         }
         return None;
     };
@@ -567,6 +565,9 @@ bool ReoptimizationQueue::enqueue(orc::SymbolStringPtr Name, orc::JITDylib *JD, 
 }
 
 bool ReoptimizationQueue::speculate(llvm::orc::SymbolStringPtr Name, llvm::orc::JITDylib *JD, int32_t Version, uint32_t OptLevel, llvm::BranchProbability Probability) {
+    if (!EnableSpeculation) {
+        return false;
+    }
     std::lock_guard<std::mutex> Lock(QueueMutex);
     if (Dead) {
         return false;
@@ -648,7 +649,11 @@ bool ReoptimizationManager::blockingRecompileNext() {
     uint32_t OptLevel = Entry->speculative() ? Entry->OptLevel : ReloadOptLevel();
     NumSpeculated += Entry->speculative();
     auto Optimized = optimize(Entry->Name, *Entry->JD, Entry->Version, OptLevel);
-    assert(Optimized.Address && "Failed to optimize given function!");
+    //This function wasn't optimizable (happens if we speculate on a function but we rejected
+    //reoptimizing it because of function size or name)
+    if (!Optimized.Address) {
+        return true; // Although we failed to optimize, we still want to keep going for the next entry
+    }
     assert((Optimized.Version > Entry->Version || (Optimized.Version == Entry->Version && Optimized.OptLevel >= OptLevel)) && "Optimization failed to improve the version");
     if (Optimized.Version == Entry->Version) {
         //If we didn't deoptimize the function, then we might hit a race condition between
@@ -669,6 +674,9 @@ bool ReoptimizationManager::blockingRecompileNext() {
 
 PreservedAnalyses SpeculationPass::run(Function &F, FunctionAnalysisManager &FAM) {
     if (!ReoptMgr || !JD) {
+        return PreservedAnalyses::all();
+    }
+    if (!EnableSpeculation) {
         return PreservedAnalyses::all();
     }
     auto ReoptMD = F.getMetadata(ReoptimizeMDName);

@@ -1153,6 +1153,9 @@ namespace {
     };
 
     bool shouldReoptimize(const Function &F) {
+        return false;
+        if (F.size() == 1) // we care about complicated functions, not super simple ones
+            return false;
         auto Name = F.getName();
         return Name.startswith("julia_") || Name.startswith("japi");
     }
