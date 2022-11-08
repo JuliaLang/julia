@@ -1086,7 +1086,7 @@ end
 
 function edit_transpose_chars(buf::IOBuffer)
     # Moving left but not transpoing anything is intentional, and matches Emacs's behavior
-    eof(buf) && char_move_left(buf)
+    eof(buf) && position(buf) !== 0 && char_move_left(buf)
     position(buf) == 0 && return false
     char_move_left(buf)
     pos = position(buf)

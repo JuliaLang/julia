@@ -1000,7 +1000,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
 {
     size_t lx = jl_nparams(xd);
     size_t ly = jl_nparams(yd);
-    size_t i = 0, j = 0, vx = 0, vy = 0, x_reps = 1;
+    size_t i = 0, j = 0, vx = 0, vy = 0, x_reps = 0;
     jl_value_t *lastx = NULL, *lasty = NULL;
     jl_value_t *xi = NULL, *yi = NULL;
 
@@ -2840,7 +2840,7 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
         JL_GC_PUSHARGS(env, envsz);
         jl_stenv_t tempe;
         init_stenv(&tempe, env, envsz);
-        tempe.ignore_free = 1;
+        tempe.intersection = tempe.ignore_free = 1;
         if (subtype_in_env(isuper, super_pattern, &tempe)) {
             jl_value_t *wr = wrapper;
             int i;

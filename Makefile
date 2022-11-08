@@ -222,8 +222,10 @@ endif
 endif
 endif
 
+# Note that we disable MSYS2's path munging here, as otherwise
+# it replaces our `:`-separated list as a `;`-separated one.
 define stringreplace
-	$(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
+	MSYS2_ARG_CONV_EXCL='*' $(build_depsbindir)/stringreplace $$(strings -t x - $1 | grep $2 | awk '{print $$1;}') $3 255 "$(call cygpath_w,$1)"
 endef
 
 
@@ -446,8 +448,9 @@ endif
 
 
 exe:
-	# run Inno Setup to compile installer
-	$(call spawn,$(JULIAHOME)/dist-extras/inno/iscc.exe /DAppVersion=$(JULIA_VERSION) /DSourceDir="$(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT))" /DRepoDir="$(call cygpath_w,$(JULIAHOME))" /F"$(JULIA_BINARYDIST_FILENAME)" /O"$(call cygpath_w,$(BUILDROOT))" $(INNO_ARGS) $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.iss))
+	# run Inno Setup to compile installer.
+	# Note that we disable MSYS2 path munging, as it interferes with the `/` options:
+	MSYS2_ARG_CONV_EXCL='*' $(call spawn,$(JULIAHOME)/dist-extras/inno/iscc.exe /DAppVersion=$(JULIA_VERSION) /DSourceDir="$(call cygpath_w,$(BUILDROOT)/julia-$(JULIA_COMMIT))" /DRepoDir="$(call cygpath_w,$(JULIAHOME))" /F"$(JULIA_BINARYDIST_FILENAME)" /O"$(call cygpath_w,$(BUILDROOT))" $(INNO_ARGS) $(call cygpath_w,$(JULIAHOME)/contrib/windows/build-installer.iss))
 	chmod a+x "$(BUILDROOT)/$(JULIA_BINARYDIST_FILENAME).exe"
 
 app:
@@ -572,7 +575,7 @@ win-extras:
 	cd $(JULIAHOME)/dist-extras && \
 	$(JLDOWNLOAD) https://www.jrsoftware.org/download.php/is.exe && \
 	chmod a+x is.exe && \
-	$(call spawn, $(JULIAHOME)/dist-extras/is.exe /DIR="$(call cygpath_w,$(JULIAHOME)/dist-extras/inno)" /PORTABLE=1 /CURRENTUSER /VERYSILENT)
+	MSYS2_ARG_CONV_EXCL='*' $(call spawn, $(JULIAHOME)/dist-extras/is.exe /DIR="$(call cygpath_w,$(JULIAHOME)/dist-extras/inno)" /PORTABLE=1 /CURRENTUSER /VERYSILENT)
 
 # various statistics about the build that may interest the user
 ifeq ($(USE_SYSTEM_LLVM), 1)

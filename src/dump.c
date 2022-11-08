@@ -120,11 +120,6 @@ static jl_typename_t *jl_idtable_typename = NULL;
 static jl_value_t *jl_bigint_type = NULL;
 static int gmp_limb_size = 0;
 
-static void write_uint64(ios_t *s, uint64_t i) JL_NOTSAFEPOINT
-{
-    ios_write(s, (char*)&i, 8);
-}
-
 static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
 {
     write_uint64(s, *((uint64_t*)&x));
@@ -583,13 +578,15 @@ static int jl_serialize_generic(jl_serializer_state *s, jl_value_t *v) JL_GC_DIS
     return 0;
 }
 
-static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst, int skip_partial_opaque, int internal) JL_GC_DISABLED
+static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_t *codeinst,
+                                       int skip_partial_opaque, int internal,
+                                       int force) JL_GC_DISABLED
 {
     if (internal > 2) {
         while (codeinst && !codeinst->relocatability)
             codeinst = codeinst->next;
     }
-    if (jl_serialize_generic(s, (jl_value_t*)codeinst)) {
+    if (!force && jl_serialize_generic(s, (jl_value_t*)codeinst)) {
         return;
     }
 
@@ -609,7 +606,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
     if (write_ret_type && codeinst->rettype_const &&
             jl_typeis(codeinst->rettype_const, jl_partial_opaque_type)) {
         if (skip_partial_opaque) {
-            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal);
+            jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal, 0);
             return;
         }
         else {
@@ -636,7 +633,7 @@ static void jl_serialize_code_instance(jl_serializer_state *s, jl_code_instance_
         jl_serialize_value(s, jl_nothing);
     }
     write_uint8(s->s, codeinst->relocatability);
-    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal);
+    jl_serialize_code_instance(s, codeinst->next, skip_partial_opaque, internal, 0);
 }
 
 enum METHOD_SERIALIZATION_MODE {
@@ -893,10 +890,10 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         jl_serialize_value(s, (jl_value_t*)backedges);
         jl_serialize_value(s, (jl_value_t*)NULL); //callbacks
-        jl_serialize_code_instance(s, mi->cache, 1, internal);
+        jl_serialize_code_instance(s, mi->cache, 1, internal, 0);
     }
     else if (jl_is_code_instance(v)) {
-        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0, 2);
+        jl_serialize_code_instance(s, (jl_code_instance_t*)v, 0, 2, 1);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -924,7 +921,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
         }
         else {
             write_uint8(s->s, TAG_INT64);
-            write_int64(s->s, *(int64_t*)data);
+            write_uint64(s->s, *(int64_t*)data);
         }
     }
     else if (jl_typeis(v, jl_int32_type)) {
@@ -1478,7 +1475,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t **udepsp)
         ios_seek(s, initial_pos);
         write_uint64(s, pos - initial_pos);
         ios_seek(s, pos);
-        write_int64(s, 0);
+        write_uint64(s, 0);
     }
     return pos;
 }
@@ -2713,7 +2710,7 @@ JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist)
         // Go back and update the source-text position to point to the current position
         int64_t posfile = ios_pos(&f);
         ios_seek(&f, srctextpos);
-        write_int64(&f, posfile);
+        write_uint64(&f, posfile);
         ios_seek_end(&f);
         // Each source-text file is written as
         //   int32: length of abspath

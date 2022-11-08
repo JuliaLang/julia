@@ -71,7 +71,7 @@ function matching_cache_argtypes(
             # invalidate `Conditional` imposed on varargs
             if condargs !== nothing
                 for (slotid, i) in condargs
-                    if slotid ≥ last
+                    if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
                         isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
                     end
                 end

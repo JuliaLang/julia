@@ -2031,3 +2031,12 @@ S46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,<:(Union{Abst
 A46735{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}},M,Union{AbstractMatrix{B}, AbstractMatrix{<:Vector{<:B}}}}
 @testintersect(A46735{B} where {B}, A46735, !Union{})
 @testintersect(A46735{B, M} where {B, M}, A46735, !Union{})
+
+#issue #46871
+struct A46871{T, N, M} <: AbstractArray{T, N} end
+struct B46871{T, N} <: Ref{A46871{T, N, N}} end
+for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
+    @testintersect(T, Ref{<:AbstractArray{<:Real, 3}}, B46871{Int, 3})
+end
+
+@test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)

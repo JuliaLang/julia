@@ -195,7 +195,7 @@ function complete_symbol(sym::String, @nospecialize(ffunc), context_module::Modu
                 t = typeof(t.parameters[1])
             end
             # Only look for fields if this is a concrete type
-            if isconcretetype(t)
+            if isconcretetype(t) && !(t <: Tuple)
                 fields = fieldnames(t)
                 for field in fields
                     s = string(field)
@@ -312,7 +312,12 @@ function complete_path(path::AbstractString, pos::Int; use_envpath=false, shell_
 end
 
 function complete_expanduser(path::AbstractString, r)
-    expanded = expanduser(path)
+    expanded =
+        try expanduser(path)
+        catch e
+            e isa ArgumentError || rethrow()
+            path
+        end
     return Completion[PathCompletion(expanded)], r, path != expanded
 end
 
