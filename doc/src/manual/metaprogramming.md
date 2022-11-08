@@ -17,13 +17,13 @@ data.
     correct. Metaprogramming should typically be used only when other approaches such as
     [higher order functions](@ref man-anonymous-functions) and
     [closures](https://en.wikipedia.org/wiki/Closure_(computer_programming)) cannot be applied.
-    
+
     `eval`, `Meta.parse`, and defining new macros should be typically used as a last resort.
     It is almost never a good idea to convert an arbitrary string into julia code.
-    
+
     The best uses of metaprogramming often implement most of their functionality in runtime
     helper functions, striving to minimize the amount of code they generate.
-    
+
 ## Program representation
 
 Every Julia program starts life as a string:
