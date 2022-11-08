@@ -4285,3 +4285,7 @@ end
         ccall(0, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
+
+# Issue #46839: `abstract_invoke` should handle incorrect call type
+@test only(Base.return_types(()->invoke(BitSet, Any, x), ())) === Union{}
+@test only(Base.return_types(()->invoke(BitSet, Union{Tuple{Int32},Tuple{Int64}}, 1), ())) === Union{}
