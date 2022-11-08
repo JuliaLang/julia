@@ -436,7 +436,7 @@ function explicit_mantissa_noinfnan(x::T) where {T}
     return subnormal | (significand_mask(T) & uintbits(x))
 end
 
-@inline function make_value(number::T, ep) where {T}
+function make_value(number::T, ep) where {T}
     Tfloat = floattype(T)
     Tint = inttype(T)
     epint = unsafe_trunc(Tint,ep)
@@ -457,7 +457,7 @@ end
     return reinterpret(Tfloat, bits)
 end
 
-function fmod_internal(x::T, y) where {T}
+function fmod_internal(x::T, y::T) where T<:IEEEFloat
     xuint = uintbits(x)
     yuint = uintbits(y)
     if xuint <= yuint
@@ -526,7 +526,7 @@ function fmod_internal(x::T, y) where {T}
     return make_value(m_x, e_y)
 end
 
-function fmod(x::T, y) where {T}
+function fmod(x::T, y::T) where T<:IEEEFloat
     if (!isnan(x) && !isinf(x) && !isnan(y) && !isinf(y) && !iszero(y))
         sign = signbit(x)
         xabs = abs(x)
