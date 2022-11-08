@@ -126,8 +126,8 @@ static void addBranchInstrumentation(FunctionProfile &Prof, Function &F) {
         decltype(Prof.BranchProfiles) BranchProfiles(BranchCount->getZExtValue());
         std::swap(Prof.BranchProfiles, BranchProfiles);
         for (auto &BI : Prof.BranchProfiles) {
-            BI.Taken = 0;
-            BI.Total = 0;
+            BI.Taken.store(0, std::memory_order::memory_order_relaxed);
+            BI.Total.store(0, std::memory_order::memory_order_relaxed);
         }
     }
     assert(!Prof.BranchProfiles.empty() && Prof.BranchProfiles.size() == extractProfNum(cast<MDTuple>(F.getMetadata("julia.prof.branch")), 0)->getZExtValue() && "Branch profile count mismatch");

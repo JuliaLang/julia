@@ -1230,6 +1230,23 @@ JuliaOJIT::JuliaOJIT()
 #endif
 
     ReoptMgr.setPostPartitioningLayer(&OptimizeLayer);
+    //We should update the codeinst pointer to point at the real pointer, and save the trampoline
+    //for direct specfun calls from other IR.
+    ReoptMgr.setReoptCallback([this](StringRef Name, JITTargetAddress Optimized) {
+        auto cif = getDebugInfoRegistry().get_codeinsts_in_flight();
+        auto it = cif->find(Name);
+        if (it != cif->end()) {
+            auto CI = it->second;
+            if (Name.startswith("jfptr")) {
+                // julia-abi function, update invokeptr
+                jl_atomic_store_release(&CI->invoke, (jl_callptr_t)Optimized);
+            } else {
+                assert((Name.startswith("julia") || Name.startswith("japi")) && "Expected non-jfptr to be specfun!");
+                // specfun, update specptr
+                jl_atomic_store_release(&CI->specptr.fptr, (void*)Optimized);
+            }
+        }
+    });
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function

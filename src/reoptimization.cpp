@@ -383,10 +383,10 @@ void FunctionCache::store(orc::SymbolStringPtr Name, std::unique_ptr<Module> M) 
     assert(!Entry && "Storing function module twice");
     Entry = std::make_unique<FunctionInfo>();
     Entry->Stub = nullptr;
-    Entry->Module = serializeModule(*M);
-    Entry->Version = -1;
-    Entry->NextVersion = 0;
     Entry->OptLevel = 0;
+    Entry->Version.store(-1, std::memory_order_seq_cst);
+    Entry->Module = serializeModule(*M);
+    Entry->NextVersion.store(0, std::memory_order_relaxed);
 }
 
 FunctionCache::FunctionInfo *FunctionCache::lookup(orc::SymbolStringPtr Name) {
@@ -452,7 +452,7 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
     if (!Entry) {
         return {0, 0, 0};
     }
-    auto &ES = PostPartitioningLayer->getExecutionSession();
+    auto &ES = JD.getExecutionSession();
     assert(Version >= 0 && "Version must be nonnegative");
     auto ComputedVersion = Version * int32_t(MaxOptLevel) + int32_t(OptLevel);
     {
@@ -535,7 +535,7 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
             //to be inside the lock
             Entry->Stub = reinterpret_cast<JITTargetAddress*>(cantFail(ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchAllSymbols}}, ES.intern(getStubGVName(*Name)))).getAddress());
         }
-        std::unique_lock<std::mutex> Lock(Entry->StubMutex);
+        std::lock_guard<std::mutex> Lock(Entry->StubMutex);
         if (auto Better = GetBetterVersion()) {
             ++NumRaced;
             return *Better;
@@ -544,6 +544,9 @@ ReoptimizationManager::OptimizationResult ReoptimizationManager::optimize(orc::S
         Entry->OptLevel = OptLevel;
         Entry->Version.store(ComputedVersion, std::memory_order::memory_order_seq_cst);
         Entry->StubCV.notify_all(); //all the waiters just got a better version that what was there before
+        if (OnReopt) {
+            OnReopt(*Name, Optimized.getAddress());
+        }
         return {Optimized.getAddress(), Version, OptLevel};
     }
 }

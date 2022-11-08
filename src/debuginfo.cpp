@@ -109,6 +109,12 @@ JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
     return objectmap;
 }
 
+Locked<JITDebugInfoRegistry::codeinst_in_flight_t>::LockT
+JITDebugInfoRegistry::get_codeinsts_in_flight() JL_NOTSAFEPOINT
+{
+    return *this->codeinst_in_flight;
+}
+
 void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT {
     (**this->sysimg_info) = info;
 }

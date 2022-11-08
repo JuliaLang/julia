@@ -28,6 +28,7 @@ class JITDebugInfoRegistry
 {
 public:
 
+    typedef llvm::StringMap<jl_code_instance_t*> codeinst_in_flight_t;
     struct sysimg_info_t {
         uint64_t jl_sysimage_base;
         jl_sysimg_fptrs_t sysimg_fptrs;
@@ -91,4 +92,5 @@ public:
     void set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT;
     Locked<sysimg_info_t>::ConstLockT get_sysimg_info() const JL_NOTSAFEPOINT;
     Locked<objfilemap_t>::LockT get_objfile_map() JL_NOTSAFEPOINT;
+    Locked<codeinst_in_flight_t>::LockT get_codeinsts_in_flight() JL_NOTSAFEPOINT;
 };

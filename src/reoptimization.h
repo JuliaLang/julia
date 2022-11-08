@@ -151,6 +151,8 @@ private:
 
 class ReoptimizationManager {
 public:
+    typedef llvm::unique_function<void(llvm::StringRef, llvm::JITTargetAddress)> ReoptCallback;
+
     ReoptimizationManager(JITFunctionProfiler &Profiler, FunctionCache &Cache, uint32_t MinOptLevel = 0, uint32_t MaxOptLevel = 3);
 
     struct OptimizationResult {
@@ -189,11 +191,16 @@ public:
         return Cache;
     }
 
+    void setReoptCallback(ReoptCallback Callback) {
+        OnReopt = std::move(Callback);
+    }
+
 private:
 
     JITFunctionProfiler &Profiler;
     FunctionCache &Cache;
     llvm::orc::IRLayer *PostPartitioningLayer;
+    ReoptCallback OnReopt;
     ResourcePool<llvm::orc::ThreadSafeContext, 0, std::queue<llvm::orc::ThreadSafeContext>> ContextPool;
     ReoptimizationQueue Queue;
     uint32_t MinOptLevel;
