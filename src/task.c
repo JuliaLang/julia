@@ -293,7 +293,7 @@ static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 void JL_NORETURN jl_finish_task(jl_task_t *t)
 {
     jl_task_t *ct = jl_current_task;
-    JL_PROBE_RT_FINISH_TASK(ct);
+    JL_PROBE_RT_FINISH_TASK(jl_object_id(t));
     JL_SIGATOMIC_BEGIN();
     if (jl_atomic_load_relaxed(&t->_isexception))
         jl_atomic_store_release(&t->_state, JL_TASK_STATE_FAILED);
@@ -637,7 +637,7 @@ JL_DLLEXPORT void jl_switch(void)
     if (!jl_set_task_tid(t, jl_atomic_load_relaxed(&ct->tid))) // manually yielding to a task
         jl_error("cannot switch to task running on another thread");
 
-    JL_PROBE_RT_PAUSE_TASK(ct);
+    JL_PROBE_RT_PAUSE_TASK(jl_object_id(ct));
 
     // Store old values on the stack and reset
     sig_atomic_t defer_signal = ptls->defer_signal;
@@ -687,7 +687,7 @@ JL_DLLEXPORT void jl_switch(void)
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
 
-    JL_PROBE_RT_RUN_TASK(ct);
+    JL_PROBE_RT_RUN_TASK(jl_object_id(ct));
 }
 
 JL_DLLEXPORT void jl_switchto(jl_task_t **pt)
@@ -893,7 +893,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
 {
     jl_task_t *ct = jl_current_task;
     jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
-    JL_PROBE_RT_NEW_TASK(ct, t);
+    JL_PROBE_RT_NEW_TASK(jl_object_id(ct), jl_object_id(t));
     t->copy_stack = 0;
     if (ssize == 0) {
         // stack size unspecified; use default
@@ -1072,7 +1072,7 @@ CFI_NORETURN
 #endif
 
     ct->started = 1;
-    JL_PROBE_RT_START_TASK(ct);
+    JL_PROBE_RT_START_TASK(jl_object_id(ct));
     if (jl_atomic_load_relaxed(&ct->_isexception)) {
         record_backtrace(ptls, 0);
         jl_push_excstack(&ct->excstack, ct->result,
