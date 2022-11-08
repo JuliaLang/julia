@@ -1529,7 +1529,7 @@ julia> LogRange(√2, 32, 10)
 10-element LogRange{Float64}:
  1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
 
-julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)  # was logspace(0,3,4) in Julia < 1.0
+julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)
 true
 
 julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))  # complex numbers
@@ -1549,7 +1549,7 @@ struct LogRange{T} <: AbstractArray{T,1}
         elseif len == 0
             return new{T}(lo, hi, len)
         elseif len == 1 && start != stop
-            throw(ArgumentError("endpoints of LogRange differ, with length = 1"))
+            throw(ArgumentError("LogRange($start, $stop, $len): endpoints differ"))
         end
         if T <: Real && (start<0) ⊻ (stop<0)
             throw(DomainError((start, stop),

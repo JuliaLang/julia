@@ -2652,7 +2652,7 @@ end
 
     # errors
     @test_throws ArgumentError LogRange(1, 10, -1)
-    @test_throws ArgumentError LogRange(1, 10, 1) # endpoints must differ
+    @test_throws ArgumentError LogRange(1, 10, 1) # endpoints must not differ
     @test_throws DomainError LogRange(1, -1, 3)   # needs complex numbers
     @test_throws ArgumentError LogRange(1, 10, 2)[true]
     @test_throws BoundsError LogRange(1, 10, 2)[3]
