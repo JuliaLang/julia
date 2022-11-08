@@ -1014,7 +1014,7 @@ Also, *every* binary operator supports a [dot version](@ref man-dot-operators)
 that can be applied to arrays (and combinations of arrays and scalars) in such
 [fused broadcasting operations](@ref man-vectorized), e.g. `z .== sin.(x .* y)`.
 
-Note that comparison operations such as `==`, `<`, etc., operate on whole arrays *lexicographically*,
+Note that comparison operations such as `==`, `<`, etc. operate on whole arrays *lexicographically*,
 giving a single boolean answer:
 
 ```jldoctest
