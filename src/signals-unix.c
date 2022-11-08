@@ -62,7 +62,7 @@ bt_context_t *jl_to_bt_context(void *sigctx)
 }
 
 static int thread0_exit_count = 0;
-static void jl_exit_thread0(int exitstate, jl_bt_element_t *bt_data, size_t bt_size);
+static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
 
 static inline __attribute__((unused)) uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
@@ -117,7 +117,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
         sigset_t sset;
         sigemptyset(&sset);
         sigaddset(&sset, sig);
-        sigprocmask(SIG_UNBLOCK, &sset, NULL);
+        pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
         fptr();
         return;
     }
@@ -195,7 +195,7 @@ JL_NO_ASAN static void jl_call_in_ctx(jl_ptls_t ptls, void (*fptr)(void), int si
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, sig);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
     fptr();
 #endif
 }
@@ -232,7 +232,8 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
     if (sig == SIGILL)
         jl_show_sigill(context);
     jl_critical_error(sig, info->si_code, jl_to_bt_context(context), jl_get_current_task());
-    if (info->si_code == SI_USER ||
+    if (info->si_code == 0 ||
+        info->si_code == SI_USER ||
 #ifdef SI_KERNEL
         info->si_code == SI_KERNEL ||
 #endif
@@ -247,11 +248,11 @@ static void sigdie_handler(int sig, siginfo_t *info, void *context)
 #endif
         info->si_code == SI_TIMER)
         raise(sig);
-    if (sig != SIGSEGV &&
-        sig != SIGBUS &&
-        sig != SIGILL &&
-        sig != SIGFPE &&
-        sig != SIGTRAP)
+    else if (sig != SIGSEGV &&
+             sig != SIGBUS &&
+             sig != SIGILL &&
+             sig != SIGFPE &&
+             sig != SIGTRAP)
         raise(sig);
     // fall-through return to re-execute faulting statement (but without the error handler)
 }
@@ -374,7 +375,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
         // (we are already corrupting that stack running this function)
         // so just call `_exit` to terminate immediately.
         jl_safe_printf("ERROR: Signal stack overflow, exit\n");
-        _exit(sig + 128);
+        jl_raise(sig);
     }
     else if (sig == SIGSEGV && info->si_code == SEGV_ACCERR && is_write_fault(context)) {  // writing to read-only memory (e.g., mmap)
         jl_throw_in_ctx(ct, jl_readonlymemory_exception, sig, context);
@@ -390,11 +391,11 @@ pthread_mutex_t in_signal_lock;
 static pthread_cond_t exit_signal_cond;
 static pthread_cond_t signal_caught_cond;
 
-static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
+static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t **ctx)
 {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_sec += 1;
+    ts.tv_sec += timeout;
     pthread_mutex_lock(&in_signal_lock);
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
     jl_task_t *ct2 = ptls2 ? jl_atomic_load_relaxed(&ptls2->current_task) : NULL;
@@ -461,43 +462,31 @@ static void jl_try_deliver_sigint(void)
 
 // Write only by signal handling thread, read only by main thread
 // no sync necessary.
-static int thread0_exit_state = 0;
+static int thread0_exit_signo = 0;
 static void JL_NORETURN jl_exit_thread0_cb(void)
 {
 CFI_NORETURN
-    // This can get stuck if it happens at an unfortunate spot
-    // (unavoidable due to its async nature).
-    // Try harder to exit each time if we get multiple exit requests.
-    if (thread0_exit_count <= 1) {
-        jl_critical_error(thread0_exit_state - 128, 0, NULL, jl_current_task);
-        jl_exit(thread0_exit_state);
-    }
-    else if (thread0_exit_count == 2) {
-        exit(thread0_exit_state);
-    }
-    else {
-        _exit(thread0_exit_state);
-    }
+    jl_critical_error(thread0_exit_signo, 0, NULL, jl_current_task);
+    jl_atexit_hook(128);
+    jl_raise(thread0_exit_signo);
 }
 
-static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
+static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (thread0_exit_count <= 1) {
-        unw_context_t *signal_context;
-        jl_thread_suspend_and_get_state(0, &signal_context);
-        if (signal_context != NULL) {
-            thread0_exit_state = state;
-            ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-            memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-            jl_thread_resume(0, -1);
-            return;
-        }
-    }
-    thread0_exit_state = state;
-    jl_atomic_store_release(&ptls2->signal_request, 3);
+    unw_context_t *signal_context;
     // This also makes sure `sleep` is aborted.
-    pthread_kill(ptls2->system_id, SIGUSR2);
+    jl_thread_suspend_and_get_state(0, 30, &signal_context);
+    if (signal_context != NULL) {
+        thread0_exit_signo = signo;
+        ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
+        memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
+        jl_thread_resume(0, -1); // resume with message 3 (call jl_exit_thread0_cb)
+    }
+    else {
+        // thread 0 is gone? just do the exit ourself
+        jl_raise(signo);
+    }
 }
 
 // request:
@@ -506,7 +495,7 @@ static void jl_exit_thread0(int state, jl_bt_element_t *bt_data, size_t bt_size)
 //  1: get state
 //  2: throw sigint if `!defer_signal && io_wait` or if force throw threshold
 //     is reached
-//  3: exit with `thread0_exit_state`
+//  3: raise `thread0_exit_signo` and try to exit
 void usr2_handler(int sig, siginfo_t *info, void *ctx)
 {
     jl_task_t *ct = jl_get_current_task();
@@ -688,23 +677,26 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls)
 #endif
 }
 
+const static int sigwait_sigs[] = {
+    SIGINT, SIGTERM, SIGABRT, SIGQUIT,
+#ifdef SIGINFO
+    SIGINFO,
+#else
+    SIGUSR1,
+#endif
+#if defined(HAVE_TIMER)
+    SIGUSR1,
+#elif defined(HAVE_ITIMER)
+    SIGPROF,
+#endif
+    0
+};
+
 static void jl_sigsetset(sigset_t *sset)
 {
     sigemptyset(sset);
-    sigaddset(sset, SIGINT);
-    sigaddset(sset, SIGTERM);
-    sigaddset(sset, SIGABRT);
-    sigaddset(sset, SIGQUIT);
-#ifdef SIGINFO
-    sigaddset(sset, SIGINFO);
-#else
-    sigaddset(sset, SIGUSR1);
-#endif
-#if defined(HAVE_TIMER)
-    sigaddset(sset, SIGUSR1);
-#elif defined(HAVE_ITIMER)
-    sigaddset(sset, SIGPROF);
-#endif
+    for (const int *sig = sigwait_sigs; *sig; sig++)
+        sigaddset(sset, *sig);
 }
 
 #ifdef HAVE_KEVENT
@@ -719,6 +711,7 @@ static void kqueue_signal(int *sigqueue, struct kevent *ev, int sig)
         *sigqueue = -1;
     }
     else {
+        // kqueue gets signals before SIG_IGN, but does not remove them from pending (unlike sigwait)
         signal(sig, SIG_IGN);
     }
 }
@@ -761,20 +754,13 @@ static void *signal_listener(void *arg)
         perror("signal kqueue");
     }
     else {
-        kqueue_signal(&sigqueue, &ev, SIGINT);
-        kqueue_signal(&sigqueue, &ev, SIGTERM);
-        kqueue_signal(&sigqueue, &ev, SIGABRT);
-        kqueue_signal(&sigqueue, &ev, SIGQUIT);
-#ifdef SIGINFO
-        kqueue_signal(&sigqueue, &ev, SIGINFO);
-#else
-        kqueue_signal(&sigqueue, &ev, SIGUSR1);
-#endif
-#if defined(HAVE_TIMER)
-        kqueue_signal(&sigqueue, &ev, SIGUSR1);
-#elif defined(HAVE_ITIMER)
-        kqueue_signal(&sigqueue, &ev, SIGPROF);
-#endif
+        for (const int *sig = sigwait_sigs; *sig; sig++)
+            kqueue_signal(&sigqueue, &ev, *sig);
+        if (sigqueue == -1) {
+            // re-enable sigwait for these
+            for (const int *sig = sigwait_sigs; *sig; sig++)
+                signal(*sig, SIG_DFL);
+        }
     }
 #endif
     while (1) {
@@ -791,6 +777,8 @@ static void *signal_listener(void *arg)
             if (nevents != 1) {
                 close(sigqueue);
                 sigqueue = -1;
+                for (const int *sig = sigwait_sigs; *sig; sig++)
+                    signal(*sig, SIG_DFL);
                 continue;
             }
             sig = ev.ident;
@@ -861,6 +849,30 @@ static void *signal_listener(void *arg)
             doexit = 0;
         }
 #endif
+        if (doexit) {
+            // The exit can get stuck if it happens at an unfortunate spot in thread 0
+            // (unavoidable due to its async nature).
+            // Try much harder to exit next time, if we get multiple exit requests.
+            // 1. unblock the signal, so this thread can be killed by it
+            // 2. reset the tty next, because we might die before we get another chance to do that
+            // 3. attempt a graceful cleanup of julia, followed by an abrupt end to the C runtime (except for fflush)
+            // 4. kill this thread with `raise`, to preserve the signo / exit code / and coredump configuration
+            // Similar to jl_raise, but a slightly different order of operations
+            sigset_t sset;
+            sigemptyset(&sset);
+            sigaddset(&sset, sig);
+            pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+#ifdef HAVE_KEVENT
+            signal(sig, SIG_DFL);
+#endif
+            uv_tty_reset_mode();
+            thread0_exit_count++;
+            fflush(NULL);
+            if (thread0_exit_count > 1) {
+                raise(sig); // very unlikely to return
+                _exit(128 + sig);
+            }
+        }
 
         int nthreads = jl_atomic_load_acquire(&jl_n_threads);
         bt_size = 0;
@@ -877,7 +889,7 @@ static void *signal_listener(void *arg)
                 // Stop the threads in the random or reverse round-robin order.
                 int i = profile ? randperm[idx] : idx;
                 // notify thread to stop
-                jl_thread_suspend_and_get_state(i, &signal_context);
+                jl_thread_suspend_and_get_state(i, 1, &signal_context);
                 if (signal_context == NULL)
                     continue;
 
@@ -951,26 +963,29 @@ static void *signal_listener(void *arg)
 
         // this part is async with the running of the rest of the program
         // and must be thread-safe, but not necessarily signal-handler safe
-        if (critical) {
-            if (doexit) {
-                thread0_exit_count++;
-                jl_exit_thread0(128 + sig, bt_data, bt_size);
+        if (doexit) {
+//            // this is probably always SI_USER (0x10001 / 65537), so we suppress it
+//            int si_code = 0;
+//#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !HAVE_KEVENT
+//            si_code = info.si_code;
+//#endif
+            jl_exit_thread0(sig, bt_data, bt_size);
+        }
+        else if (critical) {
+            // critical in this case actually means SIGINFO request
+#ifndef SIGINFO // SIGINFO already prints something similar automatically
+            int nrunning = 0;
+            for (int idx = nthreads; idx-- > 0; ) {
+                jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
+                nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
             }
-            else {
-#ifndef SIGINFO // SIGINFO already prints this automatically
-                int nrunning = 0;
-                for (int idx = nthreads; idx-- > 0; ) {
-                    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
-                    nrunning += !jl_atomic_load_relaxed(&ptls2->sleep_check_state);
-                }
-                jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
+            jl_safe_printf("\ncmd: %s %d running %d of %d\n", jl_options.julia_bin ? jl_options.julia_bin : "julia", uv_os_getpid(), nrunning, nthreads);
 #endif
 
-                jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
-                size_t i;
-                for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-                    jl_print_bt_entry_codeloc(bt_data + i);
-                }
+            jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
+            size_t i;
+            for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
+                jl_print_bt_entry_codeloc(bt_data + i);
             }
         }
     }
@@ -984,7 +999,7 @@ void restore_signals(void)
 
     sigset_t sset;
     jl_sigsetset(&sset);
-    sigprocmask(SIG_SETMASK, &sset, 0);
+    pthread_sigmask(SIG_SETMASK, &sset, 0);
 
 #if !defined(HAVE_MACH) && !defined(JL_DISABLE_LIBUNWIND)
     if (pthread_mutex_init(&in_signal_lock, NULL) != 0 ||
