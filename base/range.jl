@@ -587,11 +587,11 @@ function show(io::IO, r::LinRange{T}) where {T}
     print(io, "}(")
     ioc = IOContext(io, :typeinfo=>T)
     show(ioc, first(r))
-    print(ioc, ", ")
+    print(io, ", ")
     show(ioc, last(r))
-    print(ioc, ", ")
-    show(ioc, length(r))
-    print(ioc, ')')
+    print(io, ", ")
+    show(io, length(r))
+    print(io, ')')
 end
 
 """
