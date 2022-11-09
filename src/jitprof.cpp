@@ -261,7 +261,7 @@ PreservedAnalyses JITPreoptimizationProfiler::run(Function &F, FunctionAnalysisM
 
     auto Flags = fromFunction(F);
 
-    if (!Flags.ProfileBranches && !Flags.ProfileAllocations && !Flags.ApplyPGO)
+    if (!Flags.ProfileBranches && !Flags.ProfileAllocations && !Flags.ApplyPGO && !Flags.ProfileCalls)
         return PreservedAnalyses::all();
 
     auto &Prof = JITProf->getOrCreateProfile(F.getName(), [&]() {
