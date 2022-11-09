@@ -17,6 +17,7 @@ size(F::Transpose{<:Any,<:Factorization}) = reverse(size(parent(F)))
 
 checkpositivedefinite(info) = info == 0 || throw(PosDefException(info))
 checknonsingular(info, ::RowMaximum) = info == 0 || throw(SingularException(info))
+checknonsingular(info, ::RowNonZero) = info == 0 || throw(SingularException(info))
 checknonsingular(info, ::NoPivot) = info == 0 || throw(ZeroPivotException(info))
 checknonsingular(info) = checknonsingular(info, RowMaximum())
 
@@ -31,12 +32,12 @@ Test that a factorization of a matrix succeeded.
 ```jldoctest
 julia> F = cholesky([1 0; 0 1]);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 true
 
 julia> F = lu([1 0; 0 0]; check = false);
 
-julia> LinearAlgebra.issuccess(F)
+julia> issuccess(F)
 false
 ```
 """
@@ -53,9 +54,9 @@ function det(F::Factorization)
 end
 
 convert(::Type{T}, f::T) where {T<:Factorization} = f
-convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:Factorization} = T(f)::T
 
-convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)
+convert(::Type{T}, f::Factorization) where {T<:AbstractArray} = T(f)::T
 
 ### General promotion rules
 Factorization{T}(F::Factorization{T}) where {T} = F
@@ -145,6 +146,6 @@ end
 /(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
 /(B::AbstractMatrix, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
 /(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
-/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = B / adjoint(F.parent)
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization{<:Real}}) = transpose(transpose(F) \ transpose(B))
 /(B::AdjointAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
-/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization}) = conj.(conj.(B) / adjoint(F.parent))
+/(B::TransposeAbsVec, F::Transpose{<:Any,<:Factorization}) = transpose(transpose(F) \ transpose(B))

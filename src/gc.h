@@ -24,6 +24,7 @@
 #endif
 #endif
 #include "julia_assert.h"
+#include "gc-heap-snapshot.h"
 #include "gc-alloc-profiler.h"
 
 #ifdef __cplusplus
@@ -56,7 +57,7 @@ typedef struct {
     jl_alloc_num_t print;
 } jl_gc_debug_env_t;
 
-// This struct must be kept in sync with the Julia type of the same name in base/util.jl
+// This struct must be kept in sync with the Julia type of the same name in base/timing.jl
 typedef struct {
     int64_t     allocd;
     int64_t     deferred_alloc;
@@ -74,6 +75,12 @@ typedef struct {
     int         full_sweep;
     uint64_t    max_pause;
     uint64_t    max_memory;
+    uint64_t    time_to_safepoint;
+    uint64_t    max_time_to_safepoint;
+    uint64_t    sweep_time;
+    uint64_t    mark_time;
+    uint64_t    total_sweep_time;
+    uint64_t    total_mark_time;
 } jl_gc_num_t;
 
 enum {
@@ -387,6 +394,8 @@ extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
+extern int gc_n_threads;
+extern jl_ptls_t* gc_all_tls_states;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {
@@ -561,7 +570,8 @@ void gc_time_sweep_pause(uint64_t gc_end_t, int64_t actual_allocd,
                          int sweep_full);
 void gc_time_summary(int sweep_full, uint64_t start, uint64_t end,
                      uint64_t freed, uint64_t live, uint64_t interval,
-                     uint64_t pause);
+                     uint64_t pause, uint64_t ttsp, uint64_t mark,
+                     uint64_t sweep);
 #else
 #define gc_time_pool_start()
 STATIC_INLINE void gc_time_count_page(int freedall, int pg_skpd) JL_NOTSAFEPOINT
@@ -588,7 +598,7 @@ STATIC_INLINE void gc_time_count_mallocd_array(int bits) JL_NOTSAFEPOINT
 #define gc_time_sweep_pause(gc_end_t, actual_allocd, live_bytes,        \
                             estimate_freed, sweep_full)
 #define  gc_time_summary(sweep_full, start, end, freed, live,           \
-                            interval, pause)
+                         interval, pause, ttsp, mark, sweep)
 #endif
 
 #ifdef MEMFENCE
@@ -639,8 +649,10 @@ extern int gc_verifying;
 #define verify_parent2(ty,obj,slot,arg1,arg2) do {} while (0)
 #define gc_verifying (0)
 #endif
-int gc_slot_to_fieldidx(void *_obj, void *slot);
-int gc_slot_to_arrayidx(void *_obj, void *begin);
+
+
+int gc_slot_to_fieldidx(void *_obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT;
+int gc_slot_to_arrayidx(void *_obj, void *begin) JL_NOTSAFEPOINT;
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_offset);
 
 #ifdef GC_DEBUG_ENV

@@ -1,26 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
-    truncwidth = textwidth(truncmark)
-    (width <= 0 || width < truncwidth) && return ""
-
-    wid = truncidx = lastidx = 0
-    for (idx, c) in pairs(str)
-        lastidx = idx
-        wid += textwidth(c)
-        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
-        (wid >= width || c in chars) && break
-    end
-
-    lastidx != 0 && str[lastidx] in chars && (lastidx = prevind(str, lastidx))
-    truncidx == 0 && (truncidx = lastidx)
-    if lastidx < lastindex(str)
-        return String(SubString(str, 1, truncidx) * truncmark)
-    else
-        return String(str)
-    end
-end
-
 function show(io::IO, t::AbstractDict{K,V}) where V where K
     recur_io = IOContext(io, :SHOWN_SET => t,
                              :typeinfo => eltype(t))
@@ -226,7 +205,7 @@ end
         end
     end
 
-    @assert h.age == age0 "Muliple concurent writes to Dict detected!"
+    @assert h.age == age0 "Multiple concurrent writes to Dict detected!"
     h.age += 1
     h.slots = slots
     h.keys = keys
@@ -380,7 +359,7 @@ end
 
 function setindex!(h::Dict{K,V}, v0, key0) where V where K
     key = convert(K, key0)
-    if !isequal(key, key0)
+    if !(isequal(key, key0)::Bool)
         throw(ArgumentError("$(limitrepr(key0)) is not a valid key for type $K"))
     end
     setindex!(h, v0, key)

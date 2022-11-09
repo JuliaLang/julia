@@ -10,11 +10,19 @@ const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
-# `_dump_function` might be more efficient but it doesn't really matter here...
-get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
-    sprint(code_llvm, f, t, raw, dump_module, optimize)
+const is_debug_build = Base.isdebugbuild()
+function libjulia_codegen_name()
+    is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
+end
 
-if opt_level > 0
+# The tests below assume a certain format and safepoint_on_entry=true breaks that.
+function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
+    params = Base.CodegenParams(safepoint_on_entry=false)
+    d = InteractiveUtils._dump_function(f, t, false, false, !raw, dump_module, :att, optimize, :none, false, params)
+    sprint(print, d)
+end
+
+if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
     @test !occursin(" call ", get_llvm(identity, Tuple{String}))
 end
@@ -104,7 +112,7 @@ function test_jl_dump_llvm_opt()
     end
 end
 
-if opt_level > 0
+if !is_debug_build && opt_level > 0
     # Make sure `jl_string_ptr` is inlined
     @test !occursin(" call ", get_llvm(jl_string_ptr, Tuple{String}))
     # Make sure `Core.sizeof` call is inlined
@@ -418,9 +426,15 @@ let src = get_llvm(f33829, Tuple{Float64}, true, true)
     @test !occursin(r"call [^(]*\{}", src)
 end
 
+# Base.vect prior to PR 41696
+function oldvect(X...)
+    T = Base.promote_typeof(X...)
+    return copyto!(Vector{T}(undef, length(X)), X)
+end
+
 let io = IOBuffer()
     # Test for the f(args...) = g(args...) generic codegen optimization
-    code_llvm(io, Base.vect, Tuple{Vararg{Union{Float64, Int64}}})
+    code_llvm(io, oldvect, Tuple{Vararg{Union{Float64, Int64}}})
     @test !occursin("__apply", String(take!(io)))
 end
 
@@ -490,8 +504,9 @@ function f37262(x)
 end
 @testset "#37262" begin
     str = "store volatile { i8, {}*, {}*, {}*, {}* } zeroinitializer, { i8, {}*, {}*, {}*, {}* }* %phic"
+    str_opaque = "store volatile { i8, ptr, ptr, ptr, ptr } zeroinitializer, ptr %phic"
     llvmstr = get_llvm(f37262, (Bool,), false, false, false)
-    @test contains(llvmstr, str) || llvmstr
+    @test (contains(llvmstr, str) || contains(llvmstr, str_opaque)) || llvmstr
     @test f37262(Base.inferencebarrier(true)) === nothing
 end
 
@@ -668,17 +683,31 @@ U41096 = Term41096{:U}(Modulate41096(:U, false))
 
 @test !newexpand41096((t=t41096, μ=μ41096, U=U41096), :U)
 
+
 # test that we can start julia with libjulia-codegen removed; PR #41936
 mktempdir() do pfx
     cp(dirname(Sys.BINDIR), pfx; force=true)
-    libpath = relpath(dirname(dlpath("libjulia-codegen")), dirname(Sys.BINDIR))
+    libpath = relpath(dirname(dlpath(libjulia_codegen_name())), dirname(Sys.BINDIR))
     libs_deleted = 0
-    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    libfiles = filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    for f in libfiles
         rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
     @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+
+    # PR #47343
+    libs_emptied = 0
+    for f in libfiles
+        touch(joinpath(pfx, libpath, f))
+        libs_emptied += 1
+    end
+
+    errfile = joinpath(pfx, "stderr.txt")
+    @test libs_emptied > 0
+    @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
+    @test contains(readline(errfile), "ERROR: Unable to load dependent library")
 end
 
 # issue #42645
@@ -706,9 +735,9 @@ struct A44921{T}
     x::T
 end
 function f44921(a)
-    if a == :x
+    if a === :x
         A44921(_f) # _f purposefully undefined
-    elseif a == :p
+    elseif a === :p
         g44921(a)
     end
 end
@@ -734,3 +763,25 @@ f_donotdelete_input(x) = Base.donotdelete(x+1)
 f_donotdelete_const() = Base.donotdelete(1+1)
 @test occursin("call void (...) @jl_f_donotdelete(i64", get_llvm(f_donotdelete_input, Tuple{Int64}, true, false, false))
 @test occursin("call void (...) @jl_f_donotdelete()", get_llvm(f_donotdelete_const, Tuple{}, true, false, false))
+
+# Test 45476 fixes
+struct MaybeTuple45476
+    val::Union{Nothing, Tuple{Float32}}
+end
+
+@test MaybeTuple45476((0,)).val[1] == 0f0
+
+# Test int paths for getfield/isdefined
+f_getfield_nospecialize(@nospecialize(x)) = getfield(x, 1)
+f_isdefined_nospecialize(@nospecialize(x)) = isdefined(x, 1)
+
+@test !occursin("jl_box_int", get_llvm(f_getfield_nospecialize, Tuple{Any}, true, false, false))
+@test !occursin("jl_box_int", get_llvm(f_isdefined_nospecialize, Tuple{Any}, true, false, false))
+
+# Test codegen for isa(::Any, Type)
+f_isa_type(@nospecialize(x)) = isa(x, Type)
+@test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
+
+# Issue #47247
+f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
+@test_throws TypeError f47247(Ref(5), nothing)

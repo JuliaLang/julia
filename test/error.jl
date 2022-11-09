@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# for curmod_str
+include("testenv.jl")
+
 @testset "ExponentialBackOff" begin
     @test length(ExponentialBackOff(n=10)) == 10
     @test collect(ExponentialBackOff(n=10, first_delay=0.01))[1] == 0.01
@@ -93,6 +96,30 @@ end
         f44319(1)
     catch e
         s = sprint(showerror, e)
-        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\nClosest candidates are:\n  f44319() at none:0"
+        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
     end
+end
+
+@testset "All types ending with Exception or Error subtype Exception" begin
+    function test_exceptions(mod, visited=Set{Module}())
+        if mod ∉ visited
+            push!(visited, mod)
+            for name in names(mod, all=true)
+                isdefined(mod, name) || continue
+                value = getfield(mod, name)
+
+                if value isa Module
+                    test_exceptions(value, visited)
+                elseif value isa Type
+                    str = string(value)
+                    if endswith(str, "Exception") || endswith(str, "Error")
+                        @test value <: Exception
+                    end
+                end
+            end
+        end
+        visited
+    end
+    visited = test_exceptions(Base)
+    test_exceptions(Core, visited)
 end

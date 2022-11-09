@@ -12,6 +12,12 @@ using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, D
 
 using Base: iszero, require_one_based_indexing
 
+
+# Legacy binding maintained for backwards-compatibility but new packages
+# should not look at this, instead preferring to parse the output
+# of BLAS.get_config()
+const liblapack = libblastrampoline
+
 #Generic LAPACK error handlers
 """
 Handle only negative LAPACK error codes
@@ -550,6 +556,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * )
         function getrf!(A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
+            chkfinite(A)
             chkstride1(A)
             m, n = size(A)
             lda  = max(1,stride(A, 2))
@@ -5180,6 +5187,7 @@ for (syev, syevr, sygvd, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), WORK( * )
         function syev!(jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty})
             chkstride1(A)
+            chkuplofinite(A, uplo)
             n = checksquare(A)
             W     = similar(A, $relty, n)
             work  = Vector{$elty}(undef, 1)
@@ -5218,6 +5226,7 @@ for (syev, syevr, sygvd, elty, relty) in
         function syevr!(jobz::AbstractChar, range::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty},
                         vl::AbstractFloat, vu::AbstractFloat, il::Integer, iu::Integer, abstol::AbstractFloat)
             chkstride1(A)
+            chkuplofinite(A, uplo)
             n = checksquare(A)
             if range == 'I' && !(1 <= il <= iu <= n)
                 throw(ArgumentError("illegal choice of eigenvalue indices (il = $il, iu=$iu), which must be between 1 and n = $n"))
@@ -5286,6 +5295,8 @@ for (syev, syevr, sygvd, elty, relty) in
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function sygvd!(itype::Integer, jobz::AbstractChar, uplo::AbstractChar, A::AbstractMatrix{$elty}, B::AbstractMatrix{$elty})
             chkstride1(A, B)
+            chkuplofinite(A, uplo)
+            chkuplofinite(B, uplo)
             n, m = checksquare(A, B)
             if n != m
                 throw(DimensionMismatch("dimensions of A, ($n,$n), and B, ($m,$m), must match"))
@@ -5455,7 +5466,7 @@ for (bdsdc, elty) in
             elseif compq == 'P'
                 @warn "COMPQ='P' is not tested"
                 #TODO turn this into an actual LAPACK call
-                #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
+                #smlsiz=ilaenv(9, $elty === :Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
                 smlsiz=100 #For now, completely overkill
                 ldq = n*(11+2*smlsiz+8*round(Int,log((n/(smlsiz+1)))/log(2)))
                 ldiq = n*(3+3*round(Int,log(n/(smlsiz+1))/log(2)))

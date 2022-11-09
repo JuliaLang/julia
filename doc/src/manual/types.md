@@ -108,9 +108,26 @@ local x::Int8  # in a local declaration
 x::Int8 = 10   # as the left-hand side of an assignment
 ```
 
-and applies to the whole current scope, even before the declaration. Currently, type declarations
-cannot be used in global scope, e.g. in the REPL, since Julia does not yet have constant-type
-globals.
+and applies to the whole current scope, even before the declaration.
+
+As of Julia 1.8, type declarations can now be used in global scope i.e.
+type annotations can be added to global variables to make accessing them type stable.
+```julia
+julia> x::Int = 10
+10
+
+julia> x = 3.5
+ERROR: InexactError: Int64(3.5)
+
+julia> function foo(y)
+           global x = 15.8    # throws an error when foo is called
+           return x + y
+       end
+foo (generic function with 1 method)
+
+julia> foo(10)
+ERROR: InexactError: Int64(15.8)
+```
 
 Declarations can also be attached to function definitions:
 
@@ -182,15 +199,14 @@ The [`Number`](@ref) type is a direct child type of `Any`, and [`Real`](@ref) is
 In turn, `Real` has two children (it has more, but only two are shown here; we'll get to
 the others later): [`Integer`](@ref) and [`AbstractFloat`](@ref), separating the world into
 representations of integers and representations of real numbers. Representations of real
-numbers include, of course, floating-point types, but also include other types, such as
-rationals. Hence, `AbstractFloat` is a proper subtype of `Real`, including only
-floating-point representations of real numbers. Integers are further subdivided into
-[`Signed`](@ref) and [`Unsigned`](@ref) varieties.
+numbers include floating-point types, but also include other types, such as rationals.
+`AbstractFloat` includes only floating-point representations of real numbers. Integers
+are further subdivided into [`Signed`](@ref) and [`Unsigned`](@ref) varieties.
 
-The `<:` operator in general means "is a subtype of", and, used in declarations like this, declares
-the right-hand type to be an immediate supertype of the newly declared type. It can also be used
-in expressions as a subtype operator which returns `true` when its left operand is a subtype of
-its right operand:
+The `<:` operator in general means "is a subtype of", and, used in declarations like those above,
+declares the right-hand type to be an immediate supertype of the newly declared type. It can also
+be used in expressions as a subtype operator which returns `true` when its left operand is a
+subtype of its right operand:
 
 ```jldoctest
 julia> Integer <: Number
@@ -231,8 +247,8 @@ default method by many combinations of concrete types. Thanks to multiple dispat
 has full control over whether the default or more specific method is used.
 
 An important point to note is that there is no loss in performance if the programmer relies on
-a function whose arguments are abstract types, because it is recompiled for each tuple of argument
-concrete types with which it is invoked. (There may be a performance issue, however, in the case
+a function whose arguments are abstract types, because it is recompiled for each tuple of concrete
+argument types with which it is invoked. (There may be a performance issue, however, in the case
 of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
@@ -410,6 +426,9 @@ There is much more to say about how instances of composite types are created, bu
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
 
+For many user-defined types `X`, you may want to define a method [`Base.broadcastable(x::X) = Ref(x)`](@ref man-interfaces-broadcasting)
+so that instances of that type act as 0-dimensional "scalars" for [broadcasting](@ref Broadcasting).
+
 ## Mutable Composite Types
 
 If a composite type is declared with `mutable struct` instead of `struct`, then instances of
@@ -429,6 +448,9 @@ julia> bar.qux = 2.0
 julia> bar.baz = 1//2
 1//2
 ```
+
+An extra interface between the fields and the user can be provided through [Instance Properties](@ref man-instance-properties).
+This grants more control on what can be accessed and modified using the `bar.baz` notation.
 
 In order to support mutation, such objects are generally allocated on the heap, and have
 stable memory addresses.
@@ -726,8 +748,13 @@ to `Point` have the same type. When this isn't the case, the constructor will fa
 ```jldoctest pointtype
 julia> Point(1,2.5)
 ERROR: MethodError: no method matching Point(::Int64, ::Float64)
+
 Closest candidates are:
-  Point(::T, !Matched::T) where T at none:2
+  Point(::T, !Matched::T) where T
+   @ Main none:2
+
+Stacktrace:
+[...]
 ```
 
 Constructor methods to appropriately handle such mixed cases can be defined, but that will not
@@ -1116,16 +1143,16 @@ Parametric types can be singleton types when the above condition holds. For exam
 julia> struct NoFieldsParam{T}
        end
 
-julia> Base.issingletontype(NoFieldsParam) # can't be a singleton type ...
+julia> Base.issingletontype(NoFieldsParam) # Can't be a singleton type ...
 false
 
 julia> NoFieldsParam{Int}() isa NoFieldsParam # ... because it has ...
 true
 
-julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances
+julia> NoFieldsParam{Bool}() isa NoFieldsParam # ... multiple instances.
 true
 
-julia> Base.issingletontype(NoFieldsParam{Int}) # parametrized, it is a singleton
+julia> Base.issingletontype(NoFieldsParam{Int}) # Parametrized, it is a singleton.
 true
 
 julia> NoFieldsParam{Int}() === NoFieldsParam{Int}()
@@ -1169,10 +1196,13 @@ Types of closures are not necessarily singletons.
 julia> addy(y) = x -> x + y
 addy (generic function with 1 method)
 
-julia> Base.issingletontype(addy(1))
-false
+julia> typeof(addy(1)) === typeof(addy(2))
+true
 
 julia> addy(1) === addy(2)
+false
+
+julia> Base.issingletontype(typeof(addy(1)))
 false
 ```
 
@@ -1514,7 +1544,7 @@ when the `:compact` property is set to `true`, falling back to the long
 representation if the property is `false` or absent:
 ```jldoctest polartype
 julia> function Base.show(io::IO, z::Polar)
-           if get(io, :compact, false)
+           if get(io, :compact, false)::Bool
                print(io, z.r, "ℯ", z.Θ, "im")
            else
                print(io, z.r, " * exp(", z.Θ, "im)")
@@ -1545,8 +1575,8 @@ floating-point numbers, tuples, etc.) as type parameters.  A common example is t
 parameter in `Array{T,N}`, where `T` is a type (e.g., [`Float64`](@ref)) but `N` is just an `Int`.
 
 You can create your own custom types that take values as parameters, and use them to control dispatch
-of custom types. By way of illustration of this idea, let's introduce a parametric type, `Val{x}`,
-and a constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
+of custom types. By way of illustration of this idea, let's introduce the parametric type `Val{x}`,
+and its constructor `Val(x) = Val{x}()`, which serves as a customary way to exploit this technique
 for cases where you don't need a more elaborate hierarchy.
 
 [`Val`](@ref) is defined as:

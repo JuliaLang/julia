@@ -7,6 +7,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/ADT/DepthFirstIterator.h>
+#include <llvm/ADT/Statistic.h>
 #include <llvm/Analysis/CFG.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -16,6 +17,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -27,6 +29,8 @@
 
 #define DEBUG_TYPE "lower_handlers"
 #undef DEBUG
+STATISTIC(MaxExceptionHandlerDepth, "Maximum nesting of exception handlers");
+STATISTIC(ExceptionHandlerBuffers, "Number of exception handler buffers inserted");
 
 using namespace llvm;
 
@@ -156,6 +160,8 @@ static bool lowerExcHandlers(Function &F) {
         /* Remember the depth at the BB boundary */
         ExitDepth[BB] = Depth;
     }
+    MaxExceptionHandlerDepth.updateMax(MaxDepth);
+    ExceptionHandlerBuffers += MaxDepth;
 
     /* Step 2: EH Frame lowering */
     // Allocate stack space for each handler. We allocate these as separate
@@ -166,17 +172,24 @@ static bool lowerExcHandlers(Function &F) {
     Value *handler_sz64 = ConstantInt::get(Type::getInt64Ty(F.getContext()),
                                            sizeof(jl_handler_t));
     Instruction *firstInst = &F.getEntryBlock().front();
-    std::vector<AllocaInst *> buffs;
+    std::vector<Instruction *> buffs;
+    unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     for (int i = 0; i < MaxDepth; ++i) {
-        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), 0,
+        auto *buff = new AllocaInst(Type::getInt8Ty(F.getContext()), allocaAddressSpace,
                 handler_sz, Align(16), "", firstInst);
-        buffs.push_back(buff);
+        if (allocaAddressSpace) {
+            AddrSpaceCastInst *buff_casted = new AddrSpaceCastInst(buff, Type::getInt8PtrTy(F.getContext(), AddressSpace::Generic));
+            buff_casted->insertAfter(buff);
+            buffs.push_back(buff_casted);
+        } else {
+            buffs.push_back(buff);
+        }
     }
 
     // Lower enter funcs
     for (auto it : EnterDepth) {
         assert(it.second >= 0);
-        AllocaInst *buff = buffs[it.second];
+        Instruction *buff = buffs[it.second];
         CallInst *enter = it.first;
         auto new_enter = CallInst::Create(jlenter_func, buff, "", enter);
         Value *lifetime_args[] = {
@@ -222,7 +235,11 @@ static bool lowerExcHandlers(Function &F) {
 
 PreservedAnalyses LowerExcHandlers::run(Function &F, FunctionAnalysisManager &AM)
 {
-    if (lowerExcHandlers(F)) {
+    bool modified = lowerExcHandlers(F);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyFunction(F, &errs()));
+#endif
+    if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }
     return PreservedAnalyses::all();
@@ -234,7 +251,11 @@ struct LowerExcHandlersLegacy : public FunctionPass {
     LowerExcHandlersLegacy() : FunctionPass(ID)
     {}
     bool runOnFunction(Function &F) {
-        return lowerExcHandlers(F);
+        bool modified = lowerExcHandlers(F);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyFunction(F, &errs()));
+#endif
+        return modified;
     }
 };
 

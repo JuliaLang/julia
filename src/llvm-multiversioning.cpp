@@ -1,9 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 // Function multi-versioning
-#define DEBUG_TYPE "julia_multiversioning"
-#undef DEBUG
-
 // LLVM pass to clone function for different archs
 
 #include "llvm-version.h"
@@ -40,6 +37,9 @@
 
 #include "codegen_shared.h"
 #include "julia_assert.h"
+
+#define DEBUG_TYPE "julia_multiversioning"
+#undef DEBUG
 
 using namespace llvm;
 
@@ -281,7 +281,7 @@ private:
     function_ref<LoopInfo&(Function&)> GetLI;
     function_ref<CallGraph&()> GetCG;
 
-    // Map from original functiton to one based index in `fvars`
+    // Map from original function to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
     std::vector<uint32_t> func_infos{};
@@ -1134,8 +1134,9 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     // At this point, we should have fixed up all the uses of the cloned functions
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
-
-    assert(!verifyModule(M));
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
 
     return true;
 }
@@ -1185,7 +1186,7 @@ PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
     auto GetCG = [&]() -> CallGraph & {
         return AM.getResult<CallGraphAnalysis>(M);
     };
-    if (runMultiVersioning(M, GetLI, GetCG, false)) {
+    if (runMultiVersioning(M, GetLI, GetCG, external_use)) {
         auto preserved = PreservedAnalyses::allInSet<CFGAnalyses>();
         preserved.preserve<LoopAnalysis>();
         return preserved;

@@ -64,7 +64,8 @@ end
 @testset "alloc profiler start stop fetch clear" begin
     function do_work()
         # Compiling allocates a lot
-        for f in (gensym() for _ in 1:10)
+        nsyms = @static Sys.WORD_SIZE == 32 ? 1 : 10
+        for f in (gensym() for _ in 1:nsyms)
             @eval begin
                 $f() = 10
                 $f()

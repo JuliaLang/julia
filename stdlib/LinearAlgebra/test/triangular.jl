@@ -26,7 +26,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
                         (UnitLowerTriangular, :L))
 
         # Construct test matrix
-        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 == :U ? t : copy(t')))
+        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo1 === :U ? t : copy(t')))
         @test t1(A1) === A1
         @test t1{elty1}(A1) === A1
         # test the ctor works for AbstractMatrix
@@ -77,7 +77,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         A1c = copy(A1)
         for i = 1:size(A1, 1)
             for j = 1:size(A1, 2)
-                if uplo1 == :U
+                if uplo1 === :U
                     if i > j
                         A1c[i,j] = 0
                         @test_throws ArgumentError A1c[i,j] = 1
@@ -104,7 +104,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         # istril/istriu
-        if uplo1 == :L
+        if uplo1 === :L
             @test istril(A1)
             @test !istriu(A1)
             @test istriu(A1')
@@ -121,7 +121,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         end
 
         #tril/triu
-        if uplo1 == :L
+        if uplo1 === :L
             @test tril(A1,0)  == A1
             @test tril(A1,-1) == LowerTriangular(tril(Matrix(A1), -1))
             @test tril(A1,1)  == t1(tril(tril(Matrix(A1), 1)))
@@ -319,7 +319,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
 
                 debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
 
-                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 == :U ? t : copy(t')))
+                A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex.(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> cholesky(t't).U |> t -> uplo2 === :U ? t : copy(t')))
 
                 # Convert
                 if elty1 <: Real && !(elty2 <: Integer)

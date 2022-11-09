@@ -3,7 +3,9 @@
 using Base.Meta
 using Core.IR
 const Compiler = Core.Compiler
-using .Compiler: CFG, BasicBlock
+using .Compiler: CFG, BasicBlock, NewSSAValue
+
+include(normpath(@__DIR__, "irutils.jl"))
 
 make_bb(preds, succs) = BasicBlock(Compiler.StmtRange(0, 0), preds, succs)
 
@@ -69,8 +71,10 @@ let cfg = CFG(BasicBlock[
 ], Int[])
     dfs = Compiler.DFS(cfg.blocks)
     @test dfs.from_pre[dfs.to_parent_pre[dfs.to_pre[5]]] == 4
-    let correct_idoms = Compiler.naive_idoms(cfg.blocks)
+    let correct_idoms = Compiler.naive_idoms(cfg.blocks),
+        correct_pidoms = Compiler.naive_idoms(cfg.blocks, true)
         @test Compiler.construct_domtree(cfg.blocks).idoms_bb == correct_idoms
+        @test Compiler.construct_postdomtree(cfg.blocks).idoms_bb == correct_pidoms
         # For completeness, reverse the order of pred/succ in the CFG and verify
         # the answer doesn't change (it does change the which node is chosen
         # as the semi-dominator, since it changes the DFS numbering).
@@ -82,6 +86,7 @@ let cfg = CFG(BasicBlock[
                 d && (blocks[5] = make_bb(reverse(blocks[5].preds), blocks[5].succs))
                 cfg′ = CFG(blocks, cfg.index)
                 @test Compiler.construct_domtree(cfg′.blocks).idoms_bb == correct_idoms
+                @test Compiler.construct_postdomtree(cfg′.blocks).idoms_bb == correct_pidoms
             end
         end
     end
@@ -168,7 +173,17 @@ let ci = make_ci([
     ])
     ir = Core.Compiler.inflate_ir(ci)
     ir = Core.Compiler.compact!(ir, true)
-    @test Core.Compiler.verify_ir(ir) == nothing
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# Test that the verifier doesn't choke on cglobals (which aren't linearized)
+let ci = make_ci([
+        Expr(:call, GlobalRef(Main, :cglobal),
+                    Expr(:call, Core.tuple, :(:c)), Nothing),
+                    Core.Compiler.ReturnNode()
+    ])
+    ir = Core.Compiler.inflate_ir(ci)
+    @test Core.Compiler.verify_ir(ir) === nothing
 end
 
 # Test that GlobalRef in value position is non-canonical
@@ -205,7 +220,7 @@ let ci = make_ci([
     # come after it.
     for i in 1:length(ir.stmts)
         s = ir.stmts[i]
-        if isa(s, Expr) && s.head == :call && s.args[1] == :something
+        if Meta.isexpr(s, :call) && s.args[1] === :something
             if isa(s.args[2], SSAValue)
                 @test s.args[2].id <= i
             end
@@ -333,4 +348,259 @@ f_if_typecheck() = (if nothing; end; unsafe_load(Ptr{Int}(0)))
     cmd = `$(Base.julia_cmd()) -g 2 -e $code`
     stderr = IOBuffer()
     success(pipeline(Cmd(cmd); stdout=stdout, stderr=stderr)) && isempty(String(take!(stderr)))
+end
+
+@testset "code_ircode" begin
+    @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
+          Compiler.IRCode
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
+          Compiler.IRCode
+
+    function demo(f)
+        f()
+        f()
+        f()
+    end
+    @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
+end
+
+let
+    function test_useref(stmt, v, op)
+        if isa(stmt, Expr)
+            @test stmt.args[op] === v
+        elseif isa(stmt, GotoIfNot)
+            @test stmt.cond === v
+        elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
+            @test stmt.val === v
+        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
+            @test stmt === v
+        elseif isa(stmt, PiNode)
+            @test stmt.val === v && stmt.typ === typeof(stmt)
+        elseif isa(stmt, PhiNode) || isa(stmt, PhiCNode)
+            @test stmt.values[op] === v
+        end
+    end
+
+    function _test_userefs(@nospecialize stmt)
+        ex = Expr(:call, :+, Core.SSAValue(3), 1)
+        urs = Core.Compiler.userefs(stmt)::Core.Compiler.UseRefIterator
+        it = Core.Compiler.iterate(urs)
+        while it !== nothing
+            ur = getfield(it, 1)::Core.Compiler.UseRef
+            op = getfield(it, 2)::Int
+            v1 = Core.Compiler.getindex(ur)
+            # set to dummy expression and then back to itself to test `_useref_setindex!`
+            v2 = Core.Compiler.setindex!(ur, ex)
+            test_useref(v2, ex, op)
+            Core.Compiler.setindex!(ur, v1)
+            @test Core.Compiler.getindex(ur) === v1
+            it = Core.Compiler.iterate(urs, op)
+        end
+    end
+
+    function test_userefs(body)
+        for stmt in body
+            _test_userefs(stmt)
+        end
+    end
+
+    # this isn't valid code, we just care about looking at a variety of IR nodes
+    body = Any[
+        Expr(:enter, 11),
+        Expr(:call, :+, SSAValue(3), 1),
+        Expr(:throw_undef_if_not, :expected, false),
+        Expr(:leave, 1),
+        Expr(:(=), SSAValue(1), Expr(:call, :+, SSAValue(3), 1)),
+        UpsilonNode(),
+        UpsilonNode(SSAValue(2)),
+        PhiCNode(Any[SSAValue(5), SSAValue(7), SSAValue(9)]),
+        PhiCNode(Any[SSAValue(6)]),
+        PhiNode(Int32[8], Any[SSAValue(7)]),
+        PiNode(SSAValue(6), GotoNode),
+        GotoIfNot(SSAValue(3), 10),
+        GotoNode(5),
+        SSAValue(7),
+        NewSSAValue(9),
+        ReturnNode(SSAValue(11)),
+    ]
+
+    test_userefs(body)
+end
+
+let ir = Base.code_ircode((Bool,Any)) do c, x
+        println(x, 1) #1
+        if c
+            println(x, 2) #2
+        else
+            println(x, 3) #3
+        end
+        println(x, 4) #4
+    end |> only |> first
+    # IR legality check
+    @test length(ir.cfg.blocks) == 4
+    for i = 1:4
+        @test any(ir.cfg.blocks[i].stmts) do j
+            inst = ir.stmts[j][:inst]
+            iscall((ir, println), inst) &&
+            inst.args[3] == i
+        end
+    end
+    # domination analysis
+    domtree = Core.Compiler.construct_domtree(ir.cfg.blocks)
+    @test Core.Compiler.dominates(domtree, 1, 2)
+    @test Core.Compiler.dominates(domtree, 1, 3)
+    @test Core.Compiler.dominates(domtree, 1, 4)
+    for i = 2:4
+        for j = 1:4
+            i == j && continue
+            @test !Core.Compiler.dominates(domtree, i, j)
+        end
+    end
+    # post domination analysis
+    post_domtree = Core.Compiler.construct_postdomtree(ir.cfg.blocks)
+    @test Core.Compiler.postdominates(post_domtree, 4, 1)
+    @test Core.Compiler.postdominates(post_domtree, 4, 2)
+    @test Core.Compiler.postdominates(post_domtree, 4, 3)
+    for i = 1:3
+        for j = 1:4
+            i == j && continue
+            @test !Core.Compiler.postdominates(post_domtree, i, j)
+        end
+    end
+end
+
+@testset "issue #46967: undef stmts introduced by compaction" begin
+    # generate some IR
+    function foo(i)
+        j = i+42
+        j == 1 ? 1 : 2
+    end
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    instructions = length(ir.stmts)
+
+    # get the addition instruction
+    add_stmt = ir.stmts[1]
+    @test Meta.isexpr(add_stmt[:inst], :call) && add_stmt[:inst].args[3] == 42
+
+    # replace the addition with a slightly different one
+    inst = Core.Compiler.NewInstruction(Expr(:call, add_stmt[:inst].args[1], add_stmt[:inst].args[2], 999), Int)
+    node = Core.Compiler.insert_node!(ir, 1, inst)
+    Core.Compiler.setindex!(add_stmt, node, :inst)
+
+    # perform compaction (not by calling compact! because with DCE the bug doesn't trigger)
+    compact = Core.Compiler.IncrementalCompact(ir)
+    state = Core.Compiler.iterate(compact)
+    while state !== nothing
+        state = Core.Compiler.iterate(compact, state[2])
+    end
+    ir = Core.Compiler.complete(compact)
+
+    # test that the inserted node was compacted
+    @test Core.Compiler.length(ir.new_nodes) == 0
+
+    # test that we performed copy propagation, but that the undef node was trimmed
+    @test length(ir.stmts) == instructions
+
+    @test show(devnull, ir) === nothing
+end
+
+@testset "IncrementalCompact statefulness" begin
+    foo(i) = i == 1 ? 1 : 2
+    ir = only(Base.code_ircode(foo, (Int,)))[1]
+    compact = Core.Compiler.IncrementalCompact(ir)
+
+    # set up first iterator
+    x = Core.Compiler.iterate(compact)
+    x = Core.Compiler.iterate(compact, x[2])
+
+    # set up second iterator
+    x = Core.Compiler.iterate(compact)
+
+    # consume remainder
+    while x !== nothing
+        x = Core.Compiler.iterate(compact, x[2])
+    end
+
+    ir = Core.Compiler.complete(compact)
+    @test Core.Compiler.verify_ir(ir) === nothing
+end
+
+# insert_node! operations
+# =======================
+
+import Core: SSAValue
+import Core.Compiler: NewInstruction, insert_node!
+
+# insert_node! for pending node
+let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+        a^b
+    end |> only |> first
+    @test length(ir.stmts) == 2
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+
+    newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+    newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
+
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.stmts) == 4
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+    call1 = ir.stmts[2][:inst]
+    @test iscall((ir,println), call1)
+    @test call1.args[2] === SSAValue(1)
+    call2 = ir.stmts[3][:inst]
+    @test iscall((ir,println), call2)
+    @test call2.args[2] === SSAValue(2)
+end
+
+# insert_node! with new instruction with flag computed
+let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+        a^b
+    end |> only |> first
+    invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+        Meta.isexpr(x, :invoke)
+    end
+    @test invoke_idx !== nothing
+    invoke_expr = ir.stmts.inst[invoke_idx]
+
+    # effect-ful node
+    let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
+        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+        state = Core.Compiler.iterate(compact)
+        while state !== nothing
+            state = Core.Compiler.iterate(compact, state[2])
+        end
+        ir = Core.Compiler.finish(compact)
+        new_invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            x == invoke_expr
+        end
+        @test new_invoke_idx !== nothing
+        new_call_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            iscall((ir,println), x) && x.args[2] === SSAValue(invoke_idx)
+        end
+        @test new_call_idx !== nothing
+        @test new_call_idx == new_invoke_idx+1
+    end
+
+    # effect-free node
+    let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
+        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, GlobalRef(Base, :add_int), SSAValue(1), SSAValue(1)), Int), #=attach_after=#true)
+        state = Core.Compiler.iterate(compact)
+        while state !== nothing
+            state = Core.Compiler.iterate(compact, state[2])
+        end
+        ir = Core.Compiler.finish(compact)
+
+        ir = Core.Compiler.finish(compact)
+        new_invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            x == invoke_expr
+        end
+        @test new_invoke_idx !== nothing
+        new_call_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(invoke_idx)
+        end
+        @test new_call_idx === nothing # should be deleted during the compaction
+    end
 end
