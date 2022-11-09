@@ -60,7 +60,7 @@ end
 end
 
 @testset "DateFormat printing" begin
-    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SS\\P\""
     @test sprint(show, dateformat"yyyy-mm-dd\THH:MM:SS.s") == "dateformat\"yyyy-mm-dd\\THH:MM:SS.s\""
     @test sprint(show, dateformat"yyyy-mm-ddTHH:MM:SS.s") == "dateformat\"yyyy-mm-ddTHH:MM:SS.s\""
     @test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
