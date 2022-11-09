@@ -54,6 +54,7 @@ end
             
 @testset "pow5 overflow (#47464)" begin
     @test "4.6458339e+63" == Ryu.writeexp(4.645833859177319e63, 7)
+    @test "4.190673780e+40" == Ryu.writeexp(4.190673779576499e40, 9)
 end
 
 @testset "OutputLength" begin

@@ -64,7 +64,7 @@ lengthforindex(idx) = div(((Int64(16 * idx) * 1292913986) >> 32) + 1 + 16 + 8, 9
 
 Return `true` if `5^p` is a divisor of `x`.
 """
-pow5(x, p) = x % (unsigned(5)^p) == 0
+pow5(x, p) = x % (UInt64(5)^p) == 0
 
 """
     Ryu.pow2(x, p)
