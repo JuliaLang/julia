@@ -1109,6 +1109,42 @@ julia> ([1, 2, 3], [4, 5, 6]) .+ tuple([1, 2, 3])
 ([2, 4, 6], [5, 7, 9])
 ```
 
+
+In all these that have been said, do note that not all operations requires you vectorizing or broadcasting for
+elementwise operations. For some binary operators (e.g `*`, `+`), when used with an array and a scalar, or
+between two arrays, an elementwise operation is *normally* performed. This is important to note because whichever
+style you may choose to use, though the end results will be the same, their execution speeds and allocations may be
+different (depending on the sizes of the arrays).
+
+For example, the `+` operator when used on two arrays of same sizes and dimensions performs elementwise addition,
+just as `.+` would have done:
+
+```jldoctest
+julia> [1, 2] .+ [3, 4]
+2-element Vector{Int64}:
+ 4
+ 6
+
+julia> [1, 2] + [3, 4]
+2-element Vector{Int64}:
+ 4
+ 6
+```
+
+However, calling `@time` on these two operations (performed on a small dataset), we see the difference:
+
+```julia-repl
+julia> a = rand(Float64, 100); b = rand(Float64, 100);
+
+julia> @time a + b;
+  0.000007 seconds (1 allocation: 896 bytes)
+
+julia> @time a .+ b;
+  0.000026 seconds (3 allocations: 960 bytes)
+```
+
+On a large dataset, the time difference may be very small, but the allocations will most likely be different.
+
 ## Implementation
 
 The base array type in Julia is the abstract type [`AbstractArray{T,N}`](@ref). It is parameterized by
