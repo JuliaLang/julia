@@ -444,7 +444,7 @@ readuntil(io::AbstractPipe, arg::AbstractChar; kw...) = readuntil(pipe_reader(io
 readuntil(io::AbstractPipe, arg::AbstractString; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil(io::AbstractPipe, arg::AbstractVector; kw...) = readuntil(pipe_reader(io)::IO, arg; kw...)
 readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
-readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
+readbytes!(io::AbstractPipe, target::AbstractVector, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
 eof(io::AbstractPipe) = eof(pipe_reader(io)::IO)::Bool
@@ -969,12 +969,12 @@ Read at most `nb` bytes from `stream` into `b`, returning the number of bytes re
 The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
 and enough bytes could be read), but it will never be decreased.
 """
-function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+function readbytes!(s::IO, b::AbstractArray{T}, nb=length(b)) where T
     require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
     while nr < nb && !eof(s)
-        a = read(s, UInt8)
+        a = read(s, T)
         nr += 1
         if nr > lb
             lb = nr * 2

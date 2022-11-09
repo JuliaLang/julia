@@ -422,9 +422,9 @@ read(s::IOStream, ::Type{Float32}) = reinterpret(Float32, read(s, Int32))
 read(s::IOStream, ::Type{Float64}) = reinterpret(Float64, read(s, Int64))
 end
 
-function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt)
+function unsafe_read(s::IOStream, p::Ptr{UInt8}, nb::UInt, allow_incomplete=false)
     nr = @_lock_ios s ccall(:ios_readall, Csize_t, (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t), s, p, nb)
-    if nr != nb
+    if !allow_incomplete && nr != nb
         throw(EOFError())
     end
     nothing

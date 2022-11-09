@@ -454,8 +454,8 @@ end
     return sizeof(UInt8)
 end
 
-readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
-function readbytes!(io::GenericIOBuffer, b::Array{UInt8}, nb::Int)
+readbytes!(io::GenericIOBuffer, b::Array, nb=length(b)) = readbytes!(io, b, Int(nb))
+function readbytes!(io::GenericIOBuffer, b::Array, nb::Int)
     nr = min(nb, bytesavailable(io))
     if length(b) < nr
         resize!(b, nr)
