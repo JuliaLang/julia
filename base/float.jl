@@ -90,7 +90,6 @@ exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
 significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
 mantissa_width(::Type{Float64}) = UInt64(52)
 exponent_width(::Type{Float64}) = UInt64(11)
-inttype(::Type{UInt64}) = Int64
 
 sign_mask(::Type{Float32}) =        0x8000_0000
 exponent_mask(::Type{Float32}) =    0x7f80_0000
@@ -99,7 +98,6 @@ exponent_half(::Type{Float32}) =    0x3f00_0000
 significand_mask(::Type{Float32}) = 0x007f_ffff
 mantissa_width(::Type{Float32}) = UInt32(23)
 exponent_width(::Type{Float32}) = UInt32(8)
-inttype(::Type{UInt32}) = Int32
 
 sign_mask(::Type{Float16}) =        0x8000
 exponent_mask(::Type{Float16}) =    0x7c00
@@ -108,9 +106,8 @@ exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
 mantissa_width(::Type{Float16}) = UInt16(10)
 exponent_width(::Type{Float16}) = UInt16(5)
-inttype(::Type{UInt16}) = Int16
 
-uintbits(x::T) where {T} = reinterpret(uinttype(T), x)
+uintbits(x::T) = reinterpret(Unsigned, x)
 mantissa(x::T) where {T} = uintbits(x) & significand_mask(T)
 
 for T in (Float16, Float32, Float64)
@@ -432,15 +429,15 @@ function unbiased_exponent(x::T) where {T}
 end
 
 function explicit_mantissa_noinfnan(x::T) where {T}
-    subnormal = unbiased_exponent(x) > uinttype(T)(0) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
+    subnormal = issubnormal(x) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
     return subnormal | (significand_mask(T) & uintbits(x))
 end
 
-function make_value(number::T, ep) where {T}
+function make_value(number::T, ep) where T<:Unsigned
     Tfloat = floattype(T)
-    Tint = inttype(T)
+    Tint = signed(T)
     epint = unsafe_trunc(Tint,ep)
-    lz::inttype(T) = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
+    lz::signed(T) = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
     number <<= lz
     epint -= lz
     bits = T(0)
@@ -528,15 +525,10 @@ end
 
 function fmod(x::T, y::T) where T<:IEEEFloat
     if (!isnan(x) && !isinf(x) && !isnan(y) && !isinf(y) && !iszero(y))
-        sign = signbit(x)
         xabs = abs(x)
         yabs = abs(y)
         res = fmod_internal(xabs, yabs)
-        if sign
-            return -res
-        else
-            return res
-        end
+        return copysign(res,x)
     end
     (isnan(x) || isnan(y)) && return T(NaN)
     (isinf(x) || iszero(y)) && return T(NaN)
