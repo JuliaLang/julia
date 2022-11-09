@@ -62,8 +62,9 @@ One "family" of visualizers is based on [FlameGraphs.jl](https://github.com/timh
 - [Juno](https://junolab.org/) is a full IDE with built-in support for profile visualization
 - [ProfileView.jl](https://github.com/timholy/ProfileView.jl) is a stand-alone visualizer based on GTK
 - [ProfileVega.jl](https://github.com/davidanthoff/ProfileVega.jl) uses VegaLight and integrates well with Jupyter notebooks
-- [StatProfilerHTML](https://github.com/tkluck/StatProfilerHTML.jl) produces HTML and presents some additional summaries, and also integrates well with Jupyter notebooks
-- [ProfileSVG](https://github.com/timholy/ProfileSVG.jl) renders SVG
+- [StatProfilerHTML.jl](https://github.com/tkluck/StatProfilerHTML.jl) produces HTML and presents some additional summaries, and also integrates well with Jupyter notebooks
+- [ProfileSVG.jl](https://github.com/timholy/ProfileSVG.jl) renders SVG
+- [PProf.jl](https://github.com/JuliaPerf/PProf.jl) serves a local website for inspecting graphs, flamegraphs and more
 
 An entirely independent approach to profile visualization is [PProf.jl](https://github.com/vchuravy/PProf.jl), which uses the external `pprof` tool.
 
@@ -302,8 +303,8 @@ provides several tools measure this:
 
 ### `@time`
 
-The total amount of allocation can be measured with [`@time`](@ref) and [`@allocated`](@ref), and
-specific lines triggering allocation can often be inferred from profiling via the cost of garbage
+The total amount of allocation can be measured with [`@time`](@ref), [`@allocated`](@ref) and [`@allocations`](@ref),
+and specific lines triggering allocation can often be inferred from profiling via the cost of garbage
 collection that these lines incur. However, sometimes it is more efficient to directly measure
 the amount of memory allocated by each line of code.
 
@@ -345,7 +346,7 @@ allocation while it is running. It can be invoked with
 This information about the allocations is returned as an array of `Alloc`
 objects, wrapped in an `AllocResults` object. The best way to visualize
 these is currently with the [PProf.jl](https://github.com/JuliaPerf/PProf.jl)
-library, which can visualize the call stacks which are making the most
+package, which can visualize the call stacks which are making the most
 allocations.
 
 The allocation profiler does have significant overhead, so a `sample_rate`
@@ -361,7 +362,7 @@ Passing `sample_rate=1.0` will make it record everything (which is slow);
     `Profile.Allocs.UnknownType`.
 
     You can read more about the missing types and the plan to improve this, here:
-    https://github.com/JuliaLang/julia/issues/43688.
+    <https://github.com/JuliaLang/julia/issues/43688>.
 
 ## External Profiling
 

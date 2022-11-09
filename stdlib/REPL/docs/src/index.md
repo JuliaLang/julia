@@ -259,6 +259,7 @@ to do so), or pressing Esc and then the key.
 | `^W`                | Delete previous text up to the nearest whitespace                                                          |
 | `meta-w`            | Copy the current region in the kill ring                                                                   |
 | `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
+| `^U`                | "Kill" to beginning of line, placing the text in the kill ring                                             |
 | `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
@@ -270,9 +271,10 @@ to do so), or pressing Esc and then the key.
 | `meta-l`            | Change the next word to lowercase                                                                          |
 | `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
-| `meta-Left Arrow`   | indent the current line on the left                                                                        |
-| `meta-Right Arrow`  | indent the current line on the right                                                                       |
-| `meta-.`            | insert last word from previous history entry                                                               |
+| `meta-Left Arrow`   | Indent the current line on the left                                                                        |
+| `meta-Right Arrow`  | Indent the current line on the right                                                                       |
+| `meta-.`            | Insert last word from previous history entry                                                               |
+| `meta-e`            | Edit the current input in an editor                                                                        |
 
 ### Customizing keybindings
 
@@ -412,7 +414,7 @@ Tab completion can also help completing fields:
 ```julia-repl
 julia> x = 3 + 4im;
 
-julia> julia> x.[TAB][TAB]
+julia> x.[TAB][TAB]
 im re
 
 julia> import UUIDs
@@ -555,6 +557,79 @@ ENV["JULIA_ERROR_COLOR"] = :magenta
 ENV["JULIA_WARN_COLOR"] = :yellow
 ENV["JULIA_INFO_COLOR"] = :cyan
 ```
+
+
+## Changing the contextual module which is active at the REPL
+
+When entering expressions at the REPL, they are by default evaluated in the `Main` module;
+
+```julia-repl
+julia> @__MODULE__
+Main
+```
+
+It is possible to change this contextual module via the function
+`REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
+and pressing the keybinding Alt-m (the cursor must be on the module name). The
+active module is shown in the prompt:
+
+```julia-repl
+julia> using REPL
+
+julia> REPL.activate(Base)
+
+(Base) julia> @__MODULE__
+Base
+
+(Base) julia> using REPL # Need to load REPL into Base module to use it
+
+(Base) julia> REPL.activate(Main)
+
+julia>
+
+julia> Core<Alt-m> # using the keybinding to change module
+
+(Core) julia>
+
+(Core) julia> Main<Alt-m> # going back to Main via keybinding
+
+julia>
+```
+
+Functions that take an optional module argument often defaults to the REPL
+context module. As an example, calling `varinfo()` will show the variables of
+the current active module:
+
+```julia-repl
+julia> module CustomMod
+           export var, f
+           var = 1
+           f(x) = x^2
+       end;
+
+julia> REPL.activate(CustomMod)
+
+(Main.CustomMod) julia> varinfo()
+  name         size summary
+  ––––––––– ––––––– ––––––––––––––––––––––––––––––––––
+  CustomMod         Module
+  f         0 bytes f (generic function with 1 method)
+  var       8 bytes Int64
+```
+
+## IPython mode
+
+It is possible to get an interface which is similar to the IPython REPL with numbered input prompts and output prefixes. This is done by calling `REPL.ipython_mode!()`. If you want to have this enabled on startup, add
+```julia
+atreplinit() do repl
+    if !isdefined(repl, :interface)
+        repl.interface = REPL.setup_interface(repl)
+    end
+    REPL.ipython_mode!(repl)
+end
+```
+
+to your `startup.jl` file.
 
 ## TerminalMenus
 

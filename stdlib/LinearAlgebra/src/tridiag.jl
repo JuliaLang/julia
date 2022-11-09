@@ -213,11 +213,21 @@ end
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (_evview(A)==_evview(B))
 
-@inline mul!(A::StridedVecOrMat, B::SymTridiagonal, C::StridedVecOrMat,
+@inline mul!(A::AbstractVector, B::SymTridiagonal, C::AbstractVector,
              alpha::Number, beta::Number) =
     _mul!(A, B, C, MulAddMul(alpha, beta))
+@inline mul!(A::AbstractMatrix, B::SymTridiagonal, C::AbstractVecOrMat,
+             alpha::Number, beta::Number) =
+    _mul!(A, B, C, MulAddMul(alpha, beta))
+# disambiguation
+@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
+@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
+             alpha::Number, beta::Number) =
+    _mul!(C, A, B, MulAddMul(alpha, beta))
 
-@inline function _mul!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat,
+@inline function _mul!(C::AbstractVecOrMat, S::SymTridiagonal, B::AbstractVecOrMat,
                           _add::MulAddMul)
     m, n = size(B, 1), size(B, 2)
     if !(m == size(S, 1) == size(C, 1))
@@ -256,52 +266,55 @@ end
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
-    (nx == size(S, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+    (nx == size(S, 1) == ny) || throw(DimensionMismatch("dot"))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(S)), zero(eltype(y)))
+        return dot(x[1], S.dv[1], y[1])
     end
     dv, ev = S.dv, S.ev
-    x₀ = x[1]
-    x₊ = x[2]
-    sub = transpose(ev[1])
-    r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
-    @inbounds for j in 2:nx-1
-        x₋, x₀, x₊ = x₀, x₊, x[j+1]
-        sup, sub = transpose(sub), transpose(ev[j])
-        r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+    @inbounds begin
+        x₀ = x[1]
+        x₊ = x[2]
+        sub = transpose(ev[1])
+        r = dot(adjoint(dv[1])*x₀ + adjoint(sub)*x₊, y[1])
+        for j in 2:nx-1
+            x₋, x₀, x₊ = x₀, x₊, x[j+1]
+            sup, sub = transpose(sub), transpose(ev[j])
+            r += dot(adjoint(sup)*x₋ + adjoint(dv[j])*x₀ + adjoint(sub)*x₊, y[j])
+        end
+        r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
     end
-    r += dot(adjoint(transpose(sub))*x₀ + adjoint(dv[nx])*x₊, y[nx])
     return r
 end
 
-(\)(T::SymTridiagonal, B::StridedVecOrMat) = ldlt(T)\B
+(\)(T::SymTridiagonal, B::AbstractVecOrMat) = ldlt(T)\B
 
 # division with optional shift for use in shifted-Hessenberg solvers (hessenberg.jl):
 ldiv!(A::SymTridiagonal, B::AbstractVecOrMat; shift::Number=false) = ldiv!(ldlt(A, shift=shift), B)
 rdiv!(B::AbstractVecOrMat, A::SymTridiagonal; shift::Number=false) = rdiv!(B, ldlt(A, shift=shift))
 
-eigen!(A::SymTridiagonal{<:BlasReal}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigen!(A::SymTridiagonal{<:BlasReal,<:StridedVector}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
 eigen(A::SymTridiagonal{T}) where T = eigen!(copymutable_oftype(A, eigtype(T)))
 
-eigen!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigen!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, irange::UnitRange) =
     Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
 eigen(A::SymTridiagonal{T}, irange::UnitRange) where T =
     eigen!(copymutable_oftype(A, eigtype(T)), irange)
 
-eigen!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigen!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, vl::Real, vu::Real) =
     Eigen(LAPACK.stegr!('V', 'V', A.dv, A.ev, vl, vu, 0, 0)...)
 eigen(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
     eigen!(copymutable_oftype(A, eigtype(T)), vl, vu)
 
-eigvals!(A::SymTridiagonal{<:BlasReal}) = LAPACK.stev!('N', A.dv, A.ev)[1]
+eigvals!(A::SymTridiagonal{<:BlasReal,<:StridedVector}) = LAPACK.stev!('N', A.dv, A.ev)[1]
 eigvals(A::SymTridiagonal{T}) where T = eigvals!(copymutable_oftype(A, eigtype(T)))
 
-eigvals!(A::SymTridiagonal{<:BlasReal}, irange::UnitRange) =
+eigvals!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, irange::UnitRange) =
     LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
 eigvals(A::SymTridiagonal{T}, irange::UnitRange) where T =
     eigvals!(copymutable_oftype(A, eigtype(T)), irange)
 
-eigvals!(A::SymTridiagonal{<:BlasReal}, vl::Real, vu::Real) =
+eigvals!(A::SymTridiagonal{<:BlasReal,<:StridedVector}, vl::Real, vu::Real) =
     LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
 eigvals(A::SymTridiagonal{T}, vl::Real, vu::Real) where T =
     eigvals!(copymutable_oftype(A, eigtype(T)), vl, vu)
@@ -349,7 +362,7 @@ julia> eigvecs(A, [1.])
  -0.5547001962252291
 ```
 """
-eigvecs(A::SymTridiagonal{<:BlasFloat}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
+eigvecs(A::SymTridiagonal{<:BlasFloat,<:StridedVector}, eigvals::Vector{<:Real}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
 function svdvals!(A::SymTridiagonal)
     vals = eigvals!(A)
@@ -522,6 +535,9 @@ Tridiagonal(dl::V, d::V, du::V, du2::V) where {T,V<:AbstractVector{T}} = Tridiag
 function Tridiagonal{T}(dl::AbstractVector, d::AbstractVector, du::AbstractVector) where {T}
     Tridiagonal(map(x->convert(AbstractVector{T}, x), (dl, d, du))...)
 end
+function Tridiagonal{T,V}(A::Tridiagonal) where {T,V<:AbstractVector{T}}
+    Tridiagonal{T,V}(A.dl, A.d, A.du)
+end
 
 """
     Tridiagonal(A)
@@ -614,7 +630,7 @@ Base.copy(tS::Transpose{<:Any,<:Tridiagonal}) = (S = tS.parent; Tridiagonal(map(
 ishermitian(S::Tridiagonal) = all(ishermitian, S.d) && all(Iterators.map((x, y) -> x == y', S.du, S.dl))
 issymmetric(S::Tridiagonal) = all(issymmetric, S.d) && all(Iterators.map((x, y) -> x == transpose(y), S.du, S.dl))
 
-\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:StridedVecOrMat}) = copy(A) \ B
+\(A::Adjoint{<:Any,<:Tridiagonal}, B::Adjoint{<:Any,<:AbstractVecOrMat}) = copy(A) \ B
 
 function diag(M::Tridiagonal{T}, n::Integer=0) where T
     # every branch call similar(..., ::Int) to make sure the
@@ -841,18 +857,21 @@ function dot(x::AbstractVector, A::Tridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)
     (nx == size(A, 1) == ny) || throw(DimensionMismatch())
-    if iszero(nx)
-        return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+    if nx ≤ 1
+        nx == 0 && return dot(zero(eltype(x)), zero(eltype(A)), zero(eltype(y)))
+        return dot(x[1], A.d[1], y[1])
     end
-    x₀ = x[1]
-    x₊ = x[2]
-    dl, d, du = A.dl, A.d, A.du
-    r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
-    @inbounds for j in 2:nx-1
-        x₋, x₀, x₊ = x₀, x₊, x[j+1]
-        r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+    @inbounds begin
+        x₀ = x[1]
+        x₊ = x[2]
+        dl, d, du = A.dl, A.d, A.du
+        r = dot(adjoint(d[1])*x₀ + adjoint(dl[1])*x₊, y[1])
+        for j in 2:nx-1
+            x₋, x₀, x₊ = x₀, x₊, x[j+1]
+            r += dot(adjoint(du[j-1])*x₋ + adjoint(d[j])*x₀ + adjoint(dl[j])*x₊, y[j])
+        end
+        r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     end
-    r += dot(adjoint(du[nx-1])*x₀ + adjoint(d[nx])*x₊, y[nx])
     return r
 end
 

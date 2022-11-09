@@ -9,7 +9,7 @@ It is expected that this module will eventually be moved into a separate package
 
 Some of this documentation assumes some prior knowledge of the libgit2 API.
 For more information on some of the objects and methods referenced here, consult the upstream
-[libgit2 API reference](https://libgit2.org/libgit2/#v0.25.1).
+[libgit2 API reference](https://libgit2.org/libgit2/#v1.0.0).
 
 ```@docs
 LibGit2.Buffer

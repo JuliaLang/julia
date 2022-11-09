@@ -129,7 +129,7 @@ module MPZ
 # wrapping of libgmp functions
 # - "output parameters" are labeled x, y, z, and are returned when appropriate
 # - constant input parameters are labeled a, b, c
-# - a method modifying its input has a "!" appendend to its name, according to Julia's conventions
+# - a method modifying its input has a "!" appended to its name, according to Julia's conventions
 # - some convenient methods are added (in addition to the pure MPZ ones), e.g. `add(a, b) = add!(BigInt(), a, b)`
 #   and `add!(x, a) = add!(x, x, a)`.
 using ..GMP: BigInt, Limb, BITS_PER_LIMB
@@ -668,8 +668,12 @@ function prod(arr::AbstractArray{BigInt})
     # to account for the rounding to limbs in MPZ.mul!
     # (BITS_PER_LIMB-1 would typically be enough, to which we add
     # 1 for the initial multiplication by init=1 in foldl)
-    nbits = GC.@preserve arr sum(arr; init=BITS_PER_LIMB) do x
-        abs(x.size) * BITS_PER_LIMB - leading_zeros(unsafe_load(x.d))
+    nbits = BITS_PER_LIMB
+    for x in arr
+        iszero(x) && return zero(BigInt)
+        xsize = abs(x.size)
+        lz = GC.@preserve x leading_zeros(unsafe_load(x.d, xsize))
+        nbits += xsize * BITS_PER_LIMB - lz
     end
     init = BigInt(; nbits)
     MPZ.set_si!(init, 1)

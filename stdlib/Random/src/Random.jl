@@ -215,7 +215,7 @@ end
 # TODO: make constraining constructors to enforce that those
 # types are <: Sampler{T}
 
-##### Adapter to generate a randome value in [0, n]
+##### Adapter to generate a random value in [0, n]
 
 struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T
@@ -402,36 +402,42 @@ shared task-local generator.
 julia> Random.seed!(1234);
 
 julia> x1 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> Random.seed!(1234);
 
 julia> x2 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> x1 == x2
 true
 
-julia> rng = MersenneTwister(1234); rand(rng, 2) == x1
+julia> rng = Xoshiro(1234); rand(rng, 2) == x1
 true
 
-julia> MersenneTwister(1) == Random.seed!(rng, 1)
+julia> Xoshiro(1) == Random.seed!(rng, 1)
 true
 
 julia> rand(Random.seed!(rng), Bool) # not reproducible
 true
 
-julia> rand(Random.seed!(rng), Bool)
+julia> rand(Random.seed!(rng), Bool) # not reproducible either
 false
 
-julia> rand(MersenneTwister(), Bool) # not reproducible either
+julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
 seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
+
+# Randomize quicksort pivot selection. This code is here because of bootstrapping:
+# we need to sort things before we load this standard library.
+# TODO move this into Sort.jl
+Base.delete_method(only(methods(Base.Sort.select_pivot)))
+Base.Sort.select_pivot(lo::Integer, hi::Integer) = rand(lo:hi)
 
 end # module

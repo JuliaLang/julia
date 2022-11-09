@@ -32,7 +32,7 @@ if Sys.iswindows()
     const libstdcxx = "libstdc++-6.dll"
     const libgomp = "libgomp-1.dll"
 elseif Sys.isapple()
-    if arch(HostPlatform()) == "aarch64"
+    if arch(HostPlatform()) == "aarch64" || libgfortran_version(HostPlatform()) == v"5"
         const libgcc_s = "@rpath/libgcc_s.1.1.dylib"
     else
         const libgcc_s = "@rpath/libgcc_s.1.dylib"

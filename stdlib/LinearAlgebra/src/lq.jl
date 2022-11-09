@@ -58,7 +58,7 @@ LQ{T}(factors::AbstractMatrix, τ::AbstractVector) where {T} =
     LQ(convert(AbstractMatrix{T}, factors), convert(AbstractVector{T}, τ))
 # backwards-compatible constructors (remove with Julia 2.0)
 @deprecate(LQ{T,S}(factors::AbstractMatrix{T}, τ::AbstractVector{T}) where {T,S},
-           LQ{T,S,typeof(τ)}(factors, τ))
+           LQ{T,S,typeof(τ)}(factors, τ), false)
 
 # iteration for destructuring into components
 Base.iterate(S::LQ) = (S.L, Val(:Q))
@@ -120,7 +120,7 @@ julia> l == S.L &&  q == S.Q
 true
 ```
 """
-lq(A::AbstractMatrix{T}) where {T}  = lq!(copymutable_oftype(A, lq_eltype(T)))
+lq(A::AbstractMatrix{T}) where {T} = lq!(copy_similar(A, lq_eltype(T)))
 lq(x::Number) = lq!(fill(convert(lq_eltype(typeof(x)), x), 1, 1))
 
 lq_eltype(::Type{T}) where {T} = typeof(zero(T) / sqrt(abs2(one(T))))
@@ -191,13 +191,13 @@ end
 
 
 ## Multiplication by LQ
-function lmul!(A::LQ, B::StridedVecOrMat)
+function lmul!(A::LQ, B::AbstractVecOrMat)
     lmul!(LowerTriangular(A.L), view(lmul!(A.Q, B), 1:size(A,1), axes(B,2)))
     return B
 end
-function *(A::LQ{TA}, B::StridedVecOrMat{TB}) where {TA,TB}
+function *(A::LQ{TA}, B::AbstractVecOrMat{TB}) where {TA,TB}
     TAB = promote_type(TA, TB)
-    _cut_B(lmul!(convert(Factorization{TAB}, A), copymutable_oftype(B, TAB)), 1:size(A,1))
+    _cut_B(lmul!(convert(Factorization{TAB}, A), copy_similar(B, TAB)), 1:size(A,1))
 end
 
 ## Multiplication by Q
@@ -334,7 +334,7 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
 end
 
 
-function ldiv!(A::LQ, B::StridedVecOrMat)
+function ldiv!(A::LQ, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(A)
     m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
@@ -343,7 +343,7 @@ function ldiv!(A::LQ, B::StridedVecOrMat)
     return lmul!(adjoint(A.Q), B)
 end
 
-function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::StridedVecOrMat)
+function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(Fadj)
     m >= n || throw(DimensionMismatch("solver does not support underdetermined systems (more columns than rows)"))

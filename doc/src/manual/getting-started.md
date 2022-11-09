@@ -34,8 +34,7 @@ command:
 $ julia script.jl
 ```
 
-You can pass additional arguments to Julia, and to your program `script.jl`. A detailed list of all the available switches can be found at [Command-line Options](@ref
-command-line-options).
+You can pass additional arguments to Julia, and to your program `script.jl`. A detailed list of all the available options can be found under [Command-line Interface](@ref).
 
 ## Resources
 

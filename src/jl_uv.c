@@ -60,6 +60,7 @@ void JL_UV_LOCK(void)
     }
     else {
         jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, 1);
+        jl_fence(); // [^store_buffering_2]
         jl_wake_libuv();
         JL_LOCK(&jl_uv_mutex);
         jl_atomic_fetch_add_relaxed(&jl_uv_n_waiters, -1);
@@ -631,13 +632,6 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     SetLastError(last_error);
 #endif
     errno = last_errno;
-}
-
-JL_DLLEXPORT void jl_exit(int exitcode)
-{
-    uv_tty_reset_mode();
-    jl_atexit_hook(exitcode);
-    exit(exitcode);
 }
 
 typedef union {

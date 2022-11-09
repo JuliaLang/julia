@@ -565,7 +565,7 @@ push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), 
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
 
 function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
-    h = T(x)
+    h = T(x)::T
     if length(h) != length(x)
         error("key collision during dictionary conversion")
     end
@@ -573,7 +573,7 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<((sizeof(T)<<3)-leading_zeros(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 

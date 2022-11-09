@@ -160,12 +160,14 @@ plus(x,y) = x + y
 sum3(A) = reduce(plus, A)
 sum4(itr) = invoke(reduce, Tuple{Function, Any}, plus, itr)
 sum5(A) = reduce(plus, A; init=0)
-sum6(itr) = invoke(Core.kwfunc(reduce), Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum6(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum61(itr) = invoke(reduce, Tuple{Function, Any}, init=0, plus, itr)
 sum7(A) = mapreduce(x->x, plus, A)
 sum8(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, x->x, plus, itr)
 sum9(A) = mapreduce(x->x, plus, A; init=0)
-sum10(itr) = invoke(Core.kwfunc(mapreduce), Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
-for f in (sum2, sum5, sum6, sum9, sum10)
+sum10(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
+sum11(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, init=0, x->x, plus, itr)
+for f in (sum2, sum5, sum6, sum61, sum9, sum10, sum11)
     @test sum(z) == f(z)
     @test sum(Int[]) == f(Int[]) == 0
     @test sum(Int[7]) == f(Int[7]) == 7
@@ -263,7 +265,6 @@ let x = [4,3,5,2]
     @test maximum(x) == 5
     @test minimum(x) == 2
     @test extrema(x) == (2, 5)
-    @test Core.Compiler.extrema(x) == (2, 5)
 
     @test maximum(abs2, x) == 25
     @test minimum(abs2, x) == 4
@@ -671,9 +672,22 @@ end
 # issue #38627
 @testset "overflow in mapreduce" begin
     # at len = 16 and len = 1025 there is a change in codepath
-    for len in [0, 1, 15, 16, 1024, 1025, 2048, 2049]
+    for len in [1, 15, 16, 1024, 1025, 2048, 2049]
         oa = OffsetArray(repeat([1], len), typemax(Int)-len)
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+# issue #45748
+@testset "foldl's stability for nested Iterators" begin
+    a = Iterators.flatten((1:3, 1:3))
+    b = (2i for i in a if i > 0)
+    c = Base.Generator(Float64, b)
+    d = (sin(i) for i in c if i > 0)
+    @test @inferred(sum(d)) == sum(collect(d))
+    @test @inferred(extrema(d)) == extrema(collect(d))
+    @test @inferred(maximum(c)) == maximum(collect(c))
+    @test @inferred(prod(b)) == prod(collect(b))
+    @test @inferred(minimum(a)) == minimum(collect(a))
 end

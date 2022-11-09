@@ -43,6 +43,9 @@ end
     let x = @inferred(convert(Tuple{Integer, UInt8, UInt16, UInt32, Int, Vararg{Real}}, (2.0, 3, 5, 6.0, 42, 3.0+0im)))
         @test x == (2, 0x03, 0x0005, 0x00000006, 42, 3.0)
     end
+    for x in (Int(2), UInt8(3), UInt16(5), UInt32(6), 42, 5.0, 3.0+0im)
+        @test (x,) == @inferred Tuple(x)
+    end
 
     @test_throws MethodError convert(Tuple{Int}, ())
     @test_throws MethodError convert(Tuple{Any}, ())
@@ -61,6 +64,9 @@ end
     @test_throws MethodError convert(Tuple{Int, Int, Int}, (1, 2))
     # issue #26589
     @test_throws MethodError convert(NTuple{4}, (1.0,2.0,3.0,4.0,5.0))
+    # issue #44179
+    @test_throws TypeError NTuple{3}([1, nothing, nothing])
+    @test_throws TypeError NTuple{3}([nothing, 1, nothing])
     # issue #31824
     @test convert(NTuple, (1, 1.0)) === (1, 1.0)
     let T = Tuple{Vararg{T}} where T<:Integer, v = (1.0, 2, 0x3)
@@ -600,12 +606,18 @@ end
     @test Base.return_types() do
         findlast(==(0), (1.0,2,3f0))
     end == Any[Nothing]
+
+    @testset "long tuples" begin
+        longtuple = ntuple(i -> i in (15,17) ? 1 : 0, 40)
+        @test findfirst(isequal(1), longtuple) == 15
+        @test findlast(isequal(1), longtuple) == 17
+    end
 end
 
 @testset "properties" begin
     ttest = (:a, :b, :c)
     @test propertynames(ttest) == (1, 2, 3)
-    @test getproperty(ttest, 2) == :b
+    @test getproperty(ttest, 2) === :b
     @test map(p->getproperty(ttest, p), propertynames(ttest)) == ttest
     @test_throws ErrorException setproperty!(ttest, 1, :d)
 end
@@ -632,7 +644,7 @@ end
     @test @inferred(f()) == (9, 2:2, 3:3)
 end
 
-@testset "inferrable range indexing with constant values" begin
+@testset "inferable range indexing with constant values" begin
     whole(t) = t[1:end]
     tail(t) = t[2:end]
     ttail(t) = t[3:end]
@@ -742,3 +754,28 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 @test only(Base.return_types(g42457, (NTuple{3, Int}, Tuple))) === Union{Float64, Int}
 @test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple))) === Union{Float64, Int}
 @test only(Base.return_types(g42457, (NTuple{3, Int}, NTuple{4}))) === Float64
+
+# issue #46049: setindex(::Tuple) regression
+@inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
+
+# issue #47326
+function fun1_47326(args...)
+    head..., tail = args
+    head
+end
+function fun2_47326(args...)
+    head, tail... = args
+    tail
+end
+@test @inferred(fun1_47326(1,2,3)) === (1, 2)
+@test @inferred(fun2_47326(1,2,3)) === (2, 3)
+
+f47326(x::Union{Tuple, NamedTuple}) = Base.split_rest(x, 1)
+tup = (1, 2, 3)
+namedtup = (;a=1, b=2, c=3)
+@test only(Base.return_types(f47326, (typeof(tup),))) == Tuple{Tuple{Int, Int}, Tuple{Int}}
+@test only(Base.return_types(f47326, (typeof(namedtup),))) ==
+    Tuple{
+        NamedTuple{(:a, :b), Tuple{Int, Int}},
+        NamedTuple{(:c,), Tuple{Int}},
+    }

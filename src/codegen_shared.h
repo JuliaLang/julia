@@ -22,6 +22,7 @@ enum AddressSpace {
 };
 
 static inline auto getSizeTy(llvm::LLVMContext &ctxt) {
+    //return M.getDataLayout().getIntPtrType(M.getContext());
     if (sizeof(size_t) > sizeof(uint32_t)) {
         return llvm::Type::getInt64Ty(ctxt);
     } else {
@@ -34,8 +35,8 @@ namespace JuliaType {
         return llvm::StructType::get(C);
     }
 
-    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), 0);
+    static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C, unsigned addressSpace=0) {
+        return llvm::PointerType::get(get_jlvalue_ty(C), addressSpace);
     }
 
     static inline llvm::PointerType* get_prjlvalue_ty(llvm::LLVMContext &C) {
@@ -53,22 +54,35 @@ namespace JuliaType {
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
-        std::vector<llvm::Type*> ftargs(0);
-        ftargs.push_back(T_prjlvalue);  // function
-        ftargs.push_back(T_pprjlvalue); // args[]
-        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
-        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C)}, // nargs
+            false);
+    }
+
+    static inline auto get_jlfunc2_ty(llvm::LLVMContext &C) {
+        auto T_prjlvalue = get_prjlvalue_ty(C);
+        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C),
+                T_prjlvalue,  // linfo
+                }, // nargs
+            false);
     }
 
     static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
         auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
-        std::vector<llvm::Type*> ftargs(0);
-        ftargs.push_back(T_prjlvalue);  // function
-        ftargs.push_back(T_pprjlvalue); // args[]
-        ftargs.push_back(llvm::Type::getInt32Ty(C));      // nargs
-        ftargs.push_back(T_pprjlvalue); // linfo->sparam_vals
-        return llvm::FunctionType::get(T_prjlvalue, ftargs, false);
+        return llvm::FunctionType::get(T_prjlvalue, {
+                T_prjlvalue,  // function
+                T_pprjlvalue, // args[]
+                llvm::Type::getInt32Ty(C),
+                T_pprjlvalue,  // linfo->sparam_vals
+                }, // nargs
+            false);
     }
 
     static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {
@@ -79,10 +93,6 @@ namespace JuliaType {
         return get_voidfunc_ty(C)->getPointerTo();
     }
 }
-
-// JLCALL with API arguments ([extra], arg0, arg1, arg2, ...) has the following ABI calling conventions defined:
-#define JLCALL_F_CC (CallingConv::ID)37     // (jl_value_t *arg0, jl_value_t **argv, uint32_t nargv)
-#define JLCALL_F2_CC (CallingConv::ID)38    // (jl_value_t *arg0, jl_value_t **argv, uint32_t nargv, jl_value_t *extra)
 
 // return how many Tracked pointers are in T (count > 0),
 // and if there is anything else in T (all == false)
@@ -168,25 +178,126 @@ static inline llvm::Value *emit_bitcast_with_builder(llvm::IRBuilder<> &builder,
 }
 
 // Get PTLS through current task.
+static inline llvm::Value *get_current_task_from_pgcstack(llvm::IRBuilder<> &builder, llvm::Value *pgcstack)
+{
+    using namespace llvm;
+    auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
+    auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
+    const int pgcstack_offset = offsetof(jl_task_t, gcstack);
+    return builder.CreateInBoundsGEP(
+            T_pjlvalue, emit_bitcast_with_builder(builder, pgcstack, T_ppjlvalue),
+            ConstantInt::get(getSizeTy(builder.getContext()), -(pgcstack_offset / sizeof(void *))),
+            "current_task");
+}
+
+// Get PTLS through current task.
 static inline llvm::Value *get_current_ptls_from_task(llvm::IRBuilder<> &builder, llvm::Value *current_task, llvm::MDNode *tbaa)
 {
     using namespace llvm;
     auto T_ppjlvalue = JuliaType::get_ppjlvalue_ty(builder.getContext());
     auto T_pjlvalue = JuliaType::get_pjlvalue_ty(builder.getContext());
-    auto T_size = builder.GetInsertBlock()->getModule()->getDataLayout().getIntPtrType(builder.getContext());
+    auto T_size = getSizeTy(builder.getContext());
     const int ptls_offset = offsetof(jl_task_t, ptls);
     llvm::Value *pptls = builder.CreateInBoundsGEP(
-        T_pjlvalue, current_task,
-        ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
-        "ptls_field");
+            T_pjlvalue, current_task,
+            ConstantInt::get(T_size, ptls_offset / sizeof(void *)),
+            "ptls_field");
     LoadInst *ptls_load = builder.CreateAlignedLoad(T_pjlvalue,
-        emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
+            emit_bitcast_with_builder(builder, pptls, T_ppjlvalue), Align(sizeof(void *)), "ptls_load");
     // Note: Corresponding store (`t->ptls = ptls`) happens in `ctx_switch` of tasks.c.
     tbaa_decorate(tbaa, ptls_load);
-    // Using `CastInst::Create` to get an `Instruction*` without explicit cast:
-    auto ptls = CastInst::Create(Instruction::BitCast, ptls_load, T_ppjlvalue, "ptls");
-    builder.Insert(ptls);
-    return ptls;
+    return builder.CreateBitCast(ptls_load, T_ppjlvalue, "ptls");
+}
+
+// Get signal page through current task.
+static inline llvm::Value *get_current_signal_page_from_ptls(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa)
+{
+    using namespace llvm;
+    // return builder.CreateCall(prepare_call(reuse_signal_page_func));
+    auto T_size = getSizeTy(builder.getContext());
+    auto T_psize = T_size->getPointerTo();
+    auto T_ppsize = T_psize->getPointerTo();
+    int nthfield = offsetof(jl_tls_states_t, safepoint) / sizeof(void *);
+    ptls = emit_bitcast_with_builder(builder, ptls, T_ppsize);
+    llvm::Value *psafepoint = builder.CreateInBoundsGEP(
+            T_psize, ptls, ConstantInt::get(T_size, nthfield));
+    LoadInst *ptls_load = builder.CreateAlignedLoad(
+            T_psize, psafepoint, Align(sizeof(void *)), "safepoint");
+    tbaa_decorate(tbaa, ptls_load);
+    return ptls_load;
+}
+
+static inline void emit_signal_fence(llvm::IRBuilder<> &builder)
+{
+    using namespace llvm;
+    builder.CreateFence(AtomicOrdering::SequentiallyConsistent, SyncScope::SingleThread);
+}
+
+static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::MDNode *tbaa)
+{
+    emit_signal_fence(builder);
+    builder.CreateLoad(getSizeTy(builder.getContext()), get_current_signal_page_from_ptls(builder, ptls, tbaa), true);
+    emit_signal_fence(builder);
+}
+
+static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state, llvm::Value *old_state)
+{
+    using namespace llvm;
+    Type *T_int8 = state->getType();
+    ptls = emit_bitcast_with_builder(builder, ptls, builder.getInt8PtrTy());
+    Constant *offset = ConstantInt::getSigned(builder.getInt32Ty(), offsetof(jl_tls_states_t, gc_state));
+    Value *gc_state = builder.CreateInBoundsGEP(T_int8, ptls, ArrayRef<Value*>(offset), "gc_state");
+    if (old_state == nullptr) {
+        old_state = builder.CreateLoad(T_int8, gc_state);
+        cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);
+    }
+    builder.CreateAlignedStore(state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+    if (auto *C = dyn_cast<ConstantInt>(old_state))
+        if (C->isZero())
+            return old_state;
+    if (auto *C = dyn_cast<ConstantInt>(state))
+        if (!C->isZero())
+            return old_state;
+    BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
+    BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
+    Constant *zero8 = ConstantInt::get(T_int8, 0);
+    builder.CreateCondBr(builder.CreateAnd(builder.CreateICmpNE(old_state, zero8), // if (old_state && !state)
+                                           builder.CreateICmpEQ(state, zero8)),
+                         passBB, exitBB);
+    builder.SetInsertPoint(passBB);
+    MDNode *tbaa = get_tbaa_const(builder.getContext());
+    emit_gc_safepoint(builder, ptls, tbaa);
+    builder.CreateBr(exitBB);
+    builder.SetInsertPoint(exitBB);
+    return old_state;
+}
+
+static inline llvm::Value *emit_gc_unsafe_enter(llvm::IRBuilder<> &builder, llvm::Value *ptls)
+{
+    using namespace llvm;
+    Value *state = builder.getInt8(0);
+    return emit_gc_state_set(builder, ptls, state, nullptr);
+}
+
+static inline llvm::Value *emit_gc_unsafe_leave(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state)
+{
+    using namespace llvm;
+    Value *old_state = builder.getInt8(0);
+    return emit_gc_state_set(builder, ptls, state, old_state);
+}
+
+static inline llvm::Value *emit_gc_safe_enter(llvm::IRBuilder<> &builder, llvm::Value *ptls)
+{
+    using namespace llvm;
+    Value *state = builder.getInt8(JL_GC_STATE_SAFE);
+    return emit_gc_state_set(builder, ptls, state, nullptr);
+}
+
+static inline llvm::Value *emit_gc_safe_leave(llvm::IRBuilder<> &builder, llvm::Value *ptls, llvm::Value *state)
+{
+    using namespace llvm;
+    Value *old_state = builder.getInt8(JL_GC_STATE_SAFE);
+    return emit_gc_state_set(builder, ptls, state, old_state);
 }
 
 // Compatibility shims for LLVM attribute APIs that were renamed in LLVM 14.
@@ -318,5 +429,4 @@ inline Attribute getAttributeAtIndex(const AttributeList &L, unsigned Index, Att
     return L.getAttribute(Index, Kind);
 #endif
 }
-
 }

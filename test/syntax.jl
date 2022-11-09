@@ -276,9 +276,6 @@ end
 @test Meta.parse("'\"'") == Meta.parse("'\\\"'") == '"' == "\""[1] == '\42'
 
 # issue #24558
-@test_throws ParseError Meta.parse("'\\xff'")
-@test_throws ParseError Meta.parse("'\\x80'")
-@test_throws ParseError Meta.parse("'ab'")
 @test '\u2200' == "\u2200"[1]
 
 @test_throws ParseError Meta.parse("f(2x for x=1:10, y")
@@ -317,19 +314,16 @@ let p = 15
     @test 2p+1 == 31  # not a hex float literal
 end
 
-function test_parseerror(str, msg)
-    try
-        Meta.parse(str)
-        @test false
-    catch e
-        @test isa(e,ParseError) && e.msg == msg
-    end
+macro test_parseerror(str, msg)
+    ex = :(@test_throws ParseError($(esc(msg))) Meta.parse($(esc(str))))
+    ex.args[2] = __source__
+    return ex
 end
-test_parseerror("0x", "invalid numeric constant \"0x\"")
-test_parseerror("0b", "invalid numeric constant \"0b\"")
-test_parseerror("0o", "invalid numeric constant \"0o\"")
-test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
-test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
+@test_parseerror("0x", "invalid numeric constant \"0x\"")
+@test_parseerror("0b", "invalid numeric constant \"0b\"")
+@test_parseerror("0o", "invalid numeric constant \"0o\"")
+@test_parseerror("0x0.1", "hex float literal must contain \"p\" or \"P\"")
+@test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
 
 # issue #15798
 @test Meta.lower(Main, Base.parse_input_line("""
@@ -345,8 +339,8 @@ test_parseerror("0x1.0p", "invalid numeric constant \"0x1.0\"")
            """)::Expr) == 23341
 
 # issue #15763
-test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
-test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
+@test_parseerror("if\nfalse\nend", "missing condition in \"if\" at none:1")
+@test_parseerror("if false\nelseif\nend", "missing condition in \"elseif\" at none:2")
 
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
@@ -552,7 +546,9 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
 end
 
 # meta nodes for optional positional arguments
-@test Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3].inlineable
+let src = Meta.lower(Main, :(@inline f(p::Int=2) = 3)).args[1].code[end-1].args[3]
+    @test Core.Compiler.is_inlineable(src)
+end
 
 # issue #16096
 module M16096
@@ -655,7 +651,7 @@ function get_expr_list(ex::Core.CodeInfo)
     return ex.code::Array{Any,1}
 end
 function get_expr_list(ex::Expr)
-    if ex.head == :thunk
+    if ex.head === :thunk
         return get_expr_list(ex.args[1])
     else
         return ex.args
@@ -761,7 +757,7 @@ end
 if test + test == test
     println(test)
 end
-```.head == :if
+```.head === :if
 
 end
 
@@ -852,6 +848,14 @@ end
 @test c8925 == 3 && isconst(@__MODULE__, :c8925)
 @test d8925 == 4 && isconst(@__MODULE__, :d8925)
 
+# issue #47168
+let t47168 = (;a47168 = 1, b47168 = 2);
+    global const (;a47168, b47168) = t47168
+    @test a47168 == 1 && isconst(@__MODULE__, :a47168)
+    @test b47168 == 2 && isconst(@__MODULE__, :b47168)
+end
+@test (let x = (;x=1); let (;x) = x; x; end, x; end) == (1, (x = 1,))
+
 # issue #18754: parse ccall as a regular function
 @test Meta.parse("ccall([1], 2)[3]") == Expr(:ref, Expr(:call, :ccall, Expr(:vect, 1), 2), 3)
 @test Meta.parse("ccall(a).member") == Expr(:., Expr(:call, :ccall, :a), QuoteNode(:member))
@@ -859,7 +863,7 @@ end
 # Check that the body of a `where`-qualified short form function definition gets
 # a :block for its body
 short_where_call = :(f(x::T) where T = T)
-@test short_where_call.args[2].head == :block
+@test short_where_call.args[2].head === :block
 
 # `where` with multi-line anonymous functions
 let f = function (x::T) where T
@@ -873,6 +877,12 @@ let f = function (x::T, y::S) where T<:S where S
         end
     @test f(0,1) === (Int,Int)
 end
+
+# issue #45506
+@test :( function (a) where {B, C} end).args[1] == Expr(:where, Expr(:tuple, :a), :B, :C)
+@test (function(::Type{Tuple{A45506, B45506}}) where {A45506 <: Any, B45506 <: Any}
+    B45506
+end)(Tuple{Int8, Int16}) == Int16
 
 # issue #20541
 @test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
@@ -1549,7 +1559,8 @@ end
 # issue #27129
 f27129(x = 1) = (@inline; x)
 for meth in methods(f27129)
-    @test ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source).inlineable
+    src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), meth, C_NULL, meth.source)
+    @test Core.Compiler.is_inlineable(src)
 end
 
 # issue #27710
@@ -2059,8 +2070,8 @@ end == 1
 # issue #29982
 @test Meta.parse("'a'") == 'a'
 @test Meta.parse("'\U0061'") == 'a'
-test_parseerror("''", "invalid empty character literal")
-test_parseerror("'abc'", "character literal contains multiple characters")
+@test_parseerror("''", "invalid empty character literal")
+@test_parseerror("'abc'", "character literal contains multiple characters")
 
 # optional soft scope: #28789, #33864
 
@@ -2218,7 +2229,7 @@ end
 
 # only allow certain characters after interpolated vars (#25231)
 @test Meta.parse("\"\$x෴  \"",raise=false) == Expr(:error, "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
-@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) == :string
+@test Base.incomplete_tag(Meta.parse("\"\$foo", raise=false)) === :string
 
 @testset "issue #30341" begin
     @test Meta.parse("x .~ y") == Expr(:call, :.~, :x, :y)
@@ -2271,6 +2282,12 @@ end
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
     Expr(:error, "function argument name not unique: \"x\" around some_file:101")
 
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(102, :some_file), :(function f(x) where T where T; x::T; end))) ==
+    Expr(:error, "function static parameter name not unique: \"T\" around some_file:102")
+
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(103, :some_file), :(function f(t) where t; x; end))) ==
+    Expr(:error, "function argument and static parameter name not distinct: \"t\" around some_file:103")
+
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))
 let exc = try eval(:(f(x,x)=1)) catch e ; e ; end
@@ -2315,7 +2332,7 @@ f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
-    # Test these evals shouldnt segfault
+    # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
     eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
@@ -3045,10 +3062,10 @@ end
 end
 
 # issue #19012
-@test Meta.parse("\U2200", raise=false) == Symbol("∀")
-@test Meta.parse("\U2203", raise=false) == Symbol("∃")
-@test Meta.parse("a\U2203", raise=false) == Symbol("a∃")
-@test Meta.parse("\U2204", raise=false) == Symbol("∄")
+@test Meta.parse("\U2200", raise=false) === Symbol("∀")
+@test Meta.parse("\U2203", raise=false) === Symbol("∃")
+@test Meta.parse("a\U2203", raise=false) === Symbol("a∃")
+@test Meta.parse("\U2204", raise=false) === Symbol("∄")
 
 # issue 42220
 macro m42220()
@@ -3369,3 +3386,39 @@ end
 # issue #45162
 f45162(f) = f(x=1)
 @test first(methods(f45162)).called != 0
+
+# issue #45024
+@test_throws ParseError("expected assignment after \"const\"") Meta.parse("const x")
+@test_throws ParseError("expected assignment after \"const\"") Meta.parse("const x::Int")
+# these cases have always been caught during lowering, since (const (global x)) is not
+# ambiguous with the lowered form (const x), but that could probably be changed.
+@test Meta.lower(@__MODULE__, :(global const x)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(global const x::Int)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(const global x)) == Expr(:error, "expected assignment after \"const\"")
+@test Meta.lower(@__MODULE__, :(const global x::Int)) == Expr(:error, "expected assignment after \"const\"")
+
+@testset "issue 25072" begin
+    @test '\xc0\x80' == reinterpret(Char, 0xc0800000)
+    @test '\x80' == reinterpret(Char, 0x80000000)
+    @test '\xff' == reinterpret(Char, 0xff000000)
+    @test_parseerror "'\\xff\\xff\\xff\\xff'" "character literal contains multiple characters" # == reinterpret(Char, 0xffffffff)
+    @test '\uffff' == Char(0xffff)
+    @test '\U00002014' == Char(0x2014)
+    @test '\100' == reinterpret(Char, UInt32(0o100) << 24)
+    @test_parseerror "'\\100\\42'" "character literal contains multiple characters" # == reinterpret(Char, (UInt32(0o100) << 24) | (UInt32(0o42) << 16))
+    @test_parseerror "''" "invalid empty character literal"
+    @test_parseerror "'\\xff\\xff\\xff\\xff\\xff'" "character literal contains multiple characters"
+    @test_parseerror "'abcd'" "character literal contains multiple characters"
+    @test_parseerror "'\\uff\\xff'" "character literal contains multiple characters"
+    @test_parseerror "'\\xff\\uff'" "character literal contains multiple characters"
+    @test_parseerror "'\\xffa'" "character literal contains multiple characters"
+    @test_parseerror "'\\uffffa'" "character literal contains multiple characters"
+    @test_parseerror "'\\U00002014a'" "character literal contains multiple characters"
+    @test_parseerror "'\\1000'" "character literal contains multiple characters"
+    @test Meta.isexpr(Meta.parse("'a"), :incomplete)
+    @test ''' == "'"[1]
+end
+
+# issue #46251
+@test begin; global value = 1; (value, value += 1) end == (1, 2)
+@test begin; global value = 1; "($(value), $(value += 1))" end == "(1, 2)"

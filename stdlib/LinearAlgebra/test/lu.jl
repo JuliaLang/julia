@@ -224,6 +224,11 @@ dimg  = randn(n)/2
     end
 end
 
+@testset "Small tridiagonal matrices" for T in (Float64, ComplexF64)
+    A = Tridiagonal(T[], T[1], T[])
+    @test inv(A) == A
+end
+
 @testset "Singular matrices" for T in (Float64, ComplexF64)
     A = T[1 2; 0 0]
     @test_throws SingularException lu(A)
@@ -433,6 +438,30 @@ end
     ldiv!(u,lu(A),b)
     push!(b,4.0)
     @test length(b) == 4
+end
+
+@testset "NaN matrix should throw error" begin
+    for eltya in (NaN16, NaN32, NaN64, BigFloat(NaN))
+        r = fill(eltya, 2, 3)
+        c = fill(complex(eltya, eltya), 2, 3)
+        @test_throws ArgumentError lu(r)
+        @test_throws ArgumentError lu(c)
+    end
+end
+
+@testset "more generic ldiv! #35419" begin
+    A = rand(3, 3)
+    b = rand(3)
+    @test A * ldiv!(lu(A), Base.ReshapedArray(copy(b)', (3,), ())) ≈ b
+end
+
+@testset "generic lu!" begin
+    A = rand(3,3); B = deepcopy(A); C = A[2:3,2:3]
+    Asub1 = @view(A[2:3,2:3])
+    F1 = lu!(Asub1)
+    Asub2 = @view(B[[2,3],[2,3]])
+    F2 = lu!(Asub2)
+    @test Matrix(F1) ≈ Matrix(F2) ≈ C
 end
 
 end # module TestLU

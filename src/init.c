@@ -72,16 +72,20 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)&stacksize;
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
+        *stack_hi = (void*)__builtin_frame_address(0);
+#pragma GCC diagnostic pop
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
-        size_t stacksize = pthread_get_stacksize_np(thread);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)&stacksize;
+        *stack_hi = (void*)__builtin_frame_address(0);
         return;
 #  elif defined(_OS_FREEBSD_)
         pthread_attr_t attr;
@@ -92,7 +96,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
         *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)&stacksize;
+        *stack_hi = (void*)__builtin_frame_address(0);
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."
@@ -101,7 +105,7 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     size_t stacksize = rl.rlim_cur;
-    *stack_hi = (void*)&stacksize;
+    *stack_hi = __builtin_frame_address(0);
     *stack_lo = (void*)((char*)*stack_hi - stacksize);
 #endif
 }
@@ -193,12 +197,62 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
+// This prevents `ct` from returning via error handlers or other unintentional
+// means by destroying some old state before we start destroying that state in atexit hooks.
+void jl_task_frame_noreturn(jl_task_t *ct);
+
+// cause this process to exit with WEXITSTATUS(signo), after waiting to finish all julia, C, and C++ cleanup
+JL_DLLEXPORT void jl_exit(int exitcode)
+{
+    jl_atexit_hook(exitcode);
+    exit(exitcode);
+}
+
+// cause this process to exit with WTERMSIG(signo),
+// fairly aggressively (flushing stderr a bit, and doing a little bit of other
+// external cleanup, but no internal cleanup)
+JL_DLLEXPORT void jl_raise(int signo)
+{
+    uv_tty_reset_mode();
+    fflush(NULL);
+#ifdef _OS_WINDOWS_
+    if (signo == SIGABRT) {
+        signal(signo, SIG_DFL);
+        abort();
+    }
+    // the exit status could also potentially be set to an NTSTATUS value
+    // corresponding to a signal number, but this seems somewhat is uncommon on Windows
+    TerminateProcess(GetCurrentProcess(), 3); // aka _exit
+    abort(); // prior call does not return, because we passed GetCurrentProcess()
+#else
+    signal(signo, SIG_DFL);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, signo);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    raise(signo); // aka pthread_kill(pthread_self(), signo);
+    if (signo == SIGABRT)
+        abort();
+    _exit(128 + signo);
+#endif
+}
+
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
-    if (jl_all_tls_states == NULL)
+    uv_tty_reset_mode();
+
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = jl_get_current_task();
+
+    // we are about to start tearing everything down, so lets try not to get
+    // upset by the local mess of things when we run the user's _atexit hooks
+    if (ct)
+        jl_task_frame_noreturn(ct);
+
+    if (ct == NULL && jl_base_module)
+        ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
 
     if (exitcode == 0)
         jl_write_compiler_output();
@@ -207,10 +261,16 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
         jl_write_coverage_data(jl_options.output_code_coverage);
     if (jl_options.malloc_log)
         jl_write_malloc_log();
+
+    int8_t old_state;
+    if (ct)
+        old_state = jl_gc_unsafe_enter(ct->ptls);
+
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             JL_TRY {
+                assert(ct);
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_get_world_counter();
                 jl_apply(&f, 1);
@@ -230,49 +290,47 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     JL_STDOUT = (uv_stream_t*) STDOUT_FILENO;
     JL_STDERR = (uv_stream_t*) STDERR_FILENO;
 
-    jl_gc_run_all_finalizers(ct);
+    if (ct)
+        jl_gc_run_all_finalizers(ct);
 
     uv_loop_t *loop = jl_global_event_loop();
-
-    if (loop == NULL) {
-        return;
-    }
-
-    struct uv_shutdown_queue queue = {NULL, NULL};
-    JL_UV_LOCK();
-    uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
-    struct uv_shutdown_queue_item *item = queue.first;
-    if (ct != NULL) {
-        while (item) {
-            JL_TRY {
-                while (item) {
-                    jl_close_item_atexit(item->h);
+    if (loop != NULL) {
+        struct uv_shutdown_queue queue = {NULL, NULL};
+        JL_UV_LOCK();
+        uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+        struct uv_shutdown_queue_item *item = queue.first;
+        if (ct) {
+            while (item) {
+                JL_TRY {
+                    while (item) {
+                        jl_close_item_atexit(item->h);
+                        item = next_shutdown_queue_item(item);
+                    }
+                }
+                JL_CATCH {
+                    //error handling -- continue cleanup, as much as possible
+                    assert(item);
+                    uv_unref(item->h);
+                    jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
+                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                    jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                    jlbacktrace(); // written to STDERR_FILENO
                     item = next_shutdown_queue_item(item);
                 }
             }
-            JL_CATCH {
-                //error handling -- continue cleanup, as much as possible
-                assert(item);
-                uv_unref(item->h);
-                jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
-                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
-                jlbacktrace(); // written to STDERR_FILENO
+        }
+        else {
+            while (item) {
+                jl_close_item_atexit(item->h);
                 item = next_shutdown_queue_item(item);
             }
         }
-    }
-    else {
-        while (item) {
-            jl_close_item_atexit(item->h);
-            item = next_shutdown_queue_item(item);
-        }
-    }
 
-    // force libuv to spin until everything has finished closing
-    loop->stop_flag = 0;
-    while (uv_run(loop, UV_RUN_DEFAULT)) { }
-    JL_UV_UNLOCK();
+        // force libuv to spin until everything has finished closing
+        loop->stop_flag = 0;
+        while (uv_run(loop, UV_RUN_DEFAULT)) { }
+        JL_UV_UNLOCK();
+    }
 
     // TODO: Destroy threads
 
@@ -282,6 +340,34 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 #endif
 
     jl_teardown_codegen();
+    if (ct)
+        jl_gc_unsafe_leave(ct->ptls, old_state);
+}
+
+JL_DLLEXPORT void jl_postoutput_hook(void)
+{
+    if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
+        return;
+
+    if (jl_base_module) {
+        jl_task_t *ct = jl_get_current_task();
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_postoutput"));
+        if (f != NULL) {
+            JL_TRY {
+                size_t last_age = ct->world_age;
+                ct->world_age = jl_get_world_counter();
+                jl_apply(&f, 1);
+                ct->world_age = last_age;
+            }
+            JL_CATCH {
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
+                jlbacktrace(); // written to STDERR_FILENO
+            }
+        }
+    }
+    return;
 }
 
 static void post_boot_hooks(void);
@@ -683,22 +769,29 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     }
 
     jl_init_rand();
+    jl_init_profile_lock();
     jl_init_runtime_ccall();
     jl_init_tasks();
     jl_init_threading();
+    jl_init_threadinginfra();
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_default_signal_handlers();
 
     jl_gc_init();
     jl_ptls_t ptls = jl_init_threadtls(0);
+#pragma GCC diagnostic push
+#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
+#pragma GCC diagnostic ignored "-Wdangling-pointer"
+#endif
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
+#pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
     _finish_julia_init(rel, ptls, ct);
 }
 
 static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
 {
-    jl_init_threadinginfra();
-
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     if (jl_options.image_file)
@@ -710,6 +803,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_restore_system_image(jl_options.image_file);
     } else {
         jl_init_types();
+        jl_global_roots_table = jl_alloc_vec_any(16);
         jl_init_codegen();
     }
 
@@ -731,13 +825,9 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     if (jl_base_module == NULL) {
         // nthreads > 1 requires code in Base
-        jl_n_threads = 1;
+        jl_atomic_store_relaxed(&jl_n_threads, 1);
     }
     jl_start_threads();
-
-    // This needs to be after jl_start_threads
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        jl_install_default_signal_handlers();
 
     jl_gc_enable(1);
 
@@ -796,14 +886,14 @@ static void post_boot_hooks(void)
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
     jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-#ifdef SEGV_EXCEPTION
-    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
-#endif
     jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
     jl_initerror_type      = (jl_datatype_t*)core("InitError");
     jl_pair_type           = core("Pair");
+    jl_kwcall_func         = core("kwcall");
+    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
+    jl_kwcall_mt->max_args = 0;
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;

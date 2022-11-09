@@ -115,7 +115,7 @@ end
     @test in(2,s)
     @test length(s) == 2
     @test_throws KeyError pop!(s,1)
-    @test pop!(s,1,:foo) == :foo
+    @test pop!(s,1,:foo) === :foo
     @test length(delete!(s,2)) == 1
     @test !in(1,s)
     @test !in(2,s)
@@ -393,9 +393,10 @@ end
     @test symdiff(Set([1]), BitSet()) isa Set{Int}
     @test symdiff(BitSet([1]), Set{Int}()) isa BitSet
     @test symdiff([1], BitSet()) isa Vector{Int}
-    # symdiff must NOT uniquify
-    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
-    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+    #symdiff does uniquify
+    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [1,2]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
 
     # Base.hasfastin
     @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
@@ -499,10 +500,23 @@ end
     @test allunique([])
     @test allunique(Set())
     @test allunique([1,2,3])
+    @test allunique([1 2; 3 4])
     @test allunique([:a,:b,:c])
     @test allunique(Set([1,2,3]))
     @test !allunique([1,1,2])
     @test !allunique([:a,:b,:c,:a])
+    @test allunique(unique(randn(100)))  # longer than 32
+    @test allunique(collect('A':'z')) # 58-element Vector{Char}
+    @test !allunique(repeat(1:99, 1, 2))
+    @test !allunique(vcat(pi, randn(1998), pi))  # longer than 1000
+    @test allunique(eachrow(hcat(1:10, 1:10)))
+    @test allunique(x for x in 'A':'Z' if randn()>0)
+    @test !allunique(x for x in repeat(1:2000, 3) if true)
+    @test allunique([0.0, -0.0])
+    @test allunique(x for x in [0.0, -0.0] if true)
+    @test !allunique([NaN, NaN])
+    @test !allunique(x for x in [NaN, NaN] if true)
+    # ranges
     @test allunique(4:7)
     @test allunique(1:1)
     @test allunique(4.0:0.3:7.0)
@@ -519,6 +533,13 @@ end
              LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    # tuples
+    @test allunique(())
+    @test allunique((1,2,3))
+    @test allunique(ntuple(identity, 40))
+    @test !allunique((1,2,3,4,3))
+    @test allunique((0.0, -0.0))
+    @test !allunique((NaN, NaN))
 end
 
 @testset "allequal" begin

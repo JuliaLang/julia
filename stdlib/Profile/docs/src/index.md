@@ -34,6 +34,9 @@ First, a single stack trace at the instant that the signal was thrown is shown, 
 followed by the profile report at the next yield point, which may be at task completion for code without yield points
 e.g. tight loops.
 
+Optionally set environment variable `JULIA_PROFILE_PEEK_HEAP_SNAPSHOT` to `1` to also automatically collect a
+[heap snapshot](@ref Heap-Snapshots).
+
 ```julia-repl
 julia> foo()
 ##== the user sends a trigger while foo is running ==##
@@ -107,3 +110,24 @@ Profile.Allocs.fetch
 Profile.Allocs.start
 Profile.Allocs.stop
 ```
+
+## Heap Snapshots
+
+```@docs
+Profile.take_heap_snapshot
+```
+
+The methods in `Profile` are not exported and need to be called e.g. as `Profile.take_heap_snapshot()`.
+
+```julia-repl
+julia> using Profile
+
+julia> Profile.take_heap_snapshot("snapshot.heapsnapshot")
+```
+
+Traces and records julia objects on the heap. This only records objects known to the Julia
+garbage collector. Memory allocated by external libraries not managed by the garbage
+collector will not show up in the snapshot.
+
+The resulting heap snapshot file can be uploaded to chrome devtools to be viewed.
+For more information, see the [chrome devtools docs](https://developer.chrome.com/docs/devtools/memory-problems/heap-snapshots/#view_snapshots).

@@ -14,6 +14,28 @@ using Base: n_avail
     @test fetch(t) == "finished"
 end
 
+@testset "wait first behavior of wait on Condition" begin
+    a = Condition()
+    waiter1 = @async begin
+        wait(a)
+    end
+    waiter2 = @async begin
+        wait(a)
+    end
+    waiter3 = @async begin
+        wait(a; first=true)
+    end
+    waiter4 = @async begin
+        wait(a)
+    end
+    t = @async begin
+        Base.notify(a, "success"; all=false)
+        "finished"
+    end
+    @test fetch(waiter3) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
@@ -359,7 +381,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n"
 end
 
 @testset "throwto" begin
