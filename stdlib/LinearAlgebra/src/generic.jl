@@ -1772,6 +1772,9 @@ function isapprox(x::AbstractArray, y::AbstractArray;
     nans::Bool=false, norm::Function=norm)
     d = norm(x - y)
     if isfinite(d)
+        T = promote_type(typeof(atol), typeof(rtol*d))
+        rtol = convert(T, rtol)
+        atol = convert(T, atol)
         tol = iszero(rtol) ? atol : max(atol, rtol*max(norm(x), norm(y)))
         return d <= tol
     else
