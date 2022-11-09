@@ -822,6 +822,38 @@ end
     @test 1 < length(lines) < 30
 end
 
+@testset "Defining new algorithms & backwards compatibility with packages that use sorting internals" begin
+    struct MyFirstAlg <: Base.Sort.Algorithm end
+    # The pre 1.9 dispatch method
+    function Base.sort!(v::AbstractVector{Int}, lo::Integer, hi::Integer, ::MyFirstAlg, o::Base.Order.Ordering)
+        v[lo:hi] .= 7
+    end
+    @test sort([1,2,3], alg=MyFirstAlg()) == [7,7,7]
+    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
+    @test all(sort(v, alg=Base.Sort.InitialOptimizations(MyFirstAlg())) .=== vcat(fill(7, 100), fill(missing, 10)))
+
+    # Use the pre 1.9 hook into the internals
+    function Base.sort!(v::AbstractVector{Int}, lo::Integer, hi::Integer, ::MyFirstAlg, o::Base.Order.Ordering)
+        sort!(v, lo, hi, Base.DEFAULT_STABLE, o)
+    end
+    @test sort([3,1,2], alg=MyFirstAlg()) == [1,2,3]
+    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
+    @test issorted(sort(v, alg=Base.Sort.InitialOptimizations(MyFirstAlg())))
+
+    # Another pre 1.9 hook into the internals
+    @test issorted(sort!(rand(100), InsertionSort, Base.Order.Forward))
+
+    struct MySecondAlg <: Base.Sort.Algorithm end
+    # A new dispatch method
+    function Base.Sort._sort!(v::AbstractVector, ::MySecondAlg, o::Base.Order.Ordering, kw)
+        Base.Sort.@getkw lo hi
+        v[lo:hi] .= 9
+    end
+    @test sort([1,2,3], alg=MySecondAlg()) == [9,9,9]
+    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
+    @test all(sort(v, alg=Base.Sort.InitialOptimizations(MySecondAlg())) .=== vcat(fill(9, 100), fill(missing, 10)))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,

@@ -410,8 +410,8 @@ insorted(x, r::AbstractRange) = in(x, r)
 ## Alternative keyword management
 
 macro getkw(syms...)
-    usyms = (Symbol(:_, sym) for sym in syms)
-    Expr(:block, (:($(esc(:((kw, $sym) = $usym(v, o, kw))))) for (sym, usym) in zip(syms, usyms))...)
+    getters = (getproperty(Sort, Symbol(:_, sym)) for sym in syms)
+    Expr(:block, (:($(esc(:((kw, $sym) = $getter(v, o, kw))))) for (sym, getter) in zip(syms, getters))...)
 end
 
 for (sym, deps, exp, type) in [
@@ -430,7 +430,8 @@ for (sym, deps, exp, type) in [
         (:scratch, (), nothing, :(Union{Nothing, AbstractVector})), # could have different eltype
         (:t, (:lo, :hi, :scratch), quote
             scratch === nothing ? similar(v) : reinterpret(eltype(v), checkbounds(Bool, scratch, lo:hi) ? scratch : resize!(scratch, length(v)))
-        end, :(AbstractVector{eltype(v)}))]
+        end, :(AbstractVector{eltype(v)})),
+        (:allow_legacy_dispatch, (), true, Bool)]
     str = string(sym)
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
@@ -1795,7 +1796,7 @@ end
 
 
 
-### Unused ###
+### Unused constructs for backward compatability ###
 
 """
     MergeSort()
@@ -1860,11 +1861,30 @@ function _sort!(v::AbstractVector, a::MergeSort, o::Ordering, kw)
     return v
 end
 
-# Support 3- and 5-argument version of sort! for backwards compatability
-sort!(v::AbstractVector, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering) = _sort!(v, getalg(a), o, (;))
-sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering) = _sort!(v, getalg(a), o, (; lo, hi))
-# Support alg=InsertionSort and alg=MergeSort for backwards compatability
+# Support alg=InsertionSort and alg=MergeSort for backwards compatability (prefer InsertionSort() and MergeSort())
 getalg(a::Algorithm) = a
 getalg(::Type{A}) where A <: Algorithm = A()
+
+# Support 3- and 5-argument versions of sort! for calling into the internals in the old way
+sort!(v::AbstractVector, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering) = _sort!(v, getalg(a), o, (; allow_legacy_dispatch=false))
+sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering) = _sort!(v, getalg(a), o, (; lo, hi, allow_legacy_dispatch=false))
+
+# Support dispatch on custom algorithms in the old way
+# sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
+function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
+    @getkw lo hi allow_legacy_dispatch
+    if allow_legacy_dispatch
+        sort!(v, lo, hi, a, o)
+    else
+        # This error prevents infinite recursion for unknown algorithms
+        throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))
+    end
+end
+
+# Keep old internal types so that people can keep dispatching with
+# sort!(::AbstractVector, ::Integer, ::Integer, ::Base.QuickSortAlg, ::Ordering) = ...
+const QuickSortAlg = typeof(QuickSort)
+const MergeSortAlg = typeof(MergeSort)
+const InsertionSortAlg = typeof(InsertionSort)
 
 end # module Sort
