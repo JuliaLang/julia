@@ -93,16 +93,14 @@ static mach_port_t segv_port = 0;
 #define STR(x) #x
 #define XSTR(x) STR(x)
 #define HANDLE_MACH_ERROR(msg, retval) \
-    if (retval != KERN_SUCCESS) { mach_error(msg XSTR(: __FILE__:__LINE__:), (retval)); jl_exit(1); }
+    if (retval != KERN_SUCCESS) { mach_error(msg XSTR(: __FILE__:__LINE__:), (retval)); abort(); }
 
 void *mach_segv_listener(void *arg)
 {
     (void)arg;
-    while (1) {
-        int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
-        jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
-        jl_exit(128 + SIGSEGV);
-    }
+    int ret = mach_msg_server(mach_exc_server, 2048, segv_port, MACH_MSG_TIMEOUT_NONE);
+    mach_error("mach_msg_server" XSTR(: __FILE__:__LINE__:), ret);
+    abort();
 }
 
 
@@ -402,8 +400,9 @@ static int jl_thread_suspend_and_get_state2(int tid, host_thread_state_t *ctx)
     return 1;
 }
 
-static void jl_thread_suspend_and_get_state(int tid, unw_context_t **ctx)
+static void jl_thread_suspend_and_get_state(int tid, int timeout, unw_context_t **ctx)
 {
+    (void)timeout;
     static host_thread_state_t state;
     if (!jl_thread_suspend_and_get_state2(tid, &state)) {
         *ctx = NULL;
@@ -451,57 +450,41 @@ static void jl_try_deliver_sigint(void)
     HANDLE_MACH_ERROR("thread_resume", ret);
 }
 
-static void JL_NORETURN jl_exit_thread0_cb(int exitstate)
+static void JL_NORETURN jl_exit_thread0_cb(int signo)
 {
 CFI_NORETURN
-    jl_critical_error(exitstate - 128, 0, NULL, jl_current_task);
-    jl_exit(exitstate);
+    jl_critical_error(signo, 0, NULL, jl_current_task);
+    jl_atexit_hook(128);
+    jl_raise(signo);
 }
 
-static void jl_exit_thread0(int exitstate, jl_bt_element_t *bt_data, size_t bt_size)
+static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
 {
     jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
     mach_port_t thread = pthread_mach_thread_np(ptls2->system_id);
 
     host_thread_state_t state;
-    if (!jl_thread_suspend_and_get_state2(0, &state))
-        return;
-    unw_context_t *uc = (unw_context_t*)&state;
+    if (!jl_thread_suspend_and_get_state2(0, &state)) {
+        // thread 0 is gone? just do the signal ourself
+        jl_raise(signo);
+    }
 
     // This aborts `sleep` and other syscalls.
     kern_return_t ret = thread_abort(thread);
     HANDLE_MACH_ERROR("thread_abort", ret);
 
-    if (bt_data == NULL) {
-        // Must avoid extended backtrace frames here unless we're sure bt_data
-        // is properly rooted.
-        ptls2->bt_size = rec_backtrace_ctx(ptls2->bt_data, JL_MAX_BT_SIZE, uc, NULL);
-    }
-    else {
-        ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
-        memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
-    }
-
-    void (*exit_func)(int) = &_exit;
-    if (thread0_exit_count <= 1) {
-        exit_func = &jl_exit_thread0_cb;
-    }
-    else if (thread0_exit_count == 2) {
-        exit_func = &exit;
-    }
-    else {
-        exit_func = &_exit;
-    }
+    ptls2->bt_size = bt_size; // <= JL_MAX_BT_SIZE
+    memcpy(ptls2->bt_data, bt_data, ptls2->bt_size * sizeof(bt_data[0]));
 
 #ifdef _CPU_X86_64_
     // First integer argument. Not portable but good enough =)
-    state.__rdi = exitstate;
+    state.__rdi = signo;
 #elif defined(_CPU_AARCH64_)
-    state.__x[0] = exitstate;
+    state.__x[0] = signo;
 #else
 #error Fill in first integer argument here
 #endif
-    jl_call_in_state(ptls2, &state, (void (*)(void))exit_func);
+    jl_call_in_state(ptls2, &state, (void (*)(void))&jl_exit_thread0_cb);
     unsigned int count = MACH_THREAD_STATE_COUNT;
     ret = thread_set_state(thread, MACH_THREAD_STATE, (thread_state_t)&state, count);
     HANDLE_MACH_ERROR("thread_set_state", ret);

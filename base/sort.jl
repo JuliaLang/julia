@@ -474,6 +474,7 @@ Characteristics:
     (vanishingly rare for non-malicious input)
 """
 const QuickSort = PartialQuickSort(missing, missing)
+const QuickSortAlg = PartialQuickSort{Missing, Missing} # Exists for backward compatibility
 
 """
     MergeSort
