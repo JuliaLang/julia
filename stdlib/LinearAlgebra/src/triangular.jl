@@ -956,7 +956,7 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVec
     end
     @inbounds for j in 1:n
         for i in 1:m
-            Cij = A[i,i] * B[i,j]
+            Cij = oneunit(eltype(A)) * B[i,j]
             for k in i + 1:m
                 Cij += A.data[i,k] * B[k,j]
             end
@@ -1000,7 +1000,7 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVec
     end
     @inbounds for j in 1:n
         for i in m:-1:1
-            Cij = A[i,i] * B[i,j]
+            Cij = oneunit(eltype(A)) * B[i,j]
             for k in 1:i - 1
                 Cij += A.data[i,k] * B[k,j]
             end
@@ -1023,7 +1023,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UpperTriangular)
     end
     @inbounds for i in 1:m
         for j in n:-1:1
-            Cij = A[i,j] * B[j,j]
+            Cij = A[i,j] * B.data[j,j]
             for k in 1:j - 1
                 Cij += A[i,k] * B.data[k,j]
             end
@@ -1045,7 +1045,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitUpperTriangu
     end
     @inbounds for i in 1:m
         for j in n:-1:1
-            Cij = A[i,j] * B[j,j]
+            Cij = A[i,j] * oneunit(eltype(B))
             for k in 1:j - 1
                 Cij += A[i,k] * B.data[k,j]
             end
@@ -1067,7 +1067,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::LowerTriangular)
     end
     @inbounds for i in 1:m
         for j in 1:n
-            Cij = A[i,j] * B[j,j]
+            Cij = A[i,j] * B.data[j,j]
             for k in j + 1:n
                 Cij += A[i,k] * B.data[k,j]
             end
@@ -1089,7 +1089,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitLowerTriangu
     end
     @inbounds for i in 1:m
         for j in 1:n
-            Cij = A[i,j] * B[j,j]
+            Cij = A[i,j] * oneunit(eltype(B))
             for k in j + 1:n
                 Cij += A[i,k] * B.data[k,j]
             end
@@ -1291,7 +1291,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
             for k in 1:j - 1
                 Aij -= C[i,k]*B.data[k,j]
             end
-            C[i,j] = Aij / B[j,j]
+            C[i,j] = Aij / oneunit(eltype(B))
         end
     end
     C
@@ -1332,7 +1332,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
             for k in j + 1:n
                 Aij -= C[i,k]*B.data[k,j]
             end
-            C[i,j] = Aij / B[j,j]
+            C[i,j] = Aij / oneunit(eltype(B))
         end
     end
     C
