@@ -1010,7 +1010,7 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVec
     return C
 end
 
-function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UpperTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
@@ -1032,7 +1032,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UpperTriangular)
     end
     return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitUpperTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
@@ -1054,7 +1054,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitUpperTriangu
     end
     return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::LowerTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
@@ -1076,7 +1076,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::LowerTriangular)
     end
     return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitLowerTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
     require_one_based_indexing(C, A, B)
     m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
