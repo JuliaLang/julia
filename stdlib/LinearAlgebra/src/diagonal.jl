@@ -784,12 +784,12 @@ function svd(D::Diagonal{T}) where {T<:Number}
 end
 
 # disambiguation methods: * and / of Diagonal and Adj/Trans AbsVec
-*(x::AdjointAbsVec, D::Diagonal) = Adjoint(map((t,s) -> t'*s, D.diag, parent(x)))
-*(x::TransposeAbsVec, D::Diagonal) = Transpose(map((t,s) -> transpose(t)*s, D.diag, parent(x)))
+*(u::AdjointAbsVec, D::Diagonal) = (D'u')'
+*(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) * transpose(u))
 *(x::AdjointAbsVec,   D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
 *(x::TransposeAbsVec, D::Diagonal, y::AbstractVector) = _mapreduce_prod(*, x, D, y)
-/(u::AdjointAbsVec, D::Diagonal) = adjoint(adjoint(D) \ u.parent)
-/(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ u.parent)
+/(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
+/(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ transpose(u))
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
 *(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
 *(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
