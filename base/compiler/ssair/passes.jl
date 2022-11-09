@@ -1090,7 +1090,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     # Ok, we're committed to inlining the finalizer
     add_inlining_backedge!(et, mi)
 
-    # TOOD: Should there be a special line number node for inlined finalizers?
+    # TODO: Should there be a special line number node for inlined finalizers?
     inlined_at = ir[SSAValue(idx)][:line]
     ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
         ir.linetable, src, mi.sparam_vals, mi.def, inlined_at, argexprs)
@@ -1350,7 +1350,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                         end
                         continue
                     elseif use.kind === :preserve
-                        if length(du.defs) == 1 # allocation with this field unintialized
+                        if length(du.defs) == 1 # allocation with this field uninitialized
                             # there is nothing to preserve, just ignore this use
                             du.uses[i] = NoPreserve()
                             continue
@@ -1391,7 +1391,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
-                        continue # nothing to preserve (may happen when there are unintialized fields)
+                        continue # nothing to preserve (may happen when there are uninitialized fields)
                     elseif use.kind === :preserve
                         newval = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
@@ -2212,7 +2212,7 @@ function cfg_simplify!(ir::IRCode)
                                 resize!(values, length(values)+1)
                             end
                         elseif new_edge == -3
-                            # Mutliple predecessors, we need to expand out this phi
+                            # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]
                             function add_preds!(old_edge)
                                 for old_edge′ in bbs[old_edge].preds

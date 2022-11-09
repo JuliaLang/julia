@@ -197,10 +197,50 @@ static void jl_close_item_atexit(uv_handle_t *handle)
     }
 }
 
+// This prevents `ct` from returning via error handlers or other unintentional
+// means by destroying some old state before we start destroying that state in atexit hooks.
 void jl_task_frame_noreturn(jl_task_t *ct);
+
+// cause this process to exit with WEXITSTATUS(signo), after waiting to finish all julia, C, and C++ cleanup
+JL_DLLEXPORT void jl_exit(int exitcode)
+{
+    jl_atexit_hook(exitcode);
+    exit(exitcode);
+}
+
+// cause this process to exit with WTERMSIG(signo),
+// fairly aggressively (flushing stderr a bit, and doing a little bit of other
+// external cleanup, but no internal cleanup)
+JL_DLLEXPORT void jl_raise(int signo)
+{
+    uv_tty_reset_mode();
+    fflush(NULL);
+#ifdef _OS_WINDOWS_
+    if (signo == SIGABRT) {
+        signal(signo, SIG_DFL);
+        abort();
+    }
+    // the exit status could also potentially be set to an NTSTATUS value
+    // corresponding to a signal number, but this seems somewhat is uncommon on Windows
+    TerminateProcess(GetCurrentProcess(), 3); // aka _exit
+    abort(); // prior call does not return, because we passed GetCurrentProcess()
+#else
+    signal(signo, SIG_DFL);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, signo);
+    pthread_sigmask(SIG_UNBLOCK, &sset, NULL);
+    raise(signo); // aka pthread_kill(pthread_self(), signo);
+    if (signo == SIGABRT)
+        abort();
+    _exit(128 + signo);
+#endif
+}
 
 JL_DLLEXPORT void jl_atexit_hook(int exitcode)
 {
+    uv_tty_reset_mode();
+
     if (jl_atomic_load_relaxed(&jl_all_tls_states) == NULL)
         return;
 
@@ -846,9 +886,6 @@ static void post_boot_hooks(void)
     jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
     jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-#ifdef SEGV_EXCEPTION
-    jl_segv_exception      = jl_new_struct_uninit((jl_datatype_t*)core("SegmentationFault"));
-#endif
     jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
     jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
     jl_loaderror_type      = (jl_datatype_t*)core("LoadError");

@@ -1112,7 +1112,7 @@ julia> @atomic a.x # fetch field x of a, with sequential consistency
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
 (old = 2, success = false)
 
-julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
 
 julia> @atomicreplace a.x xchg
 (old = 2, success = true)

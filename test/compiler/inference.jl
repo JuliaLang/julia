@@ -429,7 +429,7 @@ function foo9222()
 end
 @test 0.0 == foo9222()
 
-# branching based on inferrable conditions
+# branching based on inferable conditions
 let f(x) = isa(x,Int) ? 1 : ""
     @test Base.return_types(f, Tuple{Int}) == [Int]
 end
@@ -970,7 +970,7 @@ err20033(x::Float64...) = prod(x)
 
 # Inference of constant svecs
 @eval fsvecinf() = $(QuoteNode(Core.svec(Tuple{Int,Int}, Int)))[1]
-@test Core.Compiler.return_type(fsvecinf, Tuple{}) == Type{Tuple{Int,Int}}
+@test only(Base.return_types(fsvecinf, Tuple{})) == Type{Tuple{Int,Int}}
 
 # nfields tfunc on `DataType`
 let f = ()->Val{nfields(DataType[Int][1])}
@@ -1190,12 +1190,12 @@ let niter = 0
 end
 
 # issue #22875
-
-typeargs = Tuple{Type{Int},}
-@test Base.Core.Compiler.return_type((args...) -> one(args...), typeargs) === Int
-
-typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}}
-@test Base.Core.Compiler.return_type(promote_type, typeargs) === Type{Int}
+let typeargs = Tuple{Type{Int},}
+    @test only(Base.return_types((args...) -> one(args...), typeargs)) === Int
+end
+let typeargs = Tuple{Type{Int},Type{Int},Type{Int},Type{Int},Type{Int},Type{Int}}
+    @test only(Base.return_types(promote_type, typeargs)) === Type{Int}
+end
 
 # demonstrate that inference must converge
 # while doing constant propagation
@@ -2105,7 +2105,7 @@ end
 end
 
 # https://github.com/JuliaLang/julia/issues/42090#issuecomment-911824851
-# `PartialStruct` shoudln't wrap `Conditional`
+# `PartialStruct` shouldn't wrap `Conditional`
 let M = Module()
     @eval M begin
         struct BePartialStruct
@@ -2293,66 +2293,78 @@ function _g_ifelse_isa_()
 end
 @test Base.return_types(_g_ifelse_isa_, ()) == [Int]
 
-@testset "Conditional forwarding" begin
-    # forward `Conditional` if it conveys a constraint on any other argument
-    ifelselike(cnd, x, y) = cnd ? x : y
+# Conditional forwarding
+# ======================
 
-    @test Base.return_types((Any,Int,)) do x, y
-        ifelselike(isa(x, Int), x, y)
-    end |> only == Int
+# forward `Conditional` if it conveys a constraint on any other argument
+ifelselike(cnd, x, y) = cnd ? x : y
 
-    # should work nicely with union-split
-    @test Base.return_types((Union{Int,Nothing},)) do x
-        ifelselike(isa(x, Int), x, 0)
-    end |> only == Int
+@test Base.return_types((Any,Int,)) do x, y
+    ifelselike(isa(x, Int), x, y)
+end |> only == Int
 
-    @test Base.return_types((Any,Int)) do x, y
-        ifelselike(!isa(x, Int), y, x)
-    end |> only == Int
+# should work nicely with union-split
+@test Base.return_types((Union{Int,Nothing},)) do x
+    ifelselike(isa(x, Int), x, 0)
+end |> only == Int
 
-    @test Base.return_types((Any,Int)) do x, y
-        a = ifelselike(x === 0, x, 0) # ::Const(0)
-        if a == 0
-            return y
-        else
-            return nothing # dead branch
-        end
-    end |> only == Int
+@test Base.return_types((Any,Int)) do x, y
+    ifelselike(!isa(x, Int), y, x)
+end |> only == Int
 
-    # pick up the first if there are multiple constrained arguments
-    @test Base.return_types((Any,)) do x
-        ifelselike(isa(x, Int), x, x)
-    end |> only == Any
+@test Base.return_types((Any,Int)) do x, y
+    a = ifelselike(x === 0, x, 0) # ::Const(0)
+    if a == 0
+        return y
+    else
+        return nothing # dead branch
+    end
+end |> only == Int
 
-    # just propagate multiple constraints
-    ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
-    @test Base.return_types((Any,Any)) do x, y
-        ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
-    end |> only == Int
+# pick up the first if there are multiple constrained arguments
+@test Base.return_types((Any,)) do x
+    ifelselike(isa(x, Int), x, x)
+end |> only == Any
 
-    # work with `invoke`
-    @test Base.return_types((Any,Any)) do x, y
-        @invoke ifelselike(isa(x, Int), x::Any, y::Int)
-    end |> only == Int
+# just propagate multiple constraints
+ifelselike2(cnd1, cnd2, x, y, z) = cnd1 ? x : cnd2 ? y : z
+@test Base.return_types((Any,Any)) do x, y
+    ifelselike2(isa(x, Int), isa(y, Int), x, y, 0)
+end |> only == Int
 
-    # don't be confused with vararg method
-    vacond(cnd, va...) = cnd ? va : 0
-    @test Base.return_types((Any,)) do x
-        # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
-        vacond(isa(x, Tuple{Int,Int}), x, x)
-    end |> only == Union{Int,Tuple{Any,Any}}
+# work with `invoke`
+@test Base.return_types((Any,Any)) do x, y
+    @invoke ifelselike(isa(x, Int), x::Any, y::Int)
+end |> only == Int
 
-    # demonstrate extra constraint propagation for Base.ifelse
-    @test Base.return_types((Any,Int,)) do x, y
-        ifelse(isa(x, Int), x, y)
-    end |> only == Int
+# don't be confused with vararg method
+vacond(cnd, va...) = cnd ? va : 0
+@test Base.return_types((Any,)) do x
+    # at runtime we will see `va::Tuple{Tuple{Int,Int}, Tuple{Int,Int}}`
+    vacond(isa(x, Tuple{Int,Int}), x, x)
+end |> only == Union{Int,Tuple{Any,Any}}
 
-    # slot as SSA
-    @test Base.return_types((Any,Vector{Any})) do x, y
-        z = x
-        ifelselike(isa(z, Int), z, length(y))
-    end |> only === Int
+# https://github.com/JuliaLang/julia/issues/47435
+is_closed_ex(e::InvalidStateException) = true
+is_closed_ex(e) = false
+function issue47435()
+    try
+    catch e
+        println("caught $e: $(is_closed_ex(e))")
+    end
 end
+@test only(Base.return_types(issue47435)) === Nothing
+
+# demonstrate extra constraint propagation for Base.ifelse
+@test Base.return_types((Any,Int,)) do x, y
+    ifelse(isa(x, Int), x, y)
+end |> only == Int
+
+# forward conditional information imposed on SSA that is alised to a slot
+@test Base.return_types((Any,Vector{Any})) do x, y
+    z = x
+    ifelselike(isa(z, Int), z, length(y))
+end |> only === Int
 
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
@@ -2365,13 +2377,13 @@ import Core.Compiler: apply_type_tfunc
 @test apply_type_tfunc(Const(NamedTuple), Tuple{Vararg{Symbol}}, Type{Tuple{}}) === Const(typeof((;)))
 
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union}}) == Type{Union{}}
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any}) == Type
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Any}) == Type
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Int}) == Union{}
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Type{Union},Any,Int}) == Union{}
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Any}) == Any
-@test Core.Compiler.return_type(Core.apply_type, Tuple{Any,Any}) == Any
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Type
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Any})) == Type
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Int})) == Union{}
+@test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any,Int})) == Union{}
+@test only(Base.return_types(Core.apply_type, Tuple{Any})) == Any
+@test only(Base.return_types(Core.apply_type, Tuple{Any,Any})) == Any
 
 # PR 27351, make sure optimized type intersection for method invalidation handles typevars
 
@@ -2566,7 +2578,7 @@ Base.iterate(i::Iterator27434, ::Val{2}) = i.z, Val(3)
 Base.iterate(::Iterator27434, ::Any) = nothing
 @test @inferred(splat27434(Iterator27434(1, 2, 3))) == (1, 2, 3)
 @test @inferred((1, 2, 3) == (1, 2, 3))
-@test Core.Compiler.return_type(splat27434, Tuple{typeof(Iterators.repeated(1))}) == Union{}
+@test only(Base.return_types(splat27434, Tuple{typeof(Iterators.repeated(1))})) == Union{}
 
 # issue #32465
 let rt = Base.return_types(splat27434, (NamedTuple{(:x,), Tuple{T}} where T,))
@@ -3384,44 +3396,46 @@ for badf in [getfield_const_typename_bad1, getfield_const_typename_bad2]
     @test_throws TypeError badf()
 end
 
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), Vararg{DataType}}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(sizeof), DataType, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(===), Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Vararg{Symbol}}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Vararg{Symbol}}) == Symbol
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}}) == Integer
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg}) == Integer
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg}) == Integer
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Vararg}) == Expr
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Vararg}) == Expr
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core._expr), Any, Any, Vararg}) == Expr
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Any, Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(applicable), Any, Any, Any, Vararg}) == Bool
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Any, Vararg}) == Int
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(getfield), Any, Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Vararg}) == Any
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Vararg}) == Any
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Vararg}) == Any
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Vararg}) == Any
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg}) == Union{}
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Vararg}) == Any
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Vararg}) == Any
-@test Core.Compiler.return_type(apply26826, Tuple{typeof(Core.apply_type), Any, Any, Vararg}) == Any
+# tfuncs precision with vararg argument
+apply_fargs(f, args...) = f(args...)
+@test only(Base.return_types(apply_fargs, Tuple{typeof(sizeof), Vararg{DataType}})) == Int
+@test only(Base.return_types(apply_fargs, Tuple{typeof(sizeof), DataType, Vararg})) == Int
+@test only(Base.return_types(apply_fargs, Tuple{typeof(sizeof), DataType, Any, Vararg})) == Union{}
+@test only(Base.return_types(apply_fargs, Tuple{typeof(===), Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(===), Any, Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(===), Any, Any, Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(===), Any, Any, Any, Vararg})) == Union{}
+@test only(Base.return_types(apply_fargs, Tuple{typeof(setfield!), Vararg{Symbol}})) == Union{}
+@test only(Base.return_types(apply_fargs, Tuple{typeof(setfield!), Any, Vararg{Symbol}})) == Symbol
+@test only(Base.return_types(apply_fargs, Tuple{typeof(setfield!), Any, Symbol, Vararg{Integer}})) == Integer
+@test only(Base.return_types(apply_fargs, Tuple{typeof(setfield!), Any, Symbol, Integer, Vararg})) == Integer
+@test only(Base.return_types(apply_fargs, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Vararg})) == Integer
+@test only(Base.return_types(apply_fargs, Tuple{typeof(setfield!), Any, Symbol, Integer, Any, Any, Vararg})) == Union{}
+@test only(Base.return_types(apply_fargs, Tuple{typeof(Core._expr), Vararg})) == Expr
+@test only(Base.return_types(apply_fargs, Tuple{typeof(Core._expr), Any, Vararg})) == Expr
+@test only(Base.return_types(apply_fargs, Tuple{typeof(Core._expr), Any, Any, Vararg})) == Expr
+@test only(Base.return_types(apply_fargs, Tuple{typeof(applicable), Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(applicable), Any, Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(applicable), Any, Any, Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(applicable), Any, Any, Any, Vararg})) == Bool
+@test only(Base.return_types(apply_fargs, Tuple{typeof(getfield), Tuple{Int}, Vararg})) == Int
+@test only(Base.return_types(apply_fargs, Tuple{typeof(getfield), Tuple{Int}, Any, Vararg})) == Int
+@test only(Base.return_types(apply_fargs, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Vararg})) == Int
+@test only(Base.return_types(apply_fargs, Tuple{typeof(getfield), Tuple{Int}, Any, Any, Any, Vararg})) == Int
+@test only(Base.return_types(apply_fargs, Tuple{typeof(getfield), Any, Any, Any, Any, Any, Vararg})) == Union{}
+@test only(Base.return_types(apply_fargs, Tuple{typeof(fieldtype), Vararg})) == Any
+@test only(Base.return_types(apply_fargs, Tuple{typeof(fieldtype), Any, Vararg})) == Any
+@test only(Base.return_types(apply_fargs, Tuple{typeof(fieldtype), Any, Any, Vararg})) == Any
+@test only(Base.return_types(apply_fargs, Tuple{typeof(fieldtype), Any, Any, Any, Vararg})) == Any
+@test only(Base.return_types(apply_fargs, Tuple{typeof(fieldtype), Any, Any, Any, Any, Vararg})) == Union{}
+@test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Vararg})) == Any
+@test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Any, Vararg})) == Any
+@test only(Base.return_types(apply_fargs, Tuple{typeof(Core.apply_type), Any, Any, Vararg})) == Any
 f_apply_cglobal(args...) = cglobal(args...)
-@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Vararg{Type{Int}}}) == Ptr
-@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}}) == Ptr
-@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}}) == Ptr{Int}
-@test Core.Compiler.return_type(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}}) == Union{}
+@test only(Base.return_types(f_apply_cglobal, Tuple{Vararg{Type{Int}}})) == Ptr
+@test only(Base.return_types(f_apply_cglobal, Tuple{Any, Vararg{Type{Int}}})) == Ptr
+@test only(Base.return_types(f_apply_cglobal, Tuple{Any, Type{Int}, Vararg{Type{Int}}})) == Ptr{Int}
+@test only(Base.return_types(f_apply_cglobal, Tuple{Any, Type{Int}, Type{Int}, Vararg{Type{Int}}})) == Union{}
 
 # issue #37532
 @test Core.Compiler.intrinsic_nothrow(Core.bitcast, Any[Type{Ptr{Int}}, Int])
@@ -3538,7 +3552,7 @@ end
 end
 
 # issue #37638
-@test isa(Core.Compiler.return_type(() -> (nothing, Any[]...)[2], Tuple{}), Type)
+@test only(Base.return_types(() -> (nothing, Any[]...)[2])) isa Type
 
 # Issue #37943
 f37943(x::Any, i::Int) = getfield((x::Pair{false, Int}), i)
@@ -3568,7 +3582,7 @@ g38888() = S38888(Base.inferencebarrier(3), nothing)
 @test g38888() isa S38888
 
 f_inf_error_bottom(x::Vector) = isempty(x) ? error(x[1]) : x
-@test Core.Compiler.return_type(f_inf_error_bottom, Tuple{Vector{Any}}) == Vector{Any}
+@test only(Base.return_types(f_inf_error_bottom, Tuple{Vector{Any}})) == Vector{Any}
 
 # @constprop :aggressive
 @noinline g_nonaggressive(y, x) = Val{x}()
@@ -3594,7 +3608,7 @@ function splat_lotta_unions()
     c = Union{Int8,Int16,Int32,Int64,Int128}[1][1]
     (a...,b...,c...)
 end
-@test Core.Compiler.return_type(splat_lotta_unions, Tuple{}) >: Tuple{Int,Int,Int}
+@test only(Base.return_types(splat_lotta_unions, Tuple{})) >: Tuple{Int,Int,Int}
 
 # Bare Core.Argument in IR
 @eval f_bare_argument(x) = $(Core.Argument(2))
@@ -4102,8 +4116,8 @@ end
 f_max_methods(x::Int) = 1
 f_max_methods(x::Float64) = 2
 g_max_methods(x) = f_max_methods(x)
-@test Core.Compiler.return_type(g_max_methods, Tuple{Int}) === Int
-@test Core.Compiler.return_type(g_max_methods, Tuple{Any}) === Any
+@test only(Base.return_types(g_max_methods, Tuple{Int})) === Int
+@test only(Base.return_types(g_max_methods, Tuple{Any})) === Any
 
 # Make sure return_type_tfunc doesn't accidentally cause bad inference if used
 # at top level.
@@ -4271,3 +4285,7 @@ end
         ccall(0, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
+
+# Issue #46839: `abstract_invoke` should handle incorrect call type
+@test only(Base.return_types(()->invoke(BitSet, Any, x), ())) === Union{}
+@test only(Base.return_types(()->invoke(BitSet, Union{Tuple{Int32},Tuple{Int64}}, 1), ())) === Union{}

@@ -878,6 +878,12 @@ let f = function (x::T, y::S) where T<:S where S
     @test f(0,1) === (Int,Int)
 end
 
+# issue #45506
+@test :( function (a) where {B, C} end).args[1] == Expr(:where, Expr(:tuple, :a), :B, :C)
+@test (function(::Type{Tuple{A45506, B45506}}) where {A45506 <: Any, B45506 <: Any}
+    B45506
+end)(Tuple{Int8, Int16}) == Int16
+
 # issue #20541
 @test Meta.parse("[a .!b]") == Expr(:hcat, :a, Expr(:call, :.!, :b))
 
@@ -2276,6 +2282,12 @@ end
 @test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(101, :some_file), :(f(x,x)=1))) ==
     Expr(:error, "function argument name not unique: \"x\" around some_file:101")
 
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(102, :some_file), :(function f(x) where T where T; x::T; end))) ==
+    Expr(:error, "function static parameter name not unique: \"T\" around some_file:102")
+
+@test Meta.lower(@__MODULE__, Expr(:block, LineNumberNode(103, :some_file), :(function f(t) where t; x; end))) ==
+    Expr(:error, "function argument and static parameter name not distinct: \"t\" around some_file:103")
+
 # Ensure file names don't leak between `eval`s
 eval(LineNumberNode(11, :incorrect_file))
 let exc = try eval(:(f(x,x)=1)) catch e ; e ; end
@@ -2320,7 +2332,7 @@ f44343(;kw...) = NamedTuple(kw)
 @test f44343(u = (; :a => 1)) === (u = (; :a => 1),)
 
 @testset "issue #34544/35367" begin
-    # Test these evals shouldnt segfault
+    # Test these evals shouldn't segfault
     eval(Expr(:call, :eval, Expr(:quote, Expr(:module, true, :bar1, Expr(:block)))))
     eval(Expr(:module, true, :bar2, Expr(:block)))
     eval(Expr(:quote, Expr(:module, true, :bar3, Expr(:quote))))
@@ -3406,3 +3418,7 @@ f45162(f) = f(x=1)
     @test Meta.isexpr(Meta.parse("'a"), :incomplete)
     @test ''' == "'"[1]
 end
+
+# issue #46251
+@test begin; global value = 1; (value, value += 1) end == (1, 2)
+@test begin; global value = 1; "($(value), $(value += 1))" end == "(1, 2)"

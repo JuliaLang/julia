@@ -327,7 +327,7 @@ typedef struct _jl_method_t {
     // A function that compares two specializations of this method, returning
     // `true` if the first signature is to be considered "smaller" than the
     // second for purposes of recursion analysis. Set to NULL to use
-    // the default recusion relation.
+    // the default recursion relation.
     jl_value_t *recursion_relation;
 
     uint32_t nargs;
@@ -516,6 +516,7 @@ typedef struct {
 } jl_fielddesc32_t;
 
 typedef struct {
+    uint32_t size;
     uint32_t nfields;
     uint32_t npointers; // number of pointers embedded inside
     int32_t first_ptr; // index of the first pointer (or -1)
@@ -542,7 +543,6 @@ typedef struct _jl_datatype_t {
     jl_svec_t *types;
     jl_value_t *instance;  // for singletons
     const jl_datatype_layout_t *layout;
-    int32_t size; // TODO: move to _jl_datatype_layout_t
     // memoized properties
     uint32_t hash;
     uint8_t hasfreetypevars:1; // majority part of isconcrete computation
@@ -552,6 +552,7 @@ typedef struct _jl_datatype_t {
     uint8_t zeroinit:1; // if one or more fields requires zero-initialization
     uint8_t has_concrete_subtype:1; // If clear, no value will have this datatype
     uint8_t cached_by_hash:1; // stored in hash-based set cache (instead of linear cache)
+    uint8_t isprimitivetype:1; // whether this is declared with 'primitive type' keyword (sized, no fields, and immutable)
 } jl_datatype_t;
 
 typedef struct _jl_vararg_t {
@@ -1097,9 +1098,9 @@ STATIC_INLINE jl_value_t *jl_field_type_concrete(jl_datatype_t *st JL_PROPAGATES
     return jl_svecref(st->types, i);
 }
 
-#define jl_datatype_size(t)    (((jl_datatype_t*)t)->size)
+#define jl_datatype_size(t)    (((jl_datatype_t*)t)->layout->size)
 #define jl_datatype_align(t)   (((jl_datatype_t*)t)->layout->alignment)
-#define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->size)*8)
+#define jl_datatype_nbits(t)   ((((jl_datatype_t*)t)->layout->size)*8)
 #define jl_datatype_nfields(t) (((jl_datatype_t*)(t))->layout->nfields)
 
 JL_DLLEXPORT void *jl_symbol_name(jl_sym_t *s);
@@ -1276,17 +1277,14 @@ STATIC_INLINE int jl_is_type(jl_value_t *v) JL_NOTSAFEPOINT
 
 STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
 {
-    return (jl_is_datatype(v) && jl_is_immutable(v) &&
-            ((jl_datatype_t*)(v))->layout &&
-            jl_datatype_nfields(v) == 0 &&
-            jl_datatype_size(v) > 0);
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->isprimitivetype);
 }
 
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&
             !((jl_datatype_t*)(v))->name->abstract &&
-            !jl_is_primitivetype(v));
+            !((jl_datatype_t*)(v))->isprimitivetype);
 }
 
 STATIC_INLINE int jl_isbits(void *t) JL_NOTSAFEPOINT // corresponding to isbitstype() in julia
@@ -1755,6 +1753,7 @@ JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);
 JL_DLLEXPORT void jl_postoutput_hook(void);
 JL_DLLEXPORT void JL_NORETURN jl_exit(int status);
+JL_DLLEXPORT void JL_NORETURN jl_raise(int signo);
 JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 
@@ -1952,7 +1951,7 @@ JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_sig_throw(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
-JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e);
+JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
 JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
 #define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 

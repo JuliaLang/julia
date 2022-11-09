@@ -246,7 +246,7 @@ svdvals(x::Number) = abs(x)
 svdvals(S::SVD{<:Any,T}) where {T} = (S.S)::Vector{T}
 
 ### SVD least squares ###
-function ldiv!(A::SVD{T}, B::StridedVecOrMat) where T
+function ldiv!(A::SVD{T}, B::AbstractVecOrMat) where T
     m, n = size(A)
     k = searchsortedlast(A.S, eps(real(T))*A.S[1], rev=true)
     mul!(view(B, 1:n, :), view(A.Vt, 1:k, :)', view(A.S, 1:k) .\ (view(A.U, :, 1:k)' * _cut_B(B, 1:m)))
@@ -402,7 +402,8 @@ function svd!(A::StridedMatrix{T}, B::StridedMatrix{T}) where T<:BlasFloat
     end
     GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
-svd(A::StridedMatrix{T}, B::StridedMatrix{T}) where {T<:BlasFloat} = svd!(copy(A),copy(B))
+svd(A::AbstractMatrix{T}, B::AbstractMatrix{T}) where {T<:BlasFloat} =
+    svd!(copy_similar(A, T), copy_similar(B, T))
 
 """
 

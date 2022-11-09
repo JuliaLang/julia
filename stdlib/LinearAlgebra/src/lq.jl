@@ -191,7 +191,7 @@ end
 
 
 ## Multiplication by LQ
-function lmul!(A::LQ, B::StridedVecOrMat)
+function lmul!(A::LQ, B::AbstractVecOrMat)
     lmul!(LowerTriangular(A.L), view(lmul!(A.Q, B), 1:size(A,1), axes(B,2)))
     return B
 end
@@ -334,7 +334,7 @@ function (\)(F::LQ{T}, B::VecOrMat{Complex{T}}) where T<:BlasReal
 end
 
 
-function ldiv!(A::LQ, B::StridedVecOrMat)
+function ldiv!(A::LQ, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(A)
     m ≤ n || throw(DimensionMismatch("LQ solver does not support overdetermined systems (more rows than columns)"))
@@ -343,7 +343,7 @@ function ldiv!(A::LQ, B::StridedVecOrMat)
     return lmul!(adjoint(A.Q), B)
 end
 
-function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::StridedVecOrMat)
+function ldiv!(Fadj::Adjoint{<:Any,<:LQ}, B::AbstractVecOrMat)
     require_one_based_indexing(B)
     m, n = size(Fadj)
     m >= n || throw(DimensionMismatch("solver does not support underdetermined systems (more columns than rows)"))
