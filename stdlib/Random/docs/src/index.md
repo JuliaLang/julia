@@ -202,23 +202,24 @@ Given a collection type `S`, it's currently assumed that if `rand(::S)` is defin
 
 As an example:
 ```jldoctest
-julia> struct Point{T} <: AbstractFloat
-           x::T
-           y::T
+julia> struct Diag <: AbstractFloat
+           diagonal::Float64
+           Diag(l, w) = l ≤ w ? error("length can't be ≤ width") : new(√(l^2 + w^2))
        end
 
-julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{Point}})
-           Point(rand(rng, 0.01:0.01:1.0), rand(rng, 0.01:0.01:1.0))
+julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{Diag}})
+           l, w = rand(rng, 1:100), rand(rng, 1:100)
+           l < w ? Diag(w, l) : Diag(l, w)
        end
 
-julia> rand(Point)
-Point{Float64}(0.33, 0.97)
+julia> rand(Diag)
+Diag(70.178344238091)
 
-julia> rand(Point, 3)
-3-element Vector{Point}:
- Point{Float64}(0.96, 0.66)
- Point{Float64}(0.23, 0.52)
- Point{Float64}(0.98, 0.31)
+julia> rand(Diag, 3)
+3-element Vector{Diag}:
+ Diag(35.35533905932738)
+ Diag(43.56604182158393)
+ Diag(59.07622195096772)
 ```
 
 #### An optimized sampler with pre-computed data
