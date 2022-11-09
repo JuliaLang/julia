@@ -429,7 +429,7 @@ function unbiased_exponent(x::T) where {T<:IEEEFloat}
 end
 
 function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
-    subnormal = issubnormal(x) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
+    subnormal = !issubnormal(x) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
     return subnormal | (significand_mask(T) & uintbits(x))
 end
 
@@ -437,7 +437,7 @@ function make_value(number::T, ep) where {T<:Unsigned}
     Tfloat = floattype(T)
     Tint = signed(T)
     epint = unsafe_trunc(Tint,ep)
-    lz = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
+    lz::signed(T) = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
     number <<= lz
     epint -= lz
     bits = T(0)
