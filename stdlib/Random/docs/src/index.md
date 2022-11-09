@@ -203,7 +203,7 @@ Given a collection type `S`, it's currently assumed that if `rand(::S)` is defin
 As an example:
 ```jldoctest
 julia> struct Diag <: AbstractFloat
-           diagonal::Float64
+           diagonal::Float64 # diagonal of a rectangle
            Diag(l, w) = l ≤ w ? error("length can't be ≤ width") : new(√(l^2 + w^2))
        end
 
