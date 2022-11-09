@@ -28,11 +28,6 @@ using Test
             exit(22)
             """ => 0,
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-            """
-            atexit(exitcode -> exitcode > 10 && exit(0))
-            exit(22)
-            """ => 0,
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             )
         for julia_expr in keys(julia_expr_list)
             cmd_eval = _atexit_tests_gen_cmd_eval(julia_expr)
@@ -92,11 +87,6 @@ using Test
             """ => 13,
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             """
-            atexit(exitcode -> exit(exitcode+3))
-            exit(22)
-            """ => 25,
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-            """
             atexit(() -> ("No error"))
             atexit(() -> exit(5))
             exit(22)
@@ -144,18 +134,6 @@ using Test
             atexit(() -> exit(7))
             exit(22)
             """ => 4,
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-            """
-            atexit(() -> exit(21))
-            atexit(exitcode -> exit(exitcode+3))
-            exit(22)
-            """ => 21,
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-            """
-            atexit(exitcode -> exit(exitcode+3))
-            atexit(() -> exit(21))
-            exit(22)
-            """ => 24,
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
             )
         for julia_expr in keys(julia_expr_list)
