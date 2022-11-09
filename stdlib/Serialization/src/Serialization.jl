@@ -1474,7 +1474,7 @@ function deserialize_string(s::AbstractSerializer, len::Int)
 end
 
 # default DataType deserializer
-function deserialize(s::AbstractSerializer, ::Type{T}) where {T}
+function deserialize(s::AbstractSerializer, t::DataType)
     nf = length(t.types)
     if isprimitivetype(t)
         return read(s.io, t)
@@ -1489,7 +1489,7 @@ function deserialize(s::AbstractSerializer, ::Type{T}) where {T}
         end
         return x
     elseif nf == 0
-        return ccall(:jl_new_struct_uninit, Any, (Any,), T)
+        return ccall(:jl_new_struct_uninit, Any, (Any,), t)
     else
         na = nf
         vflds = Vector{Any}(undef, nf)
@@ -1502,7 +1502,7 @@ function deserialize(s::AbstractSerializer, ::Type{T}) where {T}
                 na >= i && (na = i - 1) # rest of tail must be undefined values
             end
         end
-        return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, vflds, na)
+        return ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), t, vflds, na)
     end
 end
 
