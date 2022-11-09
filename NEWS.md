@@ -152,8 +152,7 @@ Standard library changes
 
 * UMFPACK (<https://github.com/JuliaSparse/SparseArrays.jl/pull/179>) and CHOLMOD (<https://github.com/JuliaSparse/SparseArrays.jl/pull/206>) thread safety are improved by 
   avoiding globals and using locks. Multithreaded `ldiv!` of UMFPACK objects may now be
-  performed safely by copying the factorization object with `copy_numeric=false` and 
-  `copy_symbolic=false` keyword arguments.
+  performed safely.
 
 * An experimental function `SparseArrays.allowscalar(::Bool)` allows scalar indexing of sparse arrays to be
   disabled or enabled. This function is intended to help find accidental scalar indexing of
