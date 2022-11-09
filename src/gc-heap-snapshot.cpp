@@ -185,7 +185,6 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     // Insert a new Node
     size_t self_size = 0;
-    std::string type_name;
     StringRef name = "<missing>";
     StringRef node_type = "object";
 
@@ -215,9 +214,12 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         self_size = sizeof(jl_task_t);
     }
     else if (jl_is_datatype(a)) {
-        type_name = string("Type{") + string(jl_symbol_name_(((_jl_datatype_t*)a)->name->name)) + string("}");
-        name = StringRef(type_name);
-        self_size = sizeof(jl_task_t);
+        ios_need_close = 1;
+        ios_mem(&str_, 0);
+        JL_STREAM* str = (JL_STREAM*)&str_;
+        jl_static_show(str, a);
+        name = StringRef((const char*)str_.buf, str_.size);
+        self_size = sizeof(jl_datatype_t);
     }
     else {
         self_size = jl_is_array_type(type)
