@@ -524,7 +524,7 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
 end
 
 function fmod(x::T, y::T) where {T<:IEEEFloat}
-    if (!isnan(x) && isfinite(x) && !iszero(y) && !isnan(y) && isfinite(y) && !iszero(y))
+    if (!isnan(x) && isfinite(x) && !iszero(x) && !isnan(y) && isfinite(y) && !iszero(y))
         xabs = abs(x)
         yabs = abs(y)
         res = fmod_internal(xabs, yabs)
