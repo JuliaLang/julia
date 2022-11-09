@@ -366,9 +366,9 @@
      (if (has-dups unused_anames)
          (error (string "function argument name not unique: \"" (car (has-dups unused_anames)) "\"")))
      (if (has-dups names)
-         (error "function static parameter names not unique"))
+         (error (string "function static parameter name not unique: \"" (car (has-dups names)) "\"")))
      (if (any (lambda (x) (and (not (eq? x UNUSED)) (memq x names))) anames)
-         (error "function argument and static parameter names must be distinct"))
+         (error (string "function argument and static parameter name not distinct: \"" (car (intersect names unused_anames)) "\"")))
      (if (or (and name (not (sym-ref-or-overlay? name))) (not (valid-name? name)))
          (error (string "invalid function name \"" (deparse name) "\"")))
      (let* ((loc (maybe-remove-functionloc! body))
@@ -2264,7 +2264,7 @@
 ;; `n`:    total nr of lhs args
 ;; `end`:  car collects statements to be executed afterwards.
 ;;         In general, actual assignments should only happen after
-;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+;;         the whole iterator is desctructured (https://github.com/JuliaLang/julia/issues/40574)
 (define (destructure- i lhss xx n st end)
   (if (null? lhss)
       '()

@@ -850,10 +850,11 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             code = lkup.linfo
             if code isa MethodInstance
                 def = code.def
-                if def isa Method
-                    if def.name === :kwcall && def.module === Core
-                        continue
-                    end
+                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),Any,Any,Vararg}
+                    # hide kwcall() methods, which are probably internal keyword sorter methods
+                    # (we print the internal method instead, after demangling
+                    # the argument list, since it has the right line number info)
+                    continue
                 end
             elseif !lkup.from_c
                 lkup.func === :kwcall && continue

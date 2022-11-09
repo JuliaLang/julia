@@ -414,7 +414,7 @@ Base.iterate(S::Hessenberg, ::Val{:done}) = nothing
 
 hessenberg!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(LAPACK.gehrd!(A)...)
 
-function hessenberg!(A::Union{Symmetric{<:BlasReal},Hermitian{<:BlasFloat}})
+function hessenberg!(A::Union{Symmetric{<:BlasReal,<:StridedMatrix},Hermitian{<:BlasFloat,<:StridedMatrix}})
     factors, τ, d, e = LAPACK.hetrd!(A.uplo, A.data)
     return Hessenberg(factors, τ, SymTridiagonal(d, e), A.uplo)
 end

@@ -151,13 +151,17 @@ julia> UnitUpperTriangular(A)
 """
 UnitUpperTriangular
 
+const UpperOrUnitUpperTriangular{T} = Union{UpperTriangular{T}, UnitUpperTriangular{T}}
+const LowerOrUnitLowerTriangular{T} = Union{LowerTriangular{T}, UnitLowerTriangular{T}}
+const UpperOrLowerTriangular{T} = Union{UpperOrUnitUpperTriangular{T}, LowerOrUnitLowerTriangular{T}}
+
 imag(A::UpperTriangular) = UpperTriangular(imag(A.data))
 imag(A::LowerTriangular) = LowerTriangular(imag(A.data))
 imag(A::UnitLowerTriangular) = LowerTriangular(tril!(imag(A.data),-1))
 imag(A::UnitUpperTriangular) = UpperTriangular(triu!(imag(A.data),1))
 
 Array(A::AbstractTriangular) = Matrix(A)
-parent(A::AbstractTriangular) = A.data
+parent(A::UpperOrLowerTriangular) = A.data
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
@@ -729,7 +733,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
             LAPACK.trrfs!($uploc, 'N', $isunitc, A.data, B, X)
 
         # Condition numbers
-        function cond(A::$t{<:BlasFloat}, p::Real=2)
+        function cond(A::$t{<:BlasFloat,<:StridedMatrix}, p::Real=2)
             checksquare(A)
             if p == 1
                 return inv(LAPACK.trcon!('O', $uploc, $isunitc, A.data))
@@ -830,9 +834,9 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
     end
 end
 
-errorbounds(A::AbstractTriangular{T,<:StridedMatrix}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
+errorbounds(A::AbstractTriangular{T,<:AbstractMatrix}, X::AbstractVecOrMat{T}, B::AbstractVecOrMat{T}) where {T<:Union{BigFloat,Complex{BigFloat}}} =
     error("not implemented yet! Please submit a pull request.")
-function errorbounds(A::AbstractTriangular{TA,<:StridedMatrix}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
+function errorbounds(A::AbstractTriangular{TA,<:AbstractMatrix}, X::AbstractVecOrMat{TX}, B::AbstractVecOrMat{TB}) where {TA<:Number,TX<:Number,TB<:Number}
     TAXB = promote_type(TA, TB, TX, Float32)
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
 end
@@ -915,6 +919,7 @@ for (t, unitt) in ((UpperTriangular, UnitUpperTriangular),
     end
 end
 
+## Generic triangular multiplication
 function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
     m, n = size(B, 1), size(B, 2)
@@ -935,7 +940,7 @@ function _multrimat!(C::AbstractVecOrMat, A::UpperTriangular, B::AbstractVecOrMa
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
 function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
@@ -944,6 +949,7 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVec
     if m != N
         throw(DimensionMismatch("right hand side B needs first dimension of size $(size(A,1)), has size $m"))
     end
+
     mc, nc = size(C, 1), size(C, 2)
     if mc != N || nc != n
         throw(DimensionMismatch("output has dimensions ($mc,$nc), should have ($N,$n)"))
@@ -957,7 +963,7 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitUpperTriangular, B::AbstractVec
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
 function _multrimat!(C::AbstractVecOrMat, A::LowerTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
@@ -979,7 +985,7 @@ function _multrimat!(C::AbstractVecOrMat, A::LowerTriangular, B::AbstractVecOrMa
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
 function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVecOrMat)
     require_one_based_indexing(C, A, B)
@@ -1001,12 +1007,12 @@ function _multrimat!(C::AbstractVecOrMat, A::UnitLowerTriangular, B::AbstractVec
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
 
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UpperTriangular)
     require_one_based_indexing(C, A, B)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
     if n != N
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
@@ -1024,11 +1030,11 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitUpperTriangular)
     require_one_based_indexing(C, A, B)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
     if n != N
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
@@ -1046,11 +1052,11 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitUpperTriangula
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::LowerTriangular)
     require_one_based_indexing(C, A, B)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
     if n != N
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
@@ -1068,11 +1074,11 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
-function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangular)
+function _mulmattri!(C::AbstractMatrix, A::AbstractVecOrMat, B::UnitLowerTriangular)
     require_one_based_indexing(C, A, B)
-    m, n = size(A)
+    m, n = size(A, 1), size(A, 2)
     N = size(B, 1)
     if n != N
         throw(DimensionMismatch("right hand side B needs first dimension of size $n, has size $N"))
@@ -1090,7 +1096,7 @@ function _mulmattri!(C::AbstractMatrix, A::AbstractMatrix, B::UnitLowerTriangula
             C[i,j] = Cij
         end
     end
-    C
+    return C
 end
 
 #Generic solver using naive substitution
@@ -1264,6 +1270,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::UpperTriangular)
             for k in 1:j - 1
                 Aij -= C[i,k]*B.data[k,j]
             end
+            iszero(B.data[j,j]) && throw(SingularException(j))
             C[i,j] = Aij / B.data[j,j]
         end
     end
@@ -1304,6 +1311,7 @@ function _rdiv!(C::AbstractMatrix, A::AbstractMatrix, B::LowerTriangular)
             for k in j + 1:n
                 Aij -= C[i,k]*B.data[k,j]
             end
+            iszero(B.data[j,j]) && throw(SingularException(j))
             C[i,j] = Aij / B.data[j,j]
         end
     end
@@ -2446,10 +2454,6 @@ for func in (:svd, :svd!, :svdvals)
 end
 
 factorize(A::AbstractTriangular) = A
-
-# disambiguation methods: *(AbstractTriangular, Adj/Trans of AbstractVector)
-*(A::AbstractTriangular, B::AdjointAbsVec) = adjoint(adjoint(B) * adjoint(A))
-*(A::AbstractTriangular, B::TransposeAbsVec) = transpose(transpose(B) * transpose(A))
 
 # disambiguation methods: /(Adjoint of AbsVec, <:AbstractTriangular)
 /(u::AdjointAbsVec, A::Union{LowerTriangular,UpperTriangular}) = adjoint(adjoint(A) \ u.parent)

@@ -32,12 +32,12 @@ cd(@__DIR__) do
 # Find the library directory by finding the path of libjulia-internal (or libjulia-internal-debug,
 # as the case may be) to get the private library directory
 private_libdir = if Base.DARWIN_FRAMEWORK
-    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    if Base.isdebugbuild()
         dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME * "_debug")))
     else
         joinpath(dirname(abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME))),"Frameworks")
     end
-elseif ccall(:jl_is_debugbuild, Cint, ()) != 0
+elseif Base.isdebugbuild()
     dirname(abspath(Libdl.dlpath("libjulia-internal-debug")))
 else
     dirname(abspath(Libdl.dlpath("libjulia-internal")))

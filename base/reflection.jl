@@ -863,7 +863,7 @@ function to_tuple_type(@nospecialize(t))
         t = Tuple{t...}
     end
     if isa(t, Type) && t <: Tuple
-        for p in unwrap_unionall(t).parameters
+        for p in (unwrap_unionall(t)::DataType).parameters
             if isa(p, Core.TypeofVararg)
                 p = unwrapva(p)
             end
@@ -878,13 +878,10 @@ function to_tuple_type(@nospecialize(t))
 end
 
 function signature_type(@nospecialize(f), @nospecialize(argtypes))
+    argtypes = to_tuple_type(argtypes)
     ft = Core.Typeof(f)
-    if isa(argtypes, Type)
-        u = unwrap_unionall(argtypes)
-        return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
-    else
-        return Tuple{ft, argtypes...}
-    end
+    u = unwrap_unionall(argtypes)::DataType
+    return rewrap_unionall(Tuple{ft, u.parameters...}, argtypes)
 end
 
 """
@@ -990,7 +987,6 @@ See also: [`which`](@ref) and `@which`.
 """
 function methods(@nospecialize(f), @nospecialize(t),
                  mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
-    t = to_tuple_type(t)
     world = get_world_counter()
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[]
@@ -1398,11 +1394,11 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
         _, rt = only(code_typed_opaque_closure(f))
         return Any[rt]
     end
-    types = to_tuple_type(types)
+
     if isa(f, Core.Builtin)
-        argtypes = Any[types.parameters...]
+        argtypes = Any[to_tuple_type(types).parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Any[rt]
+        return Any[Core.Compiler.widenconst(rt)]
     end
     rts = []
     for match in _methods(f, types, -1, world)::Vector
@@ -1418,8 +1414,8 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
                        world = get_world_counter(),
                        interp = Core.Compiler.NativeInterpreter(world))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    types = to_tuple_type(types)
     if isa(f, Core.Builtin)
+        types = to_tuple_type(types)
         argtypes = Any[types.parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
         return Core.Compiler.builtin_effects(Core.Compiler.typeinf_lattice(interp), f, argtypes, rt)
@@ -1505,7 +1501,6 @@ If `types` is an abstract type, then the method that would be called by `invoke`
 See also: [`parentmodule`](@ref), and `@which` and `@edit` in [`InteractiveUtils`](@ref man-interactive-utils).
 """
 function which(@nospecialize(f), @nospecialize(t))
-    t = to_tuple_type(t)
     tt = signature_type(f, t)
     return which(tt)
 end
@@ -1613,7 +1608,6 @@ true
 ```
 """
 function hasmethod(@nospecialize(f), @nospecialize(t); world::UInt=get_world_counter())
-    t = to_tuple_type(t)
     t = signature_type(f, t)
     return ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), t, nothing, world) !== nothing
 end

@@ -1078,7 +1078,7 @@ int ios_putc(int c, ios_t *s)
 
 int ios_getc(ios_t *s)
 {
-    char ch;
+    char ch = 0;
     if (s->state == bst_rd && s->bpos < s->size) {
         ch = s->buf[s->bpos++];
     }

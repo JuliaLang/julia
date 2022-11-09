@@ -1558,6 +1558,7 @@ static inline void memassign_safe(int hasptr, jl_value_t *parent, char *dst, con
         memmove_refs((void**)dst, (void**)src, nptr);
         jl_gc_multi_wb(parent, src);
         src = (jl_value_t*)((char*)src + nptr * sizeof(void*));
+        dst = dst + nptr * sizeof(void*);
         nb -= nptr * sizeof(void*);
     }
     else {
