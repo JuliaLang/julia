@@ -138,7 +138,9 @@ JL_DLLEXPORT const char * jl_get_libdir()
         jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
         exit(1);
     }
-    if (!GetModuleFileNameW(libjulia, libjulia_path, JL_PATH_MAX)) {
+    free(libjulia_path);
+    libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
+    if (!GetModuleFileNameW(libjulia, libjulia_path, 32768)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
     }
@@ -147,6 +149,7 @@ JL_DLLEXPORT const char * jl_get_libdir()
         jl_loader_print_stderr("ERROR: Unable to convert julia path to UTF-8\n");
         exit(1);
     }
+    free(libjulia_path);
 #else
     // On all other platforms, use dladdr()
     Dl_info info;
