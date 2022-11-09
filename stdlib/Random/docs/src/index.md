@@ -198,7 +198,28 @@ Given a collection type `S`, it's currently assumed that if `rand(::S)` is defin
 
 #### Generating values for an `AbstractFloat` type
 
-`AbstractFloat` types are special-cased, because by default random values are not produced in the whole type domain, but rather in `[0,1)`. The following method should be implemented for `T <: AbstractFloat`: `Random.rand(::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{T}})`
+`AbstractFloat` types are special-cased, because by default random values are not produced in the whole type domain, but rather in `[0,1)`. The following method should be implemented for `T <: AbstractFloat`: `Random.rand(::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{T}})`.
+
+As an example:
+```jldoctest
+julia> struct Point{T} <: AbstractFloat
+           x::T
+           y::T
+       end
+
+julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{Point}})
+           Point(rand(rng, 0.01:0.01:1.0), rand(rng, 0.01:0.01:1.0))
+       end
+
+julia> rand(Point)
+Point{Float64}(0.33, 0.97)
+
+julia> rand(Point, 3)
+3-element Vector{Point}:
+ Point{Float64}(0.96, 0.66)
+ Point{Float64}(0.23, 0.52)
+ Point{Float64}(0.98, 0.31)
+```
 
 #### An optimized sampler with pre-computed data
 
