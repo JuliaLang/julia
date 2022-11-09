@@ -921,15 +921,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
     if (s->incremental && jl_object_in_image(v)) {
         assert(link_ids);
         uintptr_t item = add_external_linkage(s, v, link_ids);
-        if (!item) {
-            // If we got here, we failed to find the expected external linkage. Print debugging info.
-            for (size_t i = 0; i < jl_linkage_blobs.len; i+=2) {
-                jl_printf(JL_STDOUT, "i = %zd: %p to %p\n", i>>1, jl_linkage_blobs.items[i], jl_linkage_blobs.items[i+1]);
-            }
-            jl_printf(JL_STDOUT, "Object pointer %p for ", v);
-            jl_(v);
-            jl_error("no external linkage identified");
-        }
+        assert(item && "no external linkage identified");
         return item;
     }
     if (idx == HT_NOTFOUND) {
@@ -1242,10 +1234,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         }
         else if (jl_datatype_nfields(t) == 0) {
             // The object has no fields, so we just snapshot its byte representation
-            if (t->layout->npointers) {
-                jl_(v);
-                jl_(t);
-            }
+            assert(!t->layout->npointers);
             assert(t->layout->npointers == 0);
             ios_write(s->s, (char*)v, jl_datatype_size(t));
         }
