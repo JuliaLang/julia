@@ -2615,8 +2615,8 @@ end
 
     # negative & complex
     @test LogRange(-1, -4, 3) == [-1, -2, -4]
-    @test LogRange(1, -1+0.0im, 3) == [1, im, -1]
-    @test LogRange(1, -1-0.0im, 3) == [1, -im, -1]
+    @test LogRange(1, -1+0.0im, 3) ≈ [1, im, -1]
+    @test LogRange(1, -1-0.0im, 3) ≈ [1, -im, -1]
 
     # endpoints
     @test LogRange(0.1f0, 100, 33)[1] === 0.1f0
@@ -2633,11 +2633,28 @@ end
     # empty, only, NaN, Inf
     @test first(LogRange(1, 2, 0)) === 1.0
     @test last(LogRange(1, 2, 0)) === 2.0
+    @test collect(LogRange(1, 2, 0)) == Float64[]
     @test isnan(first(LogRange(0, 2, 0)))
     @test only(LogRange(2pi, 2pi, 1)) === LogRange(2pi, 2pi, 1)[1] === 2pi
     @test isnan(LogRange(1, NaN, 3)[2])
-    @test isinf(LogRange(1, Inf, 3)[2])
+    @test isnan(LogRange(NaN, 2, 3)[2])
+    @test isnan(LogRange(1f0, NaN32, 3)[2])
+    @test isnan(LogRange(NaN32, 2f0, 3)[2])
     @test isnan(LogRange(0, 2, 3)[1])
+    @test isnan(LogRange(0, -2, 3)[1])
+    @test isnan(LogRange(-0.0, +2.0, 3)[1])
+    @test isnan(LogRange(0f0, 2f0, 3)[1])
+    @test isnan(LogRange(0f0, -2f0, 3)[1])
+    @test isnan(LogRange(-0f0, 2f0, 3)[1])
+    @test isinf(LogRange(1, Inf, 3)[2])
+    @test -Inf === LogRange(-1, -Inf, 3)[2]
+    @test isinf(LogRange(1f0, Inf32, 3)[2])
+    @test -Inf32 === LogRange(-1f0, -Inf32, 3)[2]
+    # constant
+    @test LogRange(1, 1, 3) == fill(1.0, 3)
+    @test LogRange(-1f0, -1f0, 3) == fill(-1f0, 3)
+    @test all(isnan, LogRange(0.0, -0.0, 3))
+    @test all(isnan, LogRange(-0f0, 0f0, 3))
 
     # types
     @test eltype(LogRange(1, 10, 3)) == Float64
@@ -2659,5 +2676,5 @@ end
 
     # printing
     @test repr(LogRange(1,2,3)) == "LogRange(1.0, 2.0, 3)"
-    @test repr("text/plain", LogRange(1,2,3)) == "3-element LogRange{Float64}:\n 1.0, 1.41421, 2.0"
+    @test repr("text/plain", LogRange(1,2,3)) == "3-element LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
 end

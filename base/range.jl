@@ -1491,102 +1491,124 @@ mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + 
 
 
 """
-    LogRange(start, stop, length)
+    LogRange(start, stop, length) <: AbstractVector
 
 Construct a specialized array whose elements are spaced logarithmically
 between the given endpoints. That is, the ratio of successive elements is
 a constant, calculated from the length.
 
-Like [`LinRange`](@ref), floating-point error may cause it to miss intermediate
-rational values, but the first and last elements should be exactly those provided.
+Like [`LinRange`](@ref), the first and last elements will be exactly those
+provided, but intermediate values may have small floating-point errors
+(especially for complex numbers).
 
 This is similar to `geomspace` in Python. Unlike `PowerRange` in Mathematica,
 you specify the number of elements not the ratio.
 Unlike `logspace` in Python and Matlab, the `start` and `stop` arguments are
 always the first and last elements of the result, not powers applied to some base.
 
-!!! compat "Julia 1.9"
-    This function requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
 julia> LogRange(10, 4000, 3)
-3-element LogRange{Float64}:
+3-element LogRange{Float64, Base.TwicePrecision{Float64}}:
  10.0, 200.0, 4000.0
 
 julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
 true
 
-julia> LogRange(-62_500, -0.01, 5) |> collect  # endpoints are always exact
-5-element Vector{Float64}:
- -62500.0
-  -1250.0
-    -25.0
-     -0.49999999999999994
-     -0.01
-
 julia> LogRange(√2, 32, 10)
-10-element LogRange{Float64}:
+10-element LogRange{Float64, Base.TwicePrecision{Float64}}:
  1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
 
 julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)
 true
 
+julia> LogRange(-27, -3f0, 5)  # allows negative numbers
+5-element LogRange{Float32, Float64}:
+ -27.0, -15.5885, -9.0, -5.19615, -3.0
+
 julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))  # complex numbers
 true
 ```
 """
-struct LogRange{T} <: AbstractArray{T,1}
+struct LogRange{T,X} <: AbstractArray{T,1}
     start::T
     stop::T
     len::Int
-    function LogRange(start::T1, stop::T2, len::Integer) where {T1<:Number, T2<:Number}
-        T = float(promote_type(T1, T2))
-        lo = iszero(start) ? T(NaN) : T(start)
-        hi = iszero(stop) ? T(NaN) : T(stop)
+    extra::Tuple{X,X}
+    function LogRange(start::Number, stop::Number, length::Integer)
+        T = float(promote_type(typeof(start), typeof(stop)))
+        a = iszero(start) ? T(NaN) : T(start)
+        b = iszero(stop) ? T(NaN) : T(stop)
+        len = Int(length)
         if len < 0
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): can't have negative length")))
-        elseif len == 0
-            return new{T}(lo, hi, len)
         elseif len == 1 && start != stop
             throw(ArgumentError(LazyString(
                 "LogRange(", start, ", ", stop, ", ", len, "): endpoints differ, while length is 1")))
-        end
-        if T <: Real && (start<0) ⊻ (stop<0)
+        elseif iszero(start) || iszero(stop)
+        elseif T <: Real && (start<0) ⊻ (stop<0)
             throw(DomainError((start, stop),
                 "LogRange will only return complex results if called with a complex argument"))
         end
-        new{T}(lo, hi, len)
+        ex = if T <: Real && start + stop < 0  # start+stop allows for LogRange(-0.0, -2, 3)
+            _logrange_extra(-a, -b, len)
+        else
+            _logrange_extra(a, b, len)
+        end
+        new{T,typeof(ex[1])}(a, b, len, ex)
     end
 end
 
 size(r::LogRange) = (r.len,)
+length(r::LogRange) = r.len
 
 first(r::LogRange) = r.start
 last(r::LogRange) = r.stop
 
+function _logrange_extra(a::Number, b::Number, len::Int)
+    loga = log(1.0 * a)  # widen to at least Float64
+    logb = log(1.0 * b)
+    (loga/(len-1), logb/(len-1))
+end
+function _logrange_extra(a::Float64, b::Float64, len::Int)
+    loga = TwicePrecision(Math._log_ext(reinterpret(UInt64, a))...)
+    logb = TwicePrecision(Math._log_ext(reinterpret(UInt64, b))...)
+    # The reason not to do linear interpolation on log(a)..log(b) in `getindex`
+    # is that division is quite slow, so we do it once on construction:
+    (loga/(len-1), logb/(len-1))
+end
+
 function getindex(r::LogRange, i::Int)
     @inline
     @boundscheck checkbounds(r, i)
-    if r.len == 1
-        return r.start
-    end
-    if eltype(r) <: Real && r.start < 0  # constructor guarantees r.stop < 0 too
-        -loginterp(-r.start, -r.stop, i, r.len)
-    else
-        loginterp(r.start, r.stop, i, r.len)
-    end
+    i == 1 && return r.start
+    i == r.len && return r.stop
+    # `unsafe_getindex` has almost perfect accuracy for Float32 and Float64, but not
+    # guaranteed, and not for ComplexF64. Hence the explicit start/stop cases.
+    return unsafe_getindex(r, i)
 end
 
-function loginterp(lo::T, hi::T, j::Int, n::Int) where {T}
+function unsafe_getindex(r::LogRange{T}, i::Int) where {T}
     @inline
-    S = promote_type(Float64, T)
-    convert(T, lo^(S(n-j)/S(n-1)) * hi^(S(j-1)/S(n-1)))
+    logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
+    x = T(exp(logx))
+    T <: Real ? copysign(x, r.start) : x
+end
+function unsafe_getindex(r::LogRange{Float64, TwicePrecision{Float64}}, i::Int)
+    @inline
+    tot = r.start + r.stop
+    isfinite(tot) || return tot
+    logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
+    x = Math.exp_impl(logx.hi, logx.lo, Val(:ℯ))::Float64
+    return copysign(x, r.start)
 end
 
 function show(io::IO, r::LogRange)  # compact
-    print(io, "LogRange(")
+    print(io, "LogRange(")  # type parameters are implied by knowing r.start
     show(io, first(r))
     print(io, ", ")
     show(io, last(r))
