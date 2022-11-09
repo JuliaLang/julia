@@ -107,7 +107,7 @@ significand_mask(::Type{Float16}) = 0x03ff
 mantissa_width(::Type{Float16}) = UInt16(10)
 exponent_width(::Type{Float16}) = UInt16(5)
 
-uintbits(x::T) = reinterpret(Unsigned, x)
+uintbits(x::T) where {T<:IEEEFloat} = reinterpret(Unsigned, x)
 mantissa(x::T) where {T} = uintbits(x) & significand_mask(T)
 
 for T in (Float16, Float32, Float64)
@@ -423,21 +423,21 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-function unbiased_exponent(x::T) where {T}
+function unbiased_exponent(x::T) where {T<:IEEEFloat}
     exp = (uintbits(x) & exponent_mask(T)) >> mantissa_width(T)
     return exp
 end
 
-function explicit_mantissa_noinfnan(x::T) where {T}
+function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
     subnormal = issubnormal(x) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
     return subnormal | (significand_mask(T) & uintbits(x))
 end
 
-function make_value(number::T, ep) where T<:Unsigned
+function make_value(number::T, ep) where {T<:Unsigned}
     Tfloat = floattype(T)
     Tint = signed(T)
     epint = unsafe_trunc(Tint,ep)
-    lz::signed(T) = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
+    lz = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
     number <<= lz
     epint -= lz
     bits = T(0)
@@ -454,7 +454,7 @@ function make_value(number::T, ep) where T<:Unsigned
     return reinterpret(Tfloat, bits)
 end
 
-function fmod_internal(x::T, y::T) where T<:IEEEFloat
+function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     xuint = uintbits(x)
     yuint = uintbits(y)
     if xuint <= yuint
@@ -523,8 +523,8 @@ function fmod_internal(x::T, y::T) where T<:IEEEFloat
     return make_value(m_x, e_y)
 end
 
-function fmod(x::T, y::T) where T<:IEEEFloat
-    if (!isnan(x) && !isinf(x) && !isnan(y) && !isinf(y) && !iszero(y))
+function fmod(x::T, y::T) where {T<:IEEEFloat}
+    if (!isnan(x) && isfinite(x) && !iszero(y) && !isnan(y) && isfinite(y) && !iszero(y))
         xabs = abs(x)
         yabs = abs(y)
         res = fmod_internal(xabs, yabs)
@@ -538,7 +538,7 @@ end
 
 rem(x::T, y::T) where {T<:IEEEFloat} = fmod(x, y)
 
-function mod(x::T, y::T) where T<:AbstractFloat
+function mod(x::T, y::T) where {T<:AbstractFloat}
     r = rem(x,y)
     if r == 0
         copysign(r,y)
