@@ -531,7 +531,6 @@ function fmod(x::T, y::T) where {T<:IEEEFloat}
     end
     (isnan(x) || isnan(y)) && return T(NaN)
     (isinf(x) || iszero(y)) && return T(NaN)
-    isinf(y) && return x
     return x
 end
 
