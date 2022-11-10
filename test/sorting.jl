@@ -824,12 +824,16 @@ end
 
 @testset "Defining new algorithms & backwards compatibility with packages that use sorting internals" begin
     struct MyFirstAlg <: Base.Sort.Algorithm end
+
+    @test_throws ArgumentError sort([1,2,3], alg=MyFirstAlg()) # not a stack overflow error
+
+    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
+
     # The pre 1.9 dispatch method
     function Base.sort!(v::AbstractVector{Int}, lo::Integer, hi::Integer, ::MyFirstAlg, o::Base.Order.Ordering)
         v[lo:hi] .= 7
     end
     @test sort([1,2,3], alg=MyFirstAlg()) == [7,7,7]
-    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MyFirstAlg())) .=== vcat(fill(7, 100), fill(missing, 10)))
 
     # Use the pre 1.9 hook into the internals
@@ -837,7 +841,6 @@ end
         sort!(v, lo, hi, Base.DEFAULT_STABLE, o)
     end
     @test sort([3,1,2], alg=MyFirstAlg()) == [1,2,3]
-    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
     @test issorted(sort(v, alg=Base.Sort.InitialOptimizations(MyFirstAlg())))
 
     # Another pre 1.9 hook into the internals
@@ -850,7 +853,6 @@ end
         v[lo:hi] .= 9
     end
     @test sort([1,2,3], alg=MySecondAlg()) == [9,9,9]
-    v = shuffle(vcat(fill(missing, 10), rand(Int, 100)))
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MySecondAlg())) .=== vcat(fill(9, 100), fill(missing, 10)))
 end
 
