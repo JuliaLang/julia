@@ -771,56 +771,58 @@ Compute ``\\sin(\\pi x)`` more accurately than `sin(pi*x)`, especially for large
 
 See also [`sind`](@ref), [`cospi`](@ref), [`sincospi`](@ref).
 """
-function sinpi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
-    isless(x, 0.0) && return -sinpi(-x)
+function sinpi(_x::T) where T<:Union{IEEEFloat, Rational}
+    x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
-        abs(x) >= maxintfloat(T) && return zero(T)
+        x >= maxintfloat(T) && return copysign(zero(T), _x)
     end
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
     rx = float(muladd(T(-.5), n, x))
-    n = Int(n)&3
+    n = Int64(n) & 3
     if n==0
-        return sinpi_kernel(rx)
+        res = sinpi_kernel(rx)
     elseif n==1
-        return cospi_kernel(rx)
+        res = cospi_kernel(rx)
     elseif n==2
-        return -sinpi_kernel(rx)
+        res = zero(T)-sinpi_kernel(rx)
     else
-        return -cospi_kernel(rx)
+        res = zero(T)-cospi_kernel(rx)
     end
+    return ifelse(signbit(_x), -res, res)
 end
 """
     cospi(x)
 
 Compute ``\\cos(\\pi x)`` more accurately than `cos(pi*x)`, especially for large `x`.
 """
-function cospi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
+function cospi(x::T) where T<:Union{IEEEFloat, Rational}
+    x = abs(x)
     if !isfinite(x)
         isnan(x) && return x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
-        abs(x) >= maxintfloat(T) && return one(T)
+        x >= maxintfloat(T) && return one(T)
     end
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
     rx = float(muladd(T(-.5), n, x))
-    n = Int(n)&3
+    n = Int64(n) & 3
     if n==0
         return cospi_kernel(rx)
     elseif n==1
-        return -sinpi_kernel(rx)
+        return zero(T)-sinpi_kernel(rx)
     elseif n==2
-        return -cospi_kernel(rx)
+        return zero(T)-cospi_kernel(rx)
     else
         return sinpi_kernel(rx)
     end
@@ -836,31 +838,33 @@ where `x` is in radians), returning a tuple `(sine, cosine)`.
 
 See also: [`cispi`](@ref), [`sincosd`](@ref), [`sinpi`](@ref).
 """
-function sincospi(x::T) where T<:Union{Float16, Float32, Float64, Rational}
-    isless(x, 0.0) && return -sinpi(-x)
+function sincospi(_x::T) where T<:Union{IEEEFloat, Rational}
+    x = abs(_x)
     if !isfinite(x)
         isnan(x) && return x, x
         throw(DomainError(x, "`x` cannot be infinite."))
     end
     # For large x, answers are all 1 or zero.
     if T <: AbstractFloat
-        abs(x) >= maxintfloat(T) && return (copysign(zero(T), x), one(T))
+        x >= maxintfloat(T) && return (copysign(zero(T), _x), one(T))
     end
 
     # reduce to interval [0, 0.5]
     n = round(2*x)
     rx = float(muladd(T(-.5), n, x))
-    n = Int(n)&3
+    n = Int64(n) & 3
     si, co = sinpi_kernel(rx),cospi_kernel(rx)
     if n==0
-        return si,co
+        si, co = si, co
     elseif n==1
-        return co,-si
+        si, co  = co, zero(T)-si
     elseif n==2
-        return -si,-co
+        si, co  = zero(T)-si, zero(T)-co
     else
-        return -co,si
+        si, co  = zero(T)-co, si
     end
+    si = ifelse(signbit(_x), -si, si)
+    return si, co
 end
 
 sinpi(x::Integer) = x >= 0 ? zero(float(x)) : -zero(float(x))
