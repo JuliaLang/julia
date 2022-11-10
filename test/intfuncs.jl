@@ -441,11 +441,16 @@ end
     end
 end
 
-@testset "leading_ones and count_zeros" begin
+@testset "leading_ones, count_zeros, etc." begin
     @test leading_ones(UInt32(Int64(2) ^ 32 - 2)) == 31
     @test leading_ones(1) == 0
     @test leading_zeros(Int32(1)) == 31
     @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
+
+    @test Base.used_bits(3) == 2
+    @test Base.used_bits(-Int64(17)) == 64
+    @test Base.used_bits(big(15)) != Base.used_bits(big(16)) == Base.used_bits(big(17)) == 5
+    @test_throws DomainError Base.used_bits(big(-17))
 
     @test count_zeros(Int64(1)) == 63
 end
