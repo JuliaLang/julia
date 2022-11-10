@@ -1239,3 +1239,67 @@ end
     @test (@allocations "a") == 0
     @test (@allocations "a" * "b") == 1
 end
+
+@testset "sleep precision" begin
+    println("GREP TARGET 1729 A")
+
+    times(f::F, dt::Float64, n::Int) where F = sort!([@elapsed(f(dt)) for _ in 1:n])
+    times(sleep, .01, 5) # warmup
+    times(Libc.systemsleep, .01, 5)
+
+    tol = [ # TODO multiply this by 5K before merge
+        0.00271018  0.00239281  0.00245244  0.00269688  0.00240182  0.00229111  0.0013938    0.0069971
+        0.00556846  0.00363169  0.00480335  0.00623476  0.00333945  0.00382034  0.00489615   0.0072168
+        8.59e-7     8.15e-7     7.25e-7     1.0294e-5   1.0246e-5   2.3583e-5   0.000310121  0.00256415
+        8.83e-7     8.7e-7      7.74e-7     6.269e-5    1.0389e-5   9.5803e-5   0.000778437  0.00430934
+    ]
+
+    K = 10
+    tol .*= K
+
+    @testset "test" begin
+        for j in 1:50 # TODO only run once
+            for (i,dt) in enumerate(10.0 .^ (-9:-2))
+                for (j,f) in enumerate([sleep, Libc.systemsleep])
+                    n = ceil(Int, .05/(dt+tol[2j, i]))
+                    m = max(1, n÷2)
+
+                    ts = times(f, dt, n)
+                    @test dt < ts[1] <= dt + tol[2j-1, i]
+                    @test dt < ts[m] <= dt + tol[2j, i]
+                end
+            end
+        end
+    end
+
+    tol ./= K
+
+    @testset "construct" begin # TODO remove this
+        maxratio = 1.0
+        for _ in 1:200
+            fails = 0
+            for (i,dt) in enumerate(10.0 .^ (-9:-2))
+                for (j,f) in enumerate([sleep, Libc.systemsleep])
+                    n = ceil(Int, .05/(dt+tol[2j, i]))
+                    m = max(1, n÷2)
+
+                    ts = times(f, dt, n)
+                    delta = ts[1] - dt
+                    delta > tol[2j-1, i] && (fails += 1)
+                    maxratio = max(maxratio, delta/tol[2j-1, i])
+                    tol[2j-1, i] = max(tol[2j-1, i], delta)
+
+                    delta = ts[m] - dt
+                    delta > tol[2j, i] && (fails += 1)
+                    maxratio = max(maxratio, delta/tol[2j, i])
+                    tol[2j, i] = max(tol[2j, i], delta)
+                end
+            end
+            println(fails, " ", maxratio)
+        end
+    end
+
+    display(tol)
+
+    println("GREP TARGET 1729 B")
+end
