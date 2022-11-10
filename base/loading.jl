@@ -900,7 +900,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         t_comp_before = cumulative_compile_time_ns()
     end
 
-    if isfile(ocachepath)
+    if ocachepath !== nothing
         @debug "Loading object cache file $ocachepath for $pkg"
         sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), ocachepath, depmods)
     else
@@ -1850,7 +1850,11 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # we don't actually know what the list of compile-time preferences are without compiling)
             prefs_hash = preferences_hash(tmppath)
             cachefile = compilecache_path(pkg, prefs_hash)
-            ocachefile = ocachefile_from_cachefile(cachefile)
+            if cache_objects
+                ocachefile = ocachefile_from_cachefile(cachefile)
+            else
+                ocachefile = nothing
+            end
 
             # append checksum for so to the end of the .ji file:
             crc_so = UInt32(0)
@@ -1891,7 +1895,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # this is atomic according to POSIX (not Win32):
             rename(tmppath, cachefile; force=true)
             if cache_objects
-                rename(tmppath_so, ocachefile; force=true)
+                rename(tmppath_so, ocachefile::String; force=true)
             end
             return cachefile, ocachefile
         end
