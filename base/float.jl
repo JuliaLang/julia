@@ -504,7 +504,7 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     exp_diff -= right_shift
     e_y += right_shift
     # Shift hx left until the end or n = 0
-    left_shift = exp_diff < exponent_width(T) ? exp_diff : exponent_width(T)
+    left_shift = min(exp_diff, exponent_width(T))
     m_x <<= left_shift
     exp_diff -= left_shift
 
