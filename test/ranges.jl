@@ -1722,6 +1722,7 @@ end
         @test x == Base.ceil_log2(Int128(n))
         @test x == Base.ceil_log2(Int32(n))
         @test x == Base.ceil_log2(Int8(n))
+        @test x == Base.ceil_log2(big(n))  # fallback path
     end
 end
 
