@@ -11,7 +11,7 @@ the original `ci::CodeInfo` are modified.
 function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(linfo, nothing)
+        argtypes, _ = matching_cache_argtypes(linfo)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end

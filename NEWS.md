@@ -80,6 +80,8 @@ New library functions
 * New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
   and allows any iterators of iterators. Method `stack(f, x)` generalises `mapreduce(f, hcat, x)` and
   is efficient. ([#43334])
+* New macro `@allocations` which is similar to `@allocated` except reporting the total number of allocations
+  rather than the total size of memory allocated. ([#47367])
 
 Library changes
 ---------------
@@ -140,7 +142,24 @@ Standard library changes
 * An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
   activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
+#### SuiteSparse
+
+* Code for the SuiteSparse solver wrappers has been moved to SparseArrays.jl. Solvers are now re-exported by
+  SuiteSparse.jl
+
 #### SparseArrays
+
+* SuiteSparse solvers are now available as submodules of SparseArrays (<https://github.com/JuliaSparse/SparseArrays.jl/pull/95>).
+
+* UMFPACK (<https://github.com/JuliaSparse/SparseArrays.jl/pull/179>) and CHOLMOD (<https://github.com/JuliaSparse/SparseArrays.jl/pull/206>) thread safety are improved by
+  avoiding globals and using locks. Multithreaded `ldiv!` of UMFPACK objects may now be
+  performed safely.
+
+* An experimental function `SparseArrays.allowscalar(::Bool)` allows scalar indexing of sparse arrays to be
+  disabled or enabled. This function is intended to help find accidental scalar indexing of
+  `SparseMatrixCSC` objects which is a common source of performance issues (<https://github.com/JuliaSparse/SparseArrays.jl/pull/200>).
+
+
 
 #### Test
 * New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
@@ -186,7 +205,8 @@ Deprecated or removed
 
 External dependencies
 ---------------------
-
+* On Linux, now autodetects the system libstdc++ version, and automatically loads the system library if it is newer. The old behavior of loading the bundled libstdc++ regardless of the system version obtained by setting the environment variable `JULIA_PROBE_LIBSTDCXX=0`.
+* Removed `RPATH` from the julia binary. On Linux this may break libraries that have failed to set `RUNPATH`.
 
 Tooling Improvements
 ---------------------

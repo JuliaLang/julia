@@ -21,7 +21,7 @@ static int win_file_exists(wchar_t* wpath) {
 #endif
 
 // Save DEP_LIBS to a variable that is explicitly sized for expansion
-static char dep_libs[1024] = DEP_LIBS;
+static char dep_libs[1024] = "\0" DEP_LIBS;
 
 JL_DLLEXPORT void jl_loader_print_stderr(const char * msg)
 {
@@ -45,7 +45,6 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
  * and abort the process. */
 static void * load_library(const char * rel_path, const char * src_dir, int err) {
     void * handle = NULL;
-
     // See if a handle is already open to the basename
     const char *basename = rel_path + strlen(rel_path);
     while (basename-- > rel_path)
@@ -167,6 +166,174 @@ JL_DLLEXPORT const char * jl_get_libdir()
     return lib_dir;
 }
 
+// On Linux, it can happen that the system has a newer libstdc++ than the one we ship,
+// which can break loading of some system libraries: <https://github.com/JuliaLang/julia/issues/34276>.
+// As a fix, on linux we probe the system libstdc++ to see if it is newer, and then load it if it is.
+// Otherwise, we load the bundled one. This improves compatibility with third party dynamic libs that
+// may depend on symbols exported by the system libstdxc++.
+#ifdef _OS_LINUX_
+#ifndef GLIBCXX_LEAST_VERSION_SYMBOL
+#warning GLIBCXX_LEAST_VERSION_SYMBOL should always be defined in the makefile.
+#define GLIBCXX_LEAST_VERSION_SYMBOL "GLIBCXX_a.b.c" /* Appease the linter */
+#endif
+
+#include <link.h>
+#include <sys/wait.h>
+
+// write(), but handle errors and avoid EINTR
+static void write_wrapper(int fd, const char *str, size_t len)
+{
+    size_t written_sofar = 0;
+    while (len) {
+        ssize_t bytes_written = write(fd, str + written_sofar, len);
+        if (bytes_written == -1 && errno == EINTR) continue;
+        if (bytes_written == -1 && errno != EINTR) {
+            perror("(julia) child libstdcxxprobe write");
+            _exit(1);
+        }
+        len -= bytes_written;
+        written_sofar += bytes_written;
+    }
+}
+
+// read(), but handle errors and avoid EINTR
+static void read_wrapper(int fd, char **ret, size_t *ret_len)
+{
+    // Allocate an initial buffer
+    size_t len = JL_PATH_MAX;
+    char *buf = (char *)malloc(len + 1);
+    if (!buf) {
+        perror("(julia) malloc");
+        exit(1);
+    }
+
+    // Read into it, reallocating as necessary
+    size_t have_read = 0;
+    while (1) {
+        ssize_t n = read(fd, buf + have_read, len - have_read);
+        have_read += n;
+        if (n == 0) break;
+        if (n == -1 && errno != EINTR) {
+            perror("(julia) libstdcxxprobe read");
+            exit(1);
+        }
+        if (n == -1 && errno == EINTR) continue;
+        if (have_read == len) {
+            buf = (char *)realloc(buf, 1 + (len *= 2));
+            if (!buf) {
+                perror("(julia) realloc");
+                exit(1);
+            }
+        }
+    }
+
+    *ret = buf;
+    *ret_len = have_read;
+}
+
+// Return the path to the libstdcxx to load.
+// If the path is found, return it.
+// Otherwise, print the error and exit.
+// The path returned must be freed.
+static char *libstdcxxprobe(void)
+{
+    // Create the pipe and child process.
+    int fork_pipe[2];
+    int ret = pipe(fork_pipe);
+    if (ret == -1) {
+        perror("(julia) Error during libstdcxxprobe: pipe");
+        exit(1);
+    }
+    pid_t pid = fork();
+    if (pid == -1)  {
+        perror("Error during libstdcxxprobe:\nfork");
+        exit(1);
+    }
+    if (pid == (pid_t) 0) { // Child process.
+        close(fork_pipe[0]);
+
+        // Open the first available libstdc++.so.
+        // If it can't be found, report so by exiting zero.
+        // The star is there to prevent the compiler from merging constants
+        // with "\0*libstdc++.so.6", which we string replace inside the .so during
+        // make install.
+        void *handle = dlopen("libstdc++.so.6\0*", RTLD_LAZY);
+        if (!handle) {
+            _exit(0);
+        }
+
+        // See if the version is compatible
+        char *dlerr = dlerror(); // clear out dlerror
+        void *sym = dlsym(handle, GLIBCXX_LEAST_VERSION_SYMBOL);
+        dlerr = dlerror();
+        if (dlerr) {
+            // We can't use the library that was found, so don't write anything.
+            // The main process will see that nothing was written,
+            // then exit the function and return null.
+            _exit(0);
+        }
+
+        // No error means the symbol was found, we can use this library.
+        // Get the path to it, and write it to the parent process.
+        struct link_map *lm;
+        ret = dlinfo(handle, RTLD_DI_LINKMAP, &lm);
+        if (ret == -1) {
+            char *errbuf = dlerror();
+            char *errdesc = (char*)"Error during libstdcxxprobe in child process:\ndlinfo: ";
+            write_wrapper(STDERR_FILENO, errdesc, strlen(errdesc));
+            write_wrapper(STDERR_FILENO, errbuf, strlen(errbuf));
+            write_wrapper(STDERR_FILENO, "\n", 1);
+            _exit(1);
+        }
+        char *libpath = lm->l_name;
+        write_wrapper(fork_pipe[1], libpath, strlen(libpath));
+        _exit(0);
+    }
+    else { // Parent process.
+        close(fork_pipe[1]);
+
+        // Read the absolute path to the lib from the child process.
+        char *path;
+        size_t pathlen;
+        read_wrapper(fork_pipe[0], &path, &pathlen);
+
+        // Close the read end of the pipe
+        close(fork_pipe[0]);
+
+        // Wait for the child to complete.
+        while (1) {
+            int wstatus;
+            pid_t npid = waitpid(pid, &wstatus, 0);
+            if (npid == -1) {
+                if (errno == EINTR) continue;
+                if (errno != EINTR) {
+                    perror("Error during libstdcxxprobe in parent process:\nwaitpid");
+                    exit(1);
+                }
+            }
+            else if (!WIFEXITED(wstatus)) {
+                const char *err_str = "Error during libstdcxxprobe in parent process:\n"
+                                      "The child process did not exit normally.\n";
+                size_t err_strlen = strlen(err_str);
+                write_wrapper(STDERR_FILENO, err_str, err_strlen);
+                exit(1);
+            }
+            else if (WEXITSTATUS(wstatus)) {
+                // The child has printed an error and exited, so the parent should exit too.
+                exit(1);
+            }
+            break;
+        }
+
+        if (!pathlen) {
+            free(path);
+            return NULL;
+        }
+        return path;
+    }
+}
+#endif
+
 void * libjulia_internal = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     // Only initialize this once
@@ -175,11 +342,43 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
 
     // Introspect to find our own path
-    const char * lib_dir = jl_get_libdir();
+    const char *lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
-    int deps_len = strlen(dep_libs);
-    char * curr_dep = &dep_libs[0];
+    int deps_len = strlen(&dep_libs[1]);
+    char *curr_dep = &dep_libs[1];
+
+    void *cxx_handle;
+
+#if defined(_OS_LINUX_)
+    int do_probe = 1;
+    int done_probe = 0;
+    char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
+    if (probevar) {
+        if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes") == 0)
+            do_probe = 1;
+        else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no") == 0)
+            do_probe = 0;
+    }
+    if (do_probe) {
+        char *cxxpath = libstdcxxprobe();
+        if (cxxpath) {
+            cxx_handle = dlopen(cxxpath, RTLD_LAZY);
+            char *dlr = dlerror();
+            if (dlr) {
+                jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
+                jl_loader_print_stderr3("Message: ", dlr, "\n");
+                exit(1);
+            }
+            free(cxxpath);
+            done_probe = 1;
+        }
+    }
+    if (!done_probe) {
+        const static char bundled_path[256] = "\0*libstdc++.so.6";
+        load_library(&bundled_path[2], lib_dir, 1);
+    }
+#endif
 
     // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
     // which are libraries that we want to load in some special, custom way, such as
@@ -203,7 +402,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             }
             special_library_names[special_idx] = curr_dep + 1;
             special_idx += 1;
-        } else {
+        }
+        else {
             load_library(curr_dep, lib_dir, 1);
         }
 
@@ -292,7 +492,7 @@ JL_DLLEXPORT int jl_load_repl(int argc, char * argv[]) {
 }
 
 #ifdef _OS_WINDOWS_
-int __stdcall DllMainCRTStartup(void* instance, unsigned reason, void* reserved) {
+int __stdcall DllMainCRTStartup(void *instance, unsigned reason, void *reserved) {
     setup_stdio();
 
     // Because we override DllMainCRTStartup, we have to manually call our constructor methods

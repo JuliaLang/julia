@@ -86,6 +86,13 @@ using ..LinearAlgebra: libblastrampoline, BlasReal, BlasComplex, BlasFloat, Blas
 
 include("lbt.jl")
 
+# Legacy bindings that some packages (such as NNlib.jl) use.
+# We maintain these for backwards-compatibility but new packages
+# should not look at these, instead preferring to parse the output
+# of BLAS.get_config()
+const libblas = libblastrampoline
+const liblapack = libblastrampoline
+
 vendor() = :lbt
 
 """

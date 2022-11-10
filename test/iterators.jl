@@ -987,3 +987,11 @@ end
     @test !Base.isdone(gen)
     @test collect(gen) == ["foo"]
 end
+
+@testset "empty product iterators" begin
+    v = nothing
+    for (z,) in zip(Iterators.product())
+        v = z
+    end
+    @test v == ()
+end
