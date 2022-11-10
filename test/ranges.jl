@@ -1718,8 +1718,10 @@ end
 
 @testset "ceil_log2" begin
     for n in 1:100
-        @test ceil(Int, log2(n)) == Base.ceil_log2(Int32(n))
-        @test ceil(Int, log2(n)) == Base.ceil_log2(Int64(n))
+        x = ceil(Int, log2(n))
+        @test x == Base.ceil_log2(Int128(n))
+        @test x == Base.ceil_log2(Int32(n))
+        @test x == Base.ceil_log2(Int8(n))
     end
 end
 

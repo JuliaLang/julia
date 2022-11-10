@@ -257,8 +257,7 @@ nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
 nbitslen(len, offset) = len < 2 ? 0 : ceil_log2(max(offset-1, len-offset)) + 1
 
 ceil_log2(n::Integer) = ceil(Int, log2(n))
-ceil_log2(n::Int64) = 64 - leading_zeros(n - Int64(1))
-ceil_log2(n::Int32) = 32 - leading_zeros(n - Int32(1))
+ceil_log2(n::T) where {T<:BitSigned} = 8 * sizeof(T) - leading_zeros(n - T(1))
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
