@@ -1013,6 +1013,9 @@ end
 Create a new collection with the element/elements of the location specified by `key`
 replaced with `value`(s).
 
+Note that this may be particularly expensive when `collection` is large and whose storage
+cannot be shared between seperate instances.
+
 # Implementation
 
 `setindex(collection, value, key...)` must have the property such that

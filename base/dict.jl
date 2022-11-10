@@ -674,6 +674,9 @@ end
 Create and return a new collection containing all the elements from `collection` except for
 the mapping corresponding to `key`.
 
+Note that this may be particularly expensive when `collection` is large and whose storage
+cannot be shared between seperate instances.
+
 See also: [`delete!`](@ref).
 
 # Examples
