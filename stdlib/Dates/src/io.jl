@@ -447,12 +447,8 @@ function DateFormat(f::AbstractString, locale::AbstractString)
     DateFormat(f, LOCALES[locale])
 end
 
-function Base.show(io::IO, df::DateFormat)
-    print(io, "dateformat\"")
-    for t in df.tokens
-        _show_content(io, t)
-    end
-    print(io, '"')
+function Base.show(io::IO, df::DateFormat{S,T}) where {S,T}
+    print(io, "dateformat\"", S, '"')
 end
 Base.Broadcast.broadcastable(x::DateFormat) = Ref(x)
 

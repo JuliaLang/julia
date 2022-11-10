@@ -354,8 +354,16 @@ const atexit_hooks = Callable[
 """
     atexit(f)
 
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
+Register a zero- or one-argument function `f()` to be called at process exit.
+`atexit()` hooks are called in last in first out (LIFO) order and run before
+object finalizers.
+
+If `f` has a method defined for one integer argument, it will be called as
+`f(n::Int32)`, where `n` is the current exit code, otherwise it will be called
+as `f()`.
+
+!!! compat "Julia 1.9"
+    The one-argument form requires Julia 1.9
 
 Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
 exit code `n` (instead of the original exit code). If more than one exit hook
@@ -365,11 +373,15 @@ LIFO order, "last called" is equivalent to "first registered".)
 """
 atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
-function _atexit()
+function _atexit(exitcode::Cint)
     while !isempty(atexit_hooks)
         f = popfirst!(atexit_hooks)
         try
-            f()
+            if hasmethod(f, (Cint,))
+                f(exitcode)
+            else
+                f()
+            end
         catch ex
             showerror(stderr, ex)
             Base.show_backtrace(stderr, catch_backtrace())

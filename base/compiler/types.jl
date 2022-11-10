@@ -31,10 +31,15 @@ struct StmtInfo
     used::Bool
 end
 
+abstract type ForwardableArgtypes end
+
 """
-    InferenceResult
+    InferenceResult(linfo::MethodInstance)
+    InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
 
 A type that represents the result of running type inference on a chunk of code.
+
+See also [`matching_cache_argtypes`](@ref).
 """
 mutable struct InferenceResult
     linfo::MethodInstance
@@ -47,14 +52,16 @@ mutable struct InferenceResult
     effects::Effects         # if optimization is finished
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
     must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
-    # NOTE the main constructor is defined within inferencestate.jl
-    global function _InferenceResult(
-        linfo::MethodInstance,
-        arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=#)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing,
+    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+        return new(linfo, cache_argtypes, overridden_by_const, Any, nothing,
             WorldRange(), Effects(), Effects(), nothing, true)
     end
+end
+function InferenceResult(linfo::MethodInstance)
+    return InferenceResult(linfo, matching_cache_argtypes(linfo)...)
+end
+function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
+    return InferenceResult(linfo, matching_cache_argtypes(linfo, argtypes)...)
 end
 
 """
