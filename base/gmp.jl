@@ -396,7 +396,7 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
         z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
     else
         y1 = unsafe_load(x.d, xsize) % UInt64
-        n = 64 - leading_zeros(y1)
+        n = used_bits(y1)
         # load first 54(1 + 52 bits of fraction + 1 for rounding)
         y = y1 >> (n - (precision(Float64)+1))
         if Limb == UInt64

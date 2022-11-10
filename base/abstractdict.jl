@@ -573,7 +573,7 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<((sizeof(T)<<3)-leading_zeros(x-one(T)))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(used_bits(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
 
