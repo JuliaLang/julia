@@ -3685,7 +3685,9 @@ void jl_gc_init(void)
 
     if (high_water_mark < max_total_memory)
        max_total_memory = high_water_mark;
-
+    mi_option_set(mi_option_large_os_pages , 1);
+    mi_option_set(mi_option_page_reset , 1);
+    mi_option_set(mi_option_decommit_delay , 4000);
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
     t_start = jl_hrtime();
