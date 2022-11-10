@@ -1140,8 +1140,12 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
-FC_VERSION := $(shell $(FC) -dumpversion 2>/dev/null | head -1)
-FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
+ifeq ($(USEGCC),1)
+FC_VERSION := $(shell $(FC) -dM -E - < /dev/null | grep __GNUC__ | cut -d' ' -f3)
+FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) -dumpfullversion -dumpversion 2>/dev/null | cut -d'.' -f1))
+else # Clang's -dumpversion pretends to be gcc 4.2.1, so parse --version instead
+FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1 | rev | cut -d' ' -f1 | rev | cut -d'.' -f1))
+endif
 BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
