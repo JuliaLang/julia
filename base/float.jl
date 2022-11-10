@@ -107,8 +107,7 @@ significand_mask(::Type{Float16}) = 0x03ff
 mantissa_width(::Type{Float16}) = UInt16(10)
 exponent_width(::Type{Float16}) = UInt16(5)
 
-uintbits(x::T) where {T<:IEEEFloat} = reinterpret(Unsigned, x)
-mantissa(x::T) where {T} = uintbits(x) & significand_mask(T)
+mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
 
 for T in (Float16, Float32, Float64)
     @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
@@ -424,13 +423,13 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point mod?
 
 function unbiased_exponent(x::T) where {T<:IEEEFloat}
-    exp = (uintbits(x) & exponent_mask(T)) >> mantissa_width(T)
+    exp = (reinterpret(Unsigned, x) & exponent_mask(T)) >> mantissa_width(T)
     return exp
 end
 
 function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
     subnormal = !issubnormal(x) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
-    return subnormal | (significand_mask(T) & uintbits(x))
+    return subnormal | (significand_mask(T) & reinterpret(Unsigned, x))
 end
 
 function make_value(number::T, ep) where {T<:Unsigned}
@@ -455,8 +454,8 @@ function make_value(number::T, ep) where {T<:Unsigned}
 end
 
 function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
-    xuint = uintbits(x)
-    yuint = uintbits(y)
+    xuint = reinterpret(Unsigned, x)
+    yuint = reinterpret(Unsigned, y)
     if xuint <= yuint
         if xuint < yuint
             return x
