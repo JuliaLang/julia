@@ -201,25 +201,24 @@ Given a collection type `S`, it's currently assumed that if `rand(::S)` is defin
 `AbstractFloat` types are special-cased, because by default random values are not produced in the whole type domain, but rather in `[0,1)`. The following method should be implemented for `T <: AbstractFloat`: `Random.rand(::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{T}})`.
 
 As an example:
-```jldoctest
-julia> struct Diag <: AbstractFloat
-           diagonal::Float64 # diagonal of a rectangle
-           Diag(l, w) = l ≤ w ? error("length can't be ≤ width") : new(√(l^2 + w^2))
+```jldoctest setup = :(Random.seed!(1))
+julia> struct MyFloat <: AbstractFloat
+           x::Float64
+           y::Float64
        end
 
-julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{Diag}})
-           l, w = rand(rng, 1:100), rand(rng, 1:100)
-           l < w ? Diag(w, l) : Diag(l, w)
+julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{MyFloat}})
+           MyFloat(rand(rng, 0.01:0.01:0.99), rand(rng, 0.01:0.01:0.99))
        end
 
-julia> rand(Diag)
-Diag(70.178344238091)
+julia> rand(MyFloat)
+MyFloat(0.08, 0.35)
 
-julia> rand(Diag, 3)
-3-element Vector{Diag}:
- Diag(35.35533905932738)
- Diag(43.56604182158393)
- Diag(59.07622195096772)
+julia> rand(MyFloat, 3)
+3-element Vector{MyFloat}:
+ MyFloat(0.77, 0.78)
+ MyFloat(0.67, 0.17)
+ MyFloat(0.57, 0.45)
 ```
 
 #### An optimized sampler with pre-computed data
