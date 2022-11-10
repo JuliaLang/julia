@@ -640,8 +640,8 @@ by 10.
 As Julia [`Date`](@ref) and [`DateTime`](@ref) values are represented according to the ISO 8601
 standard, `0000-01-01T00:00:00` was chosen as base (or "rounding epoch") from which to begin the
 count of days (and milliseconds) used in rounding calculations. (Note that this differs slightly
-from Julia's internal representation of [`Date`](@ref) s using Rata Die notation; but since the
-ISO 8601 standard is most visible to the end user, `0000-01-01T00:00:00` was chosen as the rounding
+from Julia's internal representation of [`Date`](@ref) s using [Rata Die notation](https://en.wikipedia.org/wiki/Rata_Die);
+but since the ISO 8601 standard is most visible to the end user, `0000-01-01T00:00:00` was chosen as the rounding
 epoch instead of the `0000-12-31T00:00:00` used internally to minimize confusion.)
 
 The only exception to the use of `0000-01-01T00:00:00` as the rounding epoch is when rounding
