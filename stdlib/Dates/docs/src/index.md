@@ -361,7 +361,7 @@ julia> Dates.monthabbr(t;locale="french")
 ```
 
 Since the abbreviated versions of the days are not loaded, trying to use the
-function `dayabbr` will error.
+function `dayabbr` will throw an error.
 
 ```jldoctest tdate2
 julia> Dates.dayabbr(t;locale="french")
