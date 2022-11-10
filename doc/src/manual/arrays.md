@@ -1029,56 +1029,56 @@ sizes, such as adding a vector to each column of a matrix. An inefficient way to
 be to replicate the vector to the size of the matrix:
 
 ```jldoctest broadcasting
-julia> a = [1, 2]; A = [10 20 30; 40 50 60]
+julia> a = [1, 2]; B = [10 20 30; 40 50 60]
 
-julia> repeat(a, 1, 3) + A
+julia> repeat(a, 1, 3) + B
 2×3 Matrix{Int64}:
  11  21  31
  42  52  62
 ```
 
 This is wasteful when dimensions get large, so Julia provides
-[`broadcast`](@ref), which aligns dimensions in array arguments from left to
-right[^2], fills lacking dimensions with a singleton dimension, expands
-singleton dimensions to match the corresponding dimension in the other array
-without using extra memory, and applies the given function elementwise:
+[`broadcast`](@ref), which aligns dimensions in array arguments starting with
+the leading ones[^2], fills lacking dimensions with a singleton dimension,
+expands singleton dimensions to match the corresponding dimension in the other
+array without using extra memory, and applies the given function elementwise:
 
 [^2]: This is the opposite direction of that of NumPy, which aligns dimensions
-from right to left.
+from the last to the first.
 
 ```jldoctest broadcasting
-julia> broadcast(+, a, A)
+julia> broadcast(+, a, B)
 2×3 Matrix{Int64}:
  11  21  31
  42  52  62
 
-julia> b = [10 20]
-1×2 Matrix{Int64}:
- 10  20
+julia> c = [10 20 30]
+1×3 Matrix{Int64}:
+ 10  20  30
 
-julia> broadcast(+, a, b)
-2×2 Matrix{Int64}:
- 11  21
- 12  22
+julia> broadcast(+, a, c)
+2×3 Matrix{Int64}:
+ 11  21  31
+ 12  22  32
 ```
 
-In the example above, the sizes of array `a` and `A` are `(2,)` and `(2, 3)`,
-respectively. Therefore, broadcasting `a` and `A` fills the second dimension of
-`a` with one and then expands it to three so that the two arrays have the same
-size.  Similarly, since the size of `b` is `(1, 2)`, broadcasting `a` and `b`
-fills the second dimension of `a` with one and expands the second dimension of
-`a` and the first dimension of `b` to two.
+In the example above, the [`size`](@ref)s of array `a` and `B` are `(2,)` and
+`(2, 3)`, respectively. Therefore, broadcasting `a` and `B` fills the second
+dimension of `a` with one and then expands it to three so that the two arrays
+have the same size.  Similarly, since the size of `c` is `(1, 2)`, broadcasting
+`a` and `c` fills the second dimension of `a` with one and expands the second
+dimension of `a` to three and the first dimension of `c` to two.
 
 ```
-Broadcasting of a and A:
+Broadcasting of a and B:
            fill         expand
 a: (2,)    --->  (2, 1)  --->  (2, 3)
-A: (2, 3)  --->  (2, 3)  --->  (2, 3)
+B: (2, 3)  --->  (2, 3)  --->  (2, 3)
 
-Broadcasting of a and b:
+Broadcasting of a and c:
            fill         expand
-a: (2,)    --->  (2, 1)  --->  (2, 2)
-b: (1, 2)  --->  (1, 2)  --->  (2, 2)
+a: (2,)    --->  (2, 1)  --->  (2, 3)
+c: (1, 3)  --->  (1, 3)  --->  (2, 3)
 ```
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
