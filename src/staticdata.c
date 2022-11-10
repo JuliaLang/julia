@@ -638,6 +638,10 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive)
 {
     void **bp = NULL;
+    bp = ptrhash_bp(&serialization_order, v);
+    assert(*bp == (void*)(uintptr_t)-1);
+    *bp = (void*)(uintptr_t)-2;
+
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
     jl_queue_for_serialization(s, t);
 
@@ -648,6 +652,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         if (jl_is_datatype(v)) {
             jl_datatype_t *dt = (jl_datatype_t*)v;
             jl_svec_t *tt = dt->parameters;
+            // ensure super is queued (though possibly not yet handled, since it may have cycles)
+            jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, 1);
             // ensure all type parameters are recached
             size_t i, l = jl_svec_len(tt);
             for (i = 0; i < l; i++)
@@ -656,7 +662,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             jl_value_t *singleton = dt->instance;
             if (singleton && needs_uniquing(singleton)) {
                 assert(jl_needs_serialization(s, singleton)); // should be true, since we visited dt
-                // do not visit dt->instance for our template object as it leads to cycles
+                // do not visit dt->instance for our template object as it leads to unwanted cycles here
+                // (it may get serialized from elsewhere though)
                 record_field_change(&dt->instance, jl_nothing);
             }
         }
@@ -737,11 +744,7 @@ done_fields:
 
     // We've encountered an item we need to cache
     bp = ptrhash_bp(&serialization_order, v);
-    if (jl_is_type(v) && *bp != (void*)(uintptr_t)-1) {
-        // This is a recursive typedef
-        return;
-    }
-    assert(*bp == (void*)(uintptr_t)-1);
+    assert(*bp == (void*)(uintptr_t)-2);
     arraylist_push(&serialization_queue, (void*) v);
     size_t idx = serialization_queue.len - 1;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
@@ -755,12 +758,14 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
         return;
 
     void **bp = ptrhash_bp(&serialization_order, v);
-    if (*bp != HT_NOTFOUND) {
-        if (!s->incremental)
-            return;
-        if (*bp != (void*)(uintptr_t)-1 || !immediate)
-            return;
-    }
+//    if (*bp != HT_NOTFOUND) {
+//        if (!s->incremental)
+//            return;
+//        if (*bp != (void*)(uintptr_t)-1 || !immediate)
+//            return;
+//    }
+    if (*bp != HT_NOTFOUND)
+        return;
     *bp = (void*)(uintptr_t)-1;
 
     // Items that require postorder traversal must visit their children prior to insertion into
@@ -932,6 +937,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         }
         assert(idx != HT_NOTFOUND && "object missed during jl_queue_for_serialization pass");
         assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
+        assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
     }
     return (char*)idx - 1 - (char*)HT_NOTFOUND;
 }
@@ -2775,6 +2781,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     //   to the external object.
     arraylist_t cleanup_list;
     arraylist_new(&cleanup_list, 0);
+    arraylist_t delay_list;
+    arraylist_new(&delay_list, 0);
     for (size_t i = 0; i < s.uniquing_list.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_list.items[i];
         // check whether we are operating on the typetag
@@ -2800,7 +2808,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 obj = (jl_value_t**)jl_typeof(jl_valueof(pfld));
             else
                 obj = *(jl_value_t***)pfld;
-            assert((char*)obj <= (char*)pfld);
+            if ((char*)obj > (char*)pfld) {
+                assert(tag == 0);
+                arraylist_push(&delay_list, pfld);
+                arraylist_push(&delay_list, obj);
+                *pfld = (uintptr_t)NULL;
+                continue;
+            }
         }
         jl_value_t *otyp = jl_typeof(obj);   // the original type of the object that was written here
         if (otyp == (jl_value_t*)jl_method_instance_type || otyp == (jl_value_t*)jl_globalref_type)
@@ -2823,14 +2837,19 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     // assume this is the unique copy later
                     newdt = jl_new_uninitialized_datatype();
                     jl_astaggedvalue(newdt)->bits.gc = GC_OLD;
-                    *newdt = *dt; // copy the datatype fields
-                    if (newdt->instance) {
-                        assert(newdt->instance == jl_nothing);
-                        newdt->instance = jl_gc_permobj(0, newdt);
+                    // leave most fields undefined for now, but we may need instance later,
+                    // and we overwrite the name field (field 0) now so preserve it too
+                    if (dt->instance) {
+                        assert(dt->instance == jl_nothing);
+                        newdt->instance = dt->instance = jl_gc_permobj(0, newdt);
                     }
-                    ptrhash_put(&new_dt_objs, (void*)newdt, NULL);
+                    static_assert(offsetof(jl_datatype_t, name) == 0, "");
+                    newdt->name = dt->name;
+                    ptrhash_put(&new_dt_objs, (void*)newdt, dt);
                 }
-                assert(newdt->hash == dt->hash);
+                else {
+                    assert(newdt->hash == dt->hash);
+                }
                 obj[0] = (jl_value_t*)newdt;
             }
             newobj = (jl_value_t*)newdt;
@@ -2849,12 +2868,51 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
         assert(jl_typeis(obj, otyp));
     }
+    // A few fields (reached via super) might be self-recursive. This is rare, but handle them now.
+    // They cannot be instances though, since the type must fully exist before the singleton field can be allocated
+    for (size_t i = 0; i < delay_list.len; ) {
+        uintptr_t *pfld = (uintptr_t*)s.uniquing_list.items[i++];
+        jl_value_t **obj = (jl_value_t **)s.uniquing_list.items[i++];
+        assert(jl_is_datatype(obj));
+        jl_datatype_t *dt = (jl_datatype_t*)obj[0];
+        assert(jl_is_datatype(dt));
+        jl_value_t *newobj = (jl_value_t*)dt;
+        *pfld = (uintptr_t)newobj;
+        assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
+    }
+    arraylist_free(&delay_list);
+    // now that all the fields of dt are assigned and unique, copy them into
+    // their final newdt memory location: this ensures we do not accidentally
+    // think this pkg image has the singular unique copy of it
     void **table = new_dt_objs.table;
     for (size_t i = 0; i < new_dt_objs.size; i += 2) {
-        if (table[i+1] != HT_NOTFOUND) {
+        void *dt = table[i + 1];
+        if (dt != HT_NOTFOUND) {
+            jl_datatype_t *newdt = (jl_datatype_t*)table[i];
+            jl_typename_t *name = newdt->name;
+            static_assert(offsetof(jl_datatype_t, name) == 0, "");
+            assert(*(void**)dt == (void*)newdt);
+            *newdt = *(jl_datatype_t*)dt; // copy the datatype fields (except field 1, which we corrupt above)
+            newdt->name = name;
+        }
+    }
+    // we should never see these pointers again, so scramble their memory, so any attempt to look at them crashes
+    //for (size_t i = 0; i < cleanup_list.len; i++) {
+    //    void *item = cleanup_list.items[i];
+    //    jl_taggedvalue_t *o = jl_astaggedvalue(item);
+    //    jl_value_t *t = jl_typeof(item); // n.b. might be 0xbabababa already
+    //    if (t == (jl_value_t*)jl_datatype_type)
+    //        memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_datatype_t));
+    //    else
+    //        memset(o, 0xba, sizeof(jl_value_t*) + 0); // singleton
+    //}
+    // finally cache all our new types now
+    //arraylist_grow(&cleanup_list, -cleanup_list.len);
+    for (size_t i = 0; i < new_dt_objs.size; i += 2) {
+        void *dt = table[i + 1];
+        if (dt != HT_NOTFOUND) {
             jl_datatype_t *newdt = (jl_datatype_t*)table[i];
             jl_cache_type_(newdt);
-            //assert(jl_invalid_types_equal(t, dt));
         }
     }
     for (size_t i = 0; i < s.fixup_list.len; i++) {
@@ -2908,7 +2966,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             }
         }
         else if (otyp == (jl_value_t*)jl_globalref_type) {
-            // this actually needs a binding_t object here
+            // this actually needs a binding_t object at that gvar slot if we encountered it in the uniquing_list
             jl_globalref_t *g = (jl_globalref_t*)obj;
             jl_binding_t *b = jl_get_binding_if_bound(g->mod, g->name);
             assert(b); // XXX: actually this is probably quite buggy, since julia's handling of global resolution is rather bad
@@ -2924,6 +2982,19 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         assert(!(image_base < (char*)newobj && (char*)newobj <= image_base + sizeof_sysimg + sizeof(uintptr_t)));
         assert(jl_typeis(obj, otyp));
     }
+    arraylist_free(&s.uniquing_list);
+    for (size_t i = 0; i < cleanup_list.len; i++) {
+        void *item = cleanup_list.items[i];
+        jl_taggedvalue_t *o = jl_astaggedvalue(item);
+        jl_value_t *t = jl_typeof(item);
+        if (t == (jl_value_t*)jl_datatype_type)
+            memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_datatype_t));
+        else if (t == (jl_value_t*)jl_method_instance_type)
+            memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
+        else
+            memset(o, 0xba, sizeof(jl_value_t*) + 0); // singleton
+    }
+    arraylist_free(&cleanup_list);
     for (size_t i = 0; i < s.fixup_list.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_list.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -2997,7 +3068,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             jl_gc_wb(obj, *a);
         }
     }
-    // Now pick up the globalrefs
+    // Now pick up the globalref binding pointer field, when we can
     for (size_t i = 0; i < s.fixup_list.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_list.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -3015,19 +3086,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     ios_close(&const_data);
     ios_close(&gvar_record);
 
-    for (size_t i = 0; i < cleanup_list.len; i++) {
-        void *item = cleanup_list.items[i];
-        jl_taggedvalue_t *o = jl_astaggedvalue(item);
-        jl_value_t *t = jl_typeof(item); // n.b. might be 0xbabababa already
-        if (t == (jl_value_t*)jl_method_instance_type)
-            memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
-        else if (t == (jl_value_t*)jl_datatype_type)
-            memset(o, 0xba, sizeof(jl_value_t*) + sizeof(jl_datatype_t));
-        else
-            memset(o, 0xba, sizeof(jl_value_t*) + 0); // singleton
-    }
-    arraylist_free(&cleanup_list);
-    arraylist_free(&s.uniquing_list);
     htable_free(&new_dt_objs);
 
     s.s = NULL;
