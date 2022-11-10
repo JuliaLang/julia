@@ -1056,7 +1056,7 @@ precompile_test_harness("invoke") do dir
     m = get_method_for_type(M.h, Real)
     @test isempty(m.specializations)
     m = get_method_for_type(M.hnc, Real)
-    #@test isempty(m.specializations)
+    @test isempty(m.specializations)
     m = only(methods(M.callq))
     @test isempty(m.specializations) || nvalid(m.specializations[1]) == 0
     m = only(methods(M.callqnc))
