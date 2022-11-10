@@ -204,7 +204,6 @@ As an example:
 ```jldoctest setup = :(Random.seed!(1))
 julia> struct MyFloat <: AbstractFloat
            x::Float64
-           y::Float64
        end
 
 julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{MyFloat}})
