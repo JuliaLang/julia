@@ -21,12 +21,9 @@ using Core: @doc
 if Base !== Core.Compiler
 using .Base:
     cld, fld, SubArray, view, resize!, IndexCartesian
-end
-
-# Checked.checked_mul is not available during bootstrapping:
-if Base.is_primary_base_module
-    using .Base.Checked: checked_mul
+using .Base.Checked: checked_mul
 else
+    # Checked.checked_mul is not available during bootstrapping:
     const checked_mul = *
 end
 
