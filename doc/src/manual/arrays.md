@@ -1064,7 +1064,7 @@ julia> broadcast(+, a, c)
 In the example above, the [`size`](@ref)s of array `a` and `B` are `(2,)` and
 `(2, 3)`, respectively. Therefore, broadcasting `a` and `B` fills the second
 dimension of `a` with one and then expands it to three so that the two arrays
-have the same size.  Similarly, since the size of `c` is `(1, 2)`, broadcasting
+have the same size.  Similarly, since the size of `c` is `(1, 3)`, broadcasting
 `a` and `c` fills the second dimension of `a` with one and expands the second
 dimension of `a` to three and the first dimension of `c` to two. These
 broadcastings are depicted in the following figure.
