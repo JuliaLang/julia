@@ -51,7 +51,7 @@ end
     @test "1.152921504606847e40" == Ryu.writeshortest(Core.bitcast(Float64, 0x4840F0CF064DD592))
     @test "2.305843009213694e40" == Ryu.writeshortest(Core.bitcast(Float64, 0x4850F0CF064DD592))
 end
-            
+
 @testset "pow5 overflow (#47464)" begin
     @test "4.6458339e+63" == Ryu.writeexp(4.645833859177319e63, 7)
     @test "4.190673780e+40" == Ryu.writeexp(4.190673779576499e40, 9)
