@@ -1043,8 +1043,7 @@ the leading ones[^2], fills lacking dimensions with a singleton dimension,
 expands singleton dimensions to match the corresponding dimension in the other
 array without using extra memory, and applies the given function elementwise:
 
-[^2]: This is the opposite direction of that of NumPy, which aligns dimensions
-from the last to the first.
+[^2]: This is the opposite direction of that of NumPy, which aligns dimensions from the last to the first.
 
 ```jldoctest broadcasting
 julia> broadcast(+, a, B)
@@ -1067,7 +1066,8 @@ In the example above, the [`size`](@ref)s of array `a` and `B` are `(2,)` and
 dimension of `a` with one and then expands it to three so that the two arrays
 have the same size.  Similarly, since the size of `c` is `(1, 2)`, broadcasting
 `a` and `c` fills the second dimension of `a` with one and expands the second
-dimension of `a` to three and the first dimension of `c` to two.
+dimension of `a` to three and the first dimension of `c` to two. These
+broadcastings are depicted in the following figure.
 
 ```
 Broadcasting of a and B:
