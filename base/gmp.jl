@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, used_bits
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}

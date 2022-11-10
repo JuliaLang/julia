@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, used_bits
 
 import Base:
     sort,
