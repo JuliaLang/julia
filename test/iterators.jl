@@ -429,8 +429,8 @@ let a = 1:2,
         @test_throws ArgumentError   size(product(itr))
         @test_throws ArgumentError  ndims(product(itr))
     end
-    
-    @test_throws OverflowError product(1:1e10, 1:1e10)
+
+    @test_throws OverflowError length(product(1:1e10, 1:1e10))
 end
 
 # IteratorSize trait business
