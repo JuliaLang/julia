@@ -893,6 +893,83 @@ erronce() = @error "an error" maxlog=1
     @test startswith(fails[4].value, "ErrorException")
 end
 
+@testset "@test_logs named tuple patterns" begin
+    @test_logs (;level=:info) @info("hi")
+    @test_logs (;message="hi") @info("hi")
+    @test_logs (;level=:info, message="hi") @info("hi")
+
+    fails = @testset NoThrowTestSet "test failures" begin
+        @test_logs (;level=:warn) @info("hi")
+        @test_logs (;message="hey") @info("hi")
+        @test_logs (;level=:info, message="hey") @info("hi")
+        @test_logs (;level=:warn, message="hi") @info("hi")
+    end
+    @test all(f->f isa Test.LogTestFailure, fails)
+
+    fails = @testset NoThrowTestSet "badly constructed patterns" begin
+        # Bad field names:
+        @test_logs (;nonexistant=:warn, message="hi") @info("hi")
+        @test_logs (;nonexistant=:warn) @info("hi")
+        # Forgot semicolon with single-field pattern:
+        @test_logs (message=2) @info("2")
+        # Wrong pattern type
+        @test_logs (:message => 2) @info("2")
+        @test_logs Dict(:message => 2) @info("2")
+    end
+    # These are all "Error During Test"s
+    @test all(f->!(f isa Test.LogTestFailure), fails)
+end
+
+@testset "@test_logs kwargs" begin
+    function foo1()
+        @info("hi", x=2, y=3)
+    end
+    @test_logs (;level=:info, kwargs=(;x=2, y=3)) foo1()
+    @test_logs (;level=:info, kwargs=(;x=2)) foo1()
+
+    @test_logs (;kwargs=(;x=2)) foo1()
+
+    # Test with the fully specified LogRecord pattern:
+    @test_logs (:info, "hi", @__MODULE__, Test.Ignored(), Test.Ignored(), r"", Test.Ignored(), (;y=3)) foo1()
+
+    # Test using Dict pattern instead of NamedTuple:
+    @test_logs (;kwargs=Dict(:x => 2)) foo1()
+    @test_logs (;kwargs=Dict(:x => 2, :y => 3)) foo1()
+
+    function foo2()
+        @info("hi", x=2, y=3)
+        @warn("bye", x=2, y=10)
+    end
+    @test_logs (;level=:info, kwargs=(;x=2, y=3)) match_mode=:any foo2()
+    @test_logs (;level=:info, kwargs=(;x=2)) match_mode=:any foo2()
+    @test_logs (;level=:warn, kwargs=(;x=2, y=10)) match_mode=:any foo2()
+    @test_logs (;level=:warn, kwargs=(;x=2)) match_mode=:any foo2()
+
+    # Both logs have x=2
+    @test_logs (;kwargs=(;x=2)) (;kwargs=(;x=2)) match_mode=:all foo2()
+    @test_logs (;kwargs=(;x=2)) (;kwargs=(;x=2, y=10)) match_mode=:all foo2()
+    @test_logs (;kwargs=(;x=2, y=3)) (;kwargs=(;x=2, y=10)) match_mode=:all foo2()
+
+    # Test failures
+    fails = @testset NoThrowTestSet "test failures" begin
+        function foo3()
+            @info("hi", x=2, y=3)
+        end
+
+        # Expecting log z=0, but not found:
+        @test_logs (;level=:info, kwargs=(;x=2, y=3, z=0)) foo3()
+        @test_logs (;level=:info, kwargs=(;z=0)) foo3()
+        # Wrong values for kwargs:
+        @test_logs (;level=:info, kwargs=(;x=1, y=3)) foo3()
+        @test_logs (;level=:info, kwargs=(;x=1)) foo3()
+        @test_logs (;kwargs=(;x=1, y=3)) foo3()
+        @test_logs (;kwargs=(;x=1)) foo3()
+        # Wrong message, correct kwargs:
+        @test_logs (;message="hey", kwargs=(;x=1)) foo3()
+    end
+    @test all(f->f isa Test.LogTestFailure, fails)
+end
+
 let code = quote
         function newfunc()
             42
