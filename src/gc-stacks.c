@@ -23,7 +23,7 @@
 #define MIN_STACK_MAPPINGS_PER_POOL 5
 
 const size_t jl_guard_size = (4096 * 8);
-static uint32_t num_stack_mappings = 0;
+static _Atomic(uint32_t) num_stack_mappings = 0;
 
 #ifdef _OS_WINDOWS_
 #define MAP_FAILED NULL
@@ -106,6 +106,9 @@ static unsigned select_pool(size_t nb) JL_NOTSAFEPOINT
 
 static void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz)
 {
+#ifdef _COMPILER_ASAN_ENABLED_
+    __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
     if (bufsz <= pool_sizes[JL_N_STACK_POOLS - 1]) {
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
@@ -135,6 +138,9 @@ void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
         unsigned pool_id = select_pool(bufsz);
         if (pool_sizes[pool_id] == bufsz) {
             task->stkbuf = NULL;
+#ifdef _COMPILER_ASAN_ENABLED_
+            __asan_unpoison_stack_memory((uintptr_t)stkbuf, bufsz);
+#endif
             arraylist_push(&ptls->heap.free_stacks[pool_id], stkbuf);
         }
     }
@@ -188,8 +194,9 @@ void sweep_stack_pools(void)
     //            bufsz = t->bufsz
     //            if (stkbuf)
     //                push(free_stacks[sz], stkbuf)
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
 
         // free half of stacks that remain unused since last sweep
         for (int p = 0; p < JL_N_STACK_POOLS; p++) {

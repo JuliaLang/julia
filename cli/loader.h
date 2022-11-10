@@ -1,6 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-/* Bring in definitions for `_OS_X_`, `PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
+/* Bring in definitions for `_OS_X_`, `JL_PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
 #include "../src/support/platform.h"
 #include "../src/support/dirpath.h"
 #include "../src/julia_fasttls.h"
@@ -20,12 +20,16 @@
 #define strchr loader_strchr
 #define malloc loader_malloc
 #define realloc loader_realloc
+#define free loader_free
 #endif
 
 #ifdef _OS_WINDOWS_
+
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+
 #else
+
 #ifdef _OS_DARWIN_
 #include <mach-o/dyld.h>
 #endif
@@ -33,7 +37,6 @@
 #include <stddef.h>
 #include <sys/sysctl.h>
 #endif
-
 #define _GNU_SOURCE // Need this for `dladdr()`
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,7 +45,10 @@
 #include <libgen.h>
 #include <unistd.h>
 #include <dlfcn.h>
+
 #endif
+
+#include <stdint.h>
 
 // Borrow definition from `support/dtypes.h`
 #ifdef _OS_WINDOWS_
@@ -53,7 +59,7 @@
 # endif
 #define JL_HIDDEN
 #else
-# if defined(LIBRARY_EXPORTS) && defined(_OS_LINUX)
+# if defined(LIBRARY_EXPORTS) && defined(_OS_LINUX_)
 #  define JL_DLLEXPORT __attribute__ ((visibility("protected")))
 # else
 #  define JL_DLLEXPORT __attribute__ ((visibility("default")))
@@ -91,3 +97,5 @@ int wchar_to_utf8(const wchar_t * wstr, char *str, size_t maxlen);
 int utf8_to_wchar(const char * str, wchar_t *wstr, size_t maxlen);
 void setup_stdio(void);
 #endif
+
+#include "../src/jloptions.h"

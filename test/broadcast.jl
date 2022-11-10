@@ -516,7 +516,7 @@ Base.BroadcastStyle(::Type{T}) where {T<:AD2Dim} = AD2DimStyle()
     @test a .+ 1 .* 2  == @inferred(fadd2(aa))
     @test a .* a' == @inferred(fprod(aa))
     @test isequal(a .+ [missing; 1:9], fadd3(aa))
-    @test Core.Compiler.return_type(fadd3, (typeof(aa),)) <: Array19745{<:Union{Float64, Missing}}
+    @test Core.Compiler.return_type(fadd3, Tuple{typeof(aa),}) <: Array19745{<:Union{Float64, Missing}}
     @test isa(aa .+ 1, Array19745)
     @test isa(aa .+ 1 .* 2, Array19745)
     @test isa(aa .* aa', Array19745)
@@ -691,16 +691,19 @@ end
     @test a == [1 1; 2 2; 3 3]
 end
 
-@testset "scalar .=" begin
-    A = [[1,2,3],4:5,6]
+@testset "scalar .= and promotion" begin
+    A = [[1, 2, 3], 4:5, 6]
+    @test A isa Vector{Any}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test_throws Base.CanonicalIndexError A[2] .= 0
     @test_throws MethodError A[3] .= 0
-    A = [[1,2,3],4:5]
+    A = [[1, 2, 3], 4:5]
+    @test A isa Vector{Vector{Int}}
     A[1] .= 0
-    @test A[1] == [0,0,0]
-    @test_throws ErrorException A[2] .= 0
+    A[2] .= 0
+    @test A[1] == [0, 0, 0]
+    @test A[2] == [0, 0]
 end
 
 # Issue #22180
@@ -852,6 +855,39 @@ let
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 end
 
+# issue 43847: collect preserves shape of broadcasted
+let
+    bc = Broadcast.broadcasted(*, [1 2; 3 4], 2)
+    @test collect(Iterators.product(bc, bc)) == collect(Iterators.product(copy(bc), copy(bc)))
+
+    a1 = AD1(rand(2,3))
+    bc1 = Broadcast.broadcasted(*, a1, 2)
+    @test collect(Iterators.product(bc1, bc1)) == collect(Iterators.product(copy(bc1), copy(bc1)))
+
+    # using ndims of second arg
+    bc2 = Broadcast.broadcasted(*, 2, a1)
+    @test collect(Iterators.product(bc2, bc2)) == collect(Iterators.product(copy(bc2), copy(bc2)))
+
+    # >2 args
+    bc3 = Broadcast.broadcasted(*, a1, 3, a1)
+    @test collect(Iterators.product(bc3, bc3)) == collect(Iterators.product(copy(bc3), copy(bc3)))
+
+    # including a tuple and custom array type
+    bc4 = Broadcast.broadcasted(*, (1,2,3), AD1(rand(3)))
+    @test collect(Iterators.product(bc4, bc4)) == collect(Iterators.product(copy(bc4), copy(bc4)))
+
+    # testing ArrayConflict
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{Broadcast.ArrayConflict}
+    @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
+
+    @test @inferred(Base.IteratorSize(Broadcast.broadcasted((1,2,3),a1,zeros(3,3,3)))) === Base.HasShape{3}()
+
+    # inference on nested
+    bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
+    bc_nest = Base.broadcasted(+, bc , bc)
+    @test @inferred(Base.IteratorSize(bc_nest)) === Base.HasShape{1}()
+ end
+
 # issue #31295
 let a = rand(5), b = rand(5), c = copy(a)
     view(identity(a), 1:3) .+= view(b, 1:3)
@@ -867,13 +903,13 @@ end
     ys = 1:2:20
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs, ys))
     @test IndexStyle(bc) == IndexLinear()
-    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
 
     xs2 = reshape(xs, 1, :)
     ys2 = reshape(ys, 1, :)
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, xs2, ys2))
     @test IndexStyle(bc) == IndexCartesian()
-    @test sum(bc) == mapreduce(Base.splat(*), +, zip(xs, ys))
+    @test sum(bc) == mapreduce(Base.Splat(*), +, zip(xs, ys))
 
     xs = 1:5:3*5
     ys = 1:4:3*4
@@ -991,10 +1027,6 @@ end
     @test Core.Compiler.return_type(broadcast, Tuple{typeof(+), Vector{Int},
                                                      Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
-    @test isequal([1, 2] + [3.0, missing], [4.0, missing])
-    @test Core.Compiler.return_type(+, Tuple{Vector{Int},
-                                             Vector{Union{Float64, Missing}}}) ==
-        Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
     @test Core.Compiler.return_type(+, Tuple{Vector{Int},
                                              Vector{Union{Float64, Missing}}}) ==
         Union{Vector{Missing}, Vector{Union{Missing, Float64}}, Vector{Float64}}
@@ -1015,6 +1047,8 @@ end
     @test typeof.([iszero, iszero]) == [typeof(iszero), typeof(iszero)]
     @test isequal(identity.(Vector{<:Union{Int, Missing}}[[1, 2],[missing, 1]]),
                   [[1, 2],[missing, 1]])
+    @test broadcast(i -> ((x=i, y=(i==1 ? 1 : "a")), 3), 1:4) isa
+        Vector{Tuple{NamedTuple{(:x, :y)}, Int}}
 end
 
 @testset "Issue #28382: eltype inconsistent with getindex" begin
@@ -1056,3 +1090,41 @@ end
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) == 4:2:6
     @test Broadcast.BroadcastFunction(+)(2:3, 2:3) isa AbstractRange
 end
+
+@testset "#42063" begin
+    buf = IOBuffer()
+    @test println.(buf, [1,2,3]) == [nothing, nothing, nothing]
+    @test String(take!(buf)) == "1\n2\n3\n"
+end
+
+@testset "Memory allocation inconsistency in broadcasting #41565" begin
+    function test(y)
+        y .= 0 .- y ./ (y.^2) # extra allocation
+        return y
+    end
+    arr = rand(1000)
+    @allocated test(arr)
+    @test (@allocated test(arr)) == 0
+end
+
+@testset "Fix type unstable .&& #43470" begin
+    function test(x, y)
+        return (x .> 0.0) .&& (y .> 0.0)
+    end
+    x = randn(2)
+    y = randn(2)
+    @inferred(test(x, y)) == [0, 0]
+end
+
+@testset "issue #45903, in place broadcast into a bit-masked bitmatrix" begin
+    A = BitArray(ones(3,3))
+    pos = randn(3,3)
+    A[pos .< 0] .= false
+    @test all(>=(0), pos[A])
+    @test count(A) == count(>=(0), pos)
+end
+
+# test that `Broadcast` definition is defined as total and eligible for concrete evaluation
+import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
+@test Base.infer_effects(BroadcastStyle, (DefaultArrayStyle{1},DefaultArrayStyle{2},)) |>
+    Core.Compiler.is_foldable

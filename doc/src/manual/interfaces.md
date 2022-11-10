@@ -7,28 +7,29 @@ to generically build upon those behaviors.
 
 ## [Iteration](@id man-interface-iteration)
 
-| Required methods               |                        | Brief description                                                                     |
+| Required methods               |                        | Brief description                                                                     |
 |:------------------------------ |:---------------------- |:------------------------------------------------------------------------------------- |
-| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
-| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
+| `iterate(iter)`                |                        | Returns either a tuple of the first item and initial state or [`nothing`](@ref) if empty        |
+| `iterate(iter, state)`         |                        | Returns either a tuple of the next item and next state or `nothing` if no items remain  |
 | **Important optional methods** | **Default definition** | **Brief description**                                                                 |
-| `IteratorSize(IterType)`       | `HasLength()`          | One of `HasLength()`, `HasShape{N}()`, `IsInfinite()`, or `SizeUnknown()` as appropriate |
-| `IteratorEltype(IterType)`     | `HasEltype()`          | Either `EltypeUnknown()` or `HasEltype()` as appropriate                              |
+| `Base.IteratorSize(IterType)`  | `Base.HasLength()`     | One of `Base.HasLength()`, `Base.HasShape{N}()`, `Base.IsInfinite()`, or `Base.SizeUnknown()` as appropriate |
+| `Base.IteratorEltype(IterType)`| `Base.HasEltype()`     | Either `Base.EltypeUnknown()` or `Base.HasEltype()` as appropriate                    |
 | `eltype(IterType)`             | `Any`                  | The type of the first entry of the tuple returned by `iterate()`                      |
 | `length(iter)`                 | (*undefined*)          | The number of items, if known                                                         |
 | `size(iter, [dim])`            | (*undefined*)          | The number of items in each dimension, if known                                       |
+| `Base.isdone(iter[, state])`   | `missing`              | Fast-path hint for iterator completion. Should be defined for stateful iterators, or else `isempty(iter)` may call `iterate(iter[, state])` and mutate the iterator. |
 
 | Value returned by `IteratorSize(IterType)` | Required Methods                           |
 |:------------------------------------------ |:------------------------------------------ |
-| `HasLength()`                              | [`length(iter)`](@ref)                     |
-| `HasShape{N}()`                            | `length(iter)`  and `size(iter, [dim])`    |
-| `IsInfinite()`                             | (*none*)                                   |
-| `SizeUnknown()`                            | (*none*)                                   |
+| `Base.HasLength()`                         | [`length(iter)`](@ref)                     |
+| `Base.HasShape{N}()`                       | `length(iter)`  and `size(iter, [dim])`    |
+| `Base.IsInfinite()`                        | (*none*)                                   |
+| `Base.SizeUnknown()`                       | (*none*)                                   |
 
 | Value returned by `IteratorEltype(IterType)` | Required Methods   |
 |:-------------------------------------------- |:------------------ |
-| `HasEltype()`                                | `eltype(IterType)` |
-| `EltypeUnknown()`                            | (*none*)           |
+| `Base.HasEltype()`                           | `eltype(IterType)` |
+| `Base.EltypeUnknown()`                       | (*none*)           |
 
 Sequential iteration is implemented by the [`iterate`](@ref) function. Instead
 of mutating objects as they are iterated over, Julia iterators may keep track
@@ -84,20 +85,14 @@ julia> for item in Squares(7)
 ```
 
 We can use many of the builtin methods that work with iterables,
-like [`in`](@ref), or [`mean`](@ref) and [`std`](@ref) from the
-`Statistics` standard library module:
+like [`in`](@ref) or [`sum`](@ref):
 
 ```jldoctest squaretype
 julia> 25 in Squares(10)
 true
 
-julia> using Statistics
-
-julia> mean(Squares(100))
-3383.5
-
-julia> std(Squares(100))
-3024.355854282583
+julia> sum(Squares(100))
+338350
 ```
 
 There are a few more methods we can extend to give Julia more information about this iterable
@@ -220,15 +215,15 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 
 ## [Abstract Arrays](@id man-interface-array)
 
-| Methods to implement                            |                                        | Brief description                                                                     |
+| Methods to implement                            |                                        | Brief description                                                                     |
 |:----------------------------------------------- |:-------------------------------------- |:------------------------------------------------------------------------------------- |
-| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
-| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
-| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
-| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
-| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
+| `size(A)`                                       |                                        | Returns a tuple containing the dimensions of `A`                                      |
+| `getindex(A, i::Int)`                           |                                        | (if `IndexLinear`) Linear scalar indexing                                             |
+| `getindex(A, I::Vararg{Int, N})`                |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexing             |
 | **Optional methods**                            | **Default definition**                 | **Brief description**                                                                 |
 | `IndexStyle(::Type)`                            | `IndexCartesian()`                     | Returns either `IndexLinear()` or `IndexCartesian()`. See the description below.      |
+| `setindex!(A, v, i::Int)`                       |                                        | (if `IndexLinear`) Scalar indexed assignment                                          |
+| `setindex!(A, v, I::Vararg{Int, N})`            |                                        | (if `IndexCartesian`, where `N = ndims(A)`) N-dimensional scalar indexed assignment   |
 | `getindex(A, I...)`                             | defined in terms of scalar `getindex`  | [Multidimensional and nonscalar indexing](@ref man-array-indexing)                    |
 | `setindex!(A, X, I...)`                            | defined in terms of scalar `setindex!` | [Multidimensional and nonscalar indexed assignment](@ref man-array-indexing)          |
 | `iterate`                                       | defined in terms of scalar `getindex`  | Iteration                                                                             |
@@ -238,7 +233,7 @@ ourselves, we can officially define it as a subtype of an [`AbstractArray`](@ref
 | `similar(A, dims::Dims)`                        | `similar(A, eltype(A), dims)`          | Return a mutable array with the same element type and size *dims*                     |
 | `similar(A, ::Type{S}, dims::Dims)`             | `Array{S}(undef, dims)`                | Return a mutable array with the specified element type and size                       |
 | **Non-traditional indices**                     | **Default definition**                 | **Brief description**                                                                 |
-| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return the a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
+| `axes(A)`                                    | `map(OneTo, size(A))`                  | Return a tuple of `AbstractUnitRange{<:Integer}` of valid indices                    |
 | `similar(A, ::Type{S}, inds)`              | `similar(A, S, Base.to_shape(inds))`   | Return a mutable array with the specified indices `inds` (see below)                  |
 | `similar(T::Union{Type,Function}, inds)`   | `T(Base.to_shape(inds))`               | Return an array similar to `T` with the specified indices `inds` (see below)          |
 
@@ -257,7 +252,7 @@ provides a traits-based mechanism to enable efficient generic code for all array
 
 This distinction determines which scalar indexing methods the type must define. `IndexLinear()`
 arrays are simple: just define `getindex(A::ArrayType, i::Int)`.  When the array is subsequently
-indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)()`
+indexed with a multidimensional set of indices, the fallback `getindex(A::AbstractArray, I...)`
 efficiently converts the indices into one linear index and then calls the above method. `IndexCartesian()`
 arrays, on the other hand, require methods to be defined for each supported dimensionality with
 `ndims(A)` `Int` indices. For example, [`SparseMatrixCSC`](@ref) from the `SparseArrays` standard
@@ -467,10 +462,17 @@ Not all types support `axes` and indexing, but many are convenient to allow in b
 The [`Base.broadcastable`](@ref) function is called on each argument to broadcast, allowing
 it to return something different that supports `axes` and indexing. By
 default, this is the identity function for all `AbstractArray`s and `Number`s — they already
-support `axes` and indexing. For a handful of other types (including but not limited to
-types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates),
-`Base.broadcastable` returns the argument wrapped in a `Ref` to act as a 0-dimensional
-"scalar" for the purposes of broadcasting. Custom types can similarly specialize
+support `axes` and indexing.
+
+If a type is intended to act like a "0-dimensional scalar" (a single object) rather than as a
+container for broadcasting, then the following method should be defined:
+```julia
+Base.broadcastable(o::MyType) = Ref(o)
+```
+that returns the argument wrapped in a 0-dimensional [`Ref`](@ref) container.   For example, such a wrapper
+method is defined for types themselves, functions, special singletons like [`missing`](@ref) and [`nothing`](@ref), and dates.
+
+Custom array-like types can specialize
 `Base.broadcastable` to define their shape, but they should follow the convention that
 `collect(Base.broadcastable(x)) == collect(x)`. A notable exception is `AbstractString`;
 strings are special-cased to behave as scalars for the purposes of broadcast even though
@@ -739,3 +741,103 @@ yields another `SparseVecStyle`, that its combination with a 2-dimensional array
 yields a `SparseMatStyle`, and anything of higher dimensionality falls back to the dense arbitrary-dimensional framework.
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
+
+## [Instance Properties](@id man-instance-properties)
+
+| Methods to implement              | Default definition           | Brief description                                                                     |
+|:--------------------------------- |:---------------------------- |:------------------------------------------------------------------------------------- |
+| `propertynames(x::ObjType, private::Bool=false)` | `fieldnames(typeof(x))`     | Return a tuple of the properties (`x.property`) of an object `x`. If `private=true`, also return property names intended to be kept as private |
+| `getproperty(x::ObjType, s::Symbol)`       | `getfield(x, s)`     | Return property `s` of `x`. `x.s` calls `getproperty(x, :s)`.  |
+| `setproperty!(x::ObjType, s::Symbol, v)`   | `setfield!(x, s, v)` | Set property `s` of `x` to `v`. `x.s = v` calls `setproperty!(x, :s, v)`. Should return `v`.|
+
+Sometimes, it is desirable to change how the end-user interacts with the fields of an object.
+Instead of granting direct access to type fields, an extra layer of abstraction between
+the user and the code can be provided by overloading `object.field`. Properties are what the
+user *sees of* the object, fields what the object *actually is*.
+
+By default, properties and fields are the same. However, this behavior can be changed.
+For example, take this representation of a point in a plane in [polar coordinates](https://en.wikipedia.org/wiki/Polar_coordinate_system):
+
+```jldoctest polartype
+julia> mutable struct Point
+           r::Float64
+           ϕ::Float64
+       end
+
+julia> p = Point(7.0, pi/4)
+Point(7.0, 0.7853981633974483)
+```
+
+As described in the table above dot access `p.r` is the same as `getproperty(p, :r)` which is by default the same as `getfield(p, :r)`:
+
+```jldoctest polartype
+julia> propertynames(p)
+(:r, :ϕ)
+
+julia> getproperty(p, :r), getproperty(p, :ϕ)
+(7.0, 0.7853981633974483)
+
+julia> p.r, p.ϕ
+(7.0, 0.7853981633974483)
+
+julia> getfield(p, :r), getproperty(p, :ϕ)
+(7.0, 0.7853981633974483)
+```
+
+However, we may want users to be unaware that `Point` stores the coordinates as `r` and `ϕ` (fields),
+and instead interact with `x` and `y` (properties). The methods in the first column can be
+defined to add new functionality:
+
+```jldoctest polartype
+julia> Base.propertynames(::Point, private::Bool=false) = private ? (:x, :y, :r, :ϕ) : (:x, :y)
+
+julia> function Base.getproperty(p::Point, s::Symbol)
+           if s === :x
+               return getfield(p, :r) * cos(getfield(p, :ϕ))
+           elseif s === :y
+               return getfield(p, :r) * sin(getfield(p, :ϕ))
+           else
+               # This allows accessing fields with p.r and p.ϕ
+               return getfield(p, s)
+           end
+       end
+
+julia> function Base.setproperty!(p::Point, s::Symbol, f)
+           if s === :x
+               y = p.y
+               setfield!(p, :r, sqrt(f^2 + y^2))
+               setfield!(p, :ϕ, atan(y, f))
+               return f
+           elseif s === :y
+               x = p.x
+               setfield!(p, :r, sqrt(x^2 + f^2))
+               setfield!(p, :ϕ, atan(f, x))
+               return f
+           else
+               # This allow modifying fields with p.r and p.ϕ
+               return setfield!(p, s, f)
+           end
+       end
+```
+
+It is important that `getfield` and `setfield` are used inside `getproperty` and `setproperty!` instead of the dot syntax,
+since the dot syntax would make the functions recursive which can lead to type inference issues. We can now
+try out the new functionality:
+
+```jldoctest polartype
+julia> propertynames(p)
+(:x, :y)
+
+julia> p.x
+4.949747468305833
+
+julia> p.y = 4.0
+4.0
+
+julia> p.r
+6.363961030678928
+```
+
+Finally, it is worth noting that adding instance properties like this is quite
+rarely done in Julia and should in general only be done if there is a good
+reason for doing so.

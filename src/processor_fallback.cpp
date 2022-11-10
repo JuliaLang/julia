@@ -117,7 +117,7 @@ const std::pair<std::string,std::string> &jl_get_llvm_disasm_target(void)
     return res;
 }
 
-std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
+extern "C" std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");

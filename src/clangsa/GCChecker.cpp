@@ -19,9 +19,6 @@
 
 #if defined(__GNUC__)
 #define USED_FUNC __attribute__((used))
-#elif defined(_COMPILER_MICROSOFT_)
-// Does MSVC have this?
-#define USED_FUNC
 #else
 #define USED_FUNC
 #endif
@@ -56,8 +53,8 @@ class GCChecker
           check::Location> {
   mutable std::unique_ptr<BugType> BT;
   template <typename callback>
-  void report_error(callback f, CheckerContext &C, const char *message) const;
-  void report_error(CheckerContext &C, const char *message) const {
+  void report_error(callback f, CheckerContext &C, StringRef message) const;
+  void report_error(CheckerContext &C, StringRef message) const {
     return report_error([](PathSensitiveBugReport *) {}, C, message);
   }
   void
@@ -512,7 +509,7 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
 
 template <typename callback>
 void GCChecker::report_error(callback f, CheckerContext &C,
-                             const char *message) const {
+                             StringRef message) const {
   // Generate an error node.
   ExplodedNode *N = C.generateErrorNode();
   if (!N)
@@ -708,6 +705,10 @@ bool GCChecker::isFDAnnotatedNotSafepoint(const clang::FunctionDecl *FD) {
   return declHasAnnotation(FD, "julia_not_safepoint");
 }
 
+#if LLVM_VERSION_MAJOR >= 13
+#define endswith_lower endswith_insensitive
+#endif
+
 bool GCChecker::isGCTrackedType(QualType QT) {
   return isValueCollection(QT) ||
          isJuliaType(
@@ -744,8 +745,8 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_method_match_t") ||
                    Name.endswith_lower("jl_vararg_t") ||
                    Name.endswith_lower("jl_opaque_closure_t") ||
-                   // Probably not technically true for these, but let's allow
-                   // it
+                   Name.endswith_lower("jl_globalref_t") ||
+                   // Probably not technically true for these, but let's allow it
                    Name.endswith_lower("typemap_intersection_env") ||
                    Name.endswith_lower("interpreter_state") ||
                    Name.endswith_lower("jl_typeenv_t") ||
@@ -775,7 +776,7 @@ bool GCChecker::isGCTracked(const Expr *E) {
 
 bool GCChecker::isGloballyRootedType(QualType QT) const {
   return isJuliaType(
-      [](StringRef Name) { return Name.endswith_lower("jl_sym_t"); }, QT);
+      [](StringRef Name) { return Name.endswith("jl_sym_t"); }, QT);
 }
 
 bool GCChecker::isSafepoint(const CallEvent &Call) const {
@@ -813,8 +814,8 @@ bool GCChecker::isSafepoint(const CallEvent &Call) const {
       if (FD->getBuiltinID() != 0 || FD->isTrivial())
         isCalleeSafepoint = false;
       else if (FD->getDeclName().isIdentifier() &&
-               (FD->getName().startswith_lower("uv_") ||
-                FD->getName().startswith_lower("unw_") ||
+               (FD->getName().startswith("uv_") ||
+                FD->getName().startswith("unw_") ||
                 FD->getName().startswith("_U")) &&
                FD->getName() != "uv_run")
         isCalleeSafepoint = false;
@@ -952,13 +953,13 @@ bool GCChecker::processAllocationOfResult(const CallEvent &Call,
         // global roots.
         StringRef FDName =
             FD->getDeclName().isIdentifier() ? FD->getName() : "";
-        if (FDName.startswith_lower("jl_box_")) {
+        if (FDName.startswith("jl_box_") || FDName.startswith("ijl_box_")) {
           SVal Arg = Call.getArgSVal(0);
           if (auto CI = Arg.getAs<nonloc::ConcreteInt>()) {
             const llvm::APSInt &Value = CI->getValue();
             bool GloballyRooted = false;
             const int64_t NBOX_C = 1024;
-            if (FDName.startswith_lower("jl_box_u")) {
+            if (FDName.startswith("jl_box_u") || FDName.startswith("ijl_box_u")) {
               if (Value < NBOX_C) {
                 GloballyRooted = true;
               }
@@ -1068,10 +1069,10 @@ void GCChecker::checkDerivingExpr(const Expr *Result, const Expr *Parent,
     // TODO: We may want to refine this. This is to track pointers through the
     // array list in jl_module_t.
     bool ParentIsModule = isJuliaType(
-        [](StringRef Name) { return Name.endswith_lower("jl_module_t"); },
+        [](StringRef Name) { return Name.endswith("jl_module_t"); },
         Parent->getType());
     bool ResultIsArrayList = isJuliaType(
-        [](StringRef Name) { return Name.endswith_lower("arraylist_t"); },
+        [](StringRef Name) { return Name.endswith("arraylist_t"); },
         Result->getType());
     if (!(ParentIsModule && ResultIsArrayList) && isGCTracked(Parent)) {
       ResultTracked = false;
@@ -1229,8 +1230,15 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     // We could separate out "not safepoint, except for noreturn functions",
     // but that seems like a lot of effort with little benefit.
     if (!FD || !FD->isNoReturn()) {
-      report_error(C, "Calling potential safepoint from function annotated "
-                      "JL_NOTSAFEPOINT");
+      report_error(
+          [&](PathSensitiveBugReport *Report) {
+            if (FD)
+              Report->addNote(
+                  "Tried to call method defined here",
+                  PathDiagnosticLocation::create(FD, C.getSourceManager()));
+          },
+          C, ("Calling potential safepoint as " +
+              Call.getKindAsString() + " from function annotated JL_NOTSAFEPOINT").str());
       return;
     }
   }
@@ -1428,7 +1436,7 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     C.addTransition(
         State->set<GCValueMap>(Sym, ValueState::getRooted(nullptr, -1)));
     return true;
-  } else if (name == "jl_gc_enable") {
+  } else if (name == "jl_gc_enable" || name == "ijl_gc_enable") {
     ProgramStateRef State = C.getState();
     // Check for a literal argument
     SVal Arg = C.getSVal(CE->getArg(0));
@@ -1451,6 +1459,23 @@ bool GCChecker::evalCall(const CallEvent &Call, CheckerContext &C) const {
     SVal Result = C.getSValBuilder().makeTruthVal(EnabledNow, CE->getType());
     C.addTransition(State->BindExpr(CE, C.getLocationContext(), Result));
     return true;
+  }
+  else if (name == "uv_mutex_lock") {
+    ProgramStateRef State = C.getState();
+    if (State->get<SafepointDisabledAt>() == (unsigned)-1) {
+      C.addTransition(State->set<SafepointDisabledAt>(C.getStackFrame()->getIndex()));
+      return true;
+    }
+  }
+  else if (name == "uv_mutex_unlock") {
+    ProgramStateRef State = C.getState();
+    const auto *LCtx = C.getLocationContext();
+    const auto *FD = dyn_cast<FunctionDecl>(LCtx->getDecl());
+    if (State->get<SafepointDisabledAt>() == (unsigned)C.getStackFrame()->getIndex() &&
+        !isFDAnnotatedNotSafepoint(FD)) {
+      C.addTransition(State->set<SafepointDisabledAt>(-1));
+      return true;
+    }
   }
   return false;
 }

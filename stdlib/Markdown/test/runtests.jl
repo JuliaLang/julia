@@ -1251,3 +1251,12 @@ end
                                 """
     @test_throws ErrorException Markdown.latex(s2)
 end
+
+@testset "issue #42139: autolink" begin
+    # ok
+    @test md"<mailto:foo@bar.com>" |> html == """<p><a href="mailto:foo@bar.com">mailto:foo@bar.com</a></p>\n"""
+    # not ok
+    @test md"<mailto foo@bar.com>" |> html == """<p>&lt;mailto foo@bar.com&gt;</p>\n"""
+    # see issue #42139
+    @test md"<一轮红日初升>" |> html == """<p>&lt;一轮红日初升&gt;</p>\n"""
+end

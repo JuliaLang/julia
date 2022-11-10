@@ -4,16 +4,26 @@
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
 
+# Used by `Base.finalizer` to validate mutability of an object being finalized.
+function _check_mutable(@nospecialize(o)) @noinline
+    if !ismutable(o)
+        error("objects of type ", typeof(o), " cannot be finalized")
+    end
+end
+
 """
     finalizer(f, x)
 
 Register a function `f(x)` to be called when there are no program-accessible references to
-`x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the behavior of
-this function is unpredictable.
+`x`, and return `x`. The type of `x` must be a `mutable struct`, otherwise the function
+will throw.
 
 `f` must not cause a task switch, which excludes most I/O operations such as `println`.
 Using the `@async` macro (to defer context switching to outside of the finalizer) or
 `ccall` to directly invoke IO functions in C may be helpful for debugging purposes.
+
+Note that there is no guaranteed world age for the execution of `f`. It may be
+called in the world age in which the finalizer was registered or any later world age.
 
 # Examples
 ```julia
@@ -42,19 +52,13 @@ end
 ```
 """
 function finalizer(@nospecialize(f), @nospecialize(o))
-    if !ismutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
-    end
-    ccall(:jl_gc_add_finalizer_th, Cvoid, (Ptr{Cvoid}, Any, Any),
-          Core.getptls(), o, f)
+    _check_mutable(o)
+    Core.finalizer(f, o)
     return o
 end
 
-function finalizer(f::Ptr{Cvoid}, o::T) where T
-    @_inline_meta
-    if !ismutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
-    end
+function finalizer(f::Ptr{Cvoid}, o::T) where T @inline
+    _check_mutable(o)
     ccall(:jl_gc_add_ptr_finalizer, Cvoid, (Ptr{Cvoid}, Any, Ptr{Cvoid}),
           Core.getptls(), o, f)
     return o
@@ -116,16 +120,14 @@ another Task or thread.
 """
 enable_finalizers(on::Bool) = on ? enable_finalizers() : disable_finalizers()
 
-function enable_finalizers()
-    Base.@_inline_meta
+function enable_finalizers() @inline
     ccall(:jl_gc_enable_finalizers_internal, Cvoid, ())
-    if unsafe_load(cglobal(:jl_gc_have_pending_finalizers, Cint)) != 0
+    if Core.Intrinsics.atomic_pointerref(cglobal(:jl_gc_have_pending_finalizers, Cint), :monotonic) != 0
         ccall(:jl_gc_run_pending_finalizers, Cvoid, (Ptr{Cvoid},), C_NULL)
     end
 end
 
-function disable_finalizers()
-    Base.@_inline_meta
+function disable_finalizers() @inline
     ccall(:jl_gc_disable_finalizers_internal, Cvoid, ())
 end
 
@@ -199,5 +201,14 @@ collection to run.
     This function is available as of Julia 1.4.
 """
 safepoint() = ccall(:jl_gc_safepoint, Cvoid, ())
+
+"""
+    GC.enable_logging(on::Bool)
+
+When turned on, print statistics about each GC to stderr.
+"""
+function enable_logging(on::Bool=true)
+    ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
+end
 
 end # module GC

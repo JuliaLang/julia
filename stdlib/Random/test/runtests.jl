@@ -2,7 +2,6 @@
 
 using Test, SparseArrays
 using Test: guardseed
-using Statistics: mean
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, "..", "share", "julia", "test")
 isdefined(Main, :OffsetArrays) || @eval Main include(joinpath($(BASE_TEST_PATH), "testhelpers", "OffsetArrays.jl"))
@@ -47,7 +46,7 @@ let A = zeros(2, 2)
                 0.9103565379264364  0.17732884646626457]
 end
 let A = zeros(2, 2)
-    @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
+    @test_throws MethodError rand!(MersenneTwister(0), A, 5)
     @test rand(MersenneTwister(0), Int64, 1) == [-3433174948434291912]
 end
 let A = zeros(Int64, 2, 2)
@@ -307,9 +306,32 @@ let a = [rand(RandomDevice(), UInt128) for i=1:10]
     @test reduce(|, a)>>>64 != 0
 end
 
+# wrapper around Float64 to check fallback random generators
+struct FakeFloat64 <: AbstractFloat
+    x::Float64
+end
+Base.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{FakeFloat64}}) = FakeFloat64(rand(rng))
+for f in (:sqrt, :log, :log1p, :one, :zero, :abs, :+, :-)
+    @eval Base.$f(x::FakeFloat64) = FakeFloat64($f(x.x))
+end
+for f in (:+, :-, :*, :/)
+    @eval begin
+        Base.$f(x::FakeFloat64, y::FakeFloat64) = FakeFloat64($f(x.x,y.x))
+        Base.$f(x::FakeFloat64, y::Real) = FakeFloat64($f(x.x,y))
+        Base.$f(x::Real, y::FakeFloat64) = FakeFloat64($f(x,y.x))
+    end
+end
+for f in (:<, :<=, :>, :>=, :(==), :(!=))
+    @eval begin
+        Base.$f(x::FakeFloat64, y::FakeFloat64) = $f(x.x,y.x)
+        Base.$f(x::FakeFloat64, y::Real) = $f(x.x,y)
+        Base.$f(x::Real, y::FakeFloat64) = $f(x,y.x)
+    end
+end
+
 # test all rand APIs
 for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
-    ftypes = [Float16, Float32, Float64]
+    ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Base.BitInteger_types..., ftypes...]
     randset = Set(rand(Int, 20))
@@ -406,15 +428,12 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
     rand!(rng..., BitMatrix(undef, 2, 3))  ::BitArray{2}
 
     # Test that you cannot call randn or randexp with non-Float types.
-    for r in [randn, randexp, randn!, randexp!]
-        local r
+    for r in [randn, randexp]
         @test_throws MethodError r(Int)
         @test_throws MethodError r(Int32)
         @test_throws MethodError r(Bool)
         @test_throws MethodError r(String)
         @test_throws MethodError r(AbstractFloat)
-        # TODO(#17627): Consider adding support for randn(BigFloat) and removing this test.
-        @test_throws MethodError r(BigFloat)
 
         @test_throws MethodError r(Int64, (2,3))
         @test_throws MethodError r(String, 1)
@@ -449,6 +468,7 @@ end
 @testset "rand(Bool) uniform distribution" begin
     for n in [rand(1:8), rand(9:16), rand(17:64)]
         a = zeros(Bool, n)
+        a8 = unsafe_wrap(Array, Ptr{UInt8}(pointer(a)), length(a); own=false) # unsafely observe the actual bit patterns in `a`
         as = zeros(Int, n)
         # we will test statistical properties for each position of a,
         # but also for 3 linear combinations of positions (for the array version)
@@ -466,6 +486,7 @@ end
                         end
                     else
                         as .+= rand!(rng, a)
+                        @test all(x -> x === 0x00 || x === 0x01, a8)
                         aslcs .+= [xor(getindex.(Ref(a), lcs[i])...) for i in 1:3]
                     end
                 end
@@ -662,7 +683,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
 end
 
 # this shouldn't crash (#22403)
-@test_throws ArgumentError rand!(Union{UInt,Int}[1, 2, 3])
+@test_throws MethodError rand!(Union{UInt,Int}[1, 2, 3])
 
 @testset "$RNG() & Random.seed!(rng::$RNG) initializes randomly" for RNG in (MersenneTwister, RandomDevice, Xoshiro)
     m = RNG()
@@ -688,7 +709,7 @@ end
 @testset "$RNG(seed) & Random.seed!(m::$RNG, seed) produce the same stream" for RNG=(MersenneTwister,Xoshiro)
     seeds = Any[0, 1, 2, 10000, 10001, rand(UInt32, 8), rand(UInt128, 3)...]
     if RNG == Xoshiro
-        push!(seeds, rand(UInt64, rand(1:4)), Tuple(rand(UInt64, 4)))
+        push!(seeds, rand(UInt64, rand(1:4)))
     end
     for seed=seeds
         m = RNG(seed)
@@ -699,7 +720,7 @@ end
 end
 
 @testset "Random.seed!(seed) sets Random.GLOBAL_SEED" begin
-    seeds = Any[0, rand(UInt128), rand(UInt64, 4), Tuple(rand(UInt64, 4))]
+    seeds = Any[0, rand(UInt128), rand(UInt64, 4)]
 
     for seed=seeds
         Random.seed!(seed)
@@ -734,8 +755,8 @@ end
 
 struct RandomStruct23964 end
 @testset "error message when rand not defined for a type" begin
-    @test_throws ArgumentError rand(nothing)
-    @test_throws ArgumentError rand(RandomStruct23964())
+    @test_throws MethodError rand(nothing)
+    @test_throws MethodError rand(RandomStruct23964())
 end
 
 @testset "rand(::$(typeof(RNG)), ::UnitRange{$T}" for RNG ∈ (MersenneTwister(rand(UInt128)), RandomDevice(), Xoshiro()),
@@ -867,7 +888,8 @@ end
     @test (x >> 64) % UInt64 == xs[end-6]
     @test x % UInt64 == xs[end-7]
     x = rand(m, UInt64)
-    @test x == xs[end-8] # should not be == xs[end-7]
+    @test x == xs[end-8]
+    @test x != xs[end-7]
 
     s = Set{UInt64}()
     n = 0
@@ -885,28 +907,34 @@ end
 end
 
 @testset "show" begin
-    m = MersenneTwister(123)
-    @test string(m) == "MersenneTwister(123)"
-    Random.jump!(m, 2*big(10)^20)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
-    @test m == MersenneTwister(123, (200000000000000000000, 0))
-    rand(m)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
+    @testset "MersenneTwister" begin
+        m = MersenneTwister(123)
+        @test string(m) == "MersenneTwister(123)"
+        Random.jump!(m, 2*big(10)^20)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 0))"
+        @test m == MersenneTwister(123, (200000000000000000000, 0))
+        rand(m)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 1002, 0, 1))"
 
-    @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
-    rand(m, Int64)
-    @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
-    @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
+        @test m == MersenneTwister(123, (200000000000000000000, 1002, 0, 1))
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))"
+        @test m == MersenneTwister(123, (200000000000000000000, 2256, 0, 1, 1002, 1))
 
-    m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
-    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
-    rand(m, Int64)
-    @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
-    @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
+        m = MersenneTwister(0x0ecfd77f89dcd508caa37a17ebb7556b)
+        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b)"
+        rand(m, Int64)
+        @test string(m) == "MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))"
+        @test m == MersenneTwister(0xecfd77f89dcd508caa37a17ebb7556b, (0, 1254, 0, 0, 0, 1))
 
-    m = MersenneTwister(0); rand(m, Int64); rand(m)
-    @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
-    @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+        m = MersenneTwister(0); rand(m, Int64); rand(m)
+        @test string(m) == "MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))"
+        @test m == MersenneTwister(0, (0, 2256, 1254, 1, 0, 1))
+    end
+
+    @testset "RandomDevice" begin
+        @test string(RandomDevice()) == "$RandomDevice()"
+    end
 end
 
 @testset "rand[!] for BigInt/BigFloat" begin
@@ -960,10 +988,33 @@ end
     # Test that shuffle! is uniformly random on BitArrays
     rng = MersenneTwister(123)
     a = (reshape(1:(4*5), 4, 5) .<= 2) # 4x5 BitMatrix whose first two elements are true, rest are false
-    m = mean(1:50_000) do _
+    m = sum(1:50_000) do _
         shuffle!(rng, a)
-    end # mean result of shuffle!-ing a 50_000 times. If the shuffle! is uniform, then each index has a
+    end/50_000 # mean result of shuffle!-ing a 50_000 times. If the shuffle! is uniform, then each index has a
     # 10% chance of having a true in it, so each value should converge to 0.1.
     @test minimum(m) >= 0.094
     @test maximum(m) <= 0.106
+end
+
+# issue #42752
+# test that running finalizers that launch tasks doesn't change RNG stream
+function f42752(do_gc::Bool, cell = (()->Any[[]])())
+    a = rand()
+    if do_gc
+        finalizer(cell[1]) do _
+            @async nothing
+        end
+        cell[1] = nothing
+        GC.gc()
+    end
+    b = rand()
+    (a, b)
+end
+guardseed() do
+    for _ in 1:4
+        Random.seed!(1)
+        val = f42752(false)
+        Random.seed!(1)
+        @test f42752(true) === val
+    end
 end

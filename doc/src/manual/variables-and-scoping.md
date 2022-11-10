@@ -90,13 +90,23 @@ julia> module B
 julia> module D
            b = a # errors as D's global scope is separate from A's
        end;
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
+```
 
-julia> module E
-           import ..A # make module A available
-           A.a = 2    # throws below error
-       end;
-ERROR: cannot assign variables in other modules
+If a top-level expression contains a variable declaration with keyword `local`,
+then that variable is not accessible outside that expression.
+The variable inside the expression does not affect global variables of the same name.
+An example is to declare `local x` in a `begin` or `if` block at the top-level:
+
+```jldoctest
+julia> x = 1
+       begin
+           local x = 0
+           @show x
+       end
+       @show x;
+x = 0
+x = 1
 ```
 
 Note that the interactive prompt (aka REPL) is in the global scope of the module `Main`.
@@ -108,7 +118,7 @@ man-scope-table) for a complete list). If such a block is syntactically nested
 inside of another local scope, the scope it creates is nested inside of all the
 local scopes that it appears within, which are all ultimately nested inside of
 the global scope of the module in which the code is evaluated. Variables in
-outer scopes are visible from any scope they contain — meaning that they can be
+outer scopes are visible from any scope they contain — meaning that they can be
 read and written in inner scopes — unless there is a local variable with the
 same name that "shadows" the outer variable of the same name. This is true even
 if the outer local is declared after (in the sense of textually below) an inner
@@ -130,7 +140,7 @@ _always_ updates that existing local: you can only shadow a local by explicitly
 declaring a new local in a nested scope with the `local` keyword. In particular,
 this applies to variables assigned in inner functions, which may surprise users
 coming from Python where assignment in an inner function creates a new local
-unless the variable is explictly declared to be non-local.
+unless the variable is explicitly declared to be non-local.
 
 Mostly this is pretty intuitive, but as with many things that behave
 intuitively, the details are more subtle than one might naïvely imagine.
@@ -177,7 +187,7 @@ julia> greet()
 hello
 
 julia> x # global
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 Inside of the `greet` function, the assignment `x = "hello"` causes `x` to be a new local variable
@@ -246,7 +256,7 @@ julia> sum_to(10)
 55
 
 julia> s # global
-ERROR: UndefVarError: s not defined
+ERROR: UndefVarError: `s` not defined
 ```
 
 Since `s` is local to the function `sum_to`, calling the function has no effect on the global
@@ -333,7 +343,7 @@ hello
 hello
 
 julia> x
-ERROR: UndefVarError: x not defined
+ERROR: UndefVarError: `x` not defined
 ```
 
 Since the global `x` is not defined when the `for` loop is evaluated, the first clause of the soft
@@ -398,7 +408,7 @@ julia> code = """
 julia> include_string(Main, code)
 ┌ Warning: Assignment to `s` in soft scope is ambiguous because a global variable by the same name exists: `s` will be treated as a new local. Disambiguate by using `local s` to suppress this warning or `global s` to assign to the existing global variable.
 └ @ string:4
-ERROR: LoadError: UndefVarError: s not defined
+ERROR: LoadError: UndefVarError: `s` not defined
 ```
 
 Here we use [`include_string`](@ref), to evaluate `code` as though it were the contents of a file.
@@ -423,7 +433,7 @@ evaluated first. One might imagine that the `s` on the first line of the loop co
 the `s` on the second line of the loop is local, but that's not possible since the two lines are in
 the same scope block and each variable can only mean one thing in a given scope.
 
-#### On Soft Scope
+#### [On Soft Scope](@id on-soft-scope)
 
 We have now covered all the local scope rules, but before wrapping up this section, perhaps a few
 words should be said about why the ambiguous soft scope case is handled differently in interactive
@@ -516,7 +526,7 @@ prints this very direct warning:
 This addresses both issues while preserving the "programming at scale" benefits of the 1.0 behavior:
 global variables have no spooky effect on the meaning of code that may be far away; in the REPL
 copy-and-paste debugging works and beginners don't have any issues; any time someone either forgets
-a `global` annotation or accidentally shadows an existing global with a local in a soft scope,
+a `global` annotation or accidentally shadows an existing global with a local in a soft scope,
 which would be confusing anyway, they get a nice clear warning.
 
 An important property of this design is that any code that executes in a file without a warning will
@@ -526,11 +536,20 @@ file, if it behaves differently than it did in the REPL, then you will get a war
 ### Let Blocks
 
 `let` statements create a new *hard scope* block (see above) and introduce new variable
-bindings each time they run. Whereas assignments might reassign a new value to an existing value location,
-`let` always creates a new location.
-This difference is usually not important, and is only detectable in the case of variables that
-outlive their scope via closures. The `let` syntax accepts a comma-separated series of assignments
-and variable names:
+bindings each time they run. The variable need not be immediately assigned:
+```jldoctest
+julia> var1 = let x
+           for i in 1:5
+               (i == 4) && (x = i; break)
+           end
+           x
+       end
+4
+```
+Whereas assignments might reassign a new value to an existing value location, `let` always creates a
+new location. This difference is usually not important, and is only detectable in the case of
+variables that outlive their scope via closures. The `let` syntax accepts a comma-separated series of
+assignments and variable names:
 
 ```jldoctest
 julia> x, y, z = -1, -1, -1;
@@ -540,7 +559,7 @@ julia> let x = 1, z
            println("z: $z") # errors as z has not been assigned yet but is local
        end
 x: 1, y: -1
-ERROR: UndefVarError: z not defined
+ERROR: UndefVarError: `z` not defined
 ```
 
 The assignments are evaluated in order, with each right-hand side evaluated in the scope before
@@ -773,4 +792,59 @@ WARNING: redefinition of constant x. This may fail, cause incorrect answers, or 
 
 julia> f()
 1
+```
+
+## [Typed Globals](@id man-typed-globals)
+
+!!! compat "Julia 1.8"
+    Support for typed globals was added in Julia 1.8
+
+Similar to being declared as constants, global bindings can also be declared to always be of a
+constant type. This can either be done without assigning an actual value using the syntax
+`global x::T` or upon assignment as `x::T = 123`.
+
+```jldoctest
+julia> x::Float64 = 2.718
+2.718
+
+julia> f() = x
+f (generic function with 1 method)
+
+julia> Base.return_types(f)
+1-element Vector{Any}:
+ Float64
+```
+
+For any assignment to a global, Julia will first try to convert it to the appropriate type using
+[`convert`](@ref):
+
+```jldoctest
+julia> global y::Int
+
+julia> y = 1.0
+1.0
+
+julia> y
+1
+
+julia> y = 3.14
+ERROR: InexactError: Int64(3.14)
+Stacktrace:
+[...]
+```
+
+The type does not need to be concrete, but annotations with abstract types typically have little
+performance benefit.
+
+Once a global has either been assigned to or its type has been set, the binding type is not allowed
+to change:
+
+```jldoctest
+julia> x = 1
+1
+
+julia> global x::Int
+ERROR: cannot set type for global x. It already has a value or is already set to a different type.
+Stacktrace:
+[...]
 ```

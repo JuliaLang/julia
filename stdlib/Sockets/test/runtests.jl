@@ -16,7 +16,7 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
@@ -196,6 +196,31 @@ end
 
 
 @testset "getnameinfo on some unroutable IP addresses (RFC 5737)" begin
+    try
+        getnameinfo(ip"192.0.2.1")
+        getnameinfo(ip"198.51.100.1")
+        getnameinfo(ip"203.0.113.1")
+        getnameinfo(ip"0.1.1.1")
+        getnameinfo(ip"::ffff:0.1.1.1")
+        getnameinfo(ip"::ffff:192.0.2.1")
+        getnameinfo(ip"2001:db8::1")
+    catch
+        # NOTE: Default Ubuntu installations contain a faulty DNS configuration
+        # that returns `EAI_AGAIN` instead of `EAI_NONAME`.  To fix this, try
+        # installing `libnss-resolve`, which installs the `systemd-resolve`
+        # backend for NSS, which should fix it.
+        #
+        # If you are running tests inside Docker, you'll need to install
+        # `libnss-resolve` both outside Docker (i.e. on the host machine) and
+        # inside the Docker container.
+        if Sys.islinux()
+            error_msg = string(
+                "`getnameinfo` failed on an unroutable IP address. ",
+                "If your DNS setup seems to be working, try installing libnss-resolve",
+            )
+            @error(error_msg)
+        end
+    end
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
     @test getnameinfo(ip"203.0.113.1") == "203.0.113.1"
@@ -541,7 +566,7 @@ end
         end
         let s = Sockets.connect(addr)
             @test iswritable(s)
-            shutdown(s)
+            closewrite(s)
             @test !iswritable(s)
             close(s)
         end
@@ -553,7 +578,7 @@ end
             end
             @test iswritable(s)
             write(s, "hello world\n")
-            shutdown(s)
+            closewrite(s)
             @test !iswritable(s)
             @test isreadable(s)
             @test read(s, String) == "hello world\n"
@@ -562,6 +587,18 @@ end
             close(s)
         end
         close(srv)
+    end
+end
+
+@testset "TCPSocket RawFD constructor" begin
+    if Sys.islinux()
+        let fd = ccall(:socket, Int32, (Int32, Int32, Int32),
+                       2, # AF_INET
+                       1, # SOCK_STREAM
+                       0)
+            s = Sockets.TCPSocket(RawFD(fd))
+            close(s)
+        end
     end
 end
 

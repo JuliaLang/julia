@@ -32,6 +32,11 @@ else
 end
 
 function __init__()
+    # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
+    if !haskey(ENV, "OPENBLAS_MAIN_FREE")
+        ENV["OPENBLAS_MAIN_FREE"] = "1"
+    end
+
     global libopenblas_handle = dlopen(libopenblas)
     global libopenblas_path = dlpath(libopenblas_handle)
     global artifact_dir = dirname(Sys.BINDIR)

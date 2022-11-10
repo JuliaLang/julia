@@ -2,7 +2,7 @@
 
 using Test
 using Base.Threads
-using Base.Threads: SpinLock
+using Base.Threads: SpinLock, threadpoolsize
 
 # for cfunction_closure
 include("testenv.jl")
@@ -16,7 +16,7 @@ function killjob(d)
     end
     if @isdefined(SIGINFO)
         ccall(:uv_kill, Cint, (Cint, Cint), getpid(), SIGINFO)
-        sleep(1)
+        sleep(5) # Allow time for profile to collect and print before killing
     end
     ccall(:uv_kill, Cint, (Cint, Cint), getpid(), Base.SIGTERM)
     nothing
@@ -27,9 +27,33 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+@test Threads.threadid() == 1
+@test 1 <= threadpoolsize() <= Threads.maxthreadid()
+
+# basic lock check
+if threadpoolsize() > 1
+    let lk = SpinLock()
+        c1 = Base.Event()
+        c2 = Base.Event()
+        @test trylock(lk)
+        @test !trylock(lk)
+        t1 = Threads.@spawn (notify(c1); lock(lk); unlock(lk); trylock(lk))
+        t2 = Threads.@spawn (notify(c2); trylock(lk))
+        Libc.systemsleep(0.1) # block our thread from scheduling for a bit
+        wait(c1)
+        wait(c2)
+        @test !fetch(t2)
+        @test istaskdone(t2)
+        @test !istaskdone(t1)
+        unlock(lk)
+        @test fetch(t1)
+        @test istaskdone(t1)
+    end
+end
+
 # threading constructs
 
-let a = zeros(Int, 2 * nthreads())
+let a = zeros(Int, 2 * threadpoolsize())
     @threads for i = 1:length(a)
         @sync begin
             @async begin
@@ -49,7 +73,23 @@ end
 
 # parallel loop with parallel atomic addition
 function threaded_loop(a, r, x)
+    counter = Threads.Atomic{Int}(min(threadpoolsize(), length(r)))
     @threads for i in r
+        # synchronize the start given that each partition is started sequentially,
+        # meaning that without the wait, if the loop is too fast the iteration can happen in order
+        if counter[] != 0
+            Threads.atomic_sub!(counter, 1)
+            spins = 0
+            while counter[] != 0
+                GC.safepoint()
+                ccall(:jl_cpu_pause, Cvoid, ())
+                spins += 1
+                if spins > 500_000_000  # about 10 seconds
+                    @warn "Failed wait for all workers. Unfinished rogue tasks occupying worker threads?"
+                    break
+                end
+            end
+        end
         j = i - firstindex(r) + 1
         a[j] = 1 + atomic_add!(x, 1)
     end
@@ -62,18 +102,13 @@ function test_threaded_loop_and_atomic_add()
         a = zeros(Int, n)
         threaded_loop(a,r,x)
         found = zeros(Bool,n)
-        was_inorder = true
         for i=1:length(a)
-            was_inorder &= a[i]==i
             found[a[i]] = true
         end
         @test x[] == n
         # Next test checks that all loop iterations ran,
         # and were unique (via pigeon-hole principle).
         @test !(false in found)
-        if was_inorder && nthreads() > 1
-            println(stderr, "Warning: threaded loop executed in order")
-        end
     end
 end
 
@@ -176,7 +211,7 @@ function threaded_gc_locked(::Type{LockT}) where LockT
 end
 
 threaded_gc_locked(SpinLock)
-threaded_gc_locked(Threads.ReentrantLock)
+threaded_gc_locked(ReentrantLock)
 
 # Issue 33159
 # Make sure that a Threads.Condition can't be used without being locked, on any thread.
@@ -233,7 +268,7 @@ end
 @test_throws TypeError Atomic{BigInt}
 @test_throws TypeError Atomic{ComplexF64}
 
-if Sys.ARCH == :i686 || startswith(string(Sys.ARCH), "arm") ||
+if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
    Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
 
     @test_throws TypeError Atomic{Int128}()
@@ -391,7 +426,7 @@ end
 for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
     var = Atomic{T}()
     nloops = 1000
-    di = nthreads()
+    di = threadpoolsize()
     @threads for i in 1:di
         test_atomic_cas!(var, i:di:nloops)
     end
@@ -481,8 +516,8 @@ function test_thread_cfunction()
     @test cfs[1] == cf1
     @test cfs[2] == cf(fs[2])
     @test length(unique(cfs)) == 1000
-    ok = zeros(Int, nthreads())
-    @threads for i in 1:10000
+    ok = zeros(Int, threadpoolsize())
+    @threads :static for i in 1:10000
         i = mod1(i, 1000)
         fi = fs[i]
         cfi = cf(fi)
@@ -496,24 +531,15 @@ if cfunction_closure
     test_thread_cfunction()
 end
 
-# Compare the two ways of checking if threading is enabled.
-# `jl_tls_states` should only be defined on non-threading build.
-if ccall(:jl_threading_enabled, Cint, ()) == 0
-    @test nthreads() == 1
-    cglobal(:jl_tls_states) != C_NULL
-else
-    @test_throws ErrorException cglobal(:jl_tls_states)
-end
-
 function test_thread_range()
-    a = zeros(Int, nthreads())
+    a = zeros(Int, threadpoolsize())
     @threads for i in 1:threadid()
         a[i] = 1
     end
     for i in 1:threadid()
         @test a[i] == 1
     end
-    for i in (threadid() + 1):nthreads()
+    for i in (threadid() + 1):threadpoolsize()
         @test a[i] == 0
     end
 end
@@ -526,7 +552,9 @@ function test_load_and_lookup_18020(n)
             ccall(:jl_load_and_lookup,
                   Ptr{Cvoid}, (Cstring, Cstring, Ref{Ptr{Cvoid}}),
                   "$i", :f, C_NULL)
-        catch
+        catch ex
+            ex isa ErrorException || rethrow()
+            startswith(ex.msg, "could not load library") || rethrow()
         end
     end
 end
@@ -551,41 +579,26 @@ test_nested_loops()
 
 function test_thread_too_few_iters()
     x = Atomic()
-    a = zeros(Int, nthreads()+2)
-    threaded_loop(a, 1:nthreads()-1, x)
-    found = zeros(Bool, nthreads()+2)
-    for i=1:nthreads()-1
+    a = zeros(Int, threadpoolsize()+2)
+    threaded_loop(a, 1:threadpoolsize()-1, x)
+    found = zeros(Bool, threadpoolsize()+2)
+    for i=1:threadpoolsize()-1
         found[a[i]] = true
     end
-    @test x[] == nthreads()-1
+    @test x[] == threadpoolsize()-1
     # Next test checks that all loop iterations ran,
     # and were unique (via pigeon-hole principle).
-    @test !(false in found[1:nthreads()-1])
-    @test !(true in found[nthreads():end])
+    @test !(false in found[1:threadpoolsize()-1])
+    @test !(true in found[threadpoolsize():end])
 end
 test_thread_too_few_iters()
 
-let e = Event(), started = Event()
-    done = false
-    t = @async (notify(started); wait(e); done = true)
-    wait(started)
-    sleep(0.1)
-    @test done == false
-    notify(e)
-    wait(t)
-    @test done == true
-    blocked = true
-    wait(@async (wait(e); blocked = false))
-    @test !blocked
-end
-
-
-@testset "InvasiveLinkedList" begin
-    @test eltype(Base.InvasiveLinkedList{Integer}) == Integer
+@testset "IntrusiveLinkedList" begin
+    @test eltype(Base.IntrusiveLinkedList{Integer}) == Integer
     @test eltype(Base.LinkedList{Integer}) == Integer
-    @test eltype(Base.InvasiveLinkedList{<:Integer}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Integer}) == Any
     @test eltype(Base.LinkedList{<:Integer}) == Any
-    @test eltype(Base.InvasiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
 
     t = Base.LinkedList{Integer}()
     @test eltype(t) == Integer
@@ -708,9 +721,9 @@ let ch = Channel{Char}(0), t
     @test String(collect(ch)) == "hello"
 end
 
-# errors inside @threads
+# errors inside @threads :static
 function _atthreads_with_error(a, err)
-    Threads.@threads for i in eachindex(a)
+    Threads.@threads :static for i in eachindex(a)
         if err
             error("failed")
         end
@@ -718,22 +731,75 @@ function _atthreads_with_error(a, err)
     end
     a
 end
-@test_throws TaskFailedException _atthreads_with_error(zeros(nthreads()), true)
-let a = zeros(nthreads())
+@test_throws CompositeException _atthreads_with_error(zeros(threadpoolsize()), true)
+let a = zeros(threadpoolsize())
     _atthreads_with_error(a, false)
-    @test a == [1:nthreads();]
+    @test a == [1:threadpoolsize();]
 end
 
 # static schedule
-function _atthreads_static_schedule()
-    ids = zeros(Int, nthreads())
-    Threads.@threads :static for i = 1:nthreads()
+function _atthreads_static_schedule(n)
+    ids = zeros(Int, n)
+    Threads.@threads :static for i = 1:n
         ids[i] = Threads.threadid()
     end
     return ids
 end
-@test _atthreads_static_schedule() == [1:nthreads();]
-@test_throws TaskFailedException @threads for i = 1:1; _atthreads_static_schedule(); end
+@test _atthreads_static_schedule(threadpoolsize()) == 1:threadpoolsize()
+@test _atthreads_static_schedule(1) == [1;]
+@test_throws(
+    "`@threads :static` cannot be used concurrently or nested",
+    @threads(for i = 1:1; _atthreads_static_schedule(threadpoolsize()); end),
+)
+
+# dynamic schedule
+function _atthreads_dynamic_schedule(n)
+    inc = Threads.Atomic{Int}(0)
+    flags = zeros(Int, n)
+    Threads.@threads :dynamic for i = 1:n
+        Threads.atomic_add!(inc, 1)
+        flags[i] = 1
+    end
+    return inc[], flags
+end
+@test _atthreads_dynamic_schedule(threadpoolsize()) == (threadpoolsize(), ones(threadpoolsize()))
+@test _atthreads_dynamic_schedule(1) == (1, ones(1))
+@test _atthreads_dynamic_schedule(10) == (10, ones(10))
+@test _atthreads_dynamic_schedule(threadpoolsize() * 2) == (threadpoolsize() * 2, ones(threadpoolsize() * 2))
+
+# nested dynamic schedule
+function _atthreads_dynamic_dynamic_schedule()
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :dynamic for _ = 1:threadpoolsize()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return inc[]
+end
+@test _atthreads_dynamic_dynamic_schedule() == threadpoolsize() * threadpoolsize()
+
+function _atthreads_static_dynamic_schedule()
+    ids = zeros(Int, threadpoolsize())
+    inc = Threads.Atomic{Int}(0)
+    Threads.@threads :static for i = 1:threadpoolsize()
+        ids[i] = Threads.threadid()
+        Threads.@threads :dynamic for _ = 1:threadpoolsize()
+            Threads.atomic_add!(inc, 1)
+        end
+    end
+    return ids, inc[]
+end
+@test _atthreads_static_dynamic_schedule() == (1:threadpoolsize(), threadpoolsize() * threadpoolsize())
+
+# errors inside @threads :dynamic
+function _atthreads_dynamic_with_error(a)
+    Threads.@threads :dynamic for i in eachindex(a)
+        error("user error in the loop body")
+    end
+    a
+end
+@test_throws "user error in the loop body" _atthreads_dynamic_with_error(zeros(threadpoolsize()))
 
 try
     @macroexpand @threads(for i = 1:10, j = 1:10; end)
@@ -910,5 +976,94 @@ end
     for i = 1:4
         Random.seed!(r, 23)
         @test reproducible_rand(r, 10) == val
+    end
+end
+
+# @spawn racying with sync_end
+
+hidden_spawn(f) = Threads.@spawn f()
+
+function sync_end_race()
+    y = Ref(:notset)
+    local t
+    @sync begin
+        for _ in 1:6  # tweaked to maximize `nerror` below
+            Threads.@spawn nothing
+        end
+        t = hidden_spawn() do
+            Threads.@spawn y[] = :completed
+        end
+    end
+    try
+        wait(t)
+    catch
+        return :notscheduled
+    end
+    return y[]
+end
+
+function check_sync_end_race()
+    @sync begin
+        done = Threads.Atomic{Bool}(false)
+        try
+            # `Threads.@spawn` must fail to be scheduled or complete its execution:
+            ncompleted = 0
+            nnotscheduled = 0
+            nerror = 0
+            for i in 1:1000
+                y = try
+                    yield()
+                    sync_end_race()
+                catch err
+                    if err isa CompositeException
+                        if err.exceptions[1] isa Base.ScheduledAfterSyncException
+                            nerror += 1
+                            continue
+                        end
+                    end
+                    rethrow()
+                end
+                y in (:completed, :notscheduled) || return (; i, y)
+                ncompleted += y === :completed
+                nnotscheduled += y === :notscheduled
+            end
+            # Useful for tuning the test:
+            @debug "`check_sync_end_race` done" threadpoolsize() ncompleted nnotscheduled nerror
+        finally
+            done[] = true
+        end
+    end
+    return nothing
+end
+
+@testset "Racy `@spawn`" begin
+    @test check_sync_end_race() === nothing
+end
+
+# issue #41546, thread-safe package loading
+@testset "package loading" begin
+    ch = Channel{Bool}(threadpoolsize())
+    barrier = Base.Event()
+    old_act_proj = Base.ACTIVE_PROJECT[]
+    try
+        pushfirst!(LOAD_PATH, "@")
+        Base.ACTIVE_PROJECT[] = joinpath(@__DIR__, "TestPkg")
+        @sync begin
+            for _ in 1:threadpoolsize()
+                Threads.@spawn begin
+                    put!(ch, true)
+                    wait(barrier)
+                    @eval using TestPkg
+                end
+            end
+            for _ in 1:threadpoolsize()
+                take!(ch)
+            end
+            notify(barrier)
+        end
+        @test Base.root_module(@__MODULE__, :TestPkg) isa Module
+    finally
+        Base.ACTIVE_PROJECT[] = old_act_proj
+        popfirst!(LOAD_PATH)
     end
 end

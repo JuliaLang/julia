@@ -37,9 +37,13 @@ Currently supported rounding modes are:
 - [`RoundNearestTiesAway`](@ref)
 - [`RoundNearestTiesUp`](@ref)
 - [`RoundToZero`](@ref)
-- [`RoundFromZero`](@ref) ([`BigFloat`](@ref) only)
+- [`RoundFromZero`](@ref)
 - [`RoundUp`](@ref)
 - [`RoundDown`](@ref)
+
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9. Prior versions support
+    `RoundFromZero` for `BigFloat`s only.
 """
 struct RoundingMode{T} end
 
@@ -76,7 +80,10 @@ const RoundDown = RoundingMode{:Down}()
     RoundFromZero
 
 Rounds away from zero.
-This rounding mode may only be used with `T == BigFloat` inputs to [`round`](@ref).
+
+!!! compat "Julia 1.9"
+    `RoundFromZero` requires at least Julia 1.9. Prior versions support
+    `RoundFromZero` for `BigFloat`s only.
 
 # Examples
 ```jldoctest
@@ -84,7 +91,7 @@ julia> BigFloat("1.0000000000000001", 5, RoundFromZero)
 1.06
 ```
 """
-const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
+const RoundFromZero = RoundingMode{:FromZero}()
 
 """
     RoundNearestTiesAway

@@ -42,7 +42,7 @@ if !Sys.iswindows() || Sys.windows_version() >= Sys.WINDOWS_VISTA_VER
     # creation of symlink to directory that does not yet exist
     new_dir = joinpath(subdir, "new_dir")
     foo_file = joinpath(subdir, "new_dir", "foo")
-    nedlink = joinpath(subdir, "non_existant_dirlink")
+    nedlink = joinpath(subdir, "nonexistent_dirlink")
     symlink("new_dir", nedlink; dir_target=true)
     try
         readdir(nedlink)
@@ -111,6 +111,16 @@ end
     mktempdir() do d
         t = tempname(d)
         @test dirname(t) == d
+    end
+    @test_throws ArgumentError tempname(randstring())
+
+    # 38873: check that `TMPDIR` being set does not
+    # override the parent argument to `tempname`.
+    mktempdir() do d
+        withenv("TMPDIR"=>tempdir()) do
+            t = tempname(d)
+            @test dirname(t) == d
+        end
     end
     @test_throws ArgumentError tempname(randstring())
 end
@@ -183,7 +193,7 @@ end
             t = i % 2 == 0 ? mktempfile() : mktempdir()
             push!(temps, t)
             @test ispath(t)
-            @test length(TEMP_CLEANUP) == i 
+            @test length(TEMP_CLEANUP) == i
             @test TEMP_CLEANUP_MAX[] == n
             # delete 1/3 of the temp paths
             i % 3 == 0 && rm(t, recursive=true, force=true)
@@ -531,7 +541,10 @@ end
 
 if !Sys.iswindows()
     # chown will give an error if the user does not have permissions to change files
-    if get(ENV, "USER", "") == "root" || get(ENV, "HOME", "") == "/root"
+    uid = Libc.geteuid()
+    @test stat(file).uid == uid
+    @test uid == Libc.getuid()
+    if uid == 0 # root user
         chown(file, -2, -1)  # Change the file owner to nobody
         @test stat(file).uid != 0
         chown(file, 0, -2)  # Change the file group to nogroup (and owner back to root)
@@ -591,7 +604,8 @@ close(s)
         false
     catch e
         isa(e, SystemError) || rethrow()
-        @test sprint(showerror, e) == "SystemError: opening file \"this file is not expected to exist\": No such file or directory"
+        @test e.errnum == 2
+        @test startswith(sprint(showerror, e), "SystemError: opening file \"this file is not expected to exist\"")
         true
     end
 end
@@ -757,13 +771,13 @@ end
 mktempdir() do tmpdir
     # rename file
     file = joinpath(tmpdir, "afile.txt")
-    files_stat = stat(file)
     close(open(file, "w")) # like touch, but lets the operating system update
+    files_stat = stat(file)
     # the timestamp for greater precision on some platforms (windows)
 
     newfile = joinpath(tmpdir, "bfile.txt")
     mv(file, newfile)
-    newfile_stat = stat(file)
+    newfile_stat = stat(newfile)
 
     @test !ispath(file)
     @test isfile(newfile)
@@ -1439,7 +1453,7 @@ rm(dir)
 ####################
 mktempdir() do dir
     name1 = joinpath(dir, "apples")
-    name2 = joinpath(dir, "bannanas")
+    name2 = joinpath(dir, "bananas")
     @test !ispath(name1)
     @test touch(name1) == name1
     @test isfile(name1)
@@ -1637,7 +1651,7 @@ end
 
 if Sys.iswindows()
 @testset "mkdir/rm permissions" begin
-    # test delete permission in system folders (i.e. impliclty test chmod permissions)
+    # test delete permission in system folders (i.e. implicitly test chmod permissions)
     # issue #38433
     @test withenv("TMP" => "C:\\") do
         mktempdir() do dir end
@@ -1691,4 +1705,18 @@ end
         @test !isnothing(Base.Filesystem.getusername(s.uid))
         @test !isnothing(Base.Filesystem.getgroupname(s.gid))
     end
+end
+
+@testset "diskstat() works" begin
+    # Sanity check assuming disk is smaller than 32PB
+    PB = Int64(2)^44
+
+    dstat = diskstat()
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
+    @test occursin(r"^DiskStat\(total=\d+, used=\d+, available=\d+\)$", sprint(show, dstat))
+    # Test diskstat(::AbstractString)
+    dstat = diskstat(pwd())
+    @test dstat.total < 32PB
+    @test dstat.used + dstat.available == dstat.total
 end

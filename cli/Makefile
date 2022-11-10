@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 JULIAHOME := $(abspath $(SRCDIR)/..)
 BUILDDIR ?= .
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 include $(JULIAHOME)/deps/llvm-ver.make
 
@@ -13,6 +12,8 @@ LOADER_LDFLAGS = $(JLDFLAGS) -ffreestanding -L$(build_shlibdir) -L$(build_libdir
 
 ifeq ($(OS),WINNT)
 LOADER_CFLAGS += -municode -mconsole -nostdlib -fno-stack-check -fno-stack-protector -mno-stack-arg-probe
+else ifeq ($(OS),Linux)
+LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBCXX_VERSION)" | cut -d'|' -f1 | sed 's/\\//g')\"
 endif
 
 ifeq ($(OS),WINNT)
@@ -29,6 +30,14 @@ endif
 # Build list of dependent libraries that must be opened
 SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
 DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+ifneq (,$(findstring MINGW,$(shell uname)))
+# In MSYS2, do not perform path conversion for `DEP_LIBS`.
+# https://www.msys2.org/wiki/Porting/#filesystem-namespaces
+# We define this environment variable for only these two object files,
+# as they're the only ones that require it at the time of writing.
+$(BUILDDIR)/loader_lib.o: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
+$(BUILDDIR)/loader_lib.dbg.obj: export MSYS2_ARG_CONV_EXCL = -DDEP_LIBS=
+endif # MSYS2
 
 EXE_OBJS := $(BUILDDIR)/loader_exe.o
 EXE_DOBJS := $(BUILDDIR)/loader_exe.dbg.obj
@@ -65,7 +74,6 @@ $(DIRS):
 	@mkdir -p $@
 
 ifeq ($(OS),WINNT)
-ifneq ($(USEMSVC), 1)
 $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
 	JLVER=`cat $(JULIAHOME)/VERSION` && \
 	JLVERi=`echo $$JLVER | perl -nle \
@@ -74,7 +82,6 @@ $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERS
 	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
 EXE_OBJS += $(BUILDDIR)/julia_res.o
 EXE_DOBJS += $(BUILDDIR)/julia_res.o
-endif
 endif
 
 # Embed an Info.plist in the julia executable
@@ -105,7 +112,7 @@ endif
 
 $(build_shlibdir)/libjulia.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_OBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(SHIPFLAGS) $(LIB_OBJS) -o $@ \
-		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(call SONAME_FLAGS,libjulia.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 ifeq ($(OS), WINNT)
 	@# Note that if the objcopy command starts getting too long, we can use `@file` to read
@@ -115,7 +122,7 @@ endif
 
 $(build_shlibdir)/libjulia-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(LIB_DOBJS) $(SRCDIR)/list_strip_symbols.h | $(build_shlibdir) $(build_libdir)
 	@$(call PRINT_LINK, $(CC) $(call IMPLIB_FLAGS,$@.tmp) $(LOADER_CFLAGS) -DLIBRARY_EXPORTS -shared $(DEBUGFLAGS) $(LIB_DOBJS) -o $@ \
-		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(RPATH_LIB) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
+		$(JLIBLDFLAGS) $(LOADER_LDFLAGS) $(call SONAME_FLAGS,libjulia-debug.$(JL_MAJOR_SHLIB_EXT)))
 	@$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 ifeq ($(OS), WINNT)
 	@$(call PRINT_ANALYZE, $(OBJCOPY) $(build_libdir)/$(notdir $@).tmp.a $(STRIP_EXPORTED_FUNCS) $(build_libdir)/$(notdir $@).a && rm $(build_libdir)/$(notdir $@).tmp.a)

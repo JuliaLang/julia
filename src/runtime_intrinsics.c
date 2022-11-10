@@ -8,11 +8,234 @@
 //
 // TODO: add half-float support
 
+#include "APInt-C.h"
 #include "julia.h"
 #include "julia_internal.h"
-#include "APInt-C.h"
 
 const unsigned int host_char_bit = 8;
+
+// float16 intrinsics
+
+static inline float half_to_float(uint16_t ival) JL_NOTSAFEPOINT
+{
+    uint32_t sign = (ival & 0x8000) >> 15;
+    uint32_t exp = (ival & 0x7c00) >> 10;
+    uint32_t sig = (ival & 0x3ff) >> 0;
+    uint32_t ret;
+
+    if (exp == 0) {
+        if (sig == 0) {
+            sign = sign << 31;
+            ret = sign | exp | sig;
+        }
+        else {
+            int n_bit = 1;
+            uint16_t bit = 0x0200;
+            while ((bit & sig) == 0) {
+                n_bit = n_bit + 1;
+                bit = bit >> 1;
+            }
+            sign = sign << 31;
+            exp = ((-14 - n_bit + 127) << 23);
+            sig = ((sig & (~bit)) << n_bit) << (23 - 10);
+            ret = sign | exp | sig;
+        }
+    }
+    else if (exp == 0x1f) {
+        if (sig == 0) { // Inf
+            if (sign == 0)
+                ret = 0x7f800000;
+            else
+                ret = 0xff800000;
+        }
+        else // NaN
+            ret = 0x7fc00000 | (sign << 31) | (sig << (23 - 10));
+    }
+    else {
+        sign = sign << 31;
+        exp = ((exp - 15 + 127) << 23);
+        sig = sig << (23 - 10);
+        ret = sign | exp | sig;
+    }
+
+    float fret;
+    memcpy(&fret, &ret, sizeof(float));
+    return fret;
+}
+
+// float to half algorithm from:
+//   "Fast Half Float Conversion" by Jeroen van der Zijp
+//   ftp://ftp.fox-toolkit.org/pub/fasthalffloatconversion.pdf
+//
+// With adjustments for round-to-nearest, ties to even.
+
+static uint16_t basetable[512] = {
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+    0x0000, 0x0000, 0x0000, 0x0400, 0x0800, 0x0c00, 0x1000, 0x1400, 0x1800, 0x1c00, 0x2000,
+    0x2400, 0x2800, 0x2c00, 0x3000, 0x3400, 0x3800, 0x3c00, 0x4000, 0x4400, 0x4800, 0x4c00,
+    0x5000, 0x5400, 0x5800, 0x5c00, 0x6000, 0x6400, 0x6800, 0x6c00, 0x7000, 0x7400, 0x7800,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00, 0x7c00,
+    0x7c00, 0x7c00, 0x7c00, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000,
+    0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8000, 0x8400, 0x8800, 0x8c00, 0x9000, 0x9400,
+    0x9800, 0x9c00, 0xa000, 0xa400, 0xa800, 0xac00, 0xb000, 0xb400, 0xb800, 0xbc00, 0xc000,
+    0xc400, 0xc800, 0xcc00, 0xd000, 0xd400, 0xd800, 0xdc00, 0xe000, 0xe400, 0xe800, 0xec00,
+    0xf000, 0xf400, 0xf800, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00,
+    0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00, 0xfc00};
+
+static uint8_t shifttable[512] = {
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13, 0x12, 0x11, 0x10, 0x0f,
+    0x0e, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x0d, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19,
+    0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x19, 0x18, 0x17, 0x16, 0x15, 0x14, 0x13,
+    0x12, 0x11, 0x10, 0x0f, 0x0e, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d,
+    0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x0d, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18,
+    0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x18, 0x0d};
+
+static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
+{
+    uint32_t f;
+    memcpy(&f, &param, sizeof(float));
+    if (isnan(param)) {
+        uint32_t t = 0x8000 ^ (0x8000 & ((uint16_t)(f >> 0x10)));
+        return t ^ ((uint16_t)(f >> 0xd));
+    }
+    int i = ((f & ~0x007fffff) >> 23);
+    uint8_t sh = shifttable[i];
+    f &= 0x007fffff;
+    // If `val` is subnormal, the tables are set up to force the
+    // result to 0, so the significand has an implicit `1` in the
+    // cases we care about.
+    f |= 0x007fffff + 0x1;
+    uint16_t h = (uint16_t)(basetable[i] + ((f >> sh) & 0x03ff));
+    // round
+    // NOTE: we maybe should ignore NaNs here, but the payload is
+    // getting truncated anyway so "rounding" it might not matter
+    int nextbit = (f >> (sh - 1)) & 1;
+    if (nextbit != 0 && (h & 0x7C00) != 0x7C00) {
+        // Round halfway to even or check lower bits
+        if ((h & 1) == 1 || (f & ((1 << (sh - 1)) - 1)) != 0)
+            h += UINT16_C(1);
+    }
+    return h;
+}
+
+JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param)
+{
+    return half_to_float(param);
+}
+
+JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param)
+{
+    return float_to_half(param);
+}
+
+JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
+{
+    float res = (float)param;
+    uint32_t resi;
+    memcpy(&resi, &res, sizeof(res));
+    if ((resi&0x7fffffffu) < 0x38800000u){ // if Float16(res) is subnormal
+        // shift so that the mantissa lines up where it would for normal Float16
+        uint32_t shift = 113u-((resi & 0x7f800000u)>>23u);
+        if (shift<23u) {
+            resi |= 0x00800000; // set implicit bit
+            resi >>= shift;
+        }
+    }
+    if ((resi & 0x1fffu) == 0x1000u) { // if we are halfway between 2 Float16 values
+        memcpy(&resi, &res, sizeof(res));
+        // adjust the value by 1 ULP in the direction that will make Float16(res) give the right answer
+        resi += (fabs(res) < fabs(param)) - (fabs(param) < fabs(res));
+        memcpy(&res, &resi, sizeof(res));
+    }
+    return float_to_half(res);
+}
+
+//JL_DLLEXPORT double julia__extendhfdf2(uint16_t n) { return (double)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT int32_t julia__fixhfsi(uint16_t n) { return (int32_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT int64_t julia__fixhfdi(uint16_t n) { return (int64_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT uint32_t julia__fixunshfsi(uint16_t n) { return (uint32_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT uint64_t julia__fixunshfdi(uint16_t n) { return (uint64_t)julia__gnu_h2f_ieee(n); }
+//JL_DLLEXPORT uint16_t julia__floatsihf(int32_t n) { return julia__gnu_f2h_ieee((float)n); }
+//JL_DLLEXPORT uint16_t julia__floatdihf(int64_t n) { return julia__gnu_f2h_ieee((float)n); }
+//JL_DLLEXPORT uint16_t julia__floatunsihf(uint32_t n) { return julia__gnu_f2h_ieee((float)n); }
+//JL_DLLEXPORT uint16_t julia__floatundihf(uint64_t n) { return julia__gnu_f2h_ieee((float)n); }
+//HANDLE_LIBCALL(F16, F128, __extendhftf2)
+//HANDLE_LIBCALL(F16, F80, __extendhfxf2)
+//HANDLE_LIBCALL(F80, F16, __truncxfhf2)
+//HANDLE_LIBCALL(F128, F16, __trunctfhf2)
+//HANDLE_LIBCALL(PPCF128, F16, __trunctfhf2)
+//HANDLE_LIBCALL(F16, I128, __fixhfti)
+//HANDLE_LIBCALL(F16, I128, __fixunshfti)
+//HANDLE_LIBCALL(I128, F16, __floattihf)
+//HANDLE_LIBCALL(I128, F16, __floatuntihf)
+
 
 // run time version of bitcast intrinsic
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
@@ -83,7 +306,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerref(jl_value_t *p, jl_value_t *order)
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        return jl_atomic_load((jl_value_t**)pp);
+        return jl_atomic_load((_Atomic(jl_value_t*)*)pp);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -103,7 +326,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerset(jl_value_t *p, jl_value_t *x, jl_v
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_atomic_store((jl_value_t**)pp, x);
+        jl_atomic_store((_Atomic(jl_value_t*)*)pp, x);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -127,7 +350,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
     jl_value_t *y;
     char *pp = (char*)jl_unbox_long(p);
     if (ety == (jl_value_t*)jl_any_type) {
-        y = jl_atomic_exchange((jl_value_t**)pp, x);
+        y = jl_atomic_exchange((_Atomic(jl_value_t*)*)pp, x);
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -142,15 +365,25 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerswap(jl_value_t *p, jl_value_t *x, jl_
     return y;
 }
 
-JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order_sym)
+JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, jl_value_t *x, jl_value_t *order)
 {
-    // n.b. we use seq_cst always here, but need to verify the order sym
-    // against the weaker load-only that happens first
-    if (order_sym == (jl_value_t*)acquire_release_sym)
-        order_sym = (jl_value_t*)acquire_sym;
-    jl_value_t *expected = jl_atomic_pointerref(p, order_sym);
+    JL_TYPECHK(atomic_pointermodify, pointer, p);
+    JL_TYPECHK(atomic_pointermodify, symbol, order)
+    (void)jl_get_atomic_order_checked((jl_sym_t*)order, 1, 1);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
+    jl_value_t *expected;
+    if (ety == (jl_value_t*)jl_any_type) {
+        expected = jl_atomic_load((_Atomic(jl_value_t*)*)pp);
+    }
+    else {
+        if (!is_valid_intrinsic_elptr(ety))
+            jl_error("atomic_pointermodify: invalid pointer");
+        size_t nb = jl_datatype_size(ety);
+        if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
+            jl_error("atomic_pointermodify: invalid pointer for atomic operation");
+        expected = jl_atomic_new_bits(ety, pp);
+    }
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2);
     args[0] = expected;
@@ -159,7 +392,7 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
         jl_value_t *y = jl_apply_generic(f, args, 2);
         args[1] = y;
         if (ety == (jl_value_t*)jl_any_type) {
-            if (jl_atomic_cmpswap((jl_value_t**)pp, &expected, y))
+            if (jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &expected, y))
                 break;
         }
         else {
@@ -175,11 +408,15 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointermodify(jl_value_t *p, jl_value_t *f, j
         args[0] = expected;
         jl_gc_safepoint();
     }
-    // args[0] == expected (old); args[1] == y (new)
-    args[0] = jl_f_tuple(NULL, args, 2);
+    // args[0] == expected (old)
+    // args[1] == y (new)
+    jl_datatype_t *rettyp = jl_apply_modify_type(ety);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
+    args[0] = jl_new_struct(rettyp, args[0], args[1]);
     JL_GC_POP();
     return args[0];
 }
+
 
 JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *expected, jl_value_t *x, jl_value_t *success_order_sym, jl_value_t *failure_order_sym)
 {
@@ -193,20 +430,21 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
     // TODO: filter other invalid orderings
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
     char *pp = (char*)jl_unbox_long(p);
+    jl_datatype_t *rettyp = jl_apply_cmpswap_type(ety);
+    JL_GC_PROMISE_ROOTED(rettyp); // (JL_ALWAYS_LEAFTYPE)
     if (ety == (jl_value_t*)jl_any_type) {
-        jl_value_t **result;
-        JL_GC_PUSHARGS(result, 2);
-        result[0] = expected;
+        jl_value_t *result;
+        JL_GC_PUSH1(&result);
+        result = expected;
         int success;
         while (1) {
-            success = jl_atomic_cmpswap((jl_value_t**)pp, &result[0], x);
-            if (success || !jl_egal(result[0], expected))
+            success = jl_atomic_cmpswap((_Atomic(jl_value_t*)*)pp, &result, x);
+            if (success || !jl_egal(result, expected))
                 break;
         }
-        result[1] = success ? jl_true : jl_false;
-        result[0] = jl_f_tuple(NULL, result, 2);
+        result = jl_new_struct(rettyp, result, success ? jl_true : jl_false);
         JL_GC_POP();
-        return result[0];
+        return result;
     }
     else {
         if (!is_valid_intrinsic_elptr(ety))
@@ -216,14 +454,14 @@ JL_DLLEXPORT jl_value_t *jl_atomic_pointerreplace(jl_value_t *p, jl_value_t *exp
         size_t nb = jl_datatype_size(ety);
         if ((nb & (nb - 1)) != 0 || nb > MAX_POINTERATOMIC_SIZE)
             jl_error("atomic_pointerreplace: invalid pointer for atomic operation");
-        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, pp, expected, x, nb);
+        return jl_atomic_cmpswap_bits((jl_datatype_t*)ety, rettyp, pp, expected, x, nb);
     }
 }
 
 JL_DLLEXPORT jl_value_t *jl_atomic_fence(jl_value_t *order_sym)
 {
     JL_TYPECHK(fence, symbol, order_sym);
-    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 0, 0);
+    enum jl_memory_order order = jl_get_atomic_order_checked((jl_sym_t*)order_sym, 1, 1);
     if (order > jl_memory_order_monotonic)
         jl_fence();
     return jl_nothing;
@@ -323,9 +561,9 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
     }
 
 #define fp_select(a, func) \
-    sizeof(a) == sizeof(float) ? func##f((float)a) : func(a)
+    sizeof(a) <= sizeof(float) ? func##f((float)a) : func(a)
 #define fp_select2(a, b, func) \
-    sizeof(a) == sizeof(float) ? func##f(a, b) : func(a, b)
+    sizeof(a) <= sizeof(float) ? func##f(a, b) : func(a, b)
 
 // fast-function generators //
 
@@ -369,11 +607,11 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     uint16_t a = *(uint16_t*)pa; \
-    float A = __gnu_h2f_ieee(a); \
+    float A = julia__gnu_h2f_ieee(a); \
     if (osize == 16) { \
         float R; \
         OP(&R, A); \
-        *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+        *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
     } else { \
         OP((uint16_t*)pr, A); \
     } \
@@ -397,11 +635,11 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     float R = OP(A, B); \
-    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
 }
 
 // float or integer inputs, bool output
@@ -422,8 +660,8 @@ static int jl_##name##16(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEP
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     return OP(A, B); \
 }
@@ -463,12 +701,12 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
     uint16_t c = *(uint16_t*)pc; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
-    float C = __gnu_h2f_ieee(c); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
+    float C = julia__gnu_h2f_ieee(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
 }
 
 
@@ -800,7 +1038,7 @@ static inline jl_value_t *jl_intrinsiclambda_checked(jl_value_t *ty, void *pa, v
     jl_datatype_t *tuptyp = jl_apply_tuple_type_v(params, 2);
     JL_GC_PROMISE_ROOTED(tuptyp); // (JL_ALWAYS_LEAFTYPE)
     jl_task_t *ct = jl_current_task;
-    jl_value_t *newv = jl_gc_alloc(ct->ptls, ((jl_datatype_t*)tuptyp)->size, tuptyp);
+    jl_value_t *newv = jl_gc_alloc(ct->ptls, jl_datatype_size(tuptyp), tuptyp);
 
     intrinsic_checked_t op = select_intrinsic_checked(sz2, (const intrinsic_checked_t*)voidlist);
     int ovflw = op(sz * host_char_bit, pa, pb, jl_data_ptr(newv));
@@ -947,8 +1185,112 @@ bi_fintrinsic(div,div_float)
 bi_fintrinsic(frem,rem_float)
 
 // ternary operators //
+// runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.
+#if defined(_OS_WINDOWS_)
+// reinterpret(UInt64, ::Float64)
+uint64_t bitcast_d2u(double d) {
+    uint64_t r;
+    memcpy(&r, &d, 8);
+    return r;
+}
+// reinterpret(Float64, ::UInt64)
+double bitcast_u2d(uint64_t d) {
+    double r;
+    memcpy(&r, &d, 8);
+    return r;
+}
+// Base.splitbits(::Float64)
+void splitbits(double *hi, double *lo, double d) {
+    *hi = bitcast_u2d(bitcast_d2u(d) & 0xfffffffff8000000);
+    *lo = d - *hi;
+}
+// Base.exponent(::Float64)
+int exponent(double a) {
+    int e;
+    frexp(a, &e);
+    return e - 1;
+}
+// Base.fma_emulated(::Float32, ::Float32, ::Float32)
+float julia_fmaf(float a, float b, float c) {
+    double ab, res;
+    ab = (double)a * b;
+    res = ab + (double)c;
+    if ((bitcast_d2u(res) & 0x1fffffff) == 0x10000000){
+        double reslo = fabsf(c) > fabs(ab) ? ab-(res - c) : c-(res - ab);
+        if (reslo != 0)
+            res = nextafter(res, copysign(1.0/0.0, reslo));
+    }
+    return (float)res;
+}
+// Base.twomul(::Float64, ::Float64)
+void two_mul(double *abhi, double *ablo, double a, double b) {
+    double ahi, alo, bhi, blo, blohi, blolo;
+    splitbits(&ahi, &alo, a);
+    splitbits(&bhi, &blo, b);
+    splitbits(&blohi, &blolo, blo);
+    *abhi = a*b;
+    *ablo = alo*blohi - (((*abhi - ahi*bhi) - alo*bhi) - ahi*blo) + blolo*alo;
+}
+// Base.issubnormal(::Float64) (Win32's fpclassify seems broken)
+int issubnormal(double d) {
+    uint64_t y = bitcast_d2u(d);
+    return ((y & 0x7ff0000000000000) == 0) & ((y & 0x000fffffffffffff) != 0);
+}
+#if defined(_WIN32)
+// Win32 needs volatile (avoid over optimization?)
+#define VDOUBLE volatile double
+#else
+#define VDOUBLE double
+#endif
+
+// Base.fma_emulated(::Float64, ::Float64, ::Float64)
+double julia_fma(double a, double b, double c) {
+    double abhi, ablo, r, s;
+    two_mul(&abhi, &ablo, a, b);
+    if (!isfinite(abhi+c) || fabs(abhi) < 2.0041683600089732e-292 ||
+        issubnormal(a) || issubnormal(b)) {
+        int aandbfinite = isfinite(a) && isfinite(b);
+        if (!(aandbfinite && isfinite(c)))
+            return aandbfinite ? c : abhi+c;
+        if (a == 0 || b == 0)
+            return abhi+c;
+        int bias = exponent(a) + exponent(b);
+        VDOUBLE c_denorm = ldexp(c, -bias);
+        if (isfinite(c_denorm)) {
+            if (issubnormal(a))
+                a *= 4.503599627370496e15;
+            if (issubnormal(b))
+                b *= 4.503599627370496e15;
+            a = bitcast_u2d((bitcast_d2u(a) & 0x800fffffffffffff) | 0x3ff0000000000000);
+            b = bitcast_u2d((bitcast_d2u(b) & 0x800fffffffffffff) | 0x3ff0000000000000);
+            c = c_denorm;
+            two_mul(&abhi, &ablo, a, b);
+            r = abhi+c;
+            s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+            double sumhi = r+s;
+            if (issubnormal(ldexp(sumhi, bias))) {
+                double sumlo = r-sumhi+s;
+                int bits_lost = -bias-exponent(sumhi)-1022;
+                if ((bits_lost != 1) ^ ((bitcast_d2u(sumhi)&1) == 1))
+                    if (sumlo != 0)
+                        sumhi = nextafter(sumhi, copysign(1.0/0.0, sumlo));
+            }
+            return ldexp(sumhi, bias);
+        }
+        if (isinf(abhi) && signbit(c) == signbit(a*b))
+            return abhi;
+    }
+    r = abhi+c;
+    s = (fabs(abhi) > fabs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo);
+    return r+s;
+}
+#define fma(a, b, c) \
+    sizeof(a) == sizeof(float) ? julia_fmaf(a, b, c) : julia_fma(a, b, c)
+#else // On other systems use fma(f) directly
 #define fma(a, b, c) \
     sizeof(a) == sizeof(float) ? fmaf(a, b, c) : fma(a, b, c)
+#endif
+
 #define muladd(a, b, c) a * b + c
 ter_fintrinsic(fma,fma_float)
 ter_fintrinsic(muladd,muladd_float)
@@ -986,7 +1328,7 @@ static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
 fpiseq_n(float, 32)
 fpiseq_n(double, 64)
 #define fpiseq(a,b) \
-    sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
+    sizeof(a) <= sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
 bool_fintrinsic(eq,eq_float)
 bool_fintrinsic(ne,ne_float)
@@ -1035,7 +1377,7 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
         if (!(osize < 8 * sizeof(a))) \
             jl_error("fptrunc: output bitsize must be < input bitsize"); \
         else if (osize == 16) \
-            *(uint16_t*)pr = __gnu_f2h_ieee(a); \
+            *(uint16_t*)pr = julia__gnu_f2h_ieee(a); \
         else if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \
@@ -1120,4 +1462,11 @@ JL_DLLEXPORT jl_value_t *jl_arraylen(jl_value_t *a)
 {
     JL_TYPECHK(arraylen, array, a);
     return jl_box_long(jl_array_len((jl_array_t*)a));
+}
+
+JL_DLLEXPORT jl_value_t *jl_have_fma(jl_value_t *typ)
+{
+    JL_TYPECHK(have_fma, datatype, typ);
+    // TODO: run-time feature check?
+    return jl_false;
 }

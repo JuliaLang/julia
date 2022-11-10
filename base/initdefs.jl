@@ -89,9 +89,9 @@ const DEPOT_PATH = String[]
 function append_default_depot_path!(DEPOT_PATH)
     path = joinpath(homedir(), ".julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR::String, "..", "local", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "local", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
-    path = abspath(Sys.BINDIR::String, "..", "share", "julia")
+    path = abspath(Sys.BINDIR, "..", "share", "julia")
     path in DEPOT_PATH || push!(DEPOT_PATH, path)
 end
 
@@ -100,7 +100,7 @@ function init_depot_path()
     if haskey(ENV, "JULIA_DEPOT_PATH")
         str = ENV["JULIA_DEPOT_PATH"]
         isempty(str) && return
-        for path in split(str, Sys.iswindows() ? ';' : ':')
+        for path in eachsplit(str, Sys.iswindows() ? ';' : ':')
             if isempty(path)
                 append_default_depot_path!(DEPOT_PATH)
             else
@@ -169,7 +169,11 @@ See also
 const LOAD_PATH = copy(DEFAULT_LOAD_PATH)
 # HOME_PROJECT is no longer used, here just to avoid breaking things
 const HOME_PROJECT = Ref{Union{String,Nothing}}(nothing)
-const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing)
+const ACTIVE_PROJECT = Ref{Union{String,Nothing}}(nothing) # Modify this only via `Base.set_active_project(proj)`
+## Watchers for when the active project changes (e.g., Revise)
+# Each should be a thunk, i.e., `f()`. To determine the current active project,
+# the thunk can query `Base.active_project()`.
+const active_project_callbacks = []
 
 function current_project(dir::AbstractString)
     # look for project file in current dir and parents
@@ -198,7 +202,7 @@ end
 function parse_load_path(str::String)
     envs = String[]
     isempty(str) && return envs
-    for env in split(str, Sys.iswindows() ? ';' : ':')
+    for env in eachsplit(str, Sys.iswindows() ? ';' : ':')
         if isempty(env)
             for env′ in DEFAULT_LOAD_PATH
                 env′ in envs || push!(envs, env′)
@@ -231,10 +235,11 @@ function init_active_project()
     project = (JLOptions().project != C_NULL ?
         unsafe_string(Base.JLOptions().project) :
         get(ENV, "JULIA_PROJECT", nothing))
-    ACTIVE_PROJECT[] =
+    set_active_project(
         project === nothing ? nothing :
         project == "" ? nothing :
         startswith(project, "@") ? load_path_expand(project) : abspath(expanduser(project))
+    )
 end
 
 ## load path expansion: turn LOAD_PATH entries into concrete paths ##
@@ -246,7 +251,7 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         # if you put a `@` in LOAD_PATH manually, it's expanded late
         env == "@" && return active_project(false)
         env == "@." && return current_project()
-        env == "@stdlib" && return Sys.STDLIB::String
+        env == "@stdlib" && return Sys.STDLIB
         env = replace(env, '#' => VERSION.major, count=1)
         env = replace(env, '#' => VERSION.minor, count=1)
         env = replace(env, '#' => VERSION.patch, count=1)
@@ -280,7 +285,7 @@ load_path_expand(::Nothing) = nothing
 """
     active_project()
 
-Return the path of the active `Project.toml` file.
+Return the path of the active `Project.toml` file. See also [`Base.set_active_project`](@ref).
 """
 function active_project(search_load_path::Bool=true)
     for project in (ACTIVE_PROJECT[],)
@@ -305,6 +310,23 @@ function active_project(search_load_path::Bool=true)
         basename(project) in project_names && return project
     end
 end
+
+"""
+    set_active_project(projfile::Union{AbstractString,Nothing})
+
+Set the active `Project.toml` file to `projfile`. See also [`Base.active_project`](@ref).
+"""
+function set_active_project(projfile::Union{AbstractString,Nothing})
+    ACTIVE_PROJECT[] = projfile
+    for f in active_project_callbacks
+        try
+            Base.invokelatest(f)
+        catch
+            @error "active project callback $f failed" maxlog=1
+        end
+    end
+end
+
 
 """
     load_path()
@@ -332,8 +354,16 @@ const atexit_hooks = Callable[
 """
     atexit(f)
 
-Register a zero-argument function `f()` to be called at process exit. `atexit()` hooks are
-called in last in first out (LIFO) order and run before object finalizers.
+Register a zero- or one-argument function `f()` to be called at process exit.
+`atexit()` hooks are called in last in first out (LIFO) order and run before
+object finalizers.
+
+If `f` has a method defined for one integer argument, it will be called as
+`f(n::Int32)`, where `n` is the current exit code, otherwise it will be called
+as `f()`.
+
+!!! compat "Julia 1.9"
+    The one-argument form requires Julia 1.9
 
 Exit hooks are allowed to call `exit(n)`, in which case Julia will exit with
 exit code `n` (instead of the original exit code). If more than one exit hook
@@ -343,9 +373,33 @@ LIFO order, "last called" is equivalent to "first registered".)
 """
 atexit(f::Function) = (pushfirst!(atexit_hooks, f); nothing)
 
-function _atexit()
+function _atexit(exitcode::Cint)
     while !isempty(atexit_hooks)
         f = popfirst!(atexit_hooks)
+        try
+            if hasmethod(f, (Cint,))
+                f(exitcode)
+            else
+                f()
+            end
+        catch ex
+            showerror(stderr, ex)
+            Base.show_backtrace(stderr, catch_backtrace())
+            println(stderr)
+        end
+    end
+end
+
+## postoutput: register post output hooks ##
+## like atexit but runs after any requested output.
+## any hooks saved in the sysimage are cleared in Base._start
+const postoutput_hooks = Callable[]
+
+postoutput(f::Function) = (pushfirst!(postoutput_hooks, f); nothing)
+
+function _postoutput()
+    while !isempty(postoutput_hooks)
+        f = popfirst!(postoutput_hooks)
         try
             f()
         catch ex

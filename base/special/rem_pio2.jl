@@ -23,7 +23,8 @@
 #        @printf "0x%016x,\n" k
 #        I -= k
 #    end
-const INV_2PI = UInt64[
+
+const INV_2PI = (
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
     0x36d8_a566_4f10_e410,
@@ -42,7 +43,7 @@ const INV_2PI = UInt64[
     0x5d49_eeb1_faf9_7c5e,
     0xcf41_ce7d_e294_a4ba,
     0x9afe_d7ec_47e3_5742,
-    0x1580_cc11_bf1e_daea]
+    0x1580_cc11_bf1e_daea)
 
 @inline function cody_waite_2c_pio2(x::Float64, fn, n)
     pio2_1 = 1.57079632673412561417e+00
@@ -93,9 +94,9 @@ end
     return unsafe_trunc(Int, fn), DoubleFloat64(y1, y2)
 end
 
+
 """
     fromfraction(f::Int128)
-
 Compute a tuple of values `(z1,z2)` such that
     ``z1 + z2 == f / 2^128``
 and the significand of `z1` has 27 trailing zeros.
@@ -125,7 +126,10 @@ function fromfraction(f::Int128)
     return (z1,z2)
 end
 
-function paynehanek(x::Float64)
+# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
+# because the effect analysis currently can't prove it in the presence of `@inbounds` or
+# `:boundscheck`, but still the accesses to `INV_2PI` are really safe here
+Base.@assume_effects :consistent function paynehanek(x::Float64)
     # 1. Convert to form
     #
     #    x = X * 2^k,
@@ -210,14 +214,13 @@ end
 
 """
     rem_pio2_kernel(x::Union{Float32, Float64})
-
 Calculate `x` divided by `π/2` accurately for arbitrarily large `x`.
 Returns a pair `(k, r)`, where `k` is the quadrant of the result
 (multiple of π/2) and `r` is the remainder, such that ``k * π/2 = x - r``.
 The remainder is given as a double-double pair.
 `k` is positive if `x > 0` and is negative if `x ≤ 0`.
 """
-@inline function rem_pio2_kernel(x::Float64)
+@inline function rem_pio2_kernel(x::Float64) # accurate to 1e-22
     xhp = poshighword(x)
     #  xhp <= highword(5pi/4) implies |x| ~<= 5pi/4,
     if xhp <= 0x400f6a7a
@@ -279,50 +282,15 @@ The remainder is given as a double-double pair.
     return paynehanek(x)
 end
 
-## Float32
 @inline function rem_pio2_kernel(x::Float32)
-    pio2_1 = 1.57079631090164184570e+00
-    pio2_1t = 1.58932547735281966916e-08
-    inv_pio2 = 6.36619772367581382433e-01
     xd = convert(Float64, x)
-    absxd = abs(xd)
-    # it is assumed that NaN and Infs have been checked
-    if absxd <= pi*5/4
-        if absxd <= pi*3/4
-            if x > 0
-                return 1, DoubleFloat32(xd - pi/2)
-            else
-                return -1, DoubleFloat32(xd + pi/2)
-            end
-        end
-        if x > 0
-            return 2, DoubleFloat32(xd - pi)
-        else
-            return -2, DoubleFloat32(xd + pi)
-        end
-    elseif absxd <= pi*9/4
-        if absxd <= pi*7/4
-            if x > 0
-                return 3, DoubleFloat32(xd - pi*3/2)
-            else
-                return -3, DoubleFloat32(xd + pi*3/2)
-            end
-        end
-        if x > 0
-            return 4, DoubleFloat32(xd - pi*4/2)
-        else
-            return -4, DoubleFloat32(xd + pi*4/2)
-        end
-    end
-    #/* 33+53 bit pi is good enough for medium size */
-    if absxd < Float32(pi)/2*2.0f0^28 # medium size */
-        # use Cody Waite reduction with two coefficients
-        fn = round(xd*inv_pio2)
-        r  = xd-fn*pio2_1
-        w  = fn*pio2_1t
-        y = r-w;
+    # use Cody Waite reduction with two coefficients
+    if abs(x) < Float32(pi*0x1p27) # x < 2^28 * pi/2
+        fn = round(xd * (2/pi))
+        r  = fma(fn, -pi/2, xd)
+        y = fma(fn, -6.123233995736766e-17, r) # big(pi)/2 - pi/2 remainder
         return unsafe_trunc(Int, fn), DoubleFloat32(y)
     end
-    n, y = rem_pio2_kernel(xd)
+    n, y = @noinline paynehanek(xd)
     return n, DoubleFloat32(y.hi)
 end

@@ -158,7 +158,7 @@ end
 
     i = 0
     while i+8 <= len
-        res = _rotl23(_plus(s0,s3))
+        res = _plus(_rotl23(_plus(s0,s3)),s0)
         unsafe_store!(reinterpret(Ptr{UInt64}, dst + i), f(res, T))
         t = _shl17(s1)
         s2 = _xor(s2, s0)
@@ -170,7 +170,7 @@ end
         i += 8
     end
     if i < len
-        res = _rotl23(_plus(s0,s3))
+        res = _plus(_rotl23(_plus(s0,s3)),s0)
         t = _shl17(s1)
         s2 = _xor(s2, s0)
         s3 = _xor(s3, s1)
@@ -200,7 +200,7 @@ end
 
     i = 0
     while i+8 <= len
-        res = _rotl23(_plus(s0,s3))
+        res = _plus(_rotl23(_plus(s0,s3)),s0)
         shift = 0
         while i+8 <= len && shift < 8
             resLoc = _and(_lshr(res, shift), 0x0101010101010101)
@@ -219,7 +219,7 @@ end
     end
     if i < len
         # we may overgenerate some bytes here, if len mod 64 <= 56 and len mod 8 != 0
-        res = _rotl23(_plus(s0,s3))
+        res = _plus(_rotl23(_plus(s0,s3)),s0)
         resLoc = _and(res, 0x0101010101010101)
         ref = Ref(resLoc)
         ccall(:memcpy, Ptr{Cvoid}, (Ptr{UInt8}, Ptr{UInt64}, Csize_t), dst+i, ref, len-i)
@@ -245,7 +245,7 @@ end
 
     i = 0
     while i + 8*N <= len
-        res = _rotl23(_plus(s0,s3))
+        res = _plus(_rotl23(_plus(s0,s3)),s0)
         t = _shl17(s1)
         s2 = _xor(s2, s0)
         s3 = _xor(s3, s1)
@@ -264,7 +264,7 @@ end
     msk = ntuple(i->VecElement(0x0101010101010101), Val(N))
     i = 0
     while i + 64*N <= len
-        res = _rotl23(_plus(s0,s3))
+        res = _plus(_rotl23(_plus(s0,s3)),s0)
         t = _shl17(s1)
         s2 = _xor(s2, s0)
         s3 = _xor(s3, s1)

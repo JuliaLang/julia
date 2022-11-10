@@ -2,6 +2,8 @@
 
 using Random
 
+is_effect_free(args...) = Core.Compiler.is_effect_free(Base.infer_effects(args...))
+
 @testset "gcd/lcm" begin
     # All Integer data types take different code paths -- test all
     # TODO: Test gcd and lcm for BigInt.
@@ -146,6 +148,11 @@ using Random
     @test gcd(0xf, 20) == 5
     @test gcd(UInt32(6), Int8(-50)) == 2
     @test gcd(typemax(UInt), -16) == 1
+
+    @testset "effects" begin
+        @test is_effect_free(gcd, Tuple{Int,Int})
+        @test is_effect_free(lcm, Tuple{Int,Int})
+    end
 end
 
 @testset "gcd/lcm for arrays" begin
@@ -204,6 +211,14 @@ end
     @test gcd(MyRational(2//3), 3) == gcd(2//3, 3) == gcd(Real[MyRational(2//3), 3])
     @test lcm(MyRational(2//3), 3) == lcm(2//3, 3) == lcm(Real[MyRational(2//3), 3])
     @test gcdx(MyRational(2//3), 3) == gcdx(2//3, 3)
+
+    # test error path
+    struct MyOtherRational <: Real
+        val::Rational{Int}
+    end
+    @test_throws MethodError gcd(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError lcm(MyOtherRational(2//3), MyOtherRational(3//4))
+    @test_throws MethodError gcdx(MyOtherRational(2//3), MyOtherRational(3//4))
 end
 
 @testset "invmod" begin
@@ -264,6 +279,9 @@ end
     @test prevpow(2, 3) == 2
     @test prevpow(2, 4) == 4
     @test prevpow(2, 5) == 4
+    @test prevpow(Int64(10), Int64(1234567890123456789)) === Int64(1000000000000000000)
+    @test prevpow(10, 101.0) === 100
+    @test prevpow(10.0, 101) === 100.0
     @test_throws DomainError prevpow(0, 3)
     @test_throws DomainError prevpow(0, 3)
 end
@@ -487,3 +505,23 @@ end
     ci = code_typed(() -> 14 // 21)[][1]
     @test ci.code == Any[Core.ReturnNode(2 // 3)]
 end
+@testset "binomial" begin
+    for T in (Int8, Int16, Int32, Int64)
+        for x in rand(-isqrt(typemax(T)):isqrt(typemax(T)), 1000)
+            @test binomial(x,T(1)) == x
+            x>=0 && @test binomial(x,x-T(1)) == x
+            @test binomial(x,T(2)) == div(x*(x-1), 2)
+            x>=0 && @test binomial(x,x-T(2)) == div(x*(x-1), 2)
+        end
+        @test @inferred(binomial(one(T),one(T))) isa T
+    end
+    for x in ((false,false), (false,true), (true,false), (true,true))
+        @test binomial(x...) == (x != (false,true))
+    end
+end
+
+# concrete-foldability
+@test Base.infer_effects(gcd, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
+@test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable

@@ -5,7 +5,7 @@
 ###################################
 
 using Random, Sockets
-using Downloads: download
+using Downloads: Downloads, download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
 
@@ -20,8 +20,33 @@ shcmd = `sh`
 sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
+
+function _tryonce_download_from_cache(desired_url::AbstractString)
+    cache_url = "https://cache.julialang.org/foo/$(desired_url)"
+    cache_output_filename = joinpath(mktempdir(), "myfile")
+    cache_response = Downloads.request(
+        cache_url;
+        output = cache_output_filename,
+        throw = false,
+        timeout = 60,
+    )
+    if cache_response isa Downloads.Response
+        if Downloads.status_ok(cache_response.proto, cache_response.status)
+            return cache_output_filename
+        end
+    end
+    return Downloads.download(desired_url; timeout = 60)
+end
+
+function download_from_cache(desired_url::AbstractString)
+    f = () -> _tryonce_download_from_cache(desired_url)
+    delays = Float64[30, 30, 60, 60, 60]
+    g = retry(f; delays)
+    return g()
+end
+
 if Sys.iswindows()
-    busybox = download("https://cache.julialang.org/https://frippery.org/files/busybox/busybox.exe", joinpath(tempdir(), "busybox.exe"))
+    busybox = download_from_cache("https://frippery.org/files/busybox/busybox.exe")
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
@@ -579,8 +604,8 @@ end
 @test_throws ArgumentError run(Base.AndCmds(`$truecmd`, ``))
 
 # tests for reducing over collection of Cmd
-@test_throws ArgumentError reduce(&, Base.AbstractCmd[])
-@test_throws ArgumentError reduce(&, Base.Cmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.AbstractCmd[])
+@test_throws "reducing over an empty collection is not allowed" reduce(&, Base.Cmd[])
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # readlines(::Cmd), accidentally broken in #20203
@@ -599,6 +624,7 @@ end
 # accessing the command elements as an array or iterator:
 let c = `ls -l "foo bar"`
     @test collect(c) == ["ls", "-l", "foo bar"]
+    @test collect(Iterators.reverse(c)) == reverse!(["ls", "-l", "foo bar"])
     @test first(c) == "ls" == c[1]
     @test last(c) == "foo bar" == c[3] == c[end]
     @test c[1:2] == ["ls", "-l"]
@@ -650,7 +676,7 @@ end
 psep = if Sys.iswindows() ";" else ":" end
 withenv("PATH" => "$(Sys.BINDIR)$(psep)$(ENV["PATH"])") do
     julia_exe = joinpath(Sys.BINDIR, Base.julia_exename())
-    @test Sys.which("julia") == abspath(julia_exe)
+    @test Sys.which(Base.julia_exename()) == abspath(julia_exe)
     @test Sys.which(julia_exe) == abspath(julia_exe)
 end
 
@@ -771,6 +797,12 @@ let text = "input-test-text"
     @test proc.out === out
     @test read(out, String) == text
     @test success(proc)
+
+    out = PipeBuffer()
+    proc = run(catcmd, IOBuffer(SubString(text)), out)
+    @test success(proc)
+    @test proc.out === proc.err === proc.in === devnull
+    @test String(take!(out)) == text
 end
 
 
@@ -811,6 +843,39 @@ end
         cmd2 = addenv(cmd, "FOO" => "foo2", "BAR" => "bar"; inherit=true)
         @test strip(String(read(cmd2))) == "foo2 bar"
     end
+    # Keys with value === nothing are deleted
+    cmd = Cmd(`$shcmd -c "echo \$FOO \$BAR"`, env=Dict("FOO" => "foo", "BAR" => "bar"))
+    cmd2 = addenv(cmd, "FOO" => nothing)
+    @test strip(String(read(cmd2))) == "bar"
+    # addenv keeps the cmd's dir (#42131)
+    dir = joinpath(pwd(), "dir")
+    cmd = addenv(setenv(`julia`; dir=dir), Dict())
+    @test cmd.dir == dir
+
+    @test addenv(``, ["a=b=c"], inherit=false).env == ["a=b=c"]
+    cmd = addenv(``, "a"=>"b=c", inherit=false)
+    @test cmd.env == ["a=b=c"]
+    cmd = addenv(cmd, "b"=>"b")
+    @test issetequal(cmd.env, ["b=b", "a=b=c"])
+end
+
+@testset "setenv with dir (with tests for #42131)" begin
+    dir1 = joinpath(pwd(), "dir1")
+    dir2 = joinpath(pwd(), "dir2")
+    cmd = Cmd(`julia`; dir=dir1)
+    @test cmd.dir == dir1
+    @test Cmd(cmd).dir == dir1
+    @test Cmd(cmd; dir=dir2).dir == dir2
+    @test Cmd(cmd; dir="").dir == ""
+    @test setenv(cmd).dir == dir1
+    @test setenv(cmd; dir=dir2).dir == dir2
+    @test setenv(cmd; dir="").dir == ""
+    @test setenv(cmd, "FOO"=>"foo").dir == dir1
+    @test setenv(cmd, "FOO"=>"foo"; dir=dir2).dir == dir2
+    @test setenv(cmd, "FOO"=>"foo"; dir="").dir == ""
+    @test setenv(cmd, Dict("FOO"=>"foo")).dir == dir1
+    @test setenv(cmd, Dict("FOO"=>"foo"); dir=dir2).dir == dir2
+    @test setenv(cmd, Dict("FOO"=>"foo"); dir="").dir == ""
 end
 
 

@@ -192,3 +192,5 @@ function (ss::SummarySize)(obj::Task)
     # TODO: add stack size, and possibly traverse stack roots
     return size
 end
+
+(ss::SummarySize)(obj::BigInt) = _summarysize(ss, obj) + obj.alloc*sizeof(Base.GMP.Limb)

@@ -64,7 +64,8 @@ static void unmap_page(void *ptr, size_t size)
 enum class Prot : int {
     RW = PAGE_READWRITE,
     RX = PAGE_EXECUTE,
-    RO = PAGE_READONLY
+    RO = PAGE_READONLY,
+    NO = PAGE_NOACCESS
 };
 
 static void protect_page(void *ptr, size_t size, Prot flags)
@@ -81,7 +82,8 @@ static void protect_page(void *ptr, size_t size, Prot flags)
 enum class Prot : int {
     RW = PROT_READ | PROT_WRITE,
     RX = PROT_READ | PROT_EXEC,
-    RO = PROT_READ
+    RO = PROT_READ,
+    NO = PROT_NONE
 };
 
 static void protect_page(void *ptr, size_t size, Prot flags)
@@ -173,7 +175,7 @@ static intptr_t get_anon_hdl(void)
     if (check_fd_or_close(fd))
         return fd;
 #  endif
-    char shm_name[] = "julia-codegen-0123456789-0123456789/tmp///";
+    char shm_name[JL_PATH_MAX] = "julia-codegen-0123456789-0123456789/tmp///";
     pid_t pid = getpid();
     // `shm_open` can't be mapped exec on mac
 #  ifndef _OS_DARWIN_
@@ -195,8 +197,14 @@ static intptr_t get_anon_hdl(void)
             return fd;
         }
     }
-    snprintf(shm_name, sizeof(shm_name),
-             "/tmp/julia-codegen-%d-XXXXXX", (int)pid);
+    size_t len = sizeof(shm_name);
+    if (uv_os_tmpdir(shm_name, &len) != 0) {
+        // Unknown error; default to `/tmp`
+        snprintf(shm_name, sizeof(shm_name), "/tmp");
+        len = 4;
+    }
+    snprintf(shm_name + len, sizeof(shm_name) - len,
+             "/julia-codegen-%d-XXXXXX", (int)pid);
     fd = mkstemp(shm_name);
     if (check_fd_or_close(fd)) {
         unlink(shm_name);
@@ -205,12 +213,17 @@ static intptr_t get_anon_hdl(void)
     return -1;
 }
 
-static size_t map_offset = 0;
+static _Atomic(size_t) map_offset{0};
 // Multiple of 128MB.
 // Hopefully no one will set a ulimit for this to be a problem...
 static constexpr size_t map_size_inc_default = 128 * 1024 * 1024;
 static size_t map_size = 0;
-static jl_mutex_t shared_map_lock;
+static struct _make_shared_map_lock {
+    uv_mutex_t mtx;
+    _make_shared_map_lock() {
+        uv_mutex_init(&mtx);
+    };
+} shared_map_lock;
 
 static size_t get_map_size_inc()
 {
@@ -239,7 +252,7 @@ static intptr_t init_shared_map()
     anon_hdl = get_anon_hdl();
     if (anon_hdl == -1)
         return -1;
-    map_offset = 0;
+    jl_atomic_store_relaxed(&map_offset, 0);
     map_size = get_map_size_inc();
     int ret = ftruncate(anon_hdl, map_size);
     if (ret != 0) {
@@ -256,7 +269,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
     *id = off;
     size_t map_size_inc = get_map_size_inc();
     if (__unlikely(off + size > map_size)) {
-        JL_LOCK_NOGC(&shared_map_lock);
+        uv_mutex_lock(&shared_map_lock.mtx);
         size_t old_size = map_size;
         while (off + size > map_size)
             map_size += map_size_inc;
@@ -267,7 +280,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
                 abort();
             }
         }
-        JL_UNLOCK_NOGC(&shared_map_lock);
+        uv_mutex_unlock(&shared_map_lock.mtx);
     }
     return create_shared_map(size, off);
 }
@@ -287,7 +300,7 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
         // However, it seems possible to change this at kernel compile time.
 
         // pwrite doesn't support offset with sign bit set but lseek does.
-        // This is obviously not thread safe but none of the mem manager does anyway...
+        // This is obviously not thread-safe but none of the mem manager does anyway...
         // From the kernel code, `lseek` with `SEEK_SET` can't fail.
         // However, this can possibly confuse the glibc wrapper to think that
         // we have invalid input value. Use syscall directly to be sure.
@@ -640,7 +653,7 @@ protected:
                 unmap_page((void*)block.wr_ptr, block.total);
             }
             else {
-                protect_page((void*)block.wr_ptr, block.total, Prot::RO);
+                protect_page((void*)block.wr_ptr, block.total, Prot::NO);
                 block.state = SplitPtrBlock::WRInit;
             }
         }
@@ -847,8 +860,11 @@ uint8_t *RTDyldMemoryManagerJL::allocateCodeSection(uintptr_t Size,
                                                     StringRef SectionName)
 {
     // allocating more than one code section can confuse libunwind.
+#if !defined(_COMPILER_MSAN_ENABLED_)
+    // TODO: Figure out why msan needs this.
     assert(!code_allocated);
     code_allocated = true;
+#endif
     total_allocated += Size;
     if (exe_alloc)
         return (uint8_t*)exe_alloc->alloc(Size, Alignment);

@@ -4,7 +4,7 @@
 
 # Numbers are convertible
 convert(::Type{T}, x::T)      where {T<:Number} = x
-convert(::Type{T}, x::Number) where {T<:Number} = T(x)
+convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
     isinteger(x) -> Bool
@@ -94,13 +94,13 @@ keys(::Number) = OneTo(1)
 
 getindex(x::Number) = x
 function getindex(x::Number, i::Integer)
-    @_inline_meta
-    @boundscheck i == 1 || throw(BoundsError())
+    @inline
+    @boundscheck i == 1 || throw(BoundsError(x, i))
     x
 end
 function getindex(x::Number, I::Integer...)
-    @_inline_meta
-    @boundscheck all(isone, I) || throw(BoundsError())
+    @inline
+    @boundscheck all(isone, I) || throw(BoundsError(x, I))
     x
 end
 get(x::Number, i::Integer, default) = isone(i) ? x : default
@@ -115,7 +115,7 @@ copy(x::Number) = x # some code treats numbers as collection-like
 """
     signbit(x)
 
-Returns `true` if the value of the sign of `x` is negative, otherwise `false`.
+Return `true` if the value of the sign of `x` is negative, otherwise `false`.
 
 See also [`sign`](@ref) and [`copysign`](@ref).
 
@@ -168,12 +168,24 @@ abs(x::Real) = ifelse(signbit(x), -x, x)
 
 Squared absolute value of `x`.
 
+This can be faster than `abs(x)^2`, especially for complex
+numbers where `abs(x)` requires a square root via [`hypot`](@ref).
+
+See also [`abs`](@ref), [`conj`](@ref), [`real`](@ref).
+
 # Examples
 ```jldoctest
 julia> abs2(-3)
 9
+
+julia> abs2(3.0 + 4.0im)
+25.0
+
+julia> sum(abs2, [1+2im, 3+4im])  # LinearAlgebra.norm(x)^2
+30
 ```
 """
+abs2(x::Number) = abs(x)^2
 abs2(x::Real) = x*x
 
 """
@@ -340,7 +352,7 @@ one(x::T) where {T<:Number} = one(T)
     oneunit(x::T)
     oneunit(T::Type)
 
-Returns `T(one(x))`, where `T` is either the type of the argument or
+Return `T(one(x))`, where `T` is either the type of the argument or
 (if a type is passed) the argument.  This differs from [`one`](@ref) for
 dimensionful quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).

@@ -2,56 +2,6 @@
 
 ## RandomDevice
 
-if Sys.iswindows()
-    struct RandomDevice <: AbstractRNG
-        buffer::Vector{UInt128}
-
-        RandomDevice() = new(Vector{UInt128}(undef, 1))
-    end
-
-    function rand(rd::RandomDevice, sp::SamplerBoolBitInteger)
-        rand!(rd, rd.buffer)
-        @inbounds return rd.buffer[1] % sp[]
-    end
-else # !windows
-    struct RandomDevice <: AbstractRNG
-        unlimited::Bool
-
-        RandomDevice(; unlimited::Bool=true) = new(unlimited)
-    end
-
-    rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = read(getfile(rd), sp[])
-    rand(rd::RandomDevice, ::SamplerType{Bool}) = read(getfile(rd), UInt8) % Bool
-
-    function getfile(rd::RandomDevice)
-        devrandom = rd.unlimited ? DEV_URANDOM : DEV_RANDOM
-        # TODO: there is a data-race, this can leak up to nthreads() copies of the file descriptors,
-        # so use a "thread-once" utility once available
-        isassigned(devrandom) || (devrandom[] = open(rd.unlimited ? "/dev/urandom" : "/dev/random"))
-        devrandom[]
-    end
-
-    const DEV_RANDOM  = Ref{IOStream}()
-    const DEV_URANDOM = Ref{IOStream}()
-
-end # os-test
-
-# NOTE: this can't be put within the if-else block above
-for T in (Bool, BitInteger_types...)
-    if Sys.iswindows()
-        @eval function rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T})
-            Base.windowserror("SystemFunction036 (RtlGenRandom)", 0 == ccall(
-                (:SystemFunction036, :Advapi32), stdcall, UInt8, (Ptr{Cvoid}, UInt32),
-                  A, sizeof(A)))
-            A
-        end
-    else
-        @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = read!(getfile(rd), A)
-    end
-end
-
-# RandomDevice produces natively UInt64
-rng_native_52(::RandomDevice) = UInt64
 
 """
     RandomDevice()
@@ -60,10 +10,30 @@ Create a `RandomDevice` RNG object.
 Two such objects will always generate different streams of random numbers.
 The entropy is obtained from the operating system.
 """
-RandomDevice
-
-RandomDevice(::Nothing) = RandomDevice()
+struct RandomDevice <: AbstractRNG; end
+RandomDevice(seed::Nothing) = RandomDevice()
 seed!(rng::RandomDevice) = rng
+
+rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = Libc.getrandom!(Ref{sp[]}())[]
+rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
+function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
+    Libc.getrandom!(A)
+    # we need to mask the result so that only the LSB in each byte can be non-zero
+    GC.@preserve A begin
+        p = Ptr{UInt8}(pointer(A))
+        for i = 1:length(A)
+            unsafe_store!(p, unsafe_load(p) & 0x1)
+            p += 1
+        end
+    end
+    return A
+end
+for T in BitInteger_types
+    @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = Libc.getrandom!(A)
+end
+
+# RandomDevice produces natively UInt64
+rng_native_52(::RandomDevice) = UInt64
 
 
 ## MersenneTwister
@@ -313,18 +283,10 @@ end
 function make_seed()
     try
         return rand(RandomDevice(), UInt32, 4)
-    catch
-        println(stderr,
-                "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
-        seed = reinterpret(UInt64, time())
-        seed = hash(seed, getpid() % UInt)
-        try
-            seed = hash(seed, parse(UInt64,
-                                    read(pipeline(`ifconfig`, `sha1sum`), String)[1:40],
-                                    base = 16) % UInt)
-        catch
-        end
-        return make_seed(seed)
+    catch ex
+        ex isa IOError || rethrow()
+        @warn "Entropy pool not available to seed RNG; using ad-hoc entropy sources."
+        return make_seed(Libc.rand())
     end
 end
 
@@ -368,6 +330,19 @@ end
 # GLOBAL_RNG currently uses TaskLocalRNG
 typeof_rng(::_GLOBAL_RNG) = TaskLocalRNG
 
+"""
+    default_rng() -> rng
+
+Return the default global random number generator (RNG).
+
+!!! note
+    What the default RNG is is an implementation detail.  Across different versions of
+    Julia, you should not expect the default RNG to be always the same, nor that it will
+    return the same stream of random numbers for a given seed.
+
+!!! compat "Julia 1.3"
+    This function was introduced in Julia 1.3.
+"""
 @inline default_rng() = TaskLocalRNG()
 @inline default_rng(tid::Int) = TaskLocalRNG()
 
@@ -376,6 +351,7 @@ copy!(::_GLOBAL_RNG, src::Xoshiro) = copy!(default_rng(), src)
 copy(::_GLOBAL_RNG) = copy(default_rng())
 
 GLOBAL_SEED = 0
+set_global_seed!(seed) = global GLOBAL_SEED = seed
 
 function seed!(::_GLOBAL_RNG, seed=rand(RandomDevice(), UInt64, 4))
     global GLOBAL_SEED = seed
@@ -384,7 +360,7 @@ end
 
 seed!(rng::_GLOBAL_RNG, ::Nothing) = seed!(rng)  # to resolve ambiguity
 
-seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64},NTuple{4,UInt64}}=nothing) =
+seed!(seed::Union{Nothing,Integer,Vector{UInt32},Vector{UInt64}}=nothing) =
     seed!(GLOBAL_RNG, seed)
 
 rng_native_52(::_GLOBAL_RNG) = rng_native_52(default_rng())
@@ -412,6 +388,7 @@ end
 
 function __init__()
     seed!(GLOBAL_RNG)
+    ccall(:jl_gc_init_finalizer_rng_state, Cvoid, ())
 end
 
 
@@ -489,7 +466,7 @@ end
 
 ##### Array : internal functions
 
-# internal array-like type to circumevent the lack of flexibility with reinterpret
+# internal array-like type to circumvent the lack of flexibility with reinterpret
 struct UnsafeView{T} <: DenseArray{T,1}
     ptr::Ptr{T}
     len::Int
@@ -749,8 +726,8 @@ jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
 # parameters in the tuples are:
 # 1: .adv_jump (jump steps)
 # 2: .adv (number of generated floats at the DSFMT_state level since seeding, besides jumps)
-# 3, 4: .adv_vals, .idxF (counters to reconstruct the float chache, optional if 5-6 not shown))
-# 5, 6: .adv_ints, .idxI (counters to reconstruct the integer chache, optional)
+# 3, 4: .adv_vals, .idxF (counters to reconstruct the float cache, optional if 5-6 not shown))
+# 5, 6: .adv_ints, .idxI (counters to reconstruct the integer cache, optional)
 
 Random.MersenneTwister(seed::Union{Integer,Vector{UInt32}}, advance::NTuple{6,Integer}) =
     advance!(MersenneTwister(seed), advance...)

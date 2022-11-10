@@ -60,7 +60,9 @@ end
 end
 
 @testset "DateFormat printing" begin
-    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SSP\""
+    @test sprint(show, DateFormat("yyyzzxmmdd\\MHH:MM:SS\\P")) == "dateformat\"yyyzzxmmdd\\MHH:MM:SS\\P\""
+    @test sprint(show, dateformat"yyyy-mm-dd\THH:MM:SS.s") == "dateformat\"yyyy-mm-dd\\THH:MM:SS.s\""
+    @test sprint(show, dateformat"yyyy-mm-ddTHH:MM:SS.s") == "dateformat\"yyyy-mm-ddTHH:MM:SS.s\""
     @test sprint(show, DateFormat("yyy").tokens[1]) == "DatePart(yyy)"
     @test sprint(show, DateFormat("mmzzdd").tokens[2]) == "Delim(zz)"
     @test sprint(show, DateFormat("ddxmm").tokens[2]) == "Delim(x)"
@@ -465,13 +467,17 @@ end
 # Issue #21504
 @test tryparse(Dates.Date, "0-1000") === nothing
 
+# Issue #44003
+@test tryparse(Dates.Date, "2017", Dates.DateFormat(".s")) === nothing
+
 @testset "parse milliseconds, Issue #22100" begin
     @test Dates.DateTime("2017-Mar-17 00:00:00.0000", "y-u-d H:M:S.s") == Dates.DateTime(2017, 3, 17)
     @test Dates.parse_components(".1", Dates.DateFormat(".s")) == [Dates.Millisecond(100)]
     @test Dates.parse_components(".12", Dates.DateFormat(".s")) == [Dates.Millisecond(120)]
     @test Dates.parse_components(".123", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
     @test Dates.parse_components(".1230", Dates.DateFormat(".s")) == [Dates.Millisecond(123)]
-    @test_throws InexactError Dates.parse_components(".1234", Dates.DateFormat(".s"))
+    # Issue #44003
+    @test_throws ArgumentError Dates.parse_components(".1234", Dates.DateFormat(".s"))
 
     # Ensure that no overflow occurs when using Int32 literals: Int32(10)^10
     @test Dates.parse_components("." * rpad(999, 10, '0'), Dates.DateFormat(".s")) == [Dates.Millisecond(999)]
@@ -544,7 +550,7 @@ end
             @test Time("$t12", "$HH:MMp") == t
         end
         local tmstruct, strftime
-        withlocales(["C"]) do
+        withlocales(["C"]) do locale
             # test am/pm comparison handling
             tmstruct = Libc.strptime("%I:%M%p", t12)
             strftime = Libc.strftime("%I:%M%p", tmstruct)

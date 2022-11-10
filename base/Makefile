@@ -1,7 +1,6 @@
 SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BUILDDIR := .
 JULIAHOME := $(abspath $(SRCDIR)/..)
-include $(JULIAHOME)/deps/Versions.make
 include $(JULIAHOME)/Make.inc
 
 TAGGED_RELEASE_BANNER := ""
@@ -47,8 +46,6 @@ else
 	@echo "const MACHINE = \"$(XC_HOST)\"" >> $@
 endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
-	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
-	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
 else
@@ -99,7 +96,7 @@ endif
 $(BUILDDIR)/version_git.jl.phony: $(SRCDIR)/version_git.sh
 ifneq ($(NO_GIT), 1)
 	sh $< $(SRCDIR) > $@
-	@# This to avoid touching git_version.jl when it is not modified,
+	@# This to avoid touching version_git.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
 	    $(call PRINT_PERL,) \
@@ -164,14 +161,14 @@ endif
 
 define symlink_system_library
 libname_$2 := $$(notdir $(call versioned_libname,$2,$3))
-libpath_$2 := $$(shell $$(call spawn,$$(build_depsbindir)/libwhich) -p $$(libname_$2) 2>/dev/null)
+libpath_$2 := $$(shell $$(call spawn,$$(LIBWHICH)) -p $$(libname_$2) 2>/dev/null)
 symlink_$2: $$(build_private_libdir)/$$(libname_$2)
 $$(build_private_libdir)/$$(libname_$2):
 	@if [ -e "$$(libpath_$2)" ]; then \
 		REALPATH=$$(libpath_$2); \
 		$$(call resolve_path,REALPATH) && \
 		[ -e "$$$$REALPATH" ] && \
-		([ ! -e "$$@" ] || rm "$$@") && \
+		rm -f "$$@" && \
 		echo ln -sf "$$$$REALPATH" "$$@" && \
 		ln -sf "$$$$REALPATH" "$$@"; \
 	else \
@@ -185,6 +182,31 @@ SYMLINK_SYSTEM_LIBRARIES += symlink_$2
 endif
 endef
 
+# libexec executables
+symlink_p7zip: $(build_bindir)/7z$(EXE)
+
+ifneq ($(USE_SYSTEM_P7ZIP),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_p7zip
+7Z_PATH := $(shell which 7z$(EXE))
+endif
+
+$(build_bindir)/7z$(EXE):
+	[ -e "$(7Z_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(7Z_PATH)" "$@"
+
+symlink_lld: $(build_bindir)/lld$(EXE)
+
+ifneq ($(USE_SYSTEM_LLD),0)
+SYMLINK_SYSTEM_LIBRARIES += symlink_lld
+LLD_PATH := $(shell which lld$(EXE))
+endif
+
+$(build_bindir)/lld$(EXE):
+	[ -e "$(LLD_PATH)" ] && \
+	rm -f "$@" && \
+	ln -svf "$(LLD_PATH)" "$@"
+
 # the following excludes: libuv.a, libutf8proc.a
 
 ifneq ($(USE_SYSTEM_LIBM),0)
@@ -193,7 +215,19 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+endif
+endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))
 endif
@@ -205,6 +239,7 @@ $(eval $(call symlink_system_library,CSL,libatomic,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,CSL,libgomp,1,ALLOW_FAILURE))
 $(eval $(call symlink_system_library,PCRE,libpcre2-8))
 $(eval $(call symlink_system_library,DSFMT,libdSFMT))
+$(eval $(call symlink_system_library,LIBBLASTRAMPOLINE,libblastrampoline))
 $(eval $(call symlink_system_library,BLAS,$(LIBBLASNAME)))
 ifneq ($(LIBLAPACKNAME),$(LIBBLASNAME))
 $(eval $(call symlink_system_library,LAPACK,$(LIBLAPACKNAME)))
@@ -242,7 +277,7 @@ $(build_private_libdir)/libLLVM.$(SHLIB_EXT):
 	REALPATH=$(LLVM_CONFIG_HOST_LIBS) && \
 	$(call resolve_path,REALPATH) && \
 	[ -e "$$REALPATH" ] && \
-	([ ! -e "$@" ] || rm "$@") && \
+	rm -f "$@" && \
 	echo ln -sf "$$REALPATH" "$@" && \
 	ln -sf "$$REALPATH" "$@"
 ifneq ($(USE_SYSTEM_LLVM),0)

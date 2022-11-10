@@ -3,11 +3,10 @@
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 import .Main.OffsetArrays: IdOffsetRange
-using DelimitedFiles
 using Random
 using LinearAlgebra
-using Statistics
 using Base: IdentityUnitRange
+using Test
 
 if !isdefined(@__MODULE__, :T24Linear)
     include("testhelpers/arrayindexingtypes.jl")
@@ -244,7 +243,7 @@ targets2 = ["(fill(1.0), fill(1.0))",
 end
 P = OffsetArray(rand(8,8), (1,1))
 PV = view(P, 2:3, :)
-@test endswith(summary(PV), "with indices Base.OneTo(2)×OffsetArrays.IdOffsetRange(2:9)")
+@test endswith(summary(PV), "with indices Base.OneTo(2)×$(repr(axes(P,2)))")
 
 # Similar
 B = similar(A, Float32)
@@ -415,6 +414,23 @@ rv = reverse(v)
 cv = copy(v)
 @test reverse!(cv) == rv
 
+@testset "reverse! (issue #45870)" begin
+    @testset for n in [4,5]
+        offset = typemax(Int)-n
+        vo = OffsetArray([1:n;], offset)
+        vo2 = OffsetArray([1:n;], offset)
+        @test reverse!(vo) == OffsetArray(n:-1:1, offset)
+        @test reverse!(vo) == vo2
+        @test_throws BoundsError reverse!(vo, firstindex(vo)-1, firstindex(vo))
+        @test reverse!(vo, firstindex(vo), firstindex(vo)-1) == vo2
+        @test reverse!(vo, firstindex(vo), firstindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)) == vo2
+        @test reverse!(vo, lastindex(vo), lastindex(vo)+1) == vo2 # overflow in stop
+        @test reverse!(vo, firstindex(vo)+1) == OffsetArray([1;n:-1:2], offset)
+        @test reverse!(vo2, firstindex(vo)+1, lastindex(vo)-1) == OffsetArray([1;n-1:-1:2;n], offset)
+    end
+end
+
 A = OffsetArray(rand(4,4), (-3,5))
 @test lastindex(A) == 16
 @test lastindex(A, 1) == 1
@@ -458,13 +474,10 @@ I = findall(!iszero, z)
 @test findall(x->x>0, h) == [-1,1]
 @test findall(x->x<0, h) == [-2,0]
 @test findall(x->x==0, h) == [2]
-@test mean(A_3_3) == median(A_3_3) == 5
-@test mean(x->2x, A_3_3) == 10
-@test mean(A_3_3, dims=1) == median(A_3_3, dims=1) == OffsetArray([2 5 8], A_3_3.offsets)
-@test mean(A_3_3, dims=2) == median(A_3_3, dims=2) == OffsetArray(reshape([4,5,6],(3,1)), A_3_3.offsets)
-@test var(A_3_3) == 7.5
-@test std(A_3_3, dims=1) == OffsetArray([1 1 1], A_3_3.offsets)
-@test std(A_3_3, dims=2) == OffsetArray(reshape([3,3,3], (3,1)), A_3_3.offsets)
+@test sum(A_3_3) == 45
+@test sum(x->2x, A_3_3) == 90
+@test sum(A_3_3, dims=1) == OffsetArray([6 15 24], A_3_3.offsets)
+@test sum(A_3_3, dims=2) == OffsetArray(reshape([12,15,18],(3,1)), A_3_3.offsets)
 @test sum(OffsetArray(fill(1,3000), -1000)) == 3000
 
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/92
@@ -493,11 +506,6 @@ B92 = view(A92, :, :, Base.IdentityUnitRange(-1:0))
         @test sum(v) ≈ sum(parent(v))
     end
 end
-
-io = IOBuffer()
-writedlm(io, A)
-seek(io, 0)
-@test readdlm(io, eltype(A)) == parent(A)
 
 amin, amax = extrema(parent(A))
 @test clamp.(A, (amax+amin)/2, amax).parent == clamp.(parent(A), (amax+amin)/2, amax)
@@ -650,6 +658,14 @@ end
     @test last(v, 100) == v0
     @test last(v, 100) !== v
     @test last(v, 1) == [v[end]]
+
+    @testset "overflow (issue #45842)" begin
+        a = [2,3,4]
+        b = OffsetArray(a, 2:4)
+        @test first(a, typemax(Int)) == first(b, typemax(Int))
+        b = OffsetArray(a, typemin(Int))
+        @test last(a, 100) == last(b, 100)
+    end
 end
 
 @testset "Resizing OffsetVectors" begin
@@ -788,7 +804,7 @@ end
     end
 end
 
-@testset "proper patition for non-1-indexed vector" begin
+@testset "proper partition for non-1-indexed vector" begin
     @test Iterators.partition(OffsetArray(1:10,10), 5) |> collect == [1:5,6:10] # OffsetVector
     @test Iterators.partition(OffsetArray(collect(1:10),10), 5) |> collect == [1:5,6:10] # OffsetVector
     @test Iterators.partition(OffsetArray(reshape(1:9,3,3), (3,3)), 5) |> collect == [1:5,6:9] #OffsetMatrix
@@ -800,4 +816,50 @@ end
     a = OffsetArray(4:5, 5:6)
     @test reshape(a, :) === a
     @test reshape(a, (:,)) === a
+end
+
+@testset "stack" begin
+    nought = OffsetArray([0, 0.1, 0.01], 0:2)
+    ten = OffsetArray([1,10,100,1000], 10:13)
+
+    @test stack(ten) == ten
+    @test stack(ten .+ nought') == ten .+ nought'
+    @test stack(x^2 for x in ten) == ten.^2
+
+    @test axes(stack(nought for _ in ten)) == (0:2, 10:13)
+    @test axes(stack([nought for _ in ten])) == (0:2, 10:13)
+    @test axes(stack(nought for _ in ten; dims=1)) == (10:13, 0:2)
+    @test axes(stack((x, x^2) for x in nought)) == (1:2, 0:2)
+    @test axes(stack(x -> x[end-1:end], ten for _ in nought, _ in nought)) == (1:2, 0:2, 0:2)
+    @test axes(stack([ten[end-1:end] for _ in nought, _ in nought])) == (1:2, 0:2, 0:2)
+end
+
+@testset "issue #41630: replace_ref_begin_end!/@view on offset-like arrays" begin
+    x = OffsetArray([1 2; 3 4], -10:-9, 9:10)  # 2×2 OffsetArray{...} with indices -10:-9×9:10
+
+    # begin/end with offset indices
+    @test (@view x[begin, 9])[] == 1
+    @test (@view x[-10, end])[] == 2
+    @test (@view x[-9, begin])[] == 3
+    @test (@view x[end, 10])[] == 4
+    @test (@view x[begin, begin])[] == 1
+    @test (@view x[begin, end])[] == 2
+    @test (@view x[end, begin])[] == 3
+    @test (@view x[end, end])[] == 4
+
+    # nested usages of begin/end
+    y = OffsetArray([-10, -9], (5,))
+    @test (@view x[begin, -y[end]])[] == 1
+    @test (@view x[y[begin], end])[] == 2
+    @test (@view x[end, -y[end]])[] == 3
+    @test (@view x[y[end], end])[] == 4
+end
+
+@testset "CartesianIndices (issue #40035)" begin
+    A = OffsetArray(big(1):big(2), 0);
+    B = OffsetArray(1:2, 0);
+    # axes of an OffsetArray may be converted to an AbstractUnitRange,
+    # but the conversion to an OrdinalRange was not defined.
+    # this is fixed in #40038, so the evaluation of its CartesianIndices should work
+    @test CartesianIndices(A) == CartesianIndices(B)
 end

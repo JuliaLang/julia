@@ -91,6 +91,9 @@ end
         HelloWorldC_exe_path = joinpath(HelloWorldC_dir, "bin", "hello_world$(exeext)")
         @test isfile(HelloWorldC_exe_path)
 
+        HelloWorldC_dir_explicit_artifact = eval(:(@artifact_str "HelloWorldC" nothing joinpath(@__DIR__, "Artifacts.toml")))
+        @test isdir(HelloWorldC_dir_explicit_artifact)
+
         # Simple slash-indexed lookup
         HelloWorldC_bin_path = artifact"HelloWorldC/bin"
         @test isdir(HelloWorldC_bin_path)
@@ -137,7 +140,7 @@ end
         mktempdir() do tempdir
             with_artifacts_directory(tempdir) do
                 ex = @test_throws ErrorException artifact"HelloWorldC"
-                @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not installed correctly. ")
+                @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not found ")
                 ex = @test_throws ErrorException artifact"socrates"
                 @test startswith(ex.value.msg, "Artifact \"socrates\" is a lazy artifact; ")
 

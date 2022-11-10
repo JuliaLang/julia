@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: julia --startup-file=no %s | opt -load libjulia-internal%shlibext -AllocOpt -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=0 -load libjulia-codegen%shlibext -AllocOpt -S - | FileCheck %s
+# RUN: julia --startup-file=no %s | opt -enable-new-pm=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(AllocOpt)' -S - | FileCheck %s
 
 isz = sizeof(UInt) == 8 ? "i64" : "i32"
 
@@ -31,7 +32,7 @@ define void @preserve_branches(i8* %fptr, i1 %b, i1 %b2) {
 
 L1:
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
-  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v)
+  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* nonnull %v)
   call void @external_function()
   br i1 %b2, label %L2, label %L3
 
@@ -67,7 +68,7 @@ define void @preserve_branches2(i8* %fptr, i1 %b, i1 %b2) {
 
 L1:
   %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj(i8* %ptls_i8, $isz 8, {} addrspace(10)* @tag)
-  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v, {} addrspace(10)* %v2)
+  %tok = call token (...) @llvm.julia.gc_preserve_begin({} addrspace(10)* %v, {} addrspace(10)* nonnull %v2)
   call void @external_function()
   br i1 %b2, label %L2, label %L3
 

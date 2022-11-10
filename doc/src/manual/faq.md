@@ -103,43 +103,74 @@ which may or may not be caused by CTRL-C, use [`atexit`](@ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
 `InterruptException` in the [`try`](@ref) block.
+Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
-Passing options to `julia` in so-called shebang by, e.g.,
-`#!/usr/bin/env julia --startup-file=no` may not work in some
-platforms such as Linux.  This is because argument parsing in shebang
-is platform-dependent and not well-specified.  In a Unix-like
-environment, a reliable way to pass options to `julia` in an
-executable script would be to start the script as a `bash` script and
-use `exec` to replace the process to `julia`:
+Passing options to `julia` in a so-called shebang line, as in
+`#!/usr/bin/env julia --startup-file=no`, will not work on many
+platforms (BSD, macOS, Linux) where the kernel, unlike the shell, does
+not split arguments at space characters. The option `env -S`, which
+splits a single argument string into multiple arguments at spaces,
+similar to a shell, offers a simple workaround:
 
 ```julia
-#!/bin/bash
-#=
-exec julia --color=yes --startup-file=no "${BASH_SOURCE[0]}" "$@"
-=#
-
+#!/usr/bin/env -S julia --color=yes --startup-file=no
 @show ARGS  # put any Julia code here
 ```
 
-In the example above, the code between `#=` and `=#` is run as a `bash`
-script.  Julia ignores this part since it is a multi-line comment for
-Julia.  The Julia code after `=#` is ignored by `bash` since it stops
-parsing the file once it reaches to the `exec` statement.
-
 !!! note
-    In order to [catch CTRL-C](@ref catch-ctrl-c) in the script you can use
-    ```julia
-    #!/bin/bash
-    #=
-    exec julia --color=yes --startup-file=no -e 'include(popfirst!(ARGS))' \
-        "${BASH_SOURCE[0]}" "$@"
-    =#
+    Option `env -S` appeared in FreeBSD 6.0 (2005), macOS Sierra (2016)
+    and GNU/Linux coreutils 8.30 (2018).
 
-    @show ARGS  # put any Julia code here
-    ```
-    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+### Why doesn't `run` support `*` or pipes for scripting external programs?
+
+Julia's [`run`](@ref) function launches external programs *directly*, without
+invoking an [operating-system shell](https://en.wikipedia.org/wiki/Shell_(computing))
+(unlike the `system("...")` function in other languages like Python, R, or C).
+That means that `run` does not perform wildcard expansion of `*` (["globbing"](https://en.wikipedia.org/wiki/Glob_(programming))),
+nor does it interpret [shell pipelines](https://en.wikipedia.org/wiki/Pipeline_(Unix)) like `|` or `>`.
+
+You can still do globbing and pipelines using Julia features, however.  For example, the built-in
+[`pipeline`](@ref) function allows you to chain external programs and files, similar to shell pipes, and
+the [Glob.jl package](https://github.com/vtjnash/Glob.jl) implements POSIX-compatible globbing.
+
+You can, of course, run programs through the shell by explicitly passing a shell and a command string to `run`,
+e.g. ```run(`sh -c "ls > files.txt"`)``` to use the Unix [Bourne shell](https://en.wikipedia.org/wiki/Bourne_shell),
+but you should generally prefer pure-Julia scripting like ```run(pipeline(`ls`, "files.txt"))```.
+The reason why we avoid the shell by default is that [shelling out sucks](https://julialang.org/blog/2012/03/shelling-out-sucks/):
+launching processes via the shell is slow, fragile to quoting of special characters,  has poor error handling, and is
+problematic for portability.  (The Python developers came to a [similar conclusion](https://www.python.org/dev/peps/pep-0324/#motivation).)
+
+## Variables and Assignments
+
+### Why am I getting `UndefVarError` from a simple loop?
+
+You might have something like:
+```
+x = 0
+while x < 10
+    x += 1
+end
+```
+and notice that it works fine in an interactive environment (like the Julia REPL),
+but gives ```UndefVarError: `x` not defined``` when you try to run it in script or other
+file.   What is going on is that Julia generally requires you to **be explicit about assigning to global variables in a local scope**.
+
+Here, `x` is a global variable, `while` defines a [local scope](@ref scope-of-variables), and `x += 1` is
+an assignment to a global in that local scope.
+
+As mentioned above, Julia (version 1.5 or later) allows you to omit the `global`
+keyword for code in the REPL (and many other interactive environments), to simplify
+exploration (e.g. copy-pasting code from a function to run interactively).
+However, once you move to code in files, Julia requires a more disciplined approach
+to global variables.  You have least three options:
+
+1. Put the code into a function (so that `x` is a *local* variable in a function). In general, it is good software engineering to use functions rather than global scripts (search online for "why global variables bad" to see many explanations). In Julia, global variables are also [slow](@ref man-performance-tips).
+2. Wrap the code in a [`let`](@ref) block.  (This makes `x` a local variable within the `let ... end` statement, again eliminating the need for `global`).
+3. Explicitly mark `x` as `global` inside the local scope before assigning to it, e.g. write `global x += 1`.
+
+More explanation can be found in the manual section [on soft scope](@ref on-soft-scope).
 
 ## Functions
 
@@ -394,7 +425,7 @@ julia> sqrt(-2.0+0im)
 ### How can I constrain or compute type parameters?
 
 The parameters of a [parametric type](@ref Parametric-Types) can hold either
-types or bits values, and the type itself chooses how it makes use of these parameters.
+types or bits values, and the type itself chooses how it makes use of these parameters.
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
 element type and the integer value `2` to express its number of dimensions.  When
 defining your own parametric type, you can use subtype constraints to declare that a
@@ -674,7 +705,7 @@ julia> module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: Foo not defined
+UndefVarError: `Foo` not defined
 Stacktrace:
 [...]
 ```
@@ -695,7 +726,7 @@ julia> @everywhere module Foo
 
 julia> Foo.foo()
 ERROR: On worker 2:
-UndefVarError: gvar not defined
+UndefVarError: `gvar` not defined
 Stacktrace:
 [...]
 ```
@@ -731,7 +762,7 @@ bar (generic function with 1 method)
 
 julia> remotecall_fetch(bar, 2)
 ERROR: On worker 2:
-UndefVarError: #bar not defined
+UndefVarError: `#bar` not defined
 [...]
 
 julia> anon_bar  = ()->1
@@ -753,8 +784,13 @@ foo (generic function with 1 method)
 
 julia> foo([1])
 ERROR: MethodError: no method matching foo(::Vector{Int64})
+
 Closest candidates are:
-  foo(!Matched::Vector{Real}) at none:1
+  foo(!Matched::Vector{Real})
+   @ Main none:1
+
+Stacktrace:
+[...]
 ```
 
 This is because `Vector{Real}` is not a supertype of `Vector{Int}`! You can solve this problem with something
@@ -834,9 +870,10 @@ no values and no subtypes (except itself). You will generally not need to use th
 
 ### Why does `x += y` allocate memory when `x` and `y` are arrays?
 
-In Julia, `x += y` gets replaced during parsing by `x = x + y`. For arrays, this has the consequence
+In Julia, `x += y` gets replaced during lowering by `x = x + y`. For arrays, this has the consequence
 that, rather than storing the result in the same location in memory as `x`, it allocates a new
-array to store the result.
+array to store the result. If you prefer to mutate `x`, use `x .+= y` to update each element
+individually.
 
 While this behavior might surprise some, the choice is deliberate. The main reason is the presence
 of immutable objects within Julia, which cannot change their value once created.  Indeed, a
@@ -869,8 +906,8 @@ After a call like `x = 5; y = power_by_squaring(x, 4)`, you would get the expect
     `x`, after the call you'd have (in general) `y != x`, but for mutable `x` you'd have `y == x`.
 
 Because supporting generic programming is deemed more important than potential performance optimizations
-that can be achieved by other means (e.g., using explicit loops), operators like `+=` and `*=`
-work by rebinding new values.
+that can be achieved by other means (e.g., using broadcasting or explicit loops), operators like `+=` and
+`*=` work by rebinding new values.
 
 ## [Asynchronous IO and concurrent synchronous writes](@id faq-async-io)
 
@@ -1016,8 +1053,8 @@ Unlike the LTS version the a Stable version will not normally receive bugfixes a
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.
-The current LTS version of Julia is versioned according to SemVer as v1.0.x;
-this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.0.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
+The current LTS version of Julia is versioned according to SemVer as v1.6.x;
+this branch will continue to receive bugfixes until a new LTS branch is chosen, at which point the v1.6.x series will no longer received regular bug fixes and all but the most conservative users will be advised to upgrade to the new LTS version series.
 As a package developer, you may prefer to develop for the LTS version, to maximize the number of users who can use your package.
 As per SemVer, code written for v1.0 will continue to work for all future LTS and Stable versions.
 In general, even if targeting the LTS, one can develop and run code in the latest Stable version, to take advantage of the improved performance; so long as one avoids using new features (such as added library functions or new methods).

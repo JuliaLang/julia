@@ -1,11 +1,15 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+isexpr(@nospecialize(ex), heads) = isa(ex, Expr) && in(ex.head, heads)
+isexpr(@nospecialize(ex), heads, n::Int) = isa(ex, Expr) && in(ex.head, heads) && length(ex.args) == n
+const is_expr = isexpr
+
 ## symbols ##
 
 """
     gensym([tag])
 
-Generates a symbol which will not conflict with other variable names.
+Generates a symbol which will not conflict with other variable names (in the same module).
 """
 gensym() = ccall(:jl_gensym, Ref{Symbol}, ())
 
@@ -209,11 +213,54 @@ end
 
 !!! compat "Julia 1.8"
     The usage within a function body requires at least Julia 1.8.
+
+---
+    @inline block
+
+Give a hint to the compiler that calls within `block` are worth inlining.
+
+```julia
+# The compiler will try to inline `f`
+@inline f(...)
+
+# The compiler will try to inline `f`, `g` and `+`
+@inline f(...) + g(...)
+```
+
+!!! note
+    A callsite annotation always has the precedence over the annotation applied to the
+    definition of the called function:
+    ```julia
+    @noinline function explicit_noinline(args...)
+        # body
+    end
+
+    let
+        @inline explicit_noinline(args...) # will be inlined
+    end
+    ```
+
+!!! note
+    When there are nested callsite annotations, the innermost annotation has the precedence:
+    ```julia
+    @noinline let a0, b0 = ...
+        a = @inline f(a0)  # the compiler will try to inline this call
+        b = f(b0)          # the compiler will NOT try to inline this call
+        return a, b
+    end
+    ```
+
+!!! warning
+    Although a callsite annotation will try to force inlining in regardless of the cost model,
+    there are still chances it can't succeed in it. Especially, recursive calls can not be
+    inlined even if they are annotated as `@inline`d.
+
+!!! compat "Julia 1.8"
+    The callsite annotation requires at least Julia 1.8.
 """
-macro inline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
+macro inline(x)
+    return annotate_meta_def_or_block(x, :inline)
 end
-macro inline() Expr(:meta, :inline) end
 
 """
     @noinline
@@ -245,38 +292,406 @@ end
 !!! compat "Julia 1.8"
     The usage within a function body requires at least Julia 1.8.
 
+---
+    @noinline block
+
+Give a hint to the compiler that it should not inline the calls within `block`.
+
+```julia
+# The compiler will try to not inline `f`
+@noinline f(...)
+
+# The compiler will try to not inline `f`, `g` and `+`
+@noinline f(...) + g(...)
+```
+
+!!! note
+    A callsite annotation always has the precedence over the annotation applied to the
+    definition of the called function:
+    ```julia
+    @inline function explicit_inline(args...)
+        # body
+    end
+
+    let
+        @noinline explicit_inline(args...) # will not be inlined
+    end
+    ```
+
+!!! note
+    When there are nested callsite annotations, the innermost annotation has the precedence:
+    ```julia
+    @inline let a0, b0 = ...
+        a = @noinline f(a0)  # the compiler will NOT try to inline this call
+        b = f(b0)            # the compiler will try to inline this call
+        return a, b
+    end
+    ```
+
+!!! compat "Julia 1.8"
+    The callsite annotation requires at least Julia 1.8.
+
+---
 !!! note
     If the function is trivial (for example returning a constant) it might get inlined anyway.
 """
-macro noinline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :noinline) : ex)
+macro noinline(x)
+    return annotate_meta_def_or_block(x, :noinline)
 end
-macro noinline() Expr(:meta, :noinline) end
 
 """
     @pure ex
-    @pure(ex)
 
 `@pure` gives the compiler a hint for the definition of a pure function,
 helping for type inference.
 
-This macro is intended for internal compiler use and may be subject to changes.
+!!! warning
+    This macro is intended for internal compiler use and may be subject to changes.
+
+!!! warning
+    In Julia 1.8 and higher, it is favorable to use [`@assume_effects`](@ref) instead of `@pure`.
+    This is because `@assume_effects` allows a finer grained control over Julia's purity
+    modeling and the effect system enables a wider range of optimizations.
 """
 macro pure(ex)
     esc(isa(ex, Expr) ? pushmeta!(ex, :pure) : ex)
 end
 
 """
-    @aggressive_constprop ex
-    @aggressive_constprop(ex)
+    @constprop setting ex
 
-`@aggressive_constprop` requests more aggressive interprocedural constant
-propagation for the annotated function. For a method where the return type
-depends on the value of the arguments, this can yield improved inference results
-at the cost of additional compile time.
+`@constprop` controls the mode of interprocedural constant propagation for the
+annotated function. Two `setting`s are supported:
+
+- `@constprop :aggressive ex`: apply constant propagation aggressively.
+  For a method where the return type depends on the value of the arguments,
+  this can yield improved inference results at the cost of additional compile time.
+- `@constprop :none ex`: disable constant propagation. This can reduce compile
+  times for functions that Julia might otherwise deem worthy of constant-propagation.
+  Common cases are for functions with `Bool`- or `Symbol`-valued arguments or keyword arguments.
 """
-macro aggressive_constprop(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+macro constprop(setting, ex)
+    if isa(setting, QuoteNode)
+        setting = setting.value
+    end
+    setting === :aggressive && return esc(isa(ex, Expr) ? pushmeta!(ex, :aggressive_constprop) : ex)
+    setting === :none && return esc(isa(ex, Expr) ? pushmeta!(ex, :no_constprop) : ex)
+    throw(ArgumentError("@constprop $setting not supported"))
+end
+
+"""
+    @assume_effects setting... ex
+
+`@assume_effects` overrides the compiler's effect modeling for the given method.
+`ex` must be a method definition or `@ccall` expression.
+
+!!! compat "Julia 1.8"
+    Using `Base.@assume_effects` requires Julia version 1.8.
+
+# Examples
+```jldoctest
+julia> Base.@assume_effects :terminates_locally function pow(x)
+           # this :terminates_locally allows `pow` to be constant-folded
+           res = 1
+           1 < x < 20 || error("bad pow")
+           while x > 1
+               res *= x
+               x -= 1
+           end
+           return res
+       end
+pow (generic function with 1 method)
+
+julia> code_typed() do
+           pow(12)
+       end
+1-element Vector{Any}:
+ CodeInfo(
+1 ─     return 479001600
+) => Int64
+
+julia> Base.@assume_effects :total !:nothrow @ccall jl_type_intersection(Vector{Int}::Any, Vector{<:Integer}::Any)::Any
+Vector{Int64} (alias for Array{Int64, 1})
+```
+
+!!! warning
+    Improper use of this macro causes undefined behavior (including crashes,
+    incorrect answers, or other hard to track bugs). Use with care and only as a
+    last resort if absolutely required. Even in such a case, you SHOULD take all
+    possible steps to minimize the strength of the effect assertion (e.g.,
+    do not use `:total` if `:nothrow` would have been sufficient).
+
+In general, each `setting` value makes an assertion about the behavior of the
+function, without requiring the compiler to prove that this behavior is indeed
+true. These assertions are made for all world ages. It is thus advisable to limit
+the use of generic functions that may later be extended to invalidate the
+assumption (which would cause undefined behavior).
+
+The following `setting`s are supported.
+- `:consistent`
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
+- `:terminates_locally`
+- `:notaskstate`
+- `:inaccessiblememonly`
+- `:foldable`
+- `:total`
+
+# Extended help
+
+---
+## `:consistent`
+
+The `:consistent` setting asserts that for egal (`===`) inputs:
+- The manner of termination (return value, exception, non-termination) will always be the same.
+- If the method returns, the results will always be egal.
+
+!!! note
+    This in particular implies that the method must not return a freshly allocated
+    mutable object. Multiple allocations of mutable objects (even with identical
+    contents) are not egal.
+
+!!! note
+    The `:consistent`-cy assertion is made world-age wise. More formally, write
+    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then we require:
+    ```math
+    ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
+    ```
+    However, for two world ages ``i``, ``j`` s.t. ``i ≠ j``, we may have ``fᵢ(x) ≢ fⱼ(y)``.
+
+    A further implication is that `:consistent` functions may not make their
+    return value dependent on the state of the heap or any other global state
+    that is not constant for a given world age.
+
+!!! note
+    The `:consistent`-cy includes all legal rewrites performed by the optimizer.
+    For example, floating-point fastmath operations are not considered `:consistent`,
+    because the optimizer may rewrite them causing the output to not be `:consistent`,
+    even for the same world age (e.g. because one ran in the interpreter, while
+    the other was optimized).
+
+!!! note
+    If `:consistent` functions terminate by throwing an exception, that exception
+    itself is not required to meet the egality requirement specified above.
+
+---
+## `:effect_free`
+
+The `:effect_free` setting asserts that the method is free of externally semantically
+visible side effects. The following is an incomplete list of externally semantically
+visible side effects:
+- Changing the value of a global variable.
+- Mutating the heap (e.g. an array or mutable value), except as noted below
+- Changing the method table (e.g. through calls to eval)
+- File/Network/etc. I/O
+- Task switching
+
+However, the following are explicitly not semantically visible, even if they
+may be observable:
+- Memory allocations (both mutable and immutable)
+- Elapsed time
+- Garbage collection
+- Heap mutations of objects whose lifetime does not exceed the method (i.e.
+  were allocated in the method and do not escape).
+- The returned value (which is externally visible, but not a side effect)
+
+The rule of thumb here is that an externally visible side effect is anything
+that would affect the execution of the remainder of the program if the function
+were not executed.
+
+!!! note
+    The `:effect_free` assertion is made both for the method itself and any code
+    that is executed by the method. Keep in mind that the assertion must be
+    valid for all world ages and limit use of this assertion accordingly.
+
+---
+## `:nothrow`
+
+The `:nothrow` settings asserts that this method does not terminate abnormally
+(i.e. will either always return a value or never return).
+
+!!! note
+    It is permissible for `:nothrow` annotated methods to make use of exception
+    handling internally as long as the exception is not rethrown out of the
+    method itself.
+
+!!! note
+    `MethodErrors` and similar exceptions count as abnormal termination.
+
+---
+## `:terminates_globally`
+
+The `:terminates_globally` settings asserts that this method will eventually terminate
+(either normally or abnormally), i.e. does not loop indefinitely.
+
+!!! note
+    This `:terminates_globally` assertion covers any other methods called by the annotated method.
+
+!!! note
+    The compiler will consider this a strong indication that the method will
+    terminate relatively *quickly* and may (if otherwise legal), call this
+    method at compile time. I.e. it is a bad idea to annotate this setting
+    on a method that *technically*, but not *practically*, terminates.
+
+---
+## `:terminates_locally`
+
+The `:terminates_locally` setting is like `:terminates_globally`, except that it only
+applies to syntactic control flow *within* the annotated method. It is thus
+a much weaker (and thus safer) assertion that allows for the possibility of
+non-termination if the method calls some other method that does not terminate.
+
+!!! note
+    `:terminates_globally` implies `:terminates_locally`.
+
+---
+## `:notaskstate`
+
+The `:notaskstate` setting asserts that the method does not use or modify the
+local task state (task local storage, RNG state, etc.) and may thus be safely
+moved between tasks without observable results.
+
+!!! note
+    The implementation of exception handling makes use of state stored in the
+    task object. However, this state is currently not considered to be within
+    the scope of `:notaskstate` and is tracked separately using the `:nothrow`
+    effect.
+
+!!! note
+    The `:notaskstate` assertion concerns the state of the *currently running task*.
+    If a reference to a `Task` object is obtained by some other means that
+    does not consider which task is *currently* running, the `:notaskstate`
+    effect need not be tainted. This is true, even if said task object happens
+    to be `===` to the currently running task.
+
+!!! note
+    Access to task state usually also results in the tainting of other effects,
+    such as `:effect_free` (if task state is modified) or `:consistent` (if
+    task state is used in the computation of the result). In particular,
+    code that is not `:notaskstate`, but is `:effect_free` and `:consistent`
+    may still be dead-code-eliminated and thus promoted to `:total`.
+
+---
+## `:inaccessiblememonly`
+
+The `:inaccessiblememonly` setting asserts that the method does not access or modify
+externally accessible mutable memory. This means the method can access or modify mutable
+memory for newly allocated objects that is not accessible by other methods or top-level
+execution before return from the method, but it can not access or modify any mutable
+global state or mutable memory pointed to by its arguments.
+
+!!! note
+    Below is an incomplete list of examples that invalidate this assumption:
+    - a global reference or `getglobal` call to access a mutable global variable
+    - a global assignment or `setglobal!` call to perform assignment to a non-constant global variable
+    - `setfield!` call that changes a field of a global mutable variable
+
+!!! note
+    This `:inaccessiblememonly` assertion covers any other methods called by the annotated method.
+
+---
+## `:foldable`
+
+This setting is a convenient shortcut for the set of effects that the compiler
+requires to be guaranteed to constant fold a call at compile time. It is
+currently equivalent to the following `setting`s:
+
+- `:consistent`
+- `:effect_free`
+- `:terminates_globally`
+
+!!! note
+    This list in particular does not include `:nothrow`. The compiler will still
+    attempt constant propagation and note any thrown error at compile time. Note
+    however, that by the `:consistent`-cy requirements, any such annotated call
+    must consistently throw given the same argument values.
+
+---
+## `:total`
+
+This `setting` is the maximum possible set of effects. It currently implies
+the following other `setting`s:
+- `:consistent`
+- `:effect_free`
+- `:nothrow`
+- `:terminates_globally`
+- `:notaskstate`
+- `:inaccessiblememonly`
+
+!!! warning
+    `:total` is a very strong assertion and will likely gain additional semantics
+    in future versions of Julia (e.g. if additional effects are added and included
+    in the definition of `:total`). As a result, it should be used with care.
+    Whenever possible, prefer to use the minimum possible set of specific effect
+    assertions required for a particular application. In cases where a large
+    number of effect overrides apply to a set of functions, a custom macro is
+    recommended over the use of `:total`.
+
+---
+## Negated effects
+
+Effect names may be prefixed by `!` to indicate that the effect should be removed
+from an earlier meta effect. For example, `:total !:nothrow` indicates that while
+the call is generally total, it may however throw.
+
+---
+## Comparison to `@pure`
+
+`@assume_effects :foldable` is similar to [`@pure`](@ref) with the primary
+distinction that the `:consistent`-cy requirement applies world-age wise rather
+than globally as described above. However, in particular, a method annotated
+`@pure` should always be at least `:foldable`.
+Another advantage is that effects introduced by `@assume_effects` are propagated to
+callers interprocedurally while a purity defined by `@pure` is not.
+"""
+macro assume_effects(args...)
+    (consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly) =
+        (false, false, false, false, false, false, false, false)
+    for org_setting in args[1:end-1]
+        (setting, val) = compute_assumed_setting(org_setting)
+        if setting === :consistent
+            consistent = val
+        elseif setting === :effect_free
+            effect_free = val
+        elseif setting === :nothrow
+            nothrow = val
+        elseif setting === :terminates_globally
+            terminates_globally = val
+        elseif setting === :terminates_locally
+            terminates_locally = val
+        elseif setting === :notaskstate
+            notaskstate = val
+        elseif setting === :inaccessiblememonly
+            inaccessiblememonly = val
+        elseif setting === :foldable
+            consistent = effect_free = terminates_globally = val
+        elseif setting === :total
+            consistent = effect_free = nothrow = terminates_globally = notaskstate = inaccessiblememonly = val
+        else
+            throw(ArgumentError("@assume_effects $org_setting not supported"))
+        end
+    end
+    ex = args[end]
+    isa(ex, Expr) || throw(ArgumentError("Bad expression `$ex` in `@assume_effects [settings] ex`"))
+    if ex.head === :macrocall && ex.args[1] === Symbol("@ccall")
+        ex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
+        insert!(ex.args, 3, Core.Compiler.encode_effects_override(Core.Compiler.EffectsOverride(
+            consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly,
+        )))
+        return esc(ex)
+    end
+    return esc(pushmeta!(ex, :purity, consistent, effect_free, nothrow, terminates_globally, terminates_locally, notaskstate, inaccessiblememonly))
+end
+
+function compute_assumed_setting(@nospecialize(setting), val::Bool=true)
+    if isexpr(setting, :call) && setting.args[1] === :(!)
+        return compute_assumed_setting(setting.args[2], !val)
+    elseif isa(setting, QuoteNode)
+        return compute_assumed_setting(setting.value, val)
+    else
+        return (setting, val)
+    end
 end
 
 """
@@ -303,6 +718,15 @@ end
 
 ## some macro utilities ##
 
+unwrap_macrocalls(@nospecialize(x)) = x
+function unwrap_macrocalls(ex::Expr)
+    inner = ex
+    while inner.head === :macrocall
+        inner = inner.args[end]::Expr
+    end
+    return inner
+end
+
 function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
     if isempty(args)
         tag = sym
@@ -310,10 +734,7 @@ function pushmeta!(ex::Expr, sym::Symbol, args::Any...)
         tag = Expr(sym, args...)::Expr
     end
 
-    inner = ex
-    while inner.head === :macrocall
-        inner = inner.args[end]::Expr
-    end
+    inner = unwrap_macrocalls(ex)
 
     idx, exargs = findmeta(inner)
     if idx != 0
@@ -363,8 +784,23 @@ function findmetaarg(metaargs, sym)
     return 0
 end
 
-function is_short_function_def(ex)
-    ex.head === :(=) || return false
+function annotate_meta_def_or_block(@nospecialize(ex), meta::Symbol)
+    inner = unwrap_macrocalls(ex)
+    if is_function_def(inner)
+        # annotation on a definition
+        return esc(pushmeta!(ex, meta))
+    else
+        # annotation on a block
+        return Expr(:block,
+                    Expr(meta, true),
+                    Expr(:local, Expr(:(=), :val, esc(ex))),
+                    Expr(meta, false),
+                    :val)
+    end
+end
+
+function is_short_function_def(@nospecialize(ex))
+    isexpr(ex, :(=)) || return false
     while length(ex.args) >= 1 && isa(ex.args[1], Expr)
         (ex.args[1].head === :call) && return true
         (ex.args[1].head === :where || ex.args[1].head === :(::)) || return false
@@ -372,9 +808,11 @@ function is_short_function_def(ex)
     end
     return false
 end
+is_function_def(@nospecialize(ex)) =
+    return isexpr(ex, :function) || is_short_function_def(ex) || isexpr(ex, :->)
 
 function findmeta(ex::Expr)
-    if ex.head === :function || is_short_function_def(ex) || ex.head === :->
+    if is_function_def(ex)
         body = ex.args[2]::Expr
         body.head === :block || error(body, " is not a block expression")
         return findmeta_block(ex.args)
@@ -428,7 +866,7 @@ end
 
 """
     @generated f
-    @generated(f)
+
 `@generated` is used to annotate a function which will be generated.
 In the body of the generated function, only types of arguments can be read
 (not the values). The function returns a quoted expression evaluated when the
@@ -437,7 +875,7 @@ the global scope or depending on mutable elements.
 
 See [Metaprogramming](@ref) for further details.
 
-## Example:
+# Examples
 ```jldoctest
 julia> @generated function bar(x)
            if x <: Integer
@@ -459,12 +897,16 @@ macro generated(f)
     if isa(f, Expr) && (f.head === :function || is_short_function_def(f))
         body = f.args[2]
         lno = body.args[1]
+        tmp = gensym("tmp")
         return Expr(:escape,
                     Expr(f.head, f.args[1],
                          Expr(:block,
                               lno,
                               Expr(:if, Expr(:generated),
-                                   body,
+                                   # https://github.com/JuliaLang/julia/issues/25678
+                                   Expr(:block,
+                                        :(local $tmp = $body),
+                                        :(if $tmp isa $(GlobalRef(Core, :CodeInfo)); return $tmp; else $tmp; end)),
                                    Expr(:block,
                                         Expr(:meta, :generated_only),
                                         Expr(:return, nothing))))))
@@ -482,7 +924,7 @@ Mark `var` or `ex` as being performed atomically, if `ex` is a supported express
 
     @atomic a.b.x = new
     @atomic a.b.x += addend
-    @atomic :acquire_release a.b.x = new
+    @atomic :release a.b.x = new
     @atomic :acquire_release a.b.x += addend
 
 Perform the store operation expressed on the right atomically and return the
@@ -505,8 +947,9 @@ result into the field in the first argument and return the values `(old, new)`.
 This operation translates to a `modifyproperty!(a.b, :x, func, arg2)` call.
 
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -523,17 +966,20 @@ julia> @atomic a.x += 1 # increment field x of a, with sequential consistency
 3
 
 julia> @atomic a.x + 1 # increment field x of a, with sequential consistency
-(3, 4)
+3 => 4
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 
 julia> @atomic max(a.x, 10) # change field x of a to the max value, with sequential consistency
-(4, 10)
+4 => 10
 
 julia> @atomic a.x max 5 # again change field x of a to the max value, with sequential consistency
-(10, 10)
+10 => 10
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomic(ex)
     if !isa(ex, Symbol) && !is_expr(ex, :(::))
@@ -601,8 +1047,9 @@ Stores `new` into `a.b.x` and returns the old value of `a.b.x`.
 
 This operation translates to a `swapproperty!(a.b, :x, new)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -615,6 +1062,9 @@ julia> @atomicswap a.x = 2+2 # replace field x of a with 4, with sequential cons
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 4
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicswap(order, ex)
     order isa QuoteNode || (order = esc(order))
@@ -644,8 +1094,9 @@ replacement was completed.
 
 This operation translates to a `replaceproperty!(a.b, :x, expected, desired)` call.
 
-See [atomics](#man-atomics) in the manual for more details.
+See [Per-field atomics](@ref man-atomics) section in the manual for more details.
 
+# Examples
 ```jldoctest
 julia> mutable struct Atomic{T}; @atomic x::T; end
 
@@ -653,22 +1104,25 @@ julia> a = Atomic(1)
 Atomic{Int64}(1)
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(1, true)
+(old = 1, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 2
 
 julia> @atomicreplace a.x 1 => 2 # replace field x of a with 2 if it was 1, with sequential consistency
-(2, false)
+(old = 2, success = false)
 
-julia> xchg = 2 => 0; # replace field x of a with 0 if it was 1, with sequential consistency
+julia> xchg = 2 => 0; # replace field x of a with 0 if it was 2, with sequential consistency
 
 julia> @atomicreplace a.x xchg
-(2, true)
+(old = 2, success = true)
 
 julia> @atomic a.x # fetch field x of a, with sequential consistency
 0
 ```
+
+!!! compat "Julia 1.7"
+    This functionality requires at least Julia 1.7.
 """
 macro atomicreplace(success_order, fail_order, ex, old_new)
     fail_order isa QuoteNode || (fail_order = esc(fail_order))

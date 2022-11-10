@@ -41,8 +41,8 @@ function open_fake_pty()
 
         fds = ccall(:open, Cint, (Ptr{UInt8}, Cint),
             ccall(:ptsname, Ptr{UInt8}, (Cint,), fdm), O_RDWR | O_NOCTTY)
+        pts = RawFD(fds)
 
-            pts = RawFD(fds)
         # pts = fdio(fds, true)
         # pts = Base.Filesystem.File(RawFD(fds))
         # pts = Base.TTY(RawFD(fds); readable = false)

@@ -18,26 +18,38 @@ n2 = 2*n1
 Random.seed!(1234323)
 
 @testset "Matrix condition number" begin
-    ainit = rand(n,n)
+    ainit = rand(n, n)
     @testset "for $elty" for elty in (Float32, Float64, ComplexF32, ComplexF64)
         ainit = convert(Matrix{elty}, ainit)
         for a in (copy(ainit), view(ainit, 1:n, 1:n))
-            @test cond(a,1) ≈ 50.60863783272028 atol=0.5
-            @test cond(a,2) ≈ 23.059634761613314 atol=0.5
-            @test cond(a,Inf) ≈ 45.12503933120795 atol=0.4
-            @test cond(a[:,1:5]) ≈ 5.719500544258695 atol=0.01
+            ainv = inv(a)
+            @test cond(a, 1)   == opnorm(a, 1)  *opnorm(ainv, 1)
+            @test cond(a, Inf) == opnorm(a, Inf)*opnorm(ainv, Inf)
+            @test cond(a[:, 1:5]) == (\)(extrema(svdvals(a[:, 1:5]))...)
             @test_throws ArgumentError cond(a,3)
         end
     end
     @testset "Singular matrices" for p in (1, 2, Inf)
         @test cond(zeros(Int, 2, 2), p) == Inf
-        @test cond(zeros(2, 2), p) == Inf
-        @test cond([0 0; 1 1], p) == Inf
-        @test cond([0. 0.; 1. 1.], p) == Inf
+        @test cond(zeros(2, 2), p)      == Inf
+        @test cond([0 0; 1 1], p)       == Inf
+        @test cond([0. 0.; 1. 1.], p)   == Inf
     end
     @testset "Issue #33547, condition number of 2x2 matrix" begin
-        M = [1.0 -2.0; -2.0 -1.5]
+        M = [1.0 -2.0
+            -2.0 -1.5]
         @test cond(M, 1) ≈ 2.227272727272727
+    end
+    @testset "Condition numbers of a non-random matrix" begin
+        # To ensure that we detect any regressions in the underlying functions
+        Mars= [11  24   7  20   3
+                4  12  25   8  16
+               17   5  13  21   9
+               10  18   1  14  22
+               23   6  19   2  15]
+        @test cond(Mars, 1)   ≈ 7.1
+        @test cond(Mars, 2)   ≈ 6.181867355918493
+        @test cond(Mars, Inf) ≈ 7.1
     end
 end
 
@@ -105,35 +117,6 @@ bimg  = randn(n,2)/2
         end
     end # for eltyb
 
-@testset "Test diagm for vectors" begin
-    @test diagm(zeros(50)) == diagm(0 => zeros(50))
-    @test diagm(ones(50)) == diagm(0 => ones(50))
-    v = randn(500)
-    @test diagm(v) == diagm(0 => v)
-    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
-end
-
-@testset "Non-square diagm" begin
-    x = [7, 8]
-    for m=1:4, n=2:4
-        if m < 2 || n < 3
-            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
-            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
-        else
-            M = zeros(m,n)
-            M[1:2,1:3] = [7 7 0; 0 8 8]
-            @test diagm(m,n, 0 => x,  1 => x) == M
-            @test diagm(n,m, 0 => x,  -1 => x) == M'
-        end
-    end
-end
-
-@testset "Test pinv (rtol, atol)" begin
-    M = [1 0 0; 0 1 0; 0 0 0]
-    @test pinv(M,atol=1)== zeros(3,3)
-    @test pinv(M,rtol=0.5)== M
-end
-
     for (a, a2) in ((copy(ainit), copy(ainit2)), (view(ainit, 1:n, 1:n), view(ainit2, 1:n, 1:n)))
         @testset "Test pinv" begin
             pinva15 = pinv(a[:,1:n1])
@@ -149,8 +132,20 @@ end
         @testset "Lyapunov/Sylvester" begin
             x = lyap(a, a2)
             @test -a2 ≈ a*x + x*a'
+            y = lyap(a', a2')
+            @test y ≈ lyap(Array(a'), Array(a2'))
+            @test -a2' ≈ a'y + y*a
+            z = lyap(Tridiagonal(a)', Diagonal(a2))
+            @test z ≈ lyap(Array(Tridiagonal(a)'), Array(Diagonal(a2)))
+            @test -Diagonal(a2) ≈ Tridiagonal(a)'*z + z*Tridiagonal(a)
             x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
             @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+            y2 = sylvester(a[1:3, 1:3]', a[4:n, 4:n]', a2[4:n,1:3]')
+            @test y2 ≈ sylvester(Array(a[1:3, 1:3]'), Array(a[4:n, 4:n]'), Array(a2[4:n,1:3]'))
+            @test -a2[4:n, 1:3]' ≈ a[1:3, 1:3]'*y2 + y2*a[4:n, 4:n]'
+            z2 = sylvester(Tridiagonal(a[1:3, 1:3]), Diagonal(a[4:n, 4:n]), a2[1:3,4:n])
+            @test z2 ≈ sylvester(Array(Tridiagonal(a[1:3, 1:3])), Array(Diagonal(a[4:n, 4:n])), Array(a2[1:3,4:n]))
+            @test -a2[1:3, 4:n] ≈ Tridiagonal(a[1:3, 1:3])*z2 + z2*Diagonal(a[4:n, 4:n])
         end
 
         @testset "Matrix square root" begin
@@ -208,8 +203,49 @@ end
         @test Matrix(factorize(A)) ≈ Matrix(factorize(Tridiagonal(e2,d,e)))
         A = diagm(0 => d, 1 => e, 2 => f)
         @test factorize(A) == UpperTriangular(A)
+
+        x = rand(eltya)
+        @test factorize(x) == x
     end
 end # for eltya
+
+@testset "Test diagm for vectors" begin
+    @test diagm(zeros(50)) == diagm(0 => zeros(50))
+    @test diagm(ones(50)) == diagm(0 => ones(50))
+    v = randn(500)
+    @test diagm(v) == diagm(0 => v)
+    @test diagm(500, 501, v) == diagm(500, 501, 0 => v)
+end
+
+@testset "Non-square diagm" begin
+    x = [7, 8]
+    for m=1:4, n=2:4
+        if m < 2 || n < 3
+            @test_throws DimensionMismatch diagm(m,n, 0 => x,  1 => x)
+            @test_throws DimensionMismatch diagm(n,m, 0 => x,  -1 => x)
+        else
+            M = zeros(m,n)
+            M[1:2,1:3] = [7 7 0; 0 8 8]
+            @test diagm(m,n, 0 => x,  1 => x) == M
+            @test diagm(n,m, 0 => x,  -1 => x) == M'
+        end
+    end
+end
+
+@testset "Test pinv (rtol, atol)" begin
+    M = [1 0 0; 0 1 0; 0 0 0]
+    @test pinv(M,atol=1)== zeros(3,3)
+    @test pinv(M,rtol=0.5)== M
+end
+
+@testset "Test inv of matrix of NaNs" begin
+    for eltya in (NaN16, NaN32, NaN32)
+        r = fill(eltya, 2, 2)
+        @test_throws ArgumentError inv(r)
+        c = fill(complex(eltya, eltya), 2, 2)
+        @test_throws ArgumentError inv(c)
+    end
+end
 
 @testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
@@ -1093,12 +1129,12 @@ end
 end
 
 function test_rdiv_pinv_consistency(a, b)
-    @test (a*b)/b ≈ a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
-    @test typeof((a*b)/b) == typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
+    @test a*(b/b) ≈ (a*b)*pinv(b) ≈ a*(b*pinv(b))
+    @test typeof(a*(b/b)) == typeof((a*b)*pinv(b)) == typeof(a*(b*pinv(b)))
 end
 function test_ldiv_pinv_consistency(a, b)
-    @test a\(a*b) ≈ (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
-    @test typeof(a\(a*b)) == typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
+    @test (a\a)*b ≈ (pinv(a)*a)*b ≈ pinv(a)*(a*b)
+    @test typeof((a\a)*b) == typeof((pinv(a)*a)*b) == typeof(pinv(a)*(a*b))
 end
 function test_div_pinv_consistency(a, b)
     test_rdiv_pinv_consistency(a, b)

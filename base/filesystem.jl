@@ -17,21 +17,19 @@ const S_ISUID = 0o4000  # set UID bit
 const S_ISGID = 0o2000  # set GID bit
 const S_ENFMT = S_ISGID # file locking enforcement
 const S_ISVTX = 0o1000  # sticky bit
-const S_IRWXU = 0o0700  # mask for owner permissions
-const S_IRUSR = 0o0400  # read by owner
 
-const S_IRUSR = 0o400
-const S_IWUSR = 0o200
-const S_IXUSR = 0o100
-const S_IRWXU = 0o700
-const S_IRGRP = 0o040
-const S_IWGRP = 0o020
-const S_IXGRP = 0o010
-const S_IRWXG = 0o070
-const S_IROTH = 0o004
-const S_IWOTH = 0o002
-const S_IXOTH = 0o001
-const S_IRWXO = 0o007
+const S_IRUSR = 0o0400  # read by owner
+const S_IWUSR = 0o0200  # write by owner
+const S_IXUSR = 0o0100  # execute by owner
+const S_IRWXU = 0o0700  # mask for owner permissions
+const S_IRGRP = 0o0040  # read by group
+const S_IWGRP = 0o0020  # write by group
+const S_IXGRP = 0o0010  # execute by group
+const S_IRWXG = 0o0070  # mask for group permissions
+const S_IROTH = 0o0004  # read by other
+const S_IWOTH = 0o0002  # write by other
+const S_IXOTH = 0o0001  # execute by other
+const S_IRWXO = 0o0007  # mask for other permissions
 
 export File,
        StatStruct,
@@ -50,6 +48,22 @@ export File,
        JL_O_SEQUENTIAL,
        JL_O_RANDOM,
        JL_O_NOCTTY,
+       JL_O_NOCTTY,
+       JL_O_NONBLOCK,
+       JL_O_NDELAY,
+       JL_O_SYNC,
+       JL_O_FSYNC,
+       JL_O_ASYNC,
+       JL_O_LARGEFILE,
+       JL_O_DIRECTORY,
+       JL_O_NOFOLLOW,
+       JL_O_CLOEXEC,
+       JL_O_DIRECT,
+       JL_O_NOATIME,
+       JL_O_PATH,
+       JL_O_TMPFILE,
+       JL_O_DSYNC,
+       JL_O_RSYNC,
        S_IRUSR, S_IWUSR, S_IXUSR, S_IRWXU,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
@@ -58,7 +72,7 @@ import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
-    rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
+    setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize
 
 import .Base.RefValue
 
@@ -92,6 +106,7 @@ if OS_HANDLE !== RawFD
 end
 
 rawhandle(file::File) = file.handle
+setup_stdio(file::File, ::Bool) = (file, false)
 
 # Filesystem.open, not Base.open
 function open(path::AbstractString, flags::Integer, mode::Integer=0)
@@ -263,5 +278,17 @@ end
 
 fd(f::File) = f.handle
 stat(f::File) = stat(f.handle)
+
+function touch(f::File)
+    @static if Sys.isunix()
+        ret = ccall(:futimes, Cint, (Cint, Ptr{Cvoid}), fd(f), C_NULL)
+        systemerror(:futimes, ret != 0)
+    else
+        t = time()
+        futime(f, t, t)
+    end
+    f
+end
+
 
 end

@@ -97,6 +97,7 @@ void jl_write_compiler_output(void)
                            jl_options.outputo,
                            jl_options.outputasm,
                            (const char*)s->buf, (size_t)s->size);
+            jl_postoutput_hook();
         }
     }
     for (size_t i = 0; i < jl_current_modules.size; i += 2) {
@@ -113,13 +114,6 @@ void jl_write_compiler_output(void)
 // and expanding the Union may give a leaf function
 static void _compile_all_tvar_union(jl_value_t *methsig)
 {
-    if (!jl_is_unionall(methsig) && jl_is_dispatch_tupletype(methsig)) {
-        // usually can create a specialized version of the function,
-        // if the signature is already a dispatch type
-        if (jl_compile_hint((jl_tupletype_t*)methsig))
-            return;
-    }
-
     int tvarslen = jl_subtype_env_size(methsig);
     jl_value_t *sigbody = methsig;
     jl_value_t **roots;
@@ -246,89 +240,67 @@ static void _compile_all_union(jl_value_t *sig)
     JL_GC_POP();
 }
 
-static void _compile_all_deq(jl_array_t *found)
+static int compile_all_collect__(jl_typemap_entry_t *ml, void *env)
 {
-    int found_i, found_l = jl_array_len(found);
-    jl_printf(JL_STDERR, "found %d uncompiled methods for compile-all\n", (int)found_l);
-    jl_method_instance_t *mi = NULL;
-    jl_value_t *src = NULL;
-    JL_GC_PUSH2(&mi, &src);
-    for (found_i = 0; found_i < found_l; found_i++) {
-        if (found_i % (1 + found_l / 300) == 0 || found_i == found_l - 1) // show 300 progress steps, to show progress without overwhelming log files
-            jl_printf(JL_STDERR, " %d / %d\r", found_i + 1, found_l);
-        jl_typemap_entry_t *ml = (jl_typemap_entry_t*)jl_array_ptr_ref(found, found_i);
-        jl_method_t *m = ml->func.method;
-        if (m->source == NULL) // TODO: generic implementations of generated functions
-            continue;
-        mi = jl_get_unspecialized(mi);
-        assert(mi == m->unspecialized); // make sure we didn't get tricked by a generated function, since we can't handle those
-        jl_code_instance_t *ucache = jl_get_method_inferred(mi, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
-        if (ucache->invoke != NULL)
-            continue;
-        src = m->source;
-        assert(src);
-        // TODO: we could now enable storing inferred function pointers in the `unspecialized` cache
-        //src = jl_type_infer(mi, jl_world_counter, 1);
-        //if (ucache->invoke != NULL)
-        //    continue;
-
-        // first try to create leaf signatures from the signature declaration and compile those
-        _compile_all_union((jl_value_t*)ml->sig);
-        // then also compile the generic fallback
-        jl_generate_fptr_for_unspecialized(ucache);
-    }
-    JL_GC_POP();
-    jl_printf(JL_STDERR, "\n");
-}
-
-static int compile_all_enq__(jl_typemap_entry_t *ml, void *env)
-{
-    jl_array_t *found = (jl_array_t*)env;
-    // method definition -- compile template field
+    jl_array_t *allmeths = (jl_array_t*)env;
     jl_method_t *m = ml->func.method;
     if (m->source) {
-        // found a method to compile
-        jl_array_ptr_1d_push(found, (jl_value_t*)ml);
+        // method has a non-generated definition; can be compiled generically
+        jl_array_ptr_1d_push(allmeths, (jl_value_t*)m);
     }
     return 1;
 }
 
-
-static void compile_all_enq_(jl_methtable_t *mt, void *env)
+static int compile_all_collect_(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, compile_all_enq__, env);
+    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), compile_all_collect__, env);
+    return 1;
 }
 
-static void jl_compile_all_defs(void)
+static void jl_compile_all_defs(jl_array_t *mis)
 {
-    // this "found" array will contain
-    // TypeMapEntries for Methods and MethodInstances that need to be compiled
-    jl_array_t *m = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&m);
-    while (1) {
-        jl_foreach_reachable_mtable(compile_all_enq_, m);
-        size_t changes = jl_array_len(m);
-        if (!changes)
-            break;
-        _compile_all_deq(m);
-        jl_array_del_end(m, changes);
+    jl_array_t *allmeths = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&allmeths);
+
+    jl_foreach_reachable_mtable(compile_all_collect_, allmeths);
+
+    size_t i, l = jl_array_len(allmeths);
+    for (i = 0; i < l; i++) {
+        jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
+        if (jl_isa_compileable_sig((jl_tupletype_t*)m->sig, m)) {
+            // method has a single compilable specialization, e.g. its definition
+            // signature is concrete. in this case we can just hint it.
+            jl_compile_hint((jl_tupletype_t*)m->sig);
+        }
+        else {
+            // first try to create leaf signatures from the signature declaration and compile those
+            _compile_all_union(m->sig);
+
+            // finally, compile a fully generic fallback that can work for all arguments
+            jl_method_instance_t *unspec = jl_get_unspecialized(m);
+            if (unspec)
+                jl_array_ptr_1d_push(mis, (jl_value_t*)unspec);
+        }
     }
+
     JL_GC_POP();
 }
 
 static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closure)
 {
     assert(jl_is_method_instance(mi));
-    jl_code_instance_t *codeinst = mi->cache;
+    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         int do_compile = 0;
-        if (codeinst->invoke != jl_fptr_const_return) {
-            if (codeinst->inferred && codeinst->inferred != jl_nothing &&
-                jl_ir_flag_inferred((jl_array_t*)codeinst->inferred) &&
-                !jl_ir_flag_inlineable((jl_array_t*)codeinst->inferred)) {
+        if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
+            jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
+            if (inferred &&
+                inferred != jl_nothing &&
+                jl_ir_flag_inferred((jl_array_t*)inferred) &&
+                (jl_ir_inlining_cost((jl_array_t*)inferred) == UINT16_MAX)) {
                 do_compile = 1;
             }
-            else if (codeinst->invoke != NULL || codeinst->precompile) {
+            else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
                 do_compile = 1;
             }
         }
@@ -344,13 +316,13 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
 static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *closure)
 {
     jl_method_t *m = def->func.method;
-    if (m->name == jl_symbol("__init__") && jl_is_dispatch_tupletype(m->sig)) {
-        // ensure `__init__()` gets strongly-hinted, specialized, and compiled
+    if ((m->name == jl_symbol("__init__") || m->ccallable) && jl_is_dispatch_tupletype(m->sig)) {
+        // ensure `__init__()` and @ccallables get strongly-hinted, specialized, and compiled
         jl_method_instance_t *mi = jl_specializations_get_linfo(m, m->sig, jl_emptysvec);
         jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
     }
     else {
-        jl_svec_t *specializations = def->func.method->specializations;
+        jl_svec_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
         size_t i, l = jl_svec_len(specializations);
         for (i = 0; i < l; i++) {
             jl_value_t *mi = jl_svecref(specializations, i);
@@ -363,21 +335,20 @@ static int precompile_enq_all_specializations__(jl_typemap_entry_t *def, void *c
     return 1;
 }
 
-static void precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
+static int precompile_enq_all_specializations_(jl_methtable_t *mt, void *env)
 {
-    jl_typemap_visitor(mt->defs, precompile_enq_all_specializations__, env);
+    return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), precompile_enq_all_specializations__, env);
 }
 
 static void *jl_precompile(int all)
 {
-    if (all)
-        jl_compile_all_defs();
-    // this "found" array will contain function
-    // type signatures that were inferred but haven't been compiled
+    // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
     jl_array_t *m2 = NULL;
     jl_method_instance_t *mi = NULL;
     JL_GC_PUSH3(&m, &m2, &mi);
+    if (all)
+        jl_compile_all_defs(m);
     jl_foreach_reachable_mtable(precompile_enq_all_specializations_, m);
     m2 = jl_alloc_vec_any(0);
     for (size_t i = 0; i < jl_array_len(m); i++) {
@@ -386,8 +357,8 @@ static void *jl_precompile(int all)
             mi = (jl_method_instance_t*)item;
             size_t min_world = 0;
             size_t max_world = ~(size_t)0;
-            if (!jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
-                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_world_counter, &min_world, &max_world, 0);
+            if (mi != jl_atomic_load_relaxed(&mi->def.method->unspecialized) && !jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
             if (mi)
                 jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
         }
@@ -398,7 +369,7 @@ static void *jl_precompile(int all)
         }
     }
     m = NULL;
-    void *native_code = jl_create_native(m2, jl_default_cgparams, 0);
+    void *native_code = jl_create_native(m2, NULL, NULL, 0);
     JL_GC_POP();
     return native_code;
 }

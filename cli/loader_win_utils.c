@@ -1,3 +1,5 @@
+// This file is a part of Julia. License is MIT: https://julialang.org/license
+
 // Workarounds for compiling via mingw without using libgcc_s
 typedef struct {
     HANDLE fd;
@@ -10,22 +12,30 @@ static FILE _stderr = { INVALID_HANDLE_VALUE };
 FILE *stdout = &_stdout;
 FILE *stderr = &_stderr;
 
-int loader_fwrite(const WCHAR *str, size_t nchars, FILE *out) {
+int loader_fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
-        if (WriteConsole(out->fd, str, nchars, &written, NULL))
+        // Windows consoles do not support UTF-8 (for reading input, though new Windows Terminal does for writing), only UTF-16.
+        size_t wbufsz = nchars * 2 + 2;
+        wchar_t* wstr = (wchar_t*)loader_malloc(wbufsz);
+        if (!utf8_to_wchar(str, wstr, wbufsz)) {
+            loader_free(wstr);
+            return -1;
+        }
+        if (WriteConsoleW(out->fd, wstr, wcslen(wstr), &written, NULL)) {
+            loader_free(wstr);
             return written;
+        }
     } else {
-        if (WriteFile(out->fd, str, sizeof(WCHAR) * nchars, &written, NULL))
+        // However, we want to print UTF-8 if the output is a file.
+        if (WriteFile(out->fd, str, nchars, &written, NULL))
             return written;
     }
     return -1;
 }
 
 int loader_fputs(const char *str, FILE *out) {
-    wchar_t wstr[1024];
-    utf8_to_wchar(str, wstr, 1024);
-    return fwrite(wstr, wcslen(wstr), out);
+    return loader_fwrite(str, loader_strlen(str), out);
 }
 
 void * loader_malloc(const size_t size) {
@@ -34,6 +44,10 @@ void * loader_malloc(const size_t size) {
 
 void * loader_realloc(void * mem, const size_t size) {
     return HeapReAlloc(GetProcessHeap(), HEAP_GENERATE_EXCEPTIONS, mem, size);
+}
+
+void loader_free(void* mem) {
+    HeapFree(GetProcessHeap(), 0, mem);
 }
 
 LPWSTR *CommandLineToArgv(LPWSTR lpCmdLine, int *pNumArgs) {

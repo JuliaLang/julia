@@ -4,6 +4,8 @@ using Test, Base.Threads
 using Core: ConcurrencyViolationError
 import Base: copy
 
+const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
+
 mutable struct ARefxy{T}
     @atomic x::T
     y::T
@@ -86,17 +88,18 @@ Base.show(io::IO, x::Int24) = print(io, "Int24(", Core.Intrinsics.zext_int(Int, 
 
 @noinline function _test_field_operators(r)
     r = r[]
+    TT = fieldtype(typeof(r), :x)
     T = typeof(getfield(r, :x))
     @test getfield(r, :x, :sequentially_consistent) === T(123_10)
     @test setfield!(r, :x, T(123_1), :sequentially_consistent) === T(123_1)
     @test getfield(r, :x, :sequentially_consistent) === T(123_1)
-    @test replacefield!(r, :x, 123_1 % UInt, T(123_30), :sequentially_consistent, :sequentially_consistent) === (T(123_1), false)
-    @test replacefield!(r, :x, T(123_1), T(123_30), :sequentially_consistent, :sequentially_consistent) === (T(123_1), true)
+    @test replacefield!(r, :x, 123_1 % UInt, T(123_30), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(123_1), false))
+    @test replacefield!(r, :x, T(123_1), T(123_30), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(123_1), true))
     @test getfield(r, :x, :sequentially_consistent) === T(123_30)
-    @test replacefield!(r, :x, T(123_1), T(123_1), :sequentially_consistent, :sequentially_consistent) === (T(123_30), false)
+    @test replacefield!(r, :x, T(123_1), T(123_1), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(123_30), false))
     @test getfield(r, :x, :sequentially_consistent) === T(123_30)
-    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === (T(123_30), T(123_31))
-    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === (T(123_31), T(123_32))
+    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === Pair{TT,TT}(T(123_30), T(123_31))
+    @test modifyfield!(r, :x, add, 1, :sequentially_consistent) === Pair{TT,TT}(T(123_31), T(123_32))
     @test getfield(r, :x, :sequentially_consistent) === T(123_32)
     @test swapfield!(r, :x, T(123_1), :sequentially_consistent) === T(123_32)
     @test getfield(r, :x, :sequentially_consistent) === T(123_1)
@@ -120,6 +123,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
 @noinline function _test_field_orderings(r, x, y)
     @nospecialize x y
     r = r[]
+    TT = fieldtype(typeof(r), :x)
 
     @test getfield(r, :x) === x
     @test_throws ConcurrencyViolationError("invalid atomic ordering") getfield(r, :x, :u)
@@ -199,7 +203,7 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :release)
     @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :acquire_release)
     @test_throws ConcurrencyViolationError("modifyfield!: non-atomic field cannot be written atomically") modifyfield!(r, :y, swap, y, :sequentially_consistent)
-    @test modifyfield!(r, :y, swap, x, :not_atomic) === (y, x)
+    @test modifyfield!(r, :y, swap, x, :not_atomic) === Pair{TT,TT}(y, x)
 
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :u, :not_atomic)
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :unordered, :not_atomic)
@@ -215,10 +219,10 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :not_atomic, :release)
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :not_atomic, :acquire_release)
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :y, y, y, :not_atomic, :sequentially_consistent)
-    @test replacefield!(r, :y, x, y, :not_atomic, :not_atomic) === (x, true)
-    @test replacefield!(r, :y, x, y, :not_atomic, :not_atomic) === (y, x === y)
-    @test replacefield!(r, :y, y, y, :not_atomic) === (y, true)
-    @test replacefield!(r, :y, y, y) === (y, true)
+    @test replacefield!(r, :y, x, y, :not_atomic, :not_atomic) === ReplaceType{TT}((x, true))
+    @test replacefield!(r, :y, x, y, :not_atomic, :not_atomic) === ReplaceType{TT}((y, x === y))
+    @test replacefield!(r, :y, y, y, :not_atomic) === ReplaceType{TT}((y, true))
+    @test replacefield!(r, :y, y, y) === ReplaceType{TT}((y, true))
 
     @test_throws ConcurrencyViolationError("invalid atomic ordering") swapfield!(r, :x, x, :u)
     @test_throws ConcurrencyViolationError("swapfield!: atomic field cannot be written non-atomically") swapfield!(r, :x, x, :not_atomic)
@@ -234,11 +238,11 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("modifyfield!: atomic field cannot be written non-atomically") modifyfield!(r, :x, swap, x, :not_atomic)
     @test_throws ConcurrencyViolationError("modifyfield!: atomic field cannot be written non-atomically") modifyfield!(r, :x, swap, x)
     @test_throws ConcurrencyViolationError("invalid atomic ordering") modifyfield!(r, :x, swap, x, :unordered)
-    @test modifyfield!(r, :x, swap, x, :monotonic) === (x, x)
-    @test modifyfield!(r, :x, swap, x, :acquire) === (x, x)
-    @test modifyfield!(r, :x, swap, x, :release) === (x, x)
-    @test modifyfield!(r, :x, swap, x, :acquire_release) === (x, x)
-    @test modifyfield!(r, :x, swap, x, :sequentially_consistent) === (x, x)
+    @test modifyfield!(r, :x, swap, x, :monotonic) === Pair{TT,TT}(x, x)
+    @test modifyfield!(r, :x, swap, x, :acquire) === Pair{TT,TT}(x, x)
+    @test modifyfield!(r, :x, swap, x, :release) === Pair{TT,TT}(x, x)
+    @test modifyfield!(r, :x, swap, x, :acquire_release) === Pair{TT,TT}(x, x)
+    @test modifyfield!(r, :x, swap, x, :sequentially_consistent) === Pair{TT,TT}(x, x)
 
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :x, x, x, :u, :not_atomic)
     @test_throws ConcurrencyViolationError("replacefield!: atomic field cannot be written non-atomically") replacefield!(r, :x, x, x)
@@ -256,9 +260,9 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :x, x, x, :not_atomic, :release)
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :x, x, x, :not_atomic, :acquire_release)
     @test_throws ConcurrencyViolationError("invalid atomic ordering") replacefield!(r, :x, x, x, :not_atomic, :sequentially_consistent)
-    @test replacefield!(r, :x, x, y, :sequentially_consistent, :sequentially_consistent) === (x, true)
-    @test replacefield!(r, :x, x, y, :sequentially_consistent, :sequentially_consistent) === (y, x === y)
-    @test replacefield!(r, :x, y, x, :sequentially_consistent) === (y, true)
+    @test replacefield!(r, :x, x, y, :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((x, true))
+    @test replacefield!(r, :x, x, y, :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((y, x === y))
+    @test replacefield!(r, :x, y, x, :sequentially_consistent) === ReplaceType{TT}((y, true))
     nothing
 end
 @noinline function test_field_orderings(r, x, y)
@@ -339,10 +343,10 @@ let a = ARefxy(1, -1)
     @test 12 === @atomic :monotonic a.x *= 3
 
     @test 12 === @atomic a.x
-    @test (12, 13) === @atomic a.x + 1
-    @test (13, 15) === @atomic :monotonic a.x + 2
-    @test (15, 19) === @atomic a.x max 19
-    @test (19, 20) === @atomic :monotonic a.x max 20
+    @test (12 => 13) === @atomic a.x + 1
+    @test (13 => 15) === @atomic :monotonic a.x + 2
+    @test (15 => 19) === @atomic a.x max 19
+    @test (19 => 20) === @atomic :monotonic a.x max 20
     @test_throws ConcurrencyViolationError @atomic :not_atomic a.x + 1
     @test_throws ConcurrencyViolationError @atomic :not_atomic a.x max 30
 
@@ -352,17 +356,28 @@ let a = ARefxy(1, -1)
     @test_throws ConcurrencyViolationError @atomicswap :not_atomic a.x = 1
 
     @test 2 === @atomic a.x
-    @test (2, true) === @atomicreplace a.x 2 => 1
-    @test (1, false) === @atomicreplace :monotonic a.x 2 => 1
-    @test (1, false) === @atomicreplace :monotonic :monotonic a.x 2 => 1
+    @test ReplaceType{Int}((2, true)) === @atomicreplace a.x 2 => 1
+    @test ReplaceType{Int}((1, false)) === @atomicreplace :monotonic a.x 2 => 1
+    @test ReplaceType{Int}((1, false)) === @atomicreplace :monotonic :monotonic a.x 2 => 1
     @test_throws ConcurrencyViolationError @atomicreplace :not_atomic a.x 1 => 2
     @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x 1 => 2
 
     @test 1 === @atomic a.x
     xchg = 1 => 2
-    @test (1, true) === @atomicreplace a.x xchg
-    @test (2, false) === @atomicreplace :monotonic a.x xchg
-    @test (2, false) === @atomicreplace :acquire_release :monotonic a.x xchg
+    @test ReplaceType{Int}((1, true)) === @atomicreplace a.x xchg
+    @test ReplaceType{Int}((2, false)) === @atomicreplace :monotonic a.x xchg
+    @test ReplaceType{Int}((2, false)) === @atomicreplace :acquire_release :monotonic a.x xchg
     @test_throws ConcurrencyViolationError @atomicreplace :not_atomic a.x xchg
     @test_throws ConcurrencyViolationError @atomicreplace :monotonic :acquire a.x xchg
 end
+
+# atomic getfield with boundcheck
+# via codegen
+getx(a, boundcheck) = getfield(a, :x, :sequentially_consistent, boundcheck)
+@test getx(ARefxy{Any}(42, 42), true) == 42
+@test getx(ARefxy{Any}(42, 42), false) == 42
+# via interpreter
+ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, true)
+@test ans == 42
+ans = getfield(ARefxy{Any}(42, 42), :x, :sequentially_consistent, false)
+@test ans == 42

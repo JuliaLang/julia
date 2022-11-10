@@ -35,7 +35,7 @@ elseif Sys.iswindows()
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
     function splitdrive(path::String)
-        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)
+        m = match(r"^([^\\]+:|\\\\[^\\]+\\[^\\]+|\\\\\?\\UNC\\[^\\]+\\[^\\]+|\\\\\?\\[^\\]+:|)(.*)$"s, path)::AbstractMatch
         String(something(m.captures[1])), String(something(m.captures[2]))
     end
 else
@@ -356,20 +356,24 @@ joinpath
 """
     normpath(path::AbstractString) -> String
 
-Normalize a path, removing "." and ".." entries.
+Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
+for the system.
 
 # Examples
 ```jldoctest
 julia> normpath("/home/myuser/../example.jl")
 "/home/example.jl"
+
+julia> normpath("Documents/Julia") == joinpath("Documents", "Julia")
+true
 ```
 """
 function normpath(path::String)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
-    parts = split(path, path_separator_re)
-    filter!(x->!isempty(x) && x!=".", parts)
+    parts = split(path, path_separator_re; keepempty=false)
+    filter!(!=("."), parts)
     while true
         clean = true
         for j = 1:length(parts)-1
@@ -411,6 +415,16 @@ normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
+
+# Example
+
+If you are in a directory called `JuliaExample` and the data you are using is two levels up relative to the `JuliaExample` directory, you could write:
+
+abspath("../../data")
+
+Which gives a path like `"/home/JuliaUser/data/"`.
+
+See also [`joinpath`](@ref), [`pwd`](@ref), [`expanduser`](@ref).
 """
 function abspath(a::String)::String
     if !isabspath(a)
@@ -512,6 +526,8 @@ end
     expanduser(path::AbstractString) -> AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
+
+See also: [`contractuser`](@ref).
 """
 expanduser(path::AbstractString)
 
@@ -519,6 +535,8 @@ expanduser(path::AbstractString)
     contractuser(path::AbstractString) -> AbstractString
 
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
+
+See also: [`expanduser`](@ref).
 """
 contractuser(path::AbstractString)
 
@@ -534,8 +552,8 @@ On Windows, case sensitivity is applied to every part of the path except drive l
 `path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
-    isempty(path) && throw(ArgumentError("`path` must be specified"))
-    isempty(startpath) && throw(ArgumentError("`startpath` must be specified"))
+    isempty(path) && throw(ArgumentError("`path` must be non-empty"))
+    isempty(startpath) && throw(ArgumentError("`startpath` must be non-empty"))
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
