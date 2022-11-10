@@ -1051,14 +1051,14 @@ julia> broadcast(+, a, B)
  11  21  31
  42  52  62
 
-julia> c = [10 20 30]
+julia> c = [10 100 1000]
 1×3 Matrix{Int64}:
- 10  20  30
+ 10  100  1000
 
 julia> broadcast(+, a, c)
 2×3 Matrix{Int64}:
- 11  21  31
- 12  22  32
+ 11  101  1001
+ 12  102  1002
 ```
 
 In the example above, the [`size`](@ref)s of array `a` and `B` are `(2,)` and
