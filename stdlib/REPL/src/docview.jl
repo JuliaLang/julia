@@ -226,7 +226,11 @@ function lookup_doc(ex)
             return Markdown.parse("`x $op= y` is a synonym for `x $eq x $op y`")
         elseif isdotted && ex !== :(..)
             op = str[2:end]
-            return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            if op in ("&&", "||")
+                return Markdown.parse("`x $ex y` broadcasts the boolean operator `$op` to `x` and `y`. See [`broadcast`](@ref).")
+            else
+                return Markdown.parse("`x $ex y` is akin to `broadcast($op, x, y)`. See [`broadcast`](@ref).")
+            end
         end
     end
     binding = esc(bindingexpr(namify(ex)))
