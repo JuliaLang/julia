@@ -56,6 +56,9 @@ Standard library changes
 
 #### REPL
 
+- Conversely to `;` which suppresses display, ending repl input with a `:` now calls display with
+  a large (1000) row limit as a convenient way to show larger objects with nicely formatted
+  show methods that are taller than the terminal window ([#47520])
 
 #### SuiteSparse
 

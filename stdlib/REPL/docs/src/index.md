@@ -43,6 +43,46 @@ julia> ans
 "12"
 ```
 
+Custom show methods for objects that are used when objects are returned in the repl typically will truncate
+output to the height of the terminal window. A trailing colon on the line can be used as a flag to
+display to a much higher row limit beyond the terminal window height.
+
+```julia-repl
+julia> d = Dict(i => i for i in 1:20)
+Dict{Int64, Int64} with 20 entries:
+  5  => 5
+  16 => 16
+  7  => 7
+  20 => 20
+  ⋮  => ⋮
+
+julia> d:
+Dict{Int64, Int64} with 20 entries:
+  5 => 5
+  16 => 16
+  7 => 7
+  20 => 20
+  12 => 12
+  8 => 8
+  17 => 17
+  1 => 1
+  19 => 19
+  4 => 4
+  6 => 6
+  13 => 13
+  2 => 2
+  10 => 10
+  11 => 11
+  9 => 9
+  15 => 15
+  18 => 18
+  14 => 14
+  3 => 3
+
+julia>
+
+```
+
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting
 text that starts with `julia> ` into the REPL. In that case, only expressions starting with
 `julia> ` are parsed, others are removed. This makes it possible to paste a chunk of code

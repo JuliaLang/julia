@@ -277,11 +277,25 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
 end
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
-function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
+function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool, limitrows::Bool)
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => active_module(repl)::Module)
-        print_response(io, response, show_value, have_color, specialdisplay(repl))
+        if limitrows
+            print_response(io, response, show_value, have_color, specialdisplay(repl))
+        else
+            before = get(Base.active_repl.options.iocontext, :displaysize, nothing)
+            try
+                Base.active_repl.options.iocontext[:displaysize] = (1000, displaysize(io)[2])
+                print_response(io, response, show_value, have_color, specialdisplay(repl))
+            finally
+                if isnothing(before)
+                    delete!(Base.active_repl.options.iocontext, :displaysize)
+                else
+                    Base.active_repl.options.iocontext[:displaysize] = before
+                end
+            end
+        end
     end
     return nothing
 end
@@ -890,7 +904,7 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
                 response = Pair{Any, Bool}(current_exceptions(), true)
             end
             hide_output = suppress_on_semicolon && ends_with_semicolon(line)
-            print_response(repl, response, !hide_output, hascolor(repl))
+            print_response(repl, response, !hide_output, hascolor(repl), !ends_with_colon(line))
         end
         prepare_next(repl)
         reset_state(s)
@@ -1361,6 +1375,9 @@ end
 ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
 ends_with_semicolon(code::Union{String,SubString{String}}) =
     contains(_rm_strings_and_comments(code), r";\s*$")
+ends_with_colon(code::AbstractString) = ends_with_colon(String(code))
+ends_with_colon(code::Union{String,SubString{String}}) =
+    contains(_rm_strings_and_comments(code), r":\s*$")
 
 function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
     have_color = hascolor(repl)
