@@ -207,17 +207,17 @@ julia> struct MyFloat <: AbstractFloat
        end
 
 julia> function Random.rand(rng::AbstractRNG, ::Random.SamplerTrivial{Random.CloseOpen01{MyFloat}})
-           MyFloat(rand(rng, 0.01:0.01:0.99), rand(rng, 0.01:0.01:0.99))
+           MyFloat(rand(rng, 0.01:0.01:0.99))
        end
 
 julia> rand(MyFloat)
-MyFloat(0.08, 0.35)
+MyFloat(0.08)
 
 julia> rand(MyFloat, 3)
 3-element Vector{MyFloat}:
- MyFloat(0.77, 0.78)
- MyFloat(0.67, 0.17)
- MyFloat(0.57, 0.45)
+ MyFloat(0.35)
+ MyFloat(0.7)
+ MyFloat(0.63)
 ```
 
 #### An optimized sampler with pre-computed data
