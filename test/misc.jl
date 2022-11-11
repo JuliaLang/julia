@@ -1241,65 +1241,32 @@ end
 end
 
 @testset "sleep precision" begin
-    println("GREP TARGET 1729 A")
+    times(f::F, dt::Float64, n::Int) where F = sort!([@elapsed(f(dt)) for _ in 1:n])[[1, n÷2]]
 
-    times(f::F, dt::Float64, n::Int) where F = sort!([@elapsed(f(dt)) for _ in 1:n])
+    sleep_tol = .04
+    systemsleep_tol = [0.000165918, 0.00108458, 0.00106672, 0.00143552, 0.0367363, 0.064039]
+    emperical_sleep_tol = 0  # TODO Delete
+    emperical_systemsleep_tol = zeros(6)  # TODO Delete
+
+    K = 10 # Tests pass with K = 2, we set K = 10 to only error on major regressions.
+
     times(sleep, .01, 5) # warmup
     times(Libc.systemsleep, .01, 5)
 
-    tol = [ # TODO multiply this by 5K before merge
-        0.0711334    0.0549671    0.0627999    0.073201     0.0627154    0.0185417    0.0430976  0.0364925
-        0.0711334    0.0549671    0.0627999    0.0936661    0.0627154    0.0278485    0.0430976  0.0364925
-        0.000176997  0.000177108  0.000179418  0.000176588  0.000177538  0.000814496  0.0458834  0.0800488
-        0.000194136  0.000203598  0.000192718  0.00135573   0.0013334    0.0017944    0.0459204  0.0800488
-    ]
+    for j in 1:1000 # TODO Delete
+        for (i,dt) in enumerate(10.0 .^ (-7:-2))
+            min, med = times(sleep, dt, 2)
+            @test dt <= min <= med <= dt + sleep_tol*K
+            emperical_sleep_tol = max(emperical_sleep_tol, med-dt) # TODO Delete
 
-    K = 10
-    tol .*= K
-
-    @testset "test" begin
-        for j in 1:50 # TODO only run once
-            for (i,dt) in enumerate(10.0 .^ (-9:-2))
-                for (j,f) in enumerate([sleep, Libc.systemsleep])
-                    n = ceil(Int, .05/(dt+tol[2j, i]))
-                    m = max(1, n÷2)
-
-                    ts = times(f, dt, n)
-                    @test dt < ts[1] <= dt + tol[2j-1, i]
-                    @test dt < ts[m] <= dt + tol[2j, i]
-                end
-            end
+            n = max(2, ceil(Int, .05/(systemsleep_tol[i] + dt)))
+            min, med = times(Libc.systemsleep, dt, n)
+            @test dt <= min <= med <= dt + systemsleep_tol[i]*K
+            emperical_systemsleep_tol[i] = max(emperical_systemsleep_tol[i], med-dt)  # TODO Delete
         end
-    end
+    end # TODO Delete
 
-    tol ./= K
-
-    @testset "construct" begin # TODO remove this
-        maxratio = 1.0
-        for _ in 1:200
-            fails = 0
-            for (i,dt) in enumerate(10.0 .^ (-9:-2))
-                for (j,f) in enumerate([sleep, Libc.systemsleep])
-                    n = ceil(Int, .05/(dt+tol[2j, i]))
-                    m = max(1, n÷2)
-
-                    ts = times(f, dt, n)
-                    delta = ts[1] - dt
-                    delta > tol[2j-1, i] && (fails += 1)
-                    maxratio = max(maxratio, delta/tol[2j-1, i])
-                    tol[2j-1, i] = max(tol[2j-1, i], delta)
-
-                    delta = ts[m] - dt
-                    delta > tol[2j, i] && (fails += 1)
-                    maxratio = max(maxratio, delta/tol[2j, i])
-                    tol[2j, i] = max(tol[2j, i], delta)
-                end
-            end
-            println(fails, " ", maxratio)
-        end
-    end
-
-    display(tol)
-
-    println("GREP TARGET 1729 B")
+    println("GREP ", emperical_sleep_tol) # TODO Delete
+    println(emperical_systemsleep_tol) # TODO Delete
+    println("k = ", max(maximum(emperical_systemsleep_tol ./ systemsleep_tol), emperical_sleep_tol / sleep_tol)) # TODO Delete
 end
