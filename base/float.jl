@@ -219,7 +219,7 @@ end
 
 function Float32(x::UInt128)
     x == 0 && return 0f0
-    n = used_bits(x) # ndigits0z(x,2)
+    n = ndigits0z2(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
     else
@@ -235,7 +235,7 @@ function Float32(x::Int128)
     x == 0 && return 0f0
     s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
     x = abs(x) % UInt128
-    n = used_bits(x) # ndigits0z(x,2)
+    n = ndigits0z2(x) # ndigits0z(x,2)
     if n <= 24
         y = ((x % UInt32) << (24-n)) & 0x007f_ffff
     else

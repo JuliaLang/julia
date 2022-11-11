@@ -483,21 +483,21 @@ julia> trailing_ones(3)
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 """
-    used_bits(x::Integer) -> Integer
+    ndigits0z2(x::Integer) -> Integer
 
 The number of bits used to represent `x` in its binary representation, excluding leading
 zeros.
 
 # Examples
 ```jldoctest
-julia> used_bits(4)
+julia> ndigits0z2(4)
 3
 
-julia> used_bits(-1)
+julia> ndigits0z2(-1)
 64
 """
-used_bits(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
-used_bits(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+ndigits0z2(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+ndigits0z2(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 
 ## integer comparisons ##
 

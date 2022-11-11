@@ -391,9 +391,9 @@ end
 # optimization: promote the modulus m to BigInt only once (cf. widemul in generic powermod above)
 powermod(x::Integer, p::Integer, m::Union{Int128,UInt128}) = oftype(m, powermod(x, p, big(m)))
 
-_nextpow2(x::Unsigned) = oneunit(x)<<(used_bits(x-oneunit(x)))
+_nextpow2(x::Unsigned) = oneunit(x)<<(ndigits0z2(x-oneunit(x)))
 _nextpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_nextpow2(unsigned(-x)) : _nextpow2(unsigned(x)))
-_prevpow2(x::Unsigned) = one(x) << unsigned(used_bits(x)-1)
+_prevpow2(x::Unsigned) = one(x) << unsigned(ndigits0z2(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
@@ -526,7 +526,7 @@ const powers_of_ten = [
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
 function bit_ndigits0z(x::Base.BitUnsigned64)
-    lz = used_bits(x)
+    lz = ndigits0z2(x)
     nd = (1233*lz)>>12+1
     nd -= x < powers_of_ten[nd]
 end
@@ -571,12 +571,12 @@ function ndigits0zpb(x::Integer, b::Integer)
     x = abs(x)
     if x isa Base.BitInteger
         x = unsigned(x)::Unsigned
-        b == 2  && return used_bits(x)
-        b == 8  && return (used_bits(x) + 2) ÷ 3
+        b == 2  && return ndigits0z2(x)
+        b == 8  && return (ndigits0z2(x) + 2) ÷ 3
         b == 16 && return sizeof(x)<<1 - leading_zeros(x)>>2
         b == 10 && return bit_ndigits0z(x)
         if ispow2(b)
-            dv, rm = divrem(used_bits(x), trailing_zeros(b))
+            dv, rm = divrem(ndigits0z2(x), trailing_zeros(b))
             return iszero(rm) ? dv : dv + 1
         end
     end
@@ -673,7 +673,7 @@ ndigits(x::Integer; base::Integer=10, pad::Integer=1) = max(pad, ndigits0z(x, ba
 ## integer to string functions ##
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    m = used_bits(x)
+    m = ndigits0z2(x)
     n = neg + max(pad, m)
     a = StringVector(n)
     # for i in 0x0:UInt(n-1) # automatic vectorization produces redundant codes
@@ -700,7 +700,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    m = div(used_bits(x) + 2, 3)
+    m = div(ndigits0z2(x) + 2, 3)
     n = neg + max(pad, m)
     a = StringVector(n)
     i = n

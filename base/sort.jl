@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, used_bits
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, ndigits0z2
 
 import Base:
     sort,
@@ -827,7 +827,7 @@ function sort!(v::AbstractVector{T}, lo::Integer, hi::Integer, ::AdaptiveSortAlg
     # if u's range is small, then once we subtract out v_min, we'll get a vector like
     # UInt16[0x001a, 0x0015, 0x0006, 0x001b, 0x0008, 0x000c, 0x0001, 0x000e, 0x001c, 0x0009]
     # where we only need to radix over the last few bits (5, in the example).
-    bits = unsigned(used_bits(u_range))
+    bits = unsigned(ndigits0z2(u_range))
 
     # radix sort runs in O(bits * lenm1), quick sort runs in O(lenm1 * log(lenm1)).
     # dividing both sides by lenm1 and introducing empirical constant factors yields

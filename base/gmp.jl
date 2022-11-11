@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, used_bits
+             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, ndigits0z2
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -396,7 +396,7 @@ function Float64(x::BigInt, ::RoundingMode{:Nearest})
         z = Float64((unsafe_load(x.d, 2) % UInt64) << BITS_PER_LIMB + unsafe_load(x.d))
     else
         y1 = unsafe_load(x.d, xsize) % UInt64
-        n = used_bits(y1)
+        n = ndigits0z2(y1)
         # load first 54(1 + 52 bits of fraction + 1 for rounding)
         y = y1 >> (n - (precision(Float64)+1))
         if Limb == UInt64
