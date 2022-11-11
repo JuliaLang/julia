@@ -148,7 +148,7 @@ JL_BUFF_TAG::UInt = ccall(:jl_get_buff_tag, UInt, ())
 const JL_GC_UNKNOWN_TYPE_TAG = UInt(0xdeadaa03)
 
 function __init__()
-    JL_BUFF_TAG = ccall(:jl_get_buff_tag, UInt, ())
+    global JL_BUFF_TAG = ccall(:jl_get_buff_tag, UInt, ())
 end
 
 struct CorruptType end
