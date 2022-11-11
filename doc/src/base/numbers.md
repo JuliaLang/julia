@@ -138,7 +138,6 @@ Base.leading_zeros
 Base.leading_ones
 Base.trailing_zeros
 Base.trailing_ones
-Base.used_bits
 Base.isodd
 Base.iseven
 Base.@int128_str
