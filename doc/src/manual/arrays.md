@@ -1029,7 +1029,15 @@ sizes, such as adding a vector to each column of a matrix. An inefficient way to
 be to replicate the vector to the size of the matrix:
 
 ```jldoctest broadcasting
-julia> a = [1, 2]; B = [10 20 30; 40 50 60]
+julia> a = [1, 2]
+2-element Vector{Int64}:
+ 1
+ 2
+
+julia> B = [10 20 30; 40 50 60]
+2×3 Matrix{Int64}:
+ 10  20  30
+ 40  50  60
 
 julia> repeat(a, 1, 3) + B
 2×3 Matrix{Int64}:
