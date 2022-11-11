@@ -174,6 +174,10 @@ static size_t last_long_collect_interval;
 int gc_n_threads;
 jl_ptls_t* gc_all_tls_states;
 const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
+JL_DLLEXPORT uintptr_t jl_get_buff_tag(void)
+{
+    return jl_buff_tag;
+}
 
 pagetable_t memory_map;
 
