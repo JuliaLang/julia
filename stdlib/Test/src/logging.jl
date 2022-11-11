@@ -307,6 +307,7 @@ logfield_contains(a::Symbol, r::Regex) = occursin(r, String(a))
 logfield_contains(a::LogLevel, b::Symbol) = a == parse_level(b)
 logfield_contains(a, b::Ignored) = true
 logfield_contains(a::NamedTuple, b) = logfield_contains(pairs(a), b)
+logfield_contains(a::NamedTuple, b::Ignored) = true  # method amibguity resolution
 function logfield_contains(a::Base.Pairs, pattern)
     pattern = pairs(pattern)
     for (k, bv) in pattern
