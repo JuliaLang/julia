@@ -503,7 +503,7 @@ julia> ndigits0z2(0)
 julia> ndigits0z2(-1)
 64
 """
-ndigits0z2(x::Integer) = ceil(Integer, log2(x + oneunit(x)))
+ndigits0z2(x::Integer) = ndigits0z(x, 2)
 ndigits0z2(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 
 ## integer comparisons ##
