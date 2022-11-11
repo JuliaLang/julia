@@ -792,8 +792,6 @@ restart_switch:
                             break;
                     }
                     jl_options.heap_size_hint = (uint64_t)(value * multiplier);
-
-                    jl_gc_set_max_memory(jl_options.heap_size_hint);
                 }
             }
             if (jl_options.heap_size_hint == 0)
