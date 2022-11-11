@@ -1061,7 +1061,7 @@ julia> broadcast(+, A, B)
 
 Broadcasting takes sevaral conceptual steps. First, it aligns dimensions in
 array arguments starting with the leading ones[^2] by filling lacking dimensions
-with a singleton dimension if needed to make sure that the argument arrays have
+with a singleton dimension if needed, to make sure that the argument arrays have
 the same number of dimensions.  Then, it expands singleton dimensions to match
 the corresponding dimension in the other array without using extra memory, and
 finally applies the given function elementwise.  In the example above, the
@@ -1073,7 +1073,7 @@ in the following diagram.
 [^2]: This is the opposite direction of that of NumPy, which aligns dimensions from the last to the first.
 
 ```
-           fill         expand
+           align        expand
 A: (2,)    --->  (2, 1)  --->  (2, 3)
 B: (2, 3)  --->  (2, 3)  --->  (2, 3)
 ```
@@ -1118,7 +1118,7 @@ julia> broadcast(+, A, B, C)
 The broadcasting of `A`, `B` and `C` happens in the following way:
 
 ```
-              fill            expand
+              align           expand
 A: (2,)       --->  (2, 1, 1)  --->  (2, 3, 4)
 B: (2, 3)     --->  (2, 3, 1)  --->  (2, 3, 4)
 C: (1, 1, 4)  --->  (1, 1, 4)  --->  (2, 3, 4)
