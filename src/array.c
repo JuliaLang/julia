@@ -59,6 +59,16 @@ JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT
     return ((char*)jl_array_data(a)) + ((jl_array_ndims(a) == 1 ? (a->maxsize - a->offset) : jl_array_len(a)) * a->elsize) + a->offset;
 }
 
+JL_DLLEXPORT uint16_t jl_array_shared_flag(jl_array_t *a)
+{
+    return a->flags.isshared;
+}
+
+JL_DLLEXPORT uint16_t jl_array_how_flag(jl_array_t *a)
+{
+    return a->flags.how;
+}
+
 STATIC_INLINE jl_value_t *jl_array_owner(jl_array_t *a JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
     if (a->flags.how == 3) {

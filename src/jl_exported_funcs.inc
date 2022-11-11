@@ -40,6 +40,8 @@
     XX(jl_array_ptr_1d_append) \
     XX(jl_array_ptr_1d_push) \
     XX(jl_array_ptr_copy) \
+    XX(jl_array_shared_flag) \
+    XX(jl_array_how_flag) \
     XX(jl_array_rank) \
     XX(jl_array_size) \
     XX(jl_array_sizehint) \

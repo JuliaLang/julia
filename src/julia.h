@@ -1000,6 +1000,7 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_data_owner_offset(ndims) (offsetof(jl_array_t,ncols) + sizeof(size_t)*(1+jl_array_ndimwords(ndims))) // in bytes
 #define jl_array_data_owner(a) (*((jl_value_t**)((char*)a + jl_array_data_owner_offset(jl_array_ndims(a)))))
 
+
 JL_DLLEXPORT char *jl_array_typetagdata(jl_array_t *a) JL_NOTSAFEPOINT;
 
 #ifdef __clang_gcanalyzer__
@@ -1598,6 +1599,8 @@ JL_DLLEXPORT int jl_array_validate_dims(size_t *nel, size_t *tot, uint32_t ndims
 JL_DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 JL_DLLEXPORT void *jl_array_eltype(jl_value_t *a);
 JL_DLLEXPORT int jl_array_rank(jl_value_t *a);
+JL_DLLEXPORT uint16_t jl_array_shared_flag(jl_array_t *a);
+JL_DLLEXPORT uint16_t jl_array_how_flag(jl_array_t *a);
 JL_DLLEXPORT size_t jl_array_size(jl_value_t *a, int d);
 
 // strings

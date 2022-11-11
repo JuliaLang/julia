@@ -220,6 +220,83 @@ function isassigned(a::Array, i::Int...)
     ccall(:jl_array_isassigned, Cint, (Any, UInt), a, ii) == 1
 end
 
+"""
+    Base.isshared(a::Array) -> Bool
+
+Return `true` if `a` points to `Array` data that is shared. Operations that change an
+array's length may throw an error if `Base.isshared(a)` is `true`.
+
+See also: [`Base.isowner`](@ref)
+
+# Examples
+
+```jldoctest
+julia> v = [1, 2, 3];
+
+julia> push!(v, 4);
+
+julia> Base.isshared(v)
+false
+
+julia> m = reshape(v, (2, 2));
+
+julia> Base.isshared(m)
+true
+
+julia> Base.isshared(v)
+true
+
+julia> push!(v, 5);
+ERROR: cannot resize array with shared data
+Stacktrace:
+[...]
+
+julia> str = "julia";
+
+julia> vstr = unsafe_wrap(Vector{UInt8}, str);
+
+julia> Base.isshared(vstr)
+true
+```
+"""
+isshared(a::Array) = ccall(:jl_array_shared_flag, UInt16, (Any,), a) == 1
+
+"""
+    Base.isowner(a::Array) -> Bool
+
+Return `true` if `a` is the original owner of its data.
+
+See also: [`Base.isshared`](@ref)
+
+# Examples
+
+```jldoctest
+julia> v = [1, 2, 3, 4];
+
+julia> Base.isowner(v)
+true
+
+julia> m = reshape(v, (2, 2));
+
+julia> Base.isowner(m)
+false
+
+julia> Base.isowner(v)
+true
+
+julia> str = "julia";
+
+julia> vstr = unsafe_wrap(Vector{UInt8}, str);
+
+julia> Base.isowner(vstr)
+false
+```
+"""
+function isowner(a::Array)
+    ccall(:jl_array_shared_flag, UInt16, (Any,), a) == 0 ||
+    ccall(:jl_array_how_flag, UInt16, (Any,), a) != 3
+end
+
 ## copy ##
 
 """
