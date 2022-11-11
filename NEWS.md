@@ -141,7 +141,24 @@ Standard library changes
 * An "IPython mode" which mimics the behaviour of the prompts and storing the evaluated result in `Out` can be
   activated with `REPL.ipython_mode!()`. See the manual for how to enable this at startup.
 
+#### SuiteSparse
+
+* Code for the SuiteSparse solver wrappers has been moved to SparseArrays.jl. Solvers are now re-exported by
+  SuiteSparse.jl
+
 #### SparseArrays
+
+* SuiteSparse solvers are now available as submodules of SparseArrays (<https://github.com/JuliaSparse/SparseArrays.jl/pull/95>).
+
+* UMFPACK (<https://github.com/JuliaSparse/SparseArrays.jl/pull/179>) and CHOLMOD (<https://github.com/JuliaSparse/SparseArrays.jl/pull/206>) thread safety are improved by
+  avoiding globals and using locks. Multithreaded `ldiv!` of UMFPACK objects may now be
+  performed safely.
+
+* An experimental function `SparseArrays.allowscalar(::Bool)` allows scalar indexing of sparse arrays to be
+  disabled or enabled. This function is intended to help find accidental scalar indexing of
+  `SparseMatrixCSC` objects which is a common source of performance issues (<https://github.com/JuliaSparse/SparseArrays.jl/pull/200>).
+
+
 
 #### Test
 * New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
@@ -149,6 +166,9 @@ Standard library changes
   to `"true"` i.e. in CI runs to request the job failure be posted eagerly when issues occur ([#45317])
 
 #### Dates
+
+* Empty strings are no longer incorrectly parsed as valid `DateTime`s, `Date`s or `Time`s and instead throw an
+  `ArgumentError` in constructors and `parse`, while `nothing` is returned by `tryparse` ([#47117]).
 
 #### Downloads
 
