@@ -3,6 +3,7 @@
 ```@docs
 @ccall
 ccall
+@cglobal
 Core.Intrinsics.cglobal
 Base.@cfunction
 Base.CFunction

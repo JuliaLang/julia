@@ -967,6 +967,7 @@ export
 # C interface
     @cfunction,
     @ccall,
+    @cglobal,
     cglobal,
     disable_sigint,
     pointer,

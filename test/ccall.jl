@@ -1925,3 +1925,43 @@ end
     ctest_total_const() = Val{ctest_total(1 + 2im)}()
     Core.Compiler.return_type(ctest_total_const, Tuple{}) == Val{2 + 0im}
 end
+
+function cglobal_macro_ptrvar()
+    libh = Libdl.dlopen(libccalltest)
+    sym = Libdl.dlsym(libh, :global_var)
+    return (@cglobal $sym::Cint) == cglobal(sym, Cint)
+end
+function cglobal_macro_ptrvar_notype()
+    libh = Libdl.dlopen(libccalltest)
+    sym = Libdl.dlsym(libh, :global_var)
+    return (@cglobal $sym) == cglobal(sym)
+end
+function cglobal_macro_ptrinline()
+    libh = Libdl.dlopen(libccalltest)
+    return (@cglobal $(Libdl.dlsym(libh, :global_var))::Cint) == cglobal(Libdl.dlsym(libh, :global_var), Cint)
+end
+function cglobal_macro_ptrinline_notype()
+    libh = Libdl.dlopen(libccalltest)
+    return (@cglobal $(Libdl.dlsym(libh, :global_var))) == cglobal(Libdl.dlsym(libh, :global_var))
+end
+function cglobal_macro_tupleliteral()
+    return (@cglobal libccalltest.global_var::Cint) == cglobal((:global_var, libccalltest), Cint)
+end
+function cglobal_macro_tupleliteral_notype()
+    return (@cglobal libccalltest.global_var) == cglobal((:global_var, libccalltest))
+end
+function cglobal_macro_literal()
+    return (@cglobal sin::Cint) == cglobal(:sin, Cint)
+end
+function cglobal_macro_literal_notype()
+    return (@cglobal sin) == cglobal(:sin)
+end
+@test cglobal_macro_ptrvar()
+@test cglobal_macro_ptrinline()
+@test cglobal_macro_tupleliteral()
+@test cglobal_macro_ptrvar_notype()
+@test cglobal_macro_ptrinline_notype()
+@test cglobal_macro_tupleliteral_notype()
+@test cglobal_macro_literal()
+@test cglobal_macro_literal_notype()
+@test_throws ArgumentError @cglobal $(1+1)

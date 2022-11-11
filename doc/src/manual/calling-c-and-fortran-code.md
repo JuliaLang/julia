@@ -1031,9 +1031,10 @@ unlike the equivalent Julia functions exposed by `Core.Intrinsics`.
 
 ## Accessing Global Variables
 
-Global variables exported by native libraries can be accessed by name using the [`cglobal`](@ref)
-function. The arguments to [`cglobal`](@ref) are a symbol specification identical to that used
-by [`ccall`](@ref), and a type describing the value stored in the variable:
+Global variables exported by native libraries can be accessed by name using the
+[`cglobal`](@ref) function (or the [`@cglobal`](@ref) macro). The arguments to
+[`cglobal`](@ref) are a symbol specification identical to that used by
+[`ccall`](@ref), and a type describing the value stored in the variable:
 
 ```julia-repl
 julia> cglobal((:errno, :libc), Int32)
