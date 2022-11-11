@@ -272,7 +272,7 @@ struct UnionSplitMethodMatches
     fullmatches::Vector{Bool}
     nonoverlayed::Bool
 end
-any_ambig(m::UnionSplitMethodMatches) = _any(any_ambig, m.info.matches)
+any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
 function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
                                union_split::Int, max_methods::Int)
@@ -304,7 +304,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
                 push!(applicable_argtypes, arg_n)
             end
             valid_worlds = intersect(valid_worlds, matches.valid_worlds)
-            thisfullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
+            thisfullmatch = any(match::MethodMatch->match.fully_covers, matches)
             found = false
             for (i, mt′) in enumerate(mts)
                 if mt′ === mt
@@ -338,7 +338,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             return FailedMethodMatch("Too many methods matched")
         end
         (; matches, overlayed) = result
-        fullmatch = _any(match->(match::MethodMatch).fully_covers, matches)
+        fullmatch = any(match::MethodMatch->match.fully_covers, matches)
         return MethodMatches(matches.matches,
                              MethodMatchInfo(matches),
                              matches.valid_worlds,
@@ -654,7 +654,7 @@ function edge_matches_sv(frame::InferenceState, method::Method, @nospecialize(si
 
         # check in the cycle list first
         # all items in here are mutual parents of all others
-        if !_any(p::InferenceState->matches_sv(p, sv), frame.callers_in_cycle)
+        if !any(p::InferenceState->matches_sv(p, sv), frame.callers_in_cycle)
             let parent = frame.parent
                 parent !== nothing || return false
                 parent = parent::InferenceState
@@ -847,7 +847,7 @@ function concrete_eval_call(interp::AbstractInterpreter,
     end
 end
 
-has_conditional(argtypes::Vector{Any}) = _any(@nospecialize(x)->isa(x, Conditional), argtypes)
+has_conditional(argtypes::Vector{Any}) = any(@nospecialize(x)->isa(x, Conditional), argtypes)
 has_conditional((; argtypes)::ArgInfo) = has_conditional(argtypes)
 
 function const_prop_enabled(interp::AbstractInterpreter, sv::InferenceState, match::MethodMatch)
@@ -872,6 +872,69 @@ struct ConstCallResults
                      effects::Effects,
                      edge::MethodInstance) =
         new(rt, const_result, effects, edge)
+end
+
+struct ConditionalArgtypes <: ForwardableArgtypes
+    arginfo::ArgInfo
+    sv::InferenceState
+end
+
+"""
+    matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+
+The implementation is able to forward `Conditional` of `argtypes`,
+as well as the other general extended lattice inforamtion.
+"""
+function matching_cache_argtypes(linfo::MethodInstance, argtypes::ConditionalArgtypes)
+    (; arginfo, sv) = argtypes
+    (; fargs, argtypes) = arginfo
+    given_argtypes = Vector{Any}(undef, length(argtypes))
+    def = linfo.def::Method
+    nargs = Int(def.nargs)
+    cache_argtypes, overridden_by_const = matching_cache_argtypes(linfo)
+    local condargs = nothing
+    for i in 1:length(argtypes)
+        argtype = argtypes[i]
+        # forward `Conditional` if it conveys a constraint on any other argument
+        if isa(argtype, Conditional) && fargs !== nothing
+            cnd = argtype
+            slotid = find_constrained_arg(cnd, fargs, sv)
+            if slotid !== nothing
+                # using union-split signature, we may be able to narrow down `Conditional`
+                sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
+                thentype = tmeet(cnd.thentype, sigt)
+                elsetype = tmeet(cnd.elsetype, sigt)
+                if thentype === Bottom && elsetype === Bottom
+                    # we accidentally proved this method match is impossible
+                    # TODO bail out here immediately rather than just propagating Bottom ?
+                    given_argtypes[i] = Bottom
+                else
+                    if condargs === nothing
+                        condargs = Tuple{Int,Int}[]
+                    end
+                    push!(condargs, (slotid, i))
+                    given_argtypes[i] = Conditional(slotid, thentype, elsetype)
+                end
+                continue
+            end
+        end
+        given_argtypes[i] = widenconditional(argtype)
+    end
+    if condargs !== nothing
+        given_argtypes = let condargs=condargs
+            va_process_argtypes(given_argtypes, linfo) do isva_given_argtypes::Vector{Any}, last::Int
+                # invalidate `Conditional` imposed on varargs
+                for (slotid, i) in condargs
+                    if slotid ≥ last && (1 ≤ i ≤ length(isva_given_argtypes)) # `Conditional` is already widened to vararg-tuple otherwise
+                        isva_given_argtypes[i] = widenconditional(isva_given_argtypes[i])
+                    end
+                end
+            end
+        end
+    else
+        given_argtypes = va_process_argtypes(given_argtypes, linfo)
+    end
+    return pick_const_args!(cache_argtypes, overridden_by_const, given_argtypes)
 end
 
 function abstract_call_method_with_const_args(interp::AbstractInterpreter,
@@ -920,7 +983,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Edge cycle encountered")
             return nothing
         end
-        inf_result = InferenceResult(mi, (arginfo, sv))
+        inf_result = InferenceResult(mi, ConditionalArgtypes(arginfo, sv))
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
@@ -1260,7 +1323,7 @@ function precise_container_type(interp::AbstractInterpreter, @nospecialize(itft)
     end
     if isa(tti, Union)
         utis = uniontypes(tti)
-        if _any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
+        if any(@nospecialize(t) -> !isa(t, DataType) || !(t <: Tuple) || !isknownlength(t), utis)
             return Any[Vararg{Any}], nothing
         end
         ltp = length((utis[1]::DataType).parameters)
@@ -1679,15 +1742,18 @@ function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgIn
     ft = widenconst(ft′)
     ft === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     (types, isexact, isconcrete, istype) = instanceof_tfunc(argtype_by_index(argtypes, 3))
-    types === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     isexact || return CallMeta(Any, Effects(), NoCallInfo())
+    unwrapped = unwrap_unionall(types)
+    if types === Bottom || types === Any || !(unwrapped isa DataType)
+        return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
+    end
     argtype = argtypes_to_type(argtype_tail(argtypes, 4))
     nargtype = typeintersect(types, argtype)
     nargtype === Bottom && return CallMeta(Bottom, EFFECTS_THROWS, NoCallInfo())
     nargtype isa DataType || return CallMeta(Any, Effects(), NoCallInfo()) # other cases are not implemented below
     isdispatchelem(ft) || return CallMeta(Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
     ft = ft::DataType
-    lookupsig = rewrap_unionall(Tuple{ft, unwrap_unionall(types).parameters...}, types)::Type
+    lookupsig = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     nargtype = Tuple{ft, nargtype.parameters...}
     argtype = Tuple{ft, argtype.parameters...}
     match, valid_worlds, overlayed = findsup(lookupsig, method_table(interp))

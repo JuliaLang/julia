@@ -15,17 +15,17 @@ FILE *stderr = &_stderr;
 int loader_fwrite(const char *str, size_t nchars, FILE *out) {
     DWORD written;
     if (out->isconsole) {
-        // Windows consoles do not support UTF8, only UTF16.
+        // Windows consoles do not support UTF-8 (for reading input, though new Windows Terminal does for writing), only UTF-16.
         wchar_t* wstr = utf8_to_wchar(str);
         if (!wstr)
             return -1;
-        if (WriteConsole(out->fd, str, wcslen(wstr), &written, NULL)) {
+        if (WriteConsoleW(out->fd, wstr, wcslen(wstr), &written, NULL)) {
             loader_free(wstr);
             return written;
         }
         loader_free(wstr);
     } else {
-        // However, we want to print utf8 if the output is a file.
+        // However, we want to print UTF-8 if the output is a file.
         if (WriteFile(out->fd, str, nchars, &written, NULL))
             return written;
     }

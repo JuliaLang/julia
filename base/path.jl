@@ -552,8 +552,8 @@ On Windows, case sensitivity is applied to every part of the path except drive l
 `path` and `startpath` refer to different drives, the absolute path of `path` is returned.
 """
 function relpath(path::String, startpath::String = ".")
-    isempty(path) && throw(ArgumentError("`path` must be specified"))
-    isempty(startpath) && throw(ArgumentError("`startpath` must be specified"))
+    isempty(path) && throw(ArgumentError("`path` must be non-empty"))
+    isempty(startpath) && throw(ArgumentError("`startpath` must be non-empty"))
     curdir = "."
     pardir = ".."
     path == startpath && return curdir
