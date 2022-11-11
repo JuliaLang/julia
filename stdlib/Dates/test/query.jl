@@ -49,6 +49,9 @@ end
         ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"],
         [""],
     )
+    @test Dates.LOCALES["english"] == deepcopy(Dates.LOCALES["english"])
+    @test Dates.LOCALES["english"] != Dates.LOCALES["french"]
+
     @test Dates.dayname(Nov; locale="french") == "lundi"
     @test Dates.dayname(Jan; locale="french") == "mardi"
     @test Dates.dayname(Dec; locale="french") == "mercredi"

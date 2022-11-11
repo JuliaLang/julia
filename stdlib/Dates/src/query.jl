@@ -13,6 +13,12 @@ struct DateLocale
     day_of_week_abbr_value::Dict{String, Int64}
 end
 
+function Base.:==(a::DateLocale, b::DateLocale)
+    all(fieldnames(DateLocale)) do f
+        getfield(a, f) == getfield(b, f)
+    end
+end
+
 function locale_dict(names::Vector{<:AbstractString})
     result = Dict{String, Int}()
 
