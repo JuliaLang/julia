@@ -98,7 +98,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    157
+#define NUM_TAGS    158
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -120,6 +120,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_array_type);
         INSERT_TAG(jl_typedslot_type);
         INSERT_TAG(jl_expr_type);
+        INSERT_TAG(jl_binding_type);
         INSERT_TAG(jl_globalref_type);
         INSERT_TAG(jl_string_type);
         INSERT_TAG(jl_module_type);
@@ -383,7 +384,6 @@ enum RefTags {
     ConstDataRef,       // constant data (e.g., layouts)
     TagRef,             // items serialized via their tags
     SymbolRef,          // symbols
-    BindingRef,         // module bindings
     FunctionRef,        // generic functions
     BuiltinFunctionRef, // builtin functions
     ExternalLinkage     // items defined externally (used when serializing packages)
@@ -971,11 +971,11 @@ static void write_pointerfield(jl_serializer_state *s, jl_value_t *fld) JL_NOTSA
 
 // Save blank space in stream `s` for a pointer `fld`, storing both location and target
 // in `gctags_list`.
-static void write_gctaggedfield(jl_serializer_state *s, uintptr_t ref) JL_NOTSAFEPOINT
+static void write_gctaggedfield(jl_serializer_state *s, jl_datatype_t *ref) JL_NOTSAFEPOINT
 {
     // jl_printf(JL_STDOUT, "gctaggedfield: position %p, value 0x%lx\n", (void*)(uintptr_t)ios_pos(s->s), ref);
     arraylist_push(&s->gctags_list, (void*)(uintptr_t)ios_pos(s->s));
-    arraylist_push(&s->gctags_list, (void*)ref);
+    arraylist_push(&s->gctags_list, (void*)backref_id(s, ref, s->link_ids_gctags));
     write_pointer(s->s);
 }
 
@@ -1009,7 +1009,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             jl_binding_t *b = (jl_binding_t*)table[i+1];
             write_pointerfield(s, (jl_value_t*)table[i]);
             tot += sizeof(void*);
-            write_gctaggedfield(s, (uintptr_t)BindingRef << RELOC_TAG_OFFSET);
+            write_gctaggedfield(s, jl_binding_type);
             tot += sizeof(void*);
             size_t binding_reloc_offset = ios_pos(s->s);
             ptrhash_put(&bindings, b, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + binding_reloc_offset));
@@ -1108,7 +1108,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         // write header
         if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(s->s)|1));
-        write_gctaggedfield(s, backref_id(s, t, s->link_ids_gctags));
+        write_gctaggedfield(s, t);
         size_t reloc_offset = ios_pos(s->s);
         assert(item < layout_table.len && layout_table.items[item] == NULL);
         layout_table.items[item] = (void*)reloc_offset;               // store the inverse mapping of `serialization_order` (`id` => object-as-streampos)
@@ -1549,9 +1549,6 @@ static uintptr_t get_reloc_for_item(uintptr_t reloc_item, size_t reloc_offset)
         case TagRef:
             assert(offset < 2 * NBOX_C + 258 && "corrupt relocation item id");
             break;
-        case BindingRef:
-            assert(offset == 0 && "corrupt relocation offset");
-            break;
         case BuiltinFunctionRef:
             assert(offset < sizeof(id_to_fptrs) / sizeof(*id_to_fptrs) && "unknown function pointer id");
             break;
@@ -1584,8 +1581,6 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
     case SymbolRef:
         assert(offset < deser_sym.len && deser_sym.items[offset] && "corrupt relocation item id");
         return (uintptr_t)deser_sym.items[offset];
-    case BindingRef:
-        return jl_buff_tag | GC_OLD;
     case TagRef:
         if (offset == 0)
             return (uintptr_t)s->ptls->root_task;

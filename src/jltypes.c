@@ -2727,6 +2727,16 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
+    jl_binding_type =
+        jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(6, "name", "value", "globalref", "owner", "ty", "flags"),
+                        jl_svec(6, jl_symbol_type, jl_any_type, jl_any_type/*jl_binding_type*/, jl_module_type, jl_any_type, jl_uint8_type),
+                        jl_emptysvec, 0, 1, 1);
+                        const static uint32_t binding_constfields[1]  = { 0x0001 }; // Set fields 1 as const
+                        const static uint32_t binding_atomicfields[1] = { 0x0016 }; // Set fields 2, 3, 5 as atomic
+                        jl_binding_type->name->constfields = binding_constfields;
+                        jl_binding_type->name->atomicfields = binding_atomicfields;
+
     jl_globalref_type =
         jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(3, "mod", "name", "binding"),
@@ -2772,6 +2782,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 13, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 14, jl_voidpointer_type);
+    jl_svecset(jl_binding_type->types, 2, jl_globalref_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

@@ -1543,6 +1543,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_return_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lineinfo_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lambda_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_assign_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_binding_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_globalref_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_do_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_method_sym;
