@@ -222,20 +222,20 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
 
-#if defined(_OS_WINDOWS_) && 0
+#if defined(_OS_WINDOWS_)
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
 {
-    return _aligned_malloc(sz ? sz : 1, align);
+    return mi_malloc_aligned(sz ? sz : 1, align);
 }
 STATIC_INLINE void *jl_realloc_aligned(void *p, size_t sz, size_t oldsz,
                                        size_t align)
 {
     (void)oldsz;
-    return _aligned_realloc(p, sz ? sz : 1, align);
+    return mi_realloc_aligned(p, sz ? sz : 1, align);
 }
 STATIC_INLINE void jl_free_aligned(void *p) JL_NOTSAFEPOINT
 {
-    _aligned_free(p);
+    mi_free(p);
 }
 #else
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
