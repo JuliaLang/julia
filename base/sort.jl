@@ -427,10 +427,7 @@ for (sym, deps, exp, type) in [
         (:umx, (:mx,), :(uint_map(mx, o)), Unsigned),
         (:urange, (:umn, :umx), :(umx-umn), Unsigned),
         (:bits, (:urange,), :(unsigned(8sizeof(urange) - leading_zeros(urange))), Unsigned),
-        (:scratch, (), nothing, :(Union{Nothing, AbstractVector})), # could have different eltype
-        (:t, (:lo, :hi, :scratch), quote
-            scratch === nothing ? similar(v) : reinterpret(eltype(v), checkbounds(Bool, scratch, lo:hi) ? scratch : resize!(scratch, length(v)))
-        end, :(AbstractVector{eltype(v)})),
+        (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
         (:allow_legacy_dispatch, (), true, Bool)]
     str = string(sym)
     usym = Symbol(:_, sym)
@@ -442,7 +439,57 @@ for (sym, deps, exp, type) in [
     end
 end
 
+## Scratch space management
+
+"""
+    make_scratch(scratch::Union{Nothing, Vector}, T::Type, len::Integer)
+
+Returns `(s, t)` where `t` is an `AbstractVector` of type `T` with length at least `len`
+that is backed by the `Vector` `s`. If `scratch !== nothing`, then `s === scratch`.
+
+This function will allocate a new vector if `scratch === nothing`, `resize!` `scratch` if it
+is too short, and `reinterpret` `scratch` if its eltype is not `T`.
+"""
+function make_scratch(scratch::Nothing, T::Type, len::Integer)
+    s = Vector{T}(undef, len)
+    s, s
+end
+function make_scratch(scratch::Vector{T}, ::Type{T}, len::Integer) where T
+    len > length(scratch) && resize!(scratch, len)
+    scratch, scratch
+end
+function make_scratch(scratch::Vector, T::Type, len::Integer)
+    len_bytes = len * sizeof(T)
+    len_scratch = div(len_bytes, sizeof(eltype(scratch)))
+    len_scratch > length(scratch) && resize!(scratch, len_scratch)
+    scratch, reinterpret(T, scratch)
+end
+
+
 ## sorting algorithm components ##
+
+"""
+    _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw; t, offset)
+
+An internal function that sorts `v` using the algorithm `a` under the ordering `o`,
+subject to specifications provided in `kw` (such as `lo` and `hi` in which case it only
+sorts `view(v, lo:hi)`)
+
+Returns a scratch space if provided or constructed during the sort, or `nothing` if
+no scratch space is present.
+
+!!! note
+    `_sort!` modifies but does not return `v`.
+
+A returned scratch space will be a `Vector{T}` where `T` is usually the eltype of `v`. There
+are some exceptions, for example if `eltype(v) == Union{Missing, T}` then the scratch space
+may be be a `Vector{T}` due to `MissingOptimization` changing the eltype of `v` to `T`.
+
+`t` is an appropriate scratch space for the algorithm at hand, to be accessed as
+`t[i + offset]`. `t` is used for an algorithm to pass a scratch space back to itself in
+internal or recursive calls.
+"""
+function _sort! end
 
 abstract type Algorithm end
 
@@ -526,7 +573,6 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-        v
     elseif eltype(v) <: Integer && o isa Perm{DirectOrdering} && nonmissingtype(eltype(o.data)) != eltype(o.data)
         lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
         _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
@@ -562,18 +608,25 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
         lo, hi = send_to_end!(isnan, v, o, true; lo, hi)
         iv = reinterpret(UIntType(eltype(v)), v)
         j = send_to_end!(x -> after_zero(o, x), v; lo, hi)
-        _sort!(iv, a.next, Reverse, (;kw..., lo, hi=j))
-        _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi))
+        scratch = _sort!(iv, a.next, Reverse, (;kw..., lo, hi=j))
+        if scratch === nothing # Union split
+            _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi, scratch))
+        else
+            _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi, scratch))
+        end
     elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
         lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
         j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
-        _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
-        _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi))
+        scratch = _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
+        if scratch === nothing # Union split
+            _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
+        else
+            _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
+        end
     else
         _sort!(v, a.next, o, kw)
     end
-    v
 end
 
 
@@ -591,7 +644,7 @@ end
 _sort!(v::AbstractVector, a::BoolOptimization, o::Ordering, kw) = _sort!(v, a.next, o, kw)
 function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering, kw)
     first = lt(o, false, true) ? false : lt(o, true, false) ? true : return v
-    @getkw lo hi
+    @getkw lo hi scratch
     count = 0
     @inbounds for i in lo:hi
         if v[i] == first
@@ -600,7 +653,7 @@ function _sort!(v::AbstractVector{Bool}, ::BoolOptimization, o::Ordering, kw)
     end
     @inbounds v[lo:lo+count-1] .= first
     @inbounds v[lo+count:hi] .= !first
-    v
+    scratch
 end
 
 
@@ -667,7 +720,7 @@ struct InsertionSort <: Algorithm end
 
 const SMALL_ALGORITHM = InsertionSort()
 function _sort!(v::AbstractVector, ::InsertionSort, o::Ordering, kw)
-    @getkw lo hi
+    @getkw lo hi scratch
     lo_plus_1 = (lo + 1)::Integer
     @inbounds for i = lo_plus_1:hi
         j = i
@@ -682,7 +735,7 @@ function _sort!(v::AbstractVector, ::InsertionSort, o::Ordering, kw)
         end
         v[j] = x
     end
-    return v
+    scratch
 end
 
 
@@ -696,17 +749,17 @@ struct CheckSorted{T <: Algorithm} <: Algorithm
     next::T
 end
 function _sort!(v::AbstractVector, a::CheckSorted, o::Ordering, kw)
-    @getkw lo hi
+    @getkw lo hi scratch
 
     # For most arrays, a presorted check is cheap (overhead < 5%) and for most large
     # arrays it is essentially free (<1%).
-    _issorted(v, lo, hi, o) && return v
+    _issorted(v, lo, hi, o) && return scratch
 
     # For most large arrays, a reverse-sorted check is essentially free (overhead < 1%)
     if hi-lo >= 500 && _issorted(v, lo, hi, ReverseOrdering(o))
         # If reversing is valid, do so. This does violates stability.
         reverse!(v, lo, hi)
-        return v
+        return scratch
     end
 
     _sort!(v, a.next, o, kw)
@@ -725,7 +778,7 @@ struct ComputeExtrema{T <: Algorithm} <: Algorithm
     next::T
 end
 function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
-    @getkw lo hi
+    @getkw lo hi scratch
     mn = mx = v[lo]
     @inbounds for i in (lo+1):hi
         vi = v[i]
@@ -734,7 +787,7 @@ function _sort!(v::AbstractVector, a::ComputeExtrema, o::Ordering, kw)
     end
     mn, mx
 
-    lt(o, mn, mx) || return v # all same
+    lt(o, mn, mx) || return scratch # all same
 
     _sort!(v, a.next, o, (;kw..., mn, mx))
 end
@@ -779,10 +832,10 @@ struct CountingSort <: Algorithm end
 maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
 function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
-    @getkw lo hi mn mx range
+    @getkw lo hi mn mx range scratch
     offs = 1 - (o === Reverse ? mx : mn)
 
-    counts = fill(0, range+1)
+    counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
     @inbounds for i = lo:hi
         counts[v[i] + offs] += 1
     end
@@ -797,7 +850,7 @@ function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering,
         idx = lastidx + 1
     end
 
-    v
+    scratch
 end
 
 
@@ -865,31 +918,14 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
 
     len = hi-lo + 1
     U = UIntMappable(eltype(v), o)
-    # A large if-else chain to avoid type instabilities and dynamic dispatch
-    if scratch !== nothing && checkbounds(Bool, scratch, lo:hi) # Fully preallocated and aligned scratch
-        t = reinterpret(U, scratch)
-        if radix_sort!(u, lo, hi, bits, t)
-            uint_unmap!(v, u, lo, hi, o, umn)
-        else
-            uint_unmap!(v, t, lo, hi, o, umn)
-        end
-    elseif scratch !== nothing && (applicable(resize!, scratch, len) || length(scratch) >= len) # Viable scratch
-        length(scratch) >= len || resize!(scratch, len)
-        t1 = axes(scratch, 1) isa OneTo ? scratch : view(scratch, firstindex(scratch):lastindex(scratch))
-        t = reinterpret(U, t1)
-        if radix_sort!(view(u, lo:hi), 1, len, bits, t)
-            uint_unmap!(view(v, lo:hi), view(u, lo:hi), 1, len, o, umn)
-        else
-            uint_unmap!(view(v, lo:hi), t, 1, len, o, umn)
-        end
-    else # No viable scratch
-        t = similar(u)
-        if radix_sort!(u, lo, hi, bits, t)
-            uint_unmap!(v, u, lo, hi, o, umn)
-        else
-            uint_unmap!(v, t, lo, hi, o, umn)
-        end
+    scratch, t = make_scratch(scratch, eltype(v), len)
+    tu = reinterpret(U, t)
+    if radix_sort!(u, lo, hi, bits, tu, 1-lo)
+        uint_unmap!(v, u, lo, hi, o, umn)
+    else
+        uint_unmap!(v, tu, lo, hi, o, umn, 1-lo)
     end
+    scratch
 end
 
 
@@ -948,67 +984,73 @@ select_pivot(lo::Integer, hi::Integer) = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + l
 #
 # returns (pivot, pivot_index) where pivot_index is the location the pivot
 # should end up, but does not set t[pivot_index] = pivot
-function partition!(t::AbstractVector, lo::Integer, hi::Integer, o::Ordering, v::AbstractVector, rev::Bool)
+function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering, v::AbstractVector, rev::Bool)
     pivot_index = select_pivot(lo, hi)
-    trues = 0
     @inbounds begin
         pivot = v[pivot_index]
         while lo < pivot_index
             x = v[lo]
             fx = rev ? !lt(o, x, pivot) : lt(o, pivot, x)
-            t[(fx ? hi : lo) - trues] = x
-            trues += fx
+            t[(fx ? hi : lo) - offset] = x
+            offset += fx
             lo += 1
         end
         while lo < hi
             x = v[lo+1]
             fx = rev ? lt(o, pivot, x) : !lt(o, x, pivot)
-            t[(fx ? hi : lo) - trues] = x
-            trues += fx
+            t[(fx ? hi : lo) - offset] = x
+            offset += fx
             lo += 1
         end
     end
 
-    # pivot_index = lo-trues
+    # pivot_index = lo-offset
     # t[pivot_index] is whatever it was before
     # t[<pivot_index] <* pivot, stable
     # t[>pivot_index] >* pivot, reverse stable
 
-    pivot, lo-trues
+    pivot, lo-offset
 end
 
 function _sort!(v::AbstractVector, a::PartialQuickSort, o::Ordering, kw;
-                t=nothing, swap=false, rev=false)
-    @getkw lo hi t
+                t=nothing, offset=nothing, swap=false, rev=false)
+    @getkw lo hi scratch
+
+    if t === nothing
+        scratch, t = make_scratch(scratch, eltype(v), hi-lo+1)
+        offset = 1-lo
+        kw = (;kw..., scratch)
+    end
 
     while lo < hi && hi - lo > SMALL_THRESHOLD
-        pivot, j = swap ? partition!(v, lo, hi, o, t, rev) : partition!(t, lo, hi, o, v, rev)
+        pivot, j = swap ? partition!(v, lo+offset, hi+offset, offset, o, t, rev) : partition!(t, lo, hi, -offset, o, v, rev)
+        j -= !swap*offset
         @inbounds v[j] = pivot
         swap = !swap
 
         # For QuickSort, a.lo === a.hi === missing, so the first two branches get skipped
         if !ismissing(a.lo) && j <= a.lo # Skip sorting the lower part
-            swap && copyto!(v, lo, t, lo, j-lo)
+            swap && copyto!(v, lo, t, lo+offset, j-lo)
             rev && reverse!(v, lo, j-1)
             lo = j+1
             rev = !rev
         elseif !ismissing(a.hi) && a.hi <= j # Skip sorting the upper part
-            swap && copyto!(v, j+1, t, j+1, hi-j)
+            swap && copyto!(v, j+1, t, j+1+offset, hi-j)
             rev || reverse!(v, j+1, hi)
             hi = j-1
         elseif j-lo < hi-j
             # Sort the lower part recursively because it is smaller. Recursing on the
             # smaller part guarantees O(log(n)) stack space even on pathological inputs.
-            _sort!(v, a, o, (;kw..., lo, hi=j-1); swap, rev)
+            _sort!(v, a, o, (;kw..., lo, hi=j-1); t, offset, swap, rev)
             lo = j+1
             rev = !rev
         else # Sort the higher part recursively
-            _sort!(v, a, o, (;kw..., lo=j+1, hi); swap, rev=!rev)
+            _sort!(v, a, o, (;kw..., lo=j+1, hi); t, offset, swap, rev=!rev)
             hi = j-1
         end
     end
-    hi < lo && return v
-    swap && copyto!(v, lo, t, lo, hi-lo+1)
+    hi < lo && return scratch
+    swap && copyto!(v, lo, t, lo+offset, hi-lo+1)
     rev && reverse!(v, lo, hi)
     _sort!(v, a.next, o, (;kw..., lo, hi))
 end
@@ -1027,12 +1069,13 @@ struct StableCheckSorted{T<:Algorithm} <: Algorithm
     next::T
 end
 function _sort!(v::AbstractVector, a::StableCheckSorted, o::Ordering, kw)
-    @getkw lo hi
+    @getkw lo hi scratch
     if _issorted(v, lo, hi, o)
-        return v
+        return scratch
     elseif _issorted(v, lo, hi, Lt((x, y) -> !lt(o, x, y)))
         # Reverse only if necessary. Using issorted(..., Reverse(o)) would violate stability.
-        return reverse!(v, lo, hi)
+        reverse!(v, lo, hi)
+        return scratch
     end
 
     _sort!(v, a.next, o, kw)
@@ -1042,23 +1085,24 @@ end
 # The return value indicates whether v is sorted (true) or t is sorted (false)
 # This is one of the many reasons radix_sort! is not exported.
 function radix_sort!(v::AbstractVector{U}, lo::Integer, hi::Integer, bits::Unsigned,
-                     t::AbstractVector{U}, chunk_size=radix_chunk_size_heuristic(lo, hi, bits)) where U <: Unsigned
+                     t::AbstractVector{U}, offset::Integer,
+                     chunk_size=radix_chunk_size_heuristic(lo, hi, bits)) where U <: Unsigned
     # bits is unsigned for performance reasons.
-    counts = Vector{Int}(undef, 1 << chunk_size + 1)
+    counts = Vector{Int}(undef, 1 << chunk_size + 1) # TODO use scratch for this
 
     shift = 0
     while true
-        @noinline radix_sort_pass!(t, lo, hi, counts, v, shift, chunk_size)
+        @noinline radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
         # the latest data resides in t
         shift += chunk_size
         shift < bits || return false
-        @noinline radix_sort_pass!(v, lo, hi, counts, t, shift, chunk_size)
+        @noinline radix_sort_pass!(v, lo+offset, hi+offset, -offset, counts, t, shift, chunk_size)
         # the latest data resides in v
         shift += chunk_size
         shift < bits || return true
     end
 end
-function radix_sort_pass!(t, lo, hi, counts, v, shift, chunk_size)
+function radix_sort_pass!(t, lo, hi, offset, counts, v, shift, chunk_size)
     mask = UInt(1) << chunk_size - 1  # mask is defined in pass so that the compiler
     @inbounds begin                   #  ↳ knows it's shape
         # counts[2:mask+2] will store the number of elements that fall into each bucket.
@@ -1081,7 +1125,7 @@ function radix_sort_pass!(t, lo, hi, counts, v, shift, chunk_size)
             x = v[k]                  # lookup the element
             i = (x >> shift)&mask + 1 # compute its bucket's index for this pass
             j = counts[i]             # lookup the target index
-            t[j] = x                  # put the element where it belongs
+            t[j + offset] = x         # put the element where it belongs
             counts[i] = j + 1         # increment the target index for the next
         end                           #  ↳ element in this bucket
     end
@@ -1310,8 +1354,9 @@ function sort!(v::AbstractVector{T};
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
-               scratch::Union{AbstractVector{T}, Nothing}=nothing) where T
+               scratch::Union{Vector{T}, Nothing}=nothing) where T
     _sort!(v, getalg(alg), ord(lt,by,rev,order), (;scratch))
+    v
 end
 
 """
@@ -1494,7 +1539,7 @@ function sortperm(A::AbstractArray;
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
                   order::Ordering=Forward,
-                  scratch::Union{AbstractVector{<:Integer}, Nothing}=nothing,
+                  scratch::Union{Vector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
     ordr = ord(lt,by,rev,order)
     if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
@@ -1555,7 +1600,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    rev::Union{Bool,Nothing}=nothing,
                    order::Ordering=Forward,
                    initialized::Bool=false,
-                   scratch::Union{AbstractVector{T}, Nothing}=nothing,
+                   scratch::Union{Vector{T}, Nothing}=nothing,
                    dims...) where T <: Integer #to optionally specify dims argument
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
@@ -1628,7 +1673,7 @@ function sort(A::AbstractArray{T};
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
               order::Ordering=Forward,
-              scratch::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+              scratch::Union{Vector{T}, Nothing}=nothing) where T
     dim = dims
     order = ord(lt,by,rev,order)
     n = length(axes(A, dim))
@@ -1636,19 +1681,31 @@ function sort(A::AbstractArray{T};
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
-        sort_chunks!(Av, n, alg, order, scratch)
+        sort_chunks!(Av, n, getalg(alg), order, scratch)
         permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
-        sort_chunks!(Av, n, alg, order, scratch)
+        sort_chunks!(Av, n, getalg(alg), order, scratch)
         reshape(Av, axes(A))
     end
 end
 
 @noinline function sort_chunks!(Av, n, alg, order, scratch)
     inds = LinearIndices(Av)
-    for lo = first(inds):n:last(inds)
-        _sort!(Av, getalg(alg), order, (; lo, hi=lo+n-1, scratch))
+    sort_chunks!(Av, n, alg, order, scratch, first(inds), last(inds))
+end
+
+@noinline function sort_chunks!(Av, n, alg, order, scratch::Nothing, fst, lst)
+    for lo = fst:n:lst
+        s = _sort!(Av, alg, order, (; lo, hi=lo+n-1, scratch))
+        s !== nothing && return sort_chunks!(Av, n, alg, order, s, lo+n, lst)
+    end
+    Av
+end
+
+@noinline function sort_chunks!(Av, n, alg, order, scratch::AbstractVector, fst, lst)
+    for lo = fst:n:lst
+        _sort!(Av, alg, order, (; lo, hi=lo+n-1, scratch))
     end
     Av
 end
@@ -1689,14 +1746,14 @@ function sort!(A::AbstractArray{T};
                lt=isless,
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
-               order::Ordering=Forward,
-               scratch::Union{AbstractVector{T}, Nothing}=similar(A, size(A, dims))) where T
+               order::Ordering=Forward, # TODO stop eagerly over-allocating.
+               scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
     __sort!(A, Val(dims), getalg(alg), ord(lt, by, rev, order), scratch)
 end
 function __sort!(A::AbstractArray{T}, ::Val{K},
                 alg::Union{Algorithm, Type{<:Algorithm}},
                 order::Ordering,
-                scratch::Union{AbstractVector{T}, Nothing}) where {K,T}
+                scratch::Union{Vector{T}, Nothing}) where {K,T}
     nd = ndims(A)
 
     1 <= K <= nd || throw(ArgumentError("dimension out of range"))
@@ -1787,9 +1844,10 @@ function uint_map!(v::AbstractVector, lo::Integer, hi::Integer, order::Ordering)
 end
 
 function uint_unmap!(v::AbstractVector, u::AbstractVector{U}, lo::Integer, hi::Integer,
-                     order::Ordering, offset::U=zero(U)) where U <: Unsigned
+                     order::Ordering, offset::U=zero(U),
+                     index_offset::Integer=0) where U <: Unsigned
     @inbounds for i in lo:hi
-        v[i] = uint_unmap(eltype(v), u[i]+offset, order)
+        v[i] = uint_unmap(eltype(v), u[i+index_offset]+offset, order)
     end
     v
 end
@@ -1819,46 +1877,47 @@ struct MergeSort{T <: Algorithm} <: Algorithm
 end
 MergeSort() = MergeSort(SMALL_ALGORITHM)
 
-function _sort!(v::AbstractVector, a::MergeSort, o::Ordering, kw)
+function _sort!(v::AbstractVector, a::MergeSort, o::Ordering, kw; t=nothing, offset=nothing)
     @getkw lo hi scratch
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return _sort!(v, a.next, o, kw)
 
         m = midpoint(lo, hi)
 
-        t = scratch === nothing ? similar(v, m-lo+1) : scratch
-        length(t) < m-lo+1 && resize!(t, m-lo+1)
-        Base.require_one_based_indexing(t)
+        if t === nothing
+            scratch, t = make_scratch(scratch, eltype(v), m-lo+1)
+            offset = 1-lo
+        end
 
-        _sort!(v, a, o, (;kw..., hi=m, scratch=t))
-        _sort!(v, a, o, (;kw..., lo=m+1, scratch=t))
+        _sort!(v, a, o, (;kw..., hi=m, scratch); t, offset)
+        _sort!(v, a, o, (;kw..., lo=m+1, scratch); t, offset)
 
         i, j = 1, lo
         while j <= m
-            t[i] = v[j]
+            t[i+offset] = v[j]
             i += 1
             j += 1
         end
 
         i, k = 1, lo
         while k < j <= hi
-            if lt(o, v[j], t[i])
+            if lt(o, v[j], t[i+offset])
                 v[k] = v[j]
                 j += 1
             else
-                v[k] = t[i]
+                v[k] = t[i+offset]
                 i += 1
             end
             k += 1
         end
         while k < j
-            v[k] = t[i]
+            v[k] = t[i+offset]
             k += 1
             i += 1
         end
     end
 
-    return v
+    scratch
 end
 
 # Support alg=InsertionSort and alg=MergeSort for backwards compatability (prefer InsertionSort() and MergeSort())
@@ -1866,15 +1925,22 @@ getalg(a::Algorithm) = a
 getalg(::Type{A}) where A <: Algorithm = A()
 
 # Support 3- and 5-argument versions of sort! for calling into the internals in the old way
-sort!(v::AbstractVector, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering) = _sort!(v, getalg(a), o, (; allow_legacy_dispatch=false))
-sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering) = _sort!(v, getalg(a), o, (; lo, hi, allow_legacy_dispatch=false))
+function sort!(v::AbstractVector, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering)
+    _sort!(v, getalg(a), o, (; allow_legacy_dispatch=false))
+    v
+end
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering)
+    _sort!(v, getalg(a), o, (; lo, hi, allow_legacy_dispatch=false))
+    v
+end
 
 # Support dispatch on custom algorithms in the old way
 # sort!(::AbstractVector, ::Integer, ::Integer, ::MyCustomAlgorithm, ::Ordering) = ...
 function _sort!(v::AbstractVector, a::Algorithm, o::Ordering, kw)
-    @getkw lo hi allow_legacy_dispatch
+    @getkw lo hi scratch allow_legacy_dispatch
     if allow_legacy_dispatch
         sort!(v, lo, hi, a, o)
+        scratch
     else
         # This error prevents infinite recursion for unknown algorithms
         throw(ArgumentError("Base.Sort._sort!(::$(typeof(v)), ::$(typeof(a)), ::$(typeof(o))) is not defined"))

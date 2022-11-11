@@ -784,13 +784,15 @@ end
 
                     x = rand(1:n+1, n)
                     y = sort(x; order)
-                    @test y == Base.Sort._sort!(x, alg, order, (;kw(y)...)) === x
+                    @test Base.Sort._sort!(x, alg, order, (;kw(y)...)) !== x
+                    @test all(y .=== x)
 
                     alg isa requires_uint_mappable && continue
 
                     x = randn(n)
                     y = sort(x; order)
-                    @test y == Base.Sort._sort!(x, alg, order, (;kw(y)...)) === x
+                    @test Base.Sort._sort!(x, alg, order, (;kw(y)...)) !== x
+                    @test all(y .=== x)
                 end
             end
         end
@@ -822,7 +824,9 @@ end
     @test 1 < length(lines) < 30
 end
 
-@testset "Defining new algorithms & backwards compatibility with packages that use sorting internals" begin
+@testset "Extensibility" begin
+    # Defining new algorithms & backwards compatibility with packages that use sorting internals
+
     struct MyFirstAlg <: Base.Sort.Algorithm end
 
     @test_throws ArgumentError sort([1,2,3], alg=MyFirstAlg()) # not a stack overflow error
