@@ -209,12 +209,28 @@ for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
 end
 
 function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
-    z = BigFloat(;precision=precision)
-    ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
-    if isnan(x) && signbit(x) != signbit(z)
-        z.sign = -z.sign
+    z = BigFloat(;precision)
+    z.sign = Int(!signbit(x))
+    if reinterpret(UInt64, x)>>52 in (0x0000, 0x7ff)
+        if isinf(x)
+            ccall((:mpfr_set_inf, :libmpfr), Int32, (Ref{BigFloat}, Int32), z, z.sign)
+        elseif isnan(x)
+            ccall((:mpfr_set_nan, :libmpfr), Int32, (Ref{BigFloat}, Int32), z, z.sign)
+        else
+            ccall((:mpfr_set_zero, :libmpfr), Int32, (Ref{BigFloat}, Int32), z, z.sign)
+        end
+        return z
     end
-    return z
+    # nlimbs - 1
+    nlimbsm1 = (precision - 1) ÷ Core.sizeof(Limb)
+    for i in 1:nlimbsm1
+        unsafe_store!(z.d, 0x0, i)
+    end
+    z.exp = 1+exponent(x)
+
+    # BigFloat doesn't have an implicit bit
+    unsafe_store!(z.d, reinterpret(UInt64, significand(x))<<11 | typemin(Int), nlimbsm1 + 1)
+    z
 end
 
 function BigFloat(x::BigInt, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
