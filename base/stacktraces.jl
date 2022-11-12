@@ -272,11 +272,7 @@ function Base.parentmodule(frame::StackFrame)
     linfo = frame.linfo
     if linfo isa MethodInstance
         def = linfo.def
-        if def isa Module
-            return def
-        else
-            return (def::Method).module
-        end
+        return def isa Module ? def : parentmodule(def::Method)
     else
         # The module is not always available (common reasons include inlined
         # frames and frames arising from the interpreter)
