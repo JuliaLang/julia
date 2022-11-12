@@ -72,8 +72,8 @@ end
 @inline function _eachslice(A::AbstractArray, dim::Integer, drop::Bool)
     _eachslice(A, (dim,), drop)
 end
-Slices(A::AbstractArray, args...) = _eachslice(A, args, true)
-Slices(A::AbstractArray, args) = _eachslice(A, args, true)
+Slices(A::AbstractArray, dims...) = eachslice(A; dims)
+Slices(A::AbstractArray, dims) = eachslice(A; dims)
 
 """
     eachslice(A::AbstractArray; dims, drop=true)
@@ -96,7 +96,8 @@ See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectd
      This function requires at least Julia 1.1.
 
 !!! compat "Julia 1.9"
-     Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
+    Prior to Julia 1.9, this returned an iterator, and only a single dimension `dims` was supported.
+    Prior to Julia 1.9, this function did not accept `dims` as a positional argument.
 
 # Example
 
@@ -129,8 +130,8 @@ julia> eachslice(m, dims=1, drop=false)
 @inline function eachslice(A; dims, drop=true)
     _eachslice(A, dims, drop)
 end
-@inline eachslice(A, dims; drop=true) = _eachslice(A, dims, drop)
-@inline eachslice(A, dims...; drop=true) = _eachslice(A, dims, drop)
+@inline eachslice(A, dims; drop=true) = eachslice(A; dims, drop)
+@inline eachslice(A, dims...; drop=true) = eachslice(A; dims, drop)
 
 """
     eachrow(A::AbstractVecOrMat) <: AbstractVector
