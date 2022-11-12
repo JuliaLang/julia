@@ -210,8 +210,7 @@ end
 
 function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     z = BigFloat(;precision)
-    z.sign = Int(!signbit(x))
-    if reinterpret(UInt64, x)>>52 in (0x0000, 0x7ff)
+    if iszero(x) || !isfinite(x) 
         if isinf(x)
             ccall((:mpfr_set_inf, :libmpfr), Int32, (Ref{BigFloat}, Int32), z, z.sign)
         elseif isnan(x)
@@ -219,17 +218,18 @@ function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::In
         else
             ccall((:mpfr_set_zero, :libmpfr), Int32, (Ref{BigFloat}, Int32), z, z.sign)
         end
+        z.sign = Int(sign(x))
         return z
     end
-    # nlimbs - 1
-    nlimbsm1 = (precision - 1) ÷ Core.sizeof(Limb)
-    for i in 1:nlimbsm1
+    nlimbs = (precision + 8*Core.sizeof(Limb) - 1) ÷ (8*Core.sizeof(Limb))
+    for i in 1:nlimbs
         unsafe_store!(z.d, 0x0, i)
     end
     z.exp = 1+exponent(x)
 
     # BigFloat doesn't have an implicit bit
-    unsafe_store!(z.d, reinterpret(UInt64, significand(x))<<11 | typemin(Int), nlimbsm1 + 1)
+    unsafe_store!(z.d, reinterpret(UInt64, significand(x))<<11 | typemin(Int64), nlimbs)
+    z.sign = Int(sign(x))
     z
 end
 
