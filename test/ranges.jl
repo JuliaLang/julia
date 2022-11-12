@@ -2656,6 +2656,10 @@ end
     @test all(isnan, LogRange(0.0, -0.0, 3))
     @test all(isnan, LogRange(-0f0, 0f0, 3))
 
+    # subnormal Float64
+    x = LogRange(1e-320, 1e-300, 21) .* 1e300
+    @test x ≈ LogRange(1e-20, 1, 21) rtol=1e-6
+
     # types
     @test eltype(LogRange(1, 10, 3)) == Float64
     @test eltype(LogRange(1, 10, Int32(3))) == Float64
@@ -2677,4 +2681,23 @@ end
     # printing
     @test repr(LogRange(1,2,3)) == "LogRange(1.0, 2.0, 3)"
     @test repr("text/plain", LogRange(1,2,3)) == "3-element LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
+end
+
+@testset "_log_twice64_unchecked" begin
+    # it roughly works
+    @test big(Base._log_twice64_unchecked(exp(1))) ≈ 1.0
+    @test big(Base._log_twice64_unchecked(exp(123))) ≈ 123.0
+
+    # it gets high accuracy
+    @test abs(big(log(4.0)) - log(big(4.0))) < 1e-16
+    @test abs(big(Base._log_twice64_unchecked(4.0)) - log(big(4.0))) < 1e-30
+
+    # it handles subnormals
+    @test abs(big(Base._log_twice64_unchecked(1e-310)) - log(big(1e-310))) < 1e-20
+
+    # it accepts negative, NaN, etc without complaint:
+    @test Base._log_twice64_unchecked(-0.0).lo isa Float64
+    @test Base._log_twice64_unchecked(-1.23).lo isa Float64
+    @test Base._log_twice64_unchecked(NaN).lo isa Float64
+    @test Base._log_twice64_unchecked(Inf).lo isa Float64
 end

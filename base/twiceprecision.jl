@@ -785,3 +785,21 @@ _tp_prod(t::TwicePrecision) = t
     x.hi < y.hi || ((x.hi == y.hi) & (x.lo < y.lo))
 
 isbetween(a, x, b) = a <= x <= b || b <= x <= a
+
+# For NaN/Inf/negative this returns junk
+function _log_twice64_unchecked(x::Float64)
+    xu = reinterpret(UInt64, x)
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -= UInt64(52) << 52 # mess with the exponent
+    end
+    TwicePrecision(Math._log_ext(xu)...)
+end
+
+function _log_twice64(x::Float64)
+    isfinite(x) || return TwicePrecision(x, x)
+    _log_twice64_unchecked(x)
+end
+
+_exp_float64(x::TwicePrecision{Float64}) = Math.exp_impl(x.hi, x.lo, Val(:ℯ))

@@ -1575,8 +1575,8 @@ function _logrange_extra(a::Number, b::Number, len::Int)
     (loga/(len-1), logb/(len-1))
 end
 function _logrange_extra(a::Float64, b::Float64, len::Int)
-    loga = TwicePrecision(Math._log_ext(reinterpret(UInt64, a))...)
-    logb = TwicePrecision(Math._log_ext(reinterpret(UInt64, b))...)
+    loga = _log_twice64_unchecked(a)
+    logb = _log_twice64_unchecked(b)
     # The reason not to do linear interpolation on log(a)..log(b) in `getindex`
     # is that division is quite slow, so we do it once on construction:
     (loga/(len-1), logb/(len-1))
@@ -1598,13 +1598,13 @@ function unsafe_getindex(r::LogRange{T}, i::Int) where {T}
     x = T(exp(logx))
     T <: Real ? copysign(x, r.start) : x
 end
-function unsafe_getindex(r::LogRange{Float64, TwicePrecision{Float64}}, i::Int)
+function unsafe_getindex(r::LogRange{T, TwicePrecision{Float64}}, i::Int) where T
     @inline
     tot = r.start + r.stop
     isfinite(tot) || return tot
     logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
-    x = Math.exp_impl(logx.hi, logx.lo, Val(:ℯ))::Float64
-    return copysign(x, r.start)
+    x = Math.exp_impl(logx.hi, logx.lo, Val(:ℯ))
+    return copysign(T(x), r.start)
 end
 
 function show(io::IO, r::LogRange)  # compact
