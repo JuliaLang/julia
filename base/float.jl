@@ -475,11 +475,7 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     end
     # Both are subnormals
     if e_x == uinttype(T)(0) && e_y == uinttype(T)(0)
-        bits = uinttype(T)(0)
-        number = xuint % yuint
-        mant = number & significand_mask(T) #this might not be necessary
-        bits |= mant
-        return reinterpret(T, bits)
+        return reinterpret(T, (xuint % yuint) & significand_mask(T))
     end
 
     m_x = explicit_mantissa_noinfnan(x)
