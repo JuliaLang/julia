@@ -413,6 +413,7 @@ export
     isperm,
     issorted,
     last,
+    logrange,
     mapslices,
     max,
     maximum!,

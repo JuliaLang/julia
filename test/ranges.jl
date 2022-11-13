@@ -2608,9 +2608,9 @@ end
 
 @testset "LogRange" begin
     # basic idea
-    @test LogRange(2, 16, 4) ≈ [2, 4, 8, 16]
+    @test logrange(2, 16, 4) ≈ [2, 4, 8, 16]
     @test LogRange(1/8, 8.0, 7) ≈ [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0]
-    @test LogRange(1000, 1, 4) ≈ [1000, 100, 10, 1]
+    @test logrange(1000, 1, 4) ≈ [1000, 100, 10, 1]
     @test LogRange(1, 10^9, 19)[1:2:end] ≈ 10 .^ (0:9)
 
     # negative & complex
@@ -2670,6 +2670,10 @@ end
     @test eltype(LogRange(1, big(10), 3)) == BigFloat
     @test LogRange(big"0.3", big(pi), 50)[1] == big"0.3"
     @test LogRange(big"0.3", big(pi), 50)[end] == big(pi)
+
+    # more constructors
+    @test logrange(1,2,3) === LogRange(1,2,3) == LogRange{Float64}(1,2,3)
+    @test logrange(1f0, 2f0, length=3) == LogRange{Float32}(1,2,3)
 
     # errors
     @test_throws ArgumentError LogRange(1, 10, -1)

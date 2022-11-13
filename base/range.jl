@@ -1491,47 +1491,110 @@ mod(i::Integer, r::AbstractUnitRange{<:Integer}) = mod(i-first(r), length(r)) + 
 
 
 """
-    LogRange(start, stop, length) <: AbstractVector
+    logrange(start, stop, length)
+    logrange(start, stop; length)
 
 Construct a specialized array whose elements are spaced logarithmically
 between the given endpoints. That is, the ratio of successive elements is
 a constant, calculated from the length.
-
-Like [`LinRange`](@ref), the first and last elements will be exactly those
-provided, but intermediate values may have small floating-point errors
-(especially for complex numbers).
 
 This is similar to `geomspace` in Python. Unlike `PowerRange` in Mathematica,
 you specify the number of elements not the ratio.
 Unlike `logspace` in Python and Matlab, the `start` and `stop` arguments are
 always the first and last elements of the result, not powers applied to some base.
 
-!!! compat "Julia 1.10"
-    This function requires at least Julia 1.10.
+See also [`range`](@ref) for linearly spaced points.
 
 # Examples
 ```jldoctest
-julia> LogRange(10, 4000, 3)
+julia> logrange(10, 4000, length=3)
 3-element LogRange{Float64, Base.TwicePrecision{Float64}}:
  10.0, 200.0, 4000.0
 
 julia> ans[2] ≈ sqrt(10 * 4000)  # middle element is the geometric mean
 true
 
-julia> LogRange(√2, 32, 10)
-10-element LogRange{Float64, Base.TwicePrecision{Float64}}:
- 1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
-
-julia> LogRange(1, 1000, 4) ≈ 10 .^ (0:3)
+julia> range(10, 40, length=3)[2] ≈ (10 + 40)/2  # arithmetic mean
 true
 
-julia> LogRange(-27, -3f0, 5)  # allows negative numbers
-5-element LogRange{Float32, Float64}:
- -27.0, -15.5885, -9.0, -5.19615, -3.0
+julia> logrange(1f0, 32f0, 11)
+11-element LogRange{Float32, Float64}:
+ 1.0, 1.41421, 2.0, 2.82843, 4.0, 5.65685, 8.0, 11.3137, 16.0, 22.6274, 32.0
 
-julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))  # complex numbers
+julia> logrange(1, 1000, length=4) ≈ 10 .^ (0:3)
 true
+
+julia> logrange(-27, -3, length=7)  # allows negative numbers
+7-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+ -27.0, -18.7208, -12.9802, -9.0, -6.24025, -4.32675, -3.0
 ```
+
+!!! compat "Julia 1.10"
+    This function requires at least Julia 1.10.
+"""
+logrange(start::Number, stop::Number, length::Integer) = LogRange(start, stop, Int(length))
+logrange(start::Number, stop::Number; length::Integer) = LogRange(start, stop, Int(length))
+
+
+"""
+    LogRange{T}(start, stop, len) <: AbstractVector{T}
+
+A range whose elements are spaced logarithmically between `start` and `stop`,
+with spacing controlled by `len`. Returned by [`logrange`](@ref).
+
+Like [`LinRange`](@ref), the first and last elements will be exactly those
+provided, but intermediate values may have small floating-point errors.
+These are calculated using the logs of the endpoints, which are
+stored on construction, often in higher precision than `T`.
+
+Negative values of `start` and `stop` are allowed, but both must have the
+same sign. For complex `T`, all points lie on the same branch of `log`
+as used by `log(start)` and `log(stop)`.
+
+# Examples
+```jldoctest
+julia> LogRange(1, 4, 5)
+5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 1.0, 1.41421, 2.0, 2.82843, 4.0
+
+julia> LogRange{Float16}(-1, -4, 5)
+5-element LogRange{Float16, Float64}:
+ -1.0, -1.414, -2.0, -2.828, -4.0
+
+julia> LogRange(1e-310, 1e-300, 11)[1:2:end] |> collect
+6-element Vector{Float64}:
+ 1.0e-310
+ 9.999999999999974e-309
+ 9.999999999999981e-307
+ 9.999999999999988e-305
+ 9.999999999999994e-303
+ 1.0e-300
+
+julia> prevfloat(1e-308, 5) == ans[2]
+true
+
+julia> LogRange(1, -1 +0.0im, 5) |> collect  # does not hit 1.0im exactly
+5-element Vector{ComplexF64}:
+                   1.0 + 0.0im
+    0.7071067811865476 + 0.7071067811865475im
+ 6.123233995736766e-17 + 1.0im
+   -0.7071067811865475 + 0.7071067811865476im
+                  -1.0 + 0.0im
+
+julia> ans ≈ cis.(LinRange(0, pi, 5))
+true
+
+julia> LogRange(2, Inf, 5)
+5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+ 2.0, Inf, Inf, Inf, Inf
+
+julia> LogRange(0, 4, 5)
+5-element LogRange{Float64, Base.TwicePrecision{Float64}}:
+ NaN, NaN, NaN, NaN, 4.0
+```
+
+!!! compat "Julia 1.10"
+    This type requires at least Julia 1.10.
 """
 struct LogRange{T<:Number,X} <: AbstractArray{T,1}
     start::T
