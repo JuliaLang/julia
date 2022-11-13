@@ -153,7 +153,12 @@ Standard library changes
 
 * New fail-fast mode for testsets that will terminate the test run early if a failure or error occurs.
   Set either via the `@testset` kwarg `failfast=true` or by setting env var `JULIA_TEST_FAILFAST`
-  to `"true"` e.g. for faster job failure in CI runs ([#45317]).
+  to `"true"` i.e. in CI runs to request the job failure be posted eagerly when issues occur ([#45317])
+
+#### Dates
+
+* Empty strings are no longer incorrectly parsed as valid `DateTime`s, `Date`s or `Time`s and instead throw an
+  `ArgumentError` in constructors and `parse`, while `nothing` is returned by `tryparse` ([#47117]).
 
 #### Distributed
 

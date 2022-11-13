@@ -588,4 +588,34 @@ end
     @test (@inferred Nothing g()) == datetime
 end
 
+@testset "Issue #43883: parsing empty strings" begin
+    for (T, name, fmt) in zip(
+            (DateTime, Date, Time),
+            ("DateTime", "Date or Time", "Date or Time"),
+            ("yyyy-mm-ddHHMMSS.s", "yyymmdd", "HHMMSS")
+        )
+        @test_throws ArgumentError T("")
+        @test_throws ArgumentError T("", fmt)
+        @test_throws ArgumentError T("", DateFormat(fmt))
+        try
+            T("")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test_throws ArgumentError parse(T, "")
+        @test_throws ArgumentError parse(T, "", DateFormat(fmt))
+        try
+            parse(T, "")
+            @test false
+        catch err
+            @test err.msg == "Cannot parse an empty string as a $name"
+        end
+
+        @test tryparse(T, "") === nothing
+        @test tryparse(T, "", DateFormat(fmt)) === nothing
+    end
+end
+
 end
