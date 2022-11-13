@@ -423,8 +423,7 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point mod?
 
 function unbiased_exponent(x::T) where {T<:IEEEFloat}
-    exp = (reinterpret(Unsigned, x) & exponent_mask(T)) >> mantissa_width(T)
-    return exp
+    return (reinterpret(Unsigned, x) & exponent_mask(T)) >> mantissa_width(T)
 end
 
 function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
