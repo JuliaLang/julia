@@ -640,10 +640,12 @@ end
 
 # the suffix "2" means base 2
 """
-    ndigits0z2(x::BitInteger) -> Int
+    ndigits0z2(x::Integer) -> Integer
 
 The number of bits used to represent `x` in its binary representation, excluding
 leading zeros.
+
+Negative `x` is only supported when `x::BitSigned`.
 
 `ndigits0z2` is internal and will eventually be replaced by constant propagation.
 
@@ -660,7 +662,13 @@ julia> ndigits0z2(0)
 julia> ndigits0z2(-1)
 64
 """
+ndigits0z2(x) = ceil(Integer, log2(x + oneunit(x)))
 ndigits0z2(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+function ndigits0z2(x::BigInt)
+    x < 0 && throw(DomainError(x, "ndigits0z2 only supports negative arguments of type BitSigned."))
+    x == 0 && return 0
+    Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
+end
 
 """
     ndigits(n::Integer; base::Integer=10, pad::Integer=1)

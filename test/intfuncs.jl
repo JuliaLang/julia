@@ -447,10 +447,35 @@ end
     @test leading_zeros(Int32(1)) == 31
     @test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
 
-    @test Base.used_bits(3) == 2
-    @test Base.used_bits(-Int64(17)) == 64
-    @test Base.used_bits(big(15)) != Base.used_bits(big(16)) == Base.used_bits(big(17)) == 5
-    @test_throws DomainError Base.used_bits(big(-17))
+    @test Base.ndigits0z2(3) == 2
+    @test Base.ndigits0z2(-Int64(17)) == 64
+    @test Base.ndigits0z2(big(15)) != Base.ndigits0z2(big(16)) == Base.ndigits0z2(big(17)) == 5
+    @test_throws DomainError Base.ndigits0z2(big(-17))
+
+    struct MyInt <: Integer
+        x::Int
+    end
+    MyInt(x::MyInt) = x
+    Base.:+(a::MyInt, b::MyInt) = a.x + b.x
+
+    for n in 0:100
+        x = ceil(Int, log2(n + 1))
+        @test x == Base.ndigits0z2(Int128(n)) == Base.ndigits0z2(unsigned(Int128(n)))
+        @test x == Base.ndigits0z2(Int32(n)) == Base.ndigits0z2(unsigned(Int64(n)))
+        @test x == Base.ndigits0z2(Int8(n)) == Base.ndigits0z2(unsigned(Int8(n)))
+        @test x == Base.ndigits0z2(big(n))   # BigInt fallback
+        @test x == Base.ndigits0z2(MyInt(n)) # generic fallback
+    end
+
+    for n in -10:-1
+        @test 128 == Base.ndigits0z2(Int128(n)) == Base.ndigits0z2(unsigned(Int128(n)))
+        @test 32  == Base.ndigits0z2(Int32(n)) == Base.ndigits0z2(unsigned(Int32(n)))
+        @test 8   == Base.ndigits0z2(Int8(n)) == Base.ndigits0z2(unsigned(Int8(n)))
+        @test_throws DomainError Base.ndigits0z2(big(n))
+        # This error message should never be exposed to the end user anyway.
+        err = n == -1 ? InexactError : DomainError
+        @test_throws err Base.ndigits0z2(MyInt(n))
+    end
 
     @test count_zeros(Int64(1)) == 63
 end

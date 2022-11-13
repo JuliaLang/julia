@@ -1716,15 +1716,6 @@ end
     @test_throws BoundsError (false:true)[3]
 end
 
-@testset "ceil_log2" begin
-    for n in 1:100
-        x = ceil(Int, log2(n))
-        @test x == Base.ceil_log2(Int128(n))
-        @test x == Base.ceil_log2(Int32(n))
-        @test x == Base.ceil_log2(Int8(n))
-        @test x == Base.ceil_log2(big(n))  # fallback path
-    end
-end
 
 module NonStandardIntegerRangeTest
 
