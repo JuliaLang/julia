@@ -482,6 +482,32 @@ julia> trailing_ones(3)
 """
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
+# the suffix "2" means base 2
+"""
+    ndigits0z2(x::Integer) -> Integer
+
+The number of bits used to represent `x` in its binary representation, excluding
+leading zeros.
+
+Negative `x` is only supported when `x::BitSigned`.
+
+`ndigits0z2` is internal and will eventually be replaced by constant propagation.
+
+See also: [`ndigits0z`](@ref), [`ndigits`](@ref).
+
+# Examples
+```jldoctest
+julia> ndigits0z2(4)
+3
+
+julia> ndigits0z2(0)
+0
+
+julia> ndigits0z2(-1)
+64
+"""
+ndigits0z2(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
+
 ## integer comparisons ##
 
 (< )(x::T, y::T) where {T<:BitUnsigned} = ult_int(x, y)

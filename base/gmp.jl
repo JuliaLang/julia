@@ -586,6 +586,12 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
+function ndigits0z2(x::BigInt)
+    x < 0 && throw(DomainError(x, "ndigits0z2 only supports negative arguments when they have type BitSigned."))
+    x == 0 && return 0
+    Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (Base.GMP.MPZ.mpz_t, Cint), x, 2))
+end
+
 divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
 divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
 
