@@ -1363,3 +1363,41 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
 end
+
+@testset "setindex" begin
+    ==ₜ(_, _) = false
+    ==ₜ(x::T, y::T) where T = x == y
+
+    @test @inferred(Base.setindex(Dict(:a=>1, :b=>2), 10, :a)) ==ₜ
+        Dict(:a=>10, :b=>2)
+    @test @inferred(Base.setindex(Dict(:a=>1, :b=>2), 3, "c")) ==ₜ
+        Dict(:a=>1, :b=>2, "c"=>3)
+    @test @inferred(Base.setindex(Dict(:a=>1, :b=>2), 3.0, :c)) ==ₜ
+        Dict(:a=>1.0, :b=>2.0, :c=>3.0)
+
+    @testset "no mutation" begin
+        dict = Dict(:a=>1, :b=>2)
+        @test Base.setindex(dict, 10, :a) ==ₜ Dict(:a=>10, :b=>2)
+        @test dict == Dict(:a=>1, :b=>2)
+
+        iddict = IdDict{Any,String}(true => "yes", 1 => "no", 1.0 => "maybe")
+        @test Base.setindex(iddict, :yes, true) ==ₜ IdDict{Any,Any}(true => :yes, 1 => "no", 1.0 => "maybe")
+        @test iddict == iddict
+    end
+
+    d1 = ImmutableDict{Symbol,Int}()
+    d2 = ImmutableDict(d1, :a => 1)
+    @test Base.setindex(d1, 1, :a) == d2
+    @test Base.setindex(d2, 2, :b) == ImmutableDict(d2, :b => 2)
+end
+
+@testset "delete" begin
+    @test delete(Dict(:a=>1.0, :b=>2.0, :c=>3.0), :b) == Dict(:a=>1.0, :c=>3.0)
+
+    d1 = ImmutableDict{Symbol,Int}()
+    d2 = ImmutableDict(d1, :a => 1)
+    d3 = ImmutableDict(d2, :b => 2)
+    @test delete(d2, :a) == d1
+    @test delete(d2, :c) == d2
+    @test delete(d3, :a) == ImmutableDict(d1, :b => 2)
+end

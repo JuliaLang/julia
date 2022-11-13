@@ -395,7 +395,6 @@ function setindex!(h::Dict{K,Any}, v, key::K) where K
     return h
 end
 
-
 """
     get!(collection, key, default)
 
@@ -669,6 +668,30 @@ function delete!(h::Dict, key)
     return h
 end
 
+"""
+    delete(collection, key)
+
+Create and return a new collection containing all the elements from `collection` except for
+the mapping corresponding to `key`.
+
+Note that this may be particularly expensive when `collection` is large and whose storage
+cannot be shared between seperate instances.
+
+See also: [`delete!`](@ref).
+
+# Examples
+```jldoctest
+julia> d = Dict("a"=>1, "b"=>2);
+
+julia> delete(d, "b") == Dict("a"=>1)
+true
+
+julia> d == Dict("a"=>1, "b"=>2)
+true
+```
+"""
+delete(collection, k) = delete!(copy(collection), k)
+
 function skip_deleted(h::Dict, i)
     L = length(h.slots)
     for i = i:L
@@ -819,6 +842,39 @@ function get(default::Callable, dict::ImmutableDict, key)
         dict = dict.parent
     end
     return default()
+end
+
+function delete(d::ImmutableDict{K,V}, key) where {K,V}
+    if isdefined(d, :parent)
+        if isequal(d.key, key)
+            d.parent
+        else
+            ImmutableDict{K,V}(delete(d.parent, key), d.key, d.value)
+        end
+    else
+        d
+    end
+end
+
+function setindex(d::ImmutableDict, v, k)
+   if isdefined(d, :parent)
+        if isequal(d.key, k)
+            d0 = d.parent
+            v0 = v
+            k0 = k
+        else
+            d0 = setindex(d.parent, v, k)
+            v0 = d.value
+            k0 = d.key
+        end
+    else
+        d0 = d
+        v0 = v
+        k0 = k
+    end
+    K = promote_type(keytype(d0), typeof(k0))
+    V = promote_type(valtype(d0), typeof(v0))
+    ImmutableDict{K,V}(d0, k0, v0)
 end
 
 # this actually defines reverse iteration (e.g. it should not be used for merge/copy/filter type operations)

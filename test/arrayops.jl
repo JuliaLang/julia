@@ -3075,3 +3075,120 @@ end
         @test c + zero(c) == c
     end
 end
+
+@testset "deleteat" begin
+    a = [1:10;]
+    ainds = eachindex(a)
+    for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
+                   8:9, 9:10, 6:9, 7:10]
+
+        a_remaining = setdiff(ainds, idx)
+        # integer indexing with AbstractArray
+        @test deleteat(a, idx) == a_remaining
+
+        # integer indexing with non-AbstractArray iterable
+        @test deleteat(a, (i for i in idx)) == a_remaining
+
+        # logical indexing
+        @test deleteat(a, map(in(idx), ainds)) == a_remaining
+    end
+    @test deleteat(a, 11:10) == [1:10;]
+    @test deleteat(a, [1,3,5,7:10...]) == [2,4,6]
+    @test_throws BoundsError deleteat(a, 13)
+    @test_throws BoundsError deleteat(a, [1,13])
+    @test_throws ArgumentError deleteat(a, [3,2]) # not sorted
+    @test_throws BoundsError deleteat(a, 5:20)
+    @test_throws BoundsError deleteat(a, Bool[])
+    @test_throws BoundsError deleteat(a, [true])
+    @test_throws BoundsError deleteat(a, falses(11))
+    @test_throws BoundsError deleteat(a, [0])
+
+    @test_throws BoundsError deleteat([], 1)
+    @test_throws BoundsError deleteat([], [1])
+    @test_throws BoundsError deleteat([], [2])
+    @test deleteat([], []) == []
+    @test deleteat([], Bool[]) == []
+    let a = Vector{Any}(undef, 2)
+        a[1] = 1
+        @test isassigned(deleteat(a, [2]), 1)
+        @test !isassigned(deleteat(a, [1]), 1)
+    end
+end
+
+==ₜ(_, _) = false
+==ₜ(x::T, y::T) where T = x == y
+
+@testset "setindex" begin
+    @test @inferred(Base.setindex(Int[1, 2], 3.0, 2)) ==ₜ [1.0, 3.0]
+    @test @inferred(Base.setindex(Int[1, 2, 3], :two, 2)) ==ₜ [1, :two, 3]
+
+    @testset "no mutation" begin
+        arr = [1]
+        @test Base.setindex(arr, 2, 1) ==ₜ [2]
+        @test arr == [1]
+    end
+
+    @test @inferred(Base.setindex(Int[1, 2], 3.0, 2)) ==ₜ [1.0, 3.0]
+    @test @inferred(Base.setindex(Int[1, 2, 3], :two, 2)) ==ₜ [1, :two, 3]
+
+    @testset "no mutation" begin
+        arr = [1]
+        @test Base.setindex(arr, 2, 1) ==ₜ [2]
+        @test arr == [1]
+    end
+
+    @testset "$(typeof(x))" for x in [
+        zeros(3),
+        falses(3),
+    ]
+        y = Base.setindex(x, true, 1)
+        @test iszero(x)  # x is not mutated
+        @test y[1] == true
+        @test iszero(x[CartesianIndices(size(x)) .== [CartesianIndex(1)]])
+
+        y2 = Base.setindex(x, one.(x), :)
+        @test iszero(x)
+        @test all(isone, y2)
+    end
+
+    @testset "$(typeof(x))" for x in [
+        zeros(3, 3),
+        falses(3, 3),
+    ]
+        y = Base.setindex(x, true, 1, 1)
+        @test iszero(x)  # x is not mutated
+        @test y[1, 1] == true
+        @test iszero(x[CartesianIndices(size(x)) .== [CartesianIndex(1, 1)]])
+
+        y2 = Base.setindex(x, one.(x), :, :)
+        @test iszero(x)
+        @test all(isone, y2)
+    end
+
+    @testset "$(typeof(x))" for x in [
+        zeros(3, 3, 3),
+        falses(3, 3, 3),
+    ]
+        y = Base.setindex(x, true, 1, 1, 1)
+        @test iszero(x)  # x is not mutated
+        @test y[1, 1, 1] == true
+        @test iszero(x[CartesianIndices(size(x)) .== [CartesianIndex(1, 1, 1)]])
+
+        y2 = Base.setindex(x, one.(x), :, :, :)
+        @test iszero(x)
+        @test all(isone, y2)
+    end
+end
+
+@testset "insert" begin
+    v = Int[1, 2]
+    @test @inferred(insert(v, 1, :two)) ==ₜ [:two, 1, 2]
+    @test @inferred(insert(v, 2, 3.0)) ==ₜ [1.0, 3.0, 2.0]
+    @test @inferred(insert(v, 3, 3)) ==ₜ [1, 2, 3]
+
+    @test insert(v, 1, "here") == ["here", 1, 2]
+    @test insert(v, 2, "here") == [1, "here", 2]
+    @test insert(v, 3, "here") == [1, 2, "here"]
+    @test_throws BoundsError insert(v, 0, 5)
+    @test_throws BoundsError insert(v, 0, 5)
+end

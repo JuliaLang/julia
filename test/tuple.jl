@@ -642,6 +642,13 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    @test Base.setindex((1,), [2], 1:1) === (2, )
+    @test Base.setindex((1, 2, 3, 4), [3, 2], 2:3) === (1, 3, 2, 4)
+    @test Base.setindex((1, 2, 3, 4), [4, 3, 2, 1], 1:4) === (4, 3, 2, 1)
+    @test Base.setindex((1,), [2], [1]) === (2, )
+    @test Base.setindex((1, 2, 3, 4), [3, 2], [2,3]) === (1, 3, 2, 4)
+    @test Base.setindex((1, 2, 3, 4), [4, 3, 2, 1], [1,2,3,4]) === (4, 3, 2, 1)
 end
 
 @testset "inferable range indexing with constant values" begin
@@ -758,6 +765,11 @@ g42457(a, b) = Base.isequal(a, b) ? 1 : 2.0
 # issue #46049: setindex(::Tuple) regression
 @inferred Base.setindex((1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16), 42, 1)
 
+@testset "insert" begin
+    @test insert((1,2), 1, "here") == ("here", 1, 2)
+    @test insert((1,2), 2, "here") == (1, "here", 2)
+    @test insert((1,2), 3, "here") == (1, 2, "here")
+end
 # issue #47326
 function fun1_47326(args...)
     head..., tail = args

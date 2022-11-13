@@ -79,6 +79,7 @@ New library functions
 * New function `stack(x)` which generalises `reduce(hcat, x::Vector{<:Vector})` to any dimensionality,
   and allows any iterators of iterators. Method `stack(f, x)` generalises `mapreduce(f, hcat, x)` and
   is efficient. ([#43334])
+* New functions `delete`, `deleteat`, and `insert` provide non-mutating counterparts to `delete!`, `deleteat!`, and `insert!` ([#46453]). 
 * New macro `@allocations` which is similar to `@allocated` except reporting the total number of allocations
   rather than the total size of memory allocated. ([#47367])
 
@@ -95,6 +96,7 @@ Library changes
 * `@time` now separates out % time spent recompiling invalidated methods ([#45015]).
 * `eachslice` now works over multiple dimensions; `eachslice`, `eachrow` and `eachcol` return
   a `Slices` object, which allows dispatching to provide more efficient methods ([#32310]).
+* The non-mutationg `Base.setindex` function now has `AbstractDict` support ([#46453]).
 * `@kwdef` is now exported and added to the public API ([#46273])
 * An issue with order of operations in `fld1` is now fixed ([#28973]).
 * Sorting is now always stable by default as `QuickSort` was stabilized in ([#45222]).

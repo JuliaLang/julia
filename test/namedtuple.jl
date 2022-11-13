@@ -305,6 +305,9 @@ let nt0 = NamedTuple(), nt1 = (a=33,), nt2 = (a=0, b=:v)
     @test Base.setindex(nt1, "value", :a) == (a="value",)
     @test Base.setindex(nt1, "value", :a) isa NamedTuple{(:a,),<:Tuple{AbstractString}}
 end
+@test Base.setindex((a = 3, b = 1), (1, 2, 3), [:a, :b, :c]) === (a = 1, b = 2, c = 3)
+
+
 
 # @NamedTuple
 @testset "@NamedTuple" begin

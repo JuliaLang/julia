@@ -38,7 +38,7 @@ get(f::Callable, t::Tuple, i::Integer) = i in 1:length(t) ? getindex(t, i) : f()
 # returns new tuple; N.B.: becomes no-op if `i` is out-of-bounds
 
 """
-    setindex(c::Tuple, v, i::Integer)
+    setindex(x::Tuple, v, i::Integer)
 
 Creates a new tuple similar to `x` with the value at index `i` set to `v`.
 Throws a `BoundsError` when out of bounds.
@@ -54,12 +54,66 @@ function setindex(x::Tuple, v, i::Integer)
     @inline
     _setindex(v, i, x...)
 end
-
 function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
     return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
 end
 
+"""
+    deleteat(x::Tuple, i::Integer)
+
+Creates a new tuple similar to `x` with the value at index `i` removed.
+Throws a `BoundsError` when out of bounds.
+
+See also: [`deleteat!`](@ref), [`delete`](@ref)
+
+# Examples
+```jldoctest
+julia> deleteat((1, 2, 3), 3) == (1, 2)
+true
+
+julia> deleteat((1, 2, 3), 4)
+ERROR: BoundsError: attempt to access Tuple{Int64, Int64, Int64} at index [4]
+[...]
+```
+"""
+function deleteat(x::Tuple, i::Integer)
+    @boundscheck checkindex(Bool, eachindex(x), i) || throw(BoundsError(x, i))
+    _deleteat(x, i)
+end
+function _deleteat(x::Tuple{Vararg{Any,N}}, i::Integer) where {N}
+    @inline
+    ntuple(j -> j < i ? getfield(x, j) : getfield(x, j + 1), Val{N-1}())
+end
+
+"""
+    deleteat(t::Tuple, inds)
+
+Return a new tuple without the itmes at the indices given by `inds`.
+
+# Examples
+
+```jldoctest
+julia> x = (6, 5, 4);
+
+julia> deleteat(x, [2, 3])
+(6,)
+```
+"""
+deleteat(t::Tuple, inds) = (deleteat!(Any[t...], inds)...,)
+
+function insert(x::Tuple{Vararg{Any,N}}, index::Integer, item) where {N}
+    @boundscheck 1 <= index <= (length(x) + 1) || throw(BoundsError(x, index))
+    ntuple(Val{N+1}()) do j
+        if j == index
+            item
+        elseif j < index
+            getfield(x, j)
+        else
+            getfield(x, j - 1)
+        end
+    end
+end
 
 ## iterating ##
 

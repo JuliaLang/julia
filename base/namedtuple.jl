@@ -381,8 +381,43 @@ julia> Base.setindex(nt, "a", :a)
 (a = "a",)
 ```
 """
-function setindex(nt::NamedTuple, v, idx::Symbol)
-    merge(nt, (; idx => v))
+setindex(nt::NamedTuple, v, idx::Symbol) = merge(nt, (; idx => v))
+function setindex(nt::NamedTuple, vs, idxs::AbstractVector{Symbol})
+    length(vs) == length(idxs) || throw_setindex_mismatch(v, idxs)
+    merge(nt, (; [i => v for (i,v) in zip(idxs, vs)]...))
+end
+
+"""
+    delete(nt::NamedTuple, key::Symbol)
+    delete(nt::NamedTuple, key::Integer)
+
+Constructs a new `NamedTuple` with the field corresponding to `key` removed.
+If no field corresponds to `key`, `nt` is returned.
+
+See also: [`delete!`](@ref), [`deleteat`](@ref)
+
+# Examples
+```jldoctest
+julia> nt = (a = 1, b = 2, c = 3)
+(a = 1, b = 2, c = 3)
+
+julia> delete(nt, :b)
+(a = 1, c = 3)
+
+julia> delete(nt, 2)
+(a = 1, c = 3)
+
+julia> delete(nt, :z)
+(a = 1, b = 2, c = 3)
+```
+"""
+function delete(nt::NamedTuple, i::Symbol)
+    fidx = fieldindex(typeof(nt), i, false)
+    fidx === 0 ? nt : unsafe_delete(nt, fidx)
+end
+delete(nt::NamedTuple, i::Integer) = (i < 1 || i > length(nt)) ? nt : unsafe_delete(nt, i)
+function unsafe_delete(nt::NamedTuple{names}, i::Integer) where {names}
+    NamedTuple{_deleteat(names, i)}(_deleteat(Tuple(nt), i))
 end
 
 """

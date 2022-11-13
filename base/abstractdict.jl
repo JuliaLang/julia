@@ -548,6 +548,22 @@ end
 # that we need to avoid dispatch loops if setindex!(t,v,k) is not defined.)
 getindex(t::AbstractDict, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
+function setindex(src::AbstractDict{K,V}, val::V, key::K) where {K,V}
+    dst = copy(src)
+    dst[key] = val
+    return dst
+end
+function setindex(src::AbstractDict{K,V}, val, key) where {K,V}
+    dst = empty(src, promote_type(K,typeof(key)), promote_type(V,typeof(val)))
+    if haslength(src)
+        sizehint!(dst, length(src))
+    end
+    for (k,v) in src
+        dst[k] = v
+    end
+    dst[key] = val
+    return dst
+end
 
 get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
 function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V

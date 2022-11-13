@@ -1007,6 +1007,67 @@ function setindex!(A::Array{T}, X::Array{T}, c::Colon) where T
     return A
 end
 
+"""
+    setindex(collection, value, key...)
+
+Create a new collection with the element/elements of the location specified by `key`
+replaced with `value`(s).
+
+Note that this may be particularly expensive when `collection` is large and whose storage
+cannot be shared between seperate instances.
+
+# Implementation
+
+`setindex(collection, value, key...)` must have the property such that
+
+```julia
+y1 = setindex(x, value, key...)
+
+y2 = copy′(x)
+@assert convert.(eltype(y2), x) == y2
+
+y2[key...] = value
+@assert convert.(eltype(y2), y1) == y2
+```
+
+with a suitable definition of `copy′` such that `y2[key...] = value` succeeds.
+
+`setindex` should support more combinations of arguments by widening collection
+type as required.
+"""
+function setindex end
+
+function setindex(x::AbstractArray, v, i...)
+    @_propagate_inbounds_meta
+    inds = to_indices(x, i)
+    if inds isa Tuple{Vararg{Integer}}
+        T = promote_type(eltype(x), typeof(v))
+    else
+        T = promote_type(eltype(x), eltype(v))
+    end
+    y = similar(x, T)
+    copy!(y, x)
+    y[inds...] = v
+    return y
+end
+function setindex(t::Tuple, v, inds::AbstractUnitRange{<:Integer})
+    start = first(inds)
+    stop = last(inds)
+    offset = start - firstindex(v)
+    ntuple(Val{nfields(t)}()) do i
+        if i < start || i > stop
+            getfield(t, i)
+        else
+            v[i - offset]
+        end
+    end
+end
+function setindex(t::Tuple, v, inds::AbstractVector{<:Integer})
+    @_propagate_inbounds_meta
+    (setindex!(Any[t...], v, inds)...,)
+end
+
+
 # efficiently grow an array
 
 _growbeg!(a::Vector, delta::Integer) =
@@ -1143,6 +1204,63 @@ function _append!(a, ::IteratorSize, iter)
         push!(a, item)
     end
     a
+end
+
+"""
+    insert(a::AbstractVector, index::Integer, item)
+
+Returns a copy of `a` with `item` inserted at `index`.
+
+See also: [`insert!`](@ref), [`deleteat`](@ref), [`delete`](@ref)
+
+# Examples
+```jldoctest
+julia> A = Any[1, 2, 3]
+3-element Vector{Any}:
+ 1
+ 2
+ 3
+
+julia> insert(A, 3, "here") == [1, 2, "here", 3]
+true
+
+julia> A == [1, 2, 3]
+true
+````
+"""
+function insert(src::AbstractVector, index::Integer, item)
+    src_idx = firstindex(src)
+    src_end = lastindex(src)
+    if index == (src_end + 1)
+        dst = similar(src, promote_type(eltype(src), typeof(item)), length(src) + 1)
+        for dst_idx in eachindex(dst)
+            @inbounds if isassigned(src, src_idx)
+                @inbounds dst[dst_idx] = src[src_idx]
+            end
+            src_idx += 1
+        end
+        @inbounds dst[end] = item
+    else
+        @boundscheck (src_end < index || index < src_idx) && throw(BoundsError(src, index))
+        dst = similar(src, promote_type(eltype(src), typeof(item)), length(src) + 1)
+        dst_idx = firstindex(dst)
+        while src_idx < index
+            @inbounds if isassigned(src, src_idx)
+                @inbounds dst[dst_idx] = src[src_idx]
+            end
+            dst_idx += 1
+            src_idx += 1
+        end
+        setindex!(dst, item, dst_idx)
+        dst_idx += 1
+        for i in src_idx:src_end
+            @inbounds if isassigned(src, i)
+                @inbounds dst[dst_idx] = src[i]
+            end
+            dst_idx += 1
+        end
+    end
+    dst
 end
 
 """
@@ -1631,6 +1749,117 @@ function deleteat!(a::Vector, inds::AbstractVector{Bool})
     end
     _deleteend!(a, n-p+1)
     return a
+end
+
+"""
+    deleteat(a::Vector, i::Integer)
+
+Remove the item at the given `i` and return the modified `a`. Subsequent items
+are shifted to fill the resulting gap.
+
+See also: [`deleteat!`](@ref), [`delete`](@ref), [`insert`](@ref)
+
+# Examples
+```jldoctest
+julia> x = [6, 5, 4]
+3-element Vector{Int64}:
+ 6
+ 5
+ 4
+
+julia> deleteat(x, 2) == [6, 4]
+true
+
+julia> deleteat(x, [2, 3]) == [6]
+true
+
+julia> x == [6, 5, 4]
+true
+```
+"""
+function deleteat(src::AbstractVector, i::Integer)
+    src_idx = firstindex(src)
+    src_end = lastindex(src)
+    src_idx <= i <= src_end || throw(BoundsError(src, i))
+    dst = similar(src, length(src) - 1)
+    dst_idx = firstindex(dst)
+    while src_idx <= src_end
+        if src_idx != i
+            @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+            dst_idx += 1
+        end
+        src_idx += 1
+    end
+    dst
+end
+function deleteat(src::AbstractVector, inds::AbstractVector{Bool})
+    n = length(src)
+    length(inds) == n || throw(BoundsError(src, inds))
+    dst = similar(src, n - count(inds))
+    dst_idx = firstindex(dst)
+    src_idx = firstindex(src)
+    for index in inds
+        if !index
+            @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+            dst_idx += 1
+        end
+        src_idx += 1
+    end
+    dst
+end
+function deleteat(src::AbstractVector, inds::AbstractUnitRange{<:Integer})
+    srcinds = eachindex(src)
+    N = length(srcinds)
+    dst = similar(src, N - length(inds))
+    src_idx = first(srcinds)
+    dst_idx = firstindex(dst)
+    while src_idx < first(inds)
+        @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+        src_idx += 1
+        dst_idx += 1
+    end
+    src_idx = last(inds) + 1
+    while src_idx <= N
+        @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+        src_idx += 1
+        dst_idx += 1
+    end
+    dst
+end
+function deleteat(src::AbstractVector, inds)
+    itr = iterate(inds)
+    if itr === nothing
+        copy(src)
+    else
+        len = length(src) - length(inds)
+        # `length(inds) > length(src)` then `inds` has repeated or out of bounds indices
+        len > 0 || throw(BoundsError(src, inds))
+        index, state = itr
+        dst = similar(src, len)
+        dst_idx = firstindex(dst)
+        src_idx = firstindex(src)
+        src_end = lastindex(src)
+        src_idx > index && throw(BoundsError(src, inds))
+        while true
+            (src_end < index || index < src_idx) && throw(BoundsError(src, inds))
+            while src_idx < index
+                @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+                dst_idx += 1
+                src_idx += 1
+            end
+            src_idx += 1
+            itr = iterate(inds, state)
+            itr === nothing && break
+            itr[1] <= index && throw(ArgumentError("indices must be unique and sorted"))
+            index, state = itr
+        end
+        while src_idx <= src_end
+            @inbounds isassigned(src, src_idx) && setindex!(dst, src[src_idx], dst_idx)
+            dst_idx += 1
+            src_idx += 1
+        end
+        dst
+    end
 end
 
 const _default_splice = []
