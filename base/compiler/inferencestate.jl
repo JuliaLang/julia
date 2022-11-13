@@ -228,12 +228,6 @@ end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
 is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
 
-function InferenceResult(
-    linfo::MethodInstance,
-    arginfo::Union{Nothing,Tuple{ArgInfo,InferenceState}} = nothing)
-    return _InferenceResult(linfo, arginfo)
-end
-
 add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
 function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
