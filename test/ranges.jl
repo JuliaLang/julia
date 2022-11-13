@@ -2677,6 +2677,7 @@ end
     @test_throws DomainError LogRange(1, -1, 3)   # needs complex numbers
     @test_throws ArgumentError LogRange(1, 10, 2)[true]
     @test_throws BoundsError LogRange(1, 10, 2)[3]
+    @test_throws ArgumentError LogRange{Int}(1,4,5)  # no integer ranges
 
     # printing
     @test repr(LogRange(1,2,3)) == "LogRange(1.0, 2.0, 3)"

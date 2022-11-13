@@ -1533,13 +1533,12 @@ julia> LogRange(1, -1+0im, 5) ≈ cis.(LinRange(0, pi, 5))  # complex numbers
 true
 ```
 """
-struct LogRange{T,X} <: AbstractArray{T,1}
+struct LogRange{T<:Number,X} <: AbstractArray{T,1}
     start::T
     stop::T
     len::Int
     extra::Tuple{X,X}
-    function LogRange(start::Number, stop::Number, length::Integer)
-        T = float(promote_type(typeof(start), typeof(stop)))
+    function LogRange{T}(start::T, stop::T, length::Int) where {T<:Number}
         a = iszero(start) ? T(NaN) : T(start)
         b = iszero(stop) ? T(NaN) : T(stop)
         len = Int(length)
@@ -1554,6 +1553,10 @@ struct LogRange{T,X} <: AbstractArray{T,1}
             throw(DomainError((start, stop),
                 "LogRange will only return complex results if called with a complex argument"))
         end
+        if T <: Integer || T <: Complex{<:Integer}
+            # LogRange{Int}(1, 512, 4) produces InexactError: Int64(7.999999999999998)
+            throw(ArgumentError("LogRange{T} does not support integer types"))
+        end
         ex = if T <: Real && start + stop < 0  # start+stop allows for LogRange(-0.0, -2, 3)
             _logrange_extra(-a, -b, len)
         else
@@ -1561,6 +1564,14 @@ struct LogRange{T,X} <: AbstractArray{T,1}
         end
         new{T,typeof(ex[1])}(a, b, len, ex)
     end
+end
+
+function LogRange{T}(start::Number, stop::Number, len::Integer) where {T}
+    LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
+end
+function LogRange(start::Number, stop::Number, len::Integer)
+    T = float(promote_type(typeof(start), typeof(stop)))
+    LogRange{T}(convert(T, start), convert(T, stop), convert(Int, len))
 end
 
 size(r::LogRange) = (r.len,)
@@ -1595,8 +1606,8 @@ end
 function unsafe_getindex(r::LogRange{T}, i::Int) where {T}
     @inline
     logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
-    x = T(exp(logx))
-    T <: Real ? copysign(x, r.start) : x
+    x = exp(logx)
+    T <: Real ? copysign(T(x), r.start) : T(x)
 end
 function unsafe_getindex(r::LogRange{T, TwicePrecision{Float64}}, i::Int) where T
     @inline
@@ -1607,11 +1618,12 @@ function unsafe_getindex(r::LogRange{T, TwicePrecision{Float64}}, i::Int) where 
     return copysign(T(x), r.start)
 end
 
-function show(io::IO, r::LogRange)  # compact
-    print(io, "LogRange(")  # type parameters are implied by knowing r.start
-    show(io, first(r))
+function show(io::IO, r::LogRange{T}) where {T}
+    print(io, "LogRange{", T, "}(")
+    ioc = IOContext(io, :typeinfo => T)
+    show(ioc, first(r))
     print(io, ", ")
-    show(io, last(r))
+    show(ioc, last(r))
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
