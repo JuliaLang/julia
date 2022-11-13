@@ -98,6 +98,8 @@
   '(-> _ (block (line 1 none) 1)))
 (parse-expect-underscore "_::Int -> 1" parse-stmts
   '(-> (:: _ Int) (block (line 1 none) 1)))
+(parse-expect-underscore "@a _+1" parse-stmts
+  '(macrocall @a (line 1 none) (call + _ 1)))
 
 (parse-expect-underscore-function "f(_)" parse-stmts
   '(-> |#1#_| (call f |#1#_|))
@@ -205,5 +207,9 @@
 ; test/misc.jl:709
 (parse-expect-underscore "function closefunc(_) end" parse-stmts
   '(function (call closefunc _) (block (line 1 none) (line 1 none))))
+
+; https://github.com/FluxML/MacroTools.jl/blob/d1937f95a7e5c82f9cc3b5a4f8a2b33fdb32f884/src/utils.jl#L248
+(parse-expect-underscore "@match ex begin _ => ex end" parse-stmts
+  '(macrocall @match (line 1 none) ex (block (line 1 none) (call => _ ex))))
 
 #t

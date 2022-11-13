@@ -773,7 +773,7 @@
 ;; the principal non-terminals follow, in increasing precedence order
 
 (define (parse-block s (down parse-eq))
-(with-underscore-context #t ; no underscore could cross block
+(with-underscore-context 'stmt ; no underscore could cross block
   (parse-Nary s down '(#\newline #\;) 'block
               (lambda (x) (memq x '(end else elseif catch finally))) #t)))
 
@@ -2797,6 +2797,7 @@
           ((eqv? t #\@)
            (take-token s)
            (with-space-sensitive
+           (with-underscore-context #f
             (let ((startloc  (line-number-node s))
                   (head (parse-macro-name s)))
               (peek-token s)
@@ -2806,7 +2807,7 @@
                                  ,startloc
                                  ,@(parse-space-separated-exprs s)))
                   (let ((call (parse-call-chain s head #t)))
-                    (macroify-call s call startloc))))))
+                    (macroify-call s call startloc)))))))
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)

@@ -158,8 +158,7 @@
 
 ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-478137038
 (parse-expect-underscore "@m g(_)" parse-stmts
-  ; BROKEN: macro never see _ then
-  '(macrocall @m (line 1 none) (-> |#1#_| (call g |#1#_|))))
+  '(macrocall @m (line 1 none) (call g _)))
 
 ; https://github.com/JuliaLang/julia/pull/24990#issuecomment-478157855
 (parse-expect-underscore "map(_[end], A)" parse-stmts
