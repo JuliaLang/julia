@@ -640,10 +640,10 @@ end
 
 # the suffix "2" means base 2
 """
-    ndigits0z2(x::Integer) -> Integer
+    ndigits0z2(x::BitInteger) -> Int
 
-Efficiently compute `ndigits0z(x, 2)`. This is the number of bits used to represent `x` in
-its binary representation, excluding leading zeros.
+The number of bits used to represent `x` in its binary representation, excluding
+leading zeros.
 
 `ndigits0z2` is internal and will eventually be replaced by constant propagation.
 
@@ -660,7 +660,6 @@ julia> ndigits0z2(0)
 julia> ndigits0z2(-1)
 64
 """
-ndigits0z2(x::Integer) = ndigits0z(x, 2)
 ndigits0z2(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 
 """
