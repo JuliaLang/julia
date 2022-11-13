@@ -58,9 +58,9 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Writing tests
 
-There are never enough tests. Track [code coverage at Coveralls](https://coveralls.io/r/JuliaLang/julia), and help improve it.
+There are never enough tests. Track [code coverage at Codecov](https://codecov.io/github/JuliaLang/julia), and help improve it.
 
-1. Go visit https://coveralls.io/r/JuliaLang/julia.
+1. Go visit https://codecov.io/github/JuliaLang/julia.
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
@@ -74,7 +74,7 @@ There are never enough tests. Track [code coverage at Coveralls](https://coveral
 * You can see the current buildbot setup at: https://build.julialang.org/builders
 * [Issue 9493](https://github.com/JuliaLang/julia/issues/9493) and [issue 11885](https://github.com/JuliaLang/julia/issues/11885) have more detailed discussion on code coverage.
 
-Coveralls shows functionality that still needs "proof of concept" tests. These are important, as are tests for tricky edge cases, such as converting between integer types when the number to convert is near the maximum of the range of one of the integer types. Even if a function already has some coverage on Coveralls, it may still benefit from tests for edge cases.
+Code coverage shows functionality that still needs "proof of concept" tests. These are important, as are tests for tricky edge cases, such as converting between integer types when the number to convert is near the maximum of the range of one of the integer types. Even if a function already has some coverage on Codecov, it may still benefit from tests for edge cases.
 
 ### Improving documentation
 
@@ -363,7 +363,7 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
   - **Community:** <https://julialang.org/community/>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Documentation:** <https://docs.julialang.org>
-  - **Code coverage:** <https://coveralls.io/r/JuliaLang/julia>
+  - **Code coverage:** <https://codecov.io/github/JuliaLang/julia>
 
 * Design of Julia
   - [Julia: A Fresh Approach to Numerical Computing](https://julialang.org/assets/research/julia-fresh-approach-BEKS.pdf)
