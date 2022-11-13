@@ -88,7 +88,6 @@ exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
 exponent_one(::Type{Float64}) =     0x3ff0_0000_0000_0000
 exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
 significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
-mantissa_width(::Type{Float64}) = UInt64(52)
 exponent_width(::Type{Float64}) = UInt64(11)
 
 sign_mask(::Type{Float32}) =        0x8000_0000
@@ -96,7 +95,6 @@ exponent_mask(::Type{Float32}) =    0x7f80_0000
 exponent_one(::Type{Float32}) =     0x3f80_0000
 exponent_half(::Type{Float32}) =    0x3f00_0000
 significand_mask(::Type{Float32}) = 0x007f_ffff
-mantissa_width(::Type{Float32}) = UInt32(23)
 exponent_width(::Type{Float32}) = UInt32(8)
 
 sign_mask(::Type{Float16}) =        0x8000
@@ -104,7 +102,6 @@ exponent_mask(::Type{Float16}) =    0x7c00
 exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
-mantissa_width(::Type{Float16}) = UInt16(10)
 exponent_width(::Type{Float16}) = UInt16(5)
 
 mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
@@ -423,7 +420,7 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point mod?
 
 function unbiased_exponent(x::T) where {T<:IEEEFloat}
-    return (reinterpret(Unsigned, x) & exponent_mask(T)) >> mantissa_width(T)
+    return (reinterpret(Unsigned, x) & exponent_mask(T)) >> significand_bits(T)
 end
 
 function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
@@ -433,24 +430,20 @@ function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
 end
 
 function make_value(number::T, ep) where {T<:Unsigned}
-    Tfloat = floattype(T)
-    Tint = signed(T)
-    epint = unsafe_trunc(Tint,ep)
-    lz::signed(T) = Core.Intrinsics.ctlz_int(number) - exponent_width(Tfloat)
+    F = floattype(T)
+    S = signed(T)
+    epint::S = unsafe_trunc(S,ep)
+    lz = Core.Intrinsics.ctlz_int(number) - T(exponent_bits(F))
     number <<= lz
     epint -= lz
     bits = T(0)
     if epint >= T(0)
-        mant = number & significand_mask(Tfloat) #this might not be necessary
-        bits |= mant
-        epint = ((epint + Tint(1)) << mantissa_width(Tfloat)) & exponent_mask(Tfloat)
-        bits |= epint
+        bits = number & significand_mask(F)
+        bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)
     else
-        number = number >> -epint
-        mant = number & significand_mask(Tfloat)
-        bits |= mant
+        bits = (number >> -epint) & significand_mask(F)
     end
-    return reinterpret(Tfloat, bits)
+    return reinterpret(F, bits)
 end
 
 function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
@@ -466,7 +459,7 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     e_x = unbiased_exponent(x)
     e_y = unbiased_exponent(y)
     # Most common case where |y| is "very normal" and |x/y| < 2^EXPONENT_WIDTH
-    if e_y > mantissa_width(T) && (e_x - e_y) <= exponent_width(T)
+    if e_y > uinttype(T)(significand_bits(T)) && (e_x - e_y) <= uinttype(T)(exponent_bits(T))
         m_x = explicit_mantissa_noinfnan(x)
         m_y = explicit_mantissa_noinfnan(y)
         d = (e_x == e_y) ? (m_x - m_y) : (m_x << (e_x - e_y)) % m_y
@@ -481,7 +474,7 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     m_x = explicit_mantissa_noinfnan(x)
     e_x -= uinttype(T)(1)
     m_y = explicit_mantissa_noinfnan(y)
-    lz_m_y = exponent_width(T)
+    lz_m_y = uinttype(T)(exponent_width(T))
     if e_y > uinttype(T)(0)
         e_y -= uinttype(T)(1)
     else
@@ -493,14 +486,14 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     sides_zeroes_cnt = lz_m_y + tz_m_y
 
     # n>0
-    exp_diff::uinttype(T) = e_x - e_y
+    exp_diff = e_x - e_y
     # Shift hy right until the end or n = 0
     right_shift = min(exp_diff, tz_m_y)
     m_y >>= right_shift
     exp_diff -= right_shift
     e_y += right_shift
     # Shift hx left until the end or n = 0
-    left_shift = min(exp_diff, exponent_width(T))
+    left_shift = min(exp_diff, uinttype(T)(exponent_width(T)))
     m_x <<= left_shift
     exp_diff -= left_shift
 
@@ -520,14 +513,12 @@ end
 
 function fmod(x::T, y::T) where {T<:IEEEFloat}
     if isfinite(x) && !iszero(x) && isfinite(y) && !iszero(y)
-        xabs = abs(x)
-        yabs = abs(y)
-        res = fmod_internal(xabs, yabs)
-        return copysign(res,x)
+        return copysign(fmod_internal(abs(x), abs(y)), x)
+    elseif isnan(y) || iszero(y)  # y can still be Inf
+        return T(NaN)
+    else
+        return x
     end
-    (isnan(x) || isnan(y)) && return T(NaN)
-    (isinf(x) || iszero(y)) && return T(NaN)
-    return x
 end
 
 rem(x::T, y::T) where {T<:IEEEFloat} = fmod(x, y)
