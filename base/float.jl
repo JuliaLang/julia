@@ -429,15 +429,16 @@ function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
     return m
 end
 
-function make_value(number::T, ep) where {T<:Unsigned}
-    F = floattype(T)
-    S = signed(T)
-    epint::S = unsafe_trunc(S,ep)
-    lz = Core.Intrinsics.ctlz_int(number) - T(exponent_bits(F))
+
+function make_value(number::U, ep) where {U<:Unsigned}
+    F = floattype(U)
+    S = signed(U)
+    epint = unsafe_trunc(S,ep)
+    lz::signed(U) = Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F))
     number <<= lz
     epint -= lz
-    bits = T(0)
-    if epint >= T(0)
+    bits = U(0)
+    if epint >= U(0)
         bits = number & significand_mask(F)
         bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)
     else
@@ -514,7 +515,7 @@ end
 function fmod(x::T, y::T) where {T<:IEEEFloat}
     if isfinite(x) && !iszero(x) && isfinite(y) && !iszero(y)
         return copysign(fmod_internal(abs(x), abs(y)), x)
-    elseif isnan(y) || iszero(y)  # y can still be Inf
+    elseif isinf(x) || isnan(y) || iszero(y)  # y can still be Inf
         return T(NaN)
     else
         return x
