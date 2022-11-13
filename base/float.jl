@@ -427,8 +427,9 @@ function unbiased_exponent(x::T) where {T<:IEEEFloat}
 end
 
 function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
-    subnormal = !issubnormal(x) ? significand_mask(T) + uinttype(T)(1) : uinttype(T)(0)
-    return subnormal | (significand_mask(T) & reinterpret(Unsigned, x))
+    m = mantissa(x)
+    issubnormal(x) || (m |= significand_mask(T) + uinttype(T)(1))
+    return m
 end
 
 function make_value(number::T, ep) where {T<:Unsigned}
