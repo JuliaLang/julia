@@ -254,10 +254,7 @@ nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
     min(cld(precision(T), 2), nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that are explicitly stored.
-nbitslen(len, offset) = len < 2 ? 0 : ceil_log2(max(offset-1, len-offset)) + 1
-
-ceil_log2(n::Integer) = ceil(Int, log2(n))
-ceil_log2(n::T) where {T<:BitSigned} = 8 * sizeof(T) - leading_zeros(n - T(1))
+nbitslen(len, offset) = len < 2 ? 0 : ndigits0z2(max(offset-1, len-offset) - 1) + 1
 
 eltype(::Type{TwicePrecision{T}}) where {T} = T
 
@@ -313,7 +310,7 @@ function *(x::TwicePrecision, v::Number)
 end
 function *(x::TwicePrecision{<:IEEEFloat}, v::Integer)
     v == 0 && return TwicePrecision(x.hi*v, x.lo*v)
-    nb = ceil_log2(abs(v))
+    nb = ndigits0z2(abs(v)-1)
     u = truncbits(x.hi, nb)
     TwicePrecision(canonicalize2(u*v, ((x.hi-u) + x.lo)*v)...)
 end
