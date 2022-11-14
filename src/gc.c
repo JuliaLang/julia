@@ -1673,6 +1673,7 @@ static void gc_sweep_perm_alloc(void)
 
 JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
 {
+#ifndef MMTKHEAP
     jl_ptls_t ptls = jl_current_task->ptls;
     jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
     // The modification of the `gc_bits` is not atomic but it
@@ -1682,6 +1683,7 @@ JL_DLLEXPORT void jl_gc_queue_root(const jl_value_t *ptr)
     o->bits.gc = GC_MARKED;
     arraylist_push(ptls->heap.remset, (jl_value_t*)ptr);
     ptls->heap.remset_nptr++; // conservative
+#endif
 }
 
 void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
@@ -3615,14 +3617,6 @@ void jl_gc_init(void)
 
     gc_init(heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t))); // currently set as 6GB or 70% the free memory in the system
 #endif
-
-    // We allocate with abandon until we get close to the free memory on the machine.
-    uint64_t free_mem = uv_get_free_memory();
-    uint64_t high_water_mark = free_mem / 10 * 7;  // 70% high water mark
-
-    if (high_water_mark < max_total_memory)
-       max_total_memory = high_water_mark;
-
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);
     t_start = jl_hrtime();
