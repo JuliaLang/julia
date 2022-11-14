@@ -960,7 +960,7 @@ function lmul!(A::UnitLowerTriangular, B::AbstractVecOrMat)
     B
 end
 
-function rmul!(A::AbstractVecOrMat, B::UpperTriangular)
+function rmul!(A::AbstractMatrix, B::UpperTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -977,7 +977,7 @@ function rmul!(A::AbstractVecOrMat, B::UpperTriangular)
     end
     A
 end
-function rmul!(A::AbstractVecOrMat, B::UnitUpperTriangular)
+function rmul!(A::AbstractMatrix, B::UnitUpperTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -995,7 +995,7 @@ function rmul!(A::AbstractVecOrMat, B::UnitUpperTriangular)
     A
 end
 
-function rmul!(A::AbstractVecOrMat, B::LowerTriangular)
+function rmul!(A::AbstractMatrix, B::LowerTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n
@@ -1012,7 +1012,7 @@ function rmul!(A::AbstractVecOrMat, B::LowerTriangular)
     end
     A
 end
-function rmul!(A::AbstractVecOrMat, B::UnitLowerTriangular)
+function rmul!(A::AbstractMatrix, B::UnitLowerTriangular)
     require_one_based_indexing(A, B)
     m, n = size(A)
     if size(B, 1) != n

@@ -269,11 +269,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
+            jl_value_t **fargs;
+            JL_GC_PUSHARGS(fargs, 2);
+            fargs[0] = f;
+            fargs[1] = jl_box_int32(exitcode);
             JL_TRY {
                 assert(ct);
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_get_world_counter();
-                jl_apply(&f, 1);
+                jl_apply(fargs, 2);
                 ct->world_age = last_age;
             }
             JL_CATCH {
@@ -282,6 +286,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode)
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
+            JL_GC_POP();
         }
     }
 
