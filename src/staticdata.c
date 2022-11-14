@@ -2873,8 +2873,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     // A few fields (reached via super) might be self-recursive. This is rare, but handle them now.
     // They cannot be instances though, since the type must fully exist before the singleton field can be allocated
     for (size_t i = 0; i < delay_list.len; ) {
-        uintptr_t *pfld = (uintptr_t*)s.uniquing_list.items[i++];
-        jl_value_t **obj = (jl_value_t **)s.uniquing_list.items[i++];
+        uintptr_t *pfld = (uintptr_t*)delay_list.items[i++];
+        jl_value_t **obj = (jl_value_t **)delay_list.items[i++];
         assert(jl_is_datatype(obj));
         jl_datatype_t *dt = (jl_datatype_t*)obj[0];
         assert(jl_is_datatype(dt));
