@@ -933,3 +933,8 @@ let err_str
     err_str = @except_str "a" + "b" MethodError
     @test occursin("String concatenation is performed with *", err_str)
 end
+
+@testset "issue #47559" begin
+    err = try; invoke(Returns, Tuple{Any,Val{N}} where N, 1, Val(1)) catch ex; ex; end
+    @test startswith(sprint(Base.showerror, err), "MethodError: no method matching Returns(::Any, ::Val{N})")
+end
