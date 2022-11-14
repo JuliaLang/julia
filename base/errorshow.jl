@@ -224,8 +224,8 @@ end
 function showerror(io::IO, ex::MethodError)
     # ex.args is a tuple type if it was thrown from `invoke` and is
     # a tuple of the arguments otherwise.
-    is_arg_types = isa(ex.args, DataType)
-    arg_types = (is_arg_types ? ex.args : typesof(ex.args...))::DataType
+    is_arg_tuple = isa(ex.args, Tuple)
+    arg_types = (is_arg_tuple ? (typesof(ex.args...)::DataType) : unwrap_unionall(ex.args))
     f = ex.f
     meth = methods_including_ambiguous(f, arg_types)
     if isa(meth, MethodList) && length(meth) > 1
@@ -237,7 +237,7 @@ function showerror(io::IO, ex::MethodError)
     ft = typeof(f)
     f_is_function = false
     kwargs = ()
-    if f === Core.kwcall && !is_arg_types
+    if f === Core.kwcall && is_arg_tuple
         f = (ex.args::Tuple)[2]
         ft = typeof(f)
         arg_types_param = arg_types_param[3:end]
@@ -245,7 +245,7 @@ function showerror(io::IO, ex::MethodError)
         ex = MethodError(f, ex.args[3:end::Int])
     end
     name = ft.name.mt.name
-    if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
+    if f === Base.convert && is_arg_tuple && length(arg_types_param) == 2
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
     elseif f === mapreduce_empty || f === reduce_empty
@@ -306,7 +306,7 @@ function showerror(io::IO, ex::MethodError)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     end
-    if !is_arg_types
+    if is_arg_tuple
         # Check for row vectors used where a column vector is intended.
         vec_args = []
         hasrows = false
@@ -382,8 +382,10 @@ stacktrace_linebreaks()::Bool =
     tryparse(Bool, get(ENV, "JULIA_STACKTRACE_LINEBREAKS", "false")) === true
 
 function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=())
-    is_arg_types = isa(ex.args, DataType)
-    arg_types = is_arg_types ? ex.args : typesof(ex.args...)
+    # ex.args is a tuple type if it was thrown from `invoke` and is
+    # a tuple of the arguments otherwise.
+    is_arg_tuple = isa(ex.args, Tuple)
+    arg_types = is_arg_tuple ? typesof(ex.args...)::DataType : unwrap_unionall(ex.args)
     arg_types_param = Any[arg_types.parameters...]
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
