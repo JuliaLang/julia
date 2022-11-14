@@ -55,7 +55,7 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
             if (ptrhash_has(news, (void*)super))
                 return 1;
             if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-                return 0; // fast-path for rejection
+                break; // fast-path for rejection
         }
         jl_svec_t *tt = dt->parameters;
         size_t i, l = jl_svec_len(tt);
