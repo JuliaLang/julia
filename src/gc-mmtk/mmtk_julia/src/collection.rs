@@ -157,10 +157,10 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn out_of_memory(_tls: VMThread, _err_kind: AllocationError) {
-        panic!("Out of Memory!");
-        // unsafe {
-        //     ((*UPCALLS).jl_throw_out_of_memory_error)()
-        // };
+        println!("Out of Memory!");
+        unsafe {
+            ((*UPCALLS).jl_throw_out_of_memory_error)()
+        };
     }
 
     fn prepare_mutator<T: MutatorContext<JuliaVM>>(
