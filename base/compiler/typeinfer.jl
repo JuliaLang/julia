@@ -937,9 +937,6 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new
         lock_mi_inference(interp, mi)
         result = InferenceResult(mi)
-        if cache === :local
-            result.must_be_codeinf = true # TODO directly keep `opt.ir` for this case
-        end
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
@@ -1013,7 +1010,6 @@ function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecializ
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_timing_begin, Cvoid, ())
     result = InferenceResult(mi)
-    result.must_be_codeinf = true
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1073,7 +1069,6 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi)
-    result.must_be_codeinf = true
     frame = InferenceState(result, #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1117,7 +1112,6 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             ccall(:jl_typeinf_timing_begin, Cvoid, ())
             if !src.inferred
                 result = InferenceResult(linfo)
-                result.must_be_codeinf = true
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better
