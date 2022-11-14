@@ -117,7 +117,6 @@ end
     x = ['a','b','c','d','e']
     y = ['a','b','c','d','e']
     α, β = 'f', 'g'
-    @test axpy!(α, x, y)
     @test_throws DimensionMismatch axpy!(α, x, ['g'])
     @test_throws DimensionMismatch axpby!(α, x, β, ['g'])
     @test_throws BoundsError axpy!(α, x, Vector(-1:5), y, Vector(1:7))
