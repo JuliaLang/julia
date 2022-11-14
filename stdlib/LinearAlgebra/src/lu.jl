@@ -528,7 +528,7 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
         throw(ArgumentError("off-diagonals of `A` must not alias"))
     end
     # Check if Tridiagonal matrix already has du2 for pivoting
-    has_du2_defined = isdefined(A, :du2) && isa(A.du2, V) && length(A.du2) == max(0, n-2)
+    has_du2_defined = isdefined(A, :du2) && length(A.du2) == max(0, n-2)
     if has_du2_defined
         du2 = A.du2::V
     else
