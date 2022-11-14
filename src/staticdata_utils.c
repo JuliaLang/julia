@@ -15,10 +15,13 @@ static void write_float64(ios_t *s, double x) JL_NOTSAFEPOINT
 // to look in the cache for it
 int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeof_sysimg)
 {
-    if (jl_object_in_image(t))
-        return 0; // fast-path for rejection
-    if (ptrhash_has(news, t) || ptrhash_has(news, jl_typeof(t)))
+    //if (jl_object_in_image(t))
+    //    return 0; // fast-path for rejection
+    assert(ptrhash_get(news, (void*)t) != (void*)t);
+    if (ptrhash_has(news, (void*)t) || ptrhash_has(news, (void*)jl_typeof(t)))
         return 1;
+    if (!(image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg))
+        return 0; // fast-path for rejection
     if (jl_is_uniontype(t)) {
         jl_uniontype_t *u = (jl_uniontype_t*)t;
         return must_be_new_dt(u->a, news, image_base, sizeof_sysimg) ||
@@ -42,12 +45,18 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
             return 1;
     }
     else if (jl_is_datatype(t)) {
-        //if (image_base < (char*)t && (char*)t <= image_base + sizeof_sysimg) {
-        //    assert(0 && "type_in_worklist mistake?");
-        //    return 1;
-        //}
         jl_datatype_t *dt = (jl_datatype_t*)t;
         assert(jl_object_in_image((jl_value_t*)dt->name) && "type_in_worklist mistake?");
+        for (jl_datatype_t *super = dt->super;
+                super != NULL && super != jl_any_type;
+                super = super->super) {
+            //if (jl_object_in_image((jl_value_t*)super))
+            //    break; // fast-path for rejection
+            if (ptrhash_has(news, (void*)super))
+                return 1;
+            if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
+                return 0; // fast-path for rejection
+        }
         jl_svec_t *tt = dt->parameters;
         size_t i, l = jl_svec_len(tt);
         for (i = 0; i < l; i++)

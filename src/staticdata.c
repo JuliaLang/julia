@@ -2812,6 +2812,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 assert(tag == 0);
                 arraylist_push(&delay_list, pfld);
                 arraylist_push(&delay_list, obj);
+                ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
                 *pfld = (uintptr_t)NULL;
                 continue;
             }
@@ -2828,6 +2829,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             else {
                 dt = (jl_datatype_t*)obj;
                 arraylist_push(&cleanup_list, (void*)obj);
+                ptrhash_remove(&new_dt_objs, (void*)obj); // unmark obj as invalid before must_be_new_dt
                 if (must_be_new_dt((jl_value_t*)dt, &new_dt_objs, image_base, sizeof_sysimg))
                     newdt = NULL;
                 else
