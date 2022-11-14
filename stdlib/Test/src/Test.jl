@@ -1309,7 +1309,7 @@ end
     @testset [CustomTestSet] [option=val  ...] ["description"] begin ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v"] for v in (...) ... end
     @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] for v in (...), w in (...) ... end
-    @testset [CustomTestSet] [option=val  ...] ["description \$v, \$w"] foo()
+    @testset [CustomTestSet] [option=val  ...] ["description"] foo()
     @testset let v = (...) ... end
 
 # With begin/end or function call
