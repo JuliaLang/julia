@@ -7787,10 +7787,11 @@ static jl_llvm_functions_t
         }
         else {
             if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
+                // we're at toplevel; insert an atomic barrier between every instruction
                 // TODO: inference is invalid if this has any effect (which it often does)
                 LoadInst *world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
                     prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-                world->setOrdering(AtomicOrdering::Acquire);
+                world->setOrdering(AtomicOrdering::Monotonic);
                 ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
             }
             emit_stmtpos(ctx, stmt, cursor);
