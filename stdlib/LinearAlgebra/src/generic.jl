@@ -1444,7 +1444,7 @@ function axpy!(α, x::AbstractArray, y::AbstractArray)
     if n != length(y)
         throw(DimensionMismatch("x has length $n, but y has length $(length(y))"))
     end
-    iszero(α) && return y
+    isa(α, Number) && iszero(α) && return y
     for (IY, IX) in zip(eachindex(y), eachindex(x))
         @inbounds y[IY] += x[IX]*α
     end
@@ -1459,7 +1459,7 @@ function axpy!(α, x::AbstractArray, rx::AbstractArray{<:Integer}, y::AbstractAr
     elseif !checkindex(Bool, eachindex(IndexLinear(), y), ry)
         throw(BoundsError(y, ry))
     end
-    iszero(α) && return y
+    isa(α, Number) && iszero(α) && return y
     for (IY, IX) in zip(eachindex(ry), eachindex(rx))
         @inbounds y[ry[IY]] += x[rx[IX]]*α
     end
@@ -1489,7 +1489,7 @@ function axpby!(α, x::AbstractArray, β, y::AbstractArray)
     if length(x) != length(y)
         throw(DimensionMismatch("x has length $(length(x)), but y has length $(length(y))"))
     end
-    iszero(α) && isone(β) && return y
+    isa(α, Number) && iszero(α) && isa(β, Number) && isone(β) && return y
     for (IX, IY) in zip(eachindex(x), eachindex(y))
         @inbounds y[IY] = x[IX]*α + y[IY]*β
     end
