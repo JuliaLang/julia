@@ -73,14 +73,25 @@ static void * load_library(const char * rel_path, const char * src_dir, int err)
         exit(1);
     }
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
-    free(wpath);
 #else
 #define PATH_EXISTS() !access(path, F_OK)
     handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
 #endif
-    if (handle == NULL) {
-        if (!err && !PATH_EXISTS())
+    if (handle != NULL) {
+#if defined(_OS_WINDOWS_)
+        free(wpath);
+#endif
+    }
+    else {
+        if (!err && !PATH_EXISTS()) {
+#if defined(_OS_WINDOWS_)
+            free(wpath);
+#endif
             return NULL;
+        }
+#if defined(_OS_WINDOWS_)
+        free(wpath);
+#endif
 #undef PATH_EXISTS
         jl_loader_print_stderr3("ERROR: Unable to load dependent library ", path, "\n");
 #if defined(_OS_WINDOWS_)
