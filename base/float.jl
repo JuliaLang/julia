@@ -88,21 +88,18 @@ exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
 exponent_one(::Type{Float64}) =     0x3ff0_0000_0000_0000
 exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
 significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
-exponent_width(::Type{Float64}) = UInt64(11)
 
 sign_mask(::Type{Float32}) =        0x8000_0000
 exponent_mask(::Type{Float32}) =    0x7f80_0000
 exponent_one(::Type{Float32}) =     0x3f80_0000
 exponent_half(::Type{Float32}) =    0x3f00_0000
 significand_mask(::Type{Float32}) = 0x007f_ffff
-exponent_width(::Type{Float32}) = UInt32(8)
 
 sign_mask(::Type{Float16}) =        0x8000
 exponent_mask(::Type{Float16}) =    0x7c00
 exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
-exponent_width(::Type{Float16}) = UInt16(5)
 
 mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
 
@@ -429,12 +426,11 @@ function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
     return m
 end
 
-
-function make_value(number::U, ep) where {U<:Unsigned}
+function _to_float(number::U, ep) where {U<:Unsigned}
     F = floattype(U)
     S = signed(U)
     epint = unsafe_trunc(S,ep)
-    lz::signed(U) = Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F))
+    lz::signed(U) = unsafe_trunc(S, Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F)))
     number <<= lz
     epint -= lz
     bits = U(0)
@@ -447,7 +443,7 @@ function make_value(number::U, ep) where {U<:Unsigned}
     return reinterpret(F, bits)
 end
 
-function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
+function rem_internal(x::T, y::T) where {T<:IEEEFloat}
     xuint = reinterpret(Unsigned, x)
     yuint = reinterpret(Unsigned, y)
     if xuint <= yuint
@@ -460,23 +456,23 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     e_x = unbiased_exponent(x)
     e_y = unbiased_exponent(y)
     # Most common case where |y| is "very normal" and |x/y| < 2^EXPONENT_WIDTH
-    if e_y > uinttype(T)(significand_bits(T)) && (e_x - e_y) <= uinttype(T)(exponent_bits(T))
+    if e_y > (significand_bits(T)) && (e_x - e_y) <= (exponent_bits(T))
         m_x = explicit_mantissa_noinfnan(x)
         m_y = explicit_mantissa_noinfnan(y)
-        d = (e_x == e_y) ? (m_x - m_y) : (m_x << (e_x - e_y)) % m_y
+        d = urem_int((m_x << (e_x - e_y)),  m_y)
         iszero(d) && return zero(T)
-        return make_value(d, e_y - uinttype(T)(1))
+        return _to_float(d, e_y - uinttype(T)(1))
     end
     # Both are subnormals
-    if e_x == uinttype(T)(0) && e_y == uinttype(T)(0)
-        return reinterpret(T, (xuint % yuint) & significand_mask(T))
+    if e_x == (0) && e_y == (0)
+        return reinterpret(T, urem_int(xuint, yuint) & significand_mask(T))
     end
 
     m_x = explicit_mantissa_noinfnan(x)
     e_x -= uinttype(T)(1)
     m_y = explicit_mantissa_noinfnan(y)
-    lz_m_y = uinttype(T)(exponent_width(T))
-    if e_y > uinttype(T)(0)
+    lz_m_y = uinttype(T)(exponent_bits(T))
+    if e_y > (0)
         e_y -= uinttype(T)(1)
     else
         m_y = mantissa(y)
@@ -494,35 +490,33 @@ function fmod_internal(x::T, y::T) where {T<:IEEEFloat}
     exp_diff -= right_shift
     e_y += right_shift
     # Shift hx left until the end or n = 0
-    left_shift = min(exp_diff, uinttype(T)(exponent_width(T)))
+    left_shift = min(exp_diff, uinttype(T)(exponent_bits(T)))
     m_x <<= left_shift
     exp_diff -= left_shift
 
-    m_x %= m_y
+    m_x = urem_int(m_x, m_y)
     iszero(m_x) && return zero(T)
-    iszero(exp_diff) && return make_value(m_x, e_y)
+    iszero(exp_diff) && return _to_float(m_x, e_y)
 
     while exp_diff > sides_zeroes_cnt
         exp_diff -= sides_zeroes_cnt
         m_x <<= sides_zeroes_cnt
-        m_x %= m_y
+        m_x = urem_int(m_x, m_y)
     end
     m_x <<= exp_diff
-    m_x %= m_y
-    return make_value(m_x, e_y)
+    m_x = urem_int(m_x, m_y)
+    return _to_float(m_x, e_y)
 end
 
-function fmod(x::T, y::T) where {T<:IEEEFloat}
+function rem(x::T, y::T) where {T<:IEEEFloat}
     if isfinite(x) && !iszero(x) && isfinite(y) && !iszero(y)
-        return copysign(fmod_internal(abs(x), abs(y)), x)
+        return copysign(rem_internal(abs(x), abs(y)), x)
     elseif isinf(x) || isnan(y) || iszero(y)  # y can still be Inf
         return T(NaN)
     else
         return x
     end
 end
-
-rem(x::T, y::T) where {T<:IEEEFloat} = fmod(x, y)
 
 function mod(x::T, y::T) where {T<:AbstractFloat}
     r = rem(x,y)
