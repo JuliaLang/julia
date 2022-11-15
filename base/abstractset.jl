@@ -499,7 +499,13 @@ function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T})
     m = gcd(step(a), step(b))
     fa, fb = minimum(a), minimum(b)
     if mod(fa - fb, m) == 0
-        shortrg, longrg = argmin(length, (a,b)), argmax(length, (a,b))
+        if length(a) > length(b)
+            longrg = a
+            shortrg = b
+        else
+            longrg = b
+            shortrg = a
+        end
         mis, mil = minimum(shortrg), minimum(longrg)
         mxs, mxl = maximum(shortrg), maximum(longrg)
 
