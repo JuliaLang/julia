@@ -152,6 +152,9 @@ vanishingly unlikely as the pivot selection is randomized in Julia v1.9.
 `PartialQuickSort(k::OrdinalRange)` is similar to `QuickSort`, but the output array is only
 sorted in the range of `k`. For example:
 
+!!! compat "Julia 1.9"
+    The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
+
 ```julia
 x = rand(1:500, 100)
 k = 50:100
@@ -186,7 +189,7 @@ defalg(v::AbstractArray{<:Number}) = MergeSort
 ```
 
 !!! compat "Julia 1.9"
-    The default sorting algorithm is stable from Julia 1.9.
+    The default sorting algorithm is stable since Julia 1.9.
 
 ## Alternate orderings
 
