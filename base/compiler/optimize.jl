@@ -576,7 +576,10 @@ function run_passes(
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "compact 1" ir = compact!(ir)
-    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    # don't inline into toplevel code (which is much slower)
+    if isa(sv.linfo.def, Method)
+        @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    end
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
