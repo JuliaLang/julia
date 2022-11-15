@@ -480,7 +480,7 @@ function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Union{Rea
     (isempty(a) || isempty(b)) && return true
     fa, la = first(a), last(a)
     fb, lb = first(b), last(b)
-    if step(a) < 0
+    if step(a) < zero(a)
         fa, la = la, fa
     end
     if step(b) < 0
