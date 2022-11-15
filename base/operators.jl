@@ -643,8 +643,8 @@ function <<(x::Integer, c::Integer)
     @inline
     0 <= c <= typemax(UInt) && return x << (c % UInt)
     -c <= typemax(UInt) && return x >> (-c % UInt)
-    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
-    oftype(x, -1)
+    (x >= 0 || c >= 0) && return zero(x) << UInt(0)  # for type stability
+    return oftype(x, -1) << UInt(0)
 end
 function <<(x::Integer, c::Unsigned)
     @inline
