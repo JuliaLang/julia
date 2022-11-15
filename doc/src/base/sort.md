@@ -189,7 +189,8 @@ defalg(v::AbstractArray{<:Number}) = MergeSort
 ```
 
 !!! compat "Julia 1.9"
-    The default sorting algorithm is stable since Julia 1.9.
+    The default sorting algorithm (returned by `Base.Sort.defalg` function) is
+    stable since Julia 1.9.
 
 ## Alternate orderings
 
