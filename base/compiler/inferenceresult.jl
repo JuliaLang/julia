@@ -28,7 +28,7 @@ function matching_cache_argtypes(linfo::MethodInstance)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-struct SimpleArgtypes
+struct SimpleArgtypes <: ForwardableArgtypes
     argtypes::Vector{Any}
 end
 
