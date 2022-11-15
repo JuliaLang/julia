@@ -47,16 +47,8 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     else if (jl_is_datatype(t)) {
         jl_datatype_t *dt = (jl_datatype_t*)t;
         assert(jl_object_in_image((jl_value_t*)dt->name) && "type_in_worklist mistake?");
-        for (jl_datatype_t *super = dt->super;
-                super != NULL && super != jl_any_type;
-                super = super->super) {
-            //if (jl_object_in_image((jl_value_t*)super))
-            //    break; // fast-path for rejection
-            if (ptrhash_has(news, (void*)super))
-                return 1;
-            if (!(image_base < (char*)super && (char*)super <= image_base + sizeof_sysimg))
-                break; // fast-path for rejection
-        }
+        if (ptrhash_has(news, (void*)dt->super))
+            return 1;
         jl_svec_t *tt = dt->parameters;
         size_t i, l = jl_svec_len(tt);
         for (i = 0; i < l; i++)

@@ -718,8 +718,12 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
         return;
 
     jl_value_t *t = jl_typeof(v);
-    if (s->incremental && jl_is_datatype(t) && !immediate && needs_uniquing(v))
-        immediate = 1;
+    if (s->incremental && !immediate) {
+        if (jl_is_datatype(t) && needs_uniquing(v))
+            immediate = 1;
+        if (jl_is_datatype_singleton((jl_datatype_t*)t) && needs_uniquing(v))
+            immediate = 1;
+    }
 
     void **bp = ptrhash_bp(&serialization_order, v);
     if (*bp != HT_NOTFOUND) {
