@@ -109,18 +109,26 @@ def p(x):
 # not been specified
 if libgfortran_version == "blank_libgfortran":
     if len(sys.argv) >= 3:
-        libgfortran_version = {
-            "4":  "libgfortran3",
-            "5":  "libgfortran3",
-            "6":  "libgfortran3",
-            "7":  "libgfortran4",
-            "8":  "libgfortran5",
-            "9":  "libgfortran5",
-            "10": "libgfortran5",
-            "11": "libgfortran5",
-            "12": "libgfortran5",
-            "13": "libgfortran5",
-        }[list(filter(lambda x: re.match("\d+\.\d+(\.\d+)?", x), sys.argv[2].split()))[-1].split('.')[0]]
+        # If there was no gfortran/gcc version passed in, default to the latest libgfortran version
+        if not sys.argv[2]:
+            libgfortran_version = "libgfortran5"
+        else:
+            # Grab the first number in the last word with a number
+            # This will be the major version number.
+            major_ver = -1
+            words = sys.argv[2].split()
+            for word in words[::-1]:
+                major_ver = re.search("[0-9]+", word)
+                if major_ver:
+                    major_ver = int(major_ver.group())
+                    break
+
+            if major_ver <= 6:
+                libgfortran_version = "libgfortran3"
+            elif major_ver <= 7:
+                libgfortran_version = "libgfortran4"
+            else:
+                libgfortran_version = "libgfortran5"
 
 if cxx_abi == "blank_cxx_abi":
     if len(sys.argv) == 4:
