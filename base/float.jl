@@ -434,7 +434,7 @@ function _to_float(number::U, ep) where {U<:Unsigned}
     number <<= lz
     epint -= lz
     bits = U(0)
-    if epint >= U(0)
+    if epint >= 0
         bits = number & significand_mask(F)
         bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)
     else
@@ -443,7 +443,7 @@ function _to_float(number::U, ep) where {U<:Unsigned}
     return reinterpret(F, bits)
 end
 
-Base.@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y::T) where {T<:IEEEFloat}
+@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y::T) where {T<:IEEEFloat}
     xuint = reinterpret(Unsigned, x)
     yuint = reinterpret(Unsigned, y)
     if xuint <= yuint
@@ -464,7 +464,7 @@ Base.@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y:
         return _to_float(d, e_y - uinttype(T)(1))
     end
     # Both are subnormals
-    if e_x == (0) && e_y == (0)
+    if e_x == 0 && e_y == 0
         return reinterpret(T, urem_int(xuint, yuint) & significand_mask(T))
     end
 
@@ -472,7 +472,7 @@ Base.@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y:
     e_x -= uinttype(T)(1)
     m_y = explicit_mantissa_noinfnan(y)
     lz_m_y = uinttype(T)(exponent_bits(T))
-    if e_y > (0)
+    if e_y > 0
         e_y -= uinttype(T)(1)
     else
         m_y = mantissa(y)
