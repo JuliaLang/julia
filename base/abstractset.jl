@@ -476,7 +476,7 @@ function isdisjoint(a, b)
     _isdisjoint(a, b)
 end
 
-function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Union{Real,Char}
+function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
     (isempty(a) || isempty(b)) && return true
     fa, la = first(a), last(a)
     fb, lb = first(b), last(b)
