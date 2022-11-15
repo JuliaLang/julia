@@ -435,6 +435,7 @@ end
                    (false, 12:6:18, 9:9:60),
                    (false, 18:6:18, 9:9:60),
                    (true, 1:2:3, 2:3:5),
+                   (true, 1:4:5, 2:1:4),
                    # Chars
                    (true, 'a':'l', 'o':'p'), # not overlapping
                    (false, 'a':'l', 'h':'p'), # partial overlap
