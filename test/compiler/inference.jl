@@ -730,6 +730,7 @@ let fieldtype_tfunc = Core.Compiler.fieldtype_tfunc,
     @test fieldtype_tfunc(Type{Union{Base.RefValue{T}, Type{Int32}}} where {T<:Real}, Const(:x)) == Type{<:Real}
     @test fieldtype_tfunc(Type{<:Tuple}, Const(1)) == Any
     @test fieldtype_tfunc(Type{<:Tuple}, Any) == Any
+    @test fieldtype_tfunc(Const(Base.RefValue{Union{Int64, Float64}}), Const(:x)) == Const(Union{Int64, Float64})
     @test fieldtype_nothrow(Type{Base.RefValue{<:Real}}, Const(:x))
     @test !fieldtype_nothrow(Type{Union{}}, Const(:x))
     @test !fieldtype_nothrow(Union{Type{Base.RefValue{T}}, Int32} where {T<:Real}, Const(:x))

@@ -1215,7 +1215,7 @@ swapfield!_tfunc(o, f, v) = (@nospecialize; getfield_tfunc(o, f))
 modifyfield!_tfunc(o, f, op, v, order) = (@nospecialize; modifyfield!_tfunc(o, f, op, v))
 function modifyfield!_tfunc(o, f, op, v)
     @nospecialize
-    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T = _fieldtype_tfunc(o, isconcretetype(o), isa(o, Const) || hasuniquerep(o), f)
     T === Bottom && return Bottom
     PT = Const(Pair)
     return instanceof_tfunc(apply_type_tfunc(PT, T, T))[1]
@@ -1253,7 +1253,7 @@ replacefield!_tfunc(o, f, x, v, success_order, failure_order) = (@nospecialize; 
 replacefield!_tfunc(o, f, x, v, success_order) = (@nospecialize; replacefield!_tfunc(o, f, x, v))
 function replacefield!_tfunc(o, f, x, v)
     @nospecialize
-    T = _fieldtype_tfunc(o, isconcretetype(o), f)
+    T = _fieldtype_tfunc(o, isconcretetype(o), isa(o, Const) || hasuniquerep(o), f)
     T === Bottom && return Bottom
     PT = Const(ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T)
     return instanceof_tfunc(apply_type_tfunc(PT, T))[1]
@@ -1352,15 +1352,15 @@ function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
 
     s, exact = instanceof_tfunc(s0)
     s === Bottom && return Bottom
-    return _fieldtype_tfunc(s, exact, name)
+    return _fieldtype_tfunc(s, exact, isa(s0, Const) || hasuniquerep(s0), name)
 end
 
-function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
+function _fieldtype_tfunc(@nospecialize(s), exact::Bool, s_uniquerep::Bool, @nospecialize(name))
     exact = exact && !has_free_typevars(s)
     u = unwrap_unionall(s)
     if isa(u, Union)
-        ta0 = _fieldtype_tfunc(rewrap_unionall(u.a, s), exact, name)
-        tb0 = _fieldtype_tfunc(rewrap_unionall(u.b, s), exact, name)
+        ta0 = _fieldtype_tfunc(rewrap_unionall(u.a, s), exact, s_uniquerep, name)
+        tb0 = _fieldtype_tfunc(rewrap_unionall(u.b, s), exact, s_uniquerep, name)
         ta0 ⊑ tb0 && return tb0
         tb0 ⊑ ta0 && return ta0
         ta, exacta, _, istypea = instanceof_tfunc(ta0)
@@ -1442,15 +1442,16 @@ function _fieldtype_tfunc(@nospecialize(s), exact::Bool, @nospecialize(name))
         return Const(ft)
     end
 
-    exactft = exact || (!has_free_typevars(ft) && u.name !== Tuple.name)
+    exactft = !has_free_typevars(ft)
     ft = rewrap_unionall(ft, s)
-    if exactft
+    if exact && s_uniquerep
+        return Const(ft)
+    elseif exact || (exactft && u.name !== Tuple.name)
         if hasuniquerep(ft)
             return Const(ft) # ft unique via type cache
         end
         return Type{ft}
-    end
-    if u.name === Tuple.name && ft === Any
+    elseif u.name === Tuple.name && ft === Any
         # Tuple{:x} is possible
         return Any
     end
