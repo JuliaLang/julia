@@ -107,6 +107,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
     val = pure_eval_call(interp, f, applicable, arginfo)
     val !== nothing && return CallMeta(val, all_effects, MethodResultPure(info)) # TODO: add some sort of edge(s)
 
+    𝕃ₚ = ipo_lattice(interp)
     for i in 1:napplicable
         match = applicable[i]::MethodMatch
         method = match.method
@@ -179,8 +180,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         end
         @assert !(this_conditional isa Conditional) "invalid lattice element returned from inter-procedural context"
         seen += 1
-        rettype = tmerge(ipo_lattice(interp), rettype, this_rt)
-        if this_conditional !== Bottom && is_lattice_bool(ipo_lattice(interp), rettype) && fargs !== nothing
+        rettype = tmerge(𝕃ₚ, rettype, this_rt)
+        if has_conditional(𝕃ₚ) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, rettype) && fargs !== nothing
             if conditionals === nothing
                 conditionals = Any[Bottom for _ in 1:length(argtypes)],
                                Any[Bottom for _ in 1:length(argtypes)]
@@ -211,7 +212,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         all_effects = Effects(all_effects; nothrow=false)
     end
 
-    rettype = from_interprocedural!(ipo_lattice(interp), rettype, sv, arginfo, conditionals)
+    rettype = from_interprocedural!(𝕃ₚ, rettype, sv, arginfo, conditionals)
 
     # Also considering inferring the compilation signature for this method, so
     # it is available to the compiler in case it ends up needing it.
@@ -349,7 +350,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
 end
 
 """
-    from_interprocedural!(ipo_lattice::AbstractLattice, rt, sv::InferenceState, arginfo::ArgInfo, maybecondinfo) -> newrt
+    from_interprocedural!(𝕃ₚ::AbstractLattice, rt, sv::InferenceState, arginfo::ArgInfo, maybecondinfo) -> newrt
 
 Converts inter-procedural return type `rt` into a local lattice element `newrt`,
 that is appropriate in the context of current local analysis frame `sv`, especially:
@@ -368,13 +369,13 @@ In such cases `maybecondinfo` should be either of:
 When we deal with multiple `MethodMatch`es, it's better to precompute `maybecondinfo` by
 `tmerge`ing argument signature type of each method call.
 """
-function from_interprocedural!(ipo_lattice::AbstractLattice, @nospecialize(rt), sv::InferenceState, arginfo::ArgInfo, @nospecialize(maybecondinfo))
+function from_interprocedural!(𝕃ₚ::AbstractLattice, @nospecialize(rt), sv::InferenceState, arginfo::ArgInfo, @nospecialize(maybecondinfo))
     rt = collect_limitations!(rt, sv)
-    if is_lattice_bool(ipo_lattice, rt)
+    if is_lattice_bool(𝕃ₚ, rt)
         if maybecondinfo === nothing
             rt = widenconditional(rt)
         else
-            rt = from_interconditional(ipo_lattice, rt, sv, arginfo, maybecondinfo)
+            rt = from_interconditional(𝕃ₚ, rt, sv, arginfo, maybecondinfo)
         end
     end
     @assert !(rt isa InterConditional) "invalid lattice element returned from inter-procedural context"
@@ -389,9 +390,10 @@ function collect_limitations!(@nospecialize(typ), sv::InferenceState)
     return typ
 end
 
-function from_interconditional(ipo_lattice::AbstractLattice, @nospecialize(typ),
+function from_interconditional(𝕃ₚ::AbstractLattice, @nospecialize(typ),
         sv::InferenceState, (; fargs, argtypes)::ArgInfo, @nospecialize(maybecondinfo))
-    lattice = widenlattice(ipo_lattice)
+    𝕃 = widenlattice(𝕃ₚ)
+    has_conditional(𝕃ₚ) || return widenconditional(typ)
     fargs === nothing && return widenconditional(typ)
     slot = 0
     thentype = elsetype = Any
@@ -417,21 +419,21 @@ function from_interconditional(ipo_lattice::AbstractLattice, @nospecialize(typ),
             end
             if condval === false
                 thentype = Bottom
-            elseif ⊑(lattice, new_thentype, thentype)
+            elseif ⊑(𝕃, new_thentype, thentype)
                 thentype = new_thentype
             else
-                thentype = tmeet(lattice, thentype, widenconst(new_thentype))
+                thentype = tmeet(𝕃, thentype, widenconst(new_thentype))
             end
             if condval === true
                 elsetype = Bottom
-            elseif ⊑(lattice, new_elsetype, elsetype)
+            elseif ⊑(𝕃, new_elsetype, elsetype)
                 elsetype = new_elsetype
             else
-                elsetype = tmeet(lattice, elsetype, widenconst(new_elsetype))
+                elsetype = tmeet(𝕃, elsetype, widenconst(new_elsetype))
             end
-            if (slot > 0 || condval !== false) && ⋤(lattice, thentype, old)
+            if (slot > 0 || condval !== false) && ⋤(𝕃, thentype, old)
                 slot = id
-            elseif (slot > 0 || condval !== true) && ⋤(lattice, elsetype, old)
+            elseif (slot > 0 || condval !== true) && ⋤(𝕃, elsetype, old)
                 slot = id
             else # reset: no new useful information for this slot
                 thentype = elsetype = Any
@@ -847,8 +849,8 @@ function concrete_eval_call(interp::AbstractInterpreter,
     end
 end
 
-has_conditional(argtypes::Vector{Any}) = any(@nospecialize(x)->isa(x, Conditional), argtypes)
-has_conditional((; argtypes)::ArgInfo) = has_conditional(argtypes)
+any_conditional(argtypes::Vector{Any}) = any(@nospecialize(x)->isa(x, Conditional), argtypes)
+any_conditional(arginfo::ArgInfo) = any_conditional(arginfo.argtypes)
 
 function const_prop_enabled(interp::AbstractInterpreter, sv::InferenceState, match::MethodMatch)
     if !InferenceParams(interp).ipo_constant_propagation
@@ -954,7 +956,7 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     mi = maybe_get_const_prop_profitable(interp, result, f, arginfo, si, match, sv)
     mi === nothing && return nothing
     # try semi-concrete evaluation
-    if res::Bool && !has_conditional(arginfo)
+    if res::Bool && !any_conditional(arginfo)
         mi_cache = WorldView(code_cache(interp), sv.world)
         code = get(mi_cache, mi, nothing)
         if code !== nothing
@@ -970,7 +972,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
     end
     # try constant prop'
     inf_cache = get_inference_cache(interp)
-    inf_result = cache_lookup(typeinf_lattice(interp), mi, arginfo.argtypes, inf_cache)
+    𝕃ᵢ = typeinf_lattice(interp)
+    inf_result = cache_lookup(𝕃ᵢ, mi, arginfo.argtypes, inf_cache)
     if inf_result === nothing
         # if there might be a cycle, check to make sure we don't end up
         # calling ourselves here.
@@ -983,7 +986,8 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             add_remark!(interp, sv, "[constprop] Edge cycle encountered")
             return nothing
         end
-        inf_result = InferenceResult(mi, ConditionalArgtypes(arginfo, sv))
+        argtypes = has_conditional(𝕃ᵢ) ? ConditionalArgtypes(arginfo, sv) : SimpleArgtypes(arginfo.argtypes)
+        inf_result = InferenceResult(mi, argtypes)
         if !any(inf_result.overridden_by_const)
             add_remark!(interp, sv, "[constprop] Could not handle constant info in matching_cache_argtypes")
             return nothing
@@ -1572,9 +1576,9 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                                sv::Union{InferenceState, IRCode}, max_methods::Int)
     @nospecialize f
     la = length(argtypes)
-    lattice = typeinf_lattice(interp)
-    ⊑ᵢ = ⊑(lattice)
-    if f === Core.ifelse && fargs isa Vector{Any} && la == 4
+    𝕃ᵢ = typeinf_lattice(interp)
+    ⊑ᵢ = ⊑(𝕃ᵢ)
+    if has_conditional(𝕃ᵢ) && f === Core.ifelse && fargs isa Vector{Any} && la == 4
         cnd = argtypes[2]
         if isa(cnd, Conditional)
             newcnd = widenconditional(cnd)
@@ -1588,17 +1592,17 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 a = ssa_def_slot(fargs[3], sv)
                 b = ssa_def_slot(fargs[4], sv)
                 if isa(a, SlotNumber) && cnd.slot == slot_id(a)
-                    tx = (cnd.thentype ⊑ᵢ tx ? cnd.thentype : tmeet(lattice, tx, widenconst(cnd.thentype)))
+                    tx = (cnd.thentype ⊑ᵢ tx ? cnd.thentype : tmeet(𝕃ᵢ, tx, widenconst(cnd.thentype)))
                 end
                 if isa(b, SlotNumber) && cnd.slot == slot_id(b)
-                    ty = (cnd.elsetype ⊑ᵢ ty ? cnd.elsetype : tmeet(lattice, ty, widenconst(cnd.elsetype)))
+                    ty = (cnd.elsetype ⊑ᵢ ty ? cnd.elsetype : tmeet(𝕃ᵢ, ty, widenconst(cnd.elsetype)))
                 end
-                return tmerge(lattice, tx, ty)
+                return tmerge(𝕃ᵢ, tx, ty)
             end
         end
     end
     rt = builtin_tfunction(interp, f, argtypes[2:end], sv)
-    if (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
+    if has_conditional(𝕃ᵢ) && (rt === Bool || (isa(rt, Const) && isa(rt.val, Bool))) && isa(fargs, Vector{Any})
         # perform very limited back-propagation of type information for `is` and `isa`
         if f === isa
             a = ssa_def_slot(fargs[2], sv)
@@ -1816,6 +1820,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     (; fargs, argtypes) = arginfo
     la = length(argtypes)
 
+    𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
             return abstract_apply(interp, argtypes, si, sv, max_methods)
@@ -1827,7 +1832,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_finalizer(interp, argtypes, sv)
         end
         rt = abstract_call_builtin(interp, f, arginfo, sv, max_methods)
-        effects = builtin_effects(typeinf_lattice(interp), f, argtypes[2:end], rt)
+        effects = builtin_effects(𝕃ᵢ, f, argtypes[2:end], rt)
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information

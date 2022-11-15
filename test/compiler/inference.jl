@@ -1438,8 +1438,9 @@ end
 
 let egal_tfunc
     function egal_tfunc(a, b)
-        r = Core.Compiler.egal_tfunc(a, b)
-        @test r === Core.Compiler.egal_tfunc(b, a)
+        𝕃 = Core.Compiler.fallback_lattice
+        r = Core.Compiler.egal_tfunc(𝕃, a, b)
+        @test r === Core.Compiler.egal_tfunc(𝕃, b, a)
         return r
     end
     @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)

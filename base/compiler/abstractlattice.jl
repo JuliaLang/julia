@@ -153,6 +153,10 @@ has_nontrivial_const_info(lattice::AbstractLattice, @nospecialize t) =
     has_nontrivial_const_info(widenlattice(lattice), t)
 has_nontrivial_const_info(::JLTypeLattice, @nospecialize(t)) = false
 
+has_conditional(𝕃::AbstractLattice) = has_conditional(widenlattice(𝕃))
+has_conditional(::AnyConditionalsLattice) = true
+has_conditional(::JLTypeLattice) = false
+
 # Curried versions
 ⊑(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(lattice, a, b)
 ⊏(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊏(lattice, a, b)
