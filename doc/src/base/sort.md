@@ -156,10 +156,10 @@ sorted in the range of `k`. For example:
     The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
 
 ```julia
-x = rand(1:500, 100)
-k = 50:100
-s1 = sort(x; alg=QuickSort)
-s2 = sort(x; alg=PartialQuickSort(k))
+x = rand(1:500, 100);
+k = 50:100;
+s1 = sort(x; alg=QuickSort);
+s2 = sort(x; alg=PartialQuickSort(k));
 map(issorted, (s1, s2))           # => (true, false)
 map(x->issorted(x[k]), (s1, s2))  # => (true, true)
 s1[k] == s2[k]                    # => true
