@@ -948,8 +948,8 @@ struct PartialQuickSort{L<:Union{Integer,Missing}, H<:Union{Integer,Missing}, T<
     hi::H
     next::T
 end
-PartialQuickSort(k::Integer) = InitialOptimizations(PartialQuickSort(missing, k, SMALL_ALGORITHM))
-PartialQuickSort(k::OrdinalRange) = InitialOptimizations(PartialQuickSort(first(k), last(k), SMALL_ALGORITHM))
+PartialQuickSort(k::Integer) = PartialQuickSort(missing, k, SMALL_ALGORITHM)
+PartialQuickSort(k::OrdinalRange) = PartialQuickSort(first(k), last(k), SMALL_ALGORITHM)
 _PartialQuickSort(k::Integer) = InitialOptimizations(PartialQuickSort(k:k))
 _PartialQuickSort(k::OrdinalRange) = InitialOptimizations(PartialQuickSort(k))
 
