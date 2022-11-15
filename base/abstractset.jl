@@ -483,7 +483,7 @@ function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Union{Rea
     if step(a) < zero(a)
         fa, la = la, fa
     end
-    if step(b) < 0
+    if step(b) < zero(b)
         fb, lb = lb, fb
     end
     not_overlapping = (la < fb) | (lb < fa)
