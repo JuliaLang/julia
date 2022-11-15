@@ -4772,7 +4772,7 @@ static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const std::str
     return emit_condition(ctx, emit_expr(ctx, cond), msg);
 }
 
-static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
+static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result, Value* world_age_field)
 {
     if (jl_is_ssavalue(expr) && ssaval_result == -1)
         return; // value not used, no point in attempting codegen for it
@@ -4826,6 +4826,14 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         return;
     }
     else {
+        if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
+            // we're at toplevel; insert an atomic barrier between every instruction
+            // TODO: inference is invalid if this has any effect (which it often does)
+            LoadInst *world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
+                prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+            world->setOrdering(AtomicOrdering::Monotonic);
+            ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
+        }
         assert(ssaval_result != -1);
         emit_ssaval_assign(ctx, ssaval_result, expr);
     }
@@ -7786,15 +7794,7 @@ static jl_llvm_functions_t
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
-            if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
-                // we're at toplevel; insert an atomic barrier between every instruction
-                // TODO: inference is invalid if this has any effect (which it often does)
-                LoadInst *world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
-                    prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-                world->setOrdering(AtomicOrdering::Monotonic);
-                ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
-            }
-            emit_stmtpos(ctx, stmt, cursor);
+            emit_stmtpos(ctx, stmt, cursor, world_age_field);
             mallocVisitStmt(debuginfoloc, nullptr);
         }
         find_next_stmt(cursor + 1);
