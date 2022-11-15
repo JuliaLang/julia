@@ -518,10 +518,10 @@ function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T})
         else
             if (mis < mil) & signbit(step(shortrg)) || (mxs > mxl) & ~signbit(step(shortrg))
                 return invoke(isdisjoint, Tuple{Any,Any},
-                    shortrg[begin:end-overlapping+1], longrg)
+                    shortrg[begin:min(end-overlapping+1,end)], longrg)
             elseif (mis < mil) & ~signbit(step(shortrg)) || (mxs > mxl) & signbit(step(shortrg))
                 return invoke(isdisjoint, Tuple{Any,Any},
-                    shortrg[begin+overlapping-1:end], longrg)
+                    shortrg[max(begin+overlapping-1,begin):end], longrg)
             else
                 return invoke(isdisjoint, Tuple{Any,Any}, shortrg, longrg)
             end
