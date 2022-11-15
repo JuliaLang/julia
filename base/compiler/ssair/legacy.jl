@@ -11,7 +11,7 @@ the original `ci::CodeInfo` are modified.
 function inflate_ir!(ci::CodeInfo, linfo::MethodInstance)
     sptypes = sptypes_from_meth_instance(linfo)
     if ci.inferred
-        argtypes, _ = matching_cache_argtypes(linfo, nothing)
+        argtypes, _ = matching_cache_argtypes(linfo)
     else
         argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
     end
@@ -39,7 +39,7 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{Any}, argtypes::Vector{Any})
     if !isa(ssavaluetypes, Vector{Any})
         ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
     end
-    info = Any[nothing for i = 1:nstmts]
+    info = CallInfo[NoCallInfo() for i = 1:nstmts]
     stmts = InstructionStream(code, ssavaluetypes, info, ci.codelocs, ci.ssaflags)
     linetable = ci.linetable
     if !isa(linetable, Vector{LineInfoNode})

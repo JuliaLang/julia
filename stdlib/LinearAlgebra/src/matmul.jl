@@ -57,8 +57,8 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::Transpose{<:Any,<:AbstractMatrix}) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix}) = reshape(a, length(a), 1) * adjB
+(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
+(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
 @inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -66,7 +66,7 @@ end
     gemv!(y, 'N', A, x, alpha, beta)
 
 # Complex matrix times real vector.
-# Reinterpret the matrix as a real matrix and do real matvec compuation.
+# Reinterpret the matrix as a real matrix and do real matvec computation.
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
         alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, 'N', A, x, alpha, beta)
@@ -469,7 +469,7 @@ end
 
 # Supporting functions for matrix multiplication
 
-# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+# copy transposed(adjoint) of upper(lower) side-diagonals. Optionally include diagonal.
 @inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
     off = diag ? 0 : 1

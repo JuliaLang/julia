@@ -201,7 +201,7 @@ function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::Optimizati
                 cache_escapes!(interp, caller, state, cccopy(ir))
             end
         catch err
-            @error "error happened within [IPO EA], insepct `Main.ir` and `Main.nargs`"
+            @error "error happened within [IPO EA], inspect `Main.ir` and `Main.nargs`"
             @eval Main (ir = $ir; nargs = $nargs)
             rethrow(err)
         end
@@ -212,14 +212,14 @@ function run_passes_with_ea(interp::EscapeAnalyzer, ci::CodeInfo, sv::Optimizati
         interp.state = state
         interp.linfo = sv.linfo
     end
-    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, ir.linetable, sv.inlining, ci.propagate_inbounds)
+    @timeit "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @timeit "compact 2" ir = compact!(ir)
     if caller.linfo.specTypes === interp.entry_tt && interp.optimize
         try
             @timeit "[Local EA]" state = analyze_escapes(ir, nargs, true, get_escape_cache(interp))
         catch err
-            @error "error happened within [Local EA], insepct `Main.ir` and `Main.nargs`"
+            @error "error happened within [Local EA], inspect `Main.ir` and `Main.nargs`"
             @eval Main (ir = $ir; nargs = $nargs)
             rethrow(err)
         end

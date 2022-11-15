@@ -201,7 +201,7 @@ function show(
 )
     # compute limit in default case
     if limit === nothing
-        get(io, :limit, false) || return show(io, str)
+        get(io, :limit, false)::Bool || return show(io, str)
         limit = max(20, displaysize(io)[2])
         # one line in collection, seven otherwise
         get(io, :typeinfo, nothing) === nothing && (limit *= 7)

@@ -153,7 +153,9 @@ static bool demoteFloat16(Function &F)
     if (erase.size() > 0) {
         for (auto V : erase)
             V->eraseFromParent();
+#ifdef JL_VERIFY_PASSES
         assert(!verifyFunction(F, &errs()));
+#endif
         return true;
     }
     else

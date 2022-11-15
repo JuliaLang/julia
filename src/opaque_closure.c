@@ -110,9 +110,6 @@ JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
         uint32_t ipo_effects, uint32_t effects, jl_value_t *argescapes,
         uint8_t relocatability);
 
-JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
-                                     jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
-
 JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tupletype_t *argt, jl_value_t *rt_lb, jl_value_t *rt_ub,
     jl_module_t *mod, jl_code_info_t *ci, int lineno, jl_value_t *file, int nargs, int isva, jl_value_t *env)
 {

@@ -53,8 +53,8 @@ class GCChecker
           check::Location> {
   mutable std::unique_ptr<BugType> BT;
   template <typename callback>
-  void report_error(callback f, CheckerContext &C, const char *message) const;
-  void report_error(CheckerContext &C, const char *message) const {
+  void report_error(callback f, CheckerContext &C, StringRef message) const;
+  void report_error(CheckerContext &C, StringRef message) const {
     return report_error([](PathSensitiveBugReport *) {}, C, message);
   }
   void
@@ -509,7 +509,7 @@ PDP GCChecker::GCValueBugVisitor::VisitNode(const ExplodedNode *N,
 
 template <typename callback>
 void GCChecker::report_error(callback f, CheckerContext &C,
-                             const char *message) const {
+                             StringRef message) const {
   // Generate an error node.
   ExplodedNode *N = C.generateErrorNode();
   if (!N)
@@ -745,6 +745,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.endswith_lower("jl_method_match_t") ||
                    Name.endswith_lower("jl_vararg_t") ||
                    Name.endswith_lower("jl_opaque_closure_t") ||
+                   Name.endswith_lower("jl_globalref_t") ||
                    // Probably not technically true for these, but let's allow it
                    Name.endswith_lower("typemap_intersection_env") ||
                    Name.endswith_lower("interpreter_state") ||
@@ -1229,8 +1230,15 @@ void GCChecker::checkPreCall(const CallEvent &Call, CheckerContext &C) const {
     // We could separate out "not safepoint, except for noreturn functions",
     // but that seems like a lot of effort with little benefit.
     if (!FD || !FD->isNoReturn()) {
-      report_error(C, "Calling potential safepoint from function annotated "
-                      "JL_NOTSAFEPOINT");
+      report_error(
+          [&](PathSensitiveBugReport *Report) {
+            if (FD)
+              Report->addNote(
+                  "Tried to call method defined here",
+                  PathDiagnosticLocation::create(FD, C.getSourceManager()));
+          },
+          C, ("Calling potential safepoint as " +
+              Call.getKindAsString() + " from function annotated JL_NOTSAFEPOINT").str());
       return;
     }
   }

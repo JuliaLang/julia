@@ -18,12 +18,12 @@ GPL licensed. We do hope to have a non-GPL distribution of Julia in the future.
 Versioning and Git
 ------------------
 The Makefile uses both the `VERSION` file and commit hashes and tags from the
-git repository to generate the `version_git.jl` with information we use to
+git repository to generate the `base/version_git.jl` with information we use to
 fill the splash screen and the `versioninfo()` output. If you for some reason
 don't want to have the git repository available when building you should
-pre-generate the `version_git.jl` file with:
+pregenerate the `base/version_git.jl` file with:
 
-    make -C base version_git.jl
+    make -C base version_git.jl.phony
 
 Julia has lots of build dependencies where we use patched versions that has not
 yet been included by the popular package managers. These dependencies will usually

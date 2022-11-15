@@ -248,7 +248,6 @@ end
 
 Construct the symmetric difference of elements in the passed in sets.
 When `s` is not an `AbstractSet`, the order is maintained.
-Note that in this case the multiplicity of elements matters.
 
 See also [`symdiff!`](@ref), [`setdiff`](@ref), [`union`](@ref) and [`intersect`](@ref).
 
@@ -261,11 +260,6 @@ julia> symdiff([1,2,3], [3,4,5], [4,5,6])
  6
 
 julia> symdiff([1,2,1], [2, 1, 2])
-2-element Vector{Int64}:
- 1
- 2
-
-julia> symdiff(unique([1,2,1]), unique([2, 1, 2]))
 Int64[]
 ```
 """
@@ -286,7 +280,9 @@ function symdiff!(s::AbstractSet, itrs...)
     return s
 end
 
-function symdiff!(s::AbstractSet, itr)
+symdiff!(s::AbstractSet, itr) = symdiff!(s::AbstractSet, Set(itr))
+
+function symdiff!(s::AbstractSet, itr::AbstractSet)
     for x in itr
         x in s ? delete!(s, x) : push!(s, x)
     end

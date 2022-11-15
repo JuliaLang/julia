@@ -518,8 +518,10 @@ end
         @test !(3.5 in 1:5)
         @test (3 in 1:5)
         @test (3 in 5:-1:1)
-        #@test (3 in 3+0*(1:5))
-        #@test !(4 in 3+0*(1:5))
+        @test (3 in 3 .+ 0*(1:5))
+        @test !(4 in 3 .+ 0*(1:5))
+        @test 0. in (0. .* (1:10))
+        @test !(0.1 in (0. .* (1:10)))
 
         let r = 0.0:0.01:1.0
             @test (r[30] in r)
@@ -536,8 +538,17 @@ end
             x = (NaN16, Inf32, -Inf64, 1//0, -1//0)
             @test !(x in r)
         end
+
+        @test 1e40 ∉ 0:1.0 # Issue #45747
+        @test 1e20 ∉ 0:1e-20:1e-20
+        @test 1e20 ∉ 0:1e-20
+        @test 1.0  ∉ 0:1e-20:1e-20
+        @test 0.5  ∉ 0:1e-20:1e-20
+        @test 1    ∉ 0:1e-20:1e-20
+
+        @test_broken 17.0 ∈ 0:1e40 # Don't support really long ranges
     end
-    @testset "in() works across types, including non-numeric types (#21728)" begin
+    @testset "in() works across types, including non-numeric types (#21728 and #45646)" begin
         @test 1//1 in 1:3
         @test 1//1 in 1.0:3.0
         @test !(5//1 in 1:3)
@@ -558,6 +569,22 @@ end
         @test !(Complex(1, 0) in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !(π in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
         @test !("a" in Date(2017, 01, 01):Dates.Day(1):Date(2017, 01, 05))
+
+        # We use Ducks because of their propensity to stand in a row and because we know
+        # that no additional methods (e.g. isfinite) are defined specifically for Ducks.
+        struct Duck
+            location::Int
+        end
+        Base.:+(x::Duck, y::Int) = Duck(x.location + y)
+        Base.:-(x::Duck, y::Int) = Duck(x.location - y)
+        Base.:-(x::Duck, y::Duck) = x.location - y.location
+        Base.isless(x::Duck, y::Duck) = isless(x.location, y.location)
+
+        @test Duck(3) ∈ Duck(1):2:Duck(5)
+        @test Duck(3) ∈ Duck(5):-2:Duck(2)
+        @test Duck(4) ∉ Duck(5):-2:Duck(1)
+        @test Duck(4) ∈ Duck(1):Duck(5)
+        @test Duck(0) ∉ Duck(1):Duck(5)
     end
 end
 @testset "indexing range with empty range (#4309)" begin

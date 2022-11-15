@@ -445,6 +445,7 @@ export
     sortperm!,
     sortslices,
     dropdims,
+    stack,
     step,
     stride,
     strides,
@@ -771,6 +772,7 @@ export
 # syntax
     esc,
     gensym,
+    @kwdef,
     macroexpand,
     @macroexpand1,
     @macroexpand,
@@ -1016,6 +1018,7 @@ export
     @timev,
     @elapsed,
     @allocated,
+    @allocations,
 
     # tasks
     @sync,

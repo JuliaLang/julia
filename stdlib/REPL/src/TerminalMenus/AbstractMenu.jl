@@ -131,7 +131,7 @@ end
 """
     header(m::AbstractMenu) -> String
 
-Returns a header string to be printed above the menu.
+Return a header string to be printed above the menu.
 Defaults to "".
 """
 header(m::AbstractMenu) = ""

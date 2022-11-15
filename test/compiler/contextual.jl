@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Cassette
+# ========
+
 module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
     # fancy features, but sufficient to exercise this code path in the compiler.
@@ -129,17 +132,12 @@ foo(i) = i+bar(Val(1))
 # Check that misbehaving pure functions propagate their error
 Base.@pure func1() = 42
 Base.@pure func2() = (this_is_an_exception; func1())
-
-let method = which(func2, ())
-    mi = Core.Compiler.specialize_method(method, Tuple{typeof(func2)}, Core.svec())
-    mi.inInference = true
-end
 func3() = func2()
 @test_throws UndefVarError func3()
 
 
-
-## overlay method tables
+# overlay method tables
+# =====================
 
 module OverlayModule
 
@@ -157,7 +155,7 @@ end
 # parametric function def
 @overlay mt tan(x::T) where {T} = 3
 
-end
+end # module OverlayModule
 
 methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, nothing, 1, Base.get_world_counter())
 @test only(methods).method.module === Base.Math

@@ -529,7 +529,7 @@ end
             @test mapreduce(cos, *, collect(skipmissing(A))) ≈ mapreduce(cos, *, skipmissing(A))
         end
 
-        # Patterns that exercize code paths for inputs with 1 or 2 non-missing values
+        # Patterns that exercise code paths for inputs with 1 or 2 non-missing values
         @test sum(skipmissing([1, missing, missing, missing])) === 1
         @test sum(skipmissing([missing, missing, missing, 1])) === 1
         @test sum(skipmissing([1, missing, missing, missing, 2])) === 3

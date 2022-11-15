@@ -200,7 +200,7 @@ end
     Bu2 = 2 .* Bl
     @test typeof(Bl2) <: Bidiagonal && Bl2.uplo == 'L'
 
-    # Example of Nested Brodacasts
+    # Example of Nested Broadcasts
     tmp = (1 .* 2) .* (Bidiagonal(1:3, 1:2, 'U') .* (3 .* 4)) .* (5 .* Bidiagonal(1:3, 1:2, 'L'))
     @test typeof(tmp) <: Tridiagonal
 

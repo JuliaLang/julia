@@ -210,7 +210,7 @@ unique(r::AbstractRange) = allunique(r) ? r : oftype(r, r[begin:begin])
 """
     unique(f, itr)
 
-Returns an array containing one value from `itr` for each unique value produced by `f`
+Return an array containing one value from `itr` for each unique value produced by `f`
 applied to elements of `itr`.
 
 # Examples
@@ -548,7 +548,7 @@ function hash(s::AbstractSet, h::UInt)
 end
 
 convert(::Type{T}, s::T) where {T<:AbstractSet} = s
-convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)
+convert(::Type{T}, s::AbstractSet) where {T<:AbstractSet} = T(s)::T
 
 
 ## replace/replace! ##

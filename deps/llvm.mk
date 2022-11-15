@@ -56,6 +56,9 @@ endif
 ifeq ($(BUILD_LIBCXX), 1)
 LLVM_ENABLE_RUNTIMES := $(LLVM_ENABLE_RUNTIMES);libcxx;libcxxabi
 endif
+ifeq ($(BUILD_LLD), 1)
+LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
+endif
 
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
@@ -309,6 +312,6 @@ $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
-install-lld install-clang install-llvm-tools: install-llvm
-
 endif # USE_BINARYBUILDER_LLVM
+
+install-lld install-clang install-llvm-tools: install-llvm

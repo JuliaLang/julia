@@ -20,7 +20,7 @@ $(build_datarootdir)/julia/stdlib/$(VERSDIR):
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
        BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
-       LLVMUNWIND CSL UNWIND
+       LLVMUNWIND CSL UNWIND LLD
 
 # Initialize this with JLLs that aren't in "deps/$(LibName).version"
 JLL_NAMES := MozillaCACerts_jll

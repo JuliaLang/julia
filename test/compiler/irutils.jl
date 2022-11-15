@@ -8,6 +8,7 @@ get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
+issplatnew(@nospecialize x) = isexpr(x, :splatnew)
 isreturn(@nospecialize x) = isa(x, ReturnNode)
 
 # check if `x` is a dynamic call of a given function
@@ -17,7 +18,12 @@ function iscall((src, f)::Tuple{IR,Base.Callable}, @nospecialize(x)) where IR<:U
         singleton_type(argextype(x, src)) === f
     end
 end
-iscall(pred::Base.Callable, @nospecialize(x)) = isexpr(x, :call) && pred(x.args[1])
+function iscall(pred::Base.Callable, @nospecialize(x))
+    if isexpr(x, :(=))
+        x = x.args[2]
+    end
+    return isexpr(x, :call) && pred(x.args[1])
+end
 
 # check if `x` is a statically-resolved call of a function whose name is `sym`
 isinvoke(y) = @nospecialize(x) -> isinvoke(y, x)

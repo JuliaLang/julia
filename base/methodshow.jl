@@ -11,7 +11,7 @@ function strip_gensym(sym)
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[unwrapva(min(i, end))]
+    t = unwrapva(sig.parameters[min(i, end)])
     if i == nargs && isva
         va = sig.parameters[end]
         if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
@@ -78,12 +78,8 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    if m.sig === Tuple # OpaqueClosure
-        return Symbol[]
-    end
-    mt = get_methodtable(m)
-    if isdefined(mt, :kwsorter)
-        kwtype = typeof(mt.kwsorter)
+    if m.sig !== Tuple # OpaqueClosure or Builtin
+        kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
@@ -164,7 +160,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 """
     functionloc(m::Method)
 
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+Return a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
     file, ln = updated_methodloc(m)
@@ -177,7 +173,7 @@ end
 """
     functionloc(f::Function, types)
 
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
 
@@ -247,7 +243,7 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
     end
 
     # module & file, re-using function from errorshow.jl
-    if get(io, :compact, false) # single-line mode
+    if get(io, :compact, false)::Bool # single-line mode
         print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width)
     else
         println(io)
@@ -268,7 +264,7 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && last(ms).sig === Tuple ?
+               : mt.module === Core && mt.defs isa Core.TypeMapEntry && (mt.defs.func::Method).sig === Tuple ?
                     "builtin function"
                : # else
                     "generic function")
@@ -472,6 +468,8 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
             push!(last_shown_line_infos, (string(file), line))
         end
     end
+    first && summary(io, mt)
+    nothing
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
@@ -484,4 +482,5 @@ function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
         end
         print(io, "</ul>")
     end
+    nothing
 end

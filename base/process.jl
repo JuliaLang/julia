@@ -430,7 +430,7 @@ function open(f::Function, cmds::AbstractCmd, args...; kwargs...)
         rethrow()
     end
     close(P.in)
-    if !eof(P.out)
+    if !(eof(P.out)::Bool)
         waitkill(P)
         throw(_UVError("open(do)", UV_EPIPE))
     end

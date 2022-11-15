@@ -153,7 +153,7 @@ end
 """
     stacktrace([trace::Vector{Ptr{Cvoid}},] [c_funcs::Bool=false]) -> StackTrace
 
-Returns a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
+Return a stack trace in the form of a vector of `StackFrame`s. (By default stacktrace
 doesn't return C functions, but this can be enabled.) When called without specifying a
 trace, `stacktrace` first calls `backtrace`.
 """
@@ -200,7 +200,7 @@ end
 """
     remove_frames!(stack::StackTrace, m::Module)
 
-Returns the `StackTrace` with all `StackFrame`s from the provided `Module` removed.
+Return the `StackTrace` with all `StackFrame`s from the provided `Module` removed.
 """
 function remove_frames!(stack::StackTrace, m::Module)
     filter!(f -> !from(f, m), stack)
@@ -287,7 +287,7 @@ end
 """
     from(frame::StackFrame, filter_mod::Module) -> Bool
 
-Returns whether the `frame` is from the provided `Module`
+Return whether the `frame` is from the provided `Module`
 """
 function from(frame::StackFrame, m::Module)
     return parentmodule(frame) === m

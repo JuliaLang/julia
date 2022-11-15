@@ -85,6 +85,8 @@ the ordering of the dimensions will match those in `dims`. If `drop = false`, th
 `Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
+See [`stack`](@ref)`(slices; dims)` for the inverse of `eachcol(A; dims::Integer, drop=true)`.
+
 See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
@@ -131,6 +133,8 @@ end
 Create a [`RowSlices`](@ref) object that is a vector of rows of matrix or vector `A`.
 Row slices are returned as `AbstractVector` views of `A`.
 
+For the inverse, see [`stack`](@ref)`(rows; dims=1)`.
+
 See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 
 !!! compat "Julia 1.1"
@@ -166,6 +170,8 @@ eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
 
 Create a [`ColumnSlices`](@ref) object that is a vector of columns of matrix or vector `A`.
 Column slices are returned as `AbstractVector` views of `A`.
+
+For the inverse, see [`stack`](@ref)`(cols)` or `reduce(`[`hcat`](@ref)`, cols)`.
 
 See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 

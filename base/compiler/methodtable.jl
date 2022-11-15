@@ -2,6 +2,27 @@
 
 abstract type MethodTableView; end
 
+struct MethodLookupResult
+    # Really Vector{Core.MethodMatch}, but it's easier to represent this as
+    # and work with Vector{Any} on the C side.
+    matches::Vector{Any}
+    valid_worlds::WorldRange
+    ambig::Bool
+end
+length(result::MethodLookupResult) = length(result.matches)
+function iterate(result::MethodLookupResult, args...)
+    r = iterate(result.matches, args...)
+    r === nothing && return nothing
+    match, state = r
+    return (match::MethodMatch, state)
+end
+getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
+
+struct MethodMatchResult
+    matches::MethodLookupResult
+    overlayed::Bool
+end
+
 """
     struct InternalMethodTable <: MethodTableView
 
@@ -23,55 +44,60 @@ struct OverlayMethodTable <: MethodTableView
     mt::Core.MethodTable
 end
 
-struct MethodLookupResult
-    # Really Vector{Core.MethodMatch}, but it's easier to represent this as
-    # and work with Vector{Any} on the C side.
-    matches::Vector{Any}
-    valid_worlds::WorldRange
-    ambig::Bool
+struct MethodMatchKey
+    sig # ::Type
+    limit::Int
+    MethodMatchKey(@nospecialize(sig), limit::Int) = new(sig, limit)
 end
-length(result::MethodLookupResult) = length(result.matches)
-function iterate(result::MethodLookupResult, args...)
-    r = iterate(result.matches, args...)
-    r === nothing && return nothing
-    match, state = r
-    return (match::MethodMatch, state)
-end
-getindex(result::MethodLookupResult, idx::Int) = getindex(result.matches, idx)::MethodMatch
 
 """
-    findall(sig::Type, view::MethodTableView; limit::Int=typemax(Int)) ->
-        (matches::MethodLookupResult, overlayed::Bool) or missing
+    struct CachedMethodTable <: MethodTableView
+
+Overlays another method table view with an additional local fast path cache that
+can respond to repeated, identical queries faster than the original method table.
+"""
+struct CachedMethodTable{T} <: MethodTableView
+    cache::IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}
+    table::T
+end
+CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Missing,MethodMatchResult}}(), table)
+
+"""
+    findall(sig::Type, view::MethodTableView; limit::Int=-1) ->
+        MethodMatchResult(matches::MethodLookupResult, overlayed::Bool) or missing
 
 Find all methods in the given method table `view` that are applicable to the given signature `sig`.
 If no applicable methods are found, an empty result is returned.
-If the number of applicable methods exceeded the specified limit, `missing` is returned.
+If the number of applicable methods exceeded the specified `limit`, `missing` is returned.
+Note that the default setting `limit=-1` does not limit the number of applicable methods.
 `overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
-function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1)
     result = _findall(sig, nothing, table.world, limit)
     result === missing && return missing
-    return result, false
+    return MethodMatchResult(result, false)
 end
 
-function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=Int(typemax(Int32)))
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1)
     result = _findall(sig, table.mt, table.world, limit)
     result === missing && return missing
     nr = length(result)
     if nr ≥ 1 && result[nr].fully_covers
         # no need to fall back to the internal method table
-        return result, true
+        return MethodMatchResult(result, true)
     end
     # fall back to the internal method table
     fallback_result = _findall(sig, nothing, table.world, limit)
     fallback_result === missing && return missing
     # merge the fallback match results with the internal method table
-    return MethodLookupResult(
-        vcat(result.matches, fallback_result.matches),
-        WorldRange(
-            max(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
-            min(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),
-        result.ambig | fallback_result.ambig), !isempty(result)
+    return MethodMatchResult(
+        MethodLookupResult(
+            vcat(result.matches, fallback_result.matches),
+            WorldRange(
+                max(result.valid_worlds.min_world, fallback_result.valid_worlds.min_world),
+                min(result.valid_worlds.max_world, fallback_result.valid_worlds.max_world)),
+            result.ambig | fallback_result.ambig),
+        !isempty(result))
 end
 
 function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable}, world::UInt, limit::Int)
@@ -83,6 +109,19 @@ function _findall(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
         return missing
     end
     return MethodLookupResult(ms::Vector{Any}, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
+end
+
+function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1)
+    if isconcretetype(sig)
+        # as for concrete types, we cache result at on the next level
+        return findall(sig, table.table; limit)
+    end
+    key = MethodMatchKey(sig, limit)
+    if haskey(table.cache, key)
+        return table.cache[key]
+    else
+        return table.cache[key] = findall(sig, table.table; limit)
+    end
 end
 
 """
@@ -129,6 +168,10 @@ function _findsup(@nospecialize(sig::Type), mt::Union{Nothing,Core.MethodTable},
     return match, valid_worlds
 end
 
+# This query is not cached
+findsup(@nospecialize(sig::Type), table::CachedMethodTable) = findsup(sig, table.table)
+
 isoverlayed(::MethodTableView)     = error("unsatisfied MethodTableView interface")
 isoverlayed(::InternalMethodTable) = false
 isoverlayed(::OverlayMethodTable)  = true
+isoverlayed(mt::CachedMethodTable) = isoverlayed(mt.table)
