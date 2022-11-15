@@ -3652,6 +3652,9 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
+
     JL_MUTEX_INIT(&heapsnapshot_lock);
     JL_MUTEX_INIT(&finalizers_lock);
     uv_mutex_init(&gc_cache_lock);
@@ -3688,7 +3691,8 @@ void jl_gc_init(void)
     t_start = jl_hrtime();
 }
 
-void jl_gc_set_max_memory(uint64_t max_mem) {
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
+{
     if (max_mem > 0
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;
