@@ -124,7 +124,7 @@ See also [`has_offset_axes`](@ref).
 !!! compat "Julia 1.2"
      This function requires at least Julia 1.2.
 """
-require_one_based_indexing(A...) = !has_offset_axes(A...) || throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
+require_one_based_indexing(A...) = !has_offset_axes(A...) || @noinline throw(ArgumentError("offset arrays are not supported but got an array with index other than 1"))
 
 # Performance optimization: get rid of a branch on `d` in `axes(A, d)`
 # for d=1. 1d arrays are heavily used, and the first dimension comes up
