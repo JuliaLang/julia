@@ -1562,15 +1562,15 @@ parentmodule(f::Function) = parentmodule(typeof(f))
 """
     parentmodule(f::Function, types) -> Module
 
-Determine the module containing the first method of a generic function `f` matching
-the specified `types`.
+Determine the module containing the only method of a generic function `f` matching
+the specified `types`. Throws an error if there are multiple matching methods.
 """
 function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
     end
-    return parentmodule(first(m))
+    return parentmodule(only(m))
 end
 
 """
