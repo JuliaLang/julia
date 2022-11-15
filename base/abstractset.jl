@@ -486,8 +486,7 @@ function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Union{Rea
     if step(b) < zero(b)
         fb, lb = lb, fb
     end
-    not_overlapping = (la < fb) | (lb < fa)
-    if not_overlapping
+    if (la < fb) | (lb < fa)
         return true
     else
         return _overlapping_range_isdisjoint(a, b)
@@ -514,7 +513,7 @@ function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T})
             overlapping -= cld(mxs - mxl, abs(step(shortrg)))
         end
 
-        if overlapping ≥ abs(step(longrg)/m)
+        if overlapping ≥ abs(cld(step(longrg), m))
             return false
         else
             if (mis < mil) & signbit(step(shortrg)) || (mxs > mxl) & ~signbit(step(shortrg))
