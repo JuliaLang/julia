@@ -59,8 +59,10 @@ STDCXXURL=https://github.com/JuliaBinaryWrappers/LibStdCxx_jll.jl/releases/downl
 curl -LJ $STDCXXURL | tar -xzf - --directory "$BUILD/usr" lib/libstdc++.so lib/libstdc++.so.6 lib/libstdc++.so.6.0.30
 
 LIBFLANGURL=https://github.com/JuliaBinaryWrappers/FlangClassic_RTLib_jll.jl/releases/download/FlangClassic_RTLib-v13.0.0%2B0/FlangClassic_RTLib.v13.0.0.x86_64-linux-gnu.tar.gz
-
 curl -JL $LIBFLANGURL | tar -xzf - --directory "$BUILD/usr" lib/libflang.so lib/libflangrti.so lib/libomp.so lib/libompstub.so lib/libpgmath.so
+
+LIBUNWINDURL=https://github.com/JuliaBinaryWrappers/LibUnwind_jll.jl/releases/download/LibUnwind-v1.5.0%2B4/LibUnwind.v1.5.0.x86_64-linux-gnu.tar.gz
+curl -JL $LIBUNWINDURL | tar -xzf - --directory  "$BUILD/usr" --wildcards lib/libunwind*
 
 JULIA_SYSIMG_BUILD_FLAGS="--emit-sanitizer=msan" make -C "$JULIA_HOME" julia-sysimg-bc -j10
 
