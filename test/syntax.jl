@@ -3297,3 +3297,10 @@ f45162(f) = f(x=1)
 @test Meta.lower(@__MODULE__, :(global const x::Int)) == Expr(:error, "expected assignment after \"const\"")
 @test Meta.lower(@__MODULE__, :(const global x)) == Expr(:error, "expected assignment after \"const\"")
 @test Meta.lower(@__MODULE__, :(const global x::Int)) == Expr(:error, "expected assignment after \"const\"")
+
+# issue #47410
+# note `eval` is needed since this needs to be at the top level
+@test eval(:(if false
+             elseif false || (()->true)()
+                 42
+             end)) == 42
