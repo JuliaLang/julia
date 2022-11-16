@@ -1,7 +1,7 @@
-diff --git a/src/transports/ssh.c b/src/transports/ssh.c
+diff --git a/src/libgit2/transports/ssh.c b/src/libgit2/transports/ssh.c
 index 89f085230..b8bdca61a 100644
---- a/src/transports/ssh.c
-+++ b/src/transports/ssh.c
+--- a/src/libgit2/transports/ssh.c
++++ b/src/libgit2/transports/ssh.c
 @@ -467,6 +467,7 @@ static int _git_ssh_setup_conn(
  	git_credential *cred = NULL;
  	LIBSSH2_SESSION *session=NULL;

@@ -215,10 +215,18 @@ else ifneq ($(USE_SYSTEM_OPENLIBM),0)
 $(eval $(call symlink_system_library,OPENLIBM,$(LIBMNAME)))
 endif
 
-ifeq ($(APPLE_ARCH),arm64)
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(OS),Darwin)
+ifeq ($(ARCH),aarch64)
+$(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
 $(eval $(call symlink_system_library,CSL,libgcc_s,1.1))
 else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
+endif
+endif
 endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))

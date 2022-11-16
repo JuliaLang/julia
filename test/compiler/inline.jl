@@ -1039,26 +1039,6 @@ struct FooTheRef
     x::Ref
     FooTheRef(v) = new(v === nothing ? THE_REF_NULL : THE_REF)
 end
-let src = code_typed1() do
-        FooTheRef(nothing)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        FooTheRef(0)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(nothing::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
-let src = code_typed1() do
-        @invoke FooTheRef(0::Any)
-    end
-    @test count(isnew, src.code) == 1
-end
 @test fully_eliminated() do
     FooTheRef(nothing)
     nothing
@@ -1835,4 +1815,31 @@ let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
     ir = Core.Compiler.cfg_simplify!(ir)
     ir = Core.Compiler.compact!(ir, true)
     @test length(ir.stmts) == 1
+end
+
+# compiler should recognize effectful :static_parameter
+# https://github.com/JuliaLang/julia/issues/45490
+issue45490_1(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = T
+issue45490_2(x::Union{T, Nothing}, y::Union{T, Nothing}) where {T} = (typeof(T); nothing)
+for f = (issue45490_1, issue45490_2)
+    src = code_typed1(f, (Any,Any))
+    @test any(src.code) do @nospecialize x
+        isexpr(x, :static_parameter)
+    end
+    @test_throws UndefVarError f(nothing, nothing)
+end
+
+# inline effect-free :static_parameter, required for semi-concrete interpretation accuracy
+# https://github.com/JuliaLang/julia/issues/47349
+function make_issue47349(::Val{N}) where {N}
+    pickargs(::Val{N}) where {N} = (@nospecialize(x::Tuple)) -> x[N]
+    return pickargs(Val{N-1}())
+end
+let src = code_typed1(make_issue47349(Val{4}()), (Any,))
+    @test !any(src.code) do @nospecialize x
+        isexpr(x, :static_parameter)
+    end
+    @test Base.return_types((Int,)) do x
+        make_issue47349(Val(4))((x,nothing,Int))
+    end |> only === Type{Int}
 end

@@ -10,7 +10,7 @@ const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
 const Iptr = sizeof(Int) == 8 ? "i64" : "i32"
 
-const is_debug_build = ccall(:jl_is_debugbuild, Cint, ()) != 0
+const is_debug_build = Base.isdebugbuild()
 function libjulia_codegen_name()
     is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
 end
@@ -689,12 +689,25 @@ mktempdir() do pfx
     cp(dirname(Sys.BINDIR), pfx; force=true)
     libpath = relpath(dirname(dlpath(libjulia_codegen_name())), dirname(Sys.BINDIR))
     libs_deleted = 0
-    for f in filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    libfiles = filter(f -> startswith(f, "libjulia-codegen"), readdir(joinpath(pfx, libpath)))
+    for f in libfiles
         rm(joinpath(pfx, libpath, f); force=true, recursive=true)
         libs_deleted += 1
     end
     @test libs_deleted > 0
     @test readchomp(`$pfx/bin/$(Base.julia_exename()) -e 'print("no codegen!\n")'`) == "no codegen!"
+
+    # PR #47343
+    libs_emptied = 0
+    for f in libfiles
+        touch(joinpath(pfx, libpath, f))
+        libs_emptied += 1
+    end
+
+    errfile = joinpath(pfx, "stderr.txt")
+    @test libs_emptied > 0
+    @test_throws ProcessFailedException run(pipeline(`$pfx/bin/$(Base.julia_exename()) -e 'print("This should fail!\n")'`; stderr=errfile))
+    @test contains(readline(errfile), "ERROR: Unable to load dependent library")
 end
 
 # issue #42645
@@ -768,3 +781,7 @@ f_isdefined_nospecialize(@nospecialize(x)) = isdefined(x, 1)
 # Test codegen for isa(::Any, Type)
 f_isa_type(@nospecialize(x)) = isa(x, Type)
 @test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
+
+# Issue #47247
+f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
+@test_throws TypeError f47247(Ref(5), nothing)

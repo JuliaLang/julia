@@ -370,8 +370,7 @@ end
 
 function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector{Any},
                          linetable::Vector{LineInfoNode}, item::InliningTodo,
-                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}},
-                         extra_flags::UInt8 = inlined_flags_for_effects(item.effects))
+                         boundscheck::Symbol, todo_bbs::Vector{Tuple{Int, Int}})
     # Ok, do the inlining here
     sparam_vals = item.mi.sparam_vals
     def = item.mi.def::Method
@@ -412,7 +411,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 break
             end
             inline_compact[idx′] = stmt′
-            inline_compact[SSAValue(idx′)][:flag] |= extra_flags
         end
         just_fixup!(inline_compact, new_new_offset, late_fixup_offset)
         compact.result_idx = inline_compact.result_idx
@@ -447,14 +445,6 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 stmt′ = PhiNode(Int32[edge+bb_offset for edge in stmt′.edges], stmt′.values)
             end
             inline_compact[idx′] = stmt′
-            if extra_flags != 0 && !isa(stmt′, Union{GotoNode, GotoIfNot})
-                if (extra_flags & IR_FLAG_NOTHROW) != 0 && inline_compact[SSAValue(idx′)][:type] === Union{}
-                    # Shown nothrow, but also guaranteed to throw => unreachable
-                    inline_compact[idx′] = ReturnNode()
-                else
-                    inline_compact[SSAValue(idx′)][:flag] |= extra_flags
-                end
-            end
         end
         just_fixup!(inline_compact, new_new_offset, late_fixup_offset)
         compact.result_idx = inline_compact.result_idx
@@ -1012,37 +1002,6 @@ function flags_for_effects(effects::Effects)
     return flags
 end
 
-"""
-    inlined_flags_for_effects(effects::Effects)
-
-This function answers the query:
-
-    Given a call site annotated as `effects`, what can we say about each inlined
-    statement after the inlining?
-
-Note that this is different from `flags_for_effects`, which just talks about
-the call site itself. Consider for example:
-
-````
-    function foo()
-        V = Any[]
-        push!(V, 1)
-        tuple(V...)
-    end
-```
-
-This function is properly inferred effect_free, because it has no global effects.
-However, we may not inline each statement with an :effect_free flag, because
-that would incorrectly lose the `push!`.
-"""
-function inlined_flags_for_effects(effects::Effects)
-    flags::UInt8 = 0
-    if is_nothrow(effects)
-        flags |= IR_FLAG_NOTHROW
-    end
-    return flags
-end
-
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case), params::OptimizationParams,
     isinvoke::Bool = false)
@@ -1221,24 +1180,20 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     invokesig = sig.argtypes
     override_effects = EFFECTS_UNKNOWN′
     if isa(result, ConcreteResult)
-        if may_inline_concrete_result(result)
-            item = concrete_result_item(result, state; invokesig)
-            handle_single_case!(todo, ir, idx, stmt, item, state.params, true)
-            return nothing
+        item = concrete_result_item(result, state, info; invokesig)
+    else
+        argtypes = invoke_rewrite(sig.argtypes)
+        if isa(result, ConstPropResult)
+            mi = result.result.linfo
+            validate_sparams(mi.sparam_vals) || return nothing
+            if argtypes_to_type(argtypes) <: mi.def.sig
+                item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig, override_effects)
+                handle_single_case!(todo, ir, idx, stmt, item, state.params, true)
+                return nothing
+            end
         end
-        override_effects = result.effects
+        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig, override_effects)
     end
-    argtypes = invoke_rewrite(sig.argtypes)
-    if isa(result, ConstPropResult)
-        mi = result.result.linfo
-        validate_sparams(mi.sparam_vals) || return nothing
-        if argtypes_to_type(argtypes) <: mi.def.sig
-            item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig, override_effects)
-            handle_single_case!(todo, ir, idx, stmt, item, state.params, true)
-            return nothing
-        end
-    end
-    item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig, override_effects)
     handle_single_case!(todo, ir, idx, stmt, item, state.params, true)
     return nothing
 end
@@ -1352,12 +1307,7 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     allow_abstract::Bool, allow_typevars::Bool)
     override_effects = EFFECTS_UNKNOWN′
     if isa(result, ConcreteResult)
-        if may_inline_concrete_result(result)
-            return handle_concrete_result!(cases, result, state)
-        else
-            override_effects = result.effects
-            result = nothing
-        end
+        return handle_concrete_result!(cases, result, state, info)
     end
     if isa(result, SemiConcreteResult)
         result = inlining_policy(state.interp, result, info, flag, result.mi, argtypes)
@@ -1538,8 +1488,8 @@ function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiC
     return true
 end
 
-function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult, state::InliningState)
-    case = concrete_result_item(result, state)
+function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult, state::InliningState, @nospecialize(info::CallInfo))
+    case = concrete_result_item(result, state, info)
     push!(cases, InliningCase(result.mi.specTypes, case))
     return true
 end
@@ -1547,9 +1497,15 @@ end
 may_inline_concrete_result(result::ConcreteResult) =
     isdefined(result, :result) && is_inlineable_constant(result.result)
 
-function concrete_result_item(result::ConcreteResult, state::InliningState;
+function concrete_result_item(result::ConcreteResult, state::InliningState, @nospecialize(info::CallInfo);
     invokesig::Union{Nothing,Vector{Any}}=nothing)
-    @assert may_inline_concrete_result(result)
+    if !may_inline_concrete_result(result)
+        et = InliningEdgeTracker(state.et, invokesig)
+        case = compileable_specialization(result.mi, result.effects, et, info;
+            compilesig_invokes=state.params.compilesig_invokes)
+        @assert case !== nothing "concrete evaluation should never happen for uncompileable callsite"
+        return case
+    end
     @assert result.effects === EFFECTS_TOTAL
     return ConstantCase(quoted(result.result))
 end
@@ -1583,12 +1539,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         validate_sparams(mi.sparam_vals) || return nothing
         item = resolve_todo(mi, result.result, sig.argtypes, info, flag, state)
     elseif isa(result, ConcreteResult)
-        if may_inline_concrete_result(result)
-            item = concrete_result_item(result, state)
-        else
-            override_effects = result.effects
-            item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false, override_effects)
-        end
+        item = concrete_result_item(result, state, info)
     else
         item = analyze_method!(info.match, sig.argtypes, info, flag, state; allow_typevars=false)
     end

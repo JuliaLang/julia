@@ -468,6 +468,8 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
         end
         return Bool
     end
+    typea = widenconditional(typea)
+    typeb = widenconditional(typeb)
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
@@ -524,10 +526,13 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
             return anyrefine ? PartialStruct(aty, fields) : aty
         end
     end
+
+
     # Don't widen const here - external AbstractInterpreter might insert lattice
     # layers between us and `ConstsLattice`.
-    isa(typea, PartialStruct) && (typea = widenconst(typea))
-    isa(typeb, PartialStruct) && (typeb = widenconst(typeb))
+    wl = widenlattice(lattice)
+    isa(typea, PartialStruct) && (typea = widenlattice(wl, typea))
+    isa(typeb, PartialStruct) && (typeb = widenlattice(wl, typeb))
 
     # type-lattice for PartialOpaque wrapper
     apo = isa(typea, PartialOpaque)
@@ -540,24 +545,27 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
                 typea.parent === typeb.parent)
                 return widenconst(typea)
             end
-            return PartialOpaque(typea.typ, tmerge(typea.env, typeb.env),
+            return PartialOpaque(typea.typ, tmerge(lattice, typea.env, typeb.env),
                 typea.parent, typea.source)
         end
         typea = aty
         typeb = bty
     elseif apo
-        typea = widenconst(typea)
+        typea = widenlattice(wl, typea)
     elseif bpo
-        typeb = widenconst(typeb)
+        typeb = widenlattice(wl, typeb)
     end
 
-    return tmerge(widenlattice(lattice), typea, typeb)
+    return tmerge(wl, typea, typeb)
 end
 
 function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
     # the equality of the constants can be checked here, but the equivalent check is usually
     # done by `tmerge_fast_path` at earlier lattice stage
-    return tmerge(widenlattice(lattice), widenconst(typea), widenconst(typeb))
+    wl = widenlattice(lattice)
+    (isa(typea, Const) || isa(typea, PartialTypeVar)) && (typea = widenlattice(wl, typea))
+    (isa(typeb, Const) || isa(typeb, PartialTypeVar)) && (typeb = widenlattice(wl, typeb))
+    return tmerge(wl, typea, typeb)
 end
 
 function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))

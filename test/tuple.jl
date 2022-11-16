@@ -644,7 +644,7 @@ end
     @test @inferred(f()) == (9, 2:2, 3:3)
 end
 
-@testset "inferrable range indexing with constant values" begin
+@testset "inferable range indexing with constant values" begin
     whole(t) = t[1:end]
     tail(t) = t[2:end]
     ttail(t) = t[3:end]

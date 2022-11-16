@@ -238,7 +238,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
 which will be one of the following:
 
-- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
 - `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
 - `BackedgePair(specsig, mt::MethodTable)`: an abstract call
 

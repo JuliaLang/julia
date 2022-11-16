@@ -11,7 +11,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, show_unquoted, summarysize,
-    to_tuple_type, signature_type, format_bytes
+    signature_type, format_bytes
 
 using Markdown
 
@@ -96,7 +96,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if !isempty(Base.GIT_VERSION_INFO.commit_short)
         println(io, "Commit $(Base.GIT_VERSION_INFO.commit_short) ($(Base.GIT_VERSION_INFO.date_string))")
     end
-    if ccall(:jl_is_debugbuild, Cint, ())!=0
+    if Base.isdebugbuild()
         println(io, "DEBUG build")
     end
     println(io, "Platform Info:")

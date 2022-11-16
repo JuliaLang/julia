@@ -214,6 +214,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     Python's special interpretation of negative indexing, `a[-1]` and `a[-2]`, should be written
     `a[end]` and `a[end-1]` in Julia.
   * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
+  * In Julia, `:` before any object creates a [`Symbol`](@ref) or *quotes* an expression; so, `x[:5]` is same as `x[5]`. If you want to get the first `n` elements of an array, then use range indexing.
   * Julia's range indexing has the format of `x[start:step:stop]`, whereas Python's format is `x[start:(stop+1):step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
   * In Julia, ranges can be constructed independently as `start:step:stop`, the same syntax it uses
     in array-indexing.  The `range` function is also supported.
@@ -383,7 +384,7 @@ For users coming to Julia from R, these are some noteworthy differences:
       in its `Manifest.toml` file by `Pkg.resolve()`.
   * Packages ("software modules") available to the "Project Environment" are loaded with
     `import` or `using`.
-    * In C/C++, you `#include <moduleheader>` to get object/function delarations, and link in
+    * In C/C++, you `#include <moduleheader>` to get object/function declarations, and link in
       libraries when you build the executable.
     * In Julia, calling using/import again just brings the existing module into scope, but does not load it again
       (similar to adding the non-standard `#pragma once` to C/C++).
@@ -438,7 +439,7 @@ For users coming to Julia from R, these are some noteworthy differences:
 
 \* The Julia package manager supports registering multiple packages from a single Git repository.<br>
 \* This allows users to house a library of related packages in a single repository.<br>
-\*\* Julia registries are primarily designed to provide versionning \& distribution of packages.<br>
+\*\* Julia registries are primarily designed to provide versioning \& distribution of packages.<br>
 \*\* Custom package registries can be used to create a type of module library.
 
 
