@@ -289,7 +289,7 @@ julia> @elapsed while n > 0 # print out results
 0.029772311
 ```
 
-Instead of `errormonitor(t)`, a more robust solution may be use use `bind(results, t)`, as that will
+Instead of `errormonitor(t)`, a more robust solution may be to use `bind(results, t)`, as that will
 not only log any unexpected failures, but also force the associated resources to close and propagate
 the exception everywhere.
 

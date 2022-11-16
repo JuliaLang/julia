@@ -195,7 +195,7 @@ function CC.tmerge(𝕃::AnyTaintLattice, @nospecialize(typea), @nospecialize(ty
     if isa(typea, T)
         if isa(typeb, T)
             return T(
-                tmerge(widenlattice(𝕃), typea.typ, typeb),
+                tmerge(widenlattice(𝕃), typea.typ, typeb.typ),
                 typea.slots ∪ typeb.slots)
         else
             typea = typea.typ
@@ -240,6 +240,26 @@ end
 @test CC.tmerge(typeinf_lattice(TaintInterpreter()), Taint(Int, 1), Taint(Int, 2)) == Taint(Int, BitSet(1:2))
 
 # code_typed(ifelse, (Bool, Int, Int); interp=TaintInterpreter())
+
+# External lattice without `Conditional`
+
+import .CC:
+    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
+    typeinf_lattice, ipo_lattice, optimizer_lattice
+
+@newinterp NonconditionalInterpreter
+CC.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+CC.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+CC.optimizer_lattice(::NonconditionalInterpreter) = OptimizerLattice(PartialsLattice(ConstsLattice()))
+
+@test Base.return_types((Any,); interp=NonconditionalInterpreter()) do x
+    c = isa(x, Int) || isa(x, Float64)
+    if c
+        return x
+    else
+        return nothing
+    end
+end |> only === Any
 
 # CallInfo × inlining
 # ===================

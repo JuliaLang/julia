@@ -238,6 +238,15 @@ end
     @test pinv(M,rtol=0.5)== M
 end
 
+@testset "Test inv of matrix of NaNs" begin
+    for eltya in (NaN16, NaN32, NaN32)
+        r = fill(eltya, 2, 2)
+        @test_throws ArgumentError inv(r)
+        c = fill(complex(eltya, eltya), 2, 2)
+        @test_throws ArgumentError inv(c)
+    end
+end
+
 @testset "test out of bounds triu/tril" begin
     local m, n = 5, 7
     ainit = rand(m, n)

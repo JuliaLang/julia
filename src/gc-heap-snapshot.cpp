@@ -24,26 +24,26 @@ using llvm::StringRef;
 // https://stackoverflow.com/a/33799784/751061
 void print_str_escape_json(ios_t *stream, StringRef s)
 {
-    ios_printf(stream, "\"");
+    ios_putc('"', stream);
     for (auto c = s.begin(); c != s.end(); c++) {
         switch (*c) {
-        case '"': ios_printf(stream, "\\\""); break;
-        case '\\': ios_printf(stream, "\\\\"); break;
-        case '\b': ios_printf(stream, "\\b"); break;
-        case '\f': ios_printf(stream, "\\f"); break;
-        case '\n': ios_printf(stream, "\\n"); break;
-        case '\r': ios_printf(stream, "\\r"); break;
-        case '\t': ios_printf(stream, "\\t"); break;
+        case '"':  ios_write(stream, "\\\"", 2); break;
+        case '\\': ios_write(stream, "\\\\", 2); break;
+        case '\b': ios_write(stream, "\\b",  2); break;
+        case '\f': ios_write(stream, "\\f",  2); break;
+        case '\n': ios_write(stream, "\\n",  2); break;
+        case '\r': ios_write(stream, "\\r",  2); break;
+        case '\t': ios_write(stream, "\\t",  2); break;
         default:
-            if ('\x00' <= *c && *c <= '\x1f') {
+            if (('\x00' <= *c) & (*c <= '\x1f')) {
                 ios_printf(stream, "\\u%04x", (int)*c);
             }
             else {
-                ios_printf(stream, "%c", *c);
+                ios_putc(*c, stream);
             }
         }
     }
-    ios_printf(stream, "\"");
+    ios_putc('"', stream);
 }
 
 
@@ -185,6 +185,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     // Insert a new Node
     size_t self_size = 0;
+    std::string type_name;
     StringRef name = "<missing>";
     StringRef node_type = "object";
 
@@ -206,11 +207,16 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
     }
     else if (jl_is_module(a)) {
-        name = "Module";
+        name = jl_symbol_name_(((_jl_module_t*)a)->name);
         self_size = sizeof(jl_module_t);
     }
     else if (jl_is_task(a)) {
         name = "Task";
+        self_size = sizeof(jl_task_t);
+    }
+    else if (jl_is_datatype(a)) {
+        type_name = string("Type{") + string(jl_symbol_name_(((_jl_datatype_t*)a)->name->name)) + string("}");
+        name = StringRef(type_name);
         self_size = sizeof(jl_task_t);
     }
     else {
@@ -403,13 +409,28 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, "<malloc>");
-
+    const char *alloc_kind;
+    switch (alloc_type)
+    {
+    case 0:
+        alloc_kind = "<malloc>";
+        break;
+    case 1:
+        alloc_kind = "<pooled>";
+        break;
+    case 2:
+        alloc_kind = "<inline>";
+        break;
+    default:
+        alloc_kind = "<undef>";
+        break;
+    }
+    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
     auto &from_node = g_snapshot->nodes[from_node_idx];
     from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
 
@@ -469,14 +490,14 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
             ios_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        ios_printf(stream, "%zu", from_node.type);
-        ios_printf(stream, ",%zu", from_node.name);
-        ios_printf(stream, ",%zu", from_node.id);
-        ios_printf(stream, ",%zu", all_one ? (size_t)1 : from_node.self_size);
-        ios_printf(stream, ",%zu", from_node.edges.size());
-        ios_printf(stream, ",%zu", from_node.trace_node_id);
-        ios_printf(stream, ",%d", from_node.detachedness);
-        ios_printf(stream, "\n");
+        ios_printf(stream, "%zu,%zu,%zu,%zu,%zu,%zu,%d\n",
+                            from_node.type,
+                            from_node.name,
+                            from_node.id,
+                            all_one ? (size_t)1 : from_node.self_size,
+                            from_node.edges.size(),
+                            from_node.trace_node_id,
+                            from_node.detachedness);
     }
     ios_printf(stream, "],\n");
 
@@ -490,10 +511,10 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
             else {
                 ios_printf(stream, ",");
             }
-            ios_printf(stream, "%zu", edge.type);
-            ios_printf(stream, ",%zu", edge.name_or_index);
-            ios_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
-            ios_printf(stream, "\n");
+            ios_printf(stream, "%zu,%zu,%zu\n",
+                                edge.type,
+                                edge.name_or_index,
+                                edge.to_node * k_node_number_of_fields);
         }
     }
     ios_printf(stream, "],\n"); // end "edges"

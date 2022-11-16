@@ -52,7 +52,7 @@ static inline void asan_unpoison_task_stack(jl_task_t *ct, jl_jmp_buf *buf)
     if (!ct)
         return;
     /* Unpoison everything from the base of the stack allocation to the address
-       that we're resetting to. The idea is to remove the posion from the frames
+       that we're resetting to. The idea is to remove the poison from the frames
        that we're skipping over, since they won't be unwound. */
     uintptr_t top = jmpbuf_sp(buf);
     uintptr_t bottom = (uintptr_t)ct->stkbuf;
@@ -282,6 +282,7 @@ static inline void memmove_refs(void **dstp, void *const *srcp, size_t n) JL_NOT
 // useful constants
 extern jl_methtable_t *jl_type_type_mt JL_GLOBALLY_ROOTED;
 extern jl_methtable_t *jl_nonfunction_mt JL_GLOBALLY_ROOTED;
+extern jl_methtable_t *jl_kwcall_mt JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT _Atomic(size_t) jl_world_counter;
 
 typedef void (*tracer_cb)(jl_value_t *tracee);
@@ -530,9 +531,6 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-// Set GC memory trigger in bytes for greedy memory collecting
-void jl_gc_set_max_memory(uint64_t max_mem);
-
 JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;
 void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
 
@@ -621,7 +619,6 @@ JL_DLLEXPORT jl_value_t *jl_apply_2va(jl_value_t *f, jl_value_t **args, uint32_t
 void JL_NORETURN jl_method_error(jl_function_t *f, jl_value_t **args, size_t na, size_t world);
 JL_DLLEXPORT jl_value_t *jl_get_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...);
 
-JL_DLLEXPORT jl_value_t *jl_get_keyword_sorter(jl_value_t *f);
 JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 
 #define JL_CALLABLE(name)                                               \
@@ -720,9 +717,11 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *
 JL_DLLEXPORT jl_value_t *jl_gf_invoke_lookup_worlds(jl_value_t *types, jl_value_t *mt, size_t world, size_t *min_world, size_t *max_world);
 
 
-JL_DLLEXPORT jl_datatype_t *jl_first_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+jl_datatype_t *jl_nth_argument_datatype(jl_value_t *argtypes JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(
+    jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+jl_methtable_t *jl_kwmethod_table_for(
     jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(
     jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
@@ -1128,7 +1127,7 @@ size_t rec_backtrace_ctx(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t 
 size_t rec_backtrace_ctx_dwarf(jl_bt_element_t *bt_data, size_t maxsize, bt_context_t *ctx, jl_gcframe_t *pgcstack) JL_NOTSAFEPOINT;
 #endif
 JL_DLLEXPORT jl_value_t *jl_get_backtrace(void);
-void jl_critical_error(int sig, bt_context_t *context, jl_task_t *ct);
+void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *ct);
 JL_DLLEXPORT void jl_raise_debugger(void);
 int jl_getFunctionInfo(jl_frame_t **frames, uintptr_t pointer, int skipC, int noInline) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_gdblookup(void* ip) JL_NOTSAFEPOINT;
@@ -1244,10 +1243,6 @@ JL_DLLEXPORT const char *jl_dlfind_win32(const char *name);
 
 // libuv wrappers:
 JL_DLLEXPORT int jl_fs_rename(const char *src_path, const char *dst_path);
-
-#ifdef SEGV_EXCEPTION
-extern JL_DLLEXPORT jl_value_t *jl_segv_exception;
-#endif
 
 // -- Runtime intrinsics -- //
 JL_DLLEXPORT const char *jl_intrinsic_name(int f) JL_NOTSAFEPOINT;
@@ -1599,7 +1594,7 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
 #endif // _COMPILER_GCC_
 
 #ifdef __clang_gcanalyzer__
-  // Not a safepoint (so it dosn't free other values), but an artificial use.
+  // Not a safepoint (so it doesn't free other values), but an artificial use.
   // Usually this is unnecessary because the analyzer can see all real uses,
   // but sometimes real uses are harder for the analyzer to see, or it may
   // give up before it sees it, so this can be helpful to be explicit.

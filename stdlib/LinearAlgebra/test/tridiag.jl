@@ -71,11 +71,13 @@ end
             @test ST == Matrix(ST)
             @test ST.dv === x
             @test ST.ev === y
+            @test typeof(ST)(ST) === ST
             TT = (Tridiagonal(y, x, y))::Tridiagonal{elty, typeof(x)}
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
             @test TT.du === y
+            @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty

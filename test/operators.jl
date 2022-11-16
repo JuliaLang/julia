@@ -184,7 +184,7 @@ end
     @test (@inferred g(1)) == ntuple(Returns(1), 13)
     h = (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ (-) ∘ sum
     @test (@inferred h((1, 2, 3); init = 0.0)) == 6.0
-    issue_45877 = reduce(∘, fill(sin,500))
+    issue_45877 = reduce(∘, fill(sin, 50))
     @test Core.Compiler.is_foldable(Base.infer_effects(Base.unwrap_composed, (typeof(issue_45877),)))
     @test fully_eliminated() do
         issue_45877(1.0)

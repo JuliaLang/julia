@@ -702,7 +702,7 @@ end
     end
     @test BLAS.iamax(a) == 0
     @test_throws "dest" BLAS.scal!(b[1], a)
-    @testset "nrm2/asum" begin # OpenBLAS allways return 0.0
+    @testset "nrm2/asum" begin # OpenBLAS always return 0.0
         @test_throws "input" BLAS.nrm2(a)
         @test_throws "input" BLAS.asum(a)
     end

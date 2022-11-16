@@ -445,6 +445,7 @@ Base.:-(a::ModInt{n}) where {n} = ModInt{n}(-a.k)
 Base.inv(a::ModInt{n}) where {n} = ModInt{n}(invmod(a.k, n))
 Base.:/(a::ModInt{n}, b::ModInt{n}) where {n} = a*inv(b)
 
+Base.isfinite(a::ModInt{n}) where {n} = isfinite(a.k)
 Base.zero(::Type{ModInt{n}}) where {n} = ModInt{n}(0)
 Base.zero(::ModInt{n}) where {n} = ModInt{n}(0)
 Base.one(::Type{ModInt{n}}) where {n} = ModInt{n}(1)
@@ -543,6 +544,13 @@ end
 
 @testset "missing values" begin
     @test ismissing(norm(missing))
+    x = [5, 6, missing]
+    y = [missing, 5, 6]
+    for p in (-Inf, -1, 1, 2, 3, Inf)
+        @test ismissing(norm(x, p))
+        @test ismissing(norm(y, p))
+    end
+    @test_broken ismissing(norm(x, 0))
 end
 
 @testset "peakflops" begin

@@ -68,7 +68,7 @@ Base.iterate(S::Schur, ::Val{:values}) = (S.values, Val(:done))
 Base.iterate(S::Schur, ::Val{:done}) = nothing
 
 """
-    schur!(A::StridedMatrix) -> F::Schur
+    schur!(A) -> F::Schur
 
 Same as [`schur`](@ref) but uses the input argument `A` as workspace.
 

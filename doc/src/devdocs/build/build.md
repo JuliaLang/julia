@@ -139,7 +139,7 @@ Notes for various architectures:
 
 * [ARM](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/build/arm.md)
 
-## [Required Build Tools and External Libraries](@id build-tools)
+## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
 
@@ -302,7 +302,7 @@ From this point, you should
 ```
 (Note that `sudo` isn't installed, but neither is it necessary since you are running as `root`, so you can omit `sudo` from all commands.)
 
-Then add all the [build dependencies](@ref build-tools), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
+Then add all the [build dependencies](#required-build-tools-and-external-libraries), a console-based editor of your choice, `git`, and anything else you'll need (e.g., `gdb`, `rr`, etc). Pick a directory to work in and `git clone` Julia, check out the branch you wish to debug, and build Julia as usual.
 
 
 ## Update the version number of a dependency

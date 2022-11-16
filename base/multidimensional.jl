@@ -712,7 +712,7 @@ checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndices) = all(checkindex.(Boo
 
 # combined count of all indices, including CartesianIndex and
 # AbstractArray{CartesianIndex}
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
 @inline index_ndims(i1, I...) = (true, index_ndims(I...)...)
 @inline function index_ndims(i1::CartesianIndex, I...)
     (map(Returns(true), i1.I)..., index_ndims(I...)...)
@@ -723,7 +723,7 @@ end
 index_ndims() = ()
 
 # combined dimensionality of all indices
-# rather than returning N, it returns an NTuple{N,Bool} so the result is inferrable
+# rather than returning N, it returns an NTuple{N,Bool} so the result is inferable
 @inline index_dimsum(i1, I...) = (index_dimsum(I...)...,)
 @inline index_dimsum(::Colon, I...) = (true, index_dimsum(I...)...)
 @inline index_dimsum(::AbstractArray{Bool}, I...) = (true, index_dimsum(I...)...)

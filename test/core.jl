@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :min_world, :max_world, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
+        (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
         (Core.MethodTable, [:module]),
@@ -4859,6 +4859,13 @@ let a = Any[]
     @test a == [10, 2]
 end
 
+# issue 47209
+struct f47209
+    x::Int
+    f47209()::Nothing = new(1)
+end
+@test_throws MethodError f47209()
+
 # issue #12096
 let a = Val{Val{TypeVar(:_, Int)}},
     b = Val{Val{x} where x<:Int}
@@ -7837,3 +7844,32 @@ fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN(args...) = fvarargN(args)
 finvokevarargN() = Base.inferencebarrier(fvarargN)(1, 2, 3)
 @test finvokevarargN() == 3
+
+# Make sure that @specialize actually overrides a module annotation
+module SpecializeModuleTest
+    @nospecialize
+    f(@specialize(x), y) = 2
+    @specialize
+end
+@test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10
+
+let # https://github.com/JuliaLang/julia/issues/46918
+    # jl_binding_type shouldn't be unstable
+    code = quote
+        res1 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+
+        stderr
+
+        res2 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+
+        res3 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+
+        print(stdout, res1, " ", res2, " ", res3)
+    end |> x->join(x.args, ';')
+    cmd = `$(Base.julia_cmd()) -e $code` # N.B make sure not to pass this code as `:block`
+    stdout = IOBuffer()
+    stderr = IOBuffer()
+    @test success(pipeline(Cmd(cmd); stdout, stderr))
+    @test isempty(String(take!(stderr))) # make sure no error has happened
+    @test String(take!(stdout)) == "nothing IO IO"
+end
