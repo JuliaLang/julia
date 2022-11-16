@@ -95,11 +95,7 @@ function Base.getproperty(c::Completion, name::Symbol)
     return getfield(c, name)
 end
 
-function representable_string(s::Symbol)
-    io = IOBuffer()
-    Base.show_sym(io, s)
-    return String(take!(io))
-end
+representable_string(s::Symbol) = sprint(Base.show_sym, s)
 
 _completion_text(c::TextCompletion) = c.text
 _completion_text(c::KeywordCompletion) = c.keyword
