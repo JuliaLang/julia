@@ -534,7 +534,6 @@ function lu!(A::Tridiagonal{T,V}, pivot::Union{RowMaximum,NoPivot} = RowMaximum(
     else
         du2 = fill!(similar(d, max(0, n-2)), 0)::V
     end
-                
 
     @inbounds begin
         for i = 1:n
