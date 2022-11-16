@@ -590,25 +590,6 @@ function store_backedges(frame::MethodInstance, edges::Vector{Any})
     end
 end
 
-# widen all Const elements in type annotations
-function widen_all_consts!(src::CodeInfo)
-    ssavaluetypes = src.ssavaluetypes::Vector{Any}
-    for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
-    end
-
-    for i = 1:length(src.code)
-        x = src.code[i]
-        if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
-        end
-    end
-
-    src.rettype = widenconst(src.rettype)
-
-    return src
-end
-
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
