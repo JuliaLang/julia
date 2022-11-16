@@ -1723,18 +1723,21 @@ let src = code_typed1((Atomic{Int},Union{Int,Float64})) do a, b
 end
 
 # apply `ssa_inlining_pass` multiple times
+function multiple_inlining(a, b)
+    @noinline a*b
+end
 let interp = Core.Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = Base.code_ircode((Int,Int); optimize_until="inlining", interp) do a, b
-        @noinline a*b
-    end |> only
+    ir, = only(Base.code_ircode(multiple_inlining, (Int,Int); optimize_until="inlining", interp))
     i = findfirst(isinvoke(:*), ir.stmts.inst)
     @test i !== nothing
 
     # ok, now delete the callsite flag, and see the second inlining pass can inline the call
     @eval Core.Compiler $ir.stmts[$i][:flag] &= ~IR_FLAG_NOINLINE
-    inlining = Core.Compiler.InliningState(Core.Compiler.OptimizationParams(interp), nothing,
-        Core.Compiler.get_world_counter(interp), interp)
+    linfo = let specs = only(methods(multiple_inlining, (Int,Int))).specializations
+        specs[findfirst(!isnothing, specs)::Int]
+    end
+    inlining = Core.Compiler.InliningState(linfo, Core.Compiler.OptimizationParams(interp), interp)
     ir = Core.Compiler.ssa_inlining_pass!(ir, inlining, false)
     @test count(isinvoke(:*), ir.stmts.inst) == 0
     @test count(iscall((ir, Core.Intrinsics.mul_int)), ir.stmts.inst) == 1

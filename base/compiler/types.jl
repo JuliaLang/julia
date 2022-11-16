@@ -90,30 +90,40 @@ struct OptimizationParams
     assume_fatal_throw::Bool
 
     MAX_TUPLE_SPLAT::Int
-
-    function OptimizationParams(;
-            inlining::Bool = inlining_enabled(),
-            inline_cost_threshold::Int = 100,
-            inline_nonleaf_penalty::Int = 1000,
-            inline_tupleret_bonus::Int = 250,
-            inline_error_path_cost::Int = 20,
-            tuple_splat::Int = 32,
-            compilesig_invokes::Bool = true,
-            trust_inference::Bool = false,
-            assume_fatal_throw::Bool = false
-        )
-        return new(
-            inlining,
-            inline_cost_threshold,
-            inline_nonleaf_penalty,
-            inline_tupleret_bonus,
-            inline_error_path_cost,
-            compilesig_invokes,
-            trust_inference,
-            assume_fatal_throw,
-            tuple_splat,
-        )
-    end
+end
+function OptimizationParams(
+    params::OptimizationParams = OptimizationParams(
+        #=inlining=# inlining_enabled(),
+        #=inline_cost_threshold=# 100,
+        #=inline_nonleaf_penalty::Int=# 1000,
+        #=inline_tupleret_bonus::Int=# 250,
+        #=inline_error_path_cost::Int=# 20,
+        #=compilesig_invokes::Bool=# true,
+        #=trust_inference::Bool=# false,
+        #=assume_fatal_throw::Bool=# false,
+        #=MAX_TUPLE_SPLAT::Int=# 32
+        );
+    inlining::Bool = params.inlining,
+    inline_cost_threshold::Int = params.inline_cost_threshold,
+    inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
+    inline_tupleret_bonus::Int = params.inline_tupleret_bonus,
+    inline_error_path_cost::Int = params.inline_error_path_cost,
+    compilesig_invokes::Bool = params.compilesig_invokes,
+    trust_inference::Bool = params.trust_inference,
+    assume_fatal_throw::Bool = params.assume_fatal_throw,
+    tuple_splat::Int = params.MAX_TUPLE_SPLAT,
+    )
+    return OptimizationParams(
+        inlining,
+        inline_cost_threshold,
+        inline_nonleaf_penalty,
+        inline_tupleret_bonus,
+        inline_error_path_cost,
+        compilesig_invokes,
+        trust_inference,
+        assume_fatal_throw,
+        tuple_splat,
+    )
 end
 
 """
@@ -146,28 +156,38 @@ struct InferenceParams
     # when attempting to inline _apply_iterate, abort the optimization if the
     # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
+end
 
-    function InferenceParams(;
-            ipo_constant_propagation::Bool = true,
-            aggressive_constant_propagation::Bool = false,
-            unoptimize_throw_blocks::Bool = true,
-            max_methods::Int = 3,
-            union_splitting::Int = 4,
-            apply_union_enum::Int = 8,
-            tupletype_depth::Int = 3,
-            tuple_splat::Int = 32,
-        )
-        return new(
-            ipo_constant_propagation,
-            aggressive_constant_propagation,
-            unoptimize_throw_blocks,
-            max_methods,
-            union_splitting,
-            apply_union_enum,
-            tupletype_depth,
-            tuple_splat,
-        )
-    end
+function InferenceParams(
+    params::InferenceParams = InferenceParams(
+        #=ipo_constant_propagation::Bool=# true,
+        #=aggressive_constant_propagation::Bool=# false,
+        #=unoptimize_throw_blocks::Bool=# true,
+        #=max_methods::Int=# 3,
+        #=union_splitting::Int=# 4,
+        #=apply_union_enum::Int=# 8,
+        #=tupletype_depth::Int=# 3,
+        #=tuple_splat::Int=# 32,
+        );
+    ipo_constant_propagation::Bool = params.ipo_constant_propagation,
+    aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
+    unoptimize_throw_blocks::Bool = params.unoptimize_throw_blocks,
+    max_methods::Int = params.MAX_METHODS,
+    union_splitting::Int = params.MAX_UNION_SPLITTING,
+    apply_union_enum::Int = params.MAX_APPLY_UNION_ENUM,
+    tupletype_depth::Int = params.TUPLE_COMPLEXITY_LIMIT_DEPTH,
+    tuple_splat::Int = params.MAX_TUPLE_SPLAT,
+    )
+    return InferenceParams(
+        ipo_constant_propagation,
+        aggressive_constant_propagation,
+        unoptimize_throw_blocks,
+        max_methods,
+        union_splitting,
+        apply_union_enum,
+        tupletype_depth,
+        tuple_splat,
+    )
 end
 
 """

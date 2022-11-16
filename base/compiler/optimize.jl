@@ -112,13 +112,21 @@ struct InliningState{Interp<:AbstractInterpreter}
     et::Union{EdgeTracker,Nothing}
     world::UInt
     interp::Interp
+    function InliningState(linfo::MethodInstance, params::OptimizationParams,
+        et::Union{EdgeTracker,Nothing}, world::UInt, interp::Interp) where Interp<:AbstractInterpreter
+        if !isa(linfo.def, Method)
+            # don't inline into toplevel code (which is much slower)
+            params = OptimizationParams(params; inlining=false)
+        end
+        return new{Interp}(params, et, world, interp)
+    end
 end
 function InliningState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
     et = EdgeTracker(frame.stmt_edges[1]::Vector{Any}, frame.valid_worlds)
-    return InliningState(params, et, frame.world, interp)
+    return InliningState(frame.linfo, params, et, frame.world, interp)
 end
-function InliningState(params::OptimizationParams, interp::AbstractInterpreter)
-    return InliningState(params, nothing, get_world_counter(interp), interp)
+function InliningState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
+    return InliningState(linfo, params, nothing, get_world_counter(interp), interp)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
@@ -160,12 +168,10 @@ function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::Optimiz
         slottypes = Any[ Any for i = 1:nslots ]
     end
     stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
-    # cache some useful state computations
-    def = linfo.def
-    mod = isa(def, Method) ? def.module : def
+    mod = let def = linfo.def; isa(def, Method) ? def.module : def; end
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
-    inlining = InliningState(params, interp)
+    inlining = InliningState(linfo, params, interp)
     return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing)
 end
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
@@ -576,10 +582,7 @@ function run_passes(
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "compact 1" ir = compact!(ir)
-    # don't inline into toplevel code (which is much slower)
-    if isa(sv.linfo.def, Method)
-        @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    end
+    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
