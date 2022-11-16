@@ -4772,7 +4772,7 @@ static Value *emit_condition(jl_codectx_t &ctx, jl_value_t *cond, const std::str
     return emit_condition(ctx, emit_expr(ctx, cond), msg);
 }
 
-static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result, Value* world_age_field)
+static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
 {
     if (jl_is_ssavalue(expr) && ssaval_result == -1)
         return; // value not used, no point in attempting codegen for it
@@ -4826,14 +4826,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result,
         return;
     }
     else {
-        if (!jl_is_method(ctx.linfo->def.method) && !ctx.is_opaque_closure) {
-            // we're at toplevel; insert an atomic barrier between every instruction
-            // TODO: inference is invalid if this has any effect (which it often does)
-            LoadInst *world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
-                prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-            world->setOrdering(AtomicOrdering::Monotonic);
-            ctx.builder.CreateAlignedStore(world, world_age_field, Align(sizeof(size_t)));
-        }
         assert(ssaval_result != -1);
         emit_ssaval_assign(ctx, ssaval_result, expr);
     }
@@ -7794,7 +7786,7 @@ static jl_llvm_functions_t
             ctx.builder.SetInsertPoint(tryblk);
         }
         else {
-            emit_stmtpos(ctx, stmt, cursor, world_age_field);
+            emit_stmtpos(ctx, stmt, cursor);
             mallocVisitStmt(debuginfoloc, nullptr);
         }
         find_next_stmt(cursor + 1);
@@ -8019,12 +8011,12 @@ static jl_llvm_functions_t
     }
 
     // step 12. Perform any delayed instantiations
-    if (ctx.debug_enabled) {
-        bool in_prologue = true;
-        for (auto &BB : *ctx.f) {
-            for (auto &I : BB) {
-                CallBase *call = dyn_cast<CallBase>(&I);
-                if (call && !I.getDebugLoc()) {
+    bool in_prologue = true;
+    for (auto &BB : *ctx.f) {
+        for (auto &I : BB) {
+            CallBase *call = dyn_cast<CallBase>(&I);
+            if (call) {
+                if (ctx.debug_enabled && !I.getDebugLoc()) {
                     // LLVM Verifier: inlinable function call in a function with debug info must have a !dbg location
                     // make sure that anything we attempt to call has some inlining info, just in case optimization messed up
                     // (except if we know that it is an intrinsic used in our prologue, which should never have its own debug subprogram)
@@ -8033,12 +8025,24 @@ static jl_llvm_functions_t
                         I.setDebugLoc(topdebugloc);
                     }
                 }
-                if (&I == &prologue_end)
-                    in_prologue = false;
+                if (toplevel && !ctx.is_opaque_closure && !in_prologue) {
+                    // we're at toplevel; insert an atomic barrier between every instruction
+                    // TODO: inference is invalid if this has any effect (which it often does)
+                    LoadInst *load_world = new LoadInst(getSizeTy(ctx.builder.getContext()),
+                        prepare_global_in(jl_Module, jlgetworld_global), Twine(),
+                        /*isVolatile*/false, Align(sizeof(size_t)), /*insertBefore*/&I);
+                    load_world->setOrdering(AtomicOrdering::Monotonic);
+                    StoreInst *store_world = new StoreInst(load_world, world_age_field,
+                        /*isVolatile*/false, Align(sizeof(size_t)), /*insertBefore*/&I);
+                    (void)store_world;
+                }
             }
+            if (&I == &prologue_end)
+                in_prologue = false;
         }
-        dbuilder.finalize();
     }
+    if (ctx.debug_enabled)
+        dbuilder.finalize();
 
     if (ctx.vaSlot > 0) {
         // remove VA allocation if we never referenced it
