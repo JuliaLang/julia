@@ -124,7 +124,7 @@ HeapSnapshot *g_snapshot = nullptr;
 extern jl_mutex_t heapsnapshot_lock;
 
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
-static inline void _record_gc_edge(const char *node_type, const char *edge_type,
+static inline void _record_gc_edge(const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
 void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
 void _add_internal_root(HeapSnapshot *snapshot);
@@ -382,13 +382,13 @@ void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT
 {
-    _record_gc_edge("array", "element", from, to, index);
+    _record_gc_edge("element", from, to, index);
 }
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
     string path = _fieldpath_for_slot(from, slot);
-    _record_gc_edge("object", "property", from, to,
+    _record_gc_edge("property", from, to,
                     g_snapshot->names.find_or_create_string_id(path));
 }
 
@@ -415,7 +415,7 @@ void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_
 
 void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
 {
-    _record_gc_edge("object", "internal", from, to,
+    _record_gc_edge("internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
@@ -446,8 +446,8 @@ void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t byt
     _record_gc_just_edge("hidden", from_node, to_node_idx, name_or_idx);
 }
 
-static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
+static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
+                                  jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
 {
     auto from_node_idx = record_node_to_gc_snapshot(a);
     auto to_node_idx = record_node_to_gc_snapshot(b);
