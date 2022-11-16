@@ -111,7 +111,7 @@ function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
     if isa(src, Vector{UInt8})
         src = ccall(:jl_uncompress_ir, Any, (Any, Ptr{Cvoid}, Any), mi.def, C_NULL, src)::CodeInfo
     else
-        isa(src, CodeInfo) || return src
+        isa(src, CodeInfo) || return nothing
     end
     return inflate_ir(src, mi)
 end
@@ -401,7 +401,7 @@ function _ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IR
         end
     end
 
-    return ultimate_rt
+    return maybe_singleton_const(ultimate_rt)
 end
 
 function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRInterpretationState)

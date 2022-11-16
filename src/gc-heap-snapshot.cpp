@@ -185,6 +185,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
 
     // Insert a new Node
     size_t self_size = 0;
+    std::string type_name;
     StringRef name = "<missing>";
     StringRef node_type = "object";
 
@@ -206,11 +207,16 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
     }
     else if (jl_is_module(a)) {
-        name = "Module";
+        name = jl_symbol_name_(((_jl_module_t*)a)->name);
         self_size = sizeof(jl_module_t);
     }
     else if (jl_is_task(a)) {
         name = "Task";
+        self_size = sizeof(jl_task_t);
+    }
+    else if (jl_is_datatype(a)) {
+        type_name = string("Type{") + string(jl_symbol_name_(((_jl_datatype_t*)a)->name->name)) + string("}");
+        name = StringRef(type_name);
         self_size = sizeof(jl_task_t);
     }
     else {
@@ -403,13 +409,28 @@ void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, "<malloc>");
-
+    const char *alloc_kind;
+    switch (alloc_type)
+    {
+    case 0:
+        alloc_kind = "<malloc>";
+        break;
+    case 1:
+        alloc_kind = "<pooled>";
+        break;
+    case 2:
+        alloc_kind = "<inline>";
+        break;
+    default:
+        alloc_kind = "<undef>";
+        break;
+    }
+    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
     auto &from_node = g_snapshot->nodes[from_node_idx];
     from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
 

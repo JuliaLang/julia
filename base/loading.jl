@@ -354,8 +354,7 @@ Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 julia> using LinearAlgebra
 
 julia> Base.identify_package(LinearAlgebra, "Pkg") # Pkg is not a dependency of LinearAlgebra
-
-````
+```
 """
 identify_package(where::Module, name::String) = _nothing_or_first(identify_package_env(where, name))
 identify_package(where::PkgId, name::String)  = _nothing_or_first(identify_package_env(where, name))
@@ -2261,6 +2260,7 @@ end
                 ftime = mtime(f)
                 is_stale = ( ftime != ftime_req ) &&
                            ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                           ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
                            ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
                            ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
                            !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond

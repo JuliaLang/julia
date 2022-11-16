@@ -254,7 +254,7 @@ static jl_gcframe_t **jl_get_pgcstack_init(void)
     // are used. Since the address of TLS variables should be constant,
     // changing the getter address can result in weird crashes.
 
-    // This is clearly not thread safe but should be fine since we
+    // This is clearly not thread-safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
 #  if JL_USE_IFUNC

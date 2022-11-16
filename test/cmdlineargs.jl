@@ -657,9 +657,9 @@ end
 # to use as a dummy shlib to open
 libjulia = if Base.DARWIN_FRAMEWORK
     abspath(Libdl.dlpath(Base.DARWIN_FRAMEWORK_NAME *
-        (ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "_debug" : "")))
+        (Base.isdebugbuild() ? "_debug" : "")))
 else
-    abspath(Libdl.dlpath((ccall(:jl_is_debugbuild, Cint, ()) != 0) ? "libjulia-debug" : "libjulia"))
+    abspath(Libdl.dlpath(Base.isdebugbuild() ? "libjulia-debug" : "libjulia"))
 end
 
 

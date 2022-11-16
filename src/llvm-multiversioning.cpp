@@ -281,7 +281,7 @@ private:
     function_ref<LoopInfo&(Function&)> GetLI;
     function_ref<CallGraph&()> GetCG;
 
-    // Map from original functiton to one based index in `fvars`
+    // Map from original function to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
     std::vector<uint32_t> func_infos{};

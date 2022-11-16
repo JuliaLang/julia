@@ -590,25 +590,6 @@ function store_backedges(frame::MethodInstance, edges::Vector{Any})
     end
 end
 
-# widen all Const elements in type annotations
-function widen_all_consts!(src::CodeInfo)
-    ssavaluetypes = src.ssavaluetypes::Vector{Any}
-    for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
-    end
-
-    for i = 1:length(src.code)
-        x = src.code[i]
-        if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
-        end
-    end
-
-    src.rettype = widenconst(src.rettype)
-
-    return src
-end
-
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -937,9 +918,6 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         # completely new
         lock_mi_inference(interp, mi)
         result = InferenceResult(mi)
-        if cache === :local
-            result.must_be_codeinf = true # TODO directly keep `opt.ir` for this case
-        end
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
             # can't get the source for this, so we know nothing
@@ -1013,7 +991,6 @@ function typeinf_frame(interp::AbstractInterpreter, method::Method, @nospecializ
     mi = specialize_method(method, atype, sparams)::MethodInstance
     ccall(:jl_typeinf_timing_begin, Cvoid, ())
     result = InferenceResult(mi)
-    result.must_be_codeinf = true
     frame = InferenceState(result, run_optimizer ? :global : :no, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1073,7 +1050,6 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
     end
     lock_mi_inference(interp, mi)
     result = InferenceResult(mi)
-    result.must_be_codeinf = true
     frame = InferenceState(result, #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
@@ -1117,7 +1093,6 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, linfo::MethodInstance
             ccall(:jl_typeinf_timing_begin, Cvoid, ())
             if !src.inferred
                 result = InferenceResult(linfo)
-                result.must_be_codeinf = true
                 frame = InferenceState(result, src, #=cache=#:global, interp)
                 typeinf(interp, frame)
                 @assert frame.inferred # TODO: deal with this better

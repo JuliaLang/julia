@@ -825,7 +825,7 @@ function recompute_inst_flag(newinst::NewInstruction, src::Union{IRCode,Incremen
 end
 
 function insert_node!(compact::IncrementalCompact, @nospecialize(before), newinst::NewInstruction, attach_after::Bool=false)
-    newflag = newinst.flag::UInt8
+    newflag = recompute_inst_flag(newinst, compact)
     if isa(before, SSAValue)
         if before.id < compact.result_idx
             count_added_node!(compact, newinst.stmt)

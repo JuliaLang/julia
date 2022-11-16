@@ -831,10 +831,10 @@ This might be worthwhile when either of the following are true:
   * You require CPU-intensive processing on each `Car`, and it becomes vastly more efficient if you
     know the `Make` and `Model` at compile time and the total number of different `Make` or `Model`
     that will be used is not too large.
-  * You have homogenous lists of the same type of `Car` to process, so that you can store them all
+  * You have homogeneous lists of the same type of `Car` to process, so that you can store them all
     in an `Array{Car{:Honda,:Accord},N}`.
 
-When the latter holds, a function processing such a homogenous array can be productively specialized:
+When the latter holds, a function processing such a homogeneous array can be productively specialized:
 Julia knows the type of each element in advance (all objects in the container have the same concrete
 type), so Julia can "look up" the correct method calls when the function is being compiled (obviating
 the need to check at run-time) and thereby emit efficient code for processing the whole list.

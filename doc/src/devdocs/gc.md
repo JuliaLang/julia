@@ -40,7 +40,7 @@ In this case, the old object being written to is enqueued into a remembered set,
 its mark bit is set to indicate that a write barrier has already been triggered on it.
 
 There is no explicit flag to determine whether a marking pass will scan the
-entire heap or only through young objects and remebered set.
+entire heap or only through young objects and remembered set.
 The mark bits of the objects themselves are used to determine whether a full mark happens.
 The mark-sweep algorithm follows this sequence of steps:
 

@@ -31,13 +31,18 @@ macro profile(ex)
     end
 end
 
-# triggers printing the report after a SIGINFO/SIGUSR1 profile request
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
 function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
+            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
+                println("Saving heap snapshot...")
+                fname = take_heap_snapshot()
+                println("Heap snapshot saved to `$(fname)`")
+            end
         end
     catch ex
         if !isa(ex, InterruptException)
@@ -607,7 +612,7 @@ error_codes = Dict(
 """
     fetch(;include_meta = true) -> data
 
-Returns a copy of the buffer of profile backtraces. Note that the
+Return a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.

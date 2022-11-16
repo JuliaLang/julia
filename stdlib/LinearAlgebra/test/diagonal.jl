@@ -690,7 +690,7 @@ end
     @test D2 == D * D
 end
 
-@testset "multiplication of 2 Diagonal and a Matix (#46400)" begin
+@testset "multiplication of 2 Diagonal and a Matrix (#46400)" begin
     A = randn(10, 10)
     D = Diagonal(randn(10))
     D2 = Diagonal(randn(10))

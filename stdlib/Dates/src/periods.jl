@@ -58,7 +58,7 @@ Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 """
     default(p::Period) -> Period
 
-Returns a sensible "default" value for the input Period by returning `T(1)` for Year,
+Return a sensible "default" value for the input Period by returning `T(1)` for Year,
 Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
 """
 function default end
