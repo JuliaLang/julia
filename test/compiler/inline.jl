@@ -1846,3 +1846,53 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
         make_issue47349(Val(4))((x,nothing,Int))
     end |> only === Type{Int}
 end
+
+# https://github.com/JuliaLang/julia/issues/47561
+# don't inline toplevel calls
+import Core: CodeInfo, MethodInstance
+import Core.Compiler: NativeInterpreter, InferenceResult, InferenceState, typeinf
+
+# resolve toplevel symbols (and other expressions like `:foreigncall`)
+# so that the returned `CodeInfo` is eligible for abstractintepret and optimization
+function resolve_toplevel_symbols!(mod::Module, src::CodeInfo)
+    @ccall jl_resolve_globals_in_ir(
+        #=jl_array_t *stmts=# src.code::Any,
+        #=jl_module_t *m=# mod::Any,
+        #=jl_svec_t *sparam_vals=# Core.svec()::Any,
+        #=int binding_effects=# 0::Int)::Cvoid
+    return src
+end
+function typeinf_toplevel(mod::Module, @nospecialize(x); world::UInt=Base.get_world_counter())
+    lwr = Meta.lower(mod, x)
+    @assert Meta.isexpr(lwr, :thunk)
+    src = lwr.args[1]::CodeInfo
+
+    # construct toplevel `MethodInstance`
+    mi = ccall(:jl_new_method_instance_uninit, Ref{MethodInstance}, ());
+    mi.specTypes = Tuple{}
+
+    mi.def = @__MODULE__
+    src = resolve_toplevel_symbols!(@__MODULE__, src)
+    mi.uninferred = src
+
+    interp = NativeInterpreter(world)
+    result = InferenceResult(mi);
+    frame = InferenceState(result, src, #=cache=# :global, interp)::InferenceState
+
+    typeinf(interp, frame)
+    @assert frame.inferred
+    return interp, frame
+end
+
+@inline function sum_n(n)
+    s = 0
+    for i in 1:n
+        s += i
+    end
+    return s
+end
+let
+    _, frame = typeinf_toplevel(@__MODULE__, :((@time sum_n(1_000_000_000))))
+    src = frame.src
+    @test any(isinvoke(:sum_n), src.code)
+end
