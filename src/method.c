@@ -17,6 +17,7 @@ extern "C" {
 
 extern jl_value_t *jl_builtin_getfield;
 extern jl_value_t *jl_builtin_tuple;
+jl_methtable_t *jl_kwcall_mt;
 
 jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name,
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva);
@@ -902,30 +903,30 @@ JL_DLLEXPORT jl_value_t *jl_generic_function_def(jl_sym_t *name,
     return gf;
 }
 
-static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got_tuple1) JL_NOTSAFEPOINT
+static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
 {
     if (jl_is_datatype(a)) {
-        if (got_tuple1) {
+        if (n == 0) {
             jl_methtable_t *mt = ((jl_datatype_t*)a)->name->mt;
             if (mt != NULL)
                 return mt;
         }
         if (jl_is_tuple_type(a)) {
-            if (jl_nparams(a) >= 1)
-                return first_methtable(jl_tparam0(a), 1);
+            if (jl_nparams(a) >= n)
+                return nth_methtable(jl_tparam(a, n - 1), 0);
         }
     }
     else if (jl_is_typevar(a)) {
-        return first_methtable(((jl_tvar_t*)a)->ub, got_tuple1);
+        return nth_methtable(((jl_tvar_t*)a)->ub, n);
     }
     else if (jl_is_unionall(a)) {
-        return first_methtable(((jl_unionall_t*)a)->body, got_tuple1);
+        return nth_methtable(((jl_unionall_t*)a)->body, n);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_methtable_t *m1 = first_methtable(u->a, got_tuple1);
+        jl_methtable_t *m1 = nth_methtable(u->a, n);
         if ((jl_value_t*)m1 != jl_nothing) {
-            jl_methtable_t *m2 = first_methtable(u->b, got_tuple1);
+            jl_methtable_t *m2 = nth_methtable(u->b, n);
             if (m1 == m2)
                 return m1;
         }
@@ -936,7 +937,15 @@ static jl_methtable_t *first_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int got
 // get the MethodTable for dispatch, or `nothing` if cannot be determined
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_methtable(argtypes, 0);
+    return nth_methtable(argtypes, 1);
+}
+
+jl_methtable_t *jl_kwmethod_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    jl_methtable_t *kwmt = nth_methtable(argtypes, 3);
+    if ((jl_value_t*)kwmt == jl_nothing)
+        return NULL;
+    return kwmt;
 }
 
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
@@ -947,7 +956,7 @@ JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGAT
 // get the MethodTable implied by a single given type, or `nothing`
 JL_DLLEXPORT jl_methtable_t *jl_argument_method_table(jl_value_t *argt JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return first_methtable(argt, 1);
+    return nth_methtable(argt, 0);
 }
 
 jl_array_t *jl_all_methods JL_GLOBALLY_ROOTED;
@@ -991,11 +1000,13 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     int32_t line = jl_linenode_line(functionloc);
 
     // TODO: derive our debug name from the syntax instead of the type
-    name = mt->name;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || external_mt) {
+    jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(argtype) : mt;
+    // if we have a kwcall, try to derive the name from the callee argument method table
+    name = (kwmt ? kwmt : mt)->name;
+    if (kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || external_mt) {
         // our value for `name` is bad, try to guess what the syntax might have had,
         // like `jl_static_show_func_sig` might have come up with
-        jl_datatype_t *dt = jl_first_argument_datatype(argtype);
+        jl_datatype_t *dt = jl_nth_argument_datatype(argtype, mt == jl_kwcall_mt ? 3 : 1);
         if (dt != NULL) {
             name = dt->name->name;
             if (jl_is_type_type((jl_value_t*)dt)) {

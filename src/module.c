@@ -394,12 +394,11 @@ JL_DLLEXPORT jl_value_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
 {
     JL_LOCK(&m->lock);
-    jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
-    if (b == HT_NOTFOUND || b->owner == NULL)
-        b = using_resolve_binding(m, var, NULL, 0);
+    jl_binding_t *b = _jl_get_module_binding(m, var);
     JL_UNLOCK(&m->lock);
-    if (b == NULL)
+    if (b == HT_NOTFOUND || b->owner == NULL)
         return jl_nothing;
+    b = jl_get_binding(m, var);
     jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
     return ty ? ty : jl_nothing;
 }

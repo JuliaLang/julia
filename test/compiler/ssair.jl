@@ -527,3 +527,80 @@ end
     ir = Core.Compiler.complete(compact)
     @test Core.Compiler.verify_ir(ir) === nothing
 end
+
+# insert_node! operations
+# =======================
+
+import Core: SSAValue
+import Core.Compiler: NewInstruction, insert_node!
+
+# insert_node! for pending node
+let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+        a^b
+    end |> only |> first
+    @test length(ir.stmts) == 2
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+
+    newssa = insert_node!(ir, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+    newssa = insert_node!(ir, newssa, NewInstruction(Expr(:call, println, newssa), Nothing), #=attach_after=#true)
+
+    ir = Core.Compiler.compact!(ir)
+    @test length(ir.stmts) == 4
+    @test Meta.isexpr(ir.stmts[1][:inst], :invoke)
+    call1 = ir.stmts[2][:inst]
+    @test iscall((ir,println), call1)
+    @test call1.args[2] === SSAValue(1)
+    call2 = ir.stmts[3][:inst]
+    @test iscall((ir,println), call2)
+    @test call2.args[2] === SSAValue(2)
+end
+
+# insert_node! with new instruction with flag computed
+let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+        a^b
+    end |> only |> first
+    invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+        Meta.isexpr(x, :invoke)
+    end
+    @test invoke_idx !== nothing
+    invoke_expr = ir.stmts.inst[invoke_idx]
+
+    # effect-ful node
+    let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
+        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, println, SSAValue(1)), Nothing), #=attach_after=#true)
+        state = Core.Compiler.iterate(compact)
+        while state !== nothing
+            state = Core.Compiler.iterate(compact, state[2])
+        end
+        ir = Core.Compiler.finish(compact)
+        new_invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            x == invoke_expr
+        end
+        @test new_invoke_idx !== nothing
+        new_call_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            iscall((ir,println), x) && x.args[2] === SSAValue(invoke_idx)
+        end
+        @test new_call_idx !== nothing
+        @test new_call_idx == new_invoke_idx+1
+    end
+
+    # effect-free node
+    let compact = Core.Compiler.IncrementalCompact(Core.Compiler.copy(ir))
+        insert_node!(compact, SSAValue(1), NewInstruction(Expr(:call, GlobalRef(Base, :add_int), SSAValue(1), SSAValue(1)), Int), #=attach_after=#true)
+        state = Core.Compiler.iterate(compact)
+        while state !== nothing
+            state = Core.Compiler.iterate(compact, state[2])
+        end
+        ir = Core.Compiler.finish(compact)
+
+        ir = Core.Compiler.finish(compact)
+        new_invoke_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            x == invoke_expr
+        end
+        @test new_invoke_idx !== nothing
+        new_call_idx = findfirst(ir.stmts.inst) do @nospecialize(x)
+            iscall((ir,Base.add_int), x) && x.args[2] === SSAValue(invoke_idx)
+        end
+        @test new_call_idx === nothing # should be deleted during the compaction
+    end
+end

@@ -31,13 +31,18 @@ macro profile(ex)
     end
 end
 
-# triggers printing the report after a SIGINFO/SIGUSR1 profile request
+# triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 const PROFILE_PRINT_COND = Ref{Base.AsyncCondition}()
 function profile_printing_listener()
     try
         while true
             wait(PROFILE_PRINT_COND[])
             peek_report[]()
+            if get(ENV, "JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", nothing) === "1"
+                println("Saving heap snapshot...")
+                fname = take_heap_snapshot()
+                println("Heap snapshot saved to `$(fname)`")
+            end
         end
     catch ex
         if !isa(ex, InterruptException)
@@ -88,10 +93,6 @@ stored per thread. Each instruction pointer corresponds to a single line of code
 list of instruction pointers. Note that 6 spaces for instruction pointers per backtrace are used to store metadata and two
 NULL end markers. Current settings can be obtained by calling this function with no arguments, and each can be set independently
 using keywords or in the order `(n, delay)`.
-
-!!! compat "Julia 1.8"
-    As of Julia 1.8, this function allocates space for `n` instruction pointers per thread being profiled.
-    Previously this was `n` total.
 """
 function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} = nothing, limitwarn::Bool = true)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
@@ -102,8 +103,7 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
     end
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n === nothing && delay === nothing
-        nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
-        return round(Int, n_cur / nthreads), delay_cur
+        return n_cur, delay_cur
     end
     nnew = (n === nothing) ? n_cur : n
     delaynew = (delay === nothing) ? delay_cur : delay
@@ -111,20 +111,17 @@ function init(; n::Union{Nothing,Integer} = nothing, delay::Union{Nothing,Real} 
 end
 
 function init(n::Integer, delay::Real; limitwarn::Bool = true)
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads() # windows only profiles the main thread
     sample_size_bytes = sizeof(Ptr) # == Sys.WORD_SIZE / 8
-    buffer_samples = n * nthreads
+    buffer_samples = n
     buffer_size_bytes = buffer_samples * sample_size_bytes
     if buffer_size_bytes > 2^29 && Sys.WORD_SIZE == 32
-        buffer_size_bytes_per_thread = floor(Int, 2^29 / nthreads)
-        buffer_samples_per_thread = floor(Int, buffer_size_bytes_per_thread / sample_size_bytes)
-        buffer_samples = buffer_samples_per_thread * nthreads
+        buffer_samples = floor(Int, 2^29 / sample_size_bytes)
         buffer_size_bytes = buffer_samples * sample_size_bytes
-        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples_per_thread per thread) given that this system is 32-bit"
+        limitwarn && @warn "Requested profile buffer limited to 512MB (n = $buffer_samples) given that this system is 32-bit"
     end
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64,10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), buffer_samples, round(UInt64, 10^9*delay))
     if status == -1
-        error("could not allocate space for ", n, " instruction pointers per thread being profiled ($nthreads threads, $(Base.format_bytes(buffer_size_bytes)) total)")
+        error("could not allocate space for ", n, " instruction pointers ($(Base.format_bytes(buffer_size_bytes)))")
     end
 end
 
@@ -427,7 +424,7 @@ function getdict!(dict::LineInfoDict, data::Vector{UInt})
     n_unique_ips = length(unique_ips)
     n_unique_ips == 0 && return dict
     iplookups = similar(unique_ips, Vector{StackFrame})
-    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.nthreads(), RoundUp))
+    @sync for indexes_part in Iterators.partition(eachindex(unique_ips), div(n_unique_ips, Threads.threadpoolsize(), RoundUp))
         Threads.@spawn begin
             for i in indexes_part
                 iplookups[i] = _lookup_corrected(unique_ips[i])
@@ -615,7 +612,7 @@ error_codes = Dict(
 """
     fetch(;include_meta = true) -> data
 
-Returns a copy of the buffer of profile backtraces. Note that the
+Return a copy of the buffer of profile backtraces. Note that the
 values in `data` have meaning only on this machine in the current session, because it
 depends on the exact memory addresses used in JIT-compiling. This function is primarily for
 internal use; [`retrieve`](@ref) may be a better choice for most users.
@@ -1243,12 +1240,14 @@ end
 """
     Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
-Devtools Heap Snapshot viewer (.heapsnapshot extension), to the given
-file path or IO stream. If all_one is true, then report the size of
-every object as one so they can be easily counted. Otherwise, report
-the actual size.
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory, or the given
+file path, or IO stream. If `all_one` is true, then report the size of
+every object as one so they can be easily counted. Otherwise, report the
+actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
     @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
@@ -1257,6 +1256,11 @@ function take_heap_snapshot(filepath::String, all_one::Bool=false)
     open(filepath, "w") do io
         take_heap_snapshot(io, all_one)
     end
+    return filepath
+end
+function take_heap_snapshot(all_one::Bool=false)
+    f = abspath("$(getpid())_$(time_ns()).heapsnapshot")
+    return take_heap_snapshot(f, all_one)
 end
 
 

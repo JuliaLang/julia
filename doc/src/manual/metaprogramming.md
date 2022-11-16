@@ -11,6 +11,21 @@ code in Julia are represented by Julia data structures, powerful [reflection](ht
 capabilities are available to explore the internals of a program and its types just like any other
 data.
 
+!!! warning
+    Metaprogramming is a powerful tool, but it introduces complexity that can make code more
+    difficult to understand. For example, it can be surprisingly hard to get scope rules
+    correct. Metaprogramming should typically be used only when other approaches such as
+    [higher order functions](@ref man-anonymous-functions) and
+    [closures](https://en.wikipedia.org/wiki/Closure_(computer_programming)) cannot be applied.
+
+    `eval` and defining new macros should be typically used as a last resort. It is almost
+    never a good idea to use `Meta.parse` or convert an arbitrary string into Julia code. For
+    manipulating Julia code, use the `Expr` data structure directly to avoid the complexity
+    of how Julia syntax is parsed.
+
+    The best uses of metaprogramming often implement most of their functionality in runtime
+    helper functions, striving to minimize the amount of code they generate.
+
 ## Program representation
 
 Every Julia program starts life as a string:
@@ -1354,7 +1369,7 @@ over the dimensions of the array, collecting the offset in each dimension into t
 
 However, all the information we need for the loop is embedded in the type information of the arguments.
 This allows the compiler to move the iteration to compile time and eliminate the runtime loops
-altogether. We can utilize generated functions to achieve a simmilar effect; in compiler parlance,
+altogether. We can utilize generated functions to achieve a similar effect; in compiler parlance,
 we use generated functions to manually unroll the loop. The body becomes almost identical, but
 instead of calculating the linear index, we build up an *expression* that calculates the index:
 

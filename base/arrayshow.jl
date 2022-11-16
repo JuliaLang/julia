@@ -40,7 +40,7 @@ centered cdot, used in printing of structural zeros of structured matrices.
 Accept keyword args `c` for alternate single character marker.
 """
 function replace_with_centered_mark(s::AbstractString;c::AbstractChar = '⋅')
-    N = length(s)
+    N = textwidth(ANSIIterator(s))
     return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
 end
 

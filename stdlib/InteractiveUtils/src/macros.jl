@@ -97,7 +97,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             return quote
                 local arg1 = $(esc(ex0.args[1]))
                 local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwfunc(arg1),
+                $(fcn)(Core.kwcall,
                        Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...};
                        $(kws...))
             end

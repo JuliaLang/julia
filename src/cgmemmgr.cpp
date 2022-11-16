@@ -218,7 +218,12 @@ static _Atomic(size_t) map_offset{0};
 // Hopefully no one will set a ulimit for this to be a problem...
 static constexpr size_t map_size_inc_default = 128 * 1024 * 1024;
 static size_t map_size = 0;
-static uv_mutex_t shared_map_lock;
+static struct _make_shared_map_lock {
+    uv_mutex_t mtx;
+    _make_shared_map_lock() {
+        uv_mutex_init(&mtx);
+    };
+} shared_map_lock;
 
 static size_t get_map_size_inc()
 {
@@ -264,7 +269,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
     *id = off;
     size_t map_size_inc = get_map_size_inc();
     if (__unlikely(off + size > map_size)) {
-        uv_mutex_lock(&shared_map_lock);
+        uv_mutex_lock(&shared_map_lock.mtx);
         size_t old_size = map_size;
         while (off + size > map_size)
             map_size += map_size_inc;
@@ -275,7 +280,7 @@ static void *alloc_shared_page(size_t size, size_t *id, bool exec)
                 abort();
             }
         }
-        uv_mutex_unlock(&shared_map_lock);
+        uv_mutex_unlock(&shared_map_lock.mtx);
     }
     return create_shared_map(size, off);
 }
@@ -295,7 +300,7 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
         // However, it seems possible to change this at kernel compile time.
 
         // pwrite doesn't support offset with sign bit set but lseek does.
-        // This is obviously not thread safe but none of the mem manager does anyway...
+        // This is obviously not thread-safe but none of the mem manager does anyway...
         // From the kernel code, `lseek` with `SEEK_SET` can't fail.
         // However, this can possibly confuse the glibc wrapper to think that
         // we have invalid input value. Use syscall directly to be sure.
@@ -313,7 +318,6 @@ ssize_t pwrite_addr(int fd, const void *buf, size_t nbyte, uintptr_t addr)
 // Use `get_self_mem_fd` which has a guard to call this only once.
 static int _init_self_mem()
 {
-    uv_mutex_init(&shared_map_lock);
     struct utsname kernel;
     uname(&kernel);
     int major, minor;

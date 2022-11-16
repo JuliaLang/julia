@@ -220,9 +220,21 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     # If we didn't transform the src for caching, we may have to transform
     # it anyway for users like typeinf_ext. Do that here.
     opt = caller.src
-    if opt isa OptimizationState # implies `may_optimize(interp) === true`
+    if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
-            caller.src = ir_to_codeinf!(opt)
+            if caller.must_be_codeinf
+                caller.src = ir_to_codeinf!(opt)
+            elseif is_inlineable(opt.src)
+                # TODO: If the CFG is too big, inlining becomes more expensive and if we're going to
+                # use this IR over and over, it's worth simplifying it. Round trips through
+                # CodeInstance do this implicitly, since they recompute the CFG, so try to
+                # match that behavior here.
+                # ir = cfg_simplify!(opt.ir)
+                caller.src = opt.ir
+            else
+                # Not cached and not inlineable - drop the ir
+                caller.src = nothing
+            end
         end
     end
     return caller.src
@@ -255,7 +267,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
     empty!(frames)
     for (caller, _, _) in results
         opt = caller.src
-        if opt isa OptimizationState # implies `may_optimize(interp) === true`
+        if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
             analyzed = optimize(interp, opt, OptimizationParams(interp), caller)
             if isa(analyzed, ConstAPI)
                 # XXX: The work in ir_to_codeinf! is essentially wasted. The only reason
@@ -355,7 +367,7 @@ function transform_result_for_cache(interp::AbstractInterpreter,
     inferred_result = result.src
     # If we decided not to optimize, drop the OptimizationState now.
     # External interpreters can override as necessary to cache additional information
-    if inferred_result isa OptimizationState
+    if inferred_result isa OptimizationState{typeof(interp)}
         inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
@@ -576,25 +588,6 @@ function store_backedges(frame::MethodInstance, edges::Vector{Any})
             ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), caller, sig, frame)
         end
     end
-end
-
-# widen all Const elements in type annotations
-function widen_all_consts!(src::CodeInfo)
-    ssavaluetypes = src.ssavaluetypes::Vector{Any}
-    for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
-    end
-
-    for i = 1:length(src.code)
-        x = src.code[i]
-        if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
-        end
-    end
-
-    src.rettype = widenconst(src.rettype)
-
-    return src
 end
 
 function record_slot_assign!(sv::InferenceState)
@@ -1056,7 +1049,8 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance)
         return retrieve_code_info(mi)
     end
     lock_mi_inference(interp, mi)
-    frame = InferenceState(InferenceResult(mi), #=cache=#:global, interp)
+    result = InferenceResult(mi)
+    frame = InferenceState(result, #=cache=#:global, interp)
     frame === nothing && return nothing
     typeinf(interp, frame)
     ccall(:jl_typeinf_timing_end, Cvoid, ())

@@ -323,18 +323,26 @@ end
 
 """
     eachindex(A...)
+    eachindex(::IndexStyle, A::AbstractArray...)
 
 Create an iterable object for visiting each index of an `AbstractArray` `A` in an efficient
 manner. For array types that have opted into fast linear indexing (like `Array`), this is
-simply the range `1:length(A)`. For other array types, return a specialized Cartesian
-range to efficiently index into the array with indices specified for every dimension. For
-other iterables, including strings and dictionaries, return an iterator object
-supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+simply the range `1:length(A)` if they use 1-based indexing.
+For array types that have not opted into fast linear indexing, a specialized Cartesian
+range is typically returned to efficiently index into the array with indices specified
+for every dimension.
+
+In general `eachindex` accepts arbitrary iterables, including strings and dictionaries, and returns
+an iterator object supporting arbitrary index types (e.g. unevenly spaced or non-integer indices).
+
+If `A` is `AbstractArray` it is possible to explicitly specify the style of the indices that
+should be returned by `eachindex` by passing a value having `IndexStyle` type as its first argument
+(typically `IndexLinear()` if linear indices are required or `IndexCartesian()` if Cartesian
+range is wanted).
 
 If you supply more than one `AbstractArray` argument, `eachindex` will create an
-iterable object that is fast for all arguments (a [`UnitRange`](@ref)
-if all inputs have fast linear indexing, a [`CartesianIndices`](@ref)
-otherwise).
+iterable object that is fast for all arguments (typically a [`UnitRange`](@ref)
+if all inputs have fast linear indexing, a [`CartesianIndices`](@ref) otherwise).
 If the arrays have different sizes and/or dimensionalities, a `DimensionMismatch` exception
 will be thrown.
 
@@ -488,7 +496,7 @@ first(itr, n::Integer) = collect(Iterators.take(itr, n))
 # Faster method for vectors
 function first(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[begin:min(begin + n - 1, end)]
+    v[range(begin, length=min(n, checked_length(v)))]
 end
 
 """
@@ -538,7 +546,7 @@ last(itr, n::Integer) = reverse!(collect(Iterators.take(Iterators.reverse(itr), 
 # Faster method for arrays
 function last(v::AbstractVector, n::Integer)
     n < 0 && throw(ArgumentError("Number of elements must be nonnegative"))
-    @inbounds v[max(begin, end - n + 1):end]
+    v[range(stop=lastindex(v), length=min(n, checked_length(v)))]
 end
 
 """
@@ -1731,7 +1739,7 @@ function cat_shape(dims, shapes::Tuple)
     end
     return out_shape
 end
-# The new way to compute the shape (more inferrable than combining cat_size & cat_shape, due to Varargs + issue#36454)
+# The new way to compute the shape (more inferable than combining cat_size & cat_shape, due to Varargs + issue#36454)
 cat_size_shape(dims) = ntuple(zero, Val(length(dims)))
 @inline cat_size_shape(dims, X, tail...) = _cat_size_shape(dims, _cshp(1, dims, (), cat_size(X)), tail...)
 _cat_size_shape(dims, shape) = shape
@@ -1813,41 +1821,50 @@ end
 """
     vcat(A...)
 
-Concatenate along dimension 1. To efficiently concatenate a large vector of arrays,
-use `reduce(vcat, x)`.
+Concatenate arrays or numbers vertically. Equivalent to [`cat`](@ref)`(A...; dims=1)`,
+and to the syntax `[a; b; c]`.
+
+To concatenate a large vector of arrays, `reduce(vcat, A)` calls an efficient method
+when `A isa AbstractVector{<:AbstractVecOrMat}`, rather than working pairwise.
+
+See also [`hcat`](@ref), [`Iterators.flatten`](@ref), [`stack`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1 2 3 4 5]
-1×5 Matrix{Int64}:
- 1  2  3  4  5
+julia> v = vcat([1,2], [3,4])
+4-element Vector{Int64}:
+ 1
+ 2
+ 3
+ 4
 
-julia> b = [6 7 8 9 10; 11 12 13 14 15]
-2×5 Matrix{Int64}:
-  6   7   8   9  10
- 11  12  13  14  15
+julia> v == vcat(1, 2, [3,4])  # accepts numbers
+true
 
-julia> vcat(a,b)
-3×5 Matrix{Int64}:
-  1   2   3   4   5
-  6   7   8   9  10
- 11  12  13  14  15
+julia> v == [1; 2; [3,4]]  # syntax for the same operation
+true
 
-julia> c = ([1 2 3], [4 5 6])
-([1 2 3], [4 5 6])
+julia> summary(ComplexF64[1; 2; [3,4]])  # syntax for supplying the element type
+"4-element Vector{ComplexF64}"
 
-julia> vcat(c...)
-2×3 Matrix{Int64}:
- 1  2  3
- 4  5  6
+julia> vcat(range(1, 2, length=3))  # collects lazy ranges
+3-element Vector{Float64}:
+ 1.0
+ 1.5
+ 2.0
 
-julia> vs = [[1, 2], [3, 4], [5, 6]]
-3-element Vector{Vector{Int64}}:
- [1, 2]
- [3, 4]
- [5, 6]
+julia> two = ([10, 20, 30]', Float64[4 5 6; 7 8 9])  # row vector and a matrix
+([10 20 30], [4.0 5.0 6.0; 7.0 8.0 9.0])
 
-julia> reduce(vcat, vs)
+julia> vcat(two...)
+3×3 Matrix{Float64}:
+ 10.0  20.0  30.0
+  4.0   5.0   6.0
+  7.0   8.0   9.0
+
+julia> vs = [[1, 2], [3, 4], [5, 6]];
+
+julia> reduce(vcat, vs)  # more efficient than vcat(vs...)
 6-element Vector{Int64}:
  1
  2
@@ -1855,69 +1872,59 @@ julia> reduce(vcat, vs)
  4
  5
  6
+
+julia> ans == collect(Iterators.flatten(vs))
+true
 ```
 """
 vcat(X...) = cat(X...; dims=Val(1))
 """
     hcat(A...)
 
-Concatenate along dimension 2. To efficiently concatenate a large vector of arrays,
-use `reduce(hcat, x)`.
+Concatenate arrays or numbers horizontally. Equivalent to [`cat`](@ref)`(A...; dims=2)`,
+and to the syntax `[a b c]` or `[a;; b;; c]`.
+
+For a large vector of arrays, `reduce(hcat, A)` calls an efficient method
+when `A isa AbstractVector{<:AbstractVecOrMat}`.
+For a vector of vectors, this can also be written [`stack`](@ref)`(A)`.
+
+See also [`vcat`](@ref), [`hvcat`](@ref).
 
 # Examples
 ```jldoctest
-julia> a = [1; 2; 3; 4; 5]
-5-element Vector{Int64}:
- 1
- 2
- 3
- 4
- 5
-
-julia> b = [6 7; 8 9; 10 11; 12 13; 14 15]
-5×2 Matrix{Int64}:
-  6   7
-  8   9
- 10  11
- 12  13
- 14  15
-
-julia> hcat(a,b)
-5×3 Matrix{Int64}:
- 1   6   7
- 2   8   9
- 3  10  11
- 4  12  13
- 5  14  15
-
-julia> c = ([1; 2; 3], [4; 5; 6])
-([1, 2, 3], [4, 5, 6])
-
-julia> hcat(c...)
-3×2 Matrix{Int64}:
- 1  4
- 2  5
- 3  6
-
-julia> x = Matrix(undef, 3, 0)  # x = [] would have created an Array{Any, 1}, but need an Array{Any, 2}
-3×0 Matrix{Any}
-
-julia> hcat(x, [1; 2; 3])
-3×1 Matrix{Any}:
- 1
- 2
- 3
-
-julia> vs = [[1, 2], [3, 4], [5, 6]]
-3-element Vector{Vector{Int64}}:
- [1, 2]
- [3, 4]
- [5, 6]
-
-julia> reduce(hcat, vs)
+julia> hcat([1,2], [3,4], [5,6])
 2×3 Matrix{Int64}:
  1  3  5
  2  4  6
+
+julia> hcat(1, 2, [30 40], [5, 6, 7]')  # accepts numbers
+1×7 Matrix{Int64}:
+ 1  2  30  40  5  6  7
+
+julia> ans == [1 2 [30 40] [5, 6, 7]']  # syntax for the same operation
+true
+
+julia> Float32[1 2 [30 40] [5, 6, 7]']  # syntax for supplying the eltype
+1×7 Matrix{Float32}:
+ 1.0  2.0  30.0  40.0  5.0  6.0  7.0
+
+julia> ms = [zeros(2,2), [1 2; 3 4], [50 60; 70 80]];
+
+julia> reduce(hcat, ms)  # more efficient than hcat(ms...)
+2×6 Matrix{Float64}:
+ 0.0  0.0  1.0  2.0  50.0  60.0
+ 0.0  0.0  3.0  4.0  70.0  80.0
+
+julia> stack(ms) |> summary  # disagrees on a vector of matrices
+"2×2×3 Array{Float64, 3}"
+
+julia> hcat(Int[], Int[], Int[])  # empty vectors, each of size (0,)
+0×3 Matrix{Int64}
+
+julia> hcat([1.1, 9.9], Matrix(undef, 2, 0))  # hcat with empty 2×0 Matrix
+2×1 Matrix{Any}:
+ 1.1
+ 9.9
 ```
 """
 hcat(X...) = cat(X...; dims=Val(2))
@@ -1928,34 +1935,45 @@ typed_hcat(::Type{T}, X...) where T = _cat_t(Val(2), T, X...)
 """
     cat(A...; dims)
 
-Concatenate the input arrays along the specified dimensions in the iterable `dims`. For
-dimensions not in `dims`, all input arrays should have the same size, which will also be the
-size of the output array along that dimension. For dimensions in `dims`, the size of the
-output array is the sum of the sizes of the input arrays along that dimension. If `dims` is
-a single number, the different arrays are tightly stacked along that dimension. If `dims` is
-an iterable containing several dimensions, this allows one to construct block diagonal
-matrices and their higher-dimensional analogues by simultaneously increasing several
-dimensions for every new input array and putting zero blocks elsewhere. For example,
-`cat(matrices...; dims=(1,2))` builds a block diagonal matrix, i.e. a block matrix with
-`matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the
-diagonal.
+Concatenate the input arrays along the dimensions specified in `dims`.
 
-See also [`hcat`](@ref), [`vcat`](@ref), [`hvcat`](@ref), [`repeat`](@ref).
+Along a dimension `d in dims`, the size of the output array is `sum(size(a,d) for
+a in A)`.
+Along other dimensions, all input arrays should have the same size,
+which will also be the size of the output array along those dimensions.
+
+If `dims` is a single number, the different arrays are tightly packed along that dimension.
+If `dims` is an iterable containing several dimensions, the positions along these dimensions
+are increased simultaneously for each input array, filling with zero elsewhere.
+This allows one to construct block-diagonal matrices as `cat(matrices...; dims=(1,2))`,
+and their higher-dimensional analogues.
+
+The special case `dims=1` is [`vcat`](@ref), and `dims=2` is [`hcat`](@ref).
+See also [`hvcat`](@ref), [`hvncat`](@ref), [`stack`](@ref), [`repeat`](@ref).
+
+The keyword also accepts `Val(dims)`.
+
+!!! compat "Julia 1.8"
+    For multiple dimensions `dims = Val(::Tuple)` was added in Julia 1.8.
 
 # Examples
 ```jldoctest
-julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)
+julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 2×6×1 Array{Float64, 3}:
 [:, :, 1] =
  1.0  2.0  3.14159  10.0  10.0  10.0
  3.0  4.0  3.14159  10.0  10.0  10.0
 
-julia> cat(true, trues(2,2), trues(4)', dims=(1,2))
+julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
  0  1  1  0  0  0  0
  0  1  1  0  0  0  0
  0  0  0  1  1  1  1
+
+julia> cat(1, [2], [3;;]; dims=Val(2))
+1×3 Matrix{Int64}:
+ 1  2  3
 ```
 """
 @inline cat(A...; dims) = _cat(dims, A...)
@@ -2882,7 +2900,7 @@ end
 """
     isless(A::AbstractVector, B::AbstractVector)
 
-Returns true when `A` is less than `B` in lexicographic order.
+Return `true` when `A` is less than `B` in lexicographic order.
 """
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
@@ -3064,7 +3082,7 @@ concatenated along the remaining dimensions.
 For example, if `dims = [1,2]` and `A` is 4-dimensional, then `f` is called on `x = A[:,:,i,j]`
 for all `i` and `j`, and `f(x)` becomes `R[:,:,i,j]` in the result `R`.
 
-See also [`eachcol`](@ref), [`eachslice`](@ref), [`mapreduce`](@ref).
+See also [`eachcol`](@ref) or [`eachslice`](@ref), used with [`map`](@ref) or [`stack`](@ref).
 
 # Examples
 ```jldoctest
@@ -3084,7 +3102,7 @@ julia> A = reshape(1:30,(2,5,3))
 
 julia> f(x::Matrix) = fill(x[1,1], 1,4);  # returns a 1×4 matrix
 
-julia> mapslices(f, A, dims=(1,2))
+julia> B = mapslices(f, A, dims=(1,2))
 1×4×3 Array{$Int, 3}:
 [:, :, 1] =
  1  1  1  1
@@ -3094,6 +3112,11 @@ julia> mapslices(f, A, dims=(1,2))
 
 [:, :, 3] =
  21  21  21  21
+
+julia> f2(x::AbstractMatrix) = fill(x[1,1], 1,4);
+
+julia> B == stack(f2, eachslice(A, dims=3))
+true
 
 julia> g(x) = x[begin] // x[end-1];  # returns a number
 
