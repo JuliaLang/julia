@@ -687,8 +687,14 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
     return nothing
 end
 
-# annotate types of all symbols in AST
+# annotate types of all symbols in AST, preparing for optimization
 function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
+    # widen `Conditional`s from `slottypes`
+    slottypes = sv.slottypes
+    for i = 1:length(slottypes)
+        slottypes[i] = widenconditional(slottypes[i])
+    end
+
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)
