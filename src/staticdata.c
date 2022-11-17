@@ -290,6 +290,7 @@ static arraylist_t deser_sym;
 static htable_t external_objects;
 
 static htable_t serialization_order; // to break cycles, mark all objects that are serialized
+static htable_t unique_ready; // as we serialize types, we need to know if all reachable objects are also already serialized. This tracks whether `immediate` has been set for all of them.
 static htable_t nullptrs;
 static htable_t bindings; // because they are not first-class objects
 // FIFO queue for objects to be serialized. Anything requiring fixup upon deserialization
@@ -704,7 +705,17 @@ done_fields: ;
 
     // We've encountered an item we need to cache
     void **bp = ptrhash_bp(&serialization_order, v);
-    assert(*bp == (void*)(uintptr_t)-2);
+    assert(*bp != (void*)(uintptr_t)-1);
+    if (s->incremental) {
+        void **bp2 = ptrhash_bp(&unique_ready, v);
+        if (*bp2 == HT_NOTFOUND)
+            assert(*bp == (void*)(uintptr_t)-2);
+        else if (*bp != (void*)(uintptr_t)-2)
+            return;
+    }
+    else {
+        assert(*bp == (void*)(uintptr_t)-2);
+    }
     arraylist_push(&serialization_queue, (void*) v);
     size_t idx = serialization_queue.len - 1;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
@@ -726,13 +737,23 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     }
 
     void **bp = ptrhash_bp(&serialization_order, v);
-    if (*bp != HT_NOTFOUND) {
-        if (!s->incremental || !immediate)
-            return;
-        if (*bp != (void*)(uintptr_t)-1)
-            return;
+    if (*bp == HT_NOTFOUND) {
+        *bp = (void*)(uintptr_t)(immediate ? -2 : -1);
     }
-    *bp = (void*)(uintptr_t)(immediate ? -2 : -1);
+    else {
+        if (!s->incremental || !immediate || !recursive)
+            return;
+        void **bp2 = ptrhash_bp(&unique_ready, v);
+        if (*bp2 == HT_NOTFOUND)
+            *bp2 = v; // now is unique_ready
+        else {
+            assert(*bp != (void*)(uintptr_t)-1);
+            return; // already was unique_ready
+        }
+        assert(*bp != (void*)(uintptr_t)-2); // should be unique_ready then
+        if (*bp == (void*)(uintptr_t)-1)
+            *bp = (void*)(uintptr_t)-2; // now immediate
+    }
 
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order
@@ -759,14 +780,14 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
         }
         else if (jl_is_datatype(v) && immediate) {
             jl_datatype_t *dt = (jl_datatype_t*)v;
-            jl_svec_t *tt = dt->parameters;
+            jl_svec_t *tt = (jl_svec_t*)dt->parameters;
             // ensure super is queued (though possibly not yet handled, since it may have cycles)
             jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, 1);
             // ensure all type parameters are recached
+            jl_queue_for_serialization_(s, (jl_value_t*)tt, 1, 1);
             size_t i, l = jl_svec_len(tt);
-            for (i = 0; i < l; i++)
+            for (i = 0; i < l; i++) // svec is mutable, so we need to visit the fields explicitly
                 jl_queue_for_serialization_(s, jl_svecref(tt, i), 1, 1);
-            jl_queue_for_serialization_(s, (jl_value_t*)tt, 0, 1);
             jl_value_t *singleton = dt->instance;
             if (singleton && needs_uniquing(singleton)) {
                 assert(jl_needs_serialization(s, singleton)); // should be true, since we visited dt
@@ -2215,7 +2236,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
                                            jl_array_t *new_specializations, jl_array_t *method_roots_list,
                                            jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
 {
-    htable_new(&field_replace, 10000);
+    htable_new(&field_replace, 0);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
@@ -2230,7 +2251,8 @@ static void jl_save_system_image_to_stream(ios_t *f,
     for (i = 0; id_to_fptrs[i] != NULL; i++) {
         ptrhash_put(&fptr_to_id, (void*)(uintptr_t)id_to_fptrs[i], (void*)(i + 2));
     }
-    htable_new(&serialization_order, 250000);
+    htable_new(&serialization_order, 25000);
+    htable_new(&unique_ready, 0);
     htable_new(&nullptrs, 0);
     htable_new(&bindings, 0);
     arraylist_new(&object_worklist, 0);
@@ -2470,6 +2492,7 @@ static void jl_save_system_image_to_stream(ios_t *f,
     if (worklist)
         htable_free(&external_objects);
     htable_free(&serialization_order);
+    htable_free(&unique_ready);
     htable_free(&nullptrs);
     htable_free(&bindings);
     htable_free(&symbol_table);
