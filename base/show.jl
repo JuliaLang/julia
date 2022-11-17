@@ -23,24 +23,27 @@ function show(io::IO, ::MIME"text/plain", r::LinRange)
     print_range(io, r)
 end
 
+function _isself(@nospecialize(ft))
+    name = ft.name.mt.name
+    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
+    return isdefined(mod, name) && ft == typeof(getfield(mod, name))
+end
+
 function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
-    mt = ft.name.mt
+    name = ft.name.mt.name
     if isa(f, Core.IntrinsicFunction)
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
         print(io, " (intrinsic function #$id)")
     elseif isa(f, Core.Builtin)
-        print(io, mt.name, " (built-in function)")
+        print(io, name, " (built-in function)")
     else
-        name = mt.name
-        isself = isdefined(ft.name.module, name) &&
-                 ft == typeof(getfield(ft.name.module, name))
         n = length(methods(f))
         m = n==1 ? "method" : "methods"
         sname = string(name)
-        ns = (isself || '#' in sname) ? sname : string("(::", ft, ")")
+        ns = (_isself(ft) || '#' in sname) ? sname : string("(::", ft, ")")
         what = startswith(ns, '@') ? "macro" : "generic function"
         print(io, ns, " (", what, " with $n $m)")
     end
@@ -570,7 +573,7 @@ modulesof!(s::Set{Module}, x::TypeVar) = modulesof!(s, x.ub)
 function modulesof!(s::Set{Module}, x::Type)
     x = unwrap_unionall(x)
     if x isa DataType
-        push!(s, x.name.module)
+        push!(s, parentmodule(x))
     elseif x isa Union
         modulesof!(s, x.a)
         modulesof!(s, x.b)
@@ -1366,7 +1369,7 @@ show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0, 0)
 #
 # This is consistent with many other show methods, i.e.:
 #   show(Set([1,2,3]))                     # ==> "Set{Int64}([2,3,1])"
-#   eval(Meta.parse("Set{Int64}([2,3,1])”) # ==> An actual set
+#   eval(Meta.parse("Set{Int64}([2,3,1])")) # ==> An actual set
 # While this isn’t true of ALL show methods, it is of all ASTs.
 
 const ExprNode = Union{Expr, QuoteNode, Slot, LineNumberNode, SSAValue,
@@ -2401,11 +2404,10 @@ end
 # `io` should contain the UnionAll env of the signature
 function show_signature_function(io::IO, @nospecialize(ft), demangle=false, fargname="", html=false, qualified=false)
     uw = unwrap_unionall(ft)
-    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) &&
-        isdefined(uw.name.module, uw.name.mt.name) &&
-        ft == typeof(getfield(uw.name.module, uw.name.mt.name))
-        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uw.name.module) && uw.name.module !== Main
-            print_within_stacktrace(io, uw.name.module, '.', bold=true)
+    if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
+        uwmod = parentmodule(uw)
+        if qualified && !is_exported_from_stdlib(uw.name.mt.name, uwmod) && uwmod !== Main
+            print_within_stacktrace(io, uwmod, '.', bold=true)
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)

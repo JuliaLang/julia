@@ -112,6 +112,8 @@ struct RefArray{T,A<:AbstractArray{T},R} <: Ref{T}
 end
 RefArray(x::AbstractArray{T}, i::Int, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, i, roots)
 RefArray(x::AbstractArray{T}, i::Int=1, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, i, nothing)
+RefArray(x::AbstractArray{T}, i::Integer, roots::Any) where {T} = RefArray{T,typeof(x),Any}(x, Int(i), roots)
+RefArray(x::AbstractArray{T}, i::Integer, roots::Nothing=nothing) where {T} = RefArray{T,typeof(x),Nothing}(x, Int(i), nothing)
 convert(::Type{Ref{T}}, x::AbstractArray{T}) where {T} = RefArray(x, 1)
 
 function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefArray{T})::P where T

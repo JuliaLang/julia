@@ -179,10 +179,11 @@ pagetable_t memory_map;
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
-// finalization
+// -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
-// If an object pointer has the lowest bit set, the next pointer is an unboxed
-// c function pointer.
+// If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
+// If an object pointer has the second lowest bit set, the current pointer is a c object pointer.
+//   It must be aligned at least 4, and it finalized immediately (at "quiescence").
 // `to_finalize` should not have tagged pointers.
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
@@ -278,17 +279,18 @@ static void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 1);
 }
 
-static void run_finalizer(jl_task_t *ct, jl_value_t *o, jl_value_t *ff)
+static void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
-    if (gc_ptr_tag(o, 3)) {
-        ((void (*)(void*))ff)(gc_ptr_clear_tag(o, 3));
+    int ptr_finalizer = gc_ptr_tag(o, 1);
+    o = gc_ptr_clear_tag(o, 3);
+    if (ptr_finalizer) {
+        ((void (*)(void*))ff)((void*)o);
         return;
     }
-    jl_value_t *args[2] = {ff,o};
     JL_TRY {
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_apply(args, 2);
+        jl_apply_generic((jl_value_t*)ff, (jl_value_t**)&o, 1);
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -373,7 +375,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
     jl_gc_push_arraylist(ct, list);
-    jl_value_t **items = (jl_value_t**)list->items;
+    void **items = list->items;
     size_t len = list->len;
     JL_UNLOCK_NOGC(&finalizers_lock);
     // run finalizers in reverse order they were added, so lower-level finalizers run last
@@ -2286,7 +2288,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 // This way the scan "loop" gets exactly what it expects after a stack pop.
 // Additional optimizations are done for some of the common cases by skipping
 // the unnecessary data stack pointer increment and the load from the stack
-// (i.e. store to load forwaring). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
+// (i.e. store to load forwarding). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
 JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
 {
     if (__unlikely(ptls == NULL)) {
@@ -2442,14 +2444,14 @@ stack: {
                 }
                 else {
                     new_obj = (jl_value_t*)gc_read_stack(&rts[i], offset, lb, ub);
-                    if (gc_ptr_tag(new_obj, 3)) {
-                        // skip over the finalizer fptr
-                        i++;
-                        if (gc_ptr_tag(new_obj, 2))
-                            continue;
+                    if (gc_ptr_tag(new_obj, 1)) {
                         // handle tagged pointers in finalizer list
                         new_obj = gc_ptr_clear_tag(new_obj, 1);
+                        // skip over the finalizer fptr
+                        i++;
                     }
+                    if (gc_ptr_tag(new_obj, 2))
+                        continue;
                 }
                 if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
                     continue;
@@ -2641,13 +2643,13 @@ finlist: {
             new_obj = *begin;
             if (__unlikely(!new_obj))
                 continue;
-            if (gc_ptr_tag(new_obj, 2))
-                continue;
             if (gc_ptr_tag(new_obj, 1)) {
                 new_obj = (jl_value_t*)gc_ptr_clear_tag(new_obj, 1);
                 begin++;
                 assert(begin < end);
             }
+            if (gc_ptr_tag(new_obj, 2))
+                continue;
             uintptr_t nptr = 0;
             if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
                 continue;
@@ -2709,10 +2711,14 @@ mark: {
             }
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_array_t));
+            if (flags.how ==0){
+                void *data_ptr = (char*)a + sizeof(jl_array_t) +jl_array_ndimwords(a->flags.ndims) * sizeof(size_t);
+                gc_heap_snapshot_record_hidden_edge(new_obj, data_ptr, jl_array_nbytes(a), 2);
+            }
             if (flags.how == 1) {
                 void *val_buf = jl_astaggedvalue((char*)a->data - a->offset * a->elsize);
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
-                gc_heap_snapshot_record_hidden_edge(new_obj, jl_valueof(val_buf), jl_array_nbytes(a));
+                gc_heap_snapshot_record_hidden_edge(new_obj, jl_valueof(val_buf), jl_array_nbytes(a), flags.pooled);
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
                                 bits, jl_array_nbytes(a));
@@ -2721,7 +2727,7 @@ mark: {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      jl_array_nbytes(a));
-                    gc_heap_snapshot_record_hidden_edge(new_obj, a->data, jl_array_nbytes(a));
+                    gc_heap_snapshot_record_hidden_edge(new_obj, a->data, jl_array_nbytes(a), flags.pooled);
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
@@ -3197,8 +3203,17 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
         jl_binding_t *ptr = (jl_binding_t*)items[i];
         // A null pointer can happen here when the binding is cleaned up
         // as an exception is thrown after it was already queued (#10221)
+        int bnd_refyoung = 0;
         jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
-        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v)) {
+        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v))
+            bnd_refyoung = 1;
+        jl_value_t *ty = jl_atomic_load_relaxed(&ptr->ty);
+        if (ty != NULL && gc_mark_queue_obj(gc_cache, sp, ty))
+            bnd_refyoung = 1;
+        jl_value_t *globalref = jl_atomic_load_relaxed(&ptr->globalref);
+        if (globalref != NULL && gc_mark_queue_obj(gc_cache, sp, globalref))
+            bnd_refyoung = 1;
+        if (bnd_refyoung) {
             items[n_bnd_refyoung] = ptr;
             n_bnd_refyoung++;
         }
@@ -3646,6 +3661,9 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
+
     JL_MUTEX_INIT(&heapsnapshot_lock);
     JL_MUTEX_INIT(&finalizers_lock);
     uv_mutex_init(&gc_cache_lock);
@@ -3682,7 +3700,8 @@ void jl_gc_init(void)
     t_start = jl_hrtime();
 }
 
-void jl_gc_set_max_memory(uint64_t max_mem) {
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
+{
     if (max_mem > 0
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;

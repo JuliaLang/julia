@@ -214,6 +214,7 @@ For users coming to Julia from R, these are some noteworthy differences:
     Python's special interpretation of negative indexing, `a[-1]` and `a[-2]`, should be written
     `a[end]` and `a[end-1]` in Julia.
   * Julia requires `end` for indexing until the last element. `x[1:]` in Python is equivalent to `x[2:end]` in Julia.
+  * In Julia, `:` before any object creates a [`Symbol`](@ref) or *quotes* an expression; so, `x[:5]` is same as `x[5]`. If you want to get the first `n` elements of an array, then use range indexing.
   * Julia's range indexing has the format of `x[start:step:stop]`, whereas Python's format is `x[start:(stop+1):step]`. Hence, `x[0:10:2]` in Python is equivalent to `x[1:2:10]` in Julia. Similarly, `x[::-1]` in Python, which refers to the reversed array, is equivalent to `x[end:-1:1]` in Julia.
   * In Julia, ranges can be constructed independently as `start:step:stop`, the same syntax it uses
     in array-indexing.  The `range` function is also supported.
@@ -350,6 +351,97 @@ For users coming to Julia from R, these are some noteworthy differences:
     in order to have dynamic dispatch. On the other hand, in Julia every method is "virtual" (although
     it's more general than that since methods are dispatched on every argument type, not only `this`,
     using the most-specific-declaration rule).
+
+### Julia &hArr; C/C++: Namespaces
+  * C/C++ `namespace`s correspond roughly to Julia `module`s.
+  * There are no private globals or fields in Julia.  Everything is publicly accessible
+    through fully qualified paths (or relative paths, if desired).
+  * `using MyNamespace::myfun` (C++) corresponds roughly to `import MyModule: myfun` (Julia).
+  * `using namespace MyNamespace` (C++) corresponds roughly to `using MyModule` (Julia)
+    * In Julia, only `export`ed symbols are made available to the calling module.
+    * In C++, only elements found in the included (public) header files are made available.
+  * Caveat: `import`/`using` keywords (Julia) also *load* modules (see below).
+  * Caveat: `import`/`using` (Julia) works only at the global scope level (`module`s)
+    * In C++, `using namespace X` works within arbitrary scopes (ex: function scope).
+
+### Julia &hArr; C/C++: Module loading
+  * When you think of a C/C++ "**library**", you are likely looking for a Julia "**package**".
+    * Caveat: C/C++ libraries often house multiple "software modules" whereas Julia
+      "packages" typically house one.
+    * Reminder: Julia `module`s are global scopes (not necessarily "software modules").
+  * **Instead of build/`make` scripts**, Julia uses "Project Environments" (sometimes called
+    either "Project" or "Environment").
+    * Build scripts are only needed for more complex applications
+      (like those needing to compile or download C/C++ executables).
+    * To develop application or project in Julia, you can initialize its root directory
+      as a "Project Environment", and house application-specific code/packages there.
+      This provides good control over project dependencies, and future reproducibility.
+    * Available packages are added to a "Project Environment" with the `Pkg.add()` function or Pkg REPL mode.
+      (This does not **load** said package, however).
+    * The list of available packages (direct dependencies) for a "Project Environment" are
+      saved in its `Project.toml` file.
+    * The *full* dependency information for a "Project Environment" is auto-generated & saved
+      in its `Manifest.toml` file by `Pkg.resolve()`.
+  * Packages ("software modules") available to the "Project Environment" are loaded with
+    `import` or `using`.
+    * In C/C++, you `#include <moduleheader>` to get object/function declarations, and link in
+      libraries when you build the executable.
+    * In Julia, calling using/import again just brings the existing module into scope, but does not load it again
+      (similar to adding the non-standard `#pragma once` to C/C++).
+  * **Directory-based package repositories** (Julia) can be made available by adding repository
+    paths to the `Base.LOAD_PATH` array.
+    * Packages from directory-based repositories do not require the `Pkg.add()` tool prior to
+      being loaded with `import` or `using`. They are simply available to the project.
+    * Directory-based package repositories are the **quickest solution** to developping local
+      libraries of "software modules".
+
+### Julia &hArr; C/C++: Assembling modules
+  * In C/C++, `.c`/`.cpp` files are compiled & added to a library with build/`make` scripts.
+    * In Julia, `import [PkgName]`/`using [PkgName]` statements load `[PkgName].jl` located
+      in a package's `[PkgName]/src/` subdirectory.
+    * In turn, `[PkgName].jl` typically loads associated source files with calls to
+      `include "[someotherfile].jl"`.
+  * `include "./path/to/somefile.jl"` (Julia) is very similar to
+    `#include "./path/to/somefile.jl"` (C/C++).
+    * However `include "..."` (Julia) is not used to include header files (not required).
+    * **Do not use** `include "..."` (Julia) to load code from other "software modules"
+      (use `import`/`using` instead).
+    * `include "path/to/some/module.jl"` (Julia) would instantiate multiple versions of the
+      same code in different modules (creating *distinct* types (etc.) with the *same* names).
+    * `include "somefile.jl"` is typically used to assemble multiple files *within the same
+      Julia package* ("software module"). It is therefore relatively straightforward to ensure
+      file are `include`d only once (No `#ifdef` confusion).
+
+### Julia &hArr; C/C++: Module interface
+  * C++ exposes interfaces using "public" `.h`/`.hpp` files whereas Julia `module`s `export`
+    symbols that are intended for their users.
+    * Often, Julia `module`s simply add functionality by generating new "methods" to existing
+      functions (ex: `Base.push!`).
+    * Developers of Julia packages therefore cannot rely on header files for interface
+      documentation.
+    * Interfaces for Julia packages are typically described using docstrings, README.md,
+      static web pages, ...
+  * Some developers choose not to `export` all symbols required to use their package/module.
+    * Users might be expected to access these components by qualifying functions/structs/...
+      with the package/module name (ex: `MyModule.run_this_task(...)`).
+
+### Julia &hArr; C/C++: Quick reference
+
+| Software Concept   | Julia | C/C++ |
+| :---               | :---  | :---  |
+| unnamed scope      | `begin` ... `end`        | `{` ... `}`                                  |
+| function scope     | `function x()` ... `end` | `int x() {` ... `}`                          |
+| global scope       | `module MyMod` ... `end` | `namespace MyNS {` ... `}`                   |
+| software module    | A Julia "package"        | `.h`/`.hpp` files<br>+compiled `somelib.a`   |
+| assembling<br>software modules | `SomePkg.jl`: ...<br>`import("subfile1.jl")`<br>`import("subfile2.jl")`<br>... | `$(AR) *.o` &rArr; `somelib.a` |
+| import<br>software module | `import SomePkg`  | `#include <somelib>`<br>+link in `somelib.a` |
+| module library     | `LOAD_PATH[]`, \*Git repository,<br>\*\*custom package registry  | more `.h`/`.hpp` files<br>+bigger compiled `somebiglib.a` |
+
+\* The Julia package manager supports registering multiple packages from a single Git repository.<br>
+\* This allows users to house a library of related packages in a single repository.<br>
+\*\* Julia registries are primarily designed to provide versioning \& distribution of packages.<br>
+\*\* Custom package registries can be used to create a type of module library.
+
 
 ## Noteworthy differences from Common Lisp
 

@@ -232,8 +232,9 @@ static bool markLoopInfo(Module &M, Function *marker, function_ref<LoopInfo &(Fu
     for (Instruction *I : ToDelete)
         I->deleteValue();
     marker->eraseFromParent();
-
+#ifdef JL_VERIFY_PASSES
     assert(!verifyModule(M, &errs()));
+#endif
     return Changed;
 }
 

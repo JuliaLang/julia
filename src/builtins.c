@@ -116,7 +116,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 }
             }
             if (!ft->layout->haspadding) {
-                if (!bits_equal(ao, bo, ft->size))
+                if (!bits_equal(ao, bo, ft->layout->size))
                     return 0;
             }
             else {
@@ -1252,6 +1252,7 @@ JL_CALLABLE(jl_f_set_binding_type)
         jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
                   jl_symbol_name(b->name));
     }
+    jl_gc_wb_binding(b, ty);
     return jl_nothing;
 }
 
@@ -1751,7 +1752,8 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
           dta->name->abstract == dtb->name->abstract &&
           dta->name->mutabl == dtb->name->mutabl &&
           dta->name->n_uninitialized == dtb->name->n_uninitialized &&
-          (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
+          dta->isprimitivetype == dtb->isprimitivetype &&
+          (!dta->isprimitivetype || dta->layout->size == dtb->layout->size) &&
           (dta->name->atomicfields == NULL
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&

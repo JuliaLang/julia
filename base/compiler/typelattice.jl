@@ -121,7 +121,7 @@ end
     struct NotFound end
     const NOT_FOUND = NotFound()
 
-A special sigleton that represents a variable has not been analyzed yet.
+A special singleton that represents a variable has not been analyzed yet.
 Particularly, all SSA value types are initialized as `NOT_FOUND` when creating a new `InferenceState`.
 Note that this is only used for `smerge`, which updates abstract state `VarTable`,
 and thus we don't define the lattice for this.
@@ -221,11 +221,12 @@ function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
 end
 
 function ⊑(lattice::OptimizerLattice, @nospecialize(a), @nospecialize(b))
-    if isa(a, MaybeUndef) && !isa(b, MaybeUndef)
-        return false
+    if isa(a, MaybeUndef)
+        isa(b, MaybeUndef) || return false
+        a, b = a.typ, b.typ
+    elseif isa(b, MaybeUndef)
+        b = b.typ
     end
-    isa(a, MaybeUndef) && (a = a.typ)
-    isa(b, MaybeUndef) && (b = b.typ)
     return ⊑(widenlattice(lattice), a, b)
 end
 
