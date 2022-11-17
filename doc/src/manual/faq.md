@@ -818,10 +818,13 @@ to strings); similarly, `repeat` can be used instead of `^` to repeat strings. T
 
 ### What is the difference between "using" and "import"?
 
-There is only one difference, and on the surface (syntax-wise) it may seem very minor. The difference
-between `using` and `import` is that with `using` you need to say `function Foo.bar(..` to
-extend module Foo's function bar with a new method, but with `import Foo.bar`,
-you only need to say `function bar(...` and it automatically extends module Foo's function bar.
+Aside the other differences between `using` and `import`
+(see the [Modules section](https://docs.julialang.org/en/v1/manual/modules/#modules)),
+one difference is very worthy of mention, because it might not seem intuitive at first glance,
+and on the surface (syntax-wise) it may seem very minor. This difference is that with `using`
+you need to say `function Foo.bar(...` to extend module `Foo`'s function `bar` with a new method,
+but with `import Foo.bar`, you only need to say `function bar(...` and it automatically extends
+module `Foo`'s function `bar`.
 
 The reason this is important enough to have been given separate syntax is that you don't want
 to accidentally extend a function that you didn't know existed, because that could easily cause
