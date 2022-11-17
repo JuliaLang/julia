@@ -170,7 +170,7 @@ for elty1 in (Float32, Float64, BigFloat, ComplexF32, ComplexF64, Complex{BigFlo
         @test diag(A1) == diag(Matrix(A1))
 
         # tr
-        @test tr(A1)::elty1 == tr(parent(A1))
+        @test tr(A1)::elty1 == tr(Matrix(A1))
 
         # real
         @test real(A1) == real(Matrix(A1))

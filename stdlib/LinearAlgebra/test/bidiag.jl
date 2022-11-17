@@ -221,7 +221,11 @@ Random.seed!(1)
         @testset "trace" begin
             for uplo in (:U, :L)
                 B = Bidiagonal(dv, ev, uplo)
-                @test tr(B) ≈ tr(Matrix(B)) rtol=2eps(real(eltype(B)))
+                if relty <: Integer
+                    @test tr(B) == tr(Matrix(B))
+                else
+                    @test tr(B) ≈ tr(Matrix(B)) rtol=2eps(relty)
+                end
             end
         end
 
