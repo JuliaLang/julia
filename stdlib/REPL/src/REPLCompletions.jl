@@ -95,15 +95,13 @@ function Base.getproperty(c::Completion, name::Symbol)
     return getfield(c, name)
 end
 
-representable_string(s::Symbol) = sprint(Base.show_sym, s)
-
 _completion_text(c::TextCompletion) = c.text
 _completion_text(c::KeywordCompletion) = c.keyword
 _completion_text(c::PathCompletion) = c.path
 _completion_text(c::ModuleCompletion) = c.mod
 _completion_text(c::PackageCompletion) = c.package
-_completion_text(c::PropertyCompletion) = representable_string(c.property)
-_completion_text(c::FieldCompletion) = representable_string(c.field)
+_completion_text(c::PropertyCompletion) = sprint(Base.show_sym, c.property)
+_completion_text(c::FieldCompletion) = sprint(Base.show_sym, c.field)
 _completion_text(c::MethodCompletion) = repr(c.method)
 _completion_text(c::BslashCompletion) = c.bslash
 _completion_text(c::ShellCompletion) = c.text
