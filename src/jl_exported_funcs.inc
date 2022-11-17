@@ -484,6 +484,8 @@
     XX(jl_typeinf_lock_end) \
     XX(jl_typeinf_timing_begin) \
     XX(jl_typeinf_timing_end) \
+    XX(jl_typeinf_profiling_clear_and_fetch) \
+    XX(jl_typeinf_profiling_push_timing) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
