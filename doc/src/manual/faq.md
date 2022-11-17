@@ -395,6 +395,8 @@ Since Julia can't predict the return type of this function at compile-time, any 
 that uses it must be able to cope with values of both types, which makes it hard to produce
 fast machine code.
 
+### Why does the docs says `String` and `Symbol` objects are immutable, yet they return `true` on the `ismutable` function?
+
 ### [Why does Julia give a `DomainError` for certain seemingly-sensible operations?](@id faq-domain-errors)
 
 Certain operations make mathematical sense but result in errors:
