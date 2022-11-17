@@ -23,7 +23,7 @@ Sockets.TCPSocket
 Sockets.UDPSocket
 Sockets.accept
 Sockets.listenany
-Sockets.bind
+Sockets.bind(::Union{TCPServer, UDPSocket, TCPSocket}, ::IPAddr, ::Integer)
 Sockets.send
 Sockets.recv
 Sockets.recvfrom
