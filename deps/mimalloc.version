@@ -2,3 +2,8 @@
 ## jll artifact
 MIMALLOC_JLL_NAME := mimalloc
 
+## source build
+MIMALLOC_VER := 2.0.7
+MIMALLOC_BRANCH=v2.0.7
+MIMALLOC_SHA1=91ba1f374da66e624841f53f6659da3a8f8f93ea
+

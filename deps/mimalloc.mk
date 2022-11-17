@@ -1,61 +1,41 @@
-## LIBUV ##
-# ifneq ($(USE_BINARYBUILDER_LIBUV),1)
-# LIBUV_GIT_URL:=https://github.com/JuliaLang/libuv.git
-# LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
-# $(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 
-# UV_CFLAGS := -O2
+ifneq ($(USE_BINARYBUILDER_MIMALLOC), 1)
+MIMALLOC_GIT_URL := https://github.com/microsoft/mimalloc.git
+MIMALLOC_TAR_URL = https://api.github.com/repos/microsoft/mimalloc/tarball/$1
+$(eval $(call git-external,mimalloc,MIMALLOC,,,$(SRCCACHE)))
 
-# UV_FLAGS := LDFLAGS="$(LDFLAGS) $(CLDFLAGS) -v"
-# UV_FLAGS += CFLAGS="$(CFLAGS) $(UV_CFLAGS) $(SANITIZE_OPTS)"
+# use Dynamic TLS because testing for musl is hard
+MIMALLOC_BUILD_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DMI_BUILD_OBJECT=OFF
+MIMALLOC_BUILD_OPTS += -DMI_INSTALL_TOPLEVEL=ON -DMI_BUILD_TESTS=OFF -DMI_OVERRIDE=OFF -DMI_LOCAL_DYNAMIC_TLS=ON
 
-# ifneq ($(VERBOSE), 0)
-# UV_MFLAGS += V=1
-# endif
+$(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-configured: $(SRCCACHE)/$(MIMALLOC_SRC_DIR)/source-extracted
+	mkdir -p $(dir $@)
+	cd $(dir $@) && $(CMAKE) $(MIMALLOC_BUILD_OPTS) $(dir $<)
+	echo 1 > $@
 
-# LIBUV_BUILDDIR := $(BUILDDIR)/$(LIBUV_SRC_DIR)
+$(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-compiled: $(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-configured
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON)
+	echo 1 > $@
 
-# ifneq ($(CLDFLAGS)$(SANITIZE_LDFLAGS),)
-# $(LIBUV_BUILDDIR)/build-configured: LDFLAGS:=$(LDFLAGS) $(CLDFLAGS) $(SANITIZE_LDFLAGS)
-# endif
-# $(LIBUV_BUILDDIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
-# 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
-# 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/Makefile.in
-# 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/configure
-# 	mkdir -p $(dir $@)
-# 	cd $(dir $@) && \
-# 	$(dir $<)/configure --with-pic $(CONFIGURE_COMMON) $(UV_FLAGS)
-# 	echo 1 > $@
+$(eval $(call staged-install, \
+	mimalloc,$(MIMALLOC_SRC_DIR), \
+	MAKE_INSTALL,,, \
+	$(INSTALL_NAME_CMD)libmimalloc.$(SHLIB_EXT) $(build_shlibdir)/libmimalloc.$(SHLIB_EXT)))
 
-# $(LIBUV_BUILDDIR)/build-compiled: $(LIBUV_BUILDDIR)/build-configured
-# 	$(MAKE) -C $(dir $<) $(UV_MFLAGS)
-# 	echo 1 > $@
+clean-mimalloc:
+	-rm -f $(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-configured $(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-compiled
+	-$(MAKE) -C $(BUILDDIR)/$(MIMALLOC_SRC_DIR) clean
 
-# $(LIBUV_BUILDDIR)/build-checked: $(LIBUV_BUILDDIR)/build-compiled
-# ifeq ($(OS),$(BUILD_OS))
-# 	$(MAKE) -C $(dir $@) check
-# endif
-# 	echo 1 > $@
+get-mimalloc: $(MIMALLOC_SRC_FILE)
+extract-mimalloc: $(BUILDDIR)/$(MIMALLOC_SRC_DIR)/source-extracted
+configure-mimalloc: $(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-configured
+compile-mimalloc: $(BUILDDIR)/$(MIMALLOC_SRC_DIR)/build-compiled
+fastcheck-mimalloc: check-mimalloc
+check-mimalloc: compile-mimalloc
 
-# $(eval $(call staged-install, \
-# 	libuv,$$(LIBUV_SRC_DIR), \
-# 	MAKE_INSTALL,,, \
-# 	$$(INSTALL_NAME_CMD)libuv.$$(SHLIB_EXT) $$(build_shlibdir)/libuv.$$(SHLIB_EXT)))
-
-# clean-libuv:
-# 	rm -rf $(LIBUV_BUILDDIR)/build-configured $(LIBUV_BUILDDIR)/build-compiled
-# 	-$(MAKE) -C $(LIBUV_BUILDDIR) clean
-
-
-# get-libuv: $(LIBUV_SRC_FILE)
-# extract-libuv: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
-# configure-libuv: $(LIBUV_BUILDDIR)/build-configured
-# compile-libuv: $(LIBUV_BUILDDIR)/build-compiled
-# fastcheck-libuv: #none
-# check-libuv: $(LIBUV_BUILDDIR)/build-checked
-
-# else # USE_BINARYBUILDER_LIBUV
+else # USE_BINARYBUILDER_MIMALLOC
 
 $(eval $(call bb-install,mimalloc,MIMALLOC,false))
 
-# endif
+endif # USE_BINARYBUILDER_MIMALLOC
+
