@@ -784,7 +784,7 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     }
 
     if (immediate)
-        jl_insert_into_serialization_queue(s, v, recursive, jl_is_immutable(t));
+        jl_insert_into_serialization_queue(s, v, recursive, jl_is_immutable(t) || jl_is_typevar(v));
     else
         arraylist_push(&object_worklist, (void*)v);
 }
