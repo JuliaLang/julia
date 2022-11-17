@@ -277,6 +277,19 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
             break;
         }
     }
+    static int thread0_exit_count = 0;
+    SetUnhandledExceptionFilter(NULL);
+    thread0_exit_count++;
+    uv_tty_reset_mode();
+    fflush(NULL);
+
+    if (thread0_exit_count > 1) {
+        // This should not return
+        RaiseFailFastException(ExceptionInfo->ExceptionRecord, ExceptionInfo->ContextRecord, 0);
+        jl_safe_printf("Unexpected return from RaiseFailFastException()!\n");
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
     if (ExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ILLEGAL_INSTRUCTION) {
         jl_safe_printf("\n");
         jl_show_sigill(ExceptionInfo->ContextRecord);
@@ -330,11 +343,10 @@ LONG WINAPI jl_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     jl_print_native_codeloc((uintptr_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
 
     jl_critical_error(0, 0, ExceptionInfo->ContextRecord, ct);
-    static int recursion = 0;
-    if (recursion++)
-        exit(1);
-    else
-        jl_exit(1);
+    jl_atexit_hook(128);
+    RaiseFailFastException(ExceptionInfo->ExceptionRecord, ExceptionInfo->ContextRecord, 0);
+    jl_safe_printf("Unexpected return from RaiseFailFastException()!\n");
+    return EXCEPTION_CONTINUE_SEARCH;
 }
 
 JL_DLLEXPORT void jl_install_sigint_handler(void)
