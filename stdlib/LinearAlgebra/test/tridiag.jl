@@ -263,6 +263,9 @@ end
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
         end
+        @testset "trace" begin
+            @test tr(A) ≈ tr(fA) rtol=2eps(eltype(A))
+        end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
