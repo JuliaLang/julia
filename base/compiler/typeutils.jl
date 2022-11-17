@@ -55,7 +55,7 @@ function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
-        return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+        return !issingletontype(typeof(val)) && !(isa(val, Type) && hasuniquerep(val))
     end
     return has_nontrivial_const_info(widenlattice(lattice), t)
 end
