@@ -1300,7 +1300,7 @@ endif
 ifeq ($(OS), WINNT)
 HAVE_SSP := 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
-	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -ldbghelp -lshell32 -lole32 -luuid
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -luserenv -lsecur32 -latomic -lshell32 -lole32 -luuid
 JLDFLAGS += -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
