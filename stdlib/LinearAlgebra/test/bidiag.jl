@@ -218,7 +218,7 @@ Random.seed!(1)
             end
         end
 
-        @testset "iszero and isone, trace" begin
+        @testset "trace" begin
             for uplo in (:U, :L)
                 B = Bidiagonal(dv, ev, uplo)
                 @test tr(B) ≈ tr(Matrix(B)) rtol=2eps(eltype(B))

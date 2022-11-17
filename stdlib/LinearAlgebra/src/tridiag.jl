@@ -749,7 +749,7 @@ function triu!(M::Tridiagonal{T}, k::Integer=0) where T
     return M
 end
 
-tr(M::Tridiagonal) = sum(T.d)
+tr(M::Tridiagonal) = sum(M.d)
 
 ###################
 # Generic methods #
