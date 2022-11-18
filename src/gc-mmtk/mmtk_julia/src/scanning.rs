@@ -11,7 +11,6 @@ use crate::object_model::BI_MARKING_METADATA_SPEC;
 use mmtk::util::Address;
 use mmtk::MMTK;
 use mmtk::vm::VMBinding;
-use mmtk::util::metadata::side_metadata::{load_atomic, store_atomic};
 use crate::edges::JuliaVMEdge;
 #[cfg(feature = "scan_obj_c")]
 use crate::julia_scanning::process_edge;
@@ -105,7 +104,7 @@ impl<VM:VMBinding> GCWork<VM> for SweepMallocedArrays {
     fn do_work(&mut self, _worker: &mut GCWorker<VM>, _mmtk: &'static MMTK<VM>) {
         // call sweep malloced arrays from UPCALLS
         unsafe {
-            ((*UPCALLS).sweep_malloced_array)()
+            ((*UPCALLS).mmtk_sweep_malloced_array)()
         }
         self.swept = true;
     }
@@ -113,10 +112,11 @@ impl<VM:VMBinding> GCWork<VM> for SweepMallocedArrays {
 
 #[no_mangle]
 pub extern "C" fn mark_metadata_scanned(addr : Address) {
-    store_atomic(&BI_MARKING_METADATA_SPEC, addr, 1, Ordering::SeqCst );
+    BI_MARKING_METADATA_SPEC.store_atomic::<u8>(addr, 1, Ordering::SeqCst );
 }
 
 #[no_mangle]
-pub extern "C" fn check_metadata_scanned(addr : Address) -> usize {
-    load_atomic(&BI_MARKING_METADATA_SPEC, addr, Ordering::SeqCst )
+pub extern "C" fn check_metadata_scanned(addr : Address) -> u8 {
+    BI_MARKING_METADATA_SPEC.load_atomic::<u8>( addr, Ordering::SeqCst )
 }
+

@@ -8,7 +8,6 @@ use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::MutatorContext;
-use mmtk::util::metadata::side_metadata::bzero_metadata;
 use std::sync::atomic::{AtomicBool, Ordering};
 use log::{info, trace};
 
@@ -52,7 +51,7 @@ impl Collection<JuliaVM> for VMCollection {
         let &(_, ref cvar) = &*STW_COND.clone();
         cvar.notify_all();
         unsafe {
-            bzero_metadata(&BI_MARKING_METADATA_SPEC, Address::from_usize(BI_METADATA_START_ALIGNED_DOWN), BI_METADATA_END_ALIGNED_UP - BI_METADATA_START_ALIGNED_DOWN)
+            BI_MARKING_METADATA_SPEC.bzero_metadata(Address::from_usize(BI_METADATA_START_ALIGNED_DOWN), BI_METADATA_END_ALIGNED_UP - BI_METADATA_START_ALIGNED_DOWN)
         }
 
         info!("Live bytes = {}, free bytes = {}, total bytes = {}", crate::api::used_bytes(), crate::api::free_bytes(), crate::api::total_bytes());
@@ -121,7 +120,7 @@ impl Collection<JuliaVM> for VMCollection {
         info!("GC Done!");
 
         unsafe {
-            ((*UPCALLS).set_gc_final_state)(old_state as usize)
+            ((*UPCALLS).set_gc_final_state)(old_state)
         };
         
 

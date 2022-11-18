@@ -166,11 +166,11 @@ pub unsafe fn scan_julia_object(addr: Address, closure : &mut dyn EdgeVisitor<Ju
         let (mut offset, mut lb, mut ub) = (0, 0, usize::MAX);
         // FIXME: the code below is executed COPY_STACKS has been defined in the C Julia implementation - it is on by default
         if !stkbuf_addr.is_zero() && copy_stack != 0 && (*ta).ptls != std::ptr::null_mut() {
-            if (*ta).tid < 0 {
+            if ((*ta).tid as i16) < 0 {
                 panic!("tid must be positive.")
             }
             let stackbase = ((*UPCALLS).get_stackbase)((*ta).tid);
-            ub = stackbase;
+            ub = stackbase as usize;
             lb = ub - (*ta).copy_stack() as usize;
             offset = Address::from_mut_ptr(stkbuf).as_usize() - lb as usize;
         }

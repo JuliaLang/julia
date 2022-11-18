@@ -1,13 +1,11 @@
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::ObjectModel;
-use std::sync::atomic::Ordering;
 use mmtk::util::copy::*;
 use crate::{JuliaVM, UPCALLS, init_boot_image_metadata_info};
 use mmtk::util::constants::BYTES_IN_PAGE;
 use mmtk::util::metadata::side_metadata::{
     SideMetadataSpec, SideMetadataOffset, SideMetadataContext
 };
-use mmtk::util::metadata::header_metadata::HeaderMetadataSpec;
 use mmtk::vm::*;
 
 pub struct VMObjectModel {}
@@ -56,55 +54,6 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
     const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(0);
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = MARKING_METADATA_SPEC;
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = LOS_METADATA_SPEC;
-    
-    fn load_metadata(
-        _metadata_spec: &HeaderMetadataSpec,
-        _object: ObjectReference,
-        _mask: Option<usize>,
-        _atomic_ordering: Option<Ordering>,
-    ) -> usize {
-        unimplemented!()
-    }
-
-    fn store_metadata(
-        _metadata_spec: &HeaderMetadataSpec,
-        _object: ObjectReference,
-        _val: usize,
-        _mask: Option<usize>,
-        _atomic_ordering: Option<Ordering>,
-    ) {
-        unimplemented!()
-    }
-
-    fn compare_exchange_metadata(
-        _metadata_spec: &HeaderMetadataSpec,
-        _object: ObjectReference,
-        _old_val: usize,
-        _new_val: usize,
-        _mask: Option<usize>,
-        _success_order: Ordering,
-        _failure_order: Ordering,
-    ) -> bool {
-        unimplemented!()
-    }
-
-    fn fetch_add_metadata(
-        _metadata_spec: &HeaderMetadataSpec,
-        _object: ObjectReference,
-        _val: usize,
-        _order: Ordering,
-    ) -> usize {
-        unimplemented!()
-    }
-
-    fn fetch_sub_metadata(
-        _metadata_spec: &HeaderMetadataSpec,
-        _object: ObjectReference,
-        _val: usize,
-        _order: Ordering,
-    ) -> usize {
-        unimplemented!()
-    }
 
     fn copy(
         _from: ObjectReference,
@@ -130,7 +79,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
             obj_size
         };
 
-        size
+        size as usize
     }
 
     fn get_size_when_copied(_object: ObjectReference) -> usize {
