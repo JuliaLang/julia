@@ -38,4 +38,3 @@ else # USE_BINARYBUILDER_MIMALLOC
 $(eval $(call bb-install,mimalloc,MIMALLOC,false))
 
 endif # USE_BINARYBUILDER_MIMALLOC
-
