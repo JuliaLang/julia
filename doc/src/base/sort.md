@@ -145,9 +145,9 @@ There are currently four sorting algorithms available in base Julia:
 and is used internally by `QuickSort`.
 
 `QuickSort` is a very fast sorting algorithm with an average-case time complexity of
-O(n log n). Since Julia 1.9, `QuickSort` is stable, i.e., elements considered equal will
-remain in the same order. Notice that O(n²) is worst-case complexity, but it gets
-vanishingly unlikely as the pivot selection is randomized in Julia v1.9.
+O(n log n). `QuickSort` is stable, i.e., elements considered equal will remain in the same
+order. Notice that O(n²) is worst-case complexity, but it gets vanishingly unlikely as the
+pivot selection is randomized.
 
 `PartialQuickSort(k::OrdinalRange)` is similar to `QuickSort`, but the output array is only
 sorted in the range of `k`. For example:
