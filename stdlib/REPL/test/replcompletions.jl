@@ -1739,18 +1739,18 @@ end
     end
 end
 
-let s = "Base.return_types(getin"
-    c, r = test_complete_foo(s)
-    @test "getindex" in c
-    @test r == 19:23
-    @test s[r] == "getin"
-end
 
 @testset "https://github.com/JuliaLang/julia/issues/47593" begin
-    struct TEST_47594
-        var"("::Int
+    let
+        m = Module()
+        @eval m begin
+            struct TEST_47594
+                var"("::Int
+            end
+            test_47594 = TEST_47594(1)
+        end
+
+        c, r = test_complete_context("test_47594.", m)
+        @test c == Any["var\"(\""]
     end
-    test_47594 = TEST_47594(1)
-    c, r = test_complete("test_47594.")
-    @test c == Any["var\"(\""]
 end
