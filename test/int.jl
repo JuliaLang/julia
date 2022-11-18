@@ -199,6 +199,11 @@ end
                 @test val >> -scount === val << ucount
             end
         end
+        for T2 in Base.BitInteger_types
+            for op in (>>, <<, >>>)
+                @test Core.Compiler.is_total(Base.infer_effects(op, (T, T2)))
+            end
+        end
     end
 end
 

@@ -590,25 +590,6 @@ function store_backedges(frame::MethodInstance, edges::Vector{Any})
     end
 end
 
-# widen all Const elements in type annotations
-function widen_all_consts!(src::CodeInfo)
-    ssavaluetypes = src.ssavaluetypes::Vector{Any}
-    for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
-    end
-
-    for i = 1:length(src.code)
-        x = src.code[i]
-        if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
-        end
-    end
-
-    src.rettype = widenconst(src.rettype)
-
-    return src
-end
-
 function record_slot_assign!(sv::InferenceState)
     # look at all assignments to slots
     # and union the set of types stored there
@@ -706,8 +687,14 @@ function find_dominating_assignment(id::Int, idx::Int, sv::InferenceState)
     return nothing
 end
 
-# annotate types of all symbols in AST
+# annotate types of all symbols in AST, preparing for optimization
 function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_optimizer::Bool)
+    # widen `Conditional`s from `slottypes`
+    slottypes = sv.slottypes
+    for i = 1:length(slottypes)
+        slottypes[i] = widenconditional(slottypes[i])
+    end
+
     # compute the required type for each slot
     # to hold all of the items assigned into it
     record_slot_assign!(sv)

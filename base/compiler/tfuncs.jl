@@ -226,27 +226,38 @@ function ifelse_nothrow(@specialize(𝕃::AbstractLattice), @nospecialize(cond),
     return cond ⊑ Bool
 end
 
-function egal_tfunc(@nospecialize(x), @nospecialize(y))
-    xx = widenconditional(x)
-    yy = widenconditional(y)
-    if isa(x, Conditional) && isa(yy, Const)
-        yy.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
-        yy.val === true && return x
+egal_tfunc(@specialize(𝕃::AbstractLattice), @nospecialize(x), @nospecialize(y)) =
+    egal_tfunc(widenlattice(𝕃), x, y)
+function egal_tfunc(@specialize(𝕃::ConditionalsLattice), @nospecialize(x), @nospecialize(y))
+    if isa(x, Conditional)
+        y = widenconditional(y)
+        if isa(y, Const)
+            y.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
+            y.val === true && return x
+            return Const(false)
+        end
+    elseif isa(y, Conditional)
+        x = widenconditional(x)
+        if isa(x, Const)
+            x.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
+            x.val === true && return y
+            return Const(false)
+        end
+    end
+    return egal_tfunc(widenlattice(𝕃), x, y)
+end
+function egal_tfunc(::ConstsLattice, @nospecialize(x), @nospecialize(y))
+    if isa(x, Const) && isa(y, Const)
+        return Const(x.val === y.val)
+    elseif !hasintersect(widenconst(x), widenconst(y))
         return Const(false)
-    elseif isa(y, Conditional) && isa(xx, Const)
-        xx.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
-        xx.val === true && return y
-        return Const(false)
-    elseif isa(xx, Const) && isa(yy, Const)
-        return Const(xx.val === yy.val)
-    elseif !hasintersect(widenconst(xx), widenconst(yy))
-        return Const(false)
-    elseif (isa(xx, Const) && y === typeof(xx.val) && isdefined(y, :instance)) ||
-           (isa(yy, Const) && x === typeof(yy.val) && isdefined(x, :instance))
+    elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
+           (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
         return Const(true)
     end
     return Bool
 end
+egal_tfunc(::JLTypeLattice, @nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(@specialize(𝕃::AbstractLattice), @nospecialize(x), @nospecialize(name))
@@ -2140,8 +2151,9 @@ end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{InferenceState,IRCode,Nothing})
+    𝕃ᵢ = typeinf_lattice(interp)
     if f === tuple
-        return tuple_tfunc(typeinf_lattice(interp), argtypes)
+        return tuple_tfunc(𝕃ᵢ, argtypes)
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
@@ -2188,7 +2200,9 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         return Bottom
     end
     if f === getfield
-        return getfield_tfunc(typeinf_lattice(interp), argtypes...)
+        return getfield_tfunc(𝕃ᵢ, argtypes...)
+    elseif f === (===)
+        return egal_tfunc(𝕃ᵢ, argtypes...)
     end
     return tf[3](argtypes...)
 end
