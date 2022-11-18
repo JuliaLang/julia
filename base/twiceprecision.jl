@@ -786,7 +786,12 @@ _tp_prod(t::TwicePrecision) = t
 
 isbetween(a, x, b) = a <= x <= b || b <= x <= a
 
-# For NaN/Inf/negative this returns junk
+# These functions exist for use in LogRange:
+
+_exp_allowing_twice64(x::Number) = exp(x)
+_exp_allowing_twice64(x::TwicePrecision{Float64}) = Math.exp_impl(x.hi, x.lo, Val(:ℯ))
+
+# No error on negative x, and for NaN/Inf this returns junk:
 function _log_twice64_unchecked(x::Float64)
     xu = reinterpret(UInt64, x)
     if xu < (UInt64(1)<<52) # x is subnormal
@@ -796,10 +801,3 @@ function _log_twice64_unchecked(x::Float64)
     end
     TwicePrecision(Math._log_ext(xu)...)
 end
-
-function _log_twice64(x::Float64)
-    isfinite(x) || return TwicePrecision(x, x)
-    _log_twice64_unchecked(x)
-end
-
-_exp_float64(x::TwicePrecision{Float64}) = Math.exp_impl(x.hi, x.lo, Val(:ℯ))

@@ -1561,7 +1561,7 @@ julia> LogRange{Float16}(-1, -4, 5)
 5-element LogRange{Float16, Float64}:
  -1.0, -1.414, -2.0, -2.828, -4.0
 
-julia> LogRange(1e-310, 1e-300, 11)[1:2:end] |> collect
+julia> LogRange(1e-310, 1e-300, 11)[1:2:end]
 6-element Vector{Float64}:
  1.0e-310
  9.999999999999974e-309
@@ -1573,7 +1573,7 @@ julia> LogRange(1e-310, 1e-300, 11)[1:2:end] |> collect
 julia> prevfloat(1e-308, 5) == ans[2]
 true
 
-julia> LogRange(1, -1 +0.0im, 5) |> collect  # does not hit 1.0im exactly
+julia> LogRange(1, -1 +0.0im, 5)
 5-element Vector{ComplexF64}:
                    1.0 + 0.0im
     0.7071067811865476 + 0.7071067811865475im
@@ -1602,6 +1602,8 @@ struct LogRange{T<:Number,X} <: AbstractArray{T,1}
     len::Int
     extra::Tuple{X,X}
     function LogRange{T}(start::T, stop::T, length::Int) where {T<:Number}
+        # LogRange(0, 1, 100) could be == [0,0,0,0,...,1], that's the limit start -> 0,
+        # but seems more likely to give silent surprises than returning NaN.
         a = iszero(start) ? T(NaN) : T(start)
         b = iszero(stop) ? T(NaN) : T(stop)
         len = Int(length)
@@ -1651,34 +1653,23 @@ end
 function _logrange_extra(a::Float64, b::Float64, len::Int)
     loga = _log_twice64_unchecked(a)
     logb = _log_twice64_unchecked(b)
-    # The reason not to do linear interpolation on log(a)..log(b) in `getindex`
-    # is that division is quite slow, so we do it once on construction:
+    # The reason not to do linear interpolation on log(a)..log(b) in `getindex` is
+    # that division of TwicePrecision is quite slow, so do it once on construction:
     (loga/(len-1), logb/(len-1))
 end
 
-function getindex(r::LogRange, i::Int)
+function getindex(r::LogRange{T}, i::Int) where {T}
     @inline
     @boundscheck checkbounds(r, i)
     i == 1 && return r.start
     i == r.len && return r.stop
-    # `unsafe_getindex` has almost perfect accuracy for Float32 and Float64, but not
-    # guaranteed, and not for ComplexF64. Hence the explicit start/stop cases.
-    return unsafe_getindex(r, i)
-end
-
-function unsafe_getindex(r::LogRange{T}, i::Int) where {T}
-    @inline
-    logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
-    x = exp(logx)
-    T <: Real ? copysign(T(x), r.start) : T(x)
-end
-function unsafe_getindex(r::LogRange{T, TwicePrecision{Float64}}, i::Int) where T
-    @inline
     tot = r.start + r.stop
     isfinite(tot) || return tot
+    # Main path uses Math.exp_impl for TwicePrecision, but is not perfectly
+    # accurate, nor does it handle NaN/Inf as desired, hence the cases above.
     logx = (r.len-i) * r.extra[1] + (i-1) * r.extra[2]
-    x = Math.exp_impl(logx.hi, logx.lo, Val(:ℯ))
-    return copysign(T(x), r.start)
+    x = _exp_allowing_twice64(logx)
+    return T <: Real ? copysign(T(x), r.start) : T(x)
 end
 
 function show(io::IO, r::LogRange{T}) where {T}
