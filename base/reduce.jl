@@ -1374,3 +1374,50 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
     end
     return n
 end
+
+"""
+    startswith(target, prefix)
+
+Simultaneously iterate both arguments until they disagree or one of them is exhausted;
+if they disagree or `target` is exhausted first, return `false`; if `prefix` is exhausted
+before or at the same time as `target` and they never disagree, return `true`.
+
+Results are well-defined for ordered collections only.
+
+# Examples
+```jldoctest
+julia> startswith((1,2,3), (1,2))
+true
+```
+"""
+function startswith(target, prefix)
+    length(prefix) > length(target) && return false
+    for (a, b) ∈ zip(target, prefix)
+        isequal(a, b) || return false
+    end
+    true
+end
+
+"""
+    endswith(target, suffix)
+
+Simultaneously iterate (in reverse order) both arguments until they disagree or one of
+them is exhausted; if they disagree or `target` is exhausted first, return `false`;
+if `prefix` is exhausted before or at the same time as `target` and they never disagree,
+return `true`.
+
+Results are well-defined for ordered collections only.
+
+# Examples
+```jldoctest
+julia> endswith((1,2,3), (2,3))
+true
+```
+"""
+function endswith(target, suffix)
+    length(suffix) > length(target) && return false
+    for (a, b) ∈ Iterators.reverse(zip(target, suffix))
+        isequal(a, b) || return false
+    end
+    true
+end

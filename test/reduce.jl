@@ -691,3 +691,60 @@ end
     @test @inferred(prod(b)) == prod(collect(b))
     @test @inferred(minimum(a)) == minimum(collect(a))
 end
+
+# startswith, endswith
+@testset "startswith, arbitrary iterables" begin
+    @test startswith(1.0, 1)
+    @test startswith([1,2,3], [1,2])
+    @test startswith(0.0:0.5:2.5, 0.0:0.5:1.5)
+
+    # various types, nothing and missing
+    @test startswith([NaN, missing, nothing], (NaN, missing))
+    @inferred startswith((NaN, missing, nothing), (NaN, missing, 1))
+    @inferred startswith((NaN, missing, nothing), [NaN, missing, nothing, 1])
+    @test startswith((nothing, missing, missing, 1), (nothing, missing))
+
+    # arrays
+    @test startswith(trues(4), [true, true])
+    @test !startswith(trues(1), [true, true])
+    @test !startswith((), ((), ()))
+
+    # etc
+    a = zip((1,2,3), (4,5,6))
+    b = ((1, 4), (2, 5))
+    @test startswith(a, b)
+    @test startswith(['w', 'o', 'r', 'l', 'd'], "wo")
+    @test !startswith(['w', 'o', 'r', 'l', 'd'], "worlds")
+    @test startswith([0x1, 0x2, 0x3], 1)
+end
+@testset "endswith, arbitrary iterables" begin
+    @test endswith(1.0, 1)
+    @test endswith([1,2,3], [2,3])
+    @test endswith(0.0:0.5:2.5, 1.5:0.5:2.5)
+
+    # un-ordered collections do not have well-defined reverse, hence, throw
+    d = Dict(i => i + 1 for i = 1:3)
+    ps = [2 => 3, 3 => 4]
+    @test_throws MethodError endswith(d, ps)
+    @test_throws MethodError endswith(d, Set(ps))
+
+    # nothing and missing
+    # various types, nothing and missing
+    @test endswith([NaN, missing, nothing, Inf], (missing, nothing, Inf))
+    @inferred endswith((NaN, missing, nothing), (NaN, missing, 1))
+    @inferred endswith((NaN, missing, nothing), [NaN, missing, nothing, 1])
+    @test endswith((nothing, missing, missing, 1), (missing, 1))
+
+    # arrays
+    @test endswith(trues(4), [true, true])
+    @test !endswith(trues(1), [true, true])
+    @test !endswith((), ((), ()))
+
+    # etc
+    a = zip((1,2,3), (4,5,6))
+    b = ((2, 5), (3, 6))
+    @test endswith(a, b)
+    @test endswith(["these", "are", "words"], ("words",))
+    @test endswith(['h', 'e', 'l', 'l', 'o'], "ello")
+    @test endswith([0x1, 0x2, 0x3], 3.0f0)
+end
