@@ -144,9 +144,9 @@ There are currently four sorting algorithms available in base Julia:
 `InsertionSort` is an O(n²) stable sorting algorithm. It is efficient for very small `n`,
 and is used internally by `QuickSort`.
 
-`QuickSort` is an in-place and very fast sorting algorithm with an average-case time
-complexity of O(n log n). Since Julia 1.9, `QuickSort` is stable, i.e., elements considered
-equal will remain in the same order. Notice that O(n²) is worst-case complexity, but it gets
+`QuickSort` is a very fast sorting algorithm with an average-case time complexity of
+O(n log n). Since Julia 1.9, `QuickSort` is stable, i.e., elements considered equal will
+remain in the same order. Notice that O(n²) is worst-case complexity, but it gets
 vanishingly unlikely as the pivot selection is randomized in Julia v1.9.
 
 `PartialQuickSort(k::OrdinalRange)` is similar to `QuickSort`, but the output array is only
@@ -169,9 +169,9 @@ s1[k] == s2[k]                    # => true
 array of half the size of the input array – and is typically not quite as fast as `QuickSort`.
 It is the default algorithm for non-numeric data.
 
-The default sorting algorithm is chosen on the basis that it is stable and fast, or *appear*
-to be fast. Usually, `QuickSort` is selected, but `InsertionSort` is preferred for small
-data. You can also explicitly specify your preferred algorithm, e.g.
+The default sorting algorithms are chosen on the basis that they are stable and fast, or
+*appear* to be fast. Usually, `QuickSort` is selected, but `InsertionSort` is preferred for
+small data. You can also explicitly specify your preferred algorithm, e.g.
 `sort!(v, alg=PartialQuickSort(10:20))`.
 
 The mechanism by which Julia picks default sorting algorithms is implemented via the
@@ -190,7 +190,7 @@ defalg(v::AbstractArray{<:Number}) = MergeSort
 
 !!! compat "Julia 1.9"
     The default sorting algorithm (returned by `Base.Sort.defalg` function) is
-    stable since Julia 1.9.
+    is guaranteed to be stable since Julia 1.9.
 
 ## Alternate orderings
 
