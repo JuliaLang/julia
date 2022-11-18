@@ -183,9 +183,10 @@ method from [`sort.jl`](https://github.com/JuliaLang/julia/blob/master/base/sort
 defalg(v::AbstractArray) = DEFAULT_STABLE
 ```
 
-You may change the default behavior for specific element type by:
+You may change the default behavior for specific element type by, e.g., as in
+[InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903):
 ```julia
-defalg(v::AbstractArray{<:Number}) = MergeSort
+Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = InlineStringSort
 ```
 
 !!! compat "Julia 1.9"
