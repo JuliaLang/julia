@@ -152,9 +152,6 @@ pivot selection is randomized.
 `PartialQuickSort(k::OrdinalRange)` is similar to `QuickSort`, but the output array is only
 sorted in the range of `k`. For example:
 
-!!! compat "Julia 1.9"
-    The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
-
 ```jldoctest
 julia> x = rand(1:500, 100);
 
@@ -173,6 +170,9 @@ julia> map(x->issorted(x[k]), (s1, s2))
 julia> s1[k] == s2[k]
 true
 ```
+
+!!! compat "Julia 1.9"
+    The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
 
 `MergeSort` is an O(n log n) stable sorting algorithm but is not in-place – it requires a temporary
 array of half the size of the input array – and is typically not quite as fast as `QuickSort`.
