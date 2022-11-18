@@ -155,14 +155,23 @@ sorted in the range of `k`. For example:
 !!! compat "Julia 1.9"
     The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
 
-```julia
-x = rand(1:500, 100);
-k = 50:100;
-s1 = sort(x; alg=QuickSort);
-s2 = sort(x; alg=PartialQuickSort(k));
-map(issorted, (s1, s2))           # => (true, false)
-map(x->issorted(x[k]), (s1, s2))  # => (true, true)
-s1[k] == s2[k]                    # => true
+```julia-repl
+julia> x = rand(1:500, 100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
 ```
 
 `MergeSort` is an O(n log n) stable sorting algorithm but is not in-place – it requires a temporary
@@ -190,8 +199,8 @@ Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = Inline
 ```
 
 !!! compat "Julia 1.9"
-    The default sorting algorithm (returned by `Base.Sort.defalg` function) is
-    is guaranteed to be stable since Julia 1.9.
+    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed
+    to be stable since Julia 1.9.
 
 ## Alternate orderings
 
