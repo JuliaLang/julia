@@ -992,7 +992,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
         m = m::Core.MethodMatch
-        (mod === nothing || m.method.module ∈ mod) && push!(ms, m.method)
+        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
     end
     MethodList(ms, typeof(f).name.mt)
 end
@@ -1561,15 +1561,26 @@ parentmodule(f::Function) = parentmodule(typeof(f))
 """
     parentmodule(f::Function, types) -> Module
 
-Determine the module containing a given definition of a generic function.
+Determine the module containing the first method of a generic function `f` matching
+the specified `types`.
 """
 function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
     end
-    return first(m).module
+    return parentmodule(first(m))
 end
+
+"""
+    parentmodule(m::Method) -> Module
+
+Return the module in which the given method `m` is defined.
+
+!!! compat "Julia 1.9"
+    Passing a `Method` as an argument requires Julia 1.9 or later.
+"""
+parentmodule(m::Method) = m.module
 
 """
     hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
@@ -1632,7 +1643,7 @@ as written, called after all missing keyword-arguments have been assigned defaul
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
 """
 function bodyfunction(basemethod::Method)
-    fmod = basemethod.module
+    fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
     #        return %1
@@ -1652,7 +1663,7 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(basemethod.module, fsym)::Function
+                        return getfield(fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
                         return getfield(fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)

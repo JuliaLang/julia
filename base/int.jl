@@ -504,12 +504,15 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 >>>(x::BitInteger, y::BitUnsigned) = lshr_int(x, y)
 # signed shift counts can shift in either direction
 # note: this early during bootstrap, `>=` is not yet available
-# note: we only define Int shift counts here; the generic case is handled later
 >>(x::BitInteger, y::Int) =
     ifelse(0 <= y, x >> unsigned(y), x << unsigned(-y))
-<<(x::BitInteger, y::Int) =
-    ifelse(0 <= y, x << unsigned(y), x >> unsigned(-y))
 >>>(x::BitInteger, y::Int) =
+    ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
+>>(x::BitInteger, y::BitSigned) =
+    ifelse(0 <= y, x >> unsigned(y), x << unsigned(-y))
+<<(x::BitInteger, y::BitSigned) =
+    ifelse(0 <= y, x << unsigned(y), x >> unsigned(-y))
+>>>(x::BitInteger, y::BitSigned) =
     ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
 for to in BitInteger_types, from in (BitInteger_types..., Bool)
