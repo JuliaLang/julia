@@ -1529,8 +1529,8 @@ julia> logrange(-27, -3, length=7)  # allows negative numbers
  -27.0, -18.7208, -12.9802, -9.0, -6.24025, -4.32675, -3.0
 ```
 
-!!! compat "Julia 1.10"
-    This function requires at least Julia 1.10.
+!!! compat "Julia 1.11"
+    This function requires at least Julia 1.11.
 """
 logrange(start::Number, stop::Number, length::Integer) = LogRange(start, stop, Int(length))
 logrange(start::Number, stop::Number; length::Integer) = LogRange(start, stop, Int(length))
@@ -1573,15 +1573,15 @@ julia> LogRange(1e-310, 1e-300, 11)[1:2:end]
 julia> prevfloat(1e-308, 5) == ans[2]
 true
 
-julia> LogRange(1, -1 +0.0im, 5)
-5-element Vector{ComplexF64}:
-                   1.0 + 0.0im
-    0.7071067811865476 + 0.7071067811865475im
- 6.123233995736766e-17 + 1.0im
-   -0.7071067811865475 + 0.7071067811865476im
-                  -1.0 + 0.0im
+julia> LogRange{ComplexF32}(1, -1 +0.0im, 5) |> collect
+5-element Vector{ComplexF32}:
+         1.0f0 + 0.0f0im
+  0.70710677f0 + 0.70710677f0im
+  6.123234f-17 + 1.0f0im
+ -0.70710677f0 + 0.70710677f0im
+        -1.0f0 + 0.0f0im
 
-julia> ans ≈ cis.(LinRange(0, pi, 5))
+julia> ans ≈ cis.(LinRange{Float32}(0, pi, 5))
 true
 
 julia> LogRange(2, Inf, 5)
@@ -1593,8 +1593,8 @@ julia> LogRange(0, 4, 5)
  NaN, NaN, NaN, NaN, 4.0
 ```
 
-!!! compat "Julia 1.10"
-    This type requires at least Julia 1.10.
+!!! compat "Julia 1.11"
+    This type requires at least Julia 1.11.
 """
 struct LogRange{T<:Number,X} <: AbstractArray{T,1}
     start::T

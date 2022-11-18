@@ -2492,8 +2492,6 @@ end
     @test test_firstindex(StepRange{Union{Int64,Int128},Int}(Int64(1), 1, Int128(0)))
 end
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 @testset "PR 49516" begin
     struct PR49516 <: Signed
         n::Int
@@ -2684,7 +2682,7 @@ end
     @test_throws ArgumentError LogRange{Int}(1,4,5)  # no integer ranges
 
     # printing
-    @test repr(LogRange(1,2,3)) == "LogRange(1.0, 2.0, 3)"
+    @test repr(LogRange(1,2,3)) == "LogRange{Float64}(1.0, 2.0, 3)"
     @test repr("text/plain", LogRange(1,2,3)) == "3-element LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
 end
 
