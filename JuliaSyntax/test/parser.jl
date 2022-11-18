@@ -1,6 +1,7 @@
 function test_parse(production, code; v=v"1.6", expr=false)
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
+    JuliaSyntax.validate_literal_tokens(stream)
     t = build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"None")
     source = SourceFile(code)
     s = SyntaxNode(source, t)
@@ -163,6 +164,7 @@ tests = [
         "-2[1, 3]" => "(call-pre - (ref 2 1 3))"
         "-2"       => "-2"
         "+2.0"     => "2.0"
+        "-1.0f0"   => "-1.0f0"
         "-0x1"     => "(call-pre - 0x01)"
         "- 2"      => "(call-pre - 2)"
         ".-2"      => "(call-pre .- 2)"
@@ -628,6 +630,8 @@ tests = [
         "'a'"           =>  "(char 'a')"
         "'α'"           =>  "(char 'α')"
         "'\\xce\\xb1'"  =>  "(char 'α')"
+        "'\\u03b1'"     =>  "(char 'α')"
+        "'\\U1D7DA'"    =>  "(char '𝟚')"
         "'a"            =>  "(char 'a' (error-t))"
         "''"            =>  "(char (error))"
         "'"             =>  "(char (error))"
@@ -776,7 +780,6 @@ tests = [
         "\"\$var\""      =>  "(string var)"
         "\"\$outer\""    =>  "(string outer)"
         "\"\$in\""       =>  "(string in)"
-        raw"\"\xqqq\""   =>  "(string ✘)"
         # Triple-quoted dedenting:
         "\"\"\"\nx\"\"\""   =>  raw"""(string-s "x")"""
         "\"\"\"\n\nx\"\"\"" =>  raw"""(string-s "\n" "x")"""
@@ -826,6 +829,14 @@ tests = [
         "\"a\\\n\""   => "(string \"a\")"
         "\"a\\\r\""   => "(string \"a\")"
         "\"a\\\r\n\"" => "(string \"a\")"
+    ],
+    JuliaSyntax.parse_atom => [
+        # errors in literals
+        "\"\\xqqq\""  =>  "(string (error))"
+        "'ab'"        =>  "(char (error))"
+        "'\\xq'"      =>  "(char (error))"
+        "10.0e1000'"  =>  "(error)"
+        "10.0f100'"   =>  "(error)"
     ],
     JuliaSyntax.parse_docstring => [
         """ "notdoc" ]        """ => "(string \"notdoc\")"

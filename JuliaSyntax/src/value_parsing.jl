@@ -2,43 +2,35 @@
 # This file contains utility functions for converting undecorated source
 # strings into Julia values.  For example, string->number, string unescaping, etc.
 
-"""
-Convert a Julia source code string into a number.
-"""
-function julia_string_to_number(str::AbstractString, kind)
+function parse_int_literal(str::AbstractString)
+    # TODO: A specialized code path here can be a lot faster and also
+    # allocation free
     str = replace(replace(str, '_'=>""), '−'=>'-')
-    if kind == K"Integer"
-        x = Base.tryparse(Int, str)
-        if Int === Int32 && isnothing(x)
-            x = Base.tryparse(Int64, str)
-        end
+    x = Base.tryparse(Int, str)
+    if Int === Int32 && isnothing(x)
+        x = Base.tryparse(Int64, str)
+    end
+    if isnothing(x)
+        x = Base.tryparse(Int128, str)
         if isnothing(x)
-            x = Base.tryparse(Int128, str)
-            if isnothing(x)
-                x = Base.parse(BigInt, str)
-            end
+            x = Base.parse(BigInt, str)
         end
-        return x
-    elseif kind == K"Float"
-        if !startswith(str,"0x") && 'f' in str && !('p' in str)
-            # TODO: re-detecting Float32 here is kind of awful. Should have a
-            # separate Float32 literal type produced by the lexer?
-            x, code = _parse_float(Float32, str)
-        else
-            x, code = _parse_float(Float64, str)
-        end
-        return code === :ok           ? x :
-               code === :underflow    ? x : # < TODO: emit warning somehow?
-               #=code === :overflow=#   ErrorVal()
-    elseif kind == K"HexInt"
-        ndigits = length(str)-2
+    end
+    return x
+end
+
+function parse_uint_literal(str::AbstractString, k)
+    str = replace(replace(str, '_'=>""), '−'=>'-')
+    ndigits = length(str)-2
+    if k == K"HexInt"
         return ndigits <= 2  ? Base.parse(UInt8, str)   :
                ndigits <= 4  ? Base.parse(UInt16, str)  :
                ndigits <= 8  ? Base.parse(UInt32, str)  :
                ndigits <= 16 ? Base.parse(UInt64, str)  :
                ndigits <= 32 ? Base.parse(UInt128, str) :
                Base.parse(BigInt, str)
-    elseif kind == K"BinInt"
+    elseif k == K"BinInt"
+        str = replace(replace(str, '_'=>""), '−'=>'-')
         ndigits = length(str)-2
         return ndigits <= 8   ? Base.parse(UInt8, str)   :
                ndigits <= 16  ? Base.parse(UInt16, str)  :
@@ -46,8 +38,7 @@ function julia_string_to_number(str::AbstractString, kind)
                ndigits <= 64  ? Base.parse(UInt64, str)  :
                ndigits <= 128 ? Base.parse(UInt128, str) :
                Base.parse(BigInt, str)
-    elseif kind == K"OctInt"
-        ndigits = length(str)-2
+    elseif k == K"OctInt"
         x = Base.tryparse(UInt64, str)
         if isnothing(x)
             x = Base.tryparse(UInt128, str)
@@ -68,7 +59,6 @@ function julia_string_to_number(str::AbstractString, kind)
     end
 end
 
-
 #-------------------------------------------------------------------------------
 """
 Like `Base.parse(Union{Float64,Float32}, str)`, but permits float underflow
@@ -76,33 +66,54 @@ Like `Base.parse(Union{Float64,Float32}, str)`, but permits float underflow
 Parse a Float64. str[firstind:lastind] must be a valid floating point literal
 string. If the value is outside Float64 range.
 """
-function _parse_float(::Type{T}, str::String,
-        firstind::Integer, lastind::Integer) where {T} # force specialize with where {T}
-    strsize = lastind - firstind + 1
+function parse_float_literal(::Type{T}, str::String,
+        firstind::Integer, endind::Integer) where {T} # force specialize with where {T}
+    strsize = endind - firstind
     bufsz = 50
     if strsize < bufsz
         buf = Ref{NTuple{bufsz, UInt8}}()
         ptr = Base.unsafe_convert(Ptr{UInt8}, pointer_from_objref(buf))
         GC.@preserve str buf begin
-            unsafe_copyto!(ptr, pointer(str, firstind), strsize)
-            # Ensure ptr is null terminated
-            unsafe_store!(ptr, UInt8(0), strsize + 1)
-            _unsafe_parse_float(T, ptr, strsize)
+            n = _copy_normalize_number!(ptr, pointer(str, firstind), strsize)
+            _unsafe_parse_float(T, ptr, n)
         end
     else
-        # Slow path with allocation.
-        buf = Vector{UInt8}(str[firstind:lastind])
-        push!(buf, 0x00)
+        # Slower path with allocation.
+        buf = Vector{UInt8}(undef, strsize+1)
         ptr = pointer(buf)
-        GC.@preserve buf _unsafe_parse_float(T, ptr, strsize)
+        GC.@preserve str buf begin
+            n = _copy_normalize_number!(ptr, pointer(str, firstind), strsize)
+            _unsafe_parse_float(T, ptr, n)
+        end
     end
 end
 
-function _parse_float(T, str::String)
-    _parse_float(T, str, firstindex(str), lastindex(str))
+# Like replace(replace(str, '_'=>""), '−'=>'-')
+# dest must be of size at least srcsize+1
+function _copy_normalize_number!(dest, src, srcsize)
+    i = 0
+    j = 0
+    while i < srcsize
+        b = unsafe_load(src + i)
+        if b == UInt8('_')
+            i += 1
+            continue
+        elseif b == 0xe2 && i+2 < srcsize &&
+                unsafe_load(src + i + 1) == 0x88 &&
+                unsafe_load(src + i + 2) == 0x92
+            # src at i,i+1,i+2 is UTF-8 code for unicode minus sign '−'
+            b = UInt8('-')
+            i += 2
+        end
+        unsafe_store!(dest+j, b)
+        i += 1
+        j += 1
+    end
+    unsafe_store!(dest+j, 0x00)
+    return j
 end
 
-# Internals of _parse_float, split into a separate function to avoid some
+# Internals of parse_float_literal, split into a separate function to avoid some
 # apparent codegen issues https://github.com/JuliaLang/julia/issues/46509
 # (perhaps we don't want the `buf` in `GC.@preserve buf` to be stack allocated
 # on one branch and heap allocated in another?)
@@ -207,15 +218,16 @@ end
 Process Julia source code escape sequences for non-raw strings.
 `str` should be passed without delimiting quotes.
 """
-function unescape_julia_string(io::IO, str::AbstractString)::Tuple{Bool, String}
-    i = firstindex(str)
-    lastidx = lastindex(str)
-    while i <= lastidx
+function unescape_julia_string(io::IO, str::AbstractString,
+                               firstind, endind, diagnostics)
+    had_error = false
+    i = firstind
+    while i < endind
         c = str[i]
         if c != '\\'
             if c == '\r'
                 # convert literal \r and \r\n in strings to \n (issue #11988)
-                if i+1 <= lastidx && str[i+1] == '\n'
+                if i+1 < endind && str[i+1] == '\n'
                     i += 1
                 end
                 c = '\n'
@@ -226,8 +238,9 @@ function unescape_julia_string(io::IO, str::AbstractString)::Tuple{Bool, String}
         end
         # Process \ escape sequences.  See also Base.unescape_string which some
         # of this code derives from (but which disallows \` \' \$)
+        escstart = i
         i += 1
-        if i > lastidx
+        if i >= endind
             break
         end
         c = str[i]
@@ -235,7 +248,7 @@ function unescape_julia_string(io::IO, str::AbstractString)::Tuple{Bool, String}
             n = k = 0
             m = c == 'x' ? 2 :
                 c == 'u' ? 4 : 8
-            while (k += 1) <= m && i+1 <= lastidx
+            while (k += 1) <= m && i+1 < endind
                 nc = str[i+1]
                 n = '0' <= nc <= '9' ? n<<4 + (nc-'0') :
                     'a' <= nc <= 'f' ? n<<4 + (nc-'a'+10) :
@@ -244,25 +257,32 @@ function unescape_julia_string(io::IO, str::AbstractString)::Tuple{Bool, String}
             end
             if k == 1 || n > 0x10ffff
                 u = m == 4 ? 'u' : 'U'
-                return true, "invalid $(m == 2 ? "hex (\\x)" : "unicode (\\$u)") escape sequence"
-            end
-            if m == 2 # \x escape sequence
-                write(io, UInt8(n))
+                msg = (m == 2) ? "invalid hex escape sequence" :
+                                 "invalid unicode escape sequence"
+                emit_diagnostic(diagnostics, escstart, i, error=msg)
+                had_error = true
             else
-                print(io, Char(n))
+                if m == 2 # \x escape sequence
+                    write(io, UInt8(n))
+                else
+                    print(io, Char(n))
+                end
             end
         elseif '0' <= c <= '7'
             k = 1
             n = c-'0'
-            while (k += 1) <= 3 && i+1 <= lastidx
+            while (k += 1) <= 3 && i+1 < endind
                 c = str[i+1]
                 n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                 i += 1
             end
             if n > 255
-                return true, "octal escape sequence out of range"
+                emit_diagnostic(diagnostics, escstart, i,
+                                error="invalid octal escape sequence")
+                had_error = true
+            else
+                write(io, UInt8(n))
             end
-            write(io, UInt8(n))
         else
             u = # C escapes
                 c == 'n' ? '\n' :
@@ -279,24 +299,18 @@ function unescape_julia_string(io::IO, str::AbstractString)::Tuple{Bool, String}
                 c == '"' ? '"' :
                 c == '$' ? '$' :
                 c == '`' ? '`' :
-                return true, "Invalid escape sequence \\$c"
-            write(io, u)
+                nothing
+            if isnothing(u)
+                emit_diagnostic(diagnostics, escstart, i,
+                                error="invalid escape sequence")
+                had_error = true
+            else
+                write(io, u)
+            end
         end
         i = nextind(str, i)
     end
-    return false, ""
-end
-
-function unescape_julia_string(str::AbstractString, is_cmd::Bool, is_raw::Bool)::Tuple{String, Bool, String}
-    io = IOBuffer()
-    error = false
-    msg = ""
-    if is_raw
-        unescape_raw_string(io, str, is_cmd)
-    else
-        error, msg = unescape_julia_string(io, str)
-    end
-    String(take!(io)), error, msg
+    return had_error
 end
 
 #-------------------------------------------------------------------------------

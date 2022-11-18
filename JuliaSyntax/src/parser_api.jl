@@ -51,6 +51,7 @@ function parse!(stream::ParseStream; rule::Symbol=:toplevel)
     else
         throw(ArgumentError("Unknown grammar rule $rule"))
     end
+    validate_literal_tokens(stream)
     stream
 end
 

@@ -186,9 +186,13 @@ function _core_parser_hook(code, filename, lineno, offset, options)
             end
             ex = options === :all ? Expr(:toplevel, error_ex) : error_ex
         else
-            # FIXME: Unilaterally showing any warnings to stdout here is far
-            # from ideal. But Meta.parse() has no API for communicating this.
-            show_diagnostics(stdout, stream.diagnostics, code)
+            # TODO: Figure out a way to show warnings. Meta.parse() has no API
+            # to communicate this, and we also can't show them to stdout as
+            # this is too side-effectful and can result in double-reporting in
+            # the REPL.
+            #
+            # show_diagnostics(stdout, stream.diagnostics, code)
+            #
             # FIXME: Add support to lineno to this tree build (via SourceFile?)
             ex = build_tree(Expr, stream; filename=filename, wrap_toplevel_as_kind=K"None")
             if Meta.isexpr(ex, :None)

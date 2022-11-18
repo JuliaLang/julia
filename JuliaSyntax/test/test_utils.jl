@@ -5,6 +5,7 @@ using .JuliaSyntax:
     # Parsing
     ParseStream,
     ParseState,
+    Diagnostic,
     SourceFile,
     parse!,
     parse,
@@ -226,6 +227,7 @@ for debugging.
 function itest_parse(production, code; version::VersionNumber=v"1.6")
     stream = ParseStream(code; version=version)
     production(JuliaSyntax.ParseState(stream))
+    JuliaSyntax.validate_literal_tokens(stream)
     t = JuliaSyntax.build_tree(GreenNode, stream, wrap_toplevel_as_kind=K"toplevel")
 
     println(stdout, "# Code:\n$code\n")

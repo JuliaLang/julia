@@ -25,13 +25,15 @@ const TRIPLE_STRING_FLAG = RawFlags(1<<5)
 # Set when a string or identifier needs "raw string" unescaping
 const RAW_STRING_FLAG = RawFlags(1<<6)
 
+# TODO?
+# const ERROR_FLAG = RawFlags(1<<7)
+
 # Token-only flag
 # Record whether a token had preceding whitespace
 const PRECEDING_WHITESPACE_FLAG = RawFlags(1<<7)
 
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 const NUMERIC_FLAGS = RawFlags(RawFlags(0xff)<<8)
-# Todo ERROR_FLAG = 0x8000 ?
 
 function set_numeric_flags(n::Integer)
     f = RawFlags((n << 8) & NUMERIC_FLAGS)
@@ -673,7 +675,7 @@ function bump_invisible(stream::ParseStream, kind, flags=EMPTY_FLAGS;
     h = SyntaxHead(kind, flags)
     push!(stream.tokens, SyntaxToken(h, b))
     if !isnothing(error)
-        _emit_diagnostic(stream, b, b-1, error=error)
+        emit_diagnostic(stream, b, b-1, error=error)
     end
     stream.peek_count = 0
     return position(stream)
@@ -796,14 +798,14 @@ function emit(stream::ParseStream, mark::ParseStreamPosition, kind::Kind,
         # nested.
         fbyte = token_first_byte(stream, first_token)
         lbyte = token_last_byte(stream, lastindex(stream.tokens))
-        _emit_diagnostic(stream, fbyte, lbyte, error=error)
+        emit_diagnostic(stream, fbyte, lbyte, error=error)
     end
     push!(stream.ranges, range)
     return position(stream)
 end
 
-function _emit_diagnostic(stream::ParseStream, fbyte, lbyte; kws...)
-    push!(stream.diagnostics, Diagnostic(fbyte, lbyte; kws...))
+function emit_diagnostic(stream::ParseStream, fbyte::Integer, lbyte::Integer; kws...)
+    emit_diagnostic(stream.diagnostics, fbyte, lbyte; kws...)
     return nothing
 end
 
@@ -812,8 +814,6 @@ Emit a diagnostic at the position of the next token
 
 If `whitespace` is true, the diagnostic is positioned on the whitespace before
 the next token. Otherwise it's positioned at the next token as returned by `peek()`.
-
-TODO: Rename? This doesn't emit normal tokens into the output event list!
 """
 function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
     i = _lookahead_index(stream, 1, true)
@@ -828,12 +828,12 @@ function emit_diagnostic(stream::ParseStream; whitespace=false, kws...)
     end
     fbyte = lookahead_token_first_byte(stream, begin_tok_i)
     lbyte = lookahead_token_last_byte(stream, end_tok_i)
-    _emit_diagnostic(stream, fbyte, lbyte; kws...)
+    emit_diagnostic(stream, fbyte, lbyte; kws...)
     return nothing
 end
 
 function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition; kws...)
-    _emit_diagnostic(stream, token_first_byte(stream, mark.token_index),
+    emit_diagnostic(stream, token_first_byte(stream, mark.token_index),
                      _next_byte(stream) - 1; kws...)
 end
 
@@ -845,10 +845,68 @@ function emit_diagnostic(stream::ParseStream, mark::ParseStreamPosition,
                          end_mark::ParseStreamPosition; kws...)
     fbyte = token_first_byte(stream, mark.token_index)
     lbyte = token_first_byte(stream, end_mark.token_index) - 1
-    _emit_diagnostic(stream, fbyte, lbyte; kws...)
+    emit_diagnostic(stream, fbyte, lbyte; kws...)
 end
 
 #-------------------------------------------------------------------------------
+# ParseStream Post-processing
+
+function validate_literal_tokens(stream::ParseStream)
+    text = sourcetext(stream)
+    toks = stream.tokens
+    charbuf = IOBuffer()
+    for i = 2:length(toks)
+        t = toks[i]
+        k = kind(t)
+        fbyte = toks[i-1].next_byte
+        nbyte = t.next_byte
+        lbyte = prevind(text, t.next_byte)
+        had_error = false
+        if k in KSet"Integer BinInt OctInt HexInt"
+            # The following shouldn't be able to error...
+            # parse_int_literal
+            # parse_uint_literal
+        elseif k == K"Float" || k == K"Float32"
+            if k == K"Float"
+                _, code = parse_float_literal(Float64, text, fbyte, nbyte)
+            else
+                _, code = parse_float_literal(Float32, text, fbyte, nbyte)
+            end
+            if code == :ok
+                # pass
+            elseif code == :overflow
+                emit_diagnostic(stream, fbyte, lbyte,
+                                error="overflow in floating point literal")
+                had_error = true
+            elseif code == :underflow
+                emit_diagnostic(stream, fbyte, lbyte,
+                                warning="underflow in floating point literal")
+            end
+        elseif k == K"Char"
+            @assert fbyte < nbyte # Already handled in the parser
+            truncate(charbuf, 0)
+            had_error = unescape_julia_string(charbuf, text, fbyte,
+                                              nbyte, stream.diagnostics)
+            if !had_error
+                seek(charbuf,0)
+                read(charbuf, Char)
+                if !eof(charbuf)
+                    had_error = true
+                    emit_diagnostic(stream, fbyte, lbyte,
+                                    error="character literal contains multiple characters")
+                end
+            end
+        elseif k == K"String" && !has_flags(t, RAW_STRING_FLAG)
+            had_error = unescape_julia_string(devnull, text, fbyte,
+                                              nbyte, stream.diagnostics)
+        end
+        if had_error
+            toks[i] = SyntaxToken(SyntaxHead(K"error", EMPTY_FLAGS),
+                                  t.orig_kind, t.next_byte)
+        end
+    end
+end
+
 # Tree construction from the list of text ranges held by ParseStream
 
 # API for extracting results from ParseStream
@@ -942,7 +1000,11 @@ state for further parsing.
 """
 function sourcetext(stream::ParseStream; steal_textbuf=false)
     root = stream.text_root
-    if root isa AbstractString && codeunit(root) == UInt8
+    # The following works for SubString but makes the return type of this
+    # method type unstable.
+    # if root isa AbstractString && codeunit(root) == UInt8
+    #     return root
+    if root isa String
         return root
     elseif steal_textbuf
         return String(stream.textbuf)

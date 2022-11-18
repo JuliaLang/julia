@@ -1,55 +1,57 @@
 using JuliaSyntax:
-    julia_string_to_number,
-    unescape_julia_string,
-    _parse_float
+    parse_int_literal,
+    parse_uint_literal,
+    parse_float_literal,
+    unescape_julia_string
 
 @testset "Float parsing" begin
     # Float64
-    @test _parse_float(Float64, "123", 1, 3)   === (123.0, :ok)
-    @test _parse_float(Float64, "123", 2, 3)   === (23.0,  :ok)
-    @test _parse_float(Float64, "123", 2, 2)   === (2.0,   :ok)
-    @test _parse_float(Float64, "1.3", 1, 3)   === (1.3,   :ok)
-    @test _parse_float(Float64, "1.3e2", 1, 5) === (1.3e2, :ok)
-    @test _parse_float(Float64, "1.0e-1000", 1, 9) === (0.0, :underflow)
-    @test _parse_float(Float64, "1.0e+1000", 1, 9) === (Inf, :overflow)
+    @test parse_float_literal(Float64, "123", 1, 4)   === (123.0, :ok)
+    @test parse_float_literal(Float64, "123", 2, 4)   === (23.0,  :ok)
+    @test parse_float_literal(Float64, "123", 2, 3)   === (2.0,   :ok)
+    @test parse_float_literal(Float64, "1.3", 1, 4)   === (1.3,   :ok)
+    @test parse_float_literal(Float64, "1.3e2", 1, 6) === (1.3e2, :ok)
+    @test parse_float_literal(Float64, "1.3E2", 1, 6) === (1.3e2, :ok)
+    @test parse_float_literal(Float64, "1.0e-1000", 1, 10) === (0.0, :underflow)
+    @test parse_float_literal(Float64, "1.0e+1000", 1, 10) === (Inf, :overflow)
     # Slow path (exceeds static buffer size)
-    @test _parse_float(Float64, "0.000000000000000000000000000000000000000000000000000000000001") === (1e-60, :ok)
+    @test parse_float_literal(Float64, "0.000000000000000000000000000000000000000000000000000000000001", 1, 63) === (1e-60, :ok)
+    # hexfloat
+    @test parse_float_literal(Float64, "0x0ap-0", 1, 8) === (Float64(10), :ok)
+    @test parse_float_literal(Float64, "0xffp-0", 1, 8) === (Float64(255), :ok)
 
     # Float32
-    @test _parse_float(Float32, "123", 1, 3) === (123.0f0, :ok)
-    @test _parse_float(Float32, "1.3f2", 1, 5) === (1.3f2, :ok)
+    @test parse_float_literal(Float32, "123", 1, 4) === (123.0f0, :ok)
+    @test parse_float_literal(Float32, "1.3f2", 1, 6) === (1.3f2, :ok)
     if !Sys.iswindows()
-        @test _parse_float(Float32, "1.0f-50", 1, 7) === (0.0f0, :underflow)
+        @test parse_float_literal(Float32, "1.0f-50", 1, 8) === (0.0f0, :underflow)
     end
-    @test _parse_float(Float32, "1.0f+50", 1, 7) === (Inf32, :overflow)
+    @test parse_float_literal(Float32, "1.0f+50", 1, 8) === (Inf32, :overflow)
 
     # Assertions
-    @test_throws ErrorException _parse_float(Float64, "x", 1, 1)
-    @test_throws ErrorException _parse_float(Float64, "1x", 1, 2)
+    @test_throws ErrorException parse_float_literal(Float64, "x", 1, 2)
+    @test_throws ErrorException parse_float_literal(Float64, "1x", 1, 3)
+
+    # Underscore and \minus allowed
+    @test parse_float_literal(Float64, "10_000.0_0", 1, 9) === (Float64(10000), :ok)
+    @test parse_float_literal(Float64, "−10.0", 1, 8)      === (Float64(-10), :ok)
+    @test parse_float_literal(Float64, "10e\u22121", 1, 8) === (Float64(1), :ok)
 end
 
-hexint(s) = julia_string_to_number(s, K"HexInt")
-binint(s) = julia_string_to_number(s, K"BinInt")
-octint(s) = julia_string_to_number(s, K"OctInt")
+hexint(s) = parse_uint_literal(s, K"HexInt")
+binint(s) = parse_uint_literal(s, K"BinInt")
+octint(s) = parse_uint_literal(s, K"OctInt")
 
-@testset "Number parsing" begin
+@testset "Integer parsing" begin
     # Integers
-    @testset "Integers" begin
-        @test julia_string_to_number("-1", K"Integer") isa Int
-        @test julia_string_to_number("1", K"Integer") isa Int
-        @test julia_string_to_number("2147483647", K"Integer") isa Int
-        @test julia_string_to_number("9223372036854775807", K"Integer") isa Int64
-        @test julia_string_to_number("9223372036854775808", K"Integer") isa Int128
-        @test julia_string_to_number("170141183460469231731687303715884105727", K"Integer") isa Int128
-        @test julia_string_to_number("170141183460469231731687303715884105728", K"Integer") isa BigInt
-    end
-
-    # Floats
-    @testset "Floats" begin
-        @test julia_string_to_number("10e-0", K"Float") === Float64(10)
-        @test julia_string_to_number("10f-0", K"Float") === Float32(10)
-        @test julia_string_to_number("0x0ap-0", K"Float") === Float64(10)
-        @test julia_string_to_number("0xffp-0", K"Float") === Float64(255)
+    @testset "Signed Integers" begin
+        @test parse_int_literal("-1") isa Int
+        @test parse_int_literal("1") isa Int
+        @test parse_int_literal("2147483647") isa Int
+        @test parse_int_literal("9223372036854775807") isa Int64
+        @test parse_int_literal("9223372036854775808") isa Int128
+        @test parse_int_literal("170141183460469231731687303715884105727") isa Int128
+        @test parse_int_literal("170141183460469231731687303715884105728") isa BigInt
     end
 
     # HexInt
@@ -137,39 +139,48 @@ octint(s) = julia_string_to_number(s, K"OctInt")
     end
 
     @testset "Underscore separators" begin
-        @test julia_string_to_number("10_000",      K"Integer") === 10000
-        @test julia_string_to_number("10_000.0",    K"Float")   === Float64(10000)
-        @test julia_string_to_number("0xff_ff",     K"HexInt")  === 0xffff
-        @test julia_string_to_number("0b1111_1111", K"BinInt")  === 0xff
-        @test julia_string_to_number("0o177_777",   K"OctInt")  === 0xffff
+        @test parse_int_literal("10_000") === 10000
+        @test parse_uint_literal("0xff_ff",     K"HexInt")  === 0xffff
+        @test parse_uint_literal("0b1111_1111", K"BinInt")  === 0xff
+        @test parse_uint_literal("0o177_777",   K"OctInt")  === 0xffff
     end
 
     @testset "\\minus ('\\u2212' / '−') allowed in numbers" begin
-        @test julia_string_to_number("−10",        K"Integer") === -10
-        @test julia_string_to_number("−10.0",      K"Float")   === Float64(-10)
-        @test julia_string_to_number("10e\u22121", K"Float")   === Float64(1)
+        @test parse_int_literal("−10")  === -10
     end
 end
 
-function unesc(str, is_cmd = false, is_raw = false)
-    str, iserror, _ = unescape_julia_string(str, is_cmd, is_raw)
-    @test !iserror
-    return str
+function unesc(str, firstind=firstindex(str), endind=lastindex(str)+1; diagnostics=false)
+    io = IOBuffer()
+    ds = JuliaSyntax.Diagnostic[]
+    unescape_julia_string(io, str, firstind, endind, ds)
+    if diagnostics
+        ds
+    else
+        @test isempty(ds)
+        String(take!(io))
+    end
 end
+
 @testset "String unescaping" begin
+    # offsets
+    @test unesc("abcd", 1, 3) == "ab"
+    @test unesc("abcd", 2, 4) == "bc"
+    @test unesc("abcd", 3, 5) == "cd"
+
     # Allowed escapes of delimiters and dollar sign
-    @test only(unesc("\\\\")) == '\\'
-    @test only(unesc("\\\"")) == '"'
-    @test only(unesc("\\\$")) == '$'
-    @test only(unesc("\\'"))  == '\''
-    @test only(unesc("\\`"))  == '`'
+    @test unesc("\\\\") == "\\"
+    @test unesc("\\\"") == "\""
+    @test unesc("\\\$") == "\$"
+    @test unesc("\\'")  == "\'"
+    @test unesc("\\`")  == "`"
 
     # Newline normalization
     @test unesc("a\nb\rc\r\nd") == "a\nb\nc\nd"
 
     # Invalid escapes
-    @test unescape_julia_string("\\.", false, false)[2]
-    @test unescape_julia_string("\\z", false, false)[2]
+    @test !isempty(unesc("\\.", diagnostics=true))
+    @test !isempty(unesc("\\z", diagnostics=true))
 
     # Standard C escape sequences
     @test codeunits(unesc("\\n\\t\\r\\e\\b\\f\\v\\a")) ==
@@ -181,44 +192,50 @@ end
     @test unesc("x\\U001F604x") == "x😄x"
     # Maximum unicode code point
     @test unesc("x\\U10ffffx") == "x\U10ffffx"
-    @test unescape_julia_string("x\\U110000x", false, false)[2]
+    @test !isempty(unesc("x\\U110000x", diagnostics=true))
 
     # variable-length octal
     @test unesc("x\\7x") == "x\ax"
     @test unesc("x\\77x") == "x?x"
     @test unesc("x\\141x") == "xax"
     @test unesc("x\\377x") == "x\xffx"
-    @test unescape_julia_string("x\\400x", false, false)[2]
+    @test !isempty(unesc("x\\400x", diagnostics=true))
+end
+
+function unesc_raw(str, is_cmd)
+    io = IOBuffer()
+    JuliaSyntax.unescape_raw_string(io, str, is_cmd)
+    return String(take!(io))
 end
 
 @testset "Raw string unescaping" begin
     # " delimited
     # x\"x ==> x"x
-    @test unesc("x\\\"x",     false, true) == "x\"x"
+    @test unesc_raw("x\\\"x",     false) == "x\"x"
     # x\`x ==> x\`x
-    @test unesc("x\\`x",      false, true) == "x\\`x"
+    @test unesc_raw("x\\`x",      false) == "x\\`x"
     # x\\\"x ==> x\"x
-    @test unesc("x\\\\\\\"x", false, true) == "x\\\"x"
+    @test unesc_raw("x\\\\\\\"x", false) == "x\\\"x"
     # x\\\`x ==> x\\\`x
-    @test unesc("x\\\\\\`x",  false, true) == "x\\\\\\`x"
+    @test unesc_raw("x\\\\\\`x",  false) == "x\\\\\\`x"
     # '\\ ' ==> '\\ '
-    @test unesc("\\\\ ",      false, true) == "\\\\ "
+    @test unesc_raw("\\\\ ",      false) == "\\\\ "
     # '\\' ==> '\'
-    @test unesc("\\\\",       false, true) == "\\"
+    @test unesc_raw("\\\\",       false) == "\\"
     # '\\\\' ==> '\\'
-    @test unesc("\\\\\\\\",   false, true) == "\\\\"
+    @test unesc_raw("\\\\\\\\",   false) == "\\\\"
 
     # ` delimited
     # x\"x ==> x\"x
-    @test unesc("x\\\"x",     true, true) == "x\\\"x"
+    @test unesc_raw("x\\\"x",     true) == "x\\\"x"
     # x\`x ==> x`x
-    @test unesc("x\\`x",      true, true)  == "x`x"
+    @test unesc_raw("x\\`x",      true)  == "x`x"
     # x\\\"x ==> x\"x
-    @test unesc("x\\\\\\\"x", true, true) == "x\\\\\\\"x"
+    @test unesc_raw("x\\\\\\\"x", true) == "x\\\\\\\"x"
     # x\\\`x ==> x\`x
-    @test unesc("x\\\\\\`x",  true, true) == "x\\`x"
+    @test unesc_raw("x\\\\\\`x",  true) == "x\\`x"
     # '\\ ' ==> '\\ '
-    @test unesc("\\\\ ",      true, true) == "\\\\ "
+    @test unesc_raw("\\\\ ",      true) == "\\\\ "
 end
 
 @testset "Normalization of identifiers" begin
