@@ -155,7 +155,7 @@ sorted in the range of `k`. For example:
 !!! compat "Julia 1.9"
     The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
 
-```julia-repl
+```jldoctest
 julia> x = rand(1:500, 100);
 
 julia> k = 50:100;
