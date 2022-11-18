@@ -419,14 +419,6 @@ for (sym, deps, exp, type) in [
         (:hi, (), :(lastindex(v)),  Integer),
         (:mn, (), :(throw(ArgumentError("mn is needed but has not been computed"))), :(eltype(v))),
         (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
-        (:range, (:mn, :mx), quote
-            o isa DirectOrdering || throw(ArgumentError("Cannot compute range under ordering $o"))
-            maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
-        end, Integer),
-        (:umn, (:mn,), :(uint_map(mn, o)), Unsigned),
-        (:umx, (:mx,), :(uint_map(mx, o)), Unsigned),
-        (:urange, (:umn, :umx), :(umx-umn), Unsigned),
-        (:bits, (:urange,), :(unsigned(8sizeof(urange) - leading_zeros(urange))), Unsigned),
         (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
         (:allow_legacy_dispatch, (), true, Bool)]
     str = string(sym)
@@ -809,7 +801,9 @@ struct ConsiderCountingSort{T <: Algorithm, U <: Algorithm} <: Algorithm
 end
 ConsiderCountingSort(next) = ConsiderCountingSort(CountingSort(), next)
 function _sort!(v::AbstractVector{<:Integer}, a::ConsiderCountingSort, o::DirectOrdering, kw)
-    @getkw lo hi range
+    @getkw lo hi mn mx
+    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
+
     if range < (sizeof(eltype(v)) > 8 ? 5(hi-lo)-100 : div(hi-lo, 2))
         _sort!(v, a.counting, o, kw)
     else
@@ -832,7 +826,8 @@ struct CountingSort <: Algorithm end
 maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
 function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
-    @getkw lo hi mn mx range scratch
+    @getkw lo hi mn mx scratch
+    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
     offs = 1 - (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
@@ -866,7 +861,9 @@ struct ConsiderRadixSort{T <: Algorithm, U <: Algorithm} <: Algorithm
 end
 ConsiderRadixSort(next) = ConsiderRadixSort(RadixSort(), next)
 function _sort!(v::AbstractVector, a::ConsiderRadixSort, o::DirectOrdering, kw)
-    @getkw bits lo hi
+    @getkw lo hi mn mx
+    urange = uint_map(mx, o)-uint_map(mn, o)
+    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
     if sizeof(eltype(v)) <= 8 && bits+70 < 22log(hi-lo)
         _sort!(v, a.radix, o, kw)
     else
@@ -898,7 +895,10 @@ Each pass divides the input into `2^chunk_size == mask+1` buckets. To do this, i
 """
 struct RadixSort <: Algorithm end
 function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
-    @getkw lo hi umn scratch bits
+    @getkw lo hi mn mx scratch
+    umn = uint_map(mn, o)
+    urange = uint_map(mx, o)-umn
+    bits = unsigned(8sizeof(urange) - leading_zeros(urange))
 
     # At this point, we are committed to radix sort.
     u = uint_map!(v, lo, hi, o)
@@ -916,10 +916,8 @@ function _sort!(v::AbstractVector, a::RadixSort, o::DirectOrdering, kw)
         u[i] -= umn
     end
 
-    len = hi-lo + 1
-    U = UIntMappable(eltype(v), o)
-    scratch, t = make_scratch(scratch, eltype(v), len)
-    tu = reinterpret(U, t)
+    scratch, t = make_scratch(scratch, eltype(v), hi-lo+1)
+    tu = reinterpret(eltype(u), t)
     if radix_sort!(u, lo, hi, bits, tu, 1-lo)
         uint_unmap!(v, u, lo, hi, o, umn)
     else
