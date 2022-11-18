@@ -3206,8 +3206,17 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
         jl_binding_t *ptr = (jl_binding_t*)items[i];
         // A null pointer can happen here when the binding is cleaned up
         // as an exception is thrown after it was already queued (#10221)
+        int bnd_refyoung = 0;
         jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
-        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v)) {
+        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v))
+            bnd_refyoung = 1;
+        jl_value_t *ty = jl_atomic_load_relaxed(&ptr->ty);
+        if (ty != NULL && gc_mark_queue_obj(gc_cache, sp, ty))
+            bnd_refyoung = 1;
+        jl_value_t *globalref = jl_atomic_load_relaxed(&ptr->globalref);
+        if (globalref != NULL && gc_mark_queue_obj(gc_cache, sp, globalref))
+            bnd_refyoung = 1;
+        if (bnd_refyoung) {
             items[n_bnd_refyoung] = ptr;
             n_bnd_refyoung++;
         }
