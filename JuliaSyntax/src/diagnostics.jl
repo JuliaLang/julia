@@ -121,6 +121,11 @@ function show_diagnostics(io::IO, diagnostics::AbstractVector{Diagnostic}, text:
     end
 end
 
+function emit_diagnostic(diagnostics::AbstractVector{Diagnostic},
+                         fbyte::Integer, lbyte::Integer; kws...)
+    push!(diagnostics, Diagnostic(fbyte, lbyte; kws...))
+end
+
 function any_error(diagnostics::AbstractVector{Diagnostic})
     any(is_error(d) for d in diagnostics)
 end

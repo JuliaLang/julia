@@ -580,7 +580,7 @@ end
     @test toks(".1..")   == [".1"=>K"Float",    ".."=>K".."]
     @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
 
-    @test kind.(collect(tokenize("1f0./1"))) == [K"Float", K"/", K"Integer", K"EndMarker"]
+    @test kind.(collect(tokenize("1f0./1"))) == [K"Float32", K"/", K"Integer", K"EndMarker"]
 end
 
 
@@ -618,15 +618,15 @@ end
     @test tok("1.0e-0").kind == K"Float"
     @test tok("1.0E0").kind  == K"Float"
     @test tok("1.0E-0").kind == K"Float"
-    @test tok("1.0f0").kind  == K"Float"
-    @test tok("1.0f-0").kind == K"Float"
+    @test tok("1.0f0").kind  == K"Float32"
+    @test tok("1.0f-0").kind == K"Float32"
 
     @test tok("0e0").kind    == K"Float"
     @test tok("0e+0").kind   == K"Float"
     @test tok("0E0").kind    == K"Float"
     @test tok("201E+0").kind == K"Float"
-    @test tok("2f+0").kind   == K"Float"
-    @test tok("2048f0").kind == K"Float"
+    @test tok("2f+0").kind   == K"Float32"
+    @test tok("2048f0").kind == K"Float32"
     @test tok("1.:0").kind == K"Float"
     @test tok("0x00p2").kind == K"Float"
     @test tok("0x00P2").kind == K"Float"
@@ -639,7 +639,7 @@ end
 
     # Floating point with \minus rather than -
     @test tok("1.0e−0").kind == K"Float"
-    @test tok("1.0f−0").kind == K"Float"
+    @test tok("1.0f−0").kind == K"Float32"
     @test tok("0x0p−2").kind == K"Float"
 end
 

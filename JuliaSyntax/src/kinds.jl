@@ -71,6 +71,7 @@ const _kind_names =
         "HexInt"
         "OctInt"
         "Float"
+        "Float32"
         "String"
         "Char"
         "CmdString"
@@ -1015,6 +1016,7 @@ const _nonunique_kind_names = Set([
     K"HexInt"
     K"OctInt"
     K"Float"
+    K"Float32"
     K"String"
     K"Char"
     K"CmdString"
@@ -1088,7 +1090,7 @@ is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS" < kind(x) < K"END_SYNTAX_KINDS"
 is_macro_name(x)       = K"BEGIN_MACRO_NAMES" < kind(x) < K"END_MACRO_NAMES"
 
 function is_number(x)
-    kind(x) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float")
+    kind(x) in (K"Integer", K"BinInt", K"HexInt", K"OctInt", K"Float", K"Float32")
 end
 
 function is_string_delim(x)

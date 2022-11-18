@@ -1120,7 +1120,7 @@ function parse_unary(ps::ParseState)
     end
     if k in KSet"- +" && !is_decorated(t)
         t2 = peek_token(ps, 2)
-        if !preceding_whitespace(t2) && kind(t2) in KSet"Integer Float"
+        if !preceding_whitespace(t2) && kind(t2) in KSet"Integer Float Float32"
             k3 = peek(ps, 3)
             if is_prec_power(k3) || k3 in KSet"[ {"
                 # `[`, `{` (issue #18851) and `^` have higher precedence than
@@ -1133,9 +1133,10 @@ function parse_unary(ps::ParseState)
             else
                 # We have a signed numeric literal. Glue the operator to the
                 # next token to create a signed literal:
-                # -2    ==>  -2
-                # +2.0  ==>  2.0
-                # -2*x  ==>  (call-i -2 * x)
+                # -2      ==>  -2
+                # +2.0    ==>  2.0
+                # -1.0f0  ==>  -1.0f0
+                # -2*x    ==>  (call-i -2 * x)
                 bump_glue(ps, kind(t2), EMPTY_FLAGS, 2)
             end
             return

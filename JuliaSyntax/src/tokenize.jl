@@ -801,7 +801,7 @@ function lex_digit(l::Lexer, kind)
         accept_number(l, isdigit)
         pc, ppc = dpeekchar(l)
         if (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
-            kind = K"Float"
+            kind = pc == 'f' ? K"Float32" : K"Float"
             readchar(l)
             accept(l, "+-−")
             if accept_batch(l, isdigit)
@@ -819,7 +819,7 @@ function lex_digit(l::Lexer, kind)
         end
 
     elseif (pc == 'e' || pc == 'E' || pc == 'f') && (isdigit(ppc) || ppc == '+' || ppc == '-' || ppc == '−')
-        kind = K"Float"
+        kind = pc == 'f' ? K"Float32" : K"Float"
         readchar(l)
         accept(l, "+-−")
         if accept_batch(l, isdigit)
