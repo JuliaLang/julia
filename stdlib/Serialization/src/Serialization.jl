@@ -566,10 +566,8 @@ function serialize_type_data(s, @nospecialize(t::DataType))
         serialize(s, t.name)
     else
         writetag(s.io, DATATYPE_TAG)
-        tname = t.name.name
-        serialize(s, tname)
-        mod = t.name.module
-        serialize(s, mod)
+        serialize(s, nameof(t))
+        serialize(s, parentmodule(t))
     end
     if !isempty(t.parameters)
         if iswrapper

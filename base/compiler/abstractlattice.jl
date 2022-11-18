@@ -50,8 +50,10 @@ widenlattice(L::InterConditionalsLattice) = L.parent
 is_valid_lattice_norec(lattice::InterConditionalsLattice, @nospecialize(elem)) = isa(elem, InterConditional)
 
 const AnyConditionalsLattice{L} = Union{ConditionalsLattice{L}, InterConditionalsLattice{L}}
-const BaseInferenceLattice = typeof(ConditionalsLattice(PartialsLattice(ConstsLattice())))
-const IPOResultLattice = typeof(InterConditionalsLattice(PartialsLattice(ConstsLattice())))
+
+const SimpleInferenceLattice = typeof(PartialsLattice(ConstsLattice()))
+const BaseInferenceLattice = typeof(ConditionalsLattice(SimpleInferenceLattice.instance))
+const IPOResultLattice = typeof(InterConditionalsLattice(SimpleInferenceLattice.instance))
 
 """
     struct InferenceLattice{L}
@@ -74,7 +76,7 @@ The lattice used by the optimizer. Extends
 struct OptimizerLattice{L} <: AbstractLattice
     parent::L
 end
-OptimizerLattice() = OptimizerLattice(BaseInferenceLattice.instance)
+OptimizerLattice() = OptimizerLattice(SimpleInferenceLattice.instance)
 widenlattice(L::OptimizerLattice) = L.parent
 is_valid_lattice_norec(lattice::OptimizerLattice, @nospecialize(elem)) = isa(elem, MaybeUndef)
 
@@ -152,6 +154,10 @@ constant information that would not be available from the type itself.
 has_nontrivial_const_info(lattice::AbstractLattice, @nospecialize t) =
     has_nontrivial_const_info(widenlattice(lattice), t)
 has_nontrivial_const_info(::JLTypeLattice, @nospecialize(t)) = false
+
+has_conditional(𝕃::AbstractLattice) = has_conditional(widenlattice(𝕃))
+has_conditional(::AnyConditionalsLattice) = true
+has_conditional(::JLTypeLattice) = false
 
 # Curried versions
 ⊑(lattice::AbstractLattice) = (@nospecialize(a), @nospecialize(b)) -> ⊑(lattice, a, b)

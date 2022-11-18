@@ -241,6 +241,26 @@ end
 
 # code_typed(ifelse, (Bool, Int, Int); interp=TaintInterpreter())
 
+# External lattice without `Conditional`
+
+import .CC:
+    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
+    typeinf_lattice, ipo_lattice, optimizer_lattice
+
+@newinterp NonconditionalInterpreter
+CC.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+CC.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+CC.optimizer_lattice(::NonconditionalInterpreter) = OptimizerLattice(PartialsLattice(ConstsLattice()))
+
+@test Base.return_types((Any,); interp=NonconditionalInterpreter()) do x
+    c = isa(x, Int) || isa(x, Float64)
+    if c
+        return x
+    else
+        return nothing
+    end
+end |> only === Any
+
 # CallInfo × inlining
 # ===================
 

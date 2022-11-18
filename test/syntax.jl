@@ -3422,3 +3422,10 @@ end
 # issue #46251
 @test begin; global value = 1; (value, value += 1) end == (1, 2)
 @test begin; global value = 1; "($(value), $(value += 1))" end == "(1, 2)"
+
+# issue #47410
+# note `eval` is needed since this needs to be at the top level
+@test eval(:(if false
+             elseif false || (()->true)()
+                 42
+             end)) == 42
