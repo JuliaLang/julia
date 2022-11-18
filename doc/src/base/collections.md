@@ -48,7 +48,6 @@ Fully implemented by:
   * [`Set`](@ref)
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
-  * [`LogRange`](@ref)
 
 ## Constructors and Types
 
@@ -59,7 +58,6 @@ Base.AbstractUnitRange
 Base.StepRange
 Base.UnitRange
 Base.LinRange
-Base.LogRange
 ```
 
 ## General Collections
