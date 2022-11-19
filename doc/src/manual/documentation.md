@@ -17,7 +17,7 @@ environments provide a way to access documentation directly:
   You can also use the Julia panel in the sidebar to search for documentation.
 - In [Pluto](https://github.com/fonsp/Pluto.jl), open the "Live Docs" panel on the bottom right.
 - In [Juno](https://junolab.org) using `Ctrl-J, Ctrl-D` will show the documentation for the object
-under the cursor.
+  under the cursor.
 
 ## Writing Documentation
 

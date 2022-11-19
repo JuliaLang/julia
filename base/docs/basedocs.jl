@@ -685,12 +685,11 @@ Expr
 Expr
 
 """
-    (:)(expr)
+    :expr
 
-`:expr` quotes the expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
-Which of these three types are returned for any given expression is an
-implementation detail.
+The syntax `:identifier` evaluates to a `Symbol`.
 
 See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
 
@@ -1750,7 +1749,7 @@ A symbol in the current scope is not defined.
 # Examples
 ```jldoctest
 julia> a
-ERROR: UndefVarError: a not defined
+ERROR: UndefVarError: `a` not defined
 
 julia> a = 1;
 
@@ -1773,7 +1772,7 @@ julia> function my_func(;my_arg)
 my_func (generic function with 1 method)
 
 julia> my_func()
-ERROR: UndefKeywordError: keyword argument my_arg not assigned
+ERROR: UndefKeywordError: keyword argument `my_arg` not assigned
 Stacktrace:
  [1] my_func() at ./REPL[1]:2
  [2] top-level scope at REPL[2]:1

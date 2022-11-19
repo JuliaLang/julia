@@ -12,6 +12,12 @@ using ..LinearAlgebra: libblastrampoline, BlasFloat, BlasInt, LAPACKException, D
 
 using Base: iszero, require_one_based_indexing
 
+
+# Legacy binding maintained for backwards-compatibility but new packages
+# should not look at this, instead preferring to parse the output
+# of BLAS.get_config()
+const liblapack = libblastrampoline
+
 #Generic LAPACK error handlers
 """
 Handle only negative LAPACK error codes
@@ -550,6 +556,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * )
         function getrf!(A::AbstractMatrix{$elty})
             require_one_based_indexing(A)
+            chkfinite(A)
             chkstride1(A)
             m, n = size(A)
             lda  = max(1,stride(A, 2))

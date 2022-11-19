@@ -106,7 +106,7 @@ mutable struct InferenceState
     bb_vartables::Vector{Union{Nothing,VarTable}} # nothing if not analyzed yet
     ssavaluetypes::Vector{Any}
     stmt_edges::Vector{Union{Nothing,Vector{Any}}}
-    stmt_info::Vector{Any}
+    stmt_info::Vector{CallInfo}
 
     #= intermediate states for interprocedural abstract interpretation =#
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
@@ -152,7 +152,7 @@ mutable struct InferenceState
         ssavalue_uses = find_ssavalue_uses(code, nssavalues)
         nstmts = length(code)
         stmt_edges = Union{Nothing, Vector{Any}}[ nothing for i = 1:nstmts ]
-        stmt_info = Any[ nothing for i = 1:nstmts ]
+        stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
 
         nslots = length(src.slotflags)
         slottypes = Vector{Any}(undef, nslots)
@@ -227,12 +227,6 @@ function is_effect_overridden(linfo::MethodInstance, effect::Symbol)
 end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
 is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
-
-function InferenceResult(
-    linfo::MethodInstance,
-    arginfo::Union{Nothing,Tuple{ArgInfo,InferenceState}} = nothing)
-    return _InferenceResult(linfo, arginfo)
-end
 
 add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
@@ -454,14 +448,14 @@ end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
-function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceState)
+function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !(new ⊑ old)
+    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)

@@ -500,7 +500,10 @@ See also [`split`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> collect(eachsplit(a, "."))
+julia> b = eachsplit(a, ".")
+Base.SplitIterator{String, String}("Ma.rch", ".", 0, true)
+
+julia> collect(b)
 2-element Vector{SubString{String}}:
  "Ma"
  "rch"

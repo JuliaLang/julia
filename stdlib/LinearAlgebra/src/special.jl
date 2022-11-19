@@ -43,8 +43,8 @@ Bidiagonal(A::AbstractTriangular) =
     isbanded(A, -1, 0) ? Bidiagonal(diag(A, 0), diag(A, -1), :L) : # is lower bidiagonal
         throw(ArgumentError("matrix cannot be represented as Bidiagonal"))
 
-_lucopy(A::Bidiagonal, T)     = copymutable_oftype(Tridiagonal(A), T)
-_lucopy(A::Diagonal, T)       = copymutable_oftype(Tridiagonal(A), T)
+_lucopy(A::Bidiagonal, T) = copymutable_oftype(Tridiagonal(A), T)
+_lucopy(A::Diagonal, T)   = copymutable_oftype(Tridiagonal(A), T)
 function _lucopy(A::SymTridiagonal, T)
     du = copy_similar(_evview(A), T)
     dl = copy.(transpose.(du))

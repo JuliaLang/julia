@@ -390,9 +390,9 @@ end
 
     # complex
     D = complex(D)
-    CD = cholesky(D)
-    CM = cholesky(Matrix(D))
-    @test CD isa Cholesky{ComplexF64}
+    CD = cholesky(Hermitian(D))
+    CM = cholesky(Matrix(Hermitian(D)))
+    @test CD isa Cholesky{ComplexF64,<:Diagonal}
     @test CD.U ≈ Diagonal(.√d) ≈ CM.U
     @test D ≈ CD.L * CD.U
     @test CD.info == 0
@@ -405,6 +405,12 @@ end
 
     # InexactError for Int
     @test_throws InexactError cholesky!(Diagonal([2, 1]))
+end
+
+@testset "Cholesky for AbstractMatrix" begin
+    S = SymTridiagonal(fill(2.0, 4), ones(3))
+    C = cholesky(S)
+    @test C.L * C.U ≈ S
 end
 
 @testset "constructor with non-BlasInt arguments" begin
