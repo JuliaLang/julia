@@ -66,10 +66,9 @@ module IteratorsMD
     5
     ```
 
-
-    !!! compat "Julia 1.9"
+    !!! compat "Julia 1.10"
         Using a `CartesianIndex` as a "scalar" for `broadcast` requires
-        Julia 1.9; in previous releases, use `Ref(I)`.
+        Julia 1.10; in previous releases, use `Ref(I)`.
     """
     struct CartesianIndex{N} <: AbstractCartesianIndex{N}
         I::NTuple{N,Int}
