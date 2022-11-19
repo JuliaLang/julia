@@ -816,6 +816,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->haspadding = 1;
     layout->npointers = haspointers;
     layout->fielddesc_type = 3;
+    layout->padding = 0;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
     desc->markfunc = markfunc;
