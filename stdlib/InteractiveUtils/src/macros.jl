@@ -57,7 +57,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
                 return quote
                     $(esc(dotfuncdef))
-                    local args = typesof($(map(esc, args)...))
+                    local args = $typesof($(map(esc, args)...))
                     $(fcn)($(esc(dotfuncname)), args; $(kws...))
                 end
             elseif !codemacro
@@ -81,7 +81,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                                   :(error("expression is not a function call"))
                               end)
                         else
-                            local args = typesof($(map(esc, ex0.args)...))
+                            local args = $typesof($(map(esc, ex0.args)...))
                             $(fcn)(Base.getproperty, args)
                         end
                     end
