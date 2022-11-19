@@ -95,6 +95,9 @@ struct IRInterpretationState
     function IRInterpretationState(interp::AbstractInterpreter,
         ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
         argtypes = va_process_argtypes(argtypes, mi)
+        for i = 1:length(argtypes)
+            argtypes[i] = widenslotwrapper(argtypes[i])
+        end
         argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
         empty!(ir.argtypes)
         append!(ir.argtypes, argtypes)
