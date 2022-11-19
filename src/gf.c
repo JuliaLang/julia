@@ -826,15 +826,6 @@ static void jl_compilation_sig(
             jl_svecset(limited, i, lastdeclt);
         }
         *newparams = limited;
-        // now there is a problem: the widened signature is more
-        // general than just the given arguments, so it might conflict
-        // with another definition that doesn't have cache instances yet.
-        // to fix this, we insert guard cache entries for all intersections
-        // of this signature and definitions. those guard entries will
-        // supersede this one in conflicted cases, alerting us that there
-        // should actually be a cache miss.
-        // TODO: the above analysis assumes that there will never
-        // be a call attempted that should throw a no-method error
         JL_GC_POP();
     }
 }
@@ -1078,18 +1069,35 @@ static jl_method_instance_t *cache_method(
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH5(&temp, &temp2, &temp3, &newmeth, &newparams);
 
+    // Consider if we can cache with the preferred compile signature
+    // so that we can minimize the number of required cache entries.
     int cache_with_orig = 1;
     jl_tupletype_t *compilationsig = tt;
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(definition->sig) : mt;
     intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? definition->nargs + 1 : kwmt->max_args + 2 + 2 * (mt == jl_kwcall_mt));
     jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
-        compilationsig = jl_apply_tuple_type(newparams);
-        temp2 = (jl_value_t*)compilationsig;
-        // In most cases `!jl_isa_compileable_sig(tt, definition))`,
+        temp2 = (jl_value_t*)jl_apply_tuple_type(newparams);
+        // Now there may be a problem: the widened signature is more general
+        // than just the given arguments, so it might conflict with another
+        // definition that does not have cache instances yet. To fix this, we
+        // may insert guard cache entries for all intersections of this
+        // signature and definitions. Those guard entries will supersede this
+        // one in conflicted cases, alerting us that there should actually be a
+        // cache miss. Alternatively, we may use the original signature in the
+        // cache, but use this return for compilation.
+        //
+        // In most cases `!jl_isa_compileable_sig(tt, definition)`,
         // although for some cases, (notably Varargs)
         // we might choose a replacement type that's preferable but not strictly better
-        cache_with_orig = !jl_subtype((jl_value_t*)compilationsig, definition->sig);
+        int issubty;
+        temp = jl_type_intersection_env_s(temp2, (jl_value_t*)definition->sig, &newparams, &issubty);
+        assert(temp != (jl_value_t*)jl_bottom_type); (void)temp;
+        if (jl_egal((jl_value_t*)newparams, (jl_value_t*)sparams)) {
+            cache_with_orig = !issubty;
+            compilationsig = (jl_datatype_t*)temp2;
+        }
+        newparams = NULL;
     }
     // TODO: maybe assert(jl_isa_compileable_sig(compilationsig, definition));
     newmeth = jl_specializations_get_linfo(definition, (jl_value_t*)compilationsig, sparams);
@@ -1110,6 +1118,8 @@ static jl_method_instance_t *cache_method(
             size_t i, l = jl_array_len(temp);
             for (i = 0; i < l; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(temp, i);
+                if (matc->method == definition)
+                    continue;
                 jl_svec_t *env = matc->sparams;
                 int k, l;
                 for (k = 0, l = jl_svec_len(env); k < l; k++) {
@@ -1128,9 +1138,7 @@ static jl_method_instance_t *cache_method(
                     cache_with_orig = 1;
                     break;
                 }
-                if (matc->method != definition) {
-                    guards++;
-                }
+                guards++;
             }
         }
         if (!cache_with_orig && guards > 0) {
@@ -2095,11 +2103,35 @@ static void record_precompile_statement(jl_method_instance_t *mi)
     JL_UNLOCK(&precomp_statement_out_lock);
 }
 
+jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
+
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
 {
+    // quick check if we already have a compiled result
     jl_code_instance_t *codeinst = jl_method_compiled(mi, world);
     if (codeinst)
         return codeinst;
+
+    // if mi has a better (wider) signature for compilation use that instead
+    // and just copy it here for caching
+    jl_method_instance_t *mi2 = jl_normalize_to_compilable_mi(mi);
+    if (mi2 != mi) {
+        jl_code_instance_t *codeinst2 = jl_compile_method_internal(mi2, world);
+        jl_code_instance_t *codeinst = jl_get_method_inferred(
+                mi, codeinst2->rettype,
+                codeinst2->min_world, codeinst2->max_world);
+        if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
+            // once set, don't change invoke-ptr, as that leads to race conditions
+            // with the (not) simultaneous updates to invoke and specptr
+            codeinst->isspecsig = codeinst2->isspecsig;
+            codeinst->rettype_const = codeinst2->rettype_const;
+            jl_atomic_store_release(&codeinst->specptr.fptr, jl_atomic_load_relaxed(&codeinst2->specptr.fptr));
+            jl_atomic_store_release(&codeinst->invoke, jl_atomic_load_relaxed(&codeinst2->invoke));
+        }
+        // don't call record_precompile_statement here, since we already compiled it as mi2 which is better
+        return codeinst;
+    }
+
     int compile_option = jl_options.compile_enabled;
     jl_method_t *def = mi->def.method;
     // disabling compilation per-module can override global setting
@@ -2134,6 +2166,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             }
         }
     }
+
     // if that didn't work and compilation is off, try running in the interpreter
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
@@ -2252,6 +2285,26 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
         jl_isa_compileable_sig(tt, m);
     JL_GC_POP();
     return is_compileable ? (jl_value_t*)tt : jl_nothing;
+}
+
+jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT)
+{
+    jl_method_t *def = mi->def.method;
+    if (!jl_is_method(def))
+        return mi;
+    jl_methtable_t *mt = jl_method_get_table(def);
+    if ((jl_value_t*)mt == jl_nothing)
+        return mi;
+    jl_value_t *compilationsig = jl_normalize_to_compilable_sig(mt, (jl_datatype_t*)mi->specTypes, mi->sparam_vals, def);
+    if (compilationsig == jl_nothing || jl_egal(compilationsig, mi->specTypes))
+        return mi;
+    jl_svec_t *env = NULL;
+    JL_GC_PUSH2(&compilationsig, &env);
+    jl_value_t *ti = jl_type_intersection_env((jl_value_t*)mi->specTypes, (jl_value_t*)def->sig, &env);
+    assert(ti != jl_bottom_type); (void)ti;
+    mi = jl_specializations_get_linfo(def, (jl_value_t*)compilationsig, env);
+    JL_GC_POP();
+    return mi;
 }
 
 // return a MethodInstance for a compileable method_match
