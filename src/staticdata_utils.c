@@ -47,8 +47,16 @@ int must_be_new_dt(jl_value_t *t, htable_t *news, char *image_base, size_t sizeo
     else if (jl_is_datatype(t)) {
         jl_datatype_t *dt = (jl_datatype_t*)t;
         assert(jl_object_in_image((jl_value_t*)dt->name) && "type_in_worklist mistake?");
-        if (ptrhash_has(news, (void*)dt->super))
+        jl_datatype_t *super = dt->super;
+        if (ptrhash_has(news, (void*)super))
             return 1;
+#ifndef NDEBUG
+        while (super != jl_any_type) {
+            assert(super);
+            assert(!ptrhash_has(news, (void*)super));
+            super = super->super;
+        }
+#endif
         jl_svec_t *tt = dt->parameters;
         size_t i, l = jl_svec_len(tt);
         for (i = 0; i < l; i++)
