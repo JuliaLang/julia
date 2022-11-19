@@ -693,8 +693,10 @@ function _sort!(v::AbstractVector, a::Small{N}, o::Ordering, kw) where N
 end
 
 
+struct InsertionSortAlg <: Algorithm end
+
 """
-    InsertionSort()
+    InsertionSort
 
 Use the insertion sort algorithm.
 
@@ -708,10 +710,10 @@ Characteristics:
 * *quadratic performance* in the number of elements to be sorted:
 it is well-suited to small collections but should not be used for large ones.
 """
-struct InsertionSort <: Algorithm end
+const InsertionSort = InsertionSortAlg()
+const SMALL_ALGORITHM = InsertionSortAlg()
 
-const SMALL_ALGORITHM = InsertionSort()
-function _sort!(v::AbstractVector, ::InsertionSort, o::Ordering, kw)
+function _sort!(v::AbstractVector, ::InsertionSortAlg, o::Ordering, kw)
     @getkw lo hi scratch
     lo_plus_1 = (lo + 1)::Integer
     @inbounds for i = lo_plus_1:hi
@@ -1347,13 +1349,13 @@ julia> v = [(1, "c"), (3, "a"), (2, "b")]; sort!(v, by = x -> x[2]); v
 ```
 """
 function sort!(v::AbstractVector{T};
-               alg::Union{Algorithm, Type{<:Algorithm}}=defalg(v),
+               alg::Algorithm=defalg(v),
                lt=isless,
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
                scratch::Union{Vector{T}, Nothing}=nothing) where T
-    _sort!(v, getalg(alg), ord(lt,by,rev,order), (;scratch))
+    _sort!(v, alg, ord(lt,by,rev,order), (;scratch))
     v
 end
 
@@ -1532,7 +1534,7 @@ julia> sortperm(A, dims = 2)
 ```
 """
 function sortperm(A::AbstractArray;
-                  alg::Union{Algorithm, Type{<:Algorithm}}=DEFAULT_UNSTABLE,
+                  alg::Algorithm=DEFAULT_UNSTABLE,
                   lt=isless,
                   by=identity,
                   rev::Union{Bool,Nothing}=nothing,
@@ -1592,7 +1594,7 @@ julia> sortperm!(p, A; dims=2); p
 ```
 """
 function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
-                   alg::Union{Algorithm, Type{<:Algorithm}}=DEFAULT_UNSTABLE,
+                   alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
                    rev::Union{Bool,Nothing}=nothing,
@@ -1666,7 +1668,7 @@ julia> sort(A, dims = 2)
 """
 function sort(A::AbstractArray{T};
               dims::Integer,
-              alg::Union{Algorithm, Type{<:Algorithm}}=defalg(A),
+              alg::Algorithm=defalg(A),
               lt=isless,
               by=identity,
               rev::Union{Bool,Nothing}=nothing,
@@ -1679,11 +1681,11 @@ function sort(A::AbstractArray{T};
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
-        sort_chunks!(Av, n, getalg(alg), order, scratch)
+        sort_chunks!(Av, n, alg, order, scratch)
         permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
-        sort_chunks!(Av, n, getalg(alg), order, scratch)
+        sort_chunks!(Av, n, alg, order, scratch)
         reshape(Av, axes(A))
     end
 end
@@ -1740,16 +1742,16 @@ julia> sort!(A, dims = 2); A
 """
 function sort!(A::AbstractArray{T};
                dims::Integer,
-               alg::Union{Algorithm, Type{<:Algorithm}}=defalg(A),
+               alg::Algorithm=defalg(A),
                lt=isless,
                by=identity,
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
                scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
-    __sort!(A, Val(dims), getalg(alg), ord(lt, by, rev, order), scratch)
+    __sort!(A, Val(dims), alg, ord(lt, by, rev, order), scratch)
 end
 function __sort!(A::AbstractArray{T}, ::Val{K},
-                alg::Union{Algorithm, Type{<:Algorithm}},
+                alg::Algorithm,
                 order::Ordering,
                 scratch::Union{Vector{T}, Nothing}) where {K,T}
     nd = ndims(A)
@@ -1852,10 +1854,14 @@ end
 
 
 
-### Unused constructs for backward compatability ###
+### Unused constructs for backward compatibility ###
+
+struct MergeSortAlg{T <: Algorithm} <: Algorithm
+    next::T
+end
 
 """
-    MergeSort()
+    MergeSort
 
 Indicate that a sorting function should use the merge sort algorithm.
 
@@ -1870,12 +1876,9 @@ Characteristics:
   * *not in-place* in memory.
   * *divide-and-conquer* sort strategy.
 """
-struct MergeSort{T <: Algorithm} <: Algorithm
-    next::T
-end
-MergeSort() = MergeSort(SMALL_ALGORITHM)
+const MergeSort = MergeSortAlg(SMALL_ALGORITHM)
 
-function _sort!(v::AbstractVector, a::MergeSort, o::Ordering, kw; t=nothing, offset=nothing)
+function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering, kw; t=nothing, offset=nothing)
     @getkw lo hi scratch
     @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return _sort!(v, a.next, o, kw)
@@ -1918,17 +1921,13 @@ function _sort!(v::AbstractVector, a::MergeSort, o::Ordering, kw; t=nothing, off
     scratch
 end
 
-# Support alg=InsertionSort and alg=MergeSort for backwards compatability (prefer InsertionSort() and MergeSort())
-getalg(a::Algorithm) = a
-getalg(::Type{A}) where A <: Algorithm = A()
-
 # Support 3- and 5-argument versions of sort! for calling into the internals in the old way
-function sort!(v::AbstractVector, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering)
-    _sort!(v, getalg(a), o, (; allow_legacy_dispatch=false))
+function sort!(v::AbstractVector, a::Algorithm, o::Ordering)
+    _sort!(v, a, o, (; allow_legacy_dispatch=false))
     v
 end
-function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Union{Algorithm, Type{<:Algorithm}}, o::Ordering)
-    _sort!(v, getalg(a), o, (; lo, hi, allow_legacy_dispatch=false))
+function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
+    _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
     v
 end
 
@@ -1948,7 +1947,5 @@ end
 # Keep old internal types so that people can keep dispatching with
 # sort!(::AbstractVector, ::Integer, ::Integer, ::Base.QuickSortAlg, ::Ordering) = ...
 const QuickSortAlg = typeof(QuickSort)
-const MergeSortAlg = typeof(MergeSort)
-const InsertionSortAlg = typeof(InsertionSort)
 
 end # module Sort
