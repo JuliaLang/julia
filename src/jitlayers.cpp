@@ -267,7 +267,7 @@ static jl_callptr_t _jl_compile_codeinst(
             // hack to export this pointer value to jl_dump_method_disasm
             jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
         }
-        if (this_code== codeinst)
+        if (this_code == codeinst)
             fptr = addr;
     }
 

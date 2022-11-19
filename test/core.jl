@@ -7902,3 +7902,15 @@ struct ModTparamTestStruct{M}; end
 end
 @test ModTparamTestStruct{@__MODULE__}() == 2
 @test ModTparamTestStruct{ModTparamTest}() == 1
+
+# issue #47476
+f47476(::Union{Int, NTuple{N,Int}}...) where {N} = N
+# force it to populate the MethodInstance specializations cache
+# with the correct sparams
+code_typed(f47476, (Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+@test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test_throws UndefVarError(:N) f47476(1, 2, 3, 4, 5, 6, 7)
