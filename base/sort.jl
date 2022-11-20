@@ -499,7 +499,7 @@ struct MissingOptimization{T <: Algorithm} <: Algorithm
     next::T
 end
 
-struct WithoutMissingVector{T, U <: AbstractVector{Union{T, Missing}}} <: AbstractVector{T}
+struct WithoutMissingVector{T, U} <: AbstractVector{T}
     data::U
     function WithoutMissingVector(data; unsafe=false)
         if !unsafe && any(ismissing, data)
