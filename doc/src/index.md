@@ -32,6 +32,18 @@ Markdown.parse("""
 """)
 ```
 
+### [Important Links](@id man-important-links)
+
+Below is a non-exhasutive list of links that will be useful as you learn and use the Julia programming language.
+
+- [Julia Homepage](https://julialang.org)
+- [Download Julia](https://julialang.org/downloads/)
+- [Q/A Support](https://discourse.julialang.org)
+- [Julia YouTube](https://www.youtube.com/user/JuliaLanguage)
+- [Find Julia Packages](https://julialang.org/packages/)
+- [Learning Resources](https://julialang.org/learning/)
+- [Read and write blogs on Julia](https://forem.julialang.org)
+
 ### [Introduction](@id man-introduction)
 
 Scientific computing has traditionally required the highest performance, yet domain experts have
@@ -47,6 +59,8 @@ Because Julia's compiler is different from the interpreters used for languages l
 R, you may find that Julia's performance is unintuitive at first. If you find that something is
 slow, we highly recommend reading through the [Performance Tips](@ref man-performance-tips) section before trying anything
 else. Once you understand how Julia works, it's easy to write code that's nearly as fast as C.
+
+### [Julia Versus Other Languages](@id man-julia-vs-other-languages)
 
 Julia features optional typing, multiple dispatch, and good performance, achieved using type inference
 and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation) (and
@@ -78,6 +92,8 @@ hand, while one can -- and usually must -- annotate types for the compiler, type
 compile time and cannot be manipulated or expressed at run time. In Julia, types are themselves
 run-time objects, and can also be used to convey information to the compiler.
 
+### [What Makes Julia, Julia?](@id man-what-makes-julia)
+
 While the casual programmer need not explicitly use types or multiple dispatch, they are the core
 unifying features of Julia: functions are defined on different combinations of argument types,
 and applied by dispatching to the most specific matching definition. This model is a good fit
@@ -92,6 +108,8 @@ efficiency exceeds that of other dynamic languages, and even rivals that of stat
 languages. For large scale numerical problems, speed always has been, continues to be, and probably
 always will be crucial: the amount of data being processed has easily kept pace with Moore's Law
 over the past decades.
+
+### [Advantages of Julia](@id man-advantages-of-julia)
 
 Julia aims to create an unprecedented combination of ease-of-use, power, and efficiency in a single
 language. In addition to the above, some advantages of Julia over comparable systems include:
