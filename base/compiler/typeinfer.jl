@@ -321,6 +321,9 @@ function CodeInstance(
         elseif isa(result_type, InterConditional)
             rettype_const = result_type
             const_flags = 0x2
+        elseif isa(result_type, InterMustAlias)
+            rettype_const = result_type
+            const_flags = 0x2
         else
             rettype_const = nothing
             const_flags = 0x00
@@ -526,8 +529,8 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
     end
     # inspect whether our inference had a limited result accuracy,
     # else it may be suitable to cache
-    me.bestguess = cycle_fix_limited(me.bestguess, me)
-    limited_ret = me.bestguess isa LimitedAccuracy
+    bestguess = me.bestguess = cycle_fix_limited(me.bestguess, me)
+    limited_ret = bestguess isa LimitedAccuracy
     limited_src = false
     if !limited_ret
         gt = me.ssavaluetypes
@@ -564,7 +567,7 @@ function finish(me::InferenceState, interp::AbstractInterpreter)
         end
     end
     me.result.valid_worlds = me.valid_worlds
-    me.result.result = me.bestguess
+    me.result.result = bestguess
     me.ipo_effects = me.result.ipo_effects = adjust_effects(me)
     validate_code_in_debug_mode(me.linfo, me.src, "inferred")
     nothing
@@ -640,7 +643,7 @@ function annotate_slot_load!(undefs::Vector{Bool}, idx::Int, sv::InferenceState,
             state = sv.bb_vartables[block]::VarTable
             vt = state[id]
             undefs[id] |= vt.undef
-            typ = widenconditional(ignorelimited(vt.typ))
+            typ = widenslotwrapper(ignorelimited(vt.typ))
         else
             typ = sv.ssavaluetypes[pc]
             @assert typ !== NOT_FOUND "active slot in unreached region"
@@ -719,7 +722,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
     # 1. introduce temporary `TypedSlot`s that are supposed to be replaced with π-nodes later
     # 2. mark used-undef slots (required by the `slot2reg` conversion)
     # 3. mark unreached statements for a bulk code deletion (see issue #7836)
-    # 4. widen `Conditional`s and remove `NOT_FOUND` from `ssavaluetypes`
+    # 4. widen slot wrappers (`Conditional` and `MustAlias`) and remove `NOT_FOUND` from `ssavaluetypes`
     #    NOTE because of this, `was_reached` will no longer be available after this point
     # 5. eliminate GotoIfNot if either branch target is unreachable
     changemap = nothing # initialized if there is any dead region
@@ -739,7 +742,7 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState, run_opt
                 end
             end
             body[i] = annotate_slot_load!(undefs, i, sv, expr) # 1&2
-            ssavaluetypes[i] = widenconditional(ssavaluetypes[i]) # 4
+            ssavaluetypes[i] = widenslotwrapper(ssavaluetypes[i]) # 4
         else # i.e. any runtime execution will never reach this statement
             if is_meta_expr(expr) # keep any lexically scoped expressions
                 ssavaluetypes[i] = Any # 4
@@ -893,13 +896,15 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             rettype = code.rettype
             if isdefined(code, :rettype_const)
                 rettype_const = code.rettype_const
-                # the second subtyping conditions are necessary to distinguish usual cases
+                # the second subtyping/egal conditions are necessary to distinguish usual cases
                 # from rare cases when `Const` wrapped those extended lattice type objects
                 if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
                     rettype = PartialStruct(rettype, rettype_const)
                 elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
                     rettype = rettype_const
-                elseif isa(rettype_const, InterConditional) && !(InterConditional <: rettype)
+                elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
+                    rettype = rettype_const
+                elseif isa(rettype_const, InterMustAlias) && rettype !== InterMustAlias
                     rettype = rettype_const
                 else
                     rettype = Const(rettype_const)
