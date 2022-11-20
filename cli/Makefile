@@ -70,8 +70,7 @@ dump-trampolines: $(SRCDIR)/trampolines/trampolines_$(ARCH).S
 	$(CC) $(SHIPFLAGS) $(LOADER_CFLAGS) $< -S | sed -E 's/ ((%%)|;) /\n/g' | sed -E 's/.global/\n.global/g'
 
 DIRS = $(build_bindir) $(build_libdir)
-$(DIRS):
-	@mkdir -p $@
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 ifeq ($(OS),WINNT)
 $(BUILDDIR)/julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc $(JULIAHOME)/VERSION
