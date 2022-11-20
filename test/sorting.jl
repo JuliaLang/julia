@@ -840,14 +840,18 @@ end
     @test sort([1,2,3], alg=MyFirstAlg()) == [7,7,7]
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MyFirstAlg())) .=== vcat(fill(7, 100), fill(missing, 10)))
 
-    # Use the pre 1.9 hook into the internals
+    # Using the old hook with old entry-point
+    @test sort!([3,1,2], MyFirstAlg(), Base.Forward) == [7,7,7]
+    @test sort!([3,1,2], 1, 3, MyFirstAlg(), Base.Forward) == [7,7,7]
+
+    # Use the pre 1.9 entry-point into the internals
     function Base.sort!(v::AbstractVector{Int}, lo::Integer, hi::Integer, ::MyFirstAlg, o::Base.Order.Ordering)
         sort!(v, lo, hi, Base.DEFAULT_STABLE, o)
     end
     @test sort([3,1,2], alg=MyFirstAlg()) == [1,2,3]
     @test issorted(sort(v, alg=Base.Sort.InitialOptimizations(MyFirstAlg())))
 
-    # Another pre 1.9 hook into the internals
+    # Another pre 1.9 entry-point into the internals
     @test issorted(sort!(rand(100), InsertionSort, Base.Order.Forward))
 
     struct MySecondAlg <: Base.Sort.Algorithm end

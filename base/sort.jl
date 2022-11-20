@@ -1922,10 +1922,7 @@ function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering, kw; t=nothing, 
 end
 
 # Support 3- and 5-argument versions of sort! for calling into the internals in the old way
-function sort!(v::AbstractVector, a::Algorithm, o::Ordering)
-    _sort!(v, a, o, (; allow_legacy_dispatch=false))
-    v
-end
+sort!(v::AbstractVector, a::Algorithm, o::Ordering) = sort!(v, firstindex(v), lastindex(v), a, o)
 function sort!(v::AbstractVector, lo::Integer, hi::Integer, a::Algorithm, o::Ordering)
     _sort!(v, a, o, (; lo, hi, allow_legacy_dispatch=false))
     v
