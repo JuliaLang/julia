@@ -418,7 +418,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     # compute inlining and other related optimizations
     result = caller.result
     @assert !(result isa LimitedAccuracy)
-    result = isa(result, InterConditional) ? widenconditional(result) : result
+    result = widenslotwrapper(result)
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
