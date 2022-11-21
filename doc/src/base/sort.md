@@ -192,15 +192,16 @@ method from [`sort.jl`](https://github.com/JuliaLang/julia/blob/master/base/sort
 defalg(v::AbstractArray) = DEFAULT_STABLE
 ```
 
-You may change the default behavior for specific element type by, e.g., as in
-[InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903):
+You may change the default behavior for specific types by defining new methods for `defalg`.
+For example, [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903)
+defines the following method:
 ```julia
 Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = InlineStringSort
 ```
 
 !!! compat "Julia 1.9"
     The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed
-    to be stable since Julia 1.9.
+    to be stable since Julia 1.9. Previous versions had unstable edge cases when sorting numeric arrays.
 
 ## Alternate orderings
 
