@@ -894,6 +894,11 @@ end
     @test issorted(sort!(x))
 end
 
+@testset "Count sort near the edge of its range" begin
+    @test issorted(sort(rand(typemin(Int):typemin(Int)+100, 1000)))
+    @test issorted(sort(rand(typemax(Int)-100:typemax(Int), 1000)))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
