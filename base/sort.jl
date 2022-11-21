@@ -421,10 +421,11 @@ for (sym, deps, exp, type) in [
         (:mx, (), :(throw(ArgumentError("mx is needed but has not been computed"))), :(eltype(v))),
         (:scratch, (), nothing, :(Union{Nothing, Vector})), # could have different eltype
         (:allow_legacy_dispatch, (), true, Bool)]
-    str = string(sym)
     usym = Symbol(:_, sym)
     @eval function $usym(v, o, kw)
-        Symbol($str) ∈ keys(kw) && return kw, kw[Symbol($str)]::$type # TODO this interpolation feels too complicated
+        # using missing instead of nothing because scratch could === nothing.
+        res = get(kw, $(Expr(:quote, sym)), missing)
+        res !== missing && return kw, res::$type
         @getkw $(deps...)
         $sym = $exp
         (;kw..., $sym), $sym::$type
