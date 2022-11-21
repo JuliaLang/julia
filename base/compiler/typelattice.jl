@@ -493,7 +493,7 @@ function ⊑(lattice::ConstsLattice, @nospecialize(a), @nospecialize(b))
         # most conservative option.
         return isa(b, Type) && isa(a.val, b)
     elseif isa(b, Const)
-        if isa(a, DataType) && isdefined(a, :instance)
+        if issingletontype(a)
             return a.instance === b.val
         end
         return false

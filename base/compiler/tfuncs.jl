@@ -253,8 +253,8 @@ function egal_tfunc(::ConstsLattice, @nospecialize(x), @nospecialize(y))
         return Const(x.val === y.val)
     elseif !hasintersect(widenconst(x), widenconst(y))
         return Const(false)
-    elseif (isa(x, Const) && y === typeof(x.val) && isdefined(y, :instance)) ||
-           (isa(y, Const) && x === typeof(y.val) && isdefined(x, :instance))
+    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
+           (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
         return Const(true)
     end
     return Bool
@@ -1753,7 +1753,7 @@ function tuple_tfunc(@specialize(lattice::AbstractLattice), argtypes::Vector{Any
     end
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
-    isdefined(typ, :instance) && return Const(typ.instance)
+    issingletontype(typ) && return Const(typ.instance)
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 tuple_tfunc(argtypes::Vector{Any}) = tuple_tfunc(fallback_lattice, argtypes)
