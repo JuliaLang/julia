@@ -592,8 +592,8 @@ end
 UIntType(::Type{Float16}) = UInt16
 UIntType(::Type{Float32}) = UInt32
 UIntType(::Type{Float64}) = UInt64
-after_zero(::ForwardOrdering, x) = 0 <= x
-after_zero(::ReverseOrdering, x) = x < 0
+after_zero(::ForwardOrdering, x) = !signbit(x)
+after_zero(::ReverseOrdering, x) = signbit(x)
 is_concrete_IEEEFloat(T::Type) = T <: Base.IEEEFloat && isconcretetype(T)
 function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
     @getkw lo hi

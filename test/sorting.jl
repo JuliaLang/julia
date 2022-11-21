@@ -887,6 +887,13 @@ end
     end
 end
 
+@testset "IEEEFloatOptimization with -0.0" begin
+    x = vcat(round.(100 .* randn(1000)) ./ 100) # Also test lots of duplicates
+    x[rand(1:1000, 5)] .= 0.0
+    x[rand(1:1000, 5)] .= -0.0  # To be sure that -0.0 is present
+    @test issorted(sort!(x))
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
