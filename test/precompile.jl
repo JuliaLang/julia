@@ -1493,8 +1493,8 @@ end
         f(x, y) = x + y
         f(x::Int, y) = 2x + y
     end
-    precompile(M.f, (Int, Any))
-    precompile(M.f, (AbstractFloat, Any))
+    @test precompile(M.f, (Int, Any))
+    @test precompile(M.f, (AbstractFloat, Any))
     mis = map(methods(M.f)) do m
         m.specializations[1]
     end

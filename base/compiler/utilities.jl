@@ -152,8 +152,8 @@ function get_compileable_sig(method::Method, @nospecialize(atype), sparams::Simp
         mt, atype, sparams, method)
 end
 
-isa_compileable_sig(@nospecialize(atype), method::Method) =
-    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any), atype, method))
+isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
+    !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
 
 # eliminate UnionAll vars that might be degenerate due to having identical bounds,
 # or a concrete upper bound and appearing covariantly.
@@ -200,7 +200,12 @@ function specialize_method(method::Method, @nospecialize(atype), sparams::Simple
     if compilesig
         new_atype = get_compileable_sig(method, atype, sparams)
         new_atype === nothing && return nothing
-        atype = new_atype
+        if atype !== new_atype
+            sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), new_atype, method.sig)::SimpleVector
+            if sparams === sp_[2]::SimpleVector
+                atype = new_atype
+            end
+        end
     end
     if preexisting
         # check cached specializations

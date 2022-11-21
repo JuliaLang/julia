@@ -7885,3 +7885,7 @@ code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
 code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
 @test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
 @test_throws UndefVarError(:N) f47476(1, 2, 3, 4, 5, 6, 7)
+
+vect47476(::Type{T}) where {T} = T
+@test vect47476(Type{Type{Type{Int32}}}) === Type{Type{Type{Int32}}}
+@test vect47476(Type{Type{Type{Int64}}}) === Type{Type{Type{Int64}}}
