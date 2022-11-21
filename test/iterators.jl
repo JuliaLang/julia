@@ -843,6 +843,8 @@ end
         v, s = iterate(z)
         @test Base.isdone(z, s)
     end
+    # Stateful wrapping mutable iterators of known length (#43245)
+    @test length(Iterators.Stateful(Iterators.Stateful(1:5))) == 5
 end
 
 @testset "pair for Svec" begin
@@ -961,7 +963,7 @@ end
     @test Base.IteratorSize(zip(1:5, (1,2,3)) ) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
 end
 
-@testset "proper patition for non-1-indexed vector" begin
+@testset "proper partition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end
 
@@ -984,4 +986,12 @@ end
     @test !isempty(gen)
     @test !Base.isdone(gen)
     @test collect(gen) == ["foo"]
+end
+
+@testset "empty product iterators" begin
+    v = nothing
+    for (z,) in zip(Iterators.product())
+        v = z
+    end
+    @test v == ()
 end

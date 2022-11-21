@@ -45,7 +45,7 @@ SRCS := \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile jloptions \
 	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
-	jlapi signal-handling safepoint timing subtype rtutils \
+	jlapi signal-handling safepoint timing subtype rtutils gc-heap-snapshot \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage runtime_ccall
 
 RT_LLVMLINK :=
@@ -153,12 +153,12 @@ OSLIBS += $(SRCDIR)/mach_dyld_atfork.tbd
 endif
 
 COMMON_LIBPATHS := -L$(build_libdir) -L$(build_shlibdir)
-RT_LIBS := $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS)
-CG_LIBS := $(NO_WHOLE_ARCHIVE) $(LIBUV) $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS)
+RT_LIBS := $(WHOLE_ARCHIVE) $(LIBUV) $(WHOLE_ARCHIVE) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(LIBUNWIND) $(RT_LLVMLINK) $(OSLIBS)
+CG_LIBS := $(LIBUNWIND) $(CG_LLVMLINK) $(OSLIBS)
 RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a -ljulia-debug $(RT_LIBS)
-CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(WHOLE_ARCHIVE) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
+CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
 RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(RT_LIBS)
-CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(WHOLE_ARCHIVE) $(CG_LIBS) -ljulia -ljulia-internal
+CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
 OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
@@ -288,12 +288,15 @@ $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SR
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
 	intrinsics.cpp jitlayers.h debug-registry.h intrinsics.h codegen_shared.h cgutils.cpp ccall.cpp abi_*.cpp processor.h builtin_proto.h)
+$(BUILDDIR)/datatype.o $(BUILDDIR)/datatype.dbg.obj: $(SRCDIR)/support/htable.h $(SRCDIR)/support/htable.inc
 $(BUILDDIR)/debuginfo.o $(BUILDDIR)/debuginfo.dbg.obj: $(addprefix $(SRCDIR)/,debuginfo.h processor.h jitlayers.h debug-registry.h)
 $(BUILDDIR)/disasm.o $(BUILDDIR)/disasm.dbg.obj: $(SRCDIR)/debuginfo.h $(SRCDIR)/processor.h
 $(BUILDDIR)/dump.o $(BUILDDIR)/dump.dbg.obj: $(addprefix $(SRCDIR)/,common_symbols1.inc common_symbols2.inc builtin_proto.h serialize.h)
 $(BUILDDIR)/gc-debug.o $(BUILDDIR)/gc-debug.dbg.obj: $(SRCDIR)/gc.h
 $(BUILDDIR)/gc-pages.o $(BUILDDIR)/gc-pages.dbg.obj: $(SRCDIR)/gc.h
-$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc.o $(BUILDDIR)/gc.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-heap-snapshot.h $(SRCDIR)/gc-alloc-profiler.h
+$(BUILDDIR)/gc-heap-snapshot.o $(BUILDDIR)/gc-heap-snapshot.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-heap-snapshot.h
+$(BUILDDIR)/gc-alloc-profiler.o $(BUILDDIR)/gc-alloc-profiler.dbg.obj: $(SRCDIR)/gc.h $(SRCDIR)/gc-alloc-profiler.h
 $(BUILDDIR)/init.o $(BUILDDIR)/init.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/interpreter.o $(BUILDDIR)/interpreter.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/jitlayers.o $(BUILDDIR)/jitlayers.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/codegen_shared.h $(SRCDIR)/debug-registry.h

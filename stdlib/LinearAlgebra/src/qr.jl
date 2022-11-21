@@ -380,9 +380,9 @@ norm solution.
 
 Multiplication with respect to either full/square or non-full/square `Q` is allowed, i.e. both `F.Q*F.R`
 and `F.Q*A` are supported. A `Q` matrix can be converted into a regular matrix with
-[`Matrix`](@ref).  This operation returns the "thin" Q factor, i.e., if `A` is `m`×`n` with `m>=n`, then
+[`Matrix`](@ref). This operation returns the "thin" Q factor, i.e., if `A` is `m`×`n` with `m>=n`, then
 `Matrix(F.Q)` yields an `m`×`n` matrix with orthonormal columns.  To retrieve the "full" Q factor, an
-`m`×`m` orthogonal matrix, use `F.Q*Matrix(I,m,m)`.  If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
+`m`×`m` orthogonal matrix, use `F.Q*I`. If `m<=n`, then `Matrix(F.Q)` yields an `m`×`m`
 orthogonal matrix.
 
 The block size for QR decomposition can be specified by keyword argument
@@ -869,19 +869,19 @@ mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, Q::AbstractQ{T}) where {T} = 
 mul!(C::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}, B::StridedVecOrMat{T}) where {T} = lmul!(adjQ, copyto!(C, B))
 mul!(C::StridedVecOrMat{T}, A::StridedVecOrMat{T}, adjQ::Adjoint{<:Any,<:AbstractQ{T}}) where {T} = rmul!(copyto!(C, A), adjQ)
 
-function ldiv!(A::QRCompactWY{T}, b::StridedVector{T}) where {T<:BlasFloat}
+function ldiv!(A::QRCompactWY{T}, b::AbstractVector{T}) where {T<:BlasFloat}
     m,n = size(A)
     ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2)))
     return b
 end
-function ldiv!(A::QRCompactWY{T}, B::StridedMatrix{T}) where {T<:BlasFloat}
+function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T<:BlasFloat}
     m,n = size(A)
     ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2)))
     return B
 end
 
 # Julia implementation similar to xgelsy
-function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasFloat
+function ldiv!(A::QRPivoted{T}, B::AbstractMatrix{T}, rcond::Real) where T<:BlasFloat
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
@@ -909,18 +909,19 @@ function ldiv!(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real) where T<:BlasF
         end
         rnk += 1
     end
-    C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    ldiv!(UpperTriangular(C[1:rnk,1:rnk]),view(lmul!(adjoint(A.Q), view(B, 1:mA, 1:nrhs)), 1:rnk, 1:nrhs))
+    C, τ = LAPACK.tzrzf!(A.factors[1:rnk, :])
+    lmul!(A.Q', view(B, 1:mA, :))
+    ldiv!(UpperTriangular(view(C, :, 1:rnk)), view(B, 1:rnk, :))
     B[rnk+1:end,:] .= zero(T)
-    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B,1:nA,1:nrhs))
-    B[1:nA,:] = view(B, 1:nA, :)[invperm(A.p),:]
+    LAPACK.ormrz!('L', eltype(B)<:Complex ? 'C' : 'T', C, τ, view(B, 1:nA, :))
+    B[A.p,:] = B[1:nA,:]
     return B, rnk
 end
-ldiv!(A::QRPivoted{T}, B::StridedVector{T}) where {T<:BlasFloat} =
-    vec(ldiv!(A,reshape(B,length(B),1)))
-ldiv!(A::QRPivoted{T}, B::StridedVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(A::QRPivoted{T}, B::AbstractVector{T}) where {T<:BlasFloat} =
+    vec(ldiv!(A, reshape(B, length(B), 1)))
+ldiv!(A::QRPivoted{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
-function _wide_qr_ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
@@ -968,7 +969,7 @@ function _wide_qr_ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
 end
 
 
-function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
+function ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
     m, n = size(A)
     m < n && return _wide_qr_ldiv!(A, B)
 
@@ -977,17 +978,17 @@ function ldiv!(A::QR{T}, B::StridedMatrix{T}) where T
     ldiv!(UpperTriangular(view(R,1:n,:)), view(B, 1:n, :))
     return B
 end
-function ldiv!(A::QR, B::StridedVector)
+function ldiv!(A::QR, B::AbstractVector)
     ldiv!(A, reshape(B, length(B), 1))
     return B
 end
 
-function ldiv!(A::QRPivoted, b::StridedVector)
+function ldiv!(A::QRPivoted, b::AbstractVector)
     ldiv!(QR(A.factors,A.τ), b)
     b[1:size(A.factors, 2)] = view(b, 1:size(A.factors, 2))[invperm(A.jpvt)]
     b
 end
-function ldiv!(A::QRPivoted, B::StridedMatrix)
+function ldiv!(A::QRPivoted, B::AbstractMatrix)
     ldiv!(QR(A.factors, A.τ), B)
     B[1:size(A.factors, 2),:] = view(B, 1:size(A.factors, 2), :)[invperm(A.jpvt),:]
     B

@@ -604,7 +604,7 @@ The second condition above implies that you can not safely call `jl_...()` funct
 void *func(void*)
 {
     // Wrong, jl_eval_string() called from thread that was not started by Julia
-    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("println(Threads.threadid())");
     return NULL;
 }
 
@@ -630,7 +630,7 @@ void *func(void*)
     // Okay, all jl_...() calls from the same thread,
     // even though it is not the main application thread
     jl_init();
-    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("println(Threads.threadid())");
     jl_atexit_hook(0);
     return NULL;
 }
@@ -670,7 +670,7 @@ int main()
     jl_eval_string("func(i) = ccall(:c_func, Float64, (Int32,), i)");
 
     // Call func() multiple times, using multiple threads to do so
-    jl_eval_string("println(Threads.nthreads())");
+    jl_eval_string("println(Threads.threadpoolsize())");
     jl_eval_string("use(i) = println(\"[J $(Threads.threadid())] i = $(i) -> $(func(i))\")");
     jl_eval_string("Threads.@threads for i in 1:5 use(i) end");
 

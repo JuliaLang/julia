@@ -108,9 +108,26 @@ local x::Int8  # in a local declaration
 x::Int8 = 10   # as the left-hand side of an assignment
 ```
 
-and applies to the whole current scope, even before the declaration. Currently, type declarations
-cannot be used in global scope, e.g. in the REPL, since Julia does not yet have constant-type
-globals.
+and applies to the whole current scope, even before the declaration.
+
+As of Julia 1.8, type declarations can now be used in global scope i.e.
+type annotations can be added to global variables to make accessing them type stable.
+```julia
+julia> x::Int = 10
+10
+
+julia> x = 3.5
+ERROR: InexactError: Int64(3.5)
+
+julia> function foo(y)
+           global x = 15.8    # throws an error when foo is called
+           return x + y
+       end
+foo (generic function with 1 method)
+
+julia> foo(10)
+ERROR: InexactError: Int64(15.8)
+```
 
 Declarations can also be attached to function definitions:
 
@@ -230,8 +247,8 @@ default method by many combinations of concrete types. Thanks to multiple dispat
 has full control over whether the default or more specific method is used.
 
 An important point to note is that there is no loss in performance if the programmer relies on
-a function whose arguments are abstract types, because it is recompiled for each tuple of argument
-concrete types with which it is invoked. (There may be a performance issue, however, in the case
+a function whose arguments are abstract types, because it is recompiled for each tuple of concrete
+argument types with which it is invoked. (There may be a performance issue, however, in the case
 of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
@@ -408,6 +425,9 @@ true
 There is much more to say about how instances of composite types are created, but that discussion
 depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
+
+For many user-defined types `X`, you may want to define a method [`Base.broadcastable(x::X) = Ref(x)`](@ref man-interfaces-broadcasting)
+so that instances of that type act as 0-dimensional "scalars" for [broadcasting](@ref Broadcasting).
 
 ## Mutable Composite Types
 
@@ -1524,7 +1544,7 @@ when the `:compact` property is set to `true`, falling back to the long
 representation if the property is `false` or absent:
 ```jldoctest polartype
 julia> function Base.show(io::IO, z::Polar)
-           if get(io, :compact, false)
+           if get(io, :compact, false)::Bool
                print(io, z.r, "ℯ", z.Θ, "im")
            else
                print(io, z.r, " * exp(", z.Θ, "im)")

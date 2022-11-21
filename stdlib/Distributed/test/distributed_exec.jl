@@ -153,12 +153,12 @@ function _getenv_include_thread_unsafe()
 end
 const _env_include_thread_unsafe = _getenv_include_thread_unsafe()
 function include_thread_unsafe_tests()
-    if Threads.nthreads() > 1
+    if Threads.maxthreadid() > 1
         if _env_include_thread_unsafe
             return true
         end
-        msg = "Skipping a thread-unsafe test because `Threads.nthreads() > 1`"
-        @warn msg Threads.nthreads()
+        msg = "Skipping a thread-unsafe test because `Threads.maxthreadid() > 1`"
+        @warn msg Threads.maxthreadid()
         Test.@test_broken false
         return false
     end
@@ -993,7 +993,7 @@ end
 let
     @test_throws RemoteException remotecall_fetch(()->LocalFoo.foo, 2)
 
-    bad_thunk = ()->NonexistantModule.f()
+    bad_thunk = ()->NonexistentModule.f()
     @test_throws RemoteException remotecall_fetch(bad_thunk, 2)
 
     # Test that the stream is still usable

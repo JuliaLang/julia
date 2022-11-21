@@ -219,7 +219,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
     helpers = GitCredentialHelper[]
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-helper
-    for entry in GitConfigIter(cfg, r"credential.*\.helper")
+    for entry in GitConfigIter(cfg, r"credential.*\.helper$")
         section, url, name, value = split_cfg_entry(entry)
         @assert name == "helper"
 

@@ -2,6 +2,7 @@
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/IR/DataLayout.h>
 
+#include "julia.h"
 #include "julia_internal.h"
 #include "processor.h"
 

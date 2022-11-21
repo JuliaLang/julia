@@ -149,7 +149,7 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    if Base.isdebugbuild()
         # Note this warning only exists in debug builds
         @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
     end
@@ -237,14 +237,16 @@ end
 # test that @sync is lexical (PR #27164)
 
 const x27164 = Ref(0)
-do_something_async_27164() = @async(begin sleep(1); x27164[] = 2; end)
+const c27164 = Base.Event()
+do_something_async_27164() = @async(begin wait(c27164); x27164[] = 2; end)
 
 let t = nothing
     @sync begin
+        @async (sleep(0.1); x27164[] = 1)
         t = do_something_async_27164()
-        @async (sleep(0.05); x27164[] = 1)
     end
     @test x27164[] == 1
+    notify(c27164)
     fetch(t)
     @test x27164[] == 2
 end
@@ -1232,4 +1234,8 @@ end
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
+
+    # sanity check `@allocations` returns what we expect in some very simple cases
+    @test (@allocations "a") == 0
+    @test (@allocations "a" * "b") == 1
 end

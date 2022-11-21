@@ -380,7 +380,7 @@ end
 """
     fetch(c::Channel)
 
-Waits for and returns (with removing) the first available item from the `Channel`.
+Waits for and returns (without removing) the first available item from the `Channel`.
 Note: `fetch` is unsupported on an unbuffered (0-size) `Channel`.
 
 # Examples

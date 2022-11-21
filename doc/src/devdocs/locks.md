@@ -32,6 +32,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * RLST_mutex
 >   * jl_locked_stream::mutex
 >   * debuginfo_asyncsafe
+>   * inference_timing_mutex
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
 >     > likewise, the ResourcePool<?>::mutexes just protect the associated resource pool
@@ -126,7 +127,7 @@ These data structures each need locks due to being shared mutable global state. 
 list for the above lock priority list. This list does not include level 1 leaf resources due to
 their simplicity.
 
-MethodTable modifications (def, cache, kwsorter type) : MethodTable->writelock
+MethodTable modifications (def, cache) : MethodTable->writelock
 
 Type declarations : toplevel lock
 
