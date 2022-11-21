@@ -864,6 +864,29 @@ end
     @test all(sort(v, alg=Base.Sort.InitialOptimizations(MySecondAlg())) .=== vcat(fill(9, 100), fill(missing, 10)))
 end
 
+@testset "sort!(v, lo, hi, alg, order)" begin
+    v = Vector{Float64}(undef, 4000)
+    for alg in [MergeSort, QuickSort, InsertionSort, Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+        rand!(v)
+        sort!(v, 1, 2000, alg, Base.Forward)
+        @test issorted(v[1:2000])
+        @test !issorted(v)
+
+        sort!(v, 2001, 4000, alg, Base.Forward)
+        @test issorted(v[1:2000])
+        @test issorted(v[2001:4000])
+        @test !issorted(v)
+
+        sort!(v, 1001, 3000, alg, Base.Forward)
+        @test issorted(v[1:1000])
+        @test issorted(v[1001:3000])
+        @test issorted(v[3001:4000])
+        @test !issorted(v[1:2000])
+        @test !issorted(v[2001:4000])
+        @test !issorted(v)
+    end
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,

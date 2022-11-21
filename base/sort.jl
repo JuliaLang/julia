@@ -1887,7 +1887,6 @@ function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering, kw; t=nothing, 
 
         if t === nothing
             scratch, t = make_scratch(scratch, eltype(v), m-lo+1)
-            offset = 1-lo
         end
 
         _sort!(v, a, o, (;kw..., hi=m, scratch); t, offset)
@@ -1895,24 +1894,24 @@ function _sort!(v::AbstractVector, a::MergeSortAlg, o::Ordering, kw; t=nothing, 
 
         i, j = 1, lo
         while j <= m
-            t[i+offset] = v[j]
+            t[i] = v[j]
             i += 1
             j += 1
         end
 
         i, k = 1, lo
         while k < j <= hi
-            if lt(o, v[j], t[i+offset])
+            if lt(o, v[j], t[i])
                 v[k] = v[j]
                 j += 1
             else
-                v[k] = t[i+offset]
+                v[k] = t[i]
                 i += 1
             end
             k += 1
         end
         while k < j
-            v[k] = t[i+offset]
+            v[k] = t[i]
             k += 1
             i += 1
         end
