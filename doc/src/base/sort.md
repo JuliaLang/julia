@@ -178,9 +178,9 @@ true
 array of half the size of the input array – and is typically not quite as fast as `QuickSort`.
 It is the default algorithm for non-numeric data.
 
-The default sorting algorithms are chosen on the basis that they are fast and stable, or
-*appear* to be stable. Usually, `QuickSort` is selected, but `InsertionSort` is preferred for
-small data. You can also explicitly specify your preferred algorithm, e.g.
+The default sorting algorithms are chosen on the basis that they are fast and stable.
+Usually, `QuickSort` is selected, but `InsertionSort` is preferred for small data.
+You can also explicitly specify your preferred algorithm, e.g.
 `sort!(v, alg=PartialQuickSort(10:20))`.
 
 The mechanism by which Julia picks default sorting algorithms is implemented via the
