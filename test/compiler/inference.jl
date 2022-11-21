@@ -1438,8 +1438,9 @@ end
 
 let egal_tfunc
     function egal_tfunc(a, b)
-        r = Core.Compiler.egal_tfunc(a, b)
-        @test r === Core.Compiler.egal_tfunc(b, a)
+        𝕃 = Core.Compiler.fallback_lattice
+        r = Core.Compiler.egal_tfunc(𝕃, a, b)
+        @test r === Core.Compiler.egal_tfunc(𝕃, b, a)
         return r
     end
     @test egal_tfunc(Const(12345.12345), Const(12344.12345 + 1)) == Const(true)
@@ -2183,6 +2184,338 @@ end
         return 0
     end |> only === Int
 end
+
+# type-based alias analysis
+# =========================
+# `MustAlias` propagates constraints imposed on aliased fields
+
+import Core: MethodInstance, CodeInstance
+const CC = Core.Compiler
+import .CC: WorldRange, WorldView
+
+"""
+    @newinterp NewInterpreter
+
+Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
+from the native code cache, satisfying the minimum interface requirements.
+"""
+macro newinterp(name)
+    cachename = Symbol(string(name, "Cache"))
+    name = esc(name)
+    quote
+        struct $cachename
+            dict::IdDict{MethodInstance,CodeInstance}
+        end
+        struct $name <: CC.AbstractInterpreter
+            interp::CC.NativeInterpreter
+            cache::$cachename
+            meta # additional information
+            $name(world = Base.get_world_counter();
+                interp = CC.NativeInterpreter(world),
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
+                meta = nothing,
+                ) = new(interp, cache, meta)
+        end
+        CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
+        CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
+        CC.get_world_counter(interp::$name) = CC.get_world_counter(interp.interp)
+        CC.get_inference_cache(interp::$name) = CC.get_inference_cache(interp.interp)
+        CC.code_cache(interp::$name) = WorldView(interp.cache, WorldRange(CC.get_world_counter(interp)))
+        CC.get(wvc::WorldView{<:$cachename}, mi::MethodInstance, default) = get(wvc.cache.dict, mi, default)
+        CC.getindex(wvc::WorldView{<:$cachename}, mi::MethodInstance) = getindex(wvc.cache.dict, mi)
+        CC.haskey(wvc::WorldView{<:$cachename}, mi::MethodInstance) = haskey(wvc.cache.dict, mi)
+        CC.setindex!(wvc::WorldView{<:$cachename}, ci::CodeInstance, mi::MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+    end
+end
+
+struct AliasableField{T}
+    f::T
+end
+struct AliasableFields{S,T}
+    f1::S
+    f2::T
+end
+mutable struct AliasableConstField{S,T}
+    const f1::S
+    f2::T
+end
+
+# lattice
+# -------
+
+import Core.Compiler:
+    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
+    MustAliasesLattice, InterMustAliasesLattice, BaseInferenceLattice, IPOResultLattice,
+    typeinf_lattice, ipo_lattice, optimizer_lattice
+
+@newinterp MustAliasInterpreter
+CC.typeinf_lattice(::MustAliasInterpreter) = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
+CC.ipo_lattice(::MustAliasInterpreter) = InferenceLattice(InterMustAliasesLattice(IPOResultLattice.instance))
+CC.optimizer_lattice(::MustAliasInterpreter) = OptimizerLattice()
+
+import Core.Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
+let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
+    ⊑(@nospecialize(a), @nospecialize(b)) = Core.Compiler.:⊑(𝕃ᵢ, a, b)
+    tmerge(@nospecialize(a), @nospecialize(b)) = Core.Compiler.tmerge(𝕃ᵢ, a, b)
+
+    @test (MustAlias(2, AliasableField{Any}, 1, Int) ⊑ Int)
+    @test !(Int ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
+    @test (Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
+    @test (Const(42) ⊑ MustAlias(2, AliasableField{Any}, 1, Int))
+    @test !(MustAlias(2, AliasableField{Any}, 1, Any) ⊑ Int)
+    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Any), Const(nothing)) === Any
+    @test tmerge(MustAlias(2, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
+    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Any)) === Any
+    @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    @test Core.Compiler.isa_tfunc(𝕃ᵢ, MustAlias(2, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
+    @test Core.Compiler.isa_tfunc(𝕃ᵢ, MustAlias(2, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
+    @test Core.Compiler.isa_tfunc(𝕃ᵢ, MustAlias(2, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
+    @test Core.Compiler.ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Int, Int) === Int
+    @test Core.Compiler.ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+end
+
+maybeget_mustalias_tmerge(x::AliasableField) = x.f
+maybeget_mustalias_tmerge(x) = x
+@test Base.return_types((Union{Nothing,AliasableField{Any}},); interp=MustAliasInterpreter()) do x
+    isa(maybeget_mustalias_tmerge(x)#=::Any, not MustAlias=#, Int) && throw()
+    x
+end |> only === Union{Nothing,AliasableField{Any}}
+
+# isa constraint
+# --------------
+
+# simple intra-procedural case
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+    if isa(getfield(a, :f), Int)
+        return getfield(a, :f)
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+    if isa(getfield(a, 1), Int)
+        return getfield(a, 1)
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do a
+    if isa(getfield(a, 1), Some)
+        return getfield(a, 1)
+    end
+    throw()
+end |> only === Some{Int}
+@test Base.return_types((Tuple{Any},); interp=MustAliasInterpreter()) do t
+    if isa(getfield(t, 1), Int)
+        return getfield(t, 1)
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+    x = AliasableFields(a, 0)     # x::PartialStruct(AliasableFields, Any[Any, Const(0)])
+    if isa(getfield(x, :f1), Int) # x::PartialStruct(AliasableFields, Any[Int, Const(0)])
+        return getfield(x, :f1)
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((Any,Any); interp=MustAliasInterpreter()) do a, b
+    x = AliasableFields(a, b)         # x::AliasableFields
+    if isa(getfield(x, :f1), Int)     # x::PartialStruct(AliasableFields, Any[Int, Any])
+        if isa(getfield(x, :f2), Int) # x::PartialStruct(AliasableFields, Any[Int, Int])
+            return getfield(x, :f1), getfield(x, :f2)
+        end
+    end
+    return 0, 0
+end |> only === Tuple{Int,Int}
+@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+    x = AliasableConstField(a, 0)
+    if isa(getfield(x, :f1), Int)
+        return getfield(x, :f1)
+    end
+    return 0
+end |> only === Int
+
+# shouldn't use refinement information when not worthwhile
+@test Base.return_types((AliasableField{Int},); interp=MustAliasInterpreter()) do a
+    if isa(getfield(a, :f), Any)
+        return getfield(a, :f) # shouldn't be ::Any
+    end
+    return 0
+end |> only === Int
+# shouldn't assume anything about mutable field
+@test Base.return_types((Any,Any); interp=MustAliasInterpreter()) do a, b
+    x = AliasableConstField{Any,Any}(a, b)
+    if isa(getfield(x, :f2), Int)
+        setfield!(x, :f2, z::Any)
+        return getfield(x, :f2) # shouldn't be ::Int
+    end
+    return 0
+end |> only === Any
+# when abstract type, we shouldn't assume anything
+@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+    if isa(getfield(a, :mayexist), Int)
+        return getfield(a, :mayexist)
+    end
+    return 0
+end |> only === Any
+
+# works inter-procedurally
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+    if isa(a.f, Int)
+        return a.f
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((Tuple{Any},); interp=MustAliasInterpreter()) do t
+    if isa(t[1], Int)
+        return t[1]
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+    x = AliasableFields(a, 0) # x::PartialStruct(AliasableFields, Any[Any, Const(0)])
+    if isa(x.f1, Int)         # x::PartialStruct(AliasableFields, Any[Int, Const(0)])
+        return x.f1
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((Any,Any); interp=MustAliasInterpreter()) do a, b
+    x = AliasableFields(a, b) # x::AliasableFields
+    if isa(x.f1, Int)         # x::PartialStruct(AliasableFields, Any[Int, Any])
+        if isa(x.f2, Int)     # x::PartialStruct(AliasableFields, Any[Int, Int])
+            return x.f1, x.f2
+        end
+    end
+    return 0, 0
+end |> only === Tuple{Int,Int}
+@test Base.return_types((Any,); interp=MustAliasInterpreter()) do a
+    x = AliasableConstField(a, 0)
+    if isa(x.f1, Int)
+        return x.f1
+    end
+    return 0
+end |> only === Int
+getf(a) = a.f
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+    if isa(getf(a), Int)
+        return getf(a)
+    end
+    return 0
+end |> only === Int
+
+# merge of same `MustAlias`s
+merge_same_aliases(b, a) = b ? _merge_same_aliases1(a) : _merge_same_aliases2(a) # MustAlias(a, Const(:f1), Union{Int,Nothing})
+_merge_same_aliases1(a) = (@assert isa(a.f, Int); a.f) # ::MustAlias(a, Const(:f1), Int)
+_merge_same_aliases2(a) = (@assert isa(a.f, Nothing); a.f) # ::MustAlias(a, Const(:f1), Nothing)
+@test Base.return_types((Bool,AliasableField,); interp=MustAliasInterpreter()) do b, a
+    return merge_same_aliases(b, a) # ::Union{Int,Nothing}
+end |> only === Union{Nothing,Int}
+
+# call-site refinement
+isaint(a) = isa(a, Int)
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do a
+    if isaint(a.f)
+        return a.f
+    end
+    return 0
+end |> only === Int
+# handle multiple call-site refinment targets
+isasome(_) = true
+isasome(::Nothing) = false
+@test Base.return_types((AliasableField{Union{Int,Nothing}},); interp=MustAliasInterpreter()) do a
+    if isasome(a.f)
+        return a.f
+    end
+    return 0
+end |> only === Int
+
+# appropriate lattice order
+@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)
+    if isa(v, Int) # ::Conditional(3, Int, Any)
+        v = v      # ::Int (∵ Int ⊑ MustAlias(2, AliasableField{Any}, 1, Any))
+    else
+        v = 42
+    end
+    return v
+end |> only === Int
+
+# complicated callsite refinement cases
+from_interconditional_check11(y::Int, ::AliasableField) = y > 0
+@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    if from_interconditional_check11(x.f, x)
+        return x.f
+    end
+    return 0
+end |> only === Int
+from_interconditional_check12(::AliasableField, y::Int) = y > 0
+@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    if from_interconditional_check12(x, x.f)
+        return x.f
+    end
+    return 0
+end |> only === Int
+from_interconditional_check21(y, ::Union{Int,String}) = isa(y, Int)
+@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    if from_interconditional_check21(x.f, x.f)
+        return x.f
+    end
+    return 0
+end |> only === Int
+from_interconditional_check22(::Union{Int,String}, y) = isa(y, Int)
+@test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
+    if from_interconditional_check22(x.f, x.f)
+        return x.f
+    end
+    return 0
+end |> only === Int
+
+# === constraint
+# --------------
+
+# simple symmetric tests
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do x
+    if x.f === 0
+        return x.f
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((AliasableField,); interp=MustAliasInterpreter()) do x
+    if 0 === x.f
+        return x.f
+    end
+    return 0
+end |> only === Int
+# NOTE we prioritize constraints on aliased field over those on slots themselves
+@test Base.return_types((AliasableField,Int,); interp=MustAliasInterpreter()) do x, a
+    if x.f === a
+        return x.f
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((AliasableField,Int,); interp=MustAliasInterpreter()) do x, a
+    if a === x.f
+        return x.f
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((AliasableField{Union{Nothing,Int}},); interp=MustAliasInterpreter()) do x
+    if !isnothing(x.f)
+        return x.f
+    end
+    return 0
+end |> only === Int
+@test Base.return_types((AliasableField{Union{Some{Int},Nothing}},); interp=MustAliasInterpreter()) do x
+    if !isnothing(x.f)
+        return x.f
+    end
+    throw()
+end |> only === Some{Int}
+
+# handle the edge case
+@eval intermustalias_edgecase(_) = $(Core.Compiler.InterMustAlias(2, Some{Any}, 1, Int))
+Base.return_types(intermustalias_edgecase, (Any,); interp=MustAliasInterpreter()) # create cache
+@test Base.return_types((Any,); interp=MustAliasInterpreter()) do x
+    intermustalias_edgecase(x)
+end |> only === Core.Compiler.InterMustAlias
 
 function f25579(g)
     h = g[]
@@ -4285,6 +4618,17 @@ end
         ccall(0, Cvoid, (Nothing,), b)
     end)[2] === Nothing
 end
+
+# singleton_type on slot wrappers
+@test Base.return_types((Int,)) do x
+    c = isa(x, Int) # ::Conditional
+    c(false)        # ::Union{}
+end |> only === Union{}
+@test Base.return_types((Tuple{typeof(typeof),Float64},)) do args
+    f = args[1] # ::MustAlias
+    v = args[2] # ::MustAlias
+    f(v)        # ::Type{Float64}
+end |> only === Type{Float64}
 
 # Issue #46839: `abstract_invoke` should handle incorrect call type
 @test only(Base.return_types(()->invoke(BitSet, Any, x), ())) === Union{}

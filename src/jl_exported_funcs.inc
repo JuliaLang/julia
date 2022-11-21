@@ -194,6 +194,7 @@
     XX(jl_gc_set_cb_pre_gc) \
     XX(jl_gc_set_cb_root_scanner) \
     XX(jl_gc_set_cb_task_scanner) \
+    XX(jl_gc_set_max_memory) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
     XX(jl_gdblookup) \
