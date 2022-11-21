@@ -50,7 +50,8 @@ function foldl_impl(op::OP, nt, itr) where {OP}
     return v
 end
 
-function _foldl_impl(op::OP, init, itr) where {OP}
+_foldl_impl(op::OP, init, itr) where {OP} = __foldl_impl(op, init, itr)
+function __foldl_impl(op::OP, init, itr) where {OP}
     # Unroll the while loop once; if init is known, the call to op may
     # be evaluated at compile time
     y = iterate(itr)
