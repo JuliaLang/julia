@@ -45,6 +45,8 @@ using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&);
 
+extern Optional<bool> always_have_fp16();
+
 void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
 
 namespace {
@@ -486,6 +488,14 @@ uint32_t CloneCtx::collect_func_info(Function &F)
             if (auto mathOp = dyn_cast<FPMathOperator>(&I)) {
                 if (mathOp->getFastMathFlags().any()) {
                     flag |= JL_TARGET_CLONE_MATH;
+                }
+            }
+            if(!always_have_fp16().hasValue()){
+                for (size_t i = 0; i < I.getNumOperands(); i++) {
+                    if(I.getOperand(i)->getType()->isHalfTy()){
+                        flag |= JL_TARGET_CLONE_FLOAT16;
+                    }
+                    // Check for BFloat16 when they are added to julia can be done here
                 }
             }
             if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {
