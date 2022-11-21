@@ -509,7 +509,7 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
