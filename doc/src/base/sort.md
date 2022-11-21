@@ -172,14 +172,14 @@ true
 ```
 
 !!! compat "Julia 1.9"
-    The `QuickSort` and `PartialQuickSort` are stable since Julia 1.9.
+    The `QuickSort` and `PartialQuickSort` algorithms are stable since Julia 1.9.
 
 `MergeSort` is an O(n log n) stable sorting algorithm but is not in-place – it requires a temporary
 array of half the size of the input array – and is typically not quite as fast as `QuickSort`.
 It is the default algorithm for non-numeric data.
 
-The default sorting algorithms are chosen on the basis that they are stable and fast, or
-*appear* to be fast. Usually, `QuickSort` is selected, but `InsertionSort` is preferred for
+The default sorting algorithms are chosen on the basis that they are fast and stable, or
+*appear* to be stable. Usually, `QuickSort` is selected, but `InsertionSort` is preferred for
 small data. You can also explicitly specify your preferred algorithm, e.g.
 `sort!(v, alg=PartialQuickSort(10:20))`.
 
