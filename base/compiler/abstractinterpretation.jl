@@ -1671,7 +1671,7 @@ end
 @inline function egal_condition(c::Const, @nospecialize(xt), max_union_splitting::Int)
     thentype = c
     elsetype = widenslotwrapper(xt)
-    if elsetype isa Type && isdefined(typeof(c.val), :instance) # can only widen a if it is a singleton
+    if elsetype isa Type && issingletontype(typeof(c.val)) # can only widen a if it is a singleton
         elsetype = typesubtract(elsetype, typeof(c.val), max_union_splitting)
     end
     return ConditionalTypes(thentype, elsetype)
