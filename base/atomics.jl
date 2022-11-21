@@ -422,11 +422,9 @@ for typ in atomictypes
     end
 end
 
-# Provide atomic floating-point operations via atomic_cas!
-const opnames = Dict{Symbol, Symbol}(:+ => :add, :- => :sub)
-for op in [:+, :-, :max, :min]
-    opname = get(opnames, op, op)
-    @eval function $(Symbol("atomic_", opname, "!"))(var::Atomic{T}, val::T) where T<:FloatTypes
+#TODO, fmin and fmax were added in LLVM 15
+for op in [:max, :min]
+    @eval function $(Symbol("atomic_", op, "!"))(var::Atomic{T}, val::T) where T<:FloatTypes
         IT = inttype(T)
         old = var[]
         while true
@@ -436,6 +434,22 @@ for op in [:+, :-, :max, :min]
             reinterpret(IT, old) == reinterpret(IT, cmp) && return old
             # Temporary solution before we have gc transition support in codegen.
             ccall(:jl_gc_safepoint, Cvoid, ())
+        end
+    end
+end
+
+# Provide atomic floating-point operations via the llvm functions!
+const opnames = Dict{Symbol, Symbol}(:fadd => :add, :fsub => :sub)
+for typ in floattypes
+    lt = llvmtypes[typ]
+    for op in [:fadd, :fsub]
+        opname = get(opnames, op, op)
+        @eval function $(Symbol("atomic_", opname, "!"))(var::Atomic{$typ}, val::$typ)
+            GC.@preserve var llvmcall($"""
+            %ptr = inttoptr i$WORD_SIZE %0 to $lt*
+            %rv = atomicrmw $op $lt* %ptr, $lt %1 acq_rel
+            ret $lt %rv
+            """, $typ, Tuple{Ptr{$typ}, $typ}, unsafe_convert(Ptr{$typ}, var), val)
         end
     end
 end
