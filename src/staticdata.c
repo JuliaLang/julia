@@ -541,7 +541,7 @@ static int caching_tag(jl_value_t *v) JL_NOTSAFEPOINT
     if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars)
-            return 0;
+            return 0; // aka !is_cacheable from jltypes.c
         if (jl_object_in_image((jl_value_t*)dt->name))
             return 1 + type_in_worklist(v);
     }
@@ -640,17 +640,58 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate)
 {
     jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-    jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate || jl_is_datatype_singleton(t));
+    jl_queue_for_serialization_(s, (jl_value_t*)t, 1, immediate);
 
     if (!recursive)
         goto done_fields;
 
+    if (s->incremental && jl_is_datatype(v) && immediate) {
+        jl_datatype_t *dt = (jl_datatype_t*)v;
+        // ensure super is queued (though possibly not yet handled, since it may have cycles)
+        jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, 1);
+        // ensure all type parameters are recached
+        jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, 1, 1);
+        jl_value_t *singleton = dt->instance;
+        if (singleton && needs_uniquing(singleton)) {
+            assert(jl_needs_serialization(s, singleton)); // should be true, since we visited dt
+            // do not visit dt->instance for our template object as it leads to unwanted cycles here
+            // (it may get serialized from elsewhere though)
+            record_field_change(&dt->instance, jl_nothing);
+        }
+        immediate = 0; // do not handle remaining fields immediately (just field types remains)
+    }
+    if (s->incremental && jl_is_method_instance(v)) {
+        if (needs_uniquing(v)) {
+            // we only need 3 specific fields of this (the rest are not used)
+            jl_method_instance_t *mi = (jl_method_instance_t*)v;
+            jl_queue_for_serialization(s, mi->def.value);
+            jl_queue_for_serialization(s, mi->specTypes);
+            jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
+            recursive = 0;
+            goto done_fields;
+        }
+        else if (needs_recaching(v)) {
+            // we only need 3 specific fields of this (the rest are restored afterward, if valid)
+            jl_method_instance_t *mi = (jl_method_instance_t*)v;
+            record_field_change((jl_value_t**)&mi->uninferred, NULL);
+            record_field_change((jl_value_t**)&mi->backedges, NULL);
+            record_field_change((jl_value_t**)&mi->callbacks, NULL);
+            record_field_change((jl_value_t**)&mi->cache, NULL);
+        }
+    }
     if (jl_is_typename(v)) {
         jl_typename_t *tn = (jl_typename_t*)v;
         // don't recurse into several fields (yet)
         jl_queue_for_serialization_(s, (jl_value_t*)tn->cache, 0, 1);
         jl_queue_for_serialization_(s, (jl_value_t*)tn->linearcache, 0, 1);
+        if (s->incremental) {
+            assert(!jl_object_in_image((jl_value_t*)tn->module));
+            assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
+        }
     }
+
+    if (immediate) // must be things that can be recursively handled, and valid as type parameters
+        assert(jl_is_immutable(t) || jl_is_typevar(v) || jl_is_symbol(v) || jl_is_svec(v));
 
     const jl_datatype_layout_t *layout = t->layout;
     if (layout->npointers == 0) {
@@ -729,6 +770,8 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
         return;
 
     jl_value_t *t = jl_typeof(v);
+    // Items that require postorder traversal must visit their children prior to insertion into
+    // the worklist/serialization_order (and also before their first use)
     if (s->incremental && !immediate) {
         if (jl_is_datatype(t) && needs_uniquing(v))
             immediate = 1;
@@ -755,57 +798,8 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
             *bp = (void*)(uintptr_t)-2; // now immediate
     }
 
-    // Items that require postorder traversal must visit their children prior to insertion into
-    // the worklist/serialization_order
-    if (s->incremental) {
-        if (jl_is_method_instance(v)) {
-            if (needs_uniquing(v)) {
-                immediate = 1;
-                recursive = 0;
-                *bp = (void*)(uintptr_t)-2;
-                // we only need 3 specific fields of this
-                jl_method_instance_t *mi = (jl_method_instance_t*)v;
-                jl_queue_for_serialization(s, mi->def.value);
-                jl_queue_for_serialization(s, mi->specTypes);
-                jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
-            }
-            else if (needs_recaching(v)) {
-                // we only need 3 specific fields of this
-                jl_method_instance_t *mi = (jl_method_instance_t*)v;
-                record_field_change((jl_value_t**)&mi->uninferred, NULL);
-                record_field_change((jl_value_t**)&mi->backedges, NULL);
-                record_field_change((jl_value_t**)&mi->callbacks, NULL);
-                record_field_change((jl_value_t**)&mi->cache, NULL);
-            }
-        }
-        else if (jl_is_datatype(v) && immediate) {
-            jl_datatype_t *dt = (jl_datatype_t*)v;
-            jl_svec_t *tt = (jl_svec_t*)dt->parameters;
-            // ensure super is queued (though possibly not yet handled, since it may have cycles)
-            jl_queue_for_serialization_(s, (jl_value_t*)dt->super, 1, 1);
-            // ensure all type parameters are recached
-            jl_queue_for_serialization_(s, (jl_value_t*)tt, 1, 1);
-            size_t i, l = jl_svec_len(tt);
-            for (i = 0; i < l; i++) // svec is mutable, so we need to visit the fields explicitly
-                jl_queue_for_serialization_(s, jl_svecref(tt, i), 1, 1);
-            jl_value_t *singleton = dt->instance;
-            if (singleton && needs_uniquing(singleton)) {
-                assert(jl_needs_serialization(s, singleton)); // should be true, since we visited dt
-                // do not visit dt->instance for our template object as it leads to unwanted cycles here
-                // (it may get serialized from elsewhere though)
-                record_field_change(&dt->instance, jl_nothing);
-            }
-        }
-        else if (jl_is_typename(v)) {
-            jl_typename_t *tn = (jl_typename_t*)v;
-            (void)tn;
-            assert(!jl_object_in_image((jl_value_t*)tn->module));
-            assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
-        }
-    }
-
     if (immediate)
-        jl_insert_into_serialization_queue(s, v, recursive, jl_is_immutable(t) || jl_is_typevar(v));
+        jl_insert_into_serialization_queue(s, v, recursive, immediate);
     else
         arraylist_push(&object_worklist, (void*)v);
 }
