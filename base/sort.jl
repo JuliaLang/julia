@@ -1167,8 +1167,8 @@ Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` w
 (the default), `ix` is initialized to contain the values `LinearIndices(A)`.
 
 !!! compat "Julia 1.9"
-    The method accepting `dims` requires at least Julia 1.9.                                                                                               
-                                                                                                
+    The method accepting `dims` requires at least Julia 1.9.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2]; p = zeros(Int, 3);
