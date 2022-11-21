@@ -45,7 +45,6 @@ using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&);
 
-
 namespace {
 constexpr uint32_t clone_mask =
     JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
