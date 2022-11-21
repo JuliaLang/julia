@@ -58,7 +58,8 @@ end
 function Core.OpaqueClosure(ir::IRCode, env...;
         nargs::Int = length(ir.argtypes)-1,
         isva::Bool = false,
-        rt = compute_ir_rettype(ir))
+        rt = compute_ir_rettype(ir),
+        do_compile::Bool = true)
     if (isva && nargs > length(ir.argtypes)) || (!isva && nargs != length(ir.argtypes)-1)
         throw(ArgumentError("invalid argument count"))
     end
@@ -71,14 +72,14 @@ function Core.OpaqueClosure(ir::IRCode, env...;
     src.inferred = true
     # NOTE: we need ir.argtypes[1] == typeof(env)
 
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
-        compute_oc_argtypes(ir, nargs, isva), Union{}, rt, @__MODULE__, src, 0, nothing, nargs, isva, env)
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+        compute_oc_argtypes(ir, nargs, isva), Union{}, rt, @__MODULE__, src, 0, nothing, nargs, isva, env, do_compile)
 end
 
 function Core.OpaqueClosure(src::CodeInfo, env...)
     M = src.parent.def
     sig = Base.tuple_type_tail(src.parent.specTypes)
 
-    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any),
-          sig, Union{}, src.rettype, @__MODULE__, src, 0, nothing, M.nargs - 1, M.isva, env)
+    ccall(:jl_new_opaque_closure_from_code_info, Any, (Any, Any, Any, Any, Any, Cint, Any, Cint, Cint, Any, Cint),
+          sig, Union{}, src.rettype, @__MODULE__, src, 0, nothing, M.nargs - 1, M.isva, env, true)
 end

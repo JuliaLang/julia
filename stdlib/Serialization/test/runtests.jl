@@ -317,18 +317,23 @@ main_ex = quote
     using Serialization
     $create_serialization_stream() do s
         local g() = :magic_token_anon_fun_test
+        local gkw(; kw=:thekw) = kw
         serialize(s, g)
         serialize(s, g)
+        serialize(s, gkw)
 
         seekstart(s)
         ds = Serializer(s)
         local g2 = deserialize(ds)
-        Base.invokelatest() do
-            $Test.@test g2 !== g
-            $Test.@test g2() === :magic_token_anon_fun_test
-            $Test.@test g2() === :magic_token_anon_fun_test
-            $Test.@test deserialize(ds) === g2
-        end
+        @test g2 !== g
+        $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
+        $Test.@test Base.invokelatest(g2) === :magic_token_anon_fun_test
+        deserialize(ds) === g2
+
+        local gkw2 = deserialize(s)
+        $Test.@test gkw2 !== gkw
+        $Test.@test Base.invokelatest(gkw2) === :thekw
+        $Test.@test Base.invokelatest(gkw2, kw="kwtest") === "kwtest"
 
         # issue #21793
         y = x -> (() -> x)
@@ -336,10 +341,10 @@ main_ex = quote
         serialize(s, y)
         seekstart(s)
         y2 = deserialize(s)
-        Base.invokelatest() do
+        $Test.@test Base.invokelatest() do
             x2 = y2(2)
-            $Test.@test x2() == 2
-        end
+            x2()
+        end === 2
     end
 end
 # This needs to be run on `Main` since the serializer treats it differently.

@@ -121,12 +121,9 @@ import Core.Compiler.CoreDocs
 Core.atdoc!(CoreDocs.docm)
 
 # sorting
-function sort! end
-function issorted end
 include("ordering.jl")
 using .Order
-include("sort.jl")
-using .Sort
+include("compiler/sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
 something(x::Nothing, y...) = something(y...)

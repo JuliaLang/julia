@@ -111,7 +111,7 @@ function NamedTuple{names}(nt::NamedTuple) where {names}
         types = Tuple{(fieldtype(nt, idx[n]) for n in 1:length(idx))...}
         Expr(:new, :(NamedTuple{names, $types}), Any[ :(getfield(nt, $(idx[n]))) for n in 1:length(idx) ]...)
     else
-        length_names = length(names)::Integer
+        length_names = length(names::Tuple)
         types = Tuple{(fieldtype(typeof(nt), names[n]) for n in 1:length_names)...}
         NamedTuple{names, types}(map(Fix1(getfield, nt), names))
     end
@@ -423,7 +423,7 @@ macro NamedTuple(ex)
     return :(NamedTuple{($(vars...),), Tuple{$(types...)}})
 end
 
-function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
+@constprop :aggressive function split_rest(t::NamedTuple{names}, n::Int, st...) where {names}
     _check_length_split_rest(length(t), n)
     names_front, names_last_n = split_rest(names, n, st...)
     return NamedTuple{names_front}(t), NamedTuple{names_last_n}(t)

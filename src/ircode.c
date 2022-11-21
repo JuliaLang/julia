@@ -360,13 +360,14 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
              jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
              (jl_isbits(jl_typeof(v)) && jl_datatype_size(jl_typeof(v)) <= 64)) {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-        if (t->size <= 255) {
+        size_t tsz = jl_datatype_size(t);
+        if (tsz <= 255) {
             write_uint8(s->s, TAG_SHORT_GENERAL);
-            write_uint8(s->s, t->size);
+            write_uint8(s->s, tsz);
         }
         else {
             write_uint8(s->s, TAG_GENERAL);
-            write_int32(s->s, t->size);
+            write_int32(s->s, tsz);
         }
         jl_encode_value(s, t);
 

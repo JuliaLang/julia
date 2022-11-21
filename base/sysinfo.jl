@@ -333,7 +333,7 @@ function isunix(os::Symbol)
     elseif os === :Emscripten
         # Emscripten implements the POSIX ABI and provides traditional
         # Unix-style operating system functions such as file system support.
-        # Therefor, we consider it a unix, even though this need not be
+        # Therefore, we consider it a unix, even though this need not be
         # generally true for a jsvm embedding.
         return true
     else

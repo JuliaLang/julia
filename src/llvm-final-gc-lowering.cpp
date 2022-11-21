@@ -9,6 +9,7 @@
 #include <llvm/IR/IntrinsicInst.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Pass.h>
 #include <llvm/Support/Debug.h>
 #include <llvm/Transforms/Utils/ModuleUtils.h>
@@ -304,7 +305,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     // Check availability of functions again since they might have been deleted.
     initFunctions(*F.getParent());
-    if (!pgcstack_getter)
+    if (!pgcstack_getter && !adoptthread_func)
         return false;
 
     // Look for a call to 'julia.get_pgcstack'.
@@ -390,7 +391,11 @@ bool FinalLowerGCLegacy::doInitialization(Module &M) {
 }
 
 bool FinalLowerGCLegacy::doFinalization(Module &M) {
-    return finalLowerGC.doFinalization(M);
+    auto ret = finalLowerGC.doFinalization(M);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
+    return ret;
 }
 
 
@@ -405,6 +410,9 @@ PreservedAnalyses FinalLowerGCPass::run(Module &M, ModuleAnalysisManager &AM)
         modified |= finalLowerGC.runOnFunction(F);
     }
     modified |= finalLowerGC.doFinalization(M);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
     if (modified) {
         return PreservedAnalyses::allInSet<CFGAnalyses>();
     }

@@ -127,7 +127,7 @@ These data structures each need locks due to being shared mutable global state. 
 list for the above lock priority list. This list does not include level 1 leaf resources due to
 their simplicity.
 
-MethodTable modifications (def, cache, kwsorter type) : MethodTable->writelock
+MethodTable modifications (def, cache) : MethodTable->writelock
 
 Type declarations : toplevel lock
 

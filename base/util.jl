@@ -224,7 +224,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
 end
 
 function julia_exename()
-    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+    if !Base.isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -665,4 +665,13 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
+end
+
+"""
+    isdebugbuild()
+
+Return `true` if julia is a debug version.
+"""
+function isdebugbuild()
+    return ccall(:jl_is_debugbuild, Cint, ()) != 0
 end

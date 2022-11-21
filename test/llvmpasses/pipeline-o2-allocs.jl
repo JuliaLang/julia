@@ -47,7 +47,7 @@ function nopreserve()
     end
 end
 
-# COM: this cordons off the atttributes/function delarations from the actual
+# COM: this cordons off the attributes/function declarations from the actual
 # COM: IR that we really want to check
 # CHECK: attributes
 

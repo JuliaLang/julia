@@ -2249,3 +2249,5 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
 end
+
+@test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)
