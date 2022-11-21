@@ -64,6 +64,11 @@ function _foldl_impl(op::OP, init, itr) where {OP}
     return v
 end
 
+function _foldl_impl(op, init, itr::Union{Tuple,NamedTuple})
+    length(itr) <= 32 && return afoldl(op, init, itr...)
+    @invoke _foldl_impl(op, init, itr::Any)
+end
+
 struct _InitialValue end
 
 """
@@ -196,11 +201,11 @@ foldl(op, itr; kw...) = mapfoldl(identity, op, itr; kw...)
 
 function mapfoldr_impl(f, op, nt, itr)
     op′, itr′ = _xfadjoint(BottomRF(FlipArgs(op)), Generator(f, itr))
-    return foldl_impl(op′, nt, _reverse(itr′))
+    return foldl_impl(op′, nt, _reverse_iter(itr′))
 end
 
-_reverse(itr) = Iterators.reverse(itr)
-_reverse(itr::Tuple) = reverse(itr)  #33235
+_reverse_iter(itr) = Iterators.reverse(itr)
+_reverse_iter(itr::Union{Tuple,NamedTuple}) = length(itr) <= 32 ? reverse(itr) : Iterators.reverse(itr) #33235
 
 struct FlipArgs{F}
     f::F
