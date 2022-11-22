@@ -481,7 +481,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
                 src = jl_uncompress_ir(def, NULL, (jl_array_t*)src);
         }
         else {
-            src = (jl_code_info_t*)unspec->def->uninferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);
         }
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
