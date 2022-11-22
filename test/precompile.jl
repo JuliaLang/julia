@@ -318,7 +318,7 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
-    if Base.JLOptions().use_pkgimage_native_code
+    if Base.JLOptions().use_pkgimage_native_code == 1
         ocachefile = Base.ocachefile_from_cachefile(cachefile)
     else
         ocachefile = nothing
@@ -502,7 +502,7 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
@@ -1405,13 +1405,13 @@ precompile_test_harness("Issue #25971") do load_path
     sourcefile = joinpath(load_path, "Foo25971.jl")
     write(sourcefile, "module Foo25971 end")
     chmod(sourcefile, 0o666)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
     chmod(sourcefile, 0o600)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
     chmod(sourcefile, 0o444)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
 end
