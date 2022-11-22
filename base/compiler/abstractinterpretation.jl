@@ -2385,10 +2385,14 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isa(sym, Symbol)
             if isdefined(sv.mod, sym)
                 t = Const(true)
+            elseif sv.params.assume_bindings_static
+                t = Const(false)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
+            elseif sv.params.assume_bindings_static
+                t = Const(false)
             end
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
@@ -2499,6 +2503,9 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, fram
         end
     elseif isdefined_globalref(g)
         nothrow = true
+    elseif isa(frame, InferenceState) && frame.params.assume_bindings_static
+        consistent = inaccessiblememonly = ALWAYS_TRUE
+        rt = Union{}
     end
     merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
     return rt
