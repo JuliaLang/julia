@@ -723,8 +723,8 @@ The result is always a floating point array. To avoid this when `eltype(A) <: In
 0-norm is `count(!iszero, A; dims)`, 1-norm is `sum(abs, A; dims)`,
 and the `Inf`-norm is `maximum(abs, A; dims)`.
 
-!!! compat "Julia 1.9"
-    Methods taking keyword `dims` require Julia 1.9.
+!!! compat "Julia 1.10"
+    Methods taking keyword `dims` require at least Julia 1.10.
 
 # Examples
 ```jldoctest
@@ -1990,7 +1990,7 @@ end
 
 Normalize `a` so that its `p`-norm equals unity,
 i.e. `norm(a, p) == 1`. For scalars, this is similar to `sign(a)`,
-except `normalize(0) == NaN`. 
+except `normalize(0) == NaN`.
 
 See also [`normalize!`](@ref), [`norm`](@ref), and [`sign`](@ref).
 
