@@ -393,14 +393,17 @@ Move the file, link, or directory from `src` to `dst`.
 `force=true` will first remove an existing `dst`.
 Return `dst`.
 
+`mv` can also be used to rename a file, since `mv` "moves"
+the contents of `src` to `dst`, and then deletes `src`.
+
 # Examples
 ```jldoctest; filter = r"Stacktrace:(\\n \\[[0-9]+\\].*)*"
 julia> write("hello.txt", "world");
 
-julia> mv("hello.txt", "goodbye.txt")
+julia> mv("hello.txt", "goodbye.txt") # `hello.txt` renamed to `goodbye.txt`
 "goodbye.txt"
 
-julia> "hello.txt" in readdir()
+julia> "hello.txt" in readdir()       # `hello.txt` has been deleted
 false
 
 julia> readline("goodbye.txt")
@@ -416,6 +419,9 @@ Stacktrace:
 
 julia> mv("hello.txt", "goodbye.txt", force=true)
 "goodbye.txt"
+
+julia> readline("goodbye.txt")
+"world2"
 
 julia> rm("goodbye.txt");
 
