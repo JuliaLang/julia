@@ -343,6 +343,16 @@ function issimplertype(lattice::AbstractLattice, @nospecialize(typea), @nospecia
         is_same_conditionals(typea, typeb) || return false
         issimplertype(lattice, typea.thentype, typeb.thentype) || return false
         issimplertype(lattice, typea.elsetype, typeb.elsetype) || return false
+    elseif typea isa MustAlias
+        typeb isa MustAlias || return false
+        issubalias(typeb, typea) || return false
+        issimplertype(lattice, typea.vartyp, typeb.vartyp) || return false
+        issimplertype(lattice, typea.fldtyp, typeb.fldtyp) || return false
+    elseif typea isa InterMustAlias
+        typeb isa InterMustAlias || return false
+        issubalias(typeb, typea) || return false
+        issimplertype(lattice, typea.vartyp, typeb.vartyp) || return false
+        issimplertype(lattice, typea.fldtyp, typeb.fldtyp) || return false
     elseif typea isa PartialOpaque
         # TODO
     end
@@ -471,6 +481,12 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
     typea = widenconditional(typea)
     typeb = widenconditional(typeb)
     return tmerge(widenlattice(lattice), typea, typeb)
+end
+
+function tmerge(𝕃::AnyMustAliasesLattice, @nospecialize(typea), @nospecialize(typeb))
+    typea = widenmustalias(typea)
+    typeb = widenmustalias(typeb)
+    return tmerge(widenlattice(𝕃), typea, typeb)
 end
 
 function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))

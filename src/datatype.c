@@ -219,6 +219,7 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
     flddesc->alignment = alignment;
     flddesc->haspadding = haspadding;
     flddesc->fielddesc_type = fielddesc_type;
+    flddesc->padding = 0;
     flddesc->npointers = npointers;
     flddesc->first_ptr = (npointers > 0 ? pointers[0] : -1);
 
@@ -815,6 +816,7 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     layout->haspadding = 1;
     layout->npointers = haspointers;
     layout->fielddesc_type = 3;
+    layout->padding = 0;
     jl_fielddescdyn_t * desc =
       (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
     desc->markfunc = markfunc;

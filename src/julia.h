@@ -524,6 +524,7 @@ typedef struct {
     uint16_t alignment; // strictest alignment over all fields
     uint16_t haspadding : 1; // has internal undefined bytes
     uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32, 3 -> foreign type
+    uint16_t padding : 13;
     // union {
     //     jl_fielddesc8_t field8[nfields];
     //     jl_fielddesc16_t field16[nfields];
