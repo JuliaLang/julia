@@ -31,7 +31,7 @@ function reorder_parameters!(args, params_pos)
 end
 
 function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
-                  eq_to_kw=false, inside_dot_expr=false, inside_vect_or_braces=false)
+                  eq_to_kw=false, inside_vect_or_braces=false)
     if !haschildren(node)
         val = node.val
         if val isa Union{Int128,UInt128,BigInt}
@@ -125,11 +125,9 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         args[2] = _to_expr(node_args[2])
     else
         eq_to_kw_in_call =
-            headsym == :call && is_prefix_call(node)          ||
+            ((headsym == :call || headsym == :dotcall) && is_prefix_call(node)) ||
             headsym == :ref
-        eq_to_kw_all = headsym == :parameters && !inside_vect_or_braces ||
-                      (headsym == :tuple && inside_dot_expr)
-        in_dot = headsym == :.
+        eq_to_kw_all = headsym == :parameters && !inside_vect_or_braces
         in_vb = headsym == :vect || headsym == :braces
         if insert_linenums && isempty(node_args)
             push!(args, source_location(LineNumberNode, node.source, node.position))
@@ -142,7 +140,6 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
                 args[insert_linenums ? 2*i : i] =
                     _to_expr(n, eq_to_kw=eq_to_kw,
-                             inside_dot_expr=in_dot,
                              inside_vect_or_braces=in_vb)
             end
         end
@@ -155,7 +152,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         if args[1] == Symbol("@.")
             args[1] = Symbol("@__dot__")
         end
-    elseif headsym in (:call, :ref)
+    elseif headsym in (:dotcall, :call, :ref)
         # Julia's standard `Expr` ASTs have children stored in a canonical
         # order which is often not always source order. We permute the children
         # here as necessary to get the canonical order.
@@ -169,6 +166,21 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         end
         # Move parameters blocks to args[2]
         reorder_parameters!(args, 2)
+        if headsym === :dotcall
+            if is_prefix_call(node)
+                return Expr(:., args[1], Expr(:tuple, args[2:end]...))
+            else
+                # operator calls
+                headsym = :call
+                args[1] = Symbol(".", args[1])
+            end
+        end
+    elseif headsym === :comparison
+        for i in 1:length(args)
+            if Meta.isexpr(args[i], :., 1)
+                args[i] = Symbol(".",args[i].args[1])
+            end
+        end
     elseif headsym in (:tuple, :vect, :braces)
         # Move parameters blocks to args[1]
         reorder_parameters!(args, 1)

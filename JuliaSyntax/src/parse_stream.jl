@@ -83,7 +83,7 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     if include_flag_suff && suffix_flags != EMPTY_FLAGS
         str = str*"-"
         is_trivia(head)  && (str = str*"t")
-        is_infix_op_call(head)          && (str = str*"i")
+        is_infix_op_call(head)   && (str = str*"i")
         is_prefix_op_call(head)  && (str = str*"pre")
         is_postfix_op_call(head) && (str = str*"post")
         has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"s")
@@ -725,9 +725,7 @@ function bump_split(stream::ParseStream, split_spec...)
         push!(stream.tokens, SyntaxToken(h, kind(tok), b))
     end
     stream.peek_count = 0
-    # Returning position(stream) like the other bump* methods would be
-    # ambiguous here; return nothing instead.
-    nothing
+    return position(stream)
 end
 
 function _reset_node_head(x, k, f)

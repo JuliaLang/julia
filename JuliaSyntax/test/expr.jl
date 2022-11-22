@@ -223,4 +223,16 @@
         @test parse(Expr, "f(a .= 1)") ==
             Expr(:call, :f, Expr(:.=, :a, 1))
     end
+
+    @testset "dotcall" begin
+        parse(Expr, "f.(x,y)") == Expr(:., :f, Expr(:tuple, :x, :y))
+        parse(Expr, "f.(x=1)") == Expr(:., :f, Expr(:tuple, Expr(:kw, :x, 1)))
+        parse(Expr, "x .+ y")  == Expr(:call, Symbol(".+"), :x, :y)
+        parse(Expr, "(x=1) .+ y")  == Expr(:call, Symbol(".+"), Expr(:(=), :x, 1), :y)
+        parse(Expr, "a .< b .< c")  == Expr(:comparison, :a, Symbol(".<"),
+                                            :b, Symbol(".<"), :c)
+        parse(Expr, ".*(x)")  == Expr(:call, Symbol(".*"), :x)
+        parse(Expr, ".+(x)")  == Expr(:call, Symbol(".+"), :x)
+        parse(Expr, ".+x")    == Expr(:call, Symbol(".+"), :x)
+    end
 end
