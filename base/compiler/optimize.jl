@@ -737,7 +737,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
             return T_IFUNC_COST[iidx]
         end
-        if isa(f, Builtin)
+        if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex
