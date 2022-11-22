@@ -1159,6 +1159,15 @@ function sortperm(A::AbstractArray;
     sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
 end
 
+function sortperm(v::AbstractVector,
+                  alg::Algorithm=DEFAULT_UNSTABLE;
+                  lt=isless,
+                  by=identity,
+                  rev::Union{Bool,Void}=nothing,
+                  order::Ordering=Forward)
+    sortperm(v, alg = alg, lt = lt, by = by, rev = rev, order = order)
+end
+
 
 """
     sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
@@ -1214,6 +1223,16 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
         ix .= LinearIndices(A)
     end
     sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+end
+
+function sortperm!(x::AbstractVector{<:Integer}, v::AbstractVector,
+                   alg::Algorithm=DEFAULT_UNSTABLE;
+                   lt=isless,
+                   by=identity,
+                   rev::Union{Bool,Void}=nothing,
+                   order::Ordering=Forward,
+                   initialized::Bool=false)
+    sortperm!(x,v, alg = alg, lt = lt, by = by, rev = rev, order = order, initialized = initialized)
 end
 
 # sortperm for vectors of few unique integers
