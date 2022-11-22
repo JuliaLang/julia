@@ -32,8 +32,8 @@ _colon(::Any, ::Any, start::T, step, stop::T) where {T} =
     (:)(start, [step], stop)
 
 Range operator. `a:b` constructs a range from `a` to `b` with a step size
-of 1 (often a [`UnitRange`](@ref)), and `a:s:b` is similar but uses a step
-size of `s` (a [`StepRange`](@ref) or [`StepRangeLen`](@ref)).
+equal to 1 (a [`UnitRange`](@ref) or [`StepRangeLen`](@ref)), and `a:s:b` is
+similar but uses a step size of `s` (a [`StepRange`](@ref) or [`StepRangeLen`](@ref)).
 See also [`range`](@ref) for more control.
 
 The operator `:` is also used in indexing to select whole dimensions, e.g. in `A[:, 1]`.
@@ -469,9 +469,10 @@ A range `r` where `r[i]` produces values of type `T` (in the first
 form, `T` is deduced automatically), parameterized by a `ref`erence
 value, a `step`, and the `len`gth. By default `ref` is the starting
 value `r[1]`, but alternatively you can supply it as the value of
-`r[offset]` for some other index `1 <= offset <= len`. In conjunction
-with `TwicePrecision` this can be used to implement ranges that are
-free of roundoff error.
+`r[offset]` for some other index `1 <= offset <= len`. The syntax `a:b`
+or `a:b:c` with `a`, `b`, and `c` all floating-points creates a `StepRangeLen`.
+In conjunction with `TwicePrecision` this can be used to implement ranges that
+are free of roundoff error.
 
 !!! compat "Julia 1.7"
     The 4th type parameter `L` requires at least Julia 1.7.
