@@ -297,17 +297,6 @@ function is_both_unary_and_binary(t)
     )
 end
 
-# operators handled by parse_unary at the start of an expression
-function is_initial_operator(t)
-    k = kind(t)
-    # TODO(jb): `?` should probably not be listed here except for the syntax hack in osutils.jl
-    is_operator(k)             &&
-    !is_word_operator(k)       &&
-    !(k in KSet": ' .' ?")     &&
-    !(is_syntactic_unary_op(k) && !is_dotted(t)) &&
-    !is_syntactic_operator(k)
-end
-
 # flisp: invalid-identifier?
 function is_valid_identifier(k)
     k = kind(k)
@@ -328,6 +317,27 @@ function was_eventually_call(ps::ParseState)
             return false
         end
     end
+end
+
+function bump_dotsplit(ps, flags=EMPTY_FLAGS;
+                       emit_dot_node::Bool=false, remap_kind::Kind=K"None")
+    t = peek_token(ps)
+    if is_dotted(t)
+        bump_trivia(ps)
+        mark = position(ps)
+        k = remap_kind != K"None" ? remap_kind : kind(t)
+        pos = bump_split(ps, (1, K".", TRIVIA_FLAG), (0, k, flags))
+        if emit_dot_node
+            pos = emit(ps, mark, K".")
+        end
+    else
+        if remap_kind != K"None"
+            pos = bump(ps, remap_kind=remap_kind)
+        else
+            pos = bump(ps)
+        end
+    end
+    return pos
 end
 
 #-------------------------------------------------------------------------------
@@ -351,9 +361,10 @@ function parse_LtoR(ps::ParseState, down, is_op)
     mark = position(ps)
     down(ps)
     while is_op(peek(ps))
-        bump(ps)
+        t = peek_token(ps)
+        bump_dotsplit(ps)
         down(ps)
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
 
@@ -364,11 +375,11 @@ end
 function parse_RtoL(ps::ParseState, down, is_op, self)
     mark = position(ps)
     down(ps)
-    k = peek(ps)
-    if is_op(k)
-        bump(ps)
+    t = peek_token(ps)
+    if is_op(kind(t))
+        bump_dotsplit(ps)
         self(ps)
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
 
@@ -573,11 +584,12 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         end
         # ~ is the only non-syntactic assignment-precedence operator.
         # a ~ b      ==>  (call-i a ~ b)
+        # a .~ b     ==>  (dotcall-i a ~ b)
         # [a ~ b c]  ==>  (hcat (call-i a ~ b) c)
         # [a~b]      ==>  (vect (call-i a ~ b))
-        bump(ps)
+        bump_dotsplit(ps)
         parse_assignment(ps, down)
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     else
         # a += b  ==>  (+= a b)
         # a .= b  ==>  (.= a b)
@@ -614,6 +626,7 @@ end
 
 # flisp: parse-pair
 # a => b  ==>  (call-i a => b)
+# a .=> b ==>  (dotcall-i a => b)
 function parse_pair(ps::ParseState)
     parse_RtoL(ps, parse_cond, is_prec_pair, parse_pair)
 end
@@ -698,11 +711,11 @@ function parse_arrow(ps::ParseState)
         else
             # x → y     ==>  (call-i x → y)
             # x <--> y  ==>  (call-i x <--> y)
-            # x .--> y  ==>  (call-i x .--> y)
+            # x .--> y  ==>  (dotcall-i x --> y)
             # x -->₁ y  ==>  (call-i x -->₁ y)
-            bump(ps)
+            bump_dotsplit(ps)
             parse_arrow(ps)
-            emit(ps, mark, K"call", INFIX_FLAG)
+            emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
         end
     end
 end
@@ -757,10 +770,12 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
     end
     n_comparisons = 0
     op_pos = NO_POSITION
+    op_dotted = false
     initial_tok = peek_token(ps)
-    while is_prec_comparison(peek(ps))
+    while (t = peek_token(ps); is_prec_comparison(t))
         n_comparisons += 1
-        op_pos = bump(ps)
+        op_dotted = is_dotted(t)
+        op_pos = bump_dotsplit(ps, emit_dot_node=true)
         parse_pipe_lt(ps)
     end
     if n_comparisons == 1
@@ -773,13 +788,19 @@ function parse_comparison(ps::ParseState, subtype_comparison=false)
         else
             # Normal binary comparisons
             # x < y    ==>  (call-i x < y)
-            # x .<: y  ==>  (call-i x .<: y)
-            emit(ps, mark, K"call", INFIX_FLAG)
+            # x .< y   ==>  (dotcall-i x < y)
+            if op_dotted
+                # x .<: y  ==>  (dotcall-i x <: y)
+                reset_node!(ps, op_pos, kind=K"TOMBSTONE", flags=TRIVIA_FLAG)
+            end
+            emit(ps, mark, is_dotted(initial_tok) ? K"dotcall" : K"call", INFIX_FLAG)
         end
     elseif n_comparisons > 1
         # Comparison chains
         # x < y < z    ==> (comparison x < y < z)
         # x == y < z   ==> (comparison x == y < z)
+        # x .< y .< z  ==> (comparison x (. <) y (. <) z)
+        # x .< y < z   ==> (comparison x (. <) y < z)
         emit(ps, mark, K"comparison")
     end
 end
@@ -791,6 +812,7 @@ function parse_pipe_lt(ps::ParseState)
 end
 
 # x |> y |> z  ==>  (call-i (call-i x |> y) |> z)
+# x .|> y      ==>  (dotcall-i x |> y)
 # flisp: parse-pipe>
 function parse_pipe_gt(ps::ParseState)
     parse_LtoR(ps, parse_range, is_prec_pipe_gt)
@@ -807,15 +829,17 @@ end
 function parse_range(ps::ParseState)
     mark = position(ps)
     parse_expr(ps)
-    initial_kind = peek(ps)
+    initial_tok = peek_token(ps)
+    initial_kind = kind(initial_tok)
     if initial_kind != K":" && is_prec_colon(initial_kind)
         # a..b     ==>   (call-i a .. b)
         # a … b    ==>   (call-i a … b)
-        bump(ps)
+        # a .… b    ==>  (dotcall-i a … b)
+        bump_dotsplit(ps)
         parse_expr(ps)
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, is_dotted(initial_tok) ? K"dotcall" : K"call", INFIX_FLAG)
     elseif initial_kind == K":" && ps.range_colon_enabled
-        # a ? b : c:d   ==>   (if a b (call-i c : d))
+        # a ? b : c:d   ==>   (? a b (call-i c : d))
         n_colons = 0
         while peek(ps) == K":"
             if ps.space_sensitive &&
@@ -888,6 +912,7 @@ end
 
 # a - b - c  ==>  (call-i (call-i a - b) - c)
 # a + b + c  ==>  (call-i a + b c)
+# a .+ b     ==>  (dotcall-i a + b)
 #
 # flisp: parse-expr
 function parse_expr(ps::ParseState)
@@ -920,16 +945,16 @@ function parse_with_chains(ps::ParseState, down, is_op, chain_ops)
             # [x+y + z]  ==>  (vect (call-i x + y z))
             break
         end
-        bump(ps)
+        bump_dotsplit(ps)
         down(ps)
         if kind(t) in chain_ops && !is_decorated(t)
             # a + b + c    ==>  (call-i a + b c)
-            # a + b .+ c   ==>  (call-i (call-i a + b) .+ c)
+            # a + b .+ c   ==>  (dotcall-i (call-i a + b) + c)
             parse_chain(ps, down, kind(t))
         end
         # a +₁ b +₁ c  ==>  (call-i (call-i a +₁ b) +₁ c)
-        # a .+ b .+ c  ==>  (call-i (call-i a .+ b) .+ c)
-        emit(ps, mark, K"call", INFIX_FLAG)
+        # a .+ b .+ c  ==>  (dotcall-i (dotcall-i a + b) + c)
+        emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
 
@@ -950,11 +975,13 @@ function parse_chain(ps::ParseState, down, op_kind)
 end
 
 # flisp: parse-rational
+# x // y // z  ==>  (call-i (call-i x // y) // z)
 function parse_rational(ps::ParseState)
     parse_LtoR(ps, parse_shift, is_prec_rational)
 end
 
 # flisp: parse-shift
+# x >> y >> z  ==>  (call-i (call-i x >> y) >> z)
 function parse_shift(ps::ParseState)
     parse_LtoR(ps, parse_unary_subtype, is_prec_bitshift)
 end
@@ -963,8 +990,8 @@ end
 #
 # flisp: parse-unary-subtype
 function parse_unary_subtype(ps::ParseState)
-    k = peek(ps, skip_newlines=true)
-    if k in KSet"<: >:"
+    t = peek_token(ps, skip_newlines=true)
+    if is_type_operator(t)
         k2 = peek(ps, 2)
         if is_closing_token(ps, k2) || k2 in KSet"NewlineWs ="
             # return operator by itself
@@ -978,13 +1005,14 @@ function parse_unary_subtype(ps::ParseState)
             # <:(x::T)     ==>  (<:-pre (:: x T))
             parse_where(ps, parse_juxtapose)
         else
+            # <: x          ==>  (<:-pre x)
             # <: A where B  ==>  (<:-pre (where A B))
             mark = position(ps)
             bump(ps, TRIVIA_FLAG)
             parse_where(ps, parse_juxtapose)
             # Flisp parser handled this, but I don't know how it can happen...
             @check peek_behind(ps).kind != K"tuple"
-            emit(ps, mark, k, PREFIX_OP_FLAG)
+            emit(ps, mark, kind(t), PREFIX_OP_FLAG)
         end
     else
         parse_where(ps, parse_juxtapose)
@@ -1103,22 +1131,33 @@ function parse_juxtapose(ps::ParseState)
     end
 end
 
-# Deal with numeric literal prefixes and unary calls
+# Parse numeric literal prefixes, calls to unary operators and prefix
+# calls involving arbitrary operators with bracketed arglists (as opposed to
+# infix notation)
 #
-# flisp: parse-unary
+# flisp: parse-unary, parse-unary-call
 function parse_unary(ps::ParseState)
     mark = position(ps)
     bump_trivia(ps)
-    t = peek_token(ps)
-    k = kind(t)
-    if !is_initial_operator(t)
+    op_t = peek_token(ps)
+    op_k = kind(op_t)
+    if ( 
+            !is_operator(op_k)           ||
+            is_word_operator(op_k)       ||
+            # TODO(jb): `?` should probably not be listed here
+            # except for the syntax hack in osutils.jl
+            (op_k in KSet": ' .' ?")     ||
+            (is_syntactic_unary_op(op_k) && !is_dotted(op_t)) ||
+            is_syntactic_operator(op_k)
+        )
+        # `op_t` is not an initial operator
         # :T      ==>  (quote T)
         # in::T   ==>  (:: in T)
         # isa::T  ==>  (:: isa T)
         parse_factor(ps)
         return
     end
-    if k in KSet"- +" && !is_decorated(t)
+    if op_k in KSet"- +" && !is_decorated(op_t)
         t2 = peek_token(ps, 2)
         if !preceding_whitespace(t2) && kind(t2) in KSet"Integer Float Float32"
             k3 = peek(ps, 3)
@@ -1142,26 +1181,6 @@ function parse_unary(ps::ParseState)
             return
         end
     end
-    # Things which are not quite negative literals result in a unary call instead
-    # -0x1 ==>  (call-pre - 0x01)
-    # - 2  ==>  (call-pre - 2)
-    # .-2  ==>  (call-pre .- 2)
-    parse_unary_call(ps)
-end
-
-# Parse calls to unary operators and prefix calls involving arbitrary operators
-# with bracketed arglists (as opposed to infix notation)
-#
-# +a      ==>  (call-pre + a)
-# +(a,b)  ==>  (call-pre + a b)
-#
-# flisp: parse-unary-call
-function parse_unary_call(ps::ParseState)
-    mark = position(ps)
-    op_t = peek_token(ps)
-    op_k = kind(op_t)
-    op_node_kind = is_type_operator(op_t) ? op_k : K"call"
-    op_tok_flags = is_type_operator(op_t) ? TRIVIA_FLAG : EMPTY_FLAGS
     t2 = peek_token(ps, 2)
     k2 = kind(t2)
     if is_closing_token(ps, k2) || k2 in KSet"NewlineWs ="
@@ -1172,9 +1191,7 @@ function parse_unary_call(ps::ParseState)
             # .+ =  ==>  (. +)
             # .+)   ==>  (. +)
             # .&    ==>  (. &)
-            bump_trivia(ps)
-            bump_split(ps, (1, K".", TRIVIA_FLAG), (0, op_k, EMPTY_FLAGS))
-            emit(ps, mark, K".")
+            bump_dotsplit(ps, emit_dot_node=true)
         else
             # Standalone non-dotted operators
             # +)  ==>  +
@@ -1184,6 +1201,7 @@ function parse_unary_call(ps::ParseState)
         # Call with type parameters or non-unary prefix call
         # +{T}(x::T)  ==>  (call (curly + T) (:: x T))
         # *(x)  ==>  (call * x)
+        # .*(x) ==>  (call .* x)
         parse_factor(ps)
     elseif k2 == K"("
         # Cases like +(a;b) are ambiguous: are they prefix calls to + with b as
@@ -1193,7 +1211,7 @@ function parse_unary_call(ps::ParseState)
         #
         # (The flisp parser only considers commas before `;` and thus gets this
         # last case wrong)
-        bump(ps, op_tok_flags)
+        op_pos = bump_dotsplit(ps, emit_dot_node=true)
 
         # Setup possible whitespace error between operator and (
         ws_mark = position(ps)
@@ -1205,15 +1223,15 @@ function parse_unary_call(ps::ParseState)
         bump(ps, TRIVIA_FLAG) # (
         initial_semi = peek(ps) == K";"
         opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
-            is_call = had_commas || had_splat || initial_semi
-            return (needs_parameters=is_call,
-                    is_call=is_call,
-                    is_block=!is_call && num_semis > 0)
+            is_paren_call = had_commas || had_splat || initial_semi
+            return (needs_parameters=is_paren_call,
+                    is_paren_call=is_paren_call,
+                    is_block=!is_paren_call && num_semis > 0)
         end
 
         # The precedence between unary + and any following infix ^ depends on
         # whether the parens are a function call or not
-        if opts.is_call
+        if opts.is_paren_call
             if preceding_whitespace(t2)
                 # Whitespace not allowed before prefix function call bracket
                 # + (a,b)   ==> (call + (error) a b)
@@ -1230,11 +1248,31 @@ function parse_unary_call(ps::ParseState)
             # Prefix calls have higher precedence than ^
             # +(a,b)^2  ==>  (call-i (call + a b) ^ 2)
             # +(a,b)(x)^2  ==>  (call-i (call (call + a b) x) ^ 2)
-            emit(ps, mark, op_node_kind)
+            if is_type_operator(op_t)
+                # <:(a,)  ==>  (<: a)
+                emit(ps, mark, op_k)
+                reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
+            else
+                if is_dotted(op_t)
+                    # Ugly hack to undo the split in bump_dotsplit
+                    # .+(a,)    ==>  (call .+ a)
+                    reset_node!(ps, op_pos, kind=K"TOMBSTONE")
+                    tb1 = ps.stream.tokens[op_pos.token_index-1]
+                    ps.stream.tokens[op_pos.token_index-1] =
+                        SyntaxToken(SyntaxHead(K"TOMBSTONE", EMPTY_FLAGS),
+                                    K"TOMBSTONE", tb1.next_byte-1)
+                    tb0 = ps.stream.tokens[op_pos.token_index]
+                    ps.stream.tokens[op_pos.token_index] =
+                        SyntaxToken(SyntaxHead(kind(tb0), flags(tb0)),
+                                    tb0.orig_kind, tb0.next_byte)
+                end
+                emit(ps, mark, K"call")
+            end
             parse_call_chain(ps, mark)
             parse_factor_with_initial_ex(ps, mark)
         else
             # Unary function calls with brackets as grouping, not an arglist
+            # .+(a)    ==>  (dotcall-pre (. +) a)
             if opts.is_block
                 # +(a;b)   ==>  (call-pre + (block a b))
                 emit(ps, mark_before_paren, K"block")
@@ -1243,26 +1281,43 @@ function parse_unary_call(ps::ParseState)
             # +(a=1)  ==>  (call-pre + (= a 1))
             # Unary operators have lower precedence than ^
             # +(a)^2  ==>  (call-pre + (call-i a ^ 2))
+            # .+(a)^2  ==>  (dotcall-pre + (call-i a ^ 2))
             # +(a)(x,y)^2  ==>  (call-pre + (call-i (call a x y) ^ 2))
             parse_call_chain(ps, mark_before_paren)
             parse_factor_with_initial_ex(ps, mark_before_paren)
-            emit(ps, mark, op_node_kind, PREFIX_OP_FLAG)
+            if is_type_operator(op_t)
+                # <:(a)  ==>  (<:-pre a)
+                emit(ps, mark, op_k, PREFIX_OP_FLAG)
+                reset_node!(ps, op_pos, flags=TRIVIA_FLAG)
+            else
+                if is_dotted(op_t)
+                    emit(ps, mark, K"dotcall", PREFIX_OP_FLAG)
+                    reset_node!(ps, op_pos, kind=K"TOMBSTONE")
+                else
+                    emit(ps, mark, K"call", PREFIX_OP_FLAG)
+                end
+            end
         end
     else
+        @assert !is_type_operator(op_t) # `<:x` handled in parse_unary_subtype
         if is_unary_op(op_t)
             # Normal unary calls
             # +x  ==>  (call-pre + x)
             # √x  ==>  (call-pre √ x)
-            # ±x  ==>  (call-pre ± x)
-            bump(ps, op_tok_flags)
+            # .~x ==>  (dotcall-pre ~ x)
+            # Things which are not quite negative literals
+            # -0x1 ==> (call-pre - 0x01)
+            # - 2  ==> (call-pre - 2)
+            # .-2  ==> (dotcall-pre - 2)
+            bump_dotsplit(ps, EMPTY_FLAGS)
         else
             # /x     ==>  (call-pre (error /) x)
             # +₁ x   ==>  (call-pre (error +₁) x)
-            # .<: x  ==>  (call-pre (error .<:) x)
+            # .<: x  ==>  (dotcall-pre (error .<:) x)
             bump(ps, error="not a unary operator")
         end
         parse_unary(ps)
-        emit(ps, mark, op_node_kind, PREFIX_OP_FLAG)
+        emit(ps, mark, is_dotted(op_t) ? K"dotcall" : K"call", PREFIX_OP_FLAG)
     end
 end
 
@@ -1270,6 +1325,7 @@ end
 #
 # x^y    ==>  (call-i x ^ y)
 # x^y^z  ==>  (call-i x ^ (call-i y ^ z))
+# x .^ y ==>  (dotcall-i x ^ y)
 # begin x end::T  ==>  (:: (block x) T)
 #
 # flisp: parse-factor
@@ -1282,10 +1338,10 @@ end
 # flisp: parse-factor-with-initial-ex
 function parse_factor_with_initial_ex(ps::ParseState, mark)
     parse_decl_with_initial_ex(ps, mark)
-    if is_prec_power(peek(ps))
-        bump(ps)
+    if (t = peek_token(ps); is_prec_power(kind(t)))
+        bump_dotsplit(ps)
         parse_factor_after(ps)
-        emit(ps, mark, K"call", INFIX_FLAG)
+        emit(ps, mark, is_dotted(t) ? K"dotcall" : K"call", INFIX_FLAG)
     end
 end
 
@@ -1526,14 +1582,12 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                     emit_diagnostic(ps, mark,
                                     error="dot call syntax not supported for macros")
                 end
-                # f.(a,b)   ==>  (. f (tuple a b))
-                # f. (x)    ==>  (. f (error-t) (tuple x))
+                # f.(a,b)   ==>  (dotcall f a b)
+                # f. (x)    ==>  (dotcall f (error-t) x)
                 bump_disallowed_space(ps)
-                m = position(ps)
                 bump(ps, TRIVIA_FLAG)
                 parse_call_arglist(ps, K")")
-                emit(ps, m, K"tuple")
-                emit(ps, mark, K".")
+                emit(ps, mark, K"dotcall")
             elseif k == K":"
                 # A.:+  ==>  (. A (quote +))
                 # A.: +  ==>  (. A (error-t) (quote +))

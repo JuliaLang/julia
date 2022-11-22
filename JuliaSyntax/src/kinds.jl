@@ -868,6 +868,7 @@ const _kind_names =
     "BEGIN_SYNTAX_KINDS"
         "block"
         "call"
+        "dotcall"
         "comparison"
         "curly"
         "inert"          # QuoteNode; not quasiquote
