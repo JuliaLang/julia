@@ -970,11 +970,11 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     jl_svec_t *atypes = (jl_svec_t*)jl_svecref(argdata, 0);
     jl_svec_t *tvars = (jl_svec_t*)jl_svecref(argdata, 1);
     jl_value_t *functionloc = jl_svecref(argdata, 2);
-    size_t nargs = jl_svec_len(atypes);
-    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
     assert(jl_is_svec(atypes));
-    assert(nargs > 0);
     assert(jl_is_svec(tvars));
+    size_t nargs = jl_svec_len(atypes);
+    assert(nargs > 0);
+    int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
     if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
         jl_error("function type in method definition is not a type");
     jl_sym_t *name;

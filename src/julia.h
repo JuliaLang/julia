@@ -523,6 +523,7 @@ typedef struct {
     uint16_t alignment; // strictest alignment over all fields
     uint16_t haspadding : 1; // has internal undefined bytes
     uint16_t fielddesc_type : 2; // 0 -> 8, 1 -> 16, 2 -> 32, 3 -> foreign type
+    uint16_t padding : 13;
     // union {
     //     jl_fielddesc8_t field8[nfields];
     //     jl_fielddesc16_t field16[nfields];
@@ -916,6 +917,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_allocobj(size_t sz);
 JL_DLLEXPORT void *jl_malloc_stack(size_t *bufsz, struct _jl_task_t *owner) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 JL_DLLEXPORT void jl_gc_use(jl_value_t *a);
+// Set GC memory trigger in bytes for greedy memory collecting
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 
 JL_DLLEXPORT void jl_clear_malloc_data(void);
 

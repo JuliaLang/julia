@@ -566,10 +566,8 @@ function serialize_type_data(s, @nospecialize(t::DataType))
         serialize(s, t.name)
     else
         writetag(s.io, DATATYPE_TAG)
-        tname = t.name.name
-        serialize(s, tname)
-        mod = t.name.module
-        serialize(s, mod)
+        serialize(s, nameof(t))
+        serialize(s, parentmodule(t))
     end
     if !isempty(t.parameters)
         if iswrapper
@@ -1325,7 +1323,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
-            if !isdefined(ty, :instance)
+            if !Base.issingletontype(ty)
                 singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
                 # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)

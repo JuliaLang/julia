@@ -1556,3 +1556,10 @@ end
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+
+@testset "issue 46778" begin
+    f46778(::Any, ::Type{Int}) = 1
+    f46778(::Any, ::DataType) = 2
+    @test precompile(Tuple{typeof(f46778), Int, DataType})
+    @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
+end

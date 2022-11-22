@@ -28,7 +28,7 @@ function matching_cache_argtypes(linfo::MethodInstance)
     return cache_argtypes, falses(length(cache_argtypes))
 end
 
-struct SimpleArgtypes
+struct SimpleArgtypes <: ForwardableArgtypes
     argtypes::Vector{Any}
 end
 
@@ -44,7 +44,7 @@ function matching_cache_argtypes(linfo::MethodInstance, simple_argtypes::SimpleA
     (; argtypes) = simple_argtypes
     given_argtypes = Vector{Any}(undef, length(argtypes))
     for i = 1:length(argtypes)
-        given_argtypes[i] = widenconditional(argtypes[i])
+        given_argtypes[i] = widenslotwrapper(argtypes[i])
     end
     given_argtypes = va_process_argtypes(given_argtypes, linfo)
     return pick_const_args(linfo, given_argtypes)
@@ -78,6 +78,7 @@ function is_argtype_match(lattice::AbstractLattice,
     return !overridden_by_const
 end
 
+# TODO MustAlias forwarding
 function is_forwardable_argtype(@nospecialize x)
     return isa(x, Const) ||
            isa(x, Conditional) ||
@@ -150,7 +151,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
-                    if isa(atyp, DataType) && isdefined(atyp, :instance)
+                    if issingletontype(atyp)
                         # replace singleton types with their equivalent Const object
                         vargtype_elements[i] = Const(atyp.instance)
                     elseif isconstType(atyp)
@@ -179,7 +180,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 tail_index -= 1
             end
             atyp = unwraptv(atyp)
-            if isa(atyp, DataType) && isdefined(atyp, :instance)
+            if issingletontype(atyp)
                 # replace singleton types with their equivalent Const object
                 atyp = Const(atyp.instance)
             elseif isconstType(atyp)
@@ -223,7 +224,7 @@ function cache_lookup(lattice::AbstractLattice, linfo::MethodInstance, given_arg
         cache_argtypes = cached_result.argtypes
         cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargs
-            if !is_argtype_match(lattice, given_argtypes[i],
+            if !is_argtype_match(lattice, widenmustalias(given_argtypes[i]),
                                  cache_argtypes[i],
                                  cache_overridden_by_const[i])
                 cache_match = false
