@@ -57,6 +57,10 @@ impl ReferenceGlue<JuliaVM> for VMReferenceGlue {
       referent
     }
 
+    fn is_referent_cleared(referent: ObjectReference) -> bool {
+      unsafe { referent.to_address().to_mut_ptr() == jl_nothing }
+    }
+
     fn enqueue_references(_references: &[ObjectReference], _tls: VMWorkerThread) {
     }
 }
