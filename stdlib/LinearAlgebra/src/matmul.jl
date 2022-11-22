@@ -807,7 +807,15 @@ function generic_matvecmul!(C::AbstractVector{R}, tA, A::AbstractVecOrMat, B::Ab
         end
         for k = 1:mB
             aoffs = (k-1)*Astride
-            b = _add(B[k], false)
+            bk = B[k]
+            # We use `false` for `Number`s since `Bool`s are also numbers and
+            # we assume that we can add them. This should be more efficient in
+            # general since it avoids allocating a zero number for something
+            # like `BigFloats`. However, we do not necessarily need to have
+            # vectors of numbers but can also have vectors of vectors. In this
+            # case, adding a scalar `false` to the vector-valued entries is
+            # not defined, so we need to use an appropriate zero.
+            b = _add(bk, bk isa Number ? false : zero(bk))
             for i = 1:mA
                 C[i] += A[aoffs + i] * b
             end

@@ -156,6 +156,18 @@ end
     end
 end
 
+@testset "generic_matvecmul for vectors of vectors" begin
+    u = [[1, 2], [3, 4]]
+    A = [1 2; 3 4]
+    v = [[0, 0], [0, 0]]
+    Au = [[7, 10], [15, 22]]
+    @test A * u == Au
+    mul!(v, A, u)
+    @test v == Au
+    mul!(v, A, u, 2, 1)
+    @test v == [[15, 22], [33, 48]]
+end
+
 @testset "fallbacks & such for BlasFloats" begin
     AA = rand(Float64, 6, 6)
     BB = rand(Float64, 6, 6)
