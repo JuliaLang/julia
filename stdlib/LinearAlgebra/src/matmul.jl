@@ -11,8 +11,8 @@ matprod(x, y) = x*y + x*y
 
 # dot products
 
-dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasReal} = BLAS.dot(x, y)
-dot(x::Union{DenseArray{T},StridedVector{T}}, y::Union{DenseArray{T},StridedVector{T}}) where {T<:BlasComplex} = BLAS.dotc(x, y)
+dot(x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasReal} = BLAS.dot(x, y)
+dot(x::StridedVecLike{T}, y::StridedVecLike{T}) where {T<:BlasComplex} = BLAS.dotc(x, y)
 
 function dot(x::Vector{T}, rx::AbstractRange{TI}, y::Vector{T}, ry::AbstractRange{TI}) where {T<:BlasReal,TI<:Integer}
     if length(rx) != length(ry)
@@ -57,8 +57,8 @@ function (*)(A::AbstractMatrix{T}, x::AbstractVector{S}) where {T,S}
 end
 
 # these will throw a DimensionMismatch unless B has 1 row (or 1 col for transposed case):
-(*)(a::AbstractVector, tB::Transpose{<:Any,<:AbstractMatrix}) = reshape(a, length(a), 1) * tB
-(*)(a::AbstractVector, adjB::Adjoint{<:Any,<:AbstractMatrix}) = reshape(a, length(a), 1) * adjB
+(*)(a::AbstractVector, tB::TransposeAbsMat) = reshape(a, length(a), 1) * tB
+(*)(a::AbstractVector, adjB::AdjointAbsMat) = reshape(a, length(a), 1) * adjB
 (*)(a::AbstractVector, B::AbstractMatrix) = reshape(a, length(a), 1) * B
 
 @inline mul!(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T},
@@ -66,7 +66,7 @@ end
     gemv!(y, 'N', A, x, alpha, beta)
 
 # Complex matrix times real vector.
-# Reinterpret the matrix as a real matrix and do real matvec compuation.
+# Reinterpret the matrix as a real matrix and do real matvec computation.
 @inline mul!(y::StridedVector{Complex{T}}, A::StridedVecOrMat{Complex{T}}, x::StridedVector{T},
         alpha::Number, beta::Number) where {T<:BlasReal} =
     gemv!(y, 'N', A, x, alpha, beta)
@@ -171,7 +171,7 @@ end
 function (*)(A::AdjOrTransStridedMat{<:BlasComplex}, B::StridedMaybeAdjOrTransMat{<:BlasReal})
     TS = promote_type(eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))),
-         copy_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
+         copymutable_oftype(A, TS), # remove AdjOrTrans to use reinterpret trick below
          wrapperop(B)(convert(AbstractArray{real(TS)}, _parent(B))))
 end
 # the following case doesn't seem to benefit from the translation A*B = (B' * A')'
@@ -315,9 +315,9 @@ see [`QR`](@ref).
 ```jldoctest
 julia> A = [0 1; 1 0];
 
-julia> B = LinearAlgebra.UpperTriangular([1 2; 0 3]);
+julia> B = UpperTriangular([1 2; 0 3]);
 
-julia> LinearAlgebra.rmul!(A, B);
+julia> rmul!(A, B);
 
 julia> A
 2×2 Matrix{Int64}:
@@ -348,9 +348,9 @@ see [`QR`](@ref).
 ```jldoctest
 julia> B = [0 1; 1 0];
 
-julia> A = LinearAlgebra.UpperTriangular([1 2; 0 3]);
+julia> A = UpperTriangular([1 2; 0 3]);
 
-julia> LinearAlgebra.lmul!(A, B);
+julia> lmul!(A, B);
 
 julia> B
 2×2 Matrix{Int64}:
@@ -469,7 +469,7 @@ end
 
 # Supporting functions for matrix multiplication
 
-# copy transposed(adjoint) of upper(lower) side-digonals. Optionally include diagonal.
+# copy transposed(adjoint) of upper(lower) side-diagonals. Optionally include diagonal.
 @inline function copytri!(A::AbstractMatrix, uplo::AbstractChar, conjugate::Bool=false, diag::Bool=false)
     n = checksquare(A)
     off = diag ? 0 : 1

@@ -7,6 +7,9 @@
 Like [`getindex`](@ref), but returns a view into the parent string `s`
 within range `i:j` or `r` respectively instead of making a copy.
 
+The [`@views`](@ref) macro converts any string slices `s[i:j]` into
+substrings `SubString(s, i, j)` in a block of code.
+
 # Examples
 ```jldoctest
 julia> SubString("abc", 1, 2)
@@ -52,13 +55,13 @@ SubString{T}(s::T) where {T<:AbstractString} = SubString{T}(s, 1, lastindex(s)::
 @propagate_inbounds maybeview(s::AbstractString, args...) = getindex(s, args...)
 
 convert(::Type{SubString{S}}, s::AbstractString) where {S<:AbstractString} =
-    SubString(convert(S, s))
+    SubString(convert(S, s))::SubString{S}
 convert(::Type{T}, s::T) where {T<:SubString} = s
 
 # Regex match allows only Union{String, SubString{String}} so define conversion to this type
 convert(::Type{Union{String, SubString{String}}}, s::String) = s
 convert(::Type{Union{String, SubString{String}}}, s::SubString{String}) = s
-convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)
+convert(::Type{Union{String, SubString{String}}}, s::AbstractString) = convert(String, s)::String
 
 function String(s::SubString{String})
     parent = s.string

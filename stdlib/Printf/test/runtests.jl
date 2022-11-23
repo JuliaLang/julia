@@ -339,10 +339,10 @@ end
     @test Printf.@sprintf("1%%2%%3") == "1%2%3"
     @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
-    @test_throws ArgumentError Printf.Format("")
-    @test_throws ArgumentError Printf.Format("%+")
-    @test_throws ArgumentError Printf.Format("%.")
-    @test_throws ArgumentError Printf.Format("%.0")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%+")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%.")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%.0")
     @test isempty(Printf.Format("%%").formats)
     @test Printf.@sprintf("%d%d", 1, 2) == "12"
     @test (Printf.@sprintf "%d%d" [1 2]...) == "12"
@@ -355,10 +355,10 @@ end
     @test (Printf.@sprintf("%d\u0f00%d", 1, 2)) == "1\u0f002"
     @test (Printf.@sprintf("%d\U0001ffff%d", 1, 2)) == "1\U0001ffff2"
     @test (Printf.@sprintf("%d\u2203%d\u0203", 1, 2)) == "1\u22032\u0203"
-    @test_throws ArgumentError Printf.Format("%y%d")
-    @test_throws ArgumentError Printf.Format("%\u00d0%d")
-    @test_throws ArgumentError Printf.Format("%\u0f00%d")
-    @test_throws ArgumentError Printf.Format("%\U0001ffff%d")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%y%d")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%\u00d0%d")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%\u0f00%d")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%\U0001ffff%d")
     @test Printf.@sprintf("%10.5d", 4) == "     00004"
     @test (Printf.@sprintf "%d" typemax(Int64)) == "9223372036854775807"
 
@@ -444,8 +444,8 @@ end
     @test (Printf.@sprintf("%f", parse(BigFloat, "1e400"))) ==
            "10000000000000000000000000000000000000000000000000000000000000000000000000000025262527574416492004687051900140830217136998040684679611623086405387447100385714565637522507383770691831689647535911648520404034824470543643098638520633064715221151920028135130764414460468236314621044034960475540018328999334468948008954289495190631358190153259681118693204411689043999084305348398480210026863210192871358464.000000"
 
-    # Check that does not attempt to output incredibly large amounts of digits
-    @test_throws ErrorException Printf.@sprintf("%f", parse(BigFloat, "1e99999"))
+    # Check that Printf does not attempt to output more than 8KiB worth of digits
+    @test_throws ArgumentError Printf.@sprintf("%f", parse(BigFloat, "1e99999"))
 
     # Check bug with precision > length of string
     @test Printf.@sprintf("%4.2s", "a") == "   a"
@@ -528,13 +528,13 @@ end
     @test Printf.@sprintf( "%0-5d", -42) == "-42  "
     @test Printf.@sprintf( "%0-15d",  42) == "42             "
     @test Printf.@sprintf( "%0-15d", -42) == "-42            "
-    @test_throws ArgumentError Printf.Format("%d %")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%d %")
 
     @test Printf.@sprintf("%lld", 18446744065119617025) == "18446744065119617025"
     @test Printf.@sprintf("%+8lld", 100) == "    +100"
     @test Printf.@sprintf("%+.8lld", 100) == "+00000100"
     @test Printf.@sprintf("%+10.8lld", 100) == " +00000100"
-    @test_throws ArgumentError Printf.Format("%_1lld")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%_1lld")
     @test Printf.@sprintf("%-1.5lld", -100) == "-00100"
     @test Printf.@sprintf("%5lld", 100) == "  100"
     @test Printf.@sprintf("%5lld", -100) == " -100"
@@ -780,6 +780,12 @@ end
     @test (Printf.@sprintf("%d4%n", 123, x); x[] == 4)
     @test (Printf.@sprintf("%s%n", "😉", x); x[] == 4)
     @test (Printf.@sprintf("%s%n", "1234", x); x[] == 4)
+end
+
+@testset "length modifiers" begin
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%h")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%hh")
+    @test_throws Printf.InvalidFormatStringError Printf.Format("%z")
 end
 
 end # @testset "Printf"

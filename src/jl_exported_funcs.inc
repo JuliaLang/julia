@@ -3,6 +3,7 @@
 #define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
     XX(jl_add_standard_imports) \
+    XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
     XX(jl_alloc_array_2d) \
@@ -97,12 +98,14 @@
     XX(jl_close_uv) \
     XX(jl_code_for_staged) \
     XX(jl_compile_hint) \
+    XX(jl_compile_method_instance) \
     XX(jl_compress_argnames) \
     XX(jl_compress_ir) \
     XX(jl_compute_fieldtypes) \
     XX(jl_copy_ast) \
     XX(jl_copy_code_info) \
     XX(jl_cpu_threads) \
+    XX(jl_effective_threads) \
     XX(jl_crc32c_sw) \
     XX(jl_create_system_image) \
     XX(jl_cstr_to_string) \
@@ -124,7 +127,6 @@
     XX(jl_environ) \
     XX(jl_eof_error) \
     XX(jl_eqtable_get) \
-    XX(jl_eqtable_nextind) \
     XX(jl_eqtable_pop) \
     XX(jl_eqtable_put) \
     XX(jl_errno) \
@@ -149,6 +151,7 @@
     XX(jl_gc_add_finalizer) \
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
+    XX(jl_gc_add_quiescent) \
     XX(jl_gc_allocobj) \
     XX(jl_gc_alloc_0w) \
     XX(jl_gc_alloc_1w) \
@@ -191,6 +194,7 @@
     XX(jl_gc_set_cb_pre_gc) \
     XX(jl_gc_set_cb_root_scanner) \
     XX(jl_gc_set_cb_task_scanner) \
+    XX(jl_gc_set_max_memory) \
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
     XX(jl_gdblookup) \
@@ -200,12 +204,12 @@
     XX(jl_getallocationgranularity) \
     XX(jl_getnameinfo) \
     XX(jl_getpagesize) \
-    XX(jl_getpid) \
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
+    XX(jl_get_binding_wr_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_get_cpu_name) \
     XX(jl_get_current_task) \
@@ -218,8 +222,6 @@
     XX(jl_get_JIT) \
     XX(jl_get_julia_bin) \
     XX(jl_get_julia_bindir) \
-    XX(jl_get_keyword_sorter) \
-    XX(jl_get_kwsorter) \
     XX(jl_get_method_inferred) \
     XX(jl_get_module_binding) \
     XX(jl_get_module_compile) \
@@ -236,6 +238,7 @@
     XX(jl_get_safe_restore) \
     XX(jl_get_size) \
     XX(jl_get_task_tid) \
+    XX(jl_get_task_threadpoolid) \
     XX(jl_get_tls_world_age) \
     XX(jl_get_UNAME) \
     XX(jl_get_world_counter) \
@@ -273,7 +276,7 @@
     XX(jl_ios_fd) \
     XX(jl_ios_get_nbyte_int) \
     XX(jl_ir_flag_inferred) \
-    XX(jl_ir_flag_inlineable) \
+    XX(jl_ir_inlining_cost) \
     XX(jl_ir_flag_pure) \
     XX(jl_ir_nslots) \
     XX(jl_ir_slotflag) \
@@ -285,6 +288,7 @@
     XX(jl_is_char_signed) \
     XX(jl_is_const) \
     XX(jl_is_debugbuild) \
+    XX(jl_is_foreign_type) \
     XX(jl_is_identifier) \
     XX(jl_is_imported) \
     XX(jl_is_initialized) \
@@ -422,6 +426,7 @@
     XX(jl_set_safe_restore) \
     XX(jl_set_sysimg_so) \
     XX(jl_set_task_tid) \
+    XX(jl_set_task_threadpoolid) \
     XX(jl_set_typeinf_func) \
     XX(jl_set_zero_subnormals) \
     XX(jl_sigatomic_begin) \
@@ -448,7 +453,6 @@
     XX(jl_svec2) \
     XX(jl_svec_copy) \
     XX(jl_svec_fill) \
-    XX(jl_svec_isassigned) \
     XX(jl_svec_ref) \
     XX(jl_switch) \
     XX(jl_switchto) \
@@ -459,8 +463,10 @@
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
     XX(jl_task_stack_buffer) \
+    XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
+    XX(jl_threadpoolid) \
     XX(jl_throw) \
     XX(jl_throw_out_of_memory_error) \
     XX(jl_too_few_args) \
@@ -472,8 +478,10 @@
     XX(jl_tty_set_mode) \
     XX(jl_tupletype_fill) \
     XX(jl_typeassert) \
-    XX(jl_typeinf_begin) \
-    XX(jl_typeinf_end) \
+    XX(jl_typeinf_lock_begin) \
+    XX(jl_typeinf_lock_end) \
+    XX(jl_typeinf_timing_begin) \
+    XX(jl_typeinf_timing_end) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
@@ -515,15 +523,13 @@
     XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
-    XX(jl_setjmp)
+    XX(jl_setjmp) \
 
 // use YY instead of XX to avoid jl -> ijl renaming in libjulia-codegen
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_extern_c) \
-    YY(jl_get_ee_context) \
-    YY(jl_get_llvm_context) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
@@ -541,8 +547,6 @@
     YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
-    YY(jl_lock_profile) \
-    YY(jl_unlock_profile) \
     YY(jl_create_native) \
     YY(jl_dump_compiles) \
     YY(jl_dump_emitted_mi_name) \
@@ -568,3 +572,5 @@
     YY(LLVMExtraAddGCInvariantVerifierPass) \
     YY(LLVMExtraAddDemoteFloat16Pass) \
     YY(LLVMExtraAddCPUFeaturesPass) \
+
+// end of file

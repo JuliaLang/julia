@@ -132,8 +132,20 @@ bimg  = randn(n,2)/2
         @testset "Lyapunov/Sylvester" begin
             x = lyap(a, a2)
             @test -a2 ≈ a*x + x*a'
+            y = lyap(a', a2')
+            @test y ≈ lyap(Array(a'), Array(a2'))
+            @test -a2' ≈ a'y + y*a
+            z = lyap(Tridiagonal(a)', Diagonal(a2))
+            @test z ≈ lyap(Array(Tridiagonal(a)'), Array(Diagonal(a2)))
+            @test -Diagonal(a2) ≈ Tridiagonal(a)'*z + z*Tridiagonal(a)
             x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
             @test -a2[1:3, 4:n] ≈ a[1:3, 1:3]*x2 + x2*a[4:n, 4:n]
+            y2 = sylvester(a[1:3, 1:3]', a[4:n, 4:n]', a2[4:n,1:3]')
+            @test y2 ≈ sylvester(Array(a[1:3, 1:3]'), Array(a[4:n, 4:n]'), Array(a2[4:n,1:3]'))
+            @test -a2[4:n, 1:3]' ≈ a[1:3, 1:3]'*y2 + y2*a[4:n, 4:n]'
+            z2 = sylvester(Tridiagonal(a[1:3, 1:3]), Diagonal(a[4:n, 4:n]), a2[1:3,4:n])
+            @test z2 ≈ sylvester(Array(Tridiagonal(a[1:3, 1:3])), Array(Diagonal(a[4:n, 4:n])), Array(a2[1:3,4:n]))
+            @test -a2[1:3, 4:n] ≈ Tridiagonal(a[1:3, 1:3])*z2 + z2*Diagonal(a[4:n, 4:n])
         end
 
         @testset "Matrix square root" begin
@@ -224,6 +236,15 @@ end
     M = [1 0 0; 0 1 0; 0 0 0]
     @test pinv(M,atol=1)== zeros(3,3)
     @test pinv(M,rtol=0.5)== M
+end
+
+@testset "Test inv of matrix of NaNs" begin
+    for eltya in (NaN16, NaN32, NaN32)
+        r = fill(eltya, 2, 2)
+        @test_throws ArgumentError inv(r)
+        c = fill(complex(eltya, eltya), 2, 2)
+        @test_throws ArgumentError inv(c)
+    end
 end
 
 @testset "test out of bounds triu/tril" begin

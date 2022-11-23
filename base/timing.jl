@@ -16,9 +16,18 @@ struct GC_Num
     collect         ::Csize_t # GC internal
     pause           ::Cint
     full_sweep      ::Cint
+    max_pause       ::Int64
+    max_memory      ::Int64
+    time_to_safepoint             ::Int64
+    max_time_to_safepointp        ::Int64
+    sweep_time      ::Int64
+    mark_time       ::Int64
+    total_sweep_time  ::Int64
+    total_mark_time   ::Int64
 end
 
 gc_num() = ccall(:jl_gc_num, GC_Num, ())
+reset_gc_stats() = ccall(:jl_gc_reset_stats, Cvoid, ())
 
 # This type is to represent differences in the counters, so fields may be negative
 struct GC_Diff
@@ -55,9 +64,21 @@ function gc_alloc_count(diff::GC_Diff)
     diff.malloc + diff.realloc + diff.poolalloc + diff.bigalloc
 end
 
-# cumulative total time spent on compilation, in nanoseconds
-cumulative_compile_time_ns_before() = ccall(:jl_cumulative_compile_time_ns_before, UInt64, ())
-cumulative_compile_time_ns_after() = ccall(:jl_cumulative_compile_time_ns_after, UInt64, ())
+# cumulative total time spent on compilation and recompilation, in nanoseconds
+function cumulative_compile_time_ns()
+    comp = ccall(:jl_cumulative_compile_time_ns, UInt64, ())
+    recomp = ccall(:jl_cumulative_recompile_time_ns, UInt64, ())
+    return comp, recomp
+end
+
+function cumulative_compile_timing(b::Bool)
+    if b
+        ccall(:jl_cumulative_compile_timing_enable, Cvoid, ())
+    else
+        ccall(:jl_cumulative_compile_timing_disable, Cvoid, ())
+    end
+    return
+end
 
 # total time spend in garbage collection, in nanoseconds
 gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
@@ -114,7 +135,7 @@ function format_bytes(bytes) # also used by InteractiveUtils
     end
 end
 
-function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, newline=false, _lpad=true)
+function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, recompile_time=0, newline=false, _lpad=true)
     timestr = Ryu.writefixed(Float64(elapsedtime/1e9), 6)
     str = sprint() do io
         _lpad && print(io, length(timestr) < 10 ? (" "^(10 - length(timestr))) : "")
@@ -142,15 +163,22 @@ function time_print(elapsedtime, bytes=0, gctime=0, allocs=0, compile_time=0, ne
             end
             print(io, Ryu.writefixed(Float64(100*compile_time/elapsedtime), 2), "% compilation time")
         end
+        if recompile_time > 0
+            perc = Float64(100 * recompile_time / compile_time)
+            # use "<1" to avoid the confusing UX of reporting 0% when it's >0%
+            print(io, ": ", perc < 1 ? "<1" : Ryu.writefixed(perc, 0), "% of which was recompilation")
+        end
         parens && print(io, ")")
     end
     newline ? println(str) : print(str)
     nothing
 end
 
-function timev_print(elapsedtime, diff::GC_Diff, compile_time, _lpad)
+function timev_print(elapsedtime, diff::GC_Diff, compile_times, _lpad)
     allocs = gc_alloc_count(diff)
-    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, true, _lpad)
+    compile_time = first(compile_times)
+    recompile_time = last(compile_times)
+    time_print(elapsedtime, diff.allocd, diff.total_time, allocs, compile_time, recompile_time, true, _lpad)
     padded_nonzero_print(elapsedtime,       "elapsed time (ns)")
     padded_nonzero_print(diff.total_time,   "gc time (ns)")
     padded_nonzero_print(diff.allocd,       "bytes allocated")
@@ -181,8 +209,8 @@ end
 
 A macro to execute an expression, printing the time it took to execute, the number of
 allocations, and the total number of bytes its execution caused to be allocated, before
-returning the value of the expression. Any time spent garbage collecting (gc) or
-compiling is shown as a percentage.
+returning the value of the expression. Any time spent garbage collecting (gc), compiling
+new code, or recompiling invalidated code is shown as a percentage.
 
 Optionally provide a description string to print before the time report.
 
@@ -190,8 +218,8 @@ In some cases the system will look inside the `@time` expression and compile som
 called code before execution of the top-level expression begins. When that happens, some
 compilation time will not be counted. To include this time you can run `@time @eval ...`.
 
-See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
-[`@allocated`](@ref).
+See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 !!! note
     For more serious benchmarking, consider the `@btime` macro from the BenchmarkTools.jl
@@ -200,6 +228,8 @@ See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@
 
 !!! compat "Julia 1.8"
     The option to add a description was introduced in Julia 1.8.
+
+    Recompilation time being shown separately from compilation time was introduced in Julia 1.8
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -238,16 +268,18 @@ macro time(msg, ex)
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
-            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
         has_msg && print(_msg, ": ")
-        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), compile_elapsedtime, true, !has_msg)
+        time_print(elapsedtime, diff.allocd, diff.total_time, gc_alloc_count(diff), first(compile_elapsedtimes), last(compile_elapsedtimes), true, !has_msg)
         val
     end
 end
@@ -286,8 +318,8 @@ Optionally provide a description string to print before the time report.
 !!! compat "Julia 1.8"
     The option to add a description was introduced in Julia 1.8.
 
-See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref), and
-[`@allocated`](@ref).
+See also [`@time`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 ```julia-repl
 julia> x = rand(10,10);
@@ -320,16 +352,18 @@ macro timev(msg, ex)
         Experimental.@force_compile
         local stats = gc_num()
         local elapsedtime = time_ns()
-        local compile_elapsedtime = cumulative_compile_time_ns_before()
+        cumulative_compile_timing(true)
+        local compile_elapsedtimes = cumulative_compile_time_ns()
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
-            compile_elapsedtime = cumulative_compile_time_ns_after() - compile_elapsedtime)
+            cumulative_compile_timing(false);
+            compile_elapsedtimes = cumulative_compile_time_ns() .- compile_elapsedtimes)
         )
         local diff = GC_Diff(gc_num(), stats)
         local _msg = $(esc(msg))
         local has_msg = !isnothing(_msg)
         has_msg && print(_msg, ": ")
-        timev_print(elapsedtime, diff, compile_elapsedtime, !has_msg)
+        timev_print(elapsedtime, diff, compile_elapsedtimes, !has_msg)
         val
     end
 end
@@ -345,7 +379,7 @@ called code before execution of the top-level expression begins. When that happe
 compilation time will not be counted. To include this time you can run `@elapsed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
-and [`@allocated`](@ref).
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 ```julia-repl
 julia> @elapsed sleep(0.3)
@@ -376,7 +410,7 @@ end
 A macro to evaluate an expression, discarding the resulting value, instead returning the
 total number of bytes allocated during evaluation of the expression.
 
-See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+See also [`@allocations`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 and [`@elapsed`](@ref).
 
 ```julia-repl
@@ -397,6 +431,33 @@ macro allocated(ex)
 end
 
 """
+    @allocations
+
+A macro to evaluate an expression, discard the resulting value, and instead return the
+total number of allocations during evaluation of the expression.
+
+See also [`@allocated`](@ref), [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
+and [`@elapsed`](@ref).
+
+```julia-repl
+julia> @allocations rand(10^6)
+2
+```
+
+!!! compat "Julia 1.9"
+    This macro was added in Julia 1.9.
+"""
+macro allocations(ex)
+    quote
+        Experimental.@force_compile
+        local stats = Base.gc_num()
+        $(esc(ex))
+        local diff = Base.GC_Diff(Base.gc_num(), stats)
+        Base.gc_alloc_count(diff)
+    end
+end
+
+"""
     @timed
 
 A macro to execute an expression, and return the value of the expression, elapsed time,
@@ -407,8 +468,8 @@ In some cases the system will look inside the `@timed` expression and compile so
 called code before execution of the top-level expression begins. When that happens, some
 compilation time will not be counted. To include this time you can run `@timed @eval ...`.
 
-See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref), and
-[`@allocated`](@ref).
+See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
+[`@allocated`](@ref), and [`@allocations`](@ref).
 
 ```julia-repl
 julia> stats = @timed rand(10^6);

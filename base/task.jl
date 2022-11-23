@@ -251,6 +251,10 @@ true
 istaskfailed(t::Task) = (load_state_acquire(t) === task_state_failed)
 
 Threads.threadid(t::Task) = Int(ccall(:jl_get_task_tid, Int16, (Any,), t)+1)
+function Threads.threadpool(t::Task)
+    tpid = ccall(:jl_get_task_threadpoolid, Int8, (Any,), t)
+    return tpid == 0 ? :default : :interactive
+end
 
 task_result(t::Task) = t.result
 
@@ -347,6 +351,11 @@ function wait(t::Task)
     nothing
 end
 
+"""
+    fetch(x::Any)
+
+Return `x`.
+"""
 fetch(@nospecialize x) = x
 
 """
@@ -415,19 +424,21 @@ function sync_end(c::Channel{Any})
     # Capture all waitable objects scheduled after the end of `@sync` and
     # include them in the exception. This way, the user can check what was
     # scheduled by examining at the exception object.
-    local racy
-    for r in c
-        if !@isdefined(racy)
-            racy = []
+    if isready(c)
+        local racy
+        for r in c
+            if !@isdefined(racy)
+                racy = []
+            end
+            push!(racy, r)
         end
-        push!(racy, r)
-    end
-    if @isdefined(racy)
-        if !@isdefined(c_ex)
-            c_ex = CompositeException()
+        if @isdefined(racy)
+            if !@isdefined(c_ex)
+                c_ex = CompositeException()
+            end
+            # Since this is a clear programming error, show this exception first:
+            pushfirst!(c_ex, ScheduledAfterSyncException(racy))
         end
-        # Since this is a clear programming error, show this exception first:
-        pushfirst!(c_ex, ScheduledAfterSyncException(racy))
     end
 
     if @isdefined(c_ex)
@@ -441,9 +452,22 @@ const sync_varname = gensym(:sync)
 """
     @sync
 
-Wait until all lexically-enclosed uses of `@async`, `@spawn`, `@spawnat` and `@distributed`
+Wait until all lexically-enclosed uses of [`@async`](@ref), [`@spawn`](@ref Threads.@spawn), `@spawnat` and `@distributed`
 are complete. All exceptions thrown by enclosed async operations are collected and thrown as
-a `CompositeException`.
+a [`CompositeException`](@ref).
+
+# Examples
+```julia-repl
+julia> Threads.nthreads()
+4
+
+julia> @sync begin
+           Threads.@spawn println("Thread-id \$(Threads.threadid()), task 1")
+           Threads.@spawn println("Thread-id \$(Threads.threadid()), task 2")
+       end;
+Thread-id 3, task 1
+Thread-id 1, task 2
+```
 """
 macro sync(block)
     var = esc(sync_varname)
@@ -502,7 +526,7 @@ function do_async_macro(expr; wrap=identity)
 end
 
 # task wrapper that doesn't create exceptions wrapped in TaskFailedException
-struct UnwrapTaskFailedException
+struct UnwrapTaskFailedException <: Exception
     task::Task
 end
 
@@ -534,6 +558,14 @@ end
     errormonitor(t::Task)
 
 Print an error log to `stderr` if task `t` fails.
+
+# Examples
+```julia-repl
+julia> Base._wait(errormonitor(Threads.@spawn error("task failed")))
+Unhandled Task ERROR: task failed
+Stacktrace:
+[...]
+```
 """
 function errormonitor(t::Task)
     t2 = Task() do
@@ -656,14 +688,14 @@ end
 
 ## scheduler and work queue
 
-struct InvasiveLinkedListSynchronized{T}
-    queue::InvasiveLinkedList{T}
+struct IntrusiveLinkedListSynchronized{T}
+    queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
-    InvasiveLinkedListSynchronized{T}() where {T} = new(InvasiveLinkedList{T}(), Threads.SpinLock())
+    IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
-isempty(W::InvasiveLinkedListSynchronized) = isempty(W.queue)
-length(W::InvasiveLinkedListSynchronized) = length(W.queue)
-function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
+length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
+function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         push!(W.queue, t)
@@ -672,7 +704,7 @@ function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         pushfirst!(W.queue, t)
@@ -681,7 +713,7 @@ function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pop!(W::InvasiveLinkedListSynchronized)
+function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return pop!(W.queue)
@@ -689,7 +721,7 @@ function pop!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function popfirst!(W::InvasiveLinkedListSynchronized)
+function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return popfirst!(W.queue)
@@ -697,7 +729,7 @@ function popfirst!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         list_deletefirst!(W.queue, t)
@@ -707,30 +739,36 @@ function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     return W
 end
 
-const StickyWorkqueue = InvasiveLinkedListSynchronized{Task}
-global const Workqueues = [StickyWorkqueue()]
-global const Workqueue = Workqueues[1] # default work queue is thread 1
-function __preinit_threads__()
-    nt = Threads.nthreads()
-    if length(Workqueues) < nt
-        resize!(Workqueues, nt)
-        for i = 2:nt
-            Workqueues[i] = StickyWorkqueue()
-        end
+const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
+global Workqueues::Vector{StickyWorkqueue} = [StickyWorkqueue()]
+const Workqueues_lock = Threads.SpinLock()
+const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
+
+function workqueue_for(tid::Int)
+    qs = Workqueues
+    if length(qs) >= tid && isassigned(qs, tid)
+        return @inbounds qs[tid]
     end
-    Partr.multiq_init(nt)
-    nothing
+    # slow path to allocate it
+    l = Workqueues_lock
+    @lock l begin
+        qs = Workqueues
+        if length(qs) < tid
+            nt = Threads.maxthreadid()
+            @assert tid <= nt
+            global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
+        end
+        if !isassigned(qs, tid)
+            @inbounds qs[tid] = StickyWorkqueue()
+        end
+        return @inbounds qs[tid]
+    end
 end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    tid = Threads.threadid(t)
-    # Note there are three reasons a Task might be put into a sticky queue
-    # even if t.sticky == false:
-    # 1. The Task's stack is currently being used by the scheduler for a certain thread.
-    # 2. There is only 1 thread.
-    # 3. The multiq is full (can be fixed by making it growable).
-    if t.sticky || Threads.nthreads() == 1
+    if t.sticky || Threads.threadpoolsize() == 1
+        tid = Threads.threadid(t)
         if tid == 0
             # Issue #41324
             # t.sticky && tid == 0 is a task that needs to be co-scheduled with
@@ -741,18 +779,10 @@ function enq_work(t::Task)
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
-        push!(Workqueues[tid], t)
+        push!(workqueue_for(tid), t)
     else
-        if !Partr.multiq_insert(t, t.priority)
-            # if multiq is full, give to a random thread (TODO fix)
-            if tid == 0
-                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
-            end
-            push!(Workqueues[tid], t)
-        else
-            tid = 0
-        end
+        Partr.multiq_insert(t, t.priority)
+        tid = 0
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
@@ -893,12 +923,12 @@ end
 
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
-    W = Workqueues[Threads.threadid()]
+    W = workqueue_for(Threads.threadid())
     if ct !== othertask && othertask._state === task_state_runnable
         # we failed to yield to othertask
         # return it to the head of a queue to be retried later
         tid = Threads.threadid(othertask)
-        Wother = tid == 0 ? W : Workqueues[tid]
+        Wother = tid == 0 ? W : workqueue_for(tid)
         pushfirst!(Wother, othertask)
     end
     # if the current task was queued,
@@ -917,7 +947,7 @@ function trypoptask(W::StickyWorkqueue)
             # can't throw here, because it's probably not the fault of the caller to wait
             # and don't want to use print() here, because that may try to incur a task switch
             ccall(:jl_safe_printf, Cvoid, (Ptr{UInt8}, Int32...),
-                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n")
+                "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n")
             continue
         end
         return t
@@ -925,9 +955,7 @@ function trypoptask(W::StickyWorkqueue)
     return Partr.multiq_deletemin()
 end
 
-function checktaskempty()
-    return Partr.multiq_check_empty()
-end
+checktaskempty = Partr.multiq_check_empty
 
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
@@ -940,7 +968,7 @@ end
 
 function wait()
     GC.safepoint()
-    W = Workqueues[Threads.threadid()]
+    W = workqueue_for(Threads.threadid())
     poptask(W)
     result = try_yieldto(ensure_rescheduled)
     process_events()

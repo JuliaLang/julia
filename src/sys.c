@@ -27,6 +27,9 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <grp.h>
+
+// For `struct termios`
+#include <termios.h>
 #endif
 
 #ifndef _OS_WINDOWS_
@@ -56,12 +59,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_GCC_)
-JL_DLLEXPORT char *dirname(char *);
-#else
-#include <libgen.h>
 #endif
 
 JL_DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
@@ -436,7 +433,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #endif
 }
 
-int jl_effective_threads(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
     int cpu = jl_cpu_threads();
     int masksize = uv_cpumask_size();
@@ -519,6 +516,14 @@ JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 JL_DLLEXPORT JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_DLLEXPORT JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
 JL_DLLEXPORT JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
+
+JL_DLLEXPORT int jl_termios_size(void) {
+#if defined(_OS_WINDOWS_)
+    return 0;
+#else
+    return sizeof(struct termios);
+#endif
+}
 
 // -- processor native alignment information --
 
@@ -719,6 +724,40 @@ JL_DLLEXPORT size_t jl_maxrss(void)
 #else
     return (size_t)0;
 #endif
+}
+
+// Simple `rand()` like function, with global seed and added thread-safety
+// (but slow and insecure)
+static _Atomic(uint64_t) g_rngseed;
+JL_DLLEXPORT uint64_t jl_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t max = UINT64_MAX;
+    uint64_t unbias = UINT64_MAX;
+    uint64_t rngseed0 = jl_atomic_load_relaxed(&g_rngseed);
+    uint64_t rngseed;
+    uint64_t rnd;
+    do {
+        rngseed = rngseed0;
+        rnd = cong(max, unbias, &rngseed);
+    } while (!jl_atomic_cmpswap_relaxed(&g_rngseed, &rngseed0, rngseed));
+    return rnd;
+}
+
+JL_DLLEXPORT void jl_srand(uint64_t rngseed) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_relaxed(&g_rngseed, rngseed);
+}
+
+void jl_init_rand(void) JL_NOTSAFEPOINT
+{
+    uint64_t rngseed;
+    if (uv_random(NULL, NULL, &rngseed, sizeof(rngseed), 0, NULL)) {
+        ios_puts("WARNING: Entropy pool not available to seed RNG; using ad-hoc entropy sources.\n", ios_stderr);
+        rngseed = uv_hrtime();
+        rngseed ^= int64hash(uv_os_getpid());
+    }
+    jl_srand(rngseed);
+    srand(rngseed);
 }
 
 #ifdef __cplusplus

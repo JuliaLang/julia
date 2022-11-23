@@ -66,6 +66,7 @@ USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
 USE_SYSTEM_P7ZIP:=0
+USE_SYSTEM_LLD:=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB := 1
@@ -76,7 +77,7 @@ JULIA_THREADS := 1
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
-# USE_PERF_JITEVENTS defined below since default is OS specific
+# USE_PERF_JITEVENTS, and USE_INTEL_JITEVENTS defined below since default is OS specific
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
@@ -133,23 +134,6 @@ endif
 endif
 export BUILDROOT
 unexport O
-
-# Make sure the user didn't try to specify a path that will confuse the shell / make
-METACHARACTERS := ][?*{}() $$%:;&|!\#,\\`\":
-ifneq (,$(findstring ',$(value BUILDROOT)))
-$(error cowardly refusing to build into directory with a single-quote in the path)
-endif
-ifneq (,$(findstring ',$(value JULIAHOME)))
-$(error cowardly refusing to build from source directory with a single-quote in the path)
-endif
-ifneq (,$(shell echo '$(value BUILDROOT)' | grep '[$(METACHARACTERS)]'))
-$(error cowardly refusing to build into directory with a shell-metacharacter in the path\
-    (got: $(value BUILDROOT)))
-endif
-ifneq (,$(shell echo '$(value JULIAHOME)' | grep '[$(METACHARACTERS)]'))
-$(error cowardly refusing to build from source directory with a shell-metacharacter in the path\
-    (got: $(value JULIAHOME)))
-endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
@@ -347,6 +331,7 @@ BUILD_LLVM_CLANG := 0
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB := 0
 BUILD_LIBCXX := 0
+BUILD_LLD := 1
 
 # Options to enable Polly and its code-generation options
 USE_POLLY := 0
@@ -440,8 +425,10 @@ endif
 # Set to 1 to enable profiling with perf
 ifeq ("$(OS)", "Linux")
 USE_PERF_JITEVENTS ?= 1
+USE_INTEL_JITEVENTS ?= 1
 else
 USE_PERF_JITEVENTS ?= 0
+USE_INTEL_JITEVENTS ?= 0
 endif
 
 JULIACODEGEN := LLVM
@@ -450,8 +437,8 @@ JULIACODEGEN := LLVM
 ifeq ($(FORCE_ASSERTIONS), 1)
 # C++ code needs to include LLVM header with the same assertion flag as LLVM
 # Use this flag to re-enable assertion in our code after all the LLVM headers are included
-CXX_DISABLE_ASSERTION :=
-DISABLE_ASSERTIONS :=
+CXX_DISABLE_ASSERTION := -DJL_VERIFY_PASSES
+DISABLE_ASSERTIONS := -DJL_VERIFY_PASSES
 else
 CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
@@ -689,7 +676,7 @@ SANITIZE_OPTS += -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-fra
 SANITIZE_LDFLAGS += $(SANITIZE_OPTS)
 endif
 ifeq ($(SANITIZE_ADDRESS),1)
-SANITIZE_OPTS += -fsanitize=address -mllvm -asan-stack=0
+SANITIZE_OPTS += -fsanitize=address
 SANITIZE_LDFLAGS += -fsanitize=address
 endif
 ifeq ($(SANITIZE_THREAD),1)
@@ -705,7 +692,7 @@ JLDFLAGS += $(SANITIZE_LDFLAGS)
 endif # SANITIZE
 
 TAR := $(shell which gtar 2>/dev/null || which tar 2>/dev/null)
-TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
+TAR_TEST := $(shell $(TAR) --help 2>&1  | grep -E 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
@@ -772,6 +759,8 @@ else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
 $(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
 else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
 $(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
+else ifneq (,$(findstring MSYS,$(shell uname)))
+$(error "cannot build julia from a msys shell. please launch a mingw shell instead by setting MSYSTEM=MINGW64")
 endif
 
 ifeq ($(BUILD_OS),Darwin)
@@ -898,10 +887,6 @@ OPENBLAS_DYNAMIC_ARCH:=0
 OPENBLAS_TARGET_ARCH:=ARMV8
 USE_BLAS64:=1
 BINARY:=64
-ifeq ($(OS),Darwin)
-# Apple Chips are all at least A12Z
-MCPU:=apple-m1
-endif
 endif
 
 # Set MARCH-specific flags
@@ -1140,8 +1125,11 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
-FC_VERSION := $(shell $(FC) --version 2>/dev/null | head -1)
-FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
+FC_VERSION := $(shell $(FC) -dM -E - < /dev/null | grep __GNUC__ | cut -d' ' -f3)
+ifeq ($(USEGCC)$(FC_VERSION),1)
+FC_OR_CC_VERSION := $(shell $(CC) -dumpfullversion -dumpversion 2>/dev/null | cut -d'.' -f1)
+# n.b. clang's __GNUC__ macro pretends to be gcc 4.2.1, so leave it as the empty string here if the compiler is not certain to be GCC
+endif
 BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
@@ -1149,11 +1137,34 @@ BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(s
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
 
+# CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
+# the next libstdc++ version would be. This is used for two things.
+# 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL
+# 2. To know which libstdc++ to load at runtime
+# We want whichever libstdc++ library is newer, because if we don't it can cause problems.
+# While what CSL bundles is quite bleeding-edge compared to what most distros ship, if someone
+# tries to build an older branch of Julia, the version of CSL that ships with it may be
+# relatively old. This is not a problem for code that is built in BB, but when we build Julia
+# with the system compiler, that compiler uses the version of `libstdc++` that it is bundled
+# with, and we can get linker errors when trying to run that `julia` executable with the
+# `libstdc++` that comes from the (now old) BB-built CSL.
+# To fix this, we take note when the system `libstdc++.so` is newer than whatever we
+# would get from CSL (by searching for a `GLIBCXX_X.Y.Z` symbol that does not exist
+# in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
+# this case. This ensures that we link against a version with the symbols required.
+# We also check the system libstdc++ at runtime in the cli loader library, and
+# load it if it contains the version symbol that indicates that it is newer than the one
+# shipped with CSL. Although we do not depend on any of the symbols, it is entirely
+# possible that a user might choose to install a library which depends on symbols provided
+# by a newer libstdc++. Without runtime detection, those libraries would break.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
+
+
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP MBEDTLS LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
@@ -1205,18 +1216,16 @@ ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
-  RPATH_LIB :=
 else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/'
 else
-  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
-  RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/' -Wl,-z,origin
+  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin -Wl,--enable-new-dtags
+  RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin -Wl,--enable-new-dtags
+  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir) -Wl,--enable-new-dtags
 endif
+RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
@@ -1226,6 +1235,9 @@ else
   WHOLE_ARCHIVE := -Wl,--whole-archive
   NO_WHOLE_ARCHIVE := -Wl,--no-whole-archive
 endif
+
+# Initialize these once, then add to them in OS-specific blocks
+JLIBLDFLAGS :=
 
 ifeq ($(OS), Linux)
 OSLIBS += -Wl,--no-as-needed -ldl -lrt -lpthread -latomic -Wl,--export-dynamic,--as-needed,--no-whole-archive
@@ -1240,14 +1252,14 @@ ifneq ($(SANITIZE),1)
 JLDFLAGS += -Wl,-no-undefined
 endif
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
-JLIBLDFLAGS := -Wl,-Bsymbolic-functions
-else
-JLIBLDFLAGS :=
+JLIBLDFLAGS += -Wl,-Bsymbolic-functions
 endif
+ifeq (--enable-new-dtags, $(shell $(LD) --help | grep -o -e "--enable-new-dtags"))
+JLIBLDFLAGS += -Wl,--enable-new-dtags
+endif
+
 # Linker doesn't detect automatically that Julia doesn't need executable stack
 JLIBLDFLAGS += -Wl,-z,noexecstack
-else ifneq ($(OS), Darwin)
-JLIBLDFLAGS :=
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -1270,7 +1282,7 @@ OSLIBS += -framework CoreFoundation
 WHOLE_ARCHIVE := -Xlinker -all_load
 NO_WHOLE_ARCHIVE :=
 HAVE_SSP := 1
-JLIBLDFLAGS := -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
+JLIBLDFLAGS += -Wl,-compatibility_version,$(SOMAJOR) -Wl,-current_version,$(JULIA_MAJOR_VERSION).$(JULIA_MINOR_VERSION).$(JULIA_PATCH_VERSION)
 endif
 
 ifeq ($(OS), WINNT)
@@ -1283,7 +1295,13 @@ JLDFLAGS += -Wl,--large-address-aware
 endif
 JCPPFLAGS += -D_WIN32_WINNT=0x0502
 UNTRUSTED_SYSTEM_LIBM := 1
-endif
+# Use hard links for files on windows, rather than soft links
+#   https://stackoverflow.com/questions/3648819/how-to-make-a-symbolic-link-with-cygwin-in-windows-7
+# Usage: $(WIN_MAKE_HARD_LINK) <source> <target>
+WIN_MAKE_HARD_LINK := cp --dereference --link --force
+else
+WIN_MAKE_HARD_LINK := true -ignore
+endif # $(OS) == WINNT
 
 # Threads
 ifneq ($(JULIA_THREADS), 0)
@@ -1366,7 +1384,6 @@ CLANGSA_FLAGS :=
 CLANGSA_CXXFLAGS :=
 ifeq ($(OS), Darwin) # on new XCode, the files are hidden
 CLANGSA_FLAGS += -isysroot $(shell xcode-select -p)/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-CLANGSA_CXXFLAGS += -isystem $(shell xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1
 endif
 ifeq ($(USEGCC),1)
 # try to help clang find the c++ files for CC by guessing the value for --prefix
@@ -1392,17 +1409,17 @@ define symlink_target # (from, to-dir, to-name)
 CLEAN_TARGETS += clean-$$(abspath $(2)/$(3))
 clean-$$(abspath $(2)/$(3)):
 ifeq ($(BUILD_OS), WINNT)
-	-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&)
+	-cmd //C rmdir $$(call cygpath_w,$(2)/$(3))
 else
-	-rm -r $$(abspath $(2)/$(3))
+	rm -rf $$(abspath $(2)/$(3))
 endif
 $$(abspath $(2)/$(3)): | $$(abspath $(2))
 ifeq ($$(BUILD_OS), WINNT)
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(3),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+	@cmd //C mklink //J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifneq (,$$(findstring CYGWIN,$$(BUILD_OS)))
 	@cmd /C mklink /J $$(call cygpath_w,$(2)/$(3)) $$(call cygpath_w,$(1))
 else ifdef JULIA_VAGRANT_BUILD
-	@rm -r $$@
+	@rm -rf $$@
 	@cp -R $$(abspath $(1)) $$@.tmp
 	@mv $$@.tmp $$@
 else
@@ -1416,7 +1433,7 @@ WINE ?= wine
 # many of the following targets must be = not := because the expansion of the makefile functions (and $1) shouldn't happen until later
 ifeq ($(BUILD_OS), WINNT) # MSYS
 spawn = $(1)
-cygpath_w = $(1)
+cygpath_w = `cygpath -w $(1)`
 else ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # Cygwin
 spawn = $(1)
 cygpath_w = `cygpath -w $(1)`
@@ -1470,11 +1487,17 @@ else
 LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
 endif
 endif
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
 ifeq ($(OS),Darwin)
 ifeq ($(ARCH),aarch64)
 LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
 else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
+else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
 endif
 endif
 ifneq ($(findstring $(OS),Linux FreeBSD),)

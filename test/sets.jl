@@ -115,7 +115,7 @@ end
     @test in(2,s)
     @test length(s) == 2
     @test_throws KeyError pop!(s,1)
-    @test pop!(s,1,:foo) == :foo
+    @test pop!(s,1,:foo) === :foo
     @test length(delete!(s,2)) == 1
     @test !in(1,s)
     @test !in(2,s)
@@ -393,9 +393,10 @@ end
     @test symdiff(Set([1]), BitSet()) isa Set{Int}
     @test symdiff(BitSet([1]), Set{Int}()) isa BitSet
     @test symdiff([1], BitSet()) isa Vector{Int}
-    # symdiff must NOT uniquify
-    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [2]
-    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [2]
+    #symdiff does uniquify
+    @test symdiff([1, 2, 1]) == symdiff!([1, 2, 1]) == [1,2]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
+    @test symdiff([1, 2, 1], [2, 2]) == symdiff!([1, 2, 1], [2, 2]) == [1]
 
     # Base.hasfastin
     @test all(Base.hasfastin, Any[Dict(1=>2), Set(1), BitSet(1), 1:9, 1:2:9,
@@ -426,6 +427,9 @@ end
     @test in(1, u)
     @test in(2, u)
     @test length(u) == 2
+    @test unique(iseven, []) == []
+    # type promotion
+    @test unique(x -> x^2, [1, 3.]) == [1, 3.]
     @test @inferred(unique(iseven, [5, 1, 8, 9, 3, 4, 10, 7, 2, 6])) == [5, 8]
     @test @inferred(unique(x->x^2, Integer[3, -4, 5, 4])) == Integer[3, -4, 5]
     @test @inferred(unique(iseven, Integer[3, -4, 5, 4]; seen=Set{Bool}())) == Integer[3, -4]
@@ -448,6 +452,8 @@ end
 end
 
 @testset "unique!" begin
+    u = []
+    @test unique!(u) === u
     u = [1,1,3,2,1]
     @inferred(unique!(u))
     @test u == [1,3,2]
@@ -494,10 +500,23 @@ end
     @test allunique([])
     @test allunique(Set())
     @test allunique([1,2,3])
+    @test allunique([1 2; 3 4])
     @test allunique([:a,:b,:c])
     @test allunique(Set([1,2,3]))
     @test !allunique([1,1,2])
     @test !allunique([:a,:b,:c,:a])
+    @test allunique(unique(randn(100)))  # longer than 32
+    @test allunique(collect('A':'z')) # 58-element Vector{Char}
+    @test !allunique(repeat(1:99, 1, 2))
+    @test !allunique(vcat(pi, randn(1998), pi))  # longer than 1000
+    @test allunique(eachrow(hcat(1:10, 1:10)))
+    @test allunique(x for x in 'A':'Z' if randn()>0)
+    @test !allunique(x for x in repeat(1:2000, 3) if true)
+    @test allunique([0.0, -0.0])
+    @test allunique(x for x in [0.0, -0.0] if true)
+    @test !allunique([NaN, NaN])
+    @test !allunique(x for x in [NaN, NaN] if true)
+    # ranges
     @test allunique(4:7)
     @test allunique(1:1)
     @test allunique(4.0:0.3:7.0)
@@ -506,6 +525,7 @@ end
     @test allunique(Date(2018, 8, 7):Day(1):Date(2018, 8, 11))  # JuliaCon 2018
     @test allunique(DateTime(2018, 8, 7):Hour(1):DateTime(2018, 8, 11))
     @test allunique(('a':1:'c')[1:2]) == true
+    @test allunique(collect(1:1001))
     for r = (Base.OneTo(-1), Base.OneTo(0), Base.OneTo(1), Base.OneTo(5),
              1:0, 1:1, 1:2, 1:10, 1:.5:.5, 1:.5:1, 1:.5:10, 3:-2:5, 3:-2:3, 3:-2:1,
              StepRangeLen(1.0, 2.0, 0), StepRangeLen(1.0, 2.0, 2), StepRangeLen(1.0, 2.0, 3),
@@ -513,6 +533,13 @@ end
              LinRange(1, 2, 3), LinRange(1, 1, 0), LinRange(1, 1, 1), LinRange(1, 1, 10))
         @test allunique(r) == invoke(allunique, Tuple{Any}, r)
     end
+    # tuples
+    @test allunique(())
+    @test allunique((1,2,3))
+    @test allunique(ntuple(identity, 40))
+    @test !allunique((1,2,3,4,3))
+    @test allunique((0.0, -0.0))
+    @test !allunique((NaN, NaN))
 end
 
 @testset "allequal" begin

@@ -20,14 +20,14 @@ const C_NULL = bitcast(Ptr{Cvoid}, 0)
 # TODO: deprecate these conversions. C doesn't even allow them.
 
 # pointer to integer
-convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))
+convert(::Type{T}, x::Ptr) where {T<:Integer} = T(UInt(x))::T
 
 # integer to pointer
 convert(::Type{Ptr{T}}, x::Union{Int,UInt}) where {T} = Ptr{T}(x)
 
 # pointer to pointer
 convert(::Type{Ptr{T}}, p::Ptr{T}) where {T} = p
-convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)
+convert(::Type{Ptr{T}}, p::Ptr) where {T} = bitcast(Ptr{T}, p)::Ptr{T}
 
 # object to pointer (when used with ccall)
 
@@ -92,7 +92,8 @@ function unsafe_wrap(::Union{Type{Array},Type{Array{T}},Type{Array{T,1}}},
     ccall(:jl_ptr_to_array_1d, Array{T,1},
           (Any, Ptr{Cvoid}, Csize_t, Cint), Array{T,1}, p, d, own)
 end
-unsafe_wrap(Atype::Type, p::Ptr, dims::NTuple{N,<:Integer}; own::Bool = false) where {N} =
+unsafe_wrap(Atype::Union{Type{Array},Type{Array{T}},Type{Array{T,N}}},
+            p::Ptr{T}, dims::NTuple{N,<:Integer}; own::Bool = false) where {T,N} =
     unsafe_wrap(Atype, p, convert(Tuple{Vararg{Int}}, dims), own = own)
 
 """

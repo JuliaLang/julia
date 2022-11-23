@@ -149,7 +149,7 @@ bool jl_atomic_cmpswap_explicit(std::atomic<T> *ptr, T *expected, S val, std::me
 {
      return std::atomic_compare_exchange_strong_explicit<T>(ptr, expected, val, order, order);
 }
-#define jl_atomic_cmpswap_relaxed(ptr, val) jl_atomic_cmpswap_explicit(ptr, val, memory_order_relaxed)
+#define jl_atomic_cmpswap_relaxed(ptr, expected, val) jl_atomic_cmpswap_explicit(ptr, expected, val, memory_order_relaxed)
 template<class T, class S>
 T jl_atomic_exchange(std::atomic<T> *ptr, S desired)
 {

@@ -10,7 +10,7 @@ mktempdir() do tempdir
             @test isdir(socrates_dir)
         end
         ex = @test_throws ErrorException artifact"HelloWorldC"
-        @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not installed correctly. ")
+        @test startswith(ex.value.msg, "Artifact \"HelloWorldC\" was not found")
     end
 end
 

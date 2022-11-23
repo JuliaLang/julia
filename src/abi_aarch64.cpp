@@ -43,9 +43,11 @@ Type *get_llvm_vectype(jl_datatype_t *dt, LLVMContext &ctx) const
     // the homogeneity check.
     jl_datatype_t *ft0 = (jl_datatype_t*)jl_field_type(dt, 0);
     // `ft0` should be a `VecElement` type and the true element type
-    // should be a primitive type
-    if (ft0->name != jl_vecelement_typename ||
-        ((jl_datatype_t*)jl_field_type(ft0, 0))->layout->nfields)
+    // should be a primitive type (nfields == 0)
+    if (!jl_is_datatype(ft0) || ft0->name != jl_vecelement_typename)
+        return nullptr;
+    jl_datatype_t *ft00 = (jl_datatype_t*)jl_field_type(ft0, 0);
+    if (!jl_is_datatype(ft00) || ft00->layout->nfields)
         return nullptr;
     for (size_t i = 1; i < nfields; i++) {
         if (jl_field_type(dt, i) != (jl_value_t*)ft0) {
@@ -120,15 +122,17 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, L
         // For composite types, find the first non zero sized member
         size_t i;
         size_t fieldsz;
-        for (i = 0;i < nfields;i++) {
+        for (i = 0; i < nfields; i++) {
             if ((fieldsz = jl_field_size(dt, i))) {
                 break;
             }
         }
         assert(i < nfields);
-        // If there's only one non zero sized member, try again on this member
+        // If there's only one non-zero sized member, try again on this member
         if (fieldsz == dsz) {
             dt = (jl_datatype_t*)jl_field_type(dt, i);
+            if (!jl_is_datatype(dt))
+                return false;
             continue;
         }
         if (Type *vectype = get_llvm_vectype(dt, ctx)) {
@@ -140,11 +144,13 @@ bool isHFAorHVA(jl_datatype_t *dt, size_t dsz, size_t &nele, ElementType &ele, L
             return true;
         }
         // Otherwise, process each members
-        for (;i < nfields;i++) {
+        for (; i < nfields; i++) {
             size_t fieldsz = jl_field_size(dt, i);
             if (fieldsz == 0)
                 continue;
             jl_datatype_t *fieldtype = (jl_datatype_t*)jl_field_type(dt, i);
+            if (!jl_is_datatype(dt))
+                return false;
             // Check element count.
             // This needs to be done after the zero size member check
             if (nele > 3 || !isHFAorHVA(fieldtype, fieldsz, nele, ele, ctx)) {

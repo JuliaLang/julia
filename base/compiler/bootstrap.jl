@@ -7,9 +7,7 @@
 
 time() = ccall(:jl_clock_now, Float64, ())
 
-let
-    world = get_world_counter()
-    interp = NativeInterpreter(world)
+let interp = NativeInterpreter()
 
     analyze_escapes_tt = Tuple{typeof(analyze_escapes), IRCode, Int, Bool, typeof(null_escape_cache)}
     fs = Any[

@@ -12,26 +12,19 @@ using InteractiveUtils: apropos
 include("testenv.jl")
 
 # Test helpers.
-function docstrings_equal(d1, d2)
+function docstrings_equal(d1, d2; debug=true)
     io1 = IOBuffer()
     io2 = IOBuffer()
     show(io1, MIME"text/markdown"(), d1)
     show(io2, MIME"text/markdown"(), d2)
     s1 = String(take!(io1))
     s2 = String(take!(io2))
-    #if s1 != s2 # for debugging
-    #    e1 = eachline(IOBuffer(s1))
-    #    e2 = eachline(IOBuffer(s2))
-    #    for (l1, l2) in zip(e1, e2)
-    #        l1 == l2 || println(l1, "\n", l2, "\n")
-    #    end
-    #    for l1 in e1
-    #        println(l1, "\n[missing]\n")
-    #    end
-    #    for l2 in e2
-    #        println("[missing]\n", l2, "\n")
-    #    end
-    #end
+    if debug && s1 != s2
+        print(s1)
+        println("--------------------------------------------------------------------------------")
+        print(s2)
+        println("================================================================================")
+    end
     return s1 == s2
 end
 docstrings_equal(d1::DocStr, d2) = docstrings_equal(parsedoc(d1), d2)
@@ -177,7 +170,7 @@ t(::AbstractString)
 "t-2"
 t(::Int, ::Any)
 "t-3"
-t{S <: Integer}(::S)
+t(::S) where {S <: Integer}
 
 # Docstrings to parametric methods after definition using where syntax (#32960):
 tw(x::T) where T = nothing
@@ -357,7 +350,7 @@ let d1 = @doc(DocsTest.t(::Int, ::Any)),
     @test docstrings_equal(d1,d2)
 end
 
-let d1 = @doc(DocsTest.t{S <: Integer}(::S)),
+let d1 = @doc(DocsTest.t(::S) where {S <: Integer}),
     d2 = doc"t-3"
     @test docstrings_equal(d1,d2)
 end
@@ -655,7 +648,7 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix)@m2_11993` is a macro.")
+    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found.
 
@@ -723,7 +716,7 @@ f12593_2() = 1
 
 # crude test to make sure we sort docstring output by method specificity
 @test !docstrings_equal(Docs.doc(getindex, Tuple{Dict{Int,Int},Int}),
-                        Docs.doc(getindex, Tuple{Type{Int64},Int}))
+                        Docs.doc(getindex, Tuple{Type{Int64},Int}); debug=false)
 
 # test that macro documentation works
 @test (@repl :@assert) !== nothing
@@ -794,7 +787,7 @@ end
 # Issue #13905.
 let err = try; @macroexpand(@doc "" f() = @x); false; catch ex; ex; end
     err::UndefVarError
-    @test err.var == Symbol("@x")
+    @test err.var === Symbol("@x")
  end
 
 
@@ -1209,11 +1202,11 @@ end
 
 import Base.Docs: @var, Binding, defined
 
-let x = Binding(Base, Symbol("@time"))
+let x = Binding(Base, Symbol("@inline"))
     @test defined(x) == true
-    @test @var(@time) == x
-    @test @var(Base.@time) == x
-    @test @var(Base.Iterators.@time) == x
+    @test @var(@inline) == x
+    @test @var(Base.@inline) == x
+    @test @var(Base.Iterators.@inline) == x
 end
 
 let x = Binding(Iterators, :enumerate)
@@ -1302,9 +1295,9 @@ dynamic_test.x = "test 2"
 function striptrimdocs(expr)
     if Meta.isexpr(expr, :call)
         fex = expr.args[1]
-        if Meta.isexpr(fex, :.) && fex.args[1] == :REPL
+        if Meta.isexpr(fex, :.) && fex.args[1] === :REPL
             fmex = fex.args[2]
-            if isa(fmex, QuoteNode) && fmex.value == :trimdocs
+            if isa(fmex, QuoteNode) && fmex.value === :trimdocs
                 expr = expr.args[2]
             end
         end
@@ -1316,28 +1309,28 @@ let dt1 = striptrimdocs(_repl(:(dynamic_test(1.0))))
     @test dt1 isa Expr
     @test dt1.args[1] isa Expr
     @test dt1.args[1].head === :macrocall
-    @test dt1.args[1].args[1] == Symbol("@doc")
+    @test dt1.args[1].args[1] === Symbol("@doc")
     @test dt1.args[1].args[3] == :(dynamic_test(::typeof(1.0)))
 end
 let dt2 = striptrimdocs(_repl(:(dynamic_test(::String))))
     @test dt2 isa Expr
     @test dt2.args[1] isa Expr
     @test dt2.args[1].head === :macrocall
-    @test dt2.args[1].args[1] == Symbol("@doc")
+    @test dt2.args[1].args[1] === Symbol("@doc")
     @test dt2.args[1].args[3] == :(dynamic_test(::String))
 end
 let dt3 = striptrimdocs(_repl(:(dynamic_test(a))))
     @test dt3 isa Expr
     @test dt3.args[1] isa Expr
     @test dt3.args[1].head === :macrocall
-    @test dt3.args[1].args[1] == Symbol("@doc")
-    @test dt3.args[1].args[3].args[2].head == :(::) # can't test equality due to line numbers
+    @test dt3.args[1].args[1] === Symbol("@doc")
+    @test dt3.args[1].args[3].args[2].head === :(::) # can't test equality due to line numbers
 end
 let dt4 = striptrimdocs(_repl(:(dynamic_test(1.0,u=2.0))))
     @test dt4 isa Expr
     @test dt4.args[1] isa Expr
     @test dt4.args[1].head === :macrocall
-    @test dt4.args[1].args[1] == Symbol("@doc")
+    @test dt4.args[1].args[1] === Symbol("@doc")
     @test dt4.args[1].args[3] == :(dynamic_test(::typeof(1.0); u::typeof(2.0)=2.0))
 end
 
@@ -1441,25 +1434,34 @@ end
 struct t_docs_abc end
 @test "t_docs_abc" in accessible(@__MODULE__)
 
-# Call overloading issue #20087
+# Call overloading issues #20087 and #44889
 """
 Docs for `MyFunc` struct.
 """
-mutable struct MyFunc
-    x
-end
+mutable struct MyFunc x end
+"""
+Docs for `MyParametricFunc{T}` struct.
+"""
+struct MyParametricFunc{T} end
 
 """
 Docs for calling `f::MyFunc`.
 """
-function (f::MyFunc)(x)
-    f.x = x
-    return f
-end
+(f::MyFunc)(x) = f
 
-@test docstrings_equal(@doc(MyFunc(2)),
+"""
+Docs for calling `f::MyParametricFunc{T}`.
+"""
+(f::MyParametricFunc{T})(x) where T = f
+
+@test docstrings_equal(@doc((::MyFunc)(2)),
 doc"""
 Docs for calling `f::MyFunc`.
+""")
+
+@test docstrings_equal(@doc((::MyParametricFunc{Int})(44889)),
+doc"""
+Docs for calling `f::MyParametricFunc{T}`.
 """)
 
 struct A_20087 end

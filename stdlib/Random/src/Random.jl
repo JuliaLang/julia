@@ -143,8 +143,10 @@ Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
 
 typeof_rng(rng::AbstractRNG) = typeof(rng)
 
-Sampler(::Type{<:AbstractRNG}, sp::Sampler, ::Repetition) =
-    throw(ArgumentError("Sampler for this object is not defined"))
+# this method is necessary to prevent rand(rng::AbstractRNG, X) from
+# recursively constructing nested Sampler types.
+Sampler(T::Type{<:AbstractRNG}, sp::Sampler, r::Repetition) =
+    throw(MethodError(Sampler, (T, sp, r)))
 
 # default shortcut for the general case
 Sampler(::Type{RNG}, X) where {RNG<:AbstractRNG} = Sampler(RNG, X, Val(Inf))
@@ -213,7 +215,7 @@ end
 # TODO: make constraining constructors to enforce that those
 # types are <: Sampler{T}
 
-##### Adapter to generate a randome value in [0, n]
+##### Adapter to generate a random value in [0, n]
 
 struct LessThan{T<:Integer,S} <: Sampler{T}
     sup::T
@@ -307,7 +309,7 @@ include("XoshiroSimd.jl")
 ## rand & rand! & seed! docstrings
 
 """
-    rand([rng=GLOBAL_RNG], [S], [dims...])
+    rand([rng=default_rng()], [S], [dims...])
 
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
@@ -359,7 +361,7 @@ julia> rand(Float64, (2, 3))
 rand
 
 """
-    rand!([rng=GLOBAL_RNG], A, [S=eltype(A)])
+    rand!([rng=default_rng()], A, [S=eltype(A)])
 
 Populate the array `A` with random values. If `S` is specified
 (`S` can be a type or a collection, cf. [`rand`](@ref) for details),
@@ -383,8 +385,8 @@ julia> rand!(rng, zeros(5))
 rand!
 
 """
-    seed!([rng=GLOBAL_RNG], seed) -> rng
-    seed!([rng=GLOBAL_RNG]) -> rng
+    seed!([rng=default_rng()], seed) -> rng
+    seed!([rng=default_rng()]) -> rng
 
 Reseed the random number generator: `rng` will give a reproducible
 sequence of numbers if and only if a `seed` is provided. Some RNGs
@@ -400,36 +402,42 @@ shared task-local generator.
 julia> Random.seed!(1234);
 
 julia> x1 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> Random.seed!(1234);
 
 julia> x2 = rand(2)
-2-element Array{Float64,1}:
- 0.590845
- 0.766797
+2-element Vector{Float64}:
+ 0.32597672886359486
+ 0.5490511363155669
 
 julia> x1 == x2
 true
 
-julia> rng = MersenneTwister(1234); rand(rng, 2) == x1
+julia> rng = Xoshiro(1234); rand(rng, 2) == x1
 true
 
-julia> MersenneTwister(1) == Random.seed!(rng, 1)
+julia> Xoshiro(1) == Random.seed!(rng, 1)
 true
 
 julia> rand(Random.seed!(rng), Bool) # not reproducible
 true
 
-julia> rand(Random.seed!(rng), Bool)
+julia> rand(Random.seed!(rng), Bool) # not reproducible either
 false
 
-julia> rand(MersenneTwister(), Bool) # not reproducible either
+julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
 seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
+
+# Randomize quicksort pivot selection. This code is here because of bootstrapping:
+# we need to sort things before we load this standard library.
+# TODO move this into Sort.jl
+Base.delete_method(only(methods(Base.Sort.select_pivot)))
+Base.Sort.select_pivot(lo::Integer, hi::Integer) = rand(lo:hi)
 
 end # module

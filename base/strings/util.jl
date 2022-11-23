@@ -500,8 +500,11 @@ See also [`split`](@ref).
 julia> a = "Ma.rch"
 "Ma.rch"
 
-julia> collect(eachsplit(a, "."))
-2-element Vector{SubString}:
+julia> b = eachsplit(a, ".")
+Base.SplitIterator{String, String}("Ma.rch", ".", 0, true)
+
+julia> collect(b)
+2-element Vector{SubString{String}}:
  "Ma"
  "rch"
 ```
@@ -517,7 +520,8 @@ struct SplitIterator{S<:AbstractString,F}
     keepempty::Bool
 end
 
-eltype(::Type{<:SplitIterator}) = SubString
+eltype(::Type{<:SplitIterator{T}}) where T = SubString{T}
+eltype(::Type{<:SplitIterator{<:SubString{T}}}) where T = SubString{T}
 
 IteratorSize(::Type{<:SplitIterator}) = SizeUnknown()
 
@@ -529,7 +533,7 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     r = findnext(iter.splitter, iter.str, k)::Union{Nothing,Int,UnitRange{Int}}
     while r !== nothing && n != iter.limit - 1 && first(r) <= ncodeunits(iter.str)
         j, k = first(r), nextind(iter.str, last(r))::Int
-        k_ = k <= j ? nextind(iter.str, j) : k
+        k_ = k <= j ? nextind(iter.str, j)::Int : k
         if i < k
             substr = @inbounds SubString(iter.str, i, prevind(iter.str, j)::Int)
             (iter.keepempty || i < j) && return (substr, (k, k_, n + 1))
@@ -540,6 +544,15 @@ function iterate(iter::SplitIterator, (i, k, n)=(firstindex(iter.str), firstinde
     end
     iter.keepempty || i <= ncodeunits(iter.str) || return nothing
     @inbounds SubString(iter.str, i), (ncodeunits(iter.str) + 2, k, n + 1)
+end
+
+# Specialization for partition(s,n) to return a SubString
+eltype(::Type{PartitionIterator{T}}) where {T<:AbstractString} = SubString{T}
+
+function iterate(itr::PartitionIterator{<:AbstractString}, state = firstindex(itr.c))
+    state > ncodeunits(itr.c) && return nothing
+    r = min(nextind(itr.c, state, itr.n - 1), lastindex(itr.c))
+    return SubString(itr.c, state, r), nextind(itr.c, r)
 end
 
 eachsplit(str::T, splitter; limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString} =
@@ -587,8 +600,7 @@ julia> split(a, ".")
 """
 function split(str::T, splitter;
                limit::Integer=0, keepempty::Bool=true) where {T<:AbstractString}
-    itr = eachsplit(str, splitter; limit, keepempty)
-    collect(T <: SubString ? T : SubString{T}, itr)
+    collect(eachsplit(str, splitter; limit, keepempty))
 end
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:

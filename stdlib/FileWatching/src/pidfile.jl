@@ -65,7 +65,7 @@ mutable struct LockMonitor
             lock = new(at, fd, update)
             finalizer(close, lock)
         catch ex
-            rm(at)
+            tryrmopenfile(at)
             close(fd)
             rethrow(ex)
         end
@@ -280,7 +280,7 @@ function tryrmopenfile(path::String)
         true
     catch ex
         isa(ex, IOError) || rethrow(ex)
-        false
+        ex
     end
 end
 
@@ -306,13 +306,7 @@ function Base.close(lock::LockMonitor)
         end
     if pathstat !== nothing && samefile(stat(lock.fd), pathstat)
         # try not to delete someone else's lock
-        try
-            rm(path)
-            removed = true
-        catch ex
-            ex isa IOError || rethrow()
-            removed = ex
-        end
+        removed = tryrmopenfile(path)
     end
     close(lock.fd)
     havelock = removed === true

@@ -13,11 +13,13 @@ and with instrumentation off the overhead is minimal.
 
 ## Enabling support
 
-On Linux install the `systemtap` package that has a version of `dtrace`.
+On Linux install the `systemtap` package that has a version of `dtrace` and create a `Make.user` file containing
 
 ```
 WITH_DTRACE=1
 ```
+
+to enable USDT probes.
 
 ### Verifying
 

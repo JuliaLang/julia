@@ -1,5 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#ifndef JL_PROCESSOR_H
+#define JL_PROCESSOR_H
+
 #include "support/dtypes.h"
 
 #include "julia.h"
@@ -109,6 +112,8 @@ enum {
     JL_TARGET_MINSIZE = 1 << 7,
     // Clone when the function queries CPU features
     JL_TARGET_CLONE_CPU = 1 << 8,
+    // Clone when the function uses fp16
+    JL_TARGET_CLONE_FLOAT16 = 1 << 9,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
@@ -214,4 +219,6 @@ struct jl_target_spec_t {
 extern "C" JL_DLLEXPORT std::vector<jl_target_spec_t> jl_get_llvm_clone_targets(void);
 std::string jl_get_cpu_name_llvm(void);
 std::string jl_get_cpu_features_llvm(void);
+#endif
+
 #endif

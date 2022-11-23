@@ -14,6 +14,28 @@ using Base: n_avail
     @test fetch(t) == "finished"
 end
 
+@testset "wait first behavior of wait on Condition" begin
+    a = Condition()
+    waiter1 = @async begin
+        wait(a)
+    end
+    waiter2 = @async begin
+        wait(a)
+    end
+    waiter3 = @async begin
+        wait(a; first=true)
+    end
+    waiter4 = @async begin
+        wait(a)
+    end
+    t = @async begin
+        Base.notify(a, "success"; all=false)
+        "finished"
+    end
+    @test fetch(waiter3) == "success"
+    @test fetch(t) == "finished"
+end
+
 @testset "various constructors" begin
     c = Channel()
     @test eltype(c) == Any
@@ -275,21 +297,8 @@ end
         end
     end
 
-    try
-        timedwait(failure_cb(1), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
-
-    try
-        timedwait(failure_cb(2), 0)
-        @test false
-    catch e
-        @test e isa CapturedException
-        @test e.ex isa ErrorException
-    end
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(1), 0)
+    @test_throws ErrorException("callback failed") timedwait(failure_cb(2), 0)
 
     # Validate that `timedwait` actually waits. Ideally we should also test that `timedwait`
     # doesn't exceed a maximum duration but that would require guarantees from the OS.
@@ -372,7 +381,7 @@ end
         redirect_stderr(oldstderr)
         close(newstderr[2])
     end
-    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state != :runnable\n"
+    @test fetch(errstream) == "\nWARNING: Workqueue inconsistency detected: popfirst!(Workqueue).state !== :runnable\n"
 end
 
 @testset "throwto" begin

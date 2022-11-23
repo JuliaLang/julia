@@ -1,30 +1,84 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-export threadid, nthreads, @threads, @spawn
+export threadid, nthreads, @threads, @spawn,
+       threadpool, nthreadpools
 
 """
-    Threads.threadid()
+    Threads.threadid() -> Int
 
-Get the ID number of the current thread of execution. The master thread has ID `1`.
+Get the ID number of the current thread of execution. The master thread has
+ID `1`.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
-# Inclusive upper bound on threadid()
+# lower bound on the largest threadid()
 """
-    Threads.nthreads()
+    Threads.maxthreadid() -> Int
 
-Get the number of threads available to the Julia process. This is the inclusive upper bound
-on [`threadid()`](@ref).
+Get a lower bound on the number of threads (across all thread pools) available
+to the Julia process, with atomic-acquire semantics. The result will always be
+greater than or equal to [`threadid()`](@ref) as well as `threadid(task)` for
+any task you were able to observe before calling `maxthreadid`.
+"""
+maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
+
+"""
+    Threads.nthreads(:default | :interactive) -> Int
+
+Get the current number of threads within the specified thread pool. The threads in default
+have id numbers `1:nthreads(:default)`.
+
+See also `BLAS.get_num_threads` and `BLAS.set_num_threads` in the [`LinearAlgebra`](@ref
+man-linalg) standard library, and `nprocs()` in the [`Distributed`](@ref man-distributed)
+standard library and [`Threads.maxthreadid()`](@ref).
+"""
+function nthreads(pool::Symbol)
+    if pool === :default
+        tpid = Int8(0)
+    elseif pool === :interactive
+        tpid = Int8(1)
+    else
+        error("invalid threadpool specified")
+    end
+    return _nthreads_in_pool(tpid)
+end
+
+function _nthreads_in_pool(tpid::Int8)
+    p = unsafe_load(cglobal(:jl_n_threads_per_pool, Ptr{Cint}))
+    return Int(unsafe_load(p, tpid + 1))
+end
+
+"""
+    Threads.threadpool(tid = threadid()) -> Symbol
+
+Returns the specified thread's threadpool; either `:default` or `:interactive`.
+"""
+function threadpool(tid = threadid())
+    tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
+    return tpid == 0 ? :default : :interactive
+end
+
+"""
+    Threads.nthreadpools() -> Int
+
+Returns the number of threadpools currently configured.
+"""
+nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
+
+"""
+    Threads.threadpoolsize()
+
+Get the number of threads available to the Julia default worker-thread pool.
 
 See also: `BLAS.get_num_threads` and `BLAS.set_num_threads` in the
 [`LinearAlgebra`](@ref man-linalg) standard library, and `nprocs()` in the
 [`Distributed`](@ref man-distributed) standard library.
 """
-nthreads() = Int(unsafe_load(cglobal(:jl_n_threads, Cint)))
+threadpoolsize() = Threads._nthreads_in_pool(Int8(0))
 
 function threading_run(fun, static)
     ccall(:jl_enter_threaded_region, Cvoid, ())
-    n = nthreads()
+    n = threadpoolsize()
     tasks = Vector{Task}(undef, n)
     for i = 1:n
         t = Task(() -> fun(i)) # pass in tid
@@ -33,12 +87,13 @@ function threading_run(fun, static)
         tasks[i] = t
         schedule(t)
     end
-    try
-        for i = 1:n
-            wait(tasks[i])
-        end
-    finally
-        ccall(:jl_exit_threaded_region, Cvoid, ())
+    for i = 1:n
+        Base._wait(tasks[i])
+    end
+    ccall(:jl_exit_threaded_region, Cvoid, ())
+    failed_tasks = filter(istaskfailed, tasks)
+    if !isempty(failed_tasks)
+        throw(CompositeException(map(TaskFailedException, failed_tasks)))
     end
 end
 
@@ -48,7 +103,7 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         let range = $(esc(range))
-        function threadsfor_fun(tid=1; onethread=false)
+        function threadsfor_fun(tid = 1; onethread = false)
             r = range # Load into local variable
             lenr = length(r)
             # divide loop iterations among threads
@@ -56,7 +111,7 @@ function _threadsfor(iter, lbody, schedule)
                 tid = 1
                 len, rem = lenr, 0
             else
-                len, rem = divrem(lenr, nthreads())
+                len, rem = divrem(lenr, threadpoolsize())
             end
             # not enough iterations for all the threads?
             if len == 0
@@ -148,11 +203,11 @@ assumption may be removed in the future.
 This scheduling option is merely a hint to the underlying execution mechanism. However, a
 few properties can be expected. The number of `Task`s used by `:dynamic` scheduler is
 bounded by a small constant multiple of the number of available worker threads
-([`nthreads()`](@ref Threads.nthreads)). Each task processes contiguous regions of the
+([`Threads.threadpoolsize()`](@ref)). Each task processes contiguous regions of the
 iteration space. Thus, `@threads :dynamic for x in xs; f(x); end` is typically more
 efficient than `@sync for x in xs; @spawn f(x); end` if `length(xs)` is significantly
 larger than the number of the worker threads and the run-time of `f(x)` is relatively
-smaller than the cost of spawning and synchronizaing a task (typically less than 10
+smaller than the cost of spawning and synchronizing a task (typically less than 10
 microseconds).
 
 !!! compat "Julia 1.8"
@@ -162,7 +217,7 @@ microseconds).
 
 `:static` scheduler creates one task per thread and divides the iterations equally among
 them, assigning each task specifically to each thread. In particular, the value of
-[`threadid()`](@ref Threads.threadid) is guranteed to be constant within one iteration.
+[`threadid()`](@ref Threads.threadid) is guaranteed to be constant within one iteration.
 Specifying `:static` is an error if used from inside another `@threads` loop or from a
 thread other than 1.
 
@@ -185,7 +240,7 @@ julia> function busywait(seconds)
 
 julia> @time begin
             Threads.@spawn busywait(5)
-            Threads.@threads :static for i in 1:Threads.nthreads()
+            Threads.@threads :static for i in 1:Threads.threadpoolsize()
                 busywait(1)
             end
         end
@@ -193,7 +248,7 @@ julia> @time begin
 
 julia> @time begin
             Threads.@spawn busywait(5)
-            Threads.@threads :dynamic for i in 1:Threads.nthreads()
+            Threads.@threads :dynamic for i in 1:Threads.threadpoolsize()
                 busywait(1)
             end
         end
@@ -232,35 +287,63 @@ macro threads(args...)
 end
 
 """
-    Threads.@spawn expr
+    Threads.@spawn [:default|:interactive] expr
 
-Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available thread.
-The task is allocated to a thread after it becomes available. To wait for the task
-to finish, call [`wait`](@ref) on the result of this macro, or call [`fetch`](@ref) to
-wait and then obtain its return value.
+Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
+thread in the specified threadpool (`:default` if unspecified). The task is
+allocated to a thread once one becomes available. To wait for the task to
+finish, call [`wait`](@ref) on the result of this macro, or call
+[`fetch`](@ref) to wait and then obtain its return value.
 
-Values can be interpolated into `@spawn` via `\$`, which copies the value directly into the
-constructed underlying closure. This allows you to insert the _value_ of a variable,
-isolating the asynchronous code from changes to the variable's value in the current task.
+Values can be interpolated into `@spawn` via `\$`, which copies the value
+directly into the constructed underlying closure. This allows you to insert
+the _value_ of a variable, isolating the asynchronous code from changes to
+the variable's value in the current task.
 
 !!! note
-    See the manual chapter on threading for important caveats.
+    See the manual chapter on [multi-threading](@ref man-multithreading)
+    for important caveats. See also the chapter on [threadpools](@ref man-threadpools).
 
 !!! compat "Julia 1.3"
     This macro is available as of Julia 1.3.
 
 !!! compat "Julia 1.4"
     Interpolating values via `\$` is available as of Julia 1.4.
-"""
-macro spawn(expr)
-    letargs = Base._lift_one_interp!(expr)
 
-    thunk = esc(:(()->($expr)))
+!!! compat "Julia 1.9"
+    A threadpool may be specified as of Julia 1.9.
+"""
+macro spawn(args...)
+    tpid = Int8(0)
+    na = length(args)
+    if na == 2
+        ttype, ex = args
+        if ttype isa QuoteNode
+            ttype = ttype.value
+        elseif ttype isa Symbol
+            # TODO: allow unquoted symbols
+            ttype = nothing
+        end
+        if ttype === :interactive
+            tpid = Int8(1)
+        elseif ttype !== :default
+            throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+        end
+    elseif na == 1
+        ex = args[1]
+    else
+        throw(ArgumentError("wrong number of arguments in @spawn"))
+    end
+
+    letargs = Base._lift_one_interp!(ex)
+
+    thunk = esc(:(()->($ex)))
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
+            ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), task, $tpid)
             if $(Expr(:islocal, var))
                 put!($var, task)
             end
