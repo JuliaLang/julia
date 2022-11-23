@@ -72,7 +72,8 @@ function parse!(::Type{TreeType}, io::IO;
 end
 
 function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=VERSION,
-                ignore_trivia=true, filename=nothing, ignore_warnings=false) where {T}
+                ignore_trivia=true, filename=nothing, ignore_errors=false,
+                ignore_warnings=ignore_errors) where {T}
     stream = ParseStream(text, index; version=version)
     if ignore_trivia && rule != :toplevel
         bump_trivia(stream, skip_newlines=true)
@@ -85,7 +86,8 @@ function _parse(rule::Symbol, need_eof::Bool, ::Type{T}, text, index=1; version=
             emit_diagnostic(stream, error="unexpected text after parsing $rule")
         end
     end
-    if any_error(stream.diagnostics) || (!ignore_warnings && !isempty(stream.diagnostics))
+    if (!ignore_errors && any_error(stream.diagnostics)) ||
+          (!ignore_warnings && !isempty(stream.diagnostics))
         throw(ParseError(stream, filename=filename))
     end
     # TODO: Figure out a more satisfying solution to the wrap_toplevel_as_kind
