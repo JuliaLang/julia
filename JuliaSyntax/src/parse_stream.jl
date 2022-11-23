@@ -865,10 +865,16 @@ function validate_literal_tokens(stream::ParseStream)
             # parse_int_literal
             # parse_uint_literal
         elseif k == K"Float" || k == K"Float32"
+            underflow0 = false
             if k == K"Float"
-                _, code = parse_float_literal(Float64, text, fbyte, nbyte)
+                x, code = parse_float_literal(Float64, text, fbyte, nbyte)
+                # jl_strtod_c can return "underflow" even for valid cases such
+                # as `5e-324` where the source is an exact representation of
+                # `x`. So only warn when underflowing to zero.
+                underflow0 = code == :underflow && x == 0
             else
-                _, code = parse_float_literal(Float32, text, fbyte, nbyte)
+                x, code = parse_float_literal(Float32, text, fbyte, nbyte)
+                underflow0 = code == :underflow && x == 0
             end
             if code == :ok
                 # pass
@@ -876,9 +882,9 @@ function validate_literal_tokens(stream::ParseStream)
                 emit_diagnostic(stream, fbyte, lbyte,
                                 error="overflow in floating point literal")
                 had_error = true
-            elseif code == :underflow
+            elseif underflow0
                 emit_diagnostic(stream, fbyte, lbyte,
-                                warning="underflow in floating point literal")
+                                warning="underflow to zero in floating point literal")
             end
         elseif k == K"Char"
             @assert fbyte < nbyte # Already handled in the parser
