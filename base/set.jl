@@ -425,10 +425,15 @@ end
 
 """
     allunique(itr) -> Bool
+    allunique(f, xs)
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
+The second form takes `itr = (f(x) for x in xs)`.
 
 See also: [`unique`](@ref), [`issorted`](@ref), [`allequal`](@ref).
+
+!!! compat "Julia 1.10"
+    The method `allunique(f, xs)` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
@@ -443,6 +448,9 @@ false
 
 julia> allunique([NaN, 2.0, NaN, 4.0])
 false
+
+julia> allunique(abs, [1, -1, 2])
+false
 ```
 """
 function allunique(C)
@@ -453,8 +461,10 @@ function allunique(C)
     return _hashed_allunique(C)
 end
 
+allunique(f, xs) = allunique(Generator(f, xs))
+
 function _hashed_allunique(C)
-    seen = Set{eltype(C)}()
+    seen = Set{@default_eltype(C)}()
     x = iterate(C)
     if haslength(C) && length(C) > 1000
         for i in OneTo(1000)
@@ -501,6 +511,12 @@ function allunique(t::Tuple)
     return a && allunique(tail(t))
 end
 allunique(t::Tuple{}) = true
+
+function allunique(f::F, t::Tuple) where {F}
+    length(t) < 2 && return true
+    length(t) < 32 || return _hashed_allunique(Generator(f, t))
+    return allunique(map(f, t))
+end
 
 """
     allequal(itr) -> Bool
@@ -557,7 +573,7 @@ allequal(f, xs) = allequal(Generator(f, xs))
 function allequal(f, xs::Tuple)
     length(xs) <= 1 && return true
     f1 = f(xs[1])
-    for x in Base.tail(xs)
+    for x in tail(xs)
         isequal(f1, f(x)) || return false
     end
     return true
