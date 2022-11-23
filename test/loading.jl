@@ -991,5 +991,25 @@ end
     end
 end
 
+
+@testset "GluePkgs" begin
+    proj = joinpath(@__DIR__, "project", "GluePkgs", "HasGluePkgs.jl")
+    cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+        using HasGluePkgs
+        HasGluePkgs.glue_loaded && error()
+        using GlueDep
+        HasGluePkgs.glue_loaded || error()
+    '`
+    @test success(cmd)
+
+    proj = joinpath(@__DIR__, "project", "GluePkgs", "HasDepWithGluePkgs.jl")
+    cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+        using HasDepWithGluePkgs
+        HasDepWithGluePkgs.do_something() || error()
+    '`
+    @test success(cmd)
+end
+
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
