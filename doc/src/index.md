@@ -60,7 +60,7 @@ R, you may find that Julia's performance is unintuitive at first. If you find th
 slow, we highly recommend reading through the [Performance Tips](@ref man-performance-tips) section before trying anything
 else. Once you understand how Julia works, it's easy to write code that's nearly as fast as C.
 
-### [Julia compared to other languages](@id man-julia-vs-other-languages)
+### [Julia compared to other languages](@id man-julia-compared-other-languages)
 
 Julia features optional typing, multiple dispatch, and good performance, achieved using type inference
 and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation) (and
