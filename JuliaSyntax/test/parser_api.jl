@@ -80,4 +80,16 @@
         @test parseatom(Expr, SubString("x+y"), 1) == (:x, 2)
         @test parseatom(Expr, SubString("x+y"), 3) == (:y, 4)
     end
+
+    @testset "error/warning handling" begin
+        # ignore_warnings
+        parse_sexpr(s;kws...) = sprint(show, MIME("text/x.sexpression"), parse(SyntaxNode, s; kws...))
+        @test_throws JuliaSyntax.ParseError parse_sexpr("try finally catch ex end")
+        @test parse_sexpr("try finally catch ex end", ignore_warnings=true) ==
+            "(try_finally_catch (block) false false false (block) ex (block))"
+        # ignore_errors
+        @test_throws JuliaSyntax.ParseError parse_sexpr("[a; b, c]")
+        @test_throws JuliaSyntax.ParseError parse_sexpr("[a; b, c]", ignore_warnings=true)
+        @test parse_sexpr("[a; b, c]", ignore_errors=true) == "(vcat a b (error-t) c)"
+    end
 end
