@@ -158,6 +158,8 @@ static htable_t external_mis;
 // Inference tracks newly-inferred MethodInstances during precompilation
 // and registers them by calling jl_set_newly_inferred
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
+// Mutex for newly_inferred
+static jl_mutex_t newly_inferred_mutex;
 
 // New roots to add to Methods. These can't be added until after
 // recaching is complete, so we have to hold on to them separately
@@ -2894,12 +2896,21 @@ JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
-// Register all newly-inferred MethodInstances
-// This gets called as the final step of Base.include_package_for_output
+// Register array of newly-inferred MethodInstances
+// This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
     assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
     newly_inferred = (jl_array_t*) _newly_inferred;
+}
+
+JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* linfo)
+{
+    JL_LOCK(&newly_inferred_mutex);
+    size_t end = jl_array_len(newly_inferred);
+    jl_array_grow_end(newly_inferred, 1);
+    jl_arrayset(newly_inferred, linfo, end);
+    JL_UNLOCK(&newly_inferred_mutex);
 }
 
 // Serialize the modules in `worklist` to file `fname`
