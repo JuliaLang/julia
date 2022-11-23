@@ -16,9 +16,13 @@ end
     @test diagnostic("x = 10.0f1000;") ==
         Diagnostic(5, 13, :error, "overflow in floating point literal")
     @test diagnostic("x = 10.0e-1000;") ==
-        Diagnostic(5, 14, :warning, "underflow in floating point literal")
+        Diagnostic(5, 14, :warning, "underflow to zero in floating point literal")
     @test diagnostic("x = 10.0f-1000;") ==
-        Diagnostic(5, 14, :warning, "underflow in floating point literal")
+        Diagnostic(5, 14, :warning, "underflow to zero in floating point literal")
+    # Underflow boundary
+    @test diagnostic("5e-324", allow_multiple=true) == []
+    @test diagnostic("2e-324") ==
+        Diagnostic(1, 6, :warning, "underflow to zero in floating point literal")
 
     # Char
     @test diagnostic("x = ''") ==
