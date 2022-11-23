@@ -348,7 +348,46 @@ The subscripted `rootsᵢ`, `graphᵢ` and `pathsᵢ` variables correspond to th
 2. Packages in non-primary environments can end up using incompatible versions of their dependencies even if their own environments are entirely compatible. This can happen when one of their dependencies is shadowed by a version in an earlier environment in the stack (either by graph or path, or both).
 
 Since the primary environment is typically the environment of a project you're working on, while environments later in the stack contain additional tools, this is the right trade-off: it's better to break your development tools but keep the project working. When such incompatibilities occur, you'll typically want to upgrade your dev tools to versions that are compatible with the main project.
+### "Glue" packages and dependencies
 
+A "glue package" is a module that is automatically loaded when a specified set of other packages (called "glue dependencies") are loaded in the current Julia session.
+These are defined by adding the following two sections to a package's `Project.toml` file:
+
+```toml
+name = "MyPackage"
+
+[gluedeps]
+GlueDep = "c9a23..." # uuid
+OtherGlueDep = "862e..." # uuid
+
+[gluepkgs]
+GlueFoo = "GlueDep"
+GlueBar = ["GlueDep", "OtherGlueDep"]
+...
+```
+
+The keys under `gluepkgs` are the name of the glue packages.
+They are loaded when all the packages on the right hand side (the glue dependencies) of the glue package are loaded.
+If a glue package only has one glue dependency the lit of glue dependencies can be written as just a string for breviety.
+The location for the entry point of the glue package is either in `glue/GlueFoo.jl` or `glue/GlueFoo/GlueFoo.jl` for
+glue package `GlueFoo`.
+The glue package can be viewed as a somewhat normal package that has the glue dependencies and the main package as dependencies.
+The content of a glue package is often structured as:
+
+```
+module GlueFoo
+
+# Load main package and glue dependencies
+using MyPackage, GlueDep
+
+# Extend functionality in main package with types from the glue dependencies
+MyPackage.func(x::GlueDep.SomeStruct) = ...
+
+end
+```
+
+When a package with glue packages is added to an environment, the `gluedeps` and `gluepkgs` sections
+are stored in the manifest file in the section for that package.
 ### Package/Environment Preferences
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.

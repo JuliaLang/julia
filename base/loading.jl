@@ -563,8 +563,11 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             pkg_uuid = explicit_project_deps_get(project_file, name)
             return PkgId(pkg_uuid, name)
         end
+        # Check for this being a dependency to a glue module
+        glue_dep = project_file_gluedeps_get(project_file, where, name)
+        glue_dep === nothing || return glue_dep
         # look for manifest file and `where` stanza
-        return explicit_manifest_deps_get(project_file, uuid, name)
+        return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_deps_get(env, where, name)
@@ -578,8 +581,12 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         proj = project_file_name_uuid(project_file, pkg.name)
         if proj == pkg
             # if `pkg` matches the project, return the project itself
-            return project_file_path(project_file, pkg.name)
+            return project_file_path(project_file)
         end
+        # Only used when the package is loading the glue pkg itself
+        # which is currently not supported
+        # mby_glue = project_file_glue_path(project_file, pkg.name)
+        # mby_glue === nothing || return mby_glue
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
@@ -598,7 +605,41 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-function project_file_path(project_file::String, name::String)
+function project_file_gluedeps_get(project_file::String, where::PkgId, name::String)
+    # Check for glue...
+    d = parsed_toml(project_file)
+    glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
+    project_id = project_file_name_uuid(project_file, "")
+    if glue !== nothing && where.uuid == uuid5(project_id.uuid, where.name)
+        gluedeps = get(glue, where.name, nothing)::Union{Nothing, String, Vector{String}}
+        if gluedeps !== nothing
+            if gluedeps isa String && name == gluedeps ||
+               gluedeps isa Vector{String} && name in gluedeps
+               gluedepses = get(d, "gluedeps", nothing)::Union{Dict{String, Any}, Nothing}
+                return PkgId(UUID(gluedepses[name]::String), name)
+            end
+            name == project_id.name && return project_id
+        end
+    end
+    return nothing
+end
+
+function project_file_glue_path(project_file::String, name::String)
+    d = parsed_toml(project_file)
+    p = project_file_path(project_file)
+    glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
+    if glue !== nothing
+        if name in keys(glue)
+            gluefile = joinpath(p, "glue", name * ".jl")
+            isfile(gluefile) && return gluefile
+            gluefiledir = joinpath(p, "glue", name, name * ".jl")
+            isfile(gluefiledir) && return gluefiledir
+        end
+    end
+    return nothing
+end
+
+function project_file_path(project_file::String)
     d = parsed_toml(project_file)
     joinpath(dirname(project_file), get(d, "path", "")::String)
 end
@@ -679,15 +720,26 @@ end
 function explicit_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
     d = parsed_toml(project_file)
     root_uuid = dummy_uuid(project_file)
+    mby_uuid_project = get(d, "uuid", nothing)::Union{String, Nothing}
+    uuid_project = mby_uuid_project === nothing ? root_uuid : UUID(mby_uuid_project)
     if get(d, "name", nothing)::Union{String, Nothing} === name
-        uuid = get(d, "uuid", nothing)::Union{String, Nothing}
-        return uuid === nothing ? root_uuid : UUID(uuid)
+        return uuid_project
     end
     deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
     if deps !== nothing
         uuid = get(deps, name, nothing)::Union{String, Nothing}
         uuid === nothing || return UUID(uuid)
     end
+
+    #=
+    # Unclear if this is needed
+    glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
+    if glue !== nothing
+        if name in keys(glue)
+            return uuid5(uuid_project, name)
+        end
+    end
+    =#
     return nothing
 end
 
@@ -716,9 +768,10 @@ end
 
 # find `where` stanza and return the PkgId for `name`
 # return `nothing` if it did not find `where` (indicating caller should continue searching)
-function explicit_manifest_deps_get(project_file::String, where::UUID, name::String)::Union{Nothing,PkgId}
+function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
+
     d = get_deps(parsed_toml(manifest_file))
     found_where = false
     found_name = false
@@ -728,21 +781,55 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
-            if UUID(uuid) === where
+            if UUID(uuid) === where.uuid
                 found_where = true
+                gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
+                if gluepkgs !== nothing
+                    if name in keys(gluepkgs)
+                        return PkgId(uuid5(where.uuid, name), name)
+                    end
+                end
                 # deps is either a list of names (deps = ["DepA", "DepB"]) or
                 # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
                 deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                deps === nothing && continue
                 if deps isa Vector{String}
                     found_name = name in deps
                     break
-                else
+                elseif deps isa Dict{String, Any}
                     deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
                         uuid::String
                         if dep === name
                             return PkgId(UUID(uuid), name)
+                        end
+                    end
+                end
+            else # Check for glue modules
+                gluepkgs = get(entry, "gluepkgs", nothing)
+                if gluepkgs !== nothing
+                    if where.name in keys(gluepkgs) && where.uuid == uuid5(UUID(uuid), where.name)
+                        found_where = true
+                        if name == dep_name
+                            return PkgId(UUID(uuid), name)
+                        end
+                        glue_entry = gluepkgs[where.name]
+                        if glue_entry isa String && name == glue_entry ||
+                          glue_entry isa Vector{String} && name in glue_entry
+                            gluedeps = get(entry, "gluedeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                            if gluedeps !== nothing
+                                if gluedeps isa Vector{String}
+                                    found_name = name in gluedeps
+                                    break
+                                elseif gluedeps isa Dict{String, Any}
+                                    gluedeps = gluedeps::Dict{String, Any}
+                                    for (dep, uuid) in gluedeps
+                                        uuid::String
+                                        if dep === name
+                                            return PkgId(UUID(uuid), name)
+                                        end
+                                    end
+                                end
+                            end
                         end
                     end
                 end
@@ -769,15 +856,33 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
 
     d = get_deps(parsed_toml(manifest_file))
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
-    entries === nothing && return nothing # TODO: allow name to mismatch?
-    for entry in entries
-        entry = entry::Dict{String, Any}
-        uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
-        uuid === nothing && continue
-        if UUID(uuid) === pkg.uuid
-            return explicit_manifest_entry_path(manifest_file, pkg, entry)
+    if entries !== nothing
+        for entry in entries
+            entry = entry::Dict{String, Any}
+            uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
+            uuid === nothing && continue
+            if UUID(uuid) === pkg.uuid
+                return explicit_manifest_entry_path(manifest_file, pkg, entry)
+            end
         end
     end
+
+    # Glue
+    for (name, entries::Vector{Any}) in d
+        for entry in entries
+            uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
+            gluedeps = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
+            if gluedeps !== nothing && pkg.name in keys(gluedeps) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+                p = normpath(dirname(locate_package(PkgId(UUID(uuid), name))), "..")
+                gluefile = joinpath(p, "glue", pkg.name * ".jl")
+                isfile(gluefile) && return gluefile
+                gluefiledir = joinpath(p, "glue", pkg.name, pkg.name * ".jl")
+                isfile(gluefiledir) && return gluefiledir
+                return nothing
+            end
+        end
+    end
+
     return nothing
 end
 
@@ -958,6 +1063,7 @@ end
 function run_package_callbacks(modkey::PkgId)
     assert_havelock(require_lock)
     unlock(require_lock)
+    run_glue_callbacks()
     try
         for callback in package_callbacks
             invokelatest(callback, modkey)
@@ -971,6 +1077,163 @@ function run_package_callbacks(modkey::PkgId)
     end
     nothing
 end
+
+
+########
+# Glue #
+########
+
+mutable struct GlueId
+    const id::PkgId # Could be symbol?
+    const parentid::PkgId
+    const triggers::Vector{PkgId} # What packages have to be loaded for the glue module to get loaded
+    triggered::Bool
+    succeeded::Bool
+end
+
+const GLUE_PKG_DORMITORY = GlueId[]
+
+function insert_glue_triggers(pkg::PkgId)
+    pkg.uuid === nothing && return
+    for env in load_path()
+        insert_glue_triggers(env, pkg)
+        break # For now, only insert triggers for packages in the first load_path.
+    end
+end
+
+function insert_glue_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
+    project_file = env_project_file(env)
+    if project_file isa String
+        proj = project_file_name_uuid(project_file, pkg.name)
+        if proj == pkg
+            insert_glue_triggers_project(project_file, pkg)
+        else
+            return insert_glue_triggers_manifest(project_file, pkg)
+        end
+    end
+    return nothing
+end
+
+function insert_glue_triggers_project(project_file::String, parent::PkgId)
+    d = parsed_toml(project_file)
+    gluedeps = get(d, "gluedeps", nothing)::Union{Nothing, Dict{String, Any}}
+    gluepkgs = get(d, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
+    gluepkgs === nothing && return
+    gluedeps === nothing && return
+    _insert_glue_triggers(parent, gluepkgs, gluedeps)
+end
+
+function insert_glue_triggers_manifest(project_file::String, parent::PkgId)
+    manifest_file = project_file_manifest_path(project_file)
+    manifest_file === nothing && return
+    d = get_deps(parsed_toml(manifest_file))
+    for (dep_name, entries) in d
+        entries::Vector{Any}
+        for entry in entries
+            entry = entry::Dict{String, Any}
+            uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+            uuid === nothing && continue
+            if UUID(uuid) === parent.uuid
+                gluedeps = get(entry, "gluedeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
+                gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
+                gluepkgs === nothing && return
+                gluedeps === nothing && return
+                if gluedeps isa Dict{String, Any}
+                    return _insert_glue_triggers(parent, gluepkgs, gluedeps)
+                end
+
+                d_gluedeps = Dict{String, String}()
+                for (dep_name, entries) in d
+                    dep_name in gluedeps || continue
+                    entries::Vector{Any}
+                    if length(entries) != 1
+                        error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+                    end
+                    entry = first(entries)::Dict{String, Any}
+                    uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                    d_gluedeps[dep_name] = uuid
+                end
+                @assert length(d_gluedeps) == length(gluedeps)
+                return _insert_glue_triggers(parent, gluepkgs, d_gluedeps)
+            end
+        end
+    end
+    return
+end
+
+function _insert_glue_triggers(parent::PkgId, gluepkgs::Dict{String, <:Any}, gluedeps::Dict{String, <:Any})
+    for (glue_entry::String, triggers::Union{String, Vector{String}}) in gluepkgs
+        triggers isa String && (triggers = [triggers])
+        triggers_id = PkgId[]
+        id = PkgId(uuid5(parent.uuid, glue_entry), glue_entry)
+        for trigger in triggers
+            # TODO: Better error message if this lookup fails?
+            uuid_trigger = UUID(gluedeps[trigger]::String)
+            push!(triggers_id, PkgId(uuid_trigger, trigger))
+        end
+        gid = GlueId(id, parent, triggers_id, false, false)
+        push!(GLUE_PKG_DORMITORY, gid)
+    end
+end
+
+function run_glue_callbacks(; force::Bool=false)
+    try
+        for glueid in GLUE_PKG_DORMITORY
+            glueid.succeeded && continue
+            !force && glueid.triggered && continue
+            if all(in(keys(Base.loaded_modules)), glueid.triggers)
+                gluepkg_not_allowed_load = nothing
+                glueid.triggered = true
+                # It is possible that some of the triggers were loaded in an environment
+                # below the one of the parent. This will cause a load failure when the
+                # glue pkg tries to load the triggers. Therefore, check this first
+                # before loading the glue pkg.
+                for trigger in glueid.triggers
+                    pkgenv = Base.identify_package_env(glueid.id, trigger.name)
+                    if pkgenv === nothing
+                        gluepkg_not_allowed_load = trigger
+                        break
+                    else
+                        pkg, env = pkgenv
+                        path = Base.locate_package(pkg, env)
+                        if path === nothing
+                            gluepkg_not_allowed_load = trigger
+                            break
+                        end
+                    end
+                end
+                if gluepkg_not_allowed_load !== nothing
+                    @debug "Glue package $(glueid.id.name) of $(glueid.parentid.name) not loaded due to \
+                            $(gluepkg_not_allowed_load.name) loaded in environment lower in load path"
+                else
+                    require(glueid.id)
+                    @debug "Glue package $(glueid.id.name) of $(glueid.parentid.name) loaded"
+                end
+                glueid.succeeded = true
+            end
+        end
+    catch
+        # Try to continue loading if loading a glue package errors
+        errs = current_exceptions()
+        @error "Error during loading of glue code" exception=errs
+    end
+    nothing
+end
+
+"""
+    get_gluepkg(parent::Module, gluepkg::Symbol)
+
+Return the module for `gluepkg` of `parent` or return `nothing` if the glue
+package is not loaded.
+"""
+get_gluepkg(parent::Module, gluepkg::Symbol) = get_gluepkg(PkgId(parent), gluepkg)
+function get_gluepkg(parentid::PkgId, gluepkg::Symbol)
+    parentid.uuid === nothing && return nothing
+    gluepkgid = PkgId(uuid5(parentid.uuid, string(gluepkg)), string(gluepkg))
+    return get(loaded_modules, gluepkgid, nothing)
+end
+
+# End glue
 
 # loads a precompile cache file, after checking stale_cachefile tests
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64)
@@ -995,6 +1258,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64)
                 notify(loading, loaded, all=true)
             end
             if loaded isa Module
+                insert_glue_triggers(modkey)
                 run_package_callbacks(modkey)
             end
         end
@@ -1035,6 +1299,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::St
                 notify(loading, loaded, all=true)
             end
             if loaded isa Module
+                insert_glue_triggers(modkey)
                 run_package_callbacks(modkey)
             end
         end
@@ -1239,7 +1504,7 @@ function require(into::Module, mod::Symbol)
     LOADING_CACHE[] = LoadingCache()
     try
         uuidkey_env = identify_package_env(into, String(mod))
-        # Core.println("require($(PkgId(into)), $mod) -> $uuidkey from env \"$env\"")
+        # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
         if uuidkey_env === nothing
             where = PkgId(into)
             if where.uuid === nothing
@@ -1279,14 +1544,6 @@ function require(into::Module, mod::Symbol)
     end
 end
 
-mutable struct PkgOrigin
-    path::Union{String,Nothing}
-    cachepath::Union{String,Nothing}
-    version::Union{VersionNumber,Nothing}
-end
-PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
-const pkgorigins = Dict{PkgId,PkgOrigin}()
-
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
 function _require_prelocked(uuidkey::PkgId, env=nothing)
@@ -1297,6 +1554,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
             error("package `$(uuidkey.name)` did not define the expected \
                   module `$(uuidkey.name)`, check for typos in package module name")
         end
+        insert_glue_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
@@ -1304,6 +1562,14 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
     end
     return newm
 end
+
+mutable struct PkgOrigin
+    path::Union{String,Nothing}
+    cachepath::Union{String,Nothing}
+    version::Union{VersionNumber,Nothing}
+end
+PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
+const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
@@ -1479,6 +1745,7 @@ function _require_from_serialized(uuidkey::PkgId, path::String)
     set_pkgorigin_version_path(uuidkey, nothing)
     newm = _tryrequire_from_serialized(uuidkey, path)
     newm isa Module || throw(newm)
+    insert_glue_triggers(uuidkey)
     # After successfully loading, notify downstream consumers
     run_package_callbacks(uuidkey)
     return newm
@@ -1711,6 +1978,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
+        empty!(Base.GLUE_PKG_DORMITORY) # If we have a custom sysimage with `GLUE_PKG_DORMITORY` prepopulated
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
