@@ -616,6 +616,22 @@ end
     @test allequal(error(x) for x in 1:3 if false)
 end
 
+@testset "allequal(f, xs)" begin
+    @test allequal(abs2, [3, -3])
+    @test allequal(x -> 1, rand(3))
+    @test !allequal(x -> rand(), [1,1,1])
+    # tuples
+    @test allequal(abs2, (3, -3))
+    @test allequal(x -> 1, Tuple(rand(3)))
+    @test !allequal(x -> rand(), (1,1,1))
+    # These cases don't call the function at all:
+    @test allequal(error, [])
+    @test allequal(error, ())
+    @test allequal(error, (x for x in 1:3 if false))
+    @test allequal(error, [1])
+    @test allequal(error, (1,))
+end
+
 @testset "filter(f, ::$S)" for S = (Set, BitSet)
     s = S([1,2,3,4])
     @test s !== filter( isodd, s) == S([1,3])

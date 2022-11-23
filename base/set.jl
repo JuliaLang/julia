@@ -504,13 +504,18 @@ allunique(t::Tuple{}) = true
 
 """
     allequal(itr) -> Bool
+    allunique(f, xs)
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
+The second form takes `itr = (f(x) for x in xs)`.
 
 See also: [`unique`](@ref), [`allunique`](@ref).
 
 !!! compat "Julia 1.8"
     The `allequal` function requires at least Julia 1.8.
+
+!!! compat "Julia 1.10"
+    The method `allequal(f, xs)` requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
@@ -528,6 +533,9 @@ false
 
 julia> allequal(Dict(:a => 1, :b => 1))
 false
+
+julia> allequal(abs2, [1, -1])
+true
 ```
 """
 function allequal(itr)
@@ -543,6 +551,17 @@ end
 allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
 
 allequal(r::AbstractRange) = iszero(step(r)) || length(r) <= 1
+
+allequal(f, xs) = allequal(Generator(f, xs))
+
+function allequal(f, xs::Tuple)
+    length(xs) <= 1 && return true
+    f1 = f(xs[1])
+    for x in Base.tail(xs)
+        isequal(f1, f(x)) || return false
+    end
+    return true
+end
 
 filter!(f, s::Set) = unsafe_filter!(f, s)
 
