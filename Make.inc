@@ -552,6 +552,8 @@ ifeq ($(OS), WINNT)
   SHLIB_EXT := dll
 else ifeq ($(OS), Darwin)
   SHLIB_EXT := dylib
+else ifeq ($(OS), Emscripten)
+  SHLIB_EXT := a
 else
   SHLIB_EXT := so
 endif
