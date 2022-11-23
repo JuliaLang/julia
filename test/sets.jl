@@ -610,6 +610,10 @@ end
     @test allequal(LinRange(1, 1, 1))
     @test allequal(LinRange(1, 1, 2))
     @test !allequal(LinRange(1, 2, 2))
+    # Known length 1, need not evaluate:
+    @test allequal(error(x) for x in [1])
+    # Empty, but !haslength:
+    @test allequal(error(x) for x in 1:3 if false)
 end
 
 @testset "filter(f, ::$S)" for S = (Set, BitSet)

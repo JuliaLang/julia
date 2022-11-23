@@ -530,7 +530,15 @@ julia> allequal(Dict(:a => 1, :b => 1))
 false
 ```
 """
-allequal(itr) = isempty(itr) ? true : all(isequal(first(itr)), itr)
+function allequal(itr)
+    if haslength(itr)
+        length(itr) <= 1 && return true
+    end
+    pl = Iterators.peel(itr)
+    isnothing(pl) && return true
+    a, rest = pl
+    return all(isequal(a), rest)
+end
 
 allequal(c::Union{AbstractSet,AbstractDict}) = length(c) <= 1
 
