@@ -17,12 +17,10 @@ include("parser.jl")
 include("diagnostics.jl")
 include("parser_api.jl")
 include("expr.jl")
-@testset "Parsing values from strings" begin
+@testset "Parsing literals from strings" begin
     include("value_parsing.jl")
 end
 include("hooks.jl")
 include("parse_packages.jl")
+include("source_files.jl")
 
-# Prototypes
-#include("syntax_interpolation.jl")
-#include("simple_parser.jl")

@@ -7,6 +7,7 @@ using .JuliaSyntax:
     ParseState,
     Diagnostic,
     SourceFile,
+    source_location,
     parse!,
     parse,
     parseall,
