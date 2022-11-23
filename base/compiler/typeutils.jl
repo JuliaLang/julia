@@ -55,7 +55,7 @@ function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
     isa(t, PartialTypeVar) && return true
     if isa(t, Const)
         val = t.val
-        return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
+        return !issingletontype(typeof(val)) && !(isa(val, Type) && hasuniquerep(val))
     end
     return has_nontrivial_const_info(widenlattice(lattice), t)
 end
@@ -245,6 +245,10 @@ function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     max = 2
     for ti in argtypes
+        # TODO remove this to implement callsite refinement of MustAlias
+        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
+            ti = widenconst(ti)
+        end
         if isa(ti, Union)
             nti = unionlen(ti)
             if nti > max
@@ -276,13 +280,17 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
             push!(tunion, tpl)
         end
     else
-        ti = t[i]
+        origti = ti = t[i]
+        # TODO remove this to implement callsite refinement of MustAlias
+        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
+            ti = widenconst(ti)
+        end
         if isa(ti, Union)
             for ty in uniontypes(ti::Union)
                 t[i] = ty
                 _switchtupleunion(t, i - 1, tunion, origt)
             end
-            t[i] = ti
+            t[i] = origti
         else
             _switchtupleunion(t, i - 1, tunion, origt)
         end

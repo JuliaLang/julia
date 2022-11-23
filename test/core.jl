@@ -4870,8 +4870,8 @@ end
 let a = Val{Val{TypeVar(:_, Int)}},
     b = Val{Val{x} where x<:Int}
 
-    @test !isdefined(a, :instance)
-    @test  isdefined(b, :instance)
+    @test !Base.issingletontype(a)
+    @test  Base.issingletontype(b)
     @test Base.isconcretetype(b)
 end
 

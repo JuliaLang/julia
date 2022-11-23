@@ -314,4 +314,5 @@ $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
 endif # USE_BINARYBUILDER_LLVM
 
+get-lld: get-llvm
 install-lld install-clang install-llvm-tools: install-llvm
