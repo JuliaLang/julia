@@ -213,56 +213,6 @@ end
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (_evview(A)==_evview(B))
 
-@inline mul!(A::AbstractVector, B::SymTridiagonal, C::AbstractVector,
-             alpha::Number, beta::Number) =
-    _mul!(A, B, C, MulAddMul(alpha, beta))
-@inline mul!(A::AbstractMatrix, B::SymTridiagonal, C::AbstractVecOrMat,
-             alpha::Number, beta::Number) =
-    _mul!(A, B, C, MulAddMul(alpha, beta))
-# disambiguation
-@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
-
-@inline function _mul!(C::AbstractVecOrMat, S::SymTridiagonal, B::AbstractVecOrMat,
-                          _add::MulAddMul)
-    m, n = size(B, 1), size(B, 2)
-    if !(m == size(S, 1) == size(C, 1))
-        throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
-    end
-    if n != size(C, 2)
-        throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
-    end
-
-    if m == 0
-        return C
-    elseif iszero(_add.alpha)
-        return _rmul_or_fill!(C, _add.beta)
-    end
-
-    α = S.dv
-    β = S.ev
-    @inbounds begin
-        for j = 1:n
-            x₊ = B[1, j]
-            x₀ = zero(x₊)
-            # If m == 1 then β[1] is out of bounds
-            β₀ = m > 1 ? zero(β[1]) : zero(eltype(β))
-            for i = 1:m - 1
-                x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
-                β₋, β₀ = β₀, β[i]
-                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
-            end
-            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
-        end
-    end
-
-    return C
-end
-
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
     nx, ny = length(x), length(y)

@@ -245,8 +245,12 @@ function (*)(D::Diagonal, V::AbstractVector)
 end
 
 (*)(A::AbstractMatrix, D::Diagonal) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
+(*)(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+(*)(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
