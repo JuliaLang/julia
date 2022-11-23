@@ -937,11 +937,14 @@ end
     @test strtok("a .&&₁ b") ==  ["a", " ", ".&&", "₁", " ", "b", ""]
 end
 
-@testset "is_identifier[_start]_char" begin
+@testset "malformed strings" begin
     malformed = first("\xe2")
     @test Tokenize.is_identifier_char(malformed) == false
     @test Tokenize.is_identifier_start_char(malformed) == false
     @test Tokenize.is_never_id_char(malformed) == true
+    @test Tokenize.dotop1(malformed) == false
+    @test Tokenize.isopsuffix(malformed) == false
+    @test Tokenize.is_operator_start_char(malformed) == false
 end
 
 end
