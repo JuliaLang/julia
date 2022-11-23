@@ -1084,13 +1084,13 @@ struct GlueId
     triggers::Vector{PkgId} # What packages have to be loaded for the glue module to get loaded
 end
 
-const GLUES_MODULES = GlueId[]
+const GLUE_PKG_DORMITORY = GlueId[]
 
 function insert_glue_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     for env in load_path()
         insert_glue_triggers(env, pkg)
-        break # For now, only look in the top env of load path
+        break # For now, only insert triggers for packages in the first load_path.
     end
 end
 
@@ -1165,22 +1165,20 @@ function _insert_glue_triggers(parent::PkgId, gluepkgs::Dict{String, <:Any}, wea
             push!(triggers_id, PkgId(uuid_trigger, trigger))
         end
         gid = GlueId(id, parent, triggers_id)
-        push!(GLUES_MODULES, gid)
+        push!(GLUE_PKG_DORMITORY, gid)
     end
 end
 
 function run_glue_callbacks(pkg::PkgId)
     try
-        for (i, glueid) in enumerate(copy(GLUES_MODULES))
-            if pkg in glueid.triggers
-                if all(in(keys(Base.loaded_modules)), glueid.triggers)
-                    deleteat!(GLUES_MODULES, i)
-                    Base.require(Base.loaded_modules[glueid.parentid], Symbol(glueid.id.name))
-                end
+        for (i, glueid) in enumerate(copy(GLUE_PKG_DORMITORY)) # Avoid this copy?
+            if all(in(keys(Base.loaded_modules)), glueid.triggers)
+                deleteat!(GLUE_PKG_DORMITORY, i)
+                require(glueid.id)
             end
         end
     catch
-        # Try to continue loading if a callback errors
+        # Try to continue loading if loading a glue package errors
         errs = current_exceptions()
         @error "Error during loading of glue code" exception=errs
     end
@@ -1930,7 +1928,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
-        empty!(Base.GLUES_MODULES)
+        empty!(Base.GLUE_PKG_DORMITORY) # If we have a custom sysimage with `GLUE_PKG_DORMITORY` prepopulated
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
