@@ -58,7 +58,7 @@ with performance comparable to traditional statically-typed languages.
 Because Julia's compiler is different from the interpreters used for languages like Python or
 R, you may find that Julia's performance is unintuitive at first. If you find that something is
 slow, we highly recommend reading through the [Performance Tips](@ref man-performance-tips) section before trying anything
-else. Once you understand how Julia works, it's easy to write code that's nearly as fast as C.
+else. Once you understand how Julia works, it is easy to write code that is nearly as fast as C.
 
 ### [Julia compared to other languages](@id man-julia-compared-other-languages)
 
