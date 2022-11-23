@@ -279,8 +279,8 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     JL_TIMING(INFERENCE);
     if (jl_typeinf_func == NULL)
         return NULL;
-    static int in_inference;
-    if (in_inference > 2)
+    jl_task_t *ct = jl_current_task;
+    if (ct->reentrant_inference > 2)
         return NULL;
 
     jl_code_info_t *src = NULL;
@@ -300,7 +300,6 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         jl_printf(JL_STDERR, "\n");
     }
 #endif
-    jl_task_t *ct = jl_current_task;
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -308,7 +307,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
     size_t last_age = ct->world_age;
     ct->world_age = jl_typeinf_world;
     mi->inInference = 1;
-    in_inference++;
+    ct->reentrant_inference++;
     JL_TRY {
         src = (jl_code_info_t*)jl_apply(fargs, 3);
     }
@@ -329,7 +328,7 @@ jl_code_info_t *jl_type_infer(jl_method_instance_t *mi, size_t world, int force)
         src = NULL;
     }
     ct->world_age = last_age;
-    in_inference--;
+    ct->reentrant_inference--;
     mi->inInference = 0;
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
@@ -544,7 +543,7 @@ static int reset_mt_caches(jl_methtable_t *mt, void *env)
 }
 
 
-jl_function_t *jl_typeinf_func = NULL;
+jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
@@ -3416,44 +3415,39 @@ int jl_has_concrete_subtype(jl_value_t *typ)
     return ((jl_datatype_t*)typ)->has_concrete_subtype;
 }
 
-// TODO: separate the codegen and typeinf locks
-//   currently using a coarser lock seems like
-//   the best way to avoid acquisition priority
-//   ordering violations
-//static jl_mutex_t typeinf_lock;
 #define typeinf_lock jl_codegen_lock
-
-static jl_mutex_t inference_timing_mutex;
-static uint64_t inference_start_time = 0;
-static uint8_t inference_is_measuring_compile_time = 0;
 
 JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
     if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
-        JL_LOCK_NOGC(&inference_timing_mutex);
-        if (inference_is_measuring_compile_time++ == 0) {
-            inference_start_time = jl_hrtime();
-        }
-        JL_UNLOCK_NOGC(&inference_timing_mutex);
+        jl_task_t *ct = jl_current_task;
+        if (ct->inference_start_time == 0 && ct->reentrant_inference == 1)
+            ct->inference_start_time = jl_hrtime();
     }
 }
 
 JL_DLLEXPORT void jl_typeinf_timing_end(void)
 {
-    JL_LOCK_NOGC(&inference_timing_mutex);
-    if (--inference_is_measuring_compile_time == 0) {
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - inference_start_time));
+    jl_task_t *ct = jl_current_task;
+    if (ct->inference_start_time != 0 && ct->reentrant_inference == 1) {
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - ct->inference_start_time));
+        ct->inference_start_time = 0;
     }
-    JL_UNLOCK_NOGC(&inference_timing_mutex);
 }
 
 JL_DLLEXPORT void jl_typeinf_lock_begin(void)
 {
     JL_LOCK(&typeinf_lock);
+    //Although this is claiming to be a typeinfer lock, it is actually
+    //affecting the codegen lock count, not type inference's inferencing count
+    jl_task_t *ct = jl_current_task;
+    ct->reentrant_codegen++;
 }
 
 JL_DLLEXPORT void jl_typeinf_lock_end(void)
 {
+    jl_task_t *ct = jl_current_task;
+    ct->reentrant_codegen--;
     JL_UNLOCK(&typeinf_lock);
 }
 

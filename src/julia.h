@@ -1765,6 +1765,7 @@ JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
+JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *linfo);
 JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
@@ -1935,6 +1936,9 @@ typedef struct _jl_task_t {
     jl_ucontext_t ctx;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
+    uint64_t inference_start_time; // time when inference started
+    unsigned int reentrant_inference; // How many times we've reentered inference
+    unsigned int reentrant_codegen; // How many times we've reentered codegen
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 } jl_task_t;
