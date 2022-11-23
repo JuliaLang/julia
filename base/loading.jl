@@ -778,6 +778,12 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             uuid === nothing && continue
             if UUID(uuid) === where.uuid
                 found_where = true
+                gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
+                if gluepkgs !== nothing
+                    if name in keys(gluepkgs)
+                        return PkgId(uuid5(where.uuid, name), name)
+                    end
+                end
                 # deps is either a list of names (deps = ["DepA", "DepB"]) or
                 # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
                 deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
@@ -791,12 +797,6 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                         if dep === name
                             return PkgId(UUID(uuid), name)
                         end
-                    end
-                end
-                gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
-                if gluepkgs !== nothing
-                    if name in keys(gluepkgs)
-                        return PkgId(uuid5(where.uuid, name), name)
                     end
                 end
             else # Check for glue modules
