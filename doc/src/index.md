@@ -38,7 +38,7 @@ Below is a non-exhasutive list of links that will be useful as you learn and use
 
 - [Julia Homepage](https://julialang.org)
 - [Download Julia](https://julialang.org/downloads/)
-- [Q/A Support](https://discourse.julialang.org)
+- [Discussion forum](https://discourse.julialang.org)
 - [Julia YouTube](https://www.youtube.com/user/JuliaLanguage)
 - [Find Julia Packages](https://julialang.org/packages/)
 - [Learning Resources](https://julialang.org/learning/)
