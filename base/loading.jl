@@ -564,7 +564,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             return PkgId(pkg_uuid, name)
         end
         # Check for this being a dependency to a glue module
-        glue_dep = project_file_weakdeps_get(project_file, where, name)
+        glue_dep = project_file_gluedeps_get(project_file, where, name)
         glue_dep === nothing || return glue_dep
         # look for manifest file and `where` stanza
         return explicit_manifest_deps_get(project_file, where, name)
@@ -603,18 +603,18 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-function project_file_weakdeps_get(project_file::String, where::PkgId, name::String)
+function project_file_gluedeps_get(project_file::String, where::PkgId, name::String)
     # Check for glue...
     d = parsed_toml(project_file)
     glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
-    weakdeps = get(d, "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+    gluedeps = get(d, "gluedeps", nothing)::Union{Dict{String, Any}, Nothing}
     project_id = project_file_name_uuid(project_file, "")
     if glue !== nothing && where.uuid == uuid5(project_id.uuid, where.name)
-        weakdeps = get(glue, where.name, nothing)::Union{Nothing, String, Vector{String}}
-        if weakdeps !== nothing
-            if weakdeps isa String && name == weakdeps ||
-               weakdeps isa Vector{String} && name in weakdeps
-                return PkgId(UUID(weakdeps[name]::String), name)
+        gluedeps = get(glue, where.name, nothing)::Union{Nothing, String, Vector{String}}
+        if gluedeps !== nothing
+            if gluedeps isa String && name == gluedeps ||
+               gluedeps isa Vector{String} && name in gluedeps
+                return PkgId(UUID(gluedeps[name]::String), name)
             end
             name == project_id.name && return project_id
         end
@@ -810,14 +810,14 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                         glue_entry = gluepkgs[where.name]
                         if glue_entry isa String && name == glue_entry ||
                           glue_entry isa Vector{String} && name in glue_entry
-                            weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                            if weakdeps !== nothing
-                                if weakdeps isa Vector{String}
-                                    found_name = name in weakdeps
+                            gluedeps = get(entry, "gluedeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                            if gluedeps !== nothing
+                                if gluedeps isa Vector{String}
+                                    found_name = name in gluedeps
                                     break
-                                elseif weakdeps isa Dict{String, Any}
-                                    weakdeps = weakdeps::Dict{String, Any}
-                                    for (dep, uuid) in weakdeps
+                                elseif gluedeps isa Dict{String, Any}
+                                    gluedeps = gluedeps::Dict{String, Any}
+                                    for (dep, uuid) in gluedeps
                                         uuid::String
                                         if dep === name
                                             return PkgId(UUID(uuid), name)
@@ -866,8 +866,8 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
     for (name, entries::Vector{Any}) in d
         for entry in entries
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
-            weakdeps = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
-            if weakdeps !== nothing && pkg.name in keys(weakdeps) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+            gluedeps = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
+            if gluedeps !== nothing && pkg.name in keys(gluedeps) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
                 p = normpath(dirname(locate_package(PkgId(UUID(uuid), name))), "..")
                 gluefile = joinpath(p, "glue", pkg.name * ".jl")
                 isfile(gluefile) && return gluefile
@@ -877,7 +877,7 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             end
         end
     end
-    
+
     return nothing
 end
 
@@ -1109,11 +1109,11 @@ end
 
 function insert_glue_triggers_project(project_file::String, parent::PkgId)
     d = parsed_toml(project_file)
-    weakdeps = get(d, "weakdeps", nothing)::Union{Nothing, Dict{String, Any}}
+    gluedeps = get(d, "gluedeps", nothing)::Union{Nothing, Dict{String, Any}}
     gluepkgs = get(d, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
     gluepkgs === nothing && return
-    weakdeps === nothing && return
-    _insert_glue_triggers(parent, gluepkgs, weakdeps)
+    gluedeps === nothing && return
+    _insert_glue_triggers(parent, gluepkgs, gluedeps)
 end
 
 function insert_glue_triggers_manifest(project_file::String, parent::PkgId)
@@ -1127,41 +1127,41 @@ function insert_glue_triggers_manifest(project_file::String, parent::PkgId)
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
             if UUID(uuid) === parent.uuid
-                weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}} 
+                gluedeps = get(entry, "gluedeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
                 gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
                 gluepkgs === nothing && return
-                weakdeps === nothing && return
-                if weakdeps isa Dict{String, Any}
-                    return _insert_glue_triggers(parent, weakdeps, gluepkgs)
+                gluedeps === nothing && return
+                if gluedeps isa Dict{String, Any}
+                    return _insert_glue_triggers(parent, gluedeps, gluepkgs)
                 end
 
-                d_weakdeps = Dict{String, String}()
+                d_gluedeps = Dict{String, String}()
                 for (dep_name, entries) in d
-                    dep_name in weakdeps || continue
+                    dep_name in gluedeps || continue
                     entries::Vector{Any}
                     if length(entries) != 1
                         error("expected a single entry for $(repr(name)) in $(repr(project_file))")
                     end
                     entry = first(entries)::Dict{String, Any}
                     uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
-                    d_weakdeps[dep_name] = uuid
+                    d_gluedeps[dep_name] = uuid
                 end
-                @assert length(d_weakdeps) == length(weakdeps)
-                return _insert_glue_triggers(parent, gluepkgs, d_weakdeps)
+                @assert length(d_gluedeps) == length(gluedeps)
+                return _insert_glue_triggers(parent, gluepkgs, d_gluedeps)
             end
         end
     end
     return
 end
 
-function _insert_glue_triggers(parent::PkgId, gluepkgs::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
+function _insert_glue_triggers(parent::PkgId, gluepkgs::Dict{String, <:Any}, gluedeps::Dict{String, <:Any})
     for (glue_entry::String, triggers::Union{String, Vector{String}}) in gluepkgs
         triggers isa String && (triggers = [triggers])
         triggers_id = PkgId[]
         id = PkgId(uuid5(parent.uuid, glue_entry), glue_entry)
         for trigger in triggers
             # TODO: Better error message if this lookup fails?
-            uuid_trigger = UUID(weakdeps[trigger]::String)
+            uuid_trigger = UUID(gluedeps[trigger]::String)
             push!(triggers_id, PkgId(uuid_trigger, trigger))
         end
         gid = GlueId(id, parent, triggers_id)
