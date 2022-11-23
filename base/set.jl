@@ -520,7 +520,7 @@ end
 
 """
     allequal(itr) -> Bool
-    allunique(f, xs)
+    allequal(f, xs)
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
 The second form takes `itr = (f(x) for x in xs)`.

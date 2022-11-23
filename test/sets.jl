@@ -591,7 +591,7 @@ end
     @test !allunique(sin, [1,2,3,1])
     @test allunique(sin, (1, 2, pi, im))  # eltype Any
     @test allunique(abs2, 1:100)
-    @test !allunique(abs2, repeat(1:100, 2))
+    @test !allunique(abs, -10:10)
     @test allunique(abs2, Vector{Any}(1:100))
     # These cases don't call the function at all:
     @test allunique(error, [])
