@@ -509,9 +509,6 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     bool isboxed;
     Type *vxt = julia_type_to_llvm(ctx, v.typ, &isboxed);
 
-    if (v.typ == jl_bottom_type)
-        return jl_cgval_t();
-
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(ctx, v);
         if (!jl_is_primitivetype(v.typ)) {
@@ -1137,7 +1134,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
-        argv[i] = emit_expr(ctx, args[i + 1]);
+        jl_cgval_t arg = emit_expr(ctx, args[i + 1]);
+        if (arg.typ == jl_bottom_type) {
+            // intrinsics generally don't handle buttom values, so bail out early
+            return jl_cgval_t();
+        }
+        argv[i] = arg;
     }
 
     // this forces everything to use runtime-intrinsics (e.g. for testing)
