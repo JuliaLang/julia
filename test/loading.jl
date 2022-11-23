@@ -991,5 +991,37 @@ end
     end
 end
 
+
+@testset "GluePkgs" begin
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        tmp = mktempdir()
+        push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+        proj = joinpath(@__DIR__, "project", "GluePkgs", "HasDepWithGluePkgs.jl")
+        for i in 1:2 # Once when requiring precomilation, once where it is already precompiled
+            cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+                begin
+                using HasGluePkgs
+                Base.get_gluepkg(HasGluePkgs, :GluePkg) === nothing || error("unexpectedly got a glue module")
+                HasGluePkgs.glue_loaded && error("glue_loaded set")
+                using HasDepWithGluePkgs
+                Base.get_gluepkg(HasGluePkgs, :GluePkg).gluevar == 1 || error("gluevar in GluePkg not set")
+                HasGluePkgs.glue_loaded || error("glue_loaded not set")
+                HasGluePkgs.glue_folder_loaded && error("glue_folder_loaded set")
+                HasDepWithGluePkgs.do_something() || error("do_something errored")
+                using GlueDep2
+                HasGluePkgs.glue_folder_loaded || error("glue_folder_loaded not set")
+
+                end
+            '`
+            @test success(cmd)
+        end
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
