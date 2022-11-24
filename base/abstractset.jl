@@ -478,14 +478,8 @@ end
 
 function isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T
     (isempty(a) || isempty(b)) && return true
-    fa, la = first(a), last(a)
-    fb, lb = first(b), last(b)
-    if step(a) < zero(step(a))
-        fa, la = la, fa
-    end
-    if step(b) < zero(step(b))
-        fb, lb = lb, fb
-    end
+    fa, la = extrema(a)
+    fb, lb = extrema(b)
     if (la < fb) | (lb < fa)
         return true
     else
@@ -506,8 +500,8 @@ function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T})
             longrg = b
             shortrg = a
         end
-        mis, mil = minimum(shortrg), minimum(longrg)
-        mxs, mxl = maximum(shortrg), maximum(longrg)
+        mis, mxs = extrema(shortrg)
+        mil, mxl = extrema(longrg)
 
         # number of elements in shortrg that overlap longrg
         overlapping = length(shortrg)
