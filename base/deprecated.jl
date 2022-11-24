@@ -364,3 +364,28 @@ end
 end
 
 # END 1.9 deprecations
+
+# BEGIN 1.10 deprecations
+struct DepricatedKeyDictAccessor
+    dict::Dict
+end
+
+struct DepricatedValueDictAccessor
+    dict::Dict
+end
+
+getindex(a::DepricatedKeyDictAccessor, i::Integer) = a.dict.pairs[i].first
+getindex(a::DepricatedValueDictAccessor, i::Integer) = a.dict.pairs[i].second
+
+function getproperty(d::Dict, s::Symbol)
+    if s == :keys
+        depwarn("For Dict, please use dict.pairs[i].first instead of dict.keys[i].", :getproperty, force=true)
+        return DepricatedKeyDictAccessor(d)
+    elseif s == :vals
+        depwarn("For Dict, please use dict.pairs[i].second instead of dict.vals[i].", :getproperty, force=true)
+        return DepricatedValueDictAccessor(d)
+    end
+    return getfield(d, s)
+end
+
+# END 1.10 deprecations
