@@ -38,7 +38,7 @@ end
 
 # method root provenance
 
-rootid(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), Base.parentmodule(m))
+rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
 rootid(m::Method) = rootid(m.module)
 
 function root_provenance(m::Method, i::Int)
@@ -345,7 +345,7 @@ precompile_test_harness(false) do dir
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
-        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
+        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),

@@ -1654,6 +1654,8 @@ JL_DLLEXPORT uint16_t julia__truncdfhf2(double param) JL_NOTSAFEPOINT;
 //JL_DLLEXPORT uint16_t julia__floatunsihf(uint32_t n) JL_NOTSAFEPOINT;
 //JL_DLLEXPORT uint16_t julia__floatundihf(uint64_t n) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
+
 #ifdef __cplusplus
 }
 #endif

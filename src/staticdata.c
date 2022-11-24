@@ -2497,24 +2497,26 @@ static void jl_save_system_image_to_stream(ios_t *f,
     jl_gc_enable(en);
 }
 
-static int64_t jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t **mod_array, jl_array_t **udeps)
+static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t **mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
     *mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     assert(jl_precompile_toplevel_module == NULL);
     jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
     write_header(f);
+    // last word of the header is the checksumpos
+    *checksumpos = ios_pos(f) - sizeof(uint64_t);
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
     // Determine unique (module, abspath, mtime) dependencies for the files defining modules in the worklist
     // (see Base._require_dependencies). These get stored in `udeps` and written to the ji-file header.
     // Also write Preferences.
-    int64_t srctextpos = write_dependency_list(f, worklist, udeps);  // srctextpos: position of srctext entry in header index (update later)
+    // last word of the dependency list is the end of the data / start of the srctextpos
+    *srctextpos = write_dependency_list(f, worklist, udeps);  // srctextpos: position of srctext entry in header index (update later)
     // write description of requirements for loading (modules that must be pre-loaded if initialization is to succeed)
     // this can return errors during deserialize,
     // best to keep it early (before any actual initialization)
     write_mod_list(f, *mod_array);
-    return srctextpos;
 }
 
 
@@ -2531,23 +2533,30 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
     JL_GC_PUSH7(&mod_array, &udeps, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     int64_t srctextpos = 0;
+    int64_t checksumpos = 0;
+    int64_t datastartpos = 0;
     if (worklist) {
-        srctextpos = jl_write_header_for_incremental(f, worklist, &mod_array, &udeps);
+        jl_write_header_for_incremental(f, worklist, &mod_array, &udeps, &srctextpos, &checksumpos);
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
         write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
+        datastartpos = ios_pos(f);
     }
     native_functions = _native_data;
     jl_save_system_image_to_stream(f, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
         jl_gc_enable_finalizers(ct, 1); // make sure we don't run any Julia code concurrently before this point
+        // Go back and update the checksum in the header
+        int64_t dataendpos = ios_pos(f);
+        uint32_t checksum = jl_crc32c(0, &f->buf[datastartpos], dataendpos - datastartpos);
+        ios_seek(f, checksumpos);
+        write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
+        ios_seek(f, srctextpos);
+        write_uint64(f, dataendpos);
         // Write the source-text for the dependent files
+        // Go back and update the source-text position to point to the current position
         if (udeps) {
-            // Go back and update the source-text position to point to the current position
-            int64_t posfile = ios_pos(f);
-            ios_seek(f, srctextpos);
-            write_uint64(f, posfile);
             ios_seek_end(f);
             // Each source-text file is written as
             //   int32: length of abspath
@@ -2576,7 +2585,7 @@ JL_DLLEXPORT ios_t *jl_create_system_image(void *_native_data, jl_array_t *workl
                     size_t slen = jl_string_len(dep);
                     write_int32(f, slen);
                     ios_write(f, depstr, slen);
-                    posfile = ios_pos(f);
+                    int64_t posfile = ios_pos(f);
                     write_uint64(f, 0);   // placeholder for length of this file in bytes
                     uint64_t filelen = (uint64_t) ios_copyall(f, &srctext);
                     ios_close(&srctext);
@@ -2632,7 +2641,7 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 // }
 #endif
 
-static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods,
+static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods,
                                                  jl_array_t **new_specializations, jl_array_t **method_roots_list,
@@ -3041,6 +3050,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
             // TODO: maybe want to delay this more, but that only strongly matters for async / thread safety
             // and we are already bad at that
             jl_module_t *mod = (jl_module_t*)obj;
+            mod->build_id.hi = checksum;
             size_t nbindings = mod->bindings.size;
             htable_new(&mod->bindings, nbindings);
             struct binding {
@@ -3153,9 +3163,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     jl_gc_enable(en);
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods)
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos)
 {
-    if (ios_eof(f) || !jl_read_verify_header(f)) {
+    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f)) || (*checksum >> 32 != 0xfafbfcfd)) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
@@ -3166,7 +3176,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods)
     }
     { // skip past the dependency list
         size_t deplen = read_uint64(f);
-        ios_skip(f, deplen);
+        ios_skip(f, deplen - sizeof(uint64_t));
+        *dataendpos = read_uint64(f);
     }
 
     // verify that the system state is valid
@@ -3176,7 +3187,9 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods)
 // TODO?: refactor to make it easier to create the "package inspector"
 static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int complete)
 {
-    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods);
+    uint64_t checksum = 0;
+    int64_t dataendpos = 0;
+    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos);
     if (verify_fail)
         return verify_fail;
 
@@ -3191,12 +3204,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
         ios_bufmode(f, bm_none);
         JL_SIGATOMIC_BEGIN();
         size_t len_begin = LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT);
-        assert(len_begin > 0);
-        ios_seek_end(f);
-        size_t len = ios_pos(f) - len_begin;
+        assert(len_begin > 0 && len_begin < dataendpos);
+        size_t len = dataendpos - len_begin;
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
         ios_seek(f, len_begin);
-        if (ios_readall(f, sysimg, len) != len) {
+        if (ios_readall(f, sysimg, len) != len || jl_crc32c(0, sysimg, len) != (uint32_t)checksum) {
             restored = jl_get_exceptionf(jl_errorexception_type, "Error reading system image file.");
             JL_SIGATOMIC_END();
         }
@@ -3205,7 +3217,7 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             ios_static_buffer(f, sysimg, len);
             htable_new(&new_code_instance_validate, 0);
             pkgcachesizes cachesizes;
-            jl_restore_system_image_from_stream_(f, image, depmods, (jl_array_t**)&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
+            jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
             JL_SIGATOMIC_END();
 
             // Insert method extensions
@@ -3243,7 +3255,8 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image)
 {
-    jl_restore_system_image_from_stream_(f, image, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    uint64_t checksum = 0; // TODO: make this real
+    jl_restore_system_image_from_stream_(f, image, NULL, checksum, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int complete)

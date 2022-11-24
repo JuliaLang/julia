@@ -315,7 +315,7 @@ typedef struct _jl_method_t {
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
     // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
     // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
-    jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
+    jl_array_t *root_blocks;   // RLE (build_id.lo, offset) pairs (even/odd indexing)
     int32_t nroots_sysimg;     // # of roots stored in the system image
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
@@ -592,7 +592,7 @@ typedef struct _jl_module_t {
     // hidden fields:
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    uint64_t build_id;
+    jl_uuid_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;
     _Atomic(uint32_t) counter;
