@@ -82,8 +82,8 @@ See also [`coalesce`](@ref), [`skipmissing`](@ref), [`@something`](@ref).
 julia> something(nothing, 1)
 1
 
-julia> typeof(something(nothing, Some(nothing)))
-Nothing
+julia> something(Some(nothing), 2) === nothing
+true
 
 julia> something(missing, nothing)
 missing
