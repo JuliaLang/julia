@@ -3046,14 +3046,16 @@ JL_DLLEXPORT int jl_gc_enable(int on)
         if (jl_atomic_fetch_add(&jl_gc_disable_counter, -1) == 1) {
             gc_num.allocd += gc_num.deferred_alloc;
             gc_num.deferred_alloc = 0;
-        }
 #ifdef MMTKHEAP
-        enable_collection();
+            enable_collection();
 #endif
+        }
     }
     else if (prev && !on) {
 #ifdef MMTKHEAP
-        disable_collection();
+        if (jl_atomic_load(&jl_gc_disable_counter) == 0) {
+            disable_collection();
+        }
 #endif
         // enable -> disable
         jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
