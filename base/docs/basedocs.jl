@@ -3030,7 +3030,7 @@ julia> "Hello World!"
 
 julia> "Hello World!\\n"
 "Hello World!\\n"
-    
+
 julia> "Hello \\
         World"
 "Hello World"
