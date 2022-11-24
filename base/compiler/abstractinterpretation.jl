@@ -2250,6 +2250,13 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             merge_effects!(interp, sv, effects)
             if isa(sv, InferenceState)
                 sv.stmt_info[sv.currpc] = info
+                # mark this call statement as DCE-elgible
+                # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
+                if is_removable_if_unused(effects)
+                    add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+                else
+                    sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+                end
             end
         end
         t = rt
@@ -2359,6 +2366,14 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         (;rt, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv, mi)
         t = rt
         merge_effects!(interp, sv, effects)
+        if isa(sv, InferenceState)
+            # mark this call statement as DCE-elgible
+            if is_removable_if_unused(effects)
+                add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            else
+                sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            end
+        end
     elseif ehead === :cfunction
         effects = EFFECTS_UNKNOWN
         merge_effects!(interp, sv, effects)
