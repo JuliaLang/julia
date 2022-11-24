@@ -3020,7 +3020,7 @@ QuoteNode
 
 """
     "
-`"` Is used to delimit string literals.
+`"` Is used to delimit string literals. A trailing `\\` can be used to continue a string literal on the next line.
 
 # Examples
 
@@ -3030,7 +3030,13 @@ julia> "Hello World!"
 
 julia> "Hello World!\\n"
 "Hello World!\\n"
+    
+julia> "Hello \\
+        World"
+"Hello World"
 ```
+    
+
 
 See also [`\"""`](@ref \"\"\").
 """
