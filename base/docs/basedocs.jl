@@ -685,12 +685,11 @@ Expr
 Expr
 
 """
-    (:)(expr)
+    :expr
 
-`:expr` quotes the expression `expr`, returning the abstract syntax tree (AST) of `expr`.
+Quote an expression `expr`, returning the abstract syntax tree (AST) of `expr`.
 The AST may be of type `Expr`, `Symbol`, or a literal value.
-Which of these three types are returned for any given expression is an
-implementation detail.
+The syntax `:identifier` evaluates to a `Symbol`.
 
 See also: [`Expr`](@ref), [`Symbol`](@ref), [`Meta.parse`](@ref)
 

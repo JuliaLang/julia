@@ -3,7 +3,7 @@
 """
     Threads.foreach(f, channel::Channel;
                     schedule::Threads.AbstractSchedule=Threads.FairSchedule(),
-                    ntasks=Base.threadpoolsize())
+                    ntasks=Threads.threadpoolsize())
 
 Similar to `foreach(f, channel)`, but iteration over `channel` and calls to
 `f` are split across `ntasks` tasks spawned by `Threads.@spawn`. This function

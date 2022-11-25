@@ -449,7 +449,7 @@ JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
         if (jl_atomic_cmpswap_relaxed(&b->globalref, &globalref, newref)) {
             JL_GC_PROMISE_ROOTED(newref);
             globalref = newref;
-            jl_gc_wb(m, globalref);
+            jl_gc_wb_binding(b, globalref);
         }
     }
     JL_UNLOCK(&m->lock); // may GC

@@ -574,7 +574,7 @@ static NOINLINE int true_main(int argc, char *argv[])
             ct->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception());
+            jl_no_exc_handler(jl_current_exception(), ct);
         }
         return 0;
     }

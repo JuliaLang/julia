@@ -31,29 +31,37 @@ struct StmtInfo
     used::Bool
 end
 
+abstract type ForwardableArgtypes end
+
 """
-    InferenceResult
+    InferenceResult(linfo::MethodInstance)
+    InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
 
 A type that represents the result of running type inference on a chunk of code.
+
+See also [`matching_cache_argtypes`](@ref).
 """
 mutable struct InferenceResult
     linfo::MethodInstance
     argtypes::Vector{Any}
     overridden_by_const::BitVector
     result                   # ::Type, or InferenceState if WIP
-    src                      # ::Union{CodeInfo, OptimizationState} if inferred copy is available, nothing otherwise
+    src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
     effects::Effects         # if optimization is finished
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
-    # NOTE the main constructor is defined within inferencestate.jl
-    global function _InferenceResult(
-        linfo::MethodInstance,
-        arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=#)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing)
+    must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
+    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+        return new(linfo, cache_argtypes, overridden_by_const, Any, nothing,
+            WorldRange(), Effects(), Effects(), nothing, true)
     end
+end
+function InferenceResult(linfo::MethodInstance)
+    return InferenceResult(linfo, matching_cache_argtypes(linfo)...)
+end
+function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
+    return InferenceResult(linfo, matching_cache_argtypes(linfo, argtypes)...)
 end
 
 """
@@ -139,6 +147,10 @@ struct InferenceParams
     # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
+    # Assume that no new bindings will be added, i.e. a non-existing binding
+    # at inference time can be assumed to always error.
+    assume_bindings_static::Bool
+
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
@@ -148,6 +160,7 @@ struct InferenceParams
             apply_union_enum::Int = 8,
             tupletype_depth::Int = 3,
             tuple_splat::Int = 32,
+            assume_bindings_static::Bool = false,
         )
         return new(
             ipo_constant_propagation,
@@ -158,6 +171,7 @@ struct InferenceParams
             apply_union_enum,
             tupletype_depth,
             tuple_splat,
+            assume_bindings_static
         )
     end
 end
@@ -291,7 +305,7 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
 abstract type CallInfo end
 

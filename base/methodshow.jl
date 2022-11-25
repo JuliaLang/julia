@@ -78,12 +78,8 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    if m.sig === Tuple # OpaqueClosure
-        return Symbol[]
-    end
-    mt = get_methodtable(m)
-    if isdefined(mt, :kwsorter)
-        kwtype = typeof(mt.kwsorter)
+    if m.sig !== Tuple # OpaqueClosure or Builtin
+        kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
         kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
         if kwli !== nothing
@@ -164,7 +160,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 """
     functionloc(m::Method)
 
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+Return a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
     file, ln = updated_methodloc(m)
@@ -177,7 +173,7 @@ end
 """
     functionloc(f::Function, types)
 
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
 
@@ -246,13 +242,12 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         show_method_params(io, tv)
     end
 
-    # module & file, re-using function from errorshow.jl
-    if get(io, :compact, false)::Bool # single-line mode
-        print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width)
-    else
+    if !(get(io, :compact, false)::Bool) # single-line mode
         println(io)
-        print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width=digit_align_width+4)
+        digit_align_width += 4
     end
+    # module & file, re-using function from errorshow.jl
+    print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -316,10 +311,10 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
 
             print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
 
-            modulecolor = if meth.module == modul
+            modulecolor = if parentmodule(meth) == modul
                 nothing
             else
-                m = parentmodule_before_main(meth.module)
+                m = parentmodule_before_main(meth)
                 get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             end
             show_method(io, meth; modulecolor)
@@ -362,7 +357,7 @@ end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
 function url(m::Method)
-    M = m.module
+    M = parentmodule(m)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
@@ -406,7 +401,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
+        print(io, m.name, "(...) in ", parentmodule(m))
         return
     end
     print(io, decls[1][2], "(")
@@ -430,7 +425,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
         show_method_params(io, tv)
         print(io,"</i>")
     end
-    print(io, " in ", m.module)
+    print(io, " in ", parentmodule(m))
     if line > 0
         file, line = updated_methodloc(m)
         u = url(m)

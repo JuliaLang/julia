@@ -64,11 +64,6 @@
 #endif
 #endif
 
-// SEGV_EXCEPTION turns segmentation faults into catchable julia exceptions.
-// This is not recommended, as the memory state after such an exception should
-// be considered untrusted, but can be helpful during development
-// #define SEGV_EXCEPTION
-
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit

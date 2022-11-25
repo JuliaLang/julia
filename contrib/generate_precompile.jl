@@ -152,7 +152,7 @@ if Artifacts !== nothing
     artifacts = Artifacts.load_artifacts_toml(artifacts_toml)
     platforms = [Artifacts.unpack_platform(e, "HelloWorldC", artifacts_toml) for e in artifacts["HelloWorldC"]]
     best_platform = select_platform(Dict(p => triplet(p) for p in platforms))
-    dlopen("libjulia$(ccall(:jl_is_debugbuild, Cint, ()) != 0 ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
+    dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
     """
 end
 
@@ -212,7 +212,6 @@ if Test !== nothing
     precompile(Tuple{typeof(Test.match_logs), Function, Tuple{String, Regex}})
     precompile(Tuple{typeof(Base.CoreLogging.shouldlog), Test.TestLogger, Base.CoreLogging.LogLevel, Module, Symbol, Symbol})
     precompile(Tuple{typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
-    precompile(Tuple{typeof(Core.kwfunc(Base.CoreLogging.handle_message)), typeof((exception=nothing,)), typeof(Base.CoreLogging.handle_message), Test.TestLogger, Base.CoreLogging.LogLevel, String, Module, Symbol, Symbol, String, Int})
     precompile(Tuple{typeof(Test.detect_ambiguities), Any})
     precompile(Tuple{typeof(Test.collect_test_logs), Function})
     precompile(Tuple{typeof(Test.do_broken_test), Test.ExecutionResult, Any})
@@ -402,10 +401,6 @@ function generate_precompile_statements()
             end
             # println(ps)
             ps = Core.eval(PrecompileStagingArea, ps)
-            # XXX: precompile doesn't currently handle overloaded nospecialize arguments very well.
-            # Skipping them avoids the warning.
-            ms = length(ps) == 1 ? Base._methods_by_ftype(ps[1], 1, Base.get_world_counter()) : Base.methods(ps...)
-            ms isa Vector || continue
             precompile(ps...)
             n_succeeded += 1
             print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
