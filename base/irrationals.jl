@@ -207,7 +207,7 @@ macro irrational(sym, val, def)
     irrational(sym, val, def)
 end
 macro irrational(sym, def)
-    irrational(sym, def, def)
+    irrational(sym, :(big($(esc(sym)))), def)
 end
 function irrational(sym, val, def)
     esym = esc(sym)
