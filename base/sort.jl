@@ -966,8 +966,8 @@ Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself 
 
 Uses `Base.copymutable` to support immutable collections and iterables.
 
-!!! compat "Julia 1.9"
-    `sort` of arbitrary iterables requires at least Julia 1.9.
+!!! compat "Julia 1.10"
+    `sort` of arbitrary iterables requires at least Julia 1.10.
 
 # Examples
 ```jldoctest
