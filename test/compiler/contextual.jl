@@ -70,7 +70,7 @@ module MiniCassette
     end
 
     function overdub_generator(self, c, f, args)
-        if !isdefined(f, :instance)
+        if !Base.issingletontype(f)
             return :(return f(args...))
         end
 

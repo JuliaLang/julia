@@ -294,7 +294,7 @@ function rm(path::AbstractString; force::Bool=false, recursive::Bool=false)
                     rm(joinpath(path, p), force=force, recursive=true)
                 end
             catch err
-                if !(force && isa(err, IOError) && err.code==Base.UV_EACCES)
+                if !(isa(err, IOError) && err.code==Base.UV_EACCES)
                     rethrow(err)
                 end
             end

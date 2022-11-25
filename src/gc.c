@@ -3203,8 +3203,17 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
         jl_binding_t *ptr = (jl_binding_t*)items[i];
         // A null pointer can happen here when the binding is cleaned up
         // as an exception is thrown after it was already queued (#10221)
+        int bnd_refyoung = 0;
         jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
-        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v)) {
+        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v))
+            bnd_refyoung = 1;
+        jl_value_t *ty = jl_atomic_load_relaxed(&ptr->ty);
+        if (ty != NULL && gc_mark_queue_obj(gc_cache, sp, ty))
+            bnd_refyoung = 1;
+        jl_value_t *globalref = jl_atomic_load_relaxed(&ptr->globalref);
+        if (globalref != NULL && gc_mark_queue_obj(gc_cache, sp, globalref))
+            bnd_refyoung = 1;
+        if (bnd_refyoung) {
             items[n_bnd_refyoung] = ptr;
             n_bnd_refyoung++;
         }
@@ -3652,6 +3661,9 @@ void jl_init_thread_heap(jl_ptls_t ptls)
 // System-wide initializations
 void jl_gc_init(void)
 {
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
+
     JL_MUTEX_INIT(&heapsnapshot_lock);
     JL_MUTEX_INIT(&finalizers_lock);
     uv_mutex_init(&gc_cache_lock);
@@ -3688,7 +3700,8 @@ void jl_gc_init(void)
     t_start = jl_hrtime();
 }
 
-void jl_gc_set_max_memory(uint64_t max_mem) {
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
+{
     if (max_mem > 0
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;

@@ -414,6 +414,9 @@ switch_dim12(B::AbstractArray) = PermutedDimsArray(B, (2, 1, ntuple(Base.Fix1(+,
 (-)(A::Adjoint)   = Adjoint(  -A.parent)
 (-)(A::Transpose) = Transpose(-A.parent)
 
+tr(A::Adjoint) = adjoint(tr(parent(A)))
+tr(A::Transpose) = transpose(tr(parent(A)))
+
 ## multiplication *
 
 function _dot_nonrecursive(u, v)
