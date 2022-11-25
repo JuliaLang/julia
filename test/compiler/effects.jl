@@ -67,7 +67,7 @@ end
 Base.@assume_effects :removable removable_call(
     f, args...; kwargs...) = f(args...; kwargs...)
 @test fully_eliminated() do
-    removable_call(getindex, ___CONST_DICT___, :a)
+    @noinline removable_call(getindex, ___CONST_DICT___, :a)
     nothing
 end
 
