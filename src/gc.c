@@ -4113,7 +4113,7 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void)
     return jl_atomic_load(&support_conservative_marking);
 }
 
-static inline jl_value_t *internal_obj_base_ptr(void *p)
+JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
 {
     p = (char *) p - 1;
     jl_gc_pagemeta_t *meta = page_metadata(p);
@@ -4204,21 +4204,6 @@ static inline jl_value_t *internal_obj_base_ptr(void *p)
         return jl_valueof(cell);
     }
     return NULL;
-}
-
-JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
-{
-    uint8_t restore = gc_all_tls_states == NULL;
-    if (__unlikely(restore)) {
-        gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
-        gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
-    }
-    jl_value_t *obj = internal_obj_base_ptr(p);
-    if (__unlikely(restore)) {
-        gc_n_threads = 0;
-        gc_all_tls_states = NULL;
-    }
-    return obj;
 }
 
 JL_DLLEXPORT size_t jl_gc_max_internal_obj_size(void)
