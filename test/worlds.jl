@@ -355,7 +355,7 @@ inner(s::Union{Vector,Dict}; kw=false) = inneri(s, kwi=maximum(s), kwb=kw)
 inneri(s, args...; kwargs...) = inneri(IOBuffer(), s, args...; kwargs...)
 inneri(io::IO, s::Union{Vector,Dict}; kwi=0, kwb=false) = (print(io, first(s), " "^kwi, kwb); String(take!(io)))
 @test outer(Ref{Any}([1,2,3])) == "1   false"
-mi = method_instance(Core.kwfunc(inneri), (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
+mi = method_instance(Core.kwcall, (NamedTuple{(:kwi,:kwb),TT} where TT<:Tuple{Any,Bool}, typeof(inneri), Vector{T} where T))
 w = worlds(mi)
 abstract type Container{T} end
 Base.eltype(::Type{C}) where {T,C<:Container{T}} = T

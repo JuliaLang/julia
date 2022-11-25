@@ -42,6 +42,7 @@ The following is a leaf lock (level 2), and only acquires level 1 locks (safepoi
 >   * typecache
 >   * Module->lock
 >   * JLDebuginfoPlugin::PluginMutex
+>   * newly_inferred_mutex
 
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
 
@@ -127,7 +128,7 @@ These data structures each need locks due to being shared mutable global state. 
 list for the above lock priority list. This list does not include level 1 leaf resources due to
 their simplicity.
 
-MethodTable modifications (def, cache, kwsorter type) : MethodTable->writelock
+MethodTable modifications (def, cache) : MethodTable->writelock
 
 Type declarations : toplevel lock
 

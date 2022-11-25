@@ -11,7 +11,7 @@ import Base: show, ==, hash, string, Symbol, isless, length, eltype,
 """
     isvalid(value) -> Bool
 
-Returns `true` if the given value is valid for its type, which currently can be either
+Return `true` if the given value is valid for its type, which currently can be either
 `AbstractChar` or `String` or `SubString{String}`.
 
 # Examples
@@ -31,7 +31,7 @@ isvalid(value)
 """
     isvalid(T, value) -> Bool
 
-Returns `true` if the given value is valid for that type. Types currently can
+Return `true` if the given value is valid for that type. Types currently can
 be either `AbstractChar` or `String`. Values for `AbstractChar` can be of type `AbstractChar` or [`UInt32`](@ref).
 Values for `String` can be of that type, `SubString{String}`, `Vector{UInt8}`,
 or a contiguous subarray thereof.

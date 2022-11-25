@@ -77,7 +77,7 @@ JULIA_THREADS := 1
 # Set to 1 to enable profiling with OProfile
 USE_OPROFILE_JITEVENTS ?= 0
 
-# USE_PERF_JITEVENTS defined below since default is OS specific
+# USE_PERF_JITEVENTS, and USE_INTEL_JITEVENTS defined below since default is OS specific
 
 # assume we don't have LIBSSP support in our compiler, will enable later if likely true
 HAVE_SSP := 0
@@ -134,23 +134,6 @@ endif
 endif
 export BUILDROOT
 unexport O
-
-# Make sure the user didn't try to specify a path that will confuse the shell / make
-METACHARACTERS := ][?*{}() $$%:;&|!\#,\\`\":
-ifneq (,$(findstring ',$(value BUILDROOT)))
-$(error cowardly refusing to build into directory with a single-quote in the path)
-endif
-ifneq (,$(findstring ',$(value JULIAHOME)))
-$(error cowardly refusing to build from source directory with a single-quote in the path)
-endif
-ifneq (,$(shell echo '$(value BUILDROOT)' | grep '[$(METACHARACTERS)]'))
-$(error cowardly refusing to build into directory with a shell-metacharacter in the path\
-    (got: $(value BUILDROOT)))
-endif
-ifneq (,$(shell echo '$(value JULIAHOME)' | grep '[$(METACHARACTERS)]'))
-$(error cowardly refusing to build from source directory with a shell-metacharacter in the path\
-    (got: $(value JULIAHOME)))
-endif
 
 # we include twice to pickup user definitions better
 # include from JULIAHOME first so that BUILDROOT can override
@@ -442,8 +425,10 @@ endif
 # Set to 1 to enable profiling with perf
 ifeq ("$(OS)", "Linux")
 USE_PERF_JITEVENTS ?= 1
+USE_INTEL_JITEVENTS ?= 1
 else
 USE_PERF_JITEVENTS ?= 0
+USE_INTEL_JITEVENTS ?= 0
 endif
 
 JULIACODEGEN := LLVM
@@ -452,8 +437,8 @@ JULIACODEGEN := LLVM
 ifeq ($(FORCE_ASSERTIONS), 1)
 # C++ code needs to include LLVM header with the same assertion flag as LLVM
 # Use this flag to re-enable assertion in our code after all the LLVM headers are included
-CXX_DISABLE_ASSERTION :=
-DISABLE_ASSERTIONS :=
+CXX_DISABLE_ASSERTION := -DJL_VERIFY_PASSES
+DISABLE_ASSERTIONS := -DJL_VERIFY_PASSES
 else
 CXX_DISABLE_ASSERTION := -DJL_NDEBUG
 DISABLE_ASSERTIONS := -DNDEBUG -DJL_NDEBUG
@@ -1140,14 +1125,40 @@ USE_BINARYBUILDER ?= 0
 endif
 
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
-FC_VERSION := $(shell $(FC) --version 2>/dev/null | head -1)
-FC_OR_CC_VERSION := $(or $(FC_VERSION),$(shell $(CC) --version 2>/dev/null | head -1))
+FC_VERSION := $(shell $(FC) -dM -E - < /dev/null | grep __GNUC__ | cut -d' ' -f3)
+ifeq ($(USEGCC)$(FC_VERSION),1)
+FC_OR_CC_VERSION := $(shell $(CC) -dumpfullversion -dumpversion 2>/dev/null | cut -d'.' -f1)
+# n.b. clang's __GNUC__ macro pretends to be gcc 4.2.1, so leave it as the empty string here if the compiler is not certain to be GCC
+endif
 BB_TRIPLET_LIBGFORTRAN_CXXABI := $(shell $(call invoke_python,$(JULIAHOME)/contrib/normalize_triplet.py) $(or $(XC_HOST),$(XC_HOST),$(BUILD_MACHINE)) "$(FC_OR_CC_VERSION)" "$(or $(shell echo '\#include <string>' | $(CXX) $(CXXFLAGS) -x c++ -dM -E - | grep _GLIBCXX_USE_CXX11_ABI | awk '{ print $$3 }' ),1)")
 BB_TRIPLET_LIBGFORTRAN := $(subst $(SPACE),-,$(filter-out cxx%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET_CXXABI := $(subst $(SPACE),-,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI))))
 BB_TRIPLET := $(subst $(SPACE),-,$(filter-out cxx%,$(filter-out libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN_CXXABI)))))
 
 LIBGFORTRAN_VERSION := $(subst libgfortran,,$(filter libgfortran%,$(subst -,$(SPACE),$(BB_TRIPLET_LIBGFORTRAN))))
+
+# CSL_NEXT_GLIBCXX_VERSION is a triple of the symbols representing support for whatever
+# the next libstdc++ version would be. This is used for two things.
+# 1. Whether the system libraries are new enough, if we need to use the libs bundled with CSL
+# 2. To know which libstdc++ to load at runtime
+# We want whichever libstdc++ library is newer, because if we don't it can cause problems.
+# While what CSL bundles is quite bleeding-edge compared to what most distros ship, if someone
+# tries to build an older branch of Julia, the version of CSL that ships with it may be
+# relatively old. This is not a problem for code that is built in BB, but when we build Julia
+# with the system compiler, that compiler uses the version of `libstdc++` that it is bundled
+# with, and we can get linker errors when trying to run that `julia` executable with the
+# `libstdc++` that comes from the (now old) BB-built CSL.
+# To fix this, we take note when the system `libstdc++.so` is newer than whatever we
+# would get from CSL (by searching for a `GLIBCXX_X.Y.Z` symbol that does not exist
+# in our CSL, but would in a newer one), and default to `USE_BINARYBUILDER_CSL=0` in
+# this case. This ensures that we link against a version with the symbols required.
+# We also check the system libstdc++ at runtime in the cli loader library, and
+# load it if it contains the version symbol that indicates that it is newer than the one
+# shipped with CSL. Although we do not depend on any of the symbols, it is entirely
+# possible that a user might choose to install a library which depends on symbols provided
+# by a newer libstdc++. Without runtime detection, those libraries would break.
+CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.31|GLIBCXX_3\.5\.|GLIBCXX_4\.
+
 
 # This is the set of projects that BinaryBuilder dependencies are hooked up for.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
@@ -1205,18 +1216,16 @@ ifneq (,$(filter $(OS),WINNT emscripten))
   RPATH :=
   RPATH_ORIGIN :=
   RPATH_ESCAPED_ORIGIN :=
-  RPATH_LIB :=
 else ifeq ($(OS), Darwin)
   RPATH := -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN := -Wl,-rpath,'@loader_path/'
   RPATH_ESCAPED_ORIGIN := $(RPATH_ORIGIN)
-  RPATH_LIB := -Wl,-rpath,'@loader_path/'
 else
-  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin
-  RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
-  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir)
-  RPATH_LIB := -Wl,-rpath,'$$ORIGIN/' -Wl,-z,origin
+  RPATH := -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath-link,$(build_shlibdir) -Wl,-z,origin -Wl,--enable-new-dtags
+  RPATH_ORIGIN := -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin -Wl,--enable-new-dtags
+  RPATH_ESCAPED_ORIGIN := -Wl,-rpath,'\$$\$$ORIGIN' -Wl,-z,origin -Wl,-rpath-link,$(build_shlibdir) -Wl,--enable-new-dtags
 endif
+RPATH_LIB := $(RPATH_ORIGIN)
 
 # --whole-archive
 ifeq ($(OS), Darwin)
@@ -1478,11 +1487,17 @@ else
 LIBGCC_NAME := libgcc_s_seh-1.$(SHLIB_EXT)
 endif
 endif
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
 ifeq ($(OS),Darwin)
 ifeq ($(ARCH),aarch64)
 LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
 else
+ifeq ($(LIBGFORTRAN_VERSION),5)
+LIBGCC_NAME := libgcc_s.1.1.$(SHLIB_EXT)
+else
 LIBGCC_NAME := libgcc_s.1.$(SHLIB_EXT)
+endif
 endif
 endif
 ifneq ($(findstring $(OS),Linux FreeBSD),)

@@ -235,17 +235,16 @@ function showerror(io::IO, ex::MethodError)
     show_candidates = true
     print(io, "MethodError: ")
     ft = typeof(f)
-    name = ft.name.mt.name
     f_is_function = false
     kwargs = ()
-    if endswith(string(ft.name.name), "##kw")
-        f = ex.args[2]
+    if f === Core.kwcall && !is_arg_types
+        f = (ex.args::Tuple)[2]
         ft = typeof(f)
-        name = ft.name.mt.name
         arg_types_param = arg_types_param[3:end]
         kwargs = pairs(ex.args[1])
         ex = MethodError(f, ex.args[3:end::Int])
     end
+    name = ft.name.mt.name
     if f === Base.convert && length(arg_types_param) == 2 && !is_arg_types
         f_is_function = true
         show_convert_error(io, ex, arg_types_param)
@@ -257,9 +256,7 @@ function showerror(io::IO, ex::MethodError)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
         print(io, "objects of type ", ft, " are not callable")
     else
-        if ft <: Function && isempty(ft.parameters) &&
-                isdefined(ft.name.module, name) &&
-                ft == typeof(getfield(ft.name.module, name))
+        if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
         end
         print(io, "no method matching ")
@@ -542,7 +539,7 @@ function show_method_candidates(io::IO, ex::MethodError, @nospecialize kwargs=()
                 end
                 println(iob)
 
-                m = parentmodule_before_main(method.module)
+                m = parentmodule_before_main(method)
                 modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
                 print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
 
@@ -697,7 +694,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
 end
 
 # Gets the topmost parent module that isn't Main
-function parentmodule_before_main(m)
+function parentmodule_before_main(m::Module)
     while parentmodule(m) !== m
         pm = parentmodule(m)
         pm == Main && break
@@ -705,6 +702,7 @@ function parentmodule_before_main(m)
     end
     m
 end
+parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
 function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
@@ -794,11 +792,6 @@ function show_backtrace(io::IO, t::Vector)
 end
 
 
-function is_kw_sorter_name(name::Symbol)
-    sn = string(name)
-    return !startswith(sn, '#') && endswith(sn, "##kw")
-end
-
 # For improved user experience, filter out frames for include() implementation
 # - see #33065. See also #35371 for extended discussion of internal frames.
 function _simplify_include_frames(trace)
@@ -850,15 +843,27 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
                 continue
             end
 
-            if (lkup.from_c && skipC) || is_kw_sorter_name(lkup.func)
+            if (lkup.from_c && skipC)
                 continue
+            end
+            code = lkup.linfo
+            if code isa MethodInstance
+                def = code.def
+                if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),Any,Any,Vararg}
+                    # hide kwcall() methods, which are probably internal keyword sorter methods
+                    # (we print the internal method instead, after demangling
+                    # the argument list, since it has the right line number info)
+                    continue
+                end
+            elseif !lkup.from_c
+                lkup.func === :kwcall && continue
             end
             count += 1
             if count > limit
                 break
             end
 
-            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== lkup.linfo
+            if lkup.file != last_frame.file || lkup.line != last_frame.line || lkup.func != last_frame.func || lkup.linfo !== last_frame.linfo
                 if n > 0
                     push!(ret, (last_frame, n))
                 end

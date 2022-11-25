@@ -754,7 +754,7 @@ function workqueue_for(tid::Int)
     @lock l begin
         qs = Workqueues
         if length(qs) < tid
-            nt = Threads.nthreads()
+            nt = Threads.maxthreadid()
             @assert tid <= nt
             global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
         end
@@ -767,7 +767,7 @@ end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    if t.sticky || Threads.nthreads() == 1
+    if t.sticky || Threads.threadpoolsize() == 1
         tid = Threads.threadid(t)
         if tid == 0
             # Issue #41324

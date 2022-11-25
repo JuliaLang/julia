@@ -274,6 +274,8 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
     JL_LOCK(&jl_codegen_lock);
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     orc::ThreadSafeContext ctx;
     orc::ThreadSafeModule backing;
     if (!llvmmod) {
@@ -425,6 +427,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
+    ct->reentrant_codegen--;
     JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
@@ -590,7 +593,11 @@ void jl_dump_native_impl(void *native_code,
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
         preopt.run(M, empty.MAM);
-        if (bc_fname || obj_fname || asm_fname) optimizer.run(M);
+        if (bc_fname || obj_fname || asm_fname) {
+            assert(!verifyModule(M, &errs()));
+            optimizer.run(M);
+            assert(!verifyModule(M, &errs()));
+        }
 
         // We would like to emit an alias or an weakref alias to redirect these symbols
         // but LLVM doesn't let us emit a GlobalAlias to a declaration...
@@ -1031,6 +1038,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             // and will better match what's actually in sysimg.
             for (auto &global : output.globals)
                 global.second->setLinkage(GlobalValue::ExternalLinkage);
+            assert(!verifyModule(*m.getModuleUnlocked(), &errs()));
             if (optimize) {
 #ifndef JL_USE_NEW_PM
                 legacy::PassManager PM;
@@ -1042,6 +1050,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
 #endif
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
+                assert(!verifyModule(*m.getModuleUnlocked(), &errs()));
             }
             const std::string *fname;
             if (decls.functionObject == "jl_fptr_args" || decls.functionObject == "jl_fptr_sparam")
