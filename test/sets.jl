@@ -436,6 +436,7 @@ end
                    (false, 18:6:18, 9:9:60),
                    (true, 1:2:3, 2:3:5),
                    (true, 1:4:5, 2:1:4),
+                   (false, 4:12:124, 1:1:8),
                    # Chars
                    (true, 'a':'l', 'o':'p'), # not overlapping
                    (false, 'a':'l', 'h':'p'), # partial overlap
@@ -444,6 +445,8 @@ end
                    (true, 1.:10., 11.:20.), # not overlapping
                    (false, 1.:10., 5.:20.), # partial overlap
                    (false, 5.:9., 1.:10.), # complete overlap
+                   # Inputs that may hang
+                   (false, -6011687643038262928:3545293653953105048, -6446834672754204848:3271267329311042532),
                    )
         @test isdisjoint(a, b) == truth
         @test isdisjoint(b, a) == truth
