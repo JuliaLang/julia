@@ -7,8 +7,12 @@ import .CC: WorldRange, WorldView
 
 include("irutils.jl")
 
-# define new `AbstractInterpreter` that satisfies the minimum interface requirements
-# while managing its cache independently
+"""
+    @newinterp NewInterpreter
+
+Defines new `NewInterpreter <: AbstractInterpreter` whose cache is separated
+from the native code cache, satisfying the minimum interface requirements.
+"""
 macro newinterp(name)
     cachename = Symbol(string(name, "Cache"))
     name = esc(name)
@@ -19,10 +23,12 @@ macro newinterp(name)
         struct $name <: CC.AbstractInterpreter
             interp::CC.NativeInterpreter
             cache::$cachename
+            meta # additional information
             $name(world = Base.get_world_counter();
                 interp = CC.NativeInterpreter(world),
-                cache = $cachename(IdDict{MethodInstance,CodeInstance}())
-                ) = new(interp, cache)
+                cache = $cachename(IdDict{MethodInstance,CodeInstance}()),
+                meta = nothing,
+                ) = new(interp, cache, meta)
         end
         CC.InferenceParams(interp::$name) = CC.InferenceParams(interp.interp)
         CC.OptimizationParams(interp::$name) = CC.OptimizationParams(interp.interp)
@@ -240,6 +246,26 @@ end
 @test CC.tmerge(typeinf_lattice(TaintInterpreter()), Taint(Int, 1), Taint(Int, 2)) == Taint(Int, BitSet(1:2))
 
 # code_typed(ifelse, (Bool, Int, Int); interp=TaintInterpreter())
+
+# External lattice without `Conditional`
+
+import .CC:
+    AbstractLattice, ConstsLattice, PartialsLattice, InferenceLattice, OptimizerLattice,
+    typeinf_lattice, ipo_lattice, optimizer_lattice
+
+@newinterp NonconditionalInterpreter
+CC.typeinf_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+CC.ipo_lattice(::NonconditionalInterpreter) = InferenceLattice(PartialsLattice(ConstsLattice()))
+CC.optimizer_lattice(::NonconditionalInterpreter) = OptimizerLattice(PartialsLattice(ConstsLattice()))
+
+@test Base.return_types((Any,); interp=NonconditionalInterpreter()) do x
+    c = isa(x, Int) || isa(x, Float64)
+    if c
+        return x
+    else
+        return nothing
+    end
+end |> only === Any
 
 # CallInfo × inlining
 # ===================

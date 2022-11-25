@@ -141,53 +141,67 @@ There are currently four sorting algorithms available in base Julia:
   * [`PartialQuickSort(k)`](@ref)
   * [`MergeSort`](@ref)
 
-`InsertionSort` is an O(n^2) stable sorting algorithm. It is efficient for very small `n`, and
-is used internally by `QuickSort`.
+`InsertionSort` is an O(n²) stable sorting algorithm. It is efficient for very small `n`,
+and is used internally by `QuickSort`.
 
-`QuickSort` is an O(n log n) sorting algorithm which is in-place, very fast, but not stable –
-i.e. elements which are considered equal will not remain in the same order in which they originally
-appeared in the array to be sorted. `QuickSort` is the default algorithm for numeric values, including
-integers and floats.
+`QuickSort` is a very fast sorting algorithm with an average-case time complexity of
+O(n log n). `QuickSort` is stable, i.e., elements considered equal will remain in the same
+order. Notice that O(n²) is worst-case complexity, but it gets vanishingly unlikely as the
+pivot selection is randomized.
 
-`PartialQuickSort(k)` is similar to `QuickSort`, but the output array is only sorted up to index
-`k` if `k` is an integer, or in the range of `k` if `k` is an `OrdinalRange`. For example:
+`PartialQuickSort(k::OrdinalRange)` is similar to `QuickSort`, but the output array is only
+sorted in the range of `k`. For example:
 
-```julia
-x = rand(1:500, 100)
-k = 50
-k2 = 50:100
-s = sort(x; alg=QuickSort)
-ps = sort(x; alg=PartialQuickSort(k))
-qs = sort(x; alg=PartialQuickSort(k2))
-map(issorted, (s, ps, qs))             # => (true, false, false)
-map(x->issorted(x[1:k]), (s, ps, qs))  # => (true, true, false)
-map(x->issorted(x[k2]), (s, ps, qs))   # => (true, false, true)
-s[1:k] == ps[1:k]                      # => true
-s[k2] == qs[k2]                        # => true
+```jldoctest
+julia> x = rand(1:500, 100);
+
+julia> k = 50:100;
+
+julia> s1 = sort(x; alg=QuickSort);
+
+julia> s2 = sort(x; alg=PartialQuickSort(k));
+
+julia> map(issorted, (s1, s2))
+(true, false)
+
+julia> map(x->issorted(x[k]), (s1, s2))
+(true, true)
+
+julia> s1[k] == s2[k]
+true
 ```
+
+!!! compat "Julia 1.9"
+    The `QuickSort` and `PartialQuickSort` algorithms are stable since Julia 1.9.
 
 `MergeSort` is an O(n log n) stable sorting algorithm but is not in-place – it requires a temporary
 array of half the size of the input array – and is typically not quite as fast as `QuickSort`.
 It is the default algorithm for non-numeric data.
 
-The default sorting algorithms are chosen on the basis that they are fast and stable, or *appear*
-to be so. For numeric types indeed, `QuickSort` is selected as it is faster and indistinguishable
-in this case from a stable sort (unless the array records its mutations in some way). The stability
-property comes at a non-negligible cost, so if you don't need it, you may want to explicitly specify
-your preferred algorithm, e.g. `sort!(v, alg=QuickSort)`.
+The default sorting algorithms are chosen on the basis that they are fast and stable.
+Usually, `QuickSort` is selected, but `InsertionSort` is preferred for small data.
+You can also explicitly specify your preferred algorithm, e.g.
+`sort!(v, alg=PartialQuickSort(10:20))`.
 
-The mechanism by which Julia picks default sorting algorithms is implemented via the `Base.Sort.defalg`
-function. It allows a particular algorithm to be registered as the default in all sorting functions
-for specific arrays. For example, here are the two default methods from [`sort.jl`](https://github.com/JuliaLang/julia/blob/master/base/sort.jl):
+The mechanism by which Julia picks default sorting algorithms is implemented via the
+`Base.Sort.defalg` function. It allows a particular algorithm to be registered as the
+default in all sorting functions for specific arrays. For example, here is the default
+method from [`sort.jl`](https://github.com/JuliaLang/julia/blob/master/base/sort.jl):
 
 ```julia
-defalg(v::AbstractArray) = MergeSort
-defalg(v::AbstractArray{<:Number}) = QuickSort
+defalg(v::AbstractArray) = DEFAULT_STABLE
 ```
 
-As for numeric arrays, choosing a non-stable default algorithm for array types for which the notion
-of a stable sort is meaningless (i.e. when two values comparing equal can not be distinguished)
-may make sense.
+You may change the default behavior for specific types by defining new methods for `defalg`.
+For example, [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl/blob/v1.3.2/src/InlineStrings.jl#L903)
+defines the following method:
+```julia
+Base.Sort.defalg(::AbstractArray{<:Union{SmallInlineStrings, Missing}}) = InlineStringSort
+```
+
+!!! compat "Julia 1.9"
+    The default sorting algorithm (returned by `Base.Sort.defalg`) is guaranteed
+    to be stable since Julia 1.9. Previous versions had unstable edge cases when sorting numeric arrays.
 
 ## Alternate orderings
 

@@ -932,7 +932,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(expr, 0);
         JL_GC_PUSH1(&values);
         values = jl_array_copy(values);
-        jl_value_t *ret = jl_new_struct(jl_phinode_type, values);
+        jl_value_t *ret = jl_new_struct(jl_phicnode_type, values);
         JL_GC_POP();
         return ret;
     }

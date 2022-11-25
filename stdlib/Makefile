@@ -14,9 +14,8 @@ include $(JULIAHOME)/deps/*.version
 
 
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)
-
-$(build_datarootdir)/julia/stdlib/$(VERSDIR):
-	mkdir -p $@
+DIRS := $(build_datarootdir)/julia/stdlib/$(VERSDIR) $(build_prefix)/manifest/$(VERSDIR)
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 JLLS = DSFMT GMP CURL LIBGIT2 LLVM LIBSSH2 LIBUV MBEDTLS MPFR NGHTTP2 \
        BLASTRAMPOLINE OPENBLAS OPENLIBM P7ZIP PCRE LIBSUITESPARSE ZLIB \
@@ -43,13 +42,18 @@ $(foreach jll,$(JLLS),$(eval $(call download-artifacts-toml,$(jll))))
 
 STDLIBS = Artifacts Base64 CRC32c Dates Distributed FileWatching \
           Future InteractiveUtils LazyArtifacts Libdl LibGit2 LinearAlgebra Logging \
-          Markdown Mmap Printf Profile Random REPL Serialization SHA \
-          SharedArrays Sockets SparseArrays SuiteSparse Test TOML Unicode UUIDs \
+          Markdown Mmap Printf Profile Random REPL Serialization \
+          SharedArrays Sockets Test TOML Unicode UUIDs \
           $(JLL_NAMES)
 
 STDLIBS_EXT = Pkg Statistics LibCURL Downloads ArgTools Tar NetworkOptions SuiteSparse SparseArrays SHA
 
 $(foreach module, $(STDLIBS_EXT), $(eval $(call stdlib-external,$(module),$(shell echo $(module) | tr a-z A-Z))))
+
+ifneq ($(filter $(STDLIBS),$(STDLIBS_EXT)),)
+$(error ERROR duplicated STDLIBS in list)
+endif
+
 
 # Generate symlinks to all stdlibs at usr/share/julia/stdlib/vX.Y/
 $(foreach module, $(STDLIBS), $(eval $(call symlink_target,$$(JULIAHOME)/stdlib/$(module),$$(build_datarootdir)/julia/stdlib/$$(VERSDIR),$(module))))
@@ -68,5 +72,5 @@ clean: $(addprefix clean-, $(STDLIBS_EXT)) $(CLEAN_TARGETS) extstdlibclean
 distclean: $(addprefix distclean-, $(STDLIBS_EXT)) clean
 checksumall: $(addprefix checksum-, $(STDLIBS_EXT))
 
-DEP_LIBS_STAGED_ALL := $(STDLIBS_EXT)
+DEP_LIBS_STAGED_ALL := $(addprefix $(VERSDIR)/,$(STDLIBS_EXT))
 include $(JULIAHOME)/deps/tools/uninstallers.mk
