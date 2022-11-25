@@ -1053,7 +1053,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
         # but before the DCE) for our predicate within `sroa_mutables!`, but we also
         # try an extra effort using a callback so that reference counts are updated
         used_ssas = copy(compact.used_ssas)
-        simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
+        simple_dce!(compact) do x::SSAValue
+            used_ssas[x.id] -= 1
+        end
         ir = complete(compact)
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
@@ -1485,9 +1487,11 @@ end
 function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist) do val::SSAValue
+            phi_uses[val.id] -= 1
+        end
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
+        return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist)
     end
 end
 
