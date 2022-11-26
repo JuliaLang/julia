@@ -941,7 +941,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->reentrant_codegen = 0;
     t->reentrant_inference = 0;
     t->inference_start_time = 0;
-    t->timing_inference = 0;
 
 #ifdef COPY_STACKS
     if (!t->copy_stack) {
@@ -1530,7 +1529,6 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->reentrant_codegen = 0;
     ct->reentrant_inference = 0;
     ct->inference_start_time = 0;
-    ct->timing_inference = 0;
     ptls->root_task = ct;
     jl_atomic_store_relaxed(&ptls->current_task, ct);
     JL_GC_PROMISE_ROOTED(ct);
