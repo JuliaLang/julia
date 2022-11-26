@@ -562,7 +562,6 @@ end
 insert_node!(ir::IRCode, pos::Int, newinst::NewInstruction, attach_after::Bool=false) =
     insert_node!(ir, SSAValue(pos), newinst, attach_after)
 
-
 mutable struct IncrementalCompact
     ir::IRCode
     result::InstructionStream
@@ -1606,20 +1605,18 @@ function iterate_compact(compact::IncrementalCompact)
     return Pair{Int,Int}(compact.idx-1, old_result_idx)
 end
 
-function maybe_erase_unused!(
-    extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool,
-    callback = null_dce_callback)
-
-    inst = idx <= length(compact.result) ? compact.result[idx] :
-        compact.new_new_nodes.stmts[idx - length(compact.result)]
+maybe_erase_unused!(compact::IncrementalCompact, idx::Int, in_worklist::Bool, extra_worklist::Vector{Int}) =
+    maybe_erase_unused!(null_dce_callback, compact, idx, in_worklist, extra_worklist)
+function maybe_erase_unused!(callback::Function, compact::IncrementalCompact, idx::Int,
+    in_worklist::Bool, extra_worklist::Vector{Int})
+    nresult = length(compact.result)
+    inst = idx ≤ nresult ? compact.result[idx] : compact.new_new_nodes.stmts[idx-nresult]
     stmt = inst[:inst]
     stmt === nothing && return false
-    if inst[:type] === Bottom
-        effect_free = false
-    else
-        effect_free = inst[:flag] & IR_FLAG_EFFECT_FREE != 0
-    end
-    function kill_ssa_value(val::SSAValue)
+    inst[:type] === Bottom && return false
+    effect_free = (inst[:flag] & IR_FLAG_EFFECT_FREE) ≠ 0
+    effect_free || return false
+    foreachssa(stmt) do val::SSAValue
         if compact.used_ssas[val.id] == 1
             if val.id < idx || in_worklist
                 push!(extra_worklist, val.id)
@@ -1628,12 +1625,8 @@ function maybe_erase_unused!(
         compact.used_ssas[val.id] -= 1
         callback(val)
     end
-    if effect_free
-        foreachssa(kill_ssa_value, stmt)
-        inst[:inst] = nothing
-        return true
-    end
-    return false
+    inst[:inst] = nothing
+    return true
 end
 
 struct FixedNode
@@ -1722,16 +1715,17 @@ function just_fixup!(compact::IncrementalCompact, new_new_nodes_offset::Union{In
     end
 end
 
-function simple_dce!(compact::IncrementalCompact, callback = null_dce_callback)
+simple_dce!(compact::IncrementalCompact) = simple_dce!(null_dce_callback, compact)
+function simple_dce!(callback::Function, compact::IncrementalCompact)
     # Perform simple DCE for unused values
     @assert isempty(compact.new_new_used_ssas) # just_fixup! wasn't run?
     extra_worklist = Int[]
     for (idx, nused) in Iterators.enumerate(compact.used_ssas)
         nused == 0 || continue
-        maybe_erase_unused!(extra_worklist, compact, idx, false, callback)
+        maybe_erase_unused!(callback, compact, idx, false, extra_worklist)
     end
     while !isempty(extra_worklist)
-        maybe_erase_unused!(extra_worklist, compact, pop!(extra_worklist), true, callback)
+        maybe_erase_unused!(callback, compact, pop!(extra_worklist), true, extra_worklist)
     end
 end
 
