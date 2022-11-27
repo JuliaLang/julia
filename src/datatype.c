@@ -824,6 +824,22 @@ JL_DLLEXPORT jl_datatype_t * jl_new_foreign_type(jl_sym_t *name,
     return bt;
 }
 
+JL_DLLEXPORT int jl_reinit_foreign_type(jl_datatype_t *dt,
+                                        jl_markfunc_t markfunc,
+                                        jl_sweepfunc_t sweepfunc)
+{
+    if (!jl_is_foreign_type(dt))
+        return 0;
+    const jl_datatype_layout_t *layout = dt->layout;
+    jl_fielddescdyn_t * desc =
+      (jl_fielddescdyn_t *) ((char *)layout + sizeof(*layout));
+    assert(!desc->markfunc);
+    assert(!desc->sweepfunc);
+    desc->markfunc = markfunc;
+    desc->sweepfunc = sweepfunc;
+    return 1;
+}
+
 JL_DLLEXPORT int jl_is_foreign_type(jl_datatype_t *dt)
 {
     return jl_is_datatype(dt) && dt->layout && dt->layout->fielddesc_type == 3;
