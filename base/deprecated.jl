@@ -366,16 +366,31 @@ end
 # END 1.9 deprecations
 
 # BEGIN 1.10 deprecations
-struct DepricatedKeyDictAccessor
-    dict::Dict
+struct DepricatedKeyDictAccessor{K,V}
+    dict::Dict{K,V}
 end
 
-struct DepricatedValueDictAccessor
-    dict::Dict
+struct DepricatedValueDictAccessor{K,V}
+    dict::Dict{K,V}
 end
 
 getindex(a::DepricatedKeyDictAccessor, i::Integer) = a.dict.pairs[i].first
 getindex(a::DepricatedValueDictAccessor, i::Integer) = a.dict.pairs[i].second
+
+function setindex!(a::DepricatedKeyDictAccessor{K,V}, value, i::Integer) where {K,V}
+    d = a.dict
+    d.pairs[i] = Pair{K,V}(value, d.pairs[i].second)
+    a
+end
+
+function setindex!(a::DepricatedValueDictAccessor{K,V}, value, i::Integer) where {K,V}
+    d = a.dict
+    d.pairs[i] = Pair{K,V}(d.pairs[i].first, value)
+    a
+end
+
+length(a::DepricatedKeyDictAccessor) = length(a.dict.pairs)
+length(a::DepricatedValueDictAccessor) = length(a.dict.pairs)
 
 function getproperty(d::Dict, s::Symbol)
     if s == :keys
