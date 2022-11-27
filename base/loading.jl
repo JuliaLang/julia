@@ -564,8 +564,8 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             return PkgId(pkg_uuid, name)
         end
         # Check for this being a dependency to a glue module
-        glue_dep = project_file_gluedeps_get(project_file, where, name)
-        glue_dep === nothing || return glue_dep
+        # glue_dep = project_file_gluedeps_get(project_file, where, name)
+        # glue_dep === nothing || return glue_dep
         # look for manifest file and `where` stanza
         return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
@@ -583,7 +583,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
-        # Only used when the package is loading the glue pkg itself
+        # Only used when the project is loading the glue pkg itself
         # which is currently not supported
         # mby_glue = project_file_glue_path(project_file, pkg.name)
         # mby_glue === nothing || return mby_glue
@@ -606,7 +606,6 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
 end
 
 function project_file_gluedeps_get(project_file::String, where::PkgId, name::String)
-    # Check for glue...
     d = parsed_toml(project_file)
     glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
     project_id = project_file_name_uuid(project_file, "")
@@ -618,7 +617,8 @@ function project_file_gluedeps_get(project_file::String, where::PkgId, name::Str
                gluedepses = get(d, "gluedeps", nothing)::Union{Dict{String, Any}, Nothing}
                 return PkgId(UUID(gluedepses[name]::String), name)
             end
-            name == project_id.name && return project_id
+            # Fall back to normal rules for loading a dep for a a package
+            return identify_package(project_id, name)
         end
     end
     return nothing
@@ -831,6 +831,8 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                 end
                             end
                         end
+                        # `name` is not a glue pkg, do standard lookup as if this was the parent
+                        return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
                 end
             end
