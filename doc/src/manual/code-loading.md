@@ -371,7 +371,6 @@ They are loaded when all the packages on the right hand side (the glue dependenc
 If a glue package only has one glue dependency the lit of glue dependencies can be written as just a string for breviety.
 The location for the entry point of the glue package is either in `glue/GlueFoo.jl` or `glue/GlueFoo/GlueFoo.jl` for
 glue package `GlueFoo`.
-The glue package can be viewed as a somewhat normal package that has the glue dependencies and the main package as dependencies.
 The content of a glue package is often structured as:
 
 ```
@@ -387,7 +386,9 @@ end
 ```
 
 When a package with glue packages is added to an environment, the `gluedeps` and `gluepkgs` sections
-are stored in the manifest file in the section for that package.
+are stored in the manifest file in the section for that package. The dependency lookup rules for
+a package are the same as for its "parent" except that the listed glue dependencies are also
+part of its dependencies.
 ### Package/Environment Preferences
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.
