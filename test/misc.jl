@@ -354,6 +354,10 @@ end
 after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
 @test after_comp >= before_comp;
 
+# should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
+# failing this probably means an uninitialized variable somewhere
+@test after_comp - before_comp < 6_000_000_000;
+
 end # redirect_stdout
 
 macro capture_stdout(ex)
