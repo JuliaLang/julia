@@ -32,7 +32,7 @@ Markdown.parse("""
 """)
 ```
 
-### [Important Links](@id man-important-links)
+## [Important Links](@id man-important-links)
 
 Below is a non-exhasutive list of links that will be useful as you learn and use the Julia programming language.
 
@@ -44,7 +44,7 @@ Below is a non-exhasutive list of links that will be useful as you learn and use
 - [Learning Resources](https://julialang.org/learning/)
 - [Read and write blogs on Julia](https://forem.julialang.org)
 
-### [Introduction](@id man-introduction)
+## [Introduction](@id man-introduction)
 
 Scientific computing has traditionally required the highest performance, yet domain experts have
 largely moved to slower dynamic languages for daily work. We believe there are many good reasons
@@ -60,7 +60,7 @@ R, you may find that Julia's performance is unintuitive at first. If you find th
 slow, we highly recommend reading through the [Performance Tips](@ref man-performance-tips) section before trying anything
 else. Once you understand how Julia works, it is easy to write code that is nearly as fast as C.
 
-### [Julia compared to other languages](@id man-julia-compared-other-languages)
+## [Julia Compared to Other Languages](@id man-julia-compared-other-languages)
 
 Julia features optional typing, multiple dispatch, and good performance, achieved using type inference
 and [just-in-time (JIT) compilation](https://en.wikipedia.org/wiki/Just-in-time_compilation) (and
@@ -84,8 +84,8 @@ The most significant departures of Julia from typical dynamic languages are:
   * Automatic generation of efficient, specialized code for different argument types
   * Good performance, approaching that of statically-compiled languages like C
 
-Although one sometimes speaks of dynamic languages as being "typeless", they are definitely not:
-every object, whether primitive or user-defined, has a type. The lack of type declarations in
+Although one sometimes speaks of dynamic languages as being "typeless", they are definitely not.
+Every object, whether primitive or user-defined, has a type. The lack of type declarations in
 most dynamic languages, however, means that one cannot instruct the compiler about the types of
 values, and often cannot explicitly talk about types at all. In static languages, on the other
 hand, while one can -- and usually must -- annotate types for the compiler, types exist only at
