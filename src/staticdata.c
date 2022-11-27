@@ -77,6 +77,7 @@ External links:
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "julia_gcext.h"
 #include "builtin_proto.h"
 #include "processor.h"
 #include "serialize.h"
@@ -1249,6 +1250,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             ios_write(s->s, (char*)v, sizeof(void*) + jl_string_len(v));
             write_uint8(s->s, '\0'); // null-terminated strings for easier C-compatibility
         }
+        else if (jl_is_foreign_type(t) == 1) {
+            jl_error("Cannot serialize instances of foreign datatypes");
+        }
         else if (jl_datatype_nfields(t) == 0) {
             // The object has no fields, so we just snapshot its byte representation
             assert(!t->layout->npointers);
@@ -1438,10 +1442,14 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 if (dt->layout != NULL) {
                     size_t nf = dt->layout->nfields;
                     size_t np = dt->layout->npointers;
-                    size_t fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
+                    size_t fieldsize = 0;
+                    uint8_t is_foreign_type = dt->layout->fielddesc_type == 3;
+                    if (!is_foreign_type) {
+                        fieldsize = jl_fielddesc_size(dt->layout->fielddesc_type);
+                    }
                     char *flddesc = (char*)dt->layout;
                     size_t fldsize = sizeof(jl_datatype_layout_t) + nf * fieldsize;
-                    if (dt->layout->first_ptr != -1)
+                    if (!is_foreign_type && dt->layout->first_ptr != -1)
                         fldsize += np << dt->layout->fielddesc_type;
                     uintptr_t layout = LLT_ALIGN(ios_pos(s->const_data), sizeof(void*));
                     write_padding(s->const_data, layout - ios_pos(s->const_data)); // realign stream
@@ -1450,6 +1458,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_datatype_t, layout))); // relocation location
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
                     ios_write(s->const_data, flddesc, fldsize);
+                    if (is_foreign_type) {
+                        // make sure we have space for the extra hidden pointers
+                        // zero them since they will need to be re-initialized externally
+                        assert(fldsize == sizeof(jl_datatype_layout_t));
+                        jl_fielddescdyn_t dyn = {0, 0};
+                        ios_write(s->const_data, (char*)&dyn, sizeof(jl_fielddescdyn_t));
+                    }
                 }
             }
             else if (jl_is_typename(v)) {
