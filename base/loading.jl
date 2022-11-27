@@ -563,9 +563,6 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             pkg_uuid = explicit_project_deps_get(project_file, name)
             return PkgId(pkg_uuid, name)
         end
-        # Check for this being a dependency to a glue module
-        # glue_dep = project_file_gluedeps_get(project_file, where, name)
-        # glue_dep === nothing || return glue_dep
         # look for manifest file and `where` stanza
         return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
@@ -583,10 +580,6 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
             # if `pkg` matches the project, return the project itself
             return project_file_path(project_file)
         end
-        # Only used when the project is loading the glue pkg itself
-        # which is currently not supported
-        # mby_glue = project_file_glue_path(project_file, pkg.name)
-        # mby_glue === nothing || return mby_glue
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
     elseif project_file
@@ -603,40 +596,6 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     uuid = uuid′ === nothing ? dummy_uuid(project_file) : UUID(uuid′)
     name = get(d, "name", name)::String
     return PkgId(uuid, name)
-end
-
-function project_file_gluedeps_get(project_file::String, where::PkgId, name::String)
-    d = parsed_toml(project_file)
-    glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
-    project_id = project_file_name_uuid(project_file, "")
-    if glue !== nothing && where.uuid == uuid5(project_id.uuid, where.name)
-        gluedeps = get(glue, where.name, nothing)::Union{Nothing, String, Vector{String}}
-        if gluedeps !== nothing
-            if gluedeps isa String && name == gluedeps ||
-               gluedeps isa Vector{String} && name in gluedeps
-               gluedepses = get(d, "gluedeps", nothing)::Union{Dict{String, Any}, Nothing}
-                return PkgId(UUID(gluedepses[name]::String), name)
-            end
-            # Fall back to normal rules for loading a dep for a a package
-            return identify_package(project_id, name)
-        end
-    end
-    return nothing
-end
-
-function project_file_glue_path(project_file::String, name::String)
-    d = parsed_toml(project_file)
-    p = project_file_path(project_file)
-    glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
-    if glue !== nothing
-        if name in keys(glue)
-            gluefile = joinpath(p, "glue", name * ".jl")
-            isfile(gluefile) && return gluefile
-            gluefiledir = joinpath(p, "glue", name, name * ".jl")
-            isfile(gluefiledir) && return gluefiledir
-        end
-    end
-    return nothing
 end
 
 function project_file_path(project_file::String)
@@ -720,26 +679,15 @@ end
 function explicit_project_deps_get(project_file::String, name::String)::Union{Nothing,UUID}
     d = parsed_toml(project_file)
     root_uuid = dummy_uuid(project_file)
-    mby_uuid_project = get(d, "uuid", nothing)::Union{String, Nothing}
-    uuid_project = mby_uuid_project === nothing ? root_uuid : UUID(mby_uuid_project)
     if get(d, "name", nothing)::Union{String, Nothing} === name
-        return uuid_project
+        uuid = get(d, "uuid", nothing)::Union{String, Nothing}
+        return uuid === nothing ? root_uuid : UUID(uuid)
     end
     deps = get(d, "deps", nothing)::Union{Dict{String, Any}, Nothing}
     if deps !== nothing
         uuid = get(deps, name, nothing)::Union{String, Nothing}
         uuid === nothing || return UUID(uuid)
     end
-
-    #=
-    # Unclear if this is needed
-    glue = get(d, "gluepkgs", nothing)::Union{Dict{String, Any}, Nothing}
-    if glue !== nothing
-        if name in keys(glue)
-            return uuid5(uuid_project, name)
-        end
-    end
-    =#
     return nothing
 end
 
@@ -771,7 +719,6 @@ end
 function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
-
     d = get_deps(parsed_toml(manifest_file))
     found_where = false
     found_name = false
@@ -783,12 +730,6 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
             uuid === nothing && continue
             if UUID(uuid) === where.uuid
                 found_where = true
-                gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
-                if gluepkgs !== nothing
-                    if name in keys(gluepkgs)
-                        return PkgId(uuid5(where.uuid, name), name)
-                    end
-                end
                 # deps is either a list of names (deps = ["DepA", "DepB"]) or
                 # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
                 deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
@@ -868,7 +809,6 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             end
         end
     end
-
     # Glue
     for (name, entries::Vector{Any}) in d
         for entry in entries
@@ -884,7 +824,6 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             end
         end
     end
-
     return nothing
 end
 
