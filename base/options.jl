@@ -52,6 +52,7 @@ struct JLOptions
     rr_detach::Int8
     strip_metadata::Int8
     strip_ir::Int8
+    emit_sanitizer::Int8
     heap_size_hint::UInt64
 end
 

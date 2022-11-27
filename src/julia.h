@@ -1671,6 +1671,7 @@ JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getpagesize(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT long jl_getallocationgranularity(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_is_debugbuild(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_get_sanitizer_attr(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_UNAME(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_sym_t *jl_get_ARCH(void) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_libllvm(void) JL_NOTSAFEPOINT;
@@ -2185,6 +2186,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
+#define JL_OPTIONS_EMIT_ASAN 1
+#define JL_OPTIONS_EMIT_MSAN 2
+#define JL_OPTIONS_EMIT_TSAN 3
 // Version information
 #include "julia_version.h"
 

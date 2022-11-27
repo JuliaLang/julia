@@ -1581,6 +1581,7 @@ static void emit_concretecheck(jl_codectx_t &ctx, Value *typ, const std::string 
     error_unless(ctx, emit_isconcrete(ctx, typ), msg);
 }
 
+
 #define CHECK_BOUNDS 1
 static bool bounds_check_enabled(jl_codectx_t &ctx, jl_value_t *inbounds) {
 #if CHECK_BOUNDS==1

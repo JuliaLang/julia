@@ -99,8 +99,11 @@ julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-sr
 julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
-julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-src-%
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
+
+$(JULIA_SYSIMG_release): julia-sysimg-ji julia-src-release
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-release
+$(JULIA_SYSIMG_debug) : julia-sysimg-ji julia-src-debug
+	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-debug
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
 
