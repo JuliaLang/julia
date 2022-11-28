@@ -197,6 +197,7 @@ static jl_callptr_t _jl_compile_codeinst(
         orc::ThreadSafeModule result_m =
             jl_create_llvm_module(name_from_method_instance(codeinst->def), params.tsctx, params.imaging);
         jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
+        auto SpeculateName = decls.specFunctionObject;
         if (result_m)
             emitted[codeinst] = {std::move(result_m), std::move(decls)};
         {
@@ -232,6 +233,9 @@ static jl_callptr_t _jl_compile_codeinst(
             // Add the results to the execution engine now
             orc::ThreadSafeModule &M = std::get<0>(def.second);
             jl_add_to_ee(M, NewExports);
+        }
+        if (!SpeculateName.empty()) {
+            jl_ExecutionEngine->speculateInitial(SpeculateName);
         }
         ++CompiledCodeinsts;
         MaxWorkqueueSize.updateMax(emitted.size());
@@ -508,7 +512,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
     if (codeinst) {
         uintptr_t fptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->invoke);
         if (getwrapper)
-            return jl_dump_fptr_asm(fptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(jl_ExecutionEngine->getAssemblyPointer(fptr), raw_mc, asm_variant, debuginfo, binary);
         uintptr_t specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
         if (fptr == (uintptr_t)jl_fptr_const_return_addr && specfptr == 0) {
             // normally we prevent native code from being generated for these functions,
@@ -549,7 +553,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             JL_UNLOCK(&jl_codegen_lock);
         }
         if (specfptr != 0)
-            return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
+            return jl_dump_fptr_asm(jl_ExecutionEngine->getAssemblyPointer(specfptr), raw_mc, asm_variant, debuginfo, binary);
     }
 
     // whatever, that didn't work - use the assembler output instead
@@ -574,34 +578,6 @@ CodeGenOpt::Level CodeGenOptLevelFor(int optlevel)
 static auto countBasicBlocks(const Function &F)
 {
     return std::distance(F.begin(), F.end());
-}
-
-void JuliaOJIT::OptSelLayerT::emit(std::unique_ptr<orc::MaterializationResponsibility> R, orc::ThreadSafeModule TSM) {
-    ++ModulesOptimized;
-    size_t optlevel = SIZE_MAX;
-    TSM.withModuleDo([&](Module &M) {
-        if (jl_generating_output()) {
-            optlevel = 0;
-        }
-        else {
-            optlevel = std::max(static_cast<int>(jl_options.opt_level), 0);
-            size_t optlevel_min = std::max(static_cast<int>(jl_options.opt_level_min), 0);
-            for (auto &F : M.functions()) {
-                if (!F.getBasicBlockList().empty()) {
-                    Attribute attr = F.getFnAttribute("julia-optimization-level");
-                    StringRef val = attr.getValueAsString();
-                    if (val != "") {
-                        size_t ol = (size_t)val[0] - '0';
-                        if (ol < optlevel)
-                            optlevel = ol;
-                    }
-                }
-            }
-            optlevel = std::min(std::max(optlevel, optlevel_min), this->count);
-        }
-    });
-    assert(optlevel != SIZE_MAX && "Failed to select a valid optimization level!");
-    this->optimizers[optlevel]->OptimizeLayer.emit(std::move(R), std::move(TSM));
 }
 
 void jl_register_jit_object(const object::ObjectFile &debugObj,
@@ -1084,9 +1060,14 @@ namespace {
 #endif
 
     struct OptimizerT {
-        OptimizerT(TargetMachine &TM, int optlevel) : optlevel(optlevel), PMs(PMCreator(TM, optlevel)) {}
+        OptimizerT(TargetMachine &TM, ReoptimizationManager &ReoptMgr) : ReoptMgr(ReoptMgr) {
+            for (size_t i = 0; i < PMs.size(); i++) {
+                PMs[i] = std::make_unique<ResourcePool<std::unique_ptr<PassManager>>>(PMCreator(TM, i));
+            }
+        }
 
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
+            ++ModulesOptimized;
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
                 {
@@ -1114,9 +1095,25 @@ namespace {
 
                 JL_TIMING(LLVM_OPT);
 
+                int optlevel = getModuleOptLevel(M, true);
+
                 //Run the optimization
+                auto TM = jl_ExecutionEngine->cloneTargetMachine();
+                PassBuilder PB;
                 assert(!verifyModule(M, &errs()));
-                (***PMs).run(M);
+                AnalysisManagers AM(*TM, PB, OptimizationLevel::O0);
+                ModulePassManager MPM;
+                MPM.addPass(createModuleToFunctionPassAdaptor(ReoptMgr.getProfiler().createPreoptimizationProfiler()));
+                MPM.run(M, AM.MAM);
+                (****PMs[optlevel]).run(M);
+                MPM = ModulePassManager();
+                PB = PassBuilder();
+                AnalysisManagers AM2(*TM, PB, OptimizationLevel::O0);
+                FunctionPassManager FPM;
+                FPM.addPass(ReoptMgr.getProfiler().createPostoptimizationProfiler());
+                FPM.addPass(SpeculationPass(R.getTargetJITDylib(), ReoptMgr));
+                MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+                MPM.run(M, AM2.MAM);
                 assert(!verifyModule(M, &errs()));
 
                 uint64_t end_time = 0;
@@ -1140,40 +1137,35 @@ namespace {
                     }
                 }
             });
-            switch (optlevel) {
-                case 0:
-                    ++OptO0;
-                    break;
-                case 1:
-                    ++OptO1;
-                    break;
-                case 2:
-                    ++OptO2;
-                    break;
-                case 3:
-                    ++OptO3;
-                    break;
-                default:
-                    llvm_unreachable("optlevel is between 0 and 3!");
-            }
             return Expected<orc::ThreadSafeModule>{std::move(TSM)};
         }
     private:
-        int optlevel;
-        JuliaOJIT::ResourcePool<std::unique_ptr<PassManager>> PMs;
+        std::array<std::unique_ptr<ResourcePool<std::unique_ptr<PassManager>>>, 4> PMs;
+        ReoptimizationManager &ReoptMgr;
     };
 
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
 
-        CompilerT(orc::IRSymbolMapper::ManglingOptions MO, TargetMachine &TM, int optlevel)
-        : orc::IRCompileLayer::IRCompiler(MO), TMs(TMCreator(TM, optlevel)) {}
-
-        Expected<std::unique_ptr<MemoryBuffer>> operator()(Module &M) override {
-            return orc::SimpleCompiler(***TMs)(M);
+        CompilerT(orc::IRSymbolMapper::ManglingOptions MO, TargetMachine &TM)
+        : orc::IRCompileLayer::IRCompiler(MO) {
+            for (size_t i = 0; i < TMs.size(); i++) {
+                TMs[i] = std::make_unique<ResourcePool<std::unique_ptr<TargetMachine>>>(TMCreator(TM, i));
+            }
         }
 
-        JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>> TMs;
+        Expected<std::unique_ptr<MemoryBuffer>> operator()(Module &M) override {
+            return orc::SimpleCompiler(****TMs[getModuleOptLevel(M)])(M);
+        }
+
+        std::array<std::unique_ptr<ResourcePool<std::unique_ptr<TargetMachine>>>, 4> TMs;
     };
+
+    bool shouldReoptimize(const Function &F) {
+        if (F.size() == 1) // we care about complicated functions, not super simple ones
+            return false;
+        auto Name = F.getName();
+        return Name.startswith("julia_") || Name.startswith("japi");
+    }
 }
 
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
@@ -1182,11 +1174,6 @@ llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
     return jl_data_layout;
 }
-
-JuliaOJIT::PipelineT::PipelineT(orc::ObjectLayer &BaseLayer, TargetMachine &TM, int optlevel)
-: CompileLayer(BaseLayer.getExecutionSession(), BaseLayer,
-    std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM.Options), TM, optlevel)),
-  OptimizeLayer(CompileLayer.getExecutionSession(), CompileLayer, OptimizerT(TM, optlevel)) {}
 
 JuliaOJIT::JuliaOJIT()
   : TM(createTargetMachine()),
@@ -1205,6 +1192,7 @@ JuliaOJIT::JuliaOJIT()
 #endif
         return orc::ThreadSafeContext(std::move(ctx));
     }),
+    ReoptMgr(Profiler, JITCache, 1, 2),
 #ifdef JL_USE_JITLINK
     MemMgr(createJITLinkMemoryManager()),
     ObjectLayer(ES, *MemMgr),
@@ -1218,13 +1206,11 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #endif
-    Pipelines{
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 1),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
-    },
-    OptSelLayer(Pipelines)
+    CompileLayer(ES, ObjectLayer,
+    std::make_unique<CompilerT>(orc::irManglingOptionsFromTargetOptions(TM->Options), *TM)),
+    MangleLayer(CompileLayer.getExecutionSession(), CompileLayer, FunctionMangler),
+    OptimizeLayer(MangleLayer.getExecutionSession(), MangleLayer, OptimizerT(*TM, ReoptMgr)),
+    PartitionLayer(OptimizeLayer.getExecutionSession(), OptimizeLayer, FunctionPartitioner(ES, JITCache, ReoptMgr, *OptimizeLayer.getManglingOptions(), shouldReoptimize))
 {
 #ifdef JL_USE_JITLINK
 # if defined(LLVM_SHLIB)
@@ -1239,6 +1225,8 @@ JuliaOJIT::JuliaOJIT()
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
     ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(total_size));
+    StubDisassembler = new StubDisassemblerPlugin(ES, JD, ReoptMgr);
+    ObjectLayer.addPlugin(std::unique_ptr<StubDisassemblerPlugin>(StubDisassembler));
 #else
     ObjectLayer.setNotifyLoaded(
         [this](orc::MaterializationResponsibility &MR,
@@ -1247,6 +1235,25 @@ JuliaOJIT::JuliaOJIT()
             registerRTDyldJITObject(Object, LO, MemMgr);
         });
 #endif
+
+    ReoptMgr.setPostPartitioningLayer(&OptimizeLayer);
+    //We should update the codeinst pointer to point at the real pointer, and save the trampoline
+    //for direct specfun calls from other IR.
+    ReoptMgr.setReoptCallback([this](StringRef Name, JITTargetAddress Optimized) {
+        auto cif = getDebugInfoRegistry().get_codeinsts_in_flight();
+        auto it = cif->find(Name);
+        if (it != cif->end()) {
+            auto CI = it->second;
+            if (Name.startswith("jfptr")) {
+                // julia-abi function, update invokeptr
+                jl_atomic_store_release(&CI->invoke, (jl_callptr_t)Optimized);
+            } else {
+                assert((Name.startswith("julia") || Name.startswith("japi")) && "Expected non-jfptr to be specfun!");
+                // specfun, update specptr
+                jl_atomic_store_release(&CI->specptr.fptr, (void*)Optimized);
+            }
+        }
+    });
 
     // Make sure SectionMemoryManager::getSymbolAddressInProcess can resolve
     // symbols in the program as well. The nullptr argument to the function
@@ -1283,7 +1290,7 @@ JuliaOJIT::JuliaOJIT()
         }
     }
 
-    JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly);
+    JD.addToLinkOrder(GlobalJD, orc::JITDylibLookupFlags::MatchAllSymbols);
 
     orc::SymbolAliasMap jl_crt = {
         { mangle("__gnu_h2f_ieee"), { mangle("julia__gnu_h2f_ieee"), JITSymbolFlags::Exported } },
@@ -1315,6 +1322,13 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin)), JITSymbolFlags::Exported);
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
+
+    for (uint32_t i = 0; i < 4; i++) {
+        std::thread reoptimizer([this]() {
+            ReoptMgr.continuousRecompile();
+        });
+        reoptimizer.detach();
+    }
 }
 
 orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
@@ -1363,7 +1377,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 #endif
     });
     // TODO: what is the performance characteristics of this?
-    cantFail(OptSelLayer.add(JD, std::move(TSM)));
+    cantFail(PartitionLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
     for (auto Name : NewExports)
@@ -1435,6 +1449,10 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
     return *fname;
 }
 
+JITTargetAddress JuliaOJIT::getAssemblyPointer(JITTargetAddress MaybeStub) {
+    assert(StubDisassembler);
+    return StubDisassembler->launderStub(MaybeStub);
+}
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION < 140000
@@ -1787,4 +1805,12 @@ extern "C" JL_DLLEXPORT
 size_t jl_jit_total_bytes_impl(void)
 {
     return jl_ExecutionEngine->getTotalBytes();
+}
+
+extern "C" JL_DLLEXPORT
+void jl_dump_profile_data_impl(void)
+{
+    dbgs() << "\nJIT PROFILE DATA START\n";
+    jl_ExecutionEngine->dumpProfileData(dbgs());
+    dbgs() << "\nJIT PROFILE DATA END\n";
 }

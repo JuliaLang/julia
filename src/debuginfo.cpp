@@ -109,16 +109,22 @@ JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
     return objectmap;
 }
 
+Locked<JITDebugInfoRegistry::codeinst_in_flight_t>::LockT
+JITDebugInfoRegistry::get_codeinsts_in_flight() JL_NOTSAFEPOINT
+{
+    return *this->codeinst_in_flight;
+}
+
 void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT {
     (**this->sysimg_info) = info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
+Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
 JITDebugInfoRegistry::get_sysimg_info() const JL_NOTSAFEPOINT {
     return *this->sysimg_info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
+Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
 JITDebugInfoRegistry::get_objfile_map() JL_NOTSAFEPOINT {
     return *this->objfilemap;
 }
@@ -358,10 +364,10 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
         {
             auto lock = *this->codeinst_in_flight;
             auto &codeinst_in_flight = *lock;
-            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(sName);
+            StringMap<jl_code_instance_t*>::iterator codeinst_it = codeinst_in_flight.find(getBaseName(sName));
             if (codeinst_it != codeinst_in_flight.end()) {
                 codeinst = codeinst_it->second;
-                codeinst_in_flight.erase(codeinst_it);
+                // codeinst_in_flight.erase(codeinst_it);
             }
         }
         jl_profile_atomic([&]() {
