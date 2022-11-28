@@ -363,4 +363,70 @@ end
     end
 end
 
+# Used by Prefences.jl
+function env_project_file(env::String)::Union{Bool,String}
+    if isdir(env)
+        for proj in project_names
+            maybe_project_file = joinpath(env, proj)
+            if isfile_casesensitive(maybe_project_file)
+                project_file = maybe_project_file
+                break
+            end
+        end
+        project_file =true
+    elseif basename(env) in project_names && isfile_casesensitive(env)
+        project_file = env
+    else
+        project_file = false
+    end
+    return project_file
+end
+
+function get_uuid_name(project_toml::String, uuid::UUID)
+    project = parsed_toml(project_toml)
+    return get_uuid_name(project, uuid)
+end
+
+# Used by Prefences.jl
+function get_uuid_name(project::Dict{String, Any}, uuid::UUID)
+    uuid_p = get(project, "uuid", nothing)::Union{Nothing, String}
+    name = get(project, "name", nothing)::Union{Nothing, String}
+    if name !== nothing && uuid_p !== nothing && UUID(uuid_p) == uuid
+        return name
+    end
+    deps = get(project, "deps", nothing)::Union{Nothing, Dict{String, Any}}
+    if deps !== nothing
+        for (k, v) in deps
+            if uuid == UUID(v::String)
+                return k
+            end
+        end
+    end
+    for subkey in ("deps", "extras")
+        subsection = get(project, subkey, nothing)::Union{Nothing, Dict{String, Any}}
+        if subsection !== nothing
+            for (k, v) in subsection
+                if uuid == UUID(v::String)
+                    return k
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+# used by Profile.jl
+# find project file's top-level UUID entry (or nothing)
+function project_file_name_uuid(project_file::String, name::String)::PkgId
+    d = parsed_toml(project_file)
+    uuid′ = get(d, "uuid", nothing)::Union{String, Nothing}
+    uuid = uuid′ === nothing ? dummy_uuid(project_file) : UUID(uuid′)
+    name = get(d, "name", name)::String
+    return PkgId(uuid, name)
+end
+
+# Used by Pkg.jl
+struct LoadingCache end
+LOADING_CACHE = Ref{Union{LoadingCache, Nothing}}(nothing)
+
 # END 1.9 deprecations

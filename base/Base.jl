@@ -413,15 +413,16 @@ include("initdefs.jl")
 # worker threads
 include("threadcall.jl")
 
-# code loading
 include("uuid.jl")
-include("pkgid.jl")
-include("toml_parser.jl")
-include("loading.jl")
 
 # misc useful functions & macros
 include("timing.jl")
 include("util.jl")
+
+# code loading
+include("pkgid.jl")
+include("toml_parser.jl")
+include("loading.jl")
 
 include("asyncmap.jl")
 
@@ -519,6 +520,7 @@ function __init__()
     init_depot_path()
     init_load_path()
     init_active_project()
+    init_stdlib_path_env()
     append!(empty!(_sysimage_modules), keys(loaded_modules))
     if haskey(ENV, "JULIA_MAX_NUM_PRECOMPILE_FILES")
         MAX_NUM_PRECOMPILE_FILES[] = parse(Int, ENV["JULIA_MAX_NUM_PRECOMPILE_FILES"])

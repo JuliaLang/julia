@@ -186,6 +186,31 @@ if Libdl !== nothing
     """
 end
 
+Serialization = get(Base.loaded_modules,
+          Base.PkgId(Base.UUID("9e88b42a-f829-5b0c-bbe9-9e923198166b"), "Serialization"),
+          nothing)
+if Serialization !== nothing
+    # Deserializing environment
+    hardcoded_precompile_statements *= """
+        precompile(Tuple{typeof(Serialization.deserialize), String})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.EnvironmentStack}})
+        precompile(Tuple{typeof(Serialization.deserialize_fillarray!), Array{String, 1}, Serialization.Serializer{Base.IOStream}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Union}})
+        precompile(Tuple{typeof(Serialization.deserialize_fillarray!), Array{Union{Base.ExplicitEnv, Base.ImplicitEnv}, 1}, Serialization.Serializer{Base.IOStream}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.ExplicitEnv}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.Dict{String, Base.UUID}}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.UUID}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.Dict{Base.UUID, Base.Dict{String, Base.UUID}}}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.Dict{Base.UUID, Union{Base.Missing, Nothing, Base.SHA1, String}}}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.SHA1}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.ImplicitEnv}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.Dict{String, Base.ImplicitEnvPkg}}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.ImplicitEnvPkg}})
+        precompile(Tuple{typeof(Serialization.deserialize_fillarray!), Array{Base.PkgId, 1}, Serialization.Serializer{Base.IOStream}})
+        precompile(Tuple{typeof(Serialization.deserialize), Serialization.Serializer{Base.IOStream}, Type{Base.PkgId}})
+    """
+end
+
 Test = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("8dfed614-e22c-5e08-85e1-65c5234f0b40"), "Test"),
           nothing)
