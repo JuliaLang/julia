@@ -425,11 +425,6 @@ static void write_reloc_t(ios_t *s, uintptr_t reloc_id) JL_NOTSAFEPOINT
     }
 }
 
-static int jl_is_binding(uintptr_t v) JL_NOTSAFEPOINT
-{
-    return jl_typeis(v, (jl_datatype_t*)jl_buff_tag);
-}
-
 // Reporting to PkgCacheInspector
 typedef struct {
     size_t sysdata;
@@ -1238,6 +1233,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         else if (jl_typeis(v, jl_task_type)) {
             jl_error("Task cannot be serialized");
         }
+        else if (jl_typeis(v, jl_binding_type)) {
+            jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
+        }
         else if (jl_is_svec(v)) {
             ios_write(s->s, (char*)v, sizeof(void*));
             size_t ii, l = jl_svec_len(v);
@@ -1430,6 +1428,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             else if (jl_is_globalref(v)) {
                 jl_globalref_t *newg = (jl_globalref_t*)&s->s->buf[reloc_offset];
                 // Don't save the cached binding reference in staticdata
+                // (it does not happen automatically since we declare the struct immutable)
                 // TODO: this should be a relocation pointing to the binding in the new image
                 newg->bnd_cache = NULL;
                 if (s->incremental)
