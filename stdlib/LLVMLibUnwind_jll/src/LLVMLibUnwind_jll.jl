@@ -14,18 +14,18 @@ export llvmlibunwind
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
+const artifact_dir = ""
 llvmlibunwind_handle = C_NULL
-llvmlibunwind_path = ""
+const llvmlibunwind_path = ""
 
 const llvmlibunwind = "libunwind"
 
 function __init__()
     # We only dlopen something on MacOS
     @static if Sys.isapple()
-        global llvmlibunwind_handle = dlopen(llvmlibunwind)
-        global llvmlibunwind_path = dlpath(llvmlibunwind_handle)
-        global artifact_dir = dirname(Sys.BINDIR)
+        llvmlibunwind_handle = dlopen(llvmlibunwind)
+        llvmlibunwind_path = dlpath(llvmlibunwind_handle)
+        artifact_dir = dirname(Sys.BINDIR)
         LIBPATH[] = dirname(llvmlibunwind_path)
         push!(LIBPATH_list, LIBPATH[])
     end
