@@ -235,4 +235,8 @@
         @test parse(Expr, ".+(x)")  == Expr(:call, Symbol(".+"), :x)
         @test parse(Expr, ".+x")    == Expr(:call, Symbol(".+"), :x)
     end
+
+    @testset "where" begin
+        @test parse(Expr, "A where {X, Y; Z}") == Expr(:where, :A, Expr(:parameters, :Z), :X, :Y)
+    end
 end

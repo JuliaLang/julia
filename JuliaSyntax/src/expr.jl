@@ -147,7 +147,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
 
     # Special cases for various expression heads
     loc = source_location(LineNumberNode, node.source, node.position)
-    if headsym == :macrocall
+    if headsym === :macrocall
         insert!(args, 2, loc)
         if args[1] == Symbol("@.")
             args[1] = Symbol("@__dot__")
@@ -184,6 +184,8 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym in (:tuple, :vect, :braces)
         # Move parameters blocks to args[1]
         reorder_parameters!(args, 1)
+    elseif headsym === :where
+        reorder_parameters!(args, 2)
     elseif headsym in (:try, :try_finally_catch)
         # Try children in source order:
         #   try_block catch_var catch_block else_block finally_block
@@ -211,10 +213,10 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             push!(args, else_)
         end
         headsym = :try
-    elseif headsym == :filter
+    elseif headsym === :filter
         pushfirst!(args, last(args))
         pop!(args)
-    elseif headsym == :flatten
+    elseif headsym === :flatten
         # The order of nodes inside the generators in Julia's flatten AST
         # is noncontiguous in the source text, so need to reconstruct
         # Julia's AST here from our alternative `flatten` expression.
@@ -227,12 +229,12 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         # For lack of a better place, the dimension argument to nrow/ncat
         # is stored in the flags
         pushfirst!(args, numeric_flags(flags(node)))
-    elseif headsym == :typed_ncat
+    elseif headsym === :typed_ncat
         insert!(args, 2, numeric_flags(flags(node)))
     # elseif headsym == :string && length(args) == 1 && version <= (1,5)
     #   Strip string from interpolations in 1.5 and lower to preserve
     #   "hi$("ho")" ==>  (string "hi" "ho")
-    elseif headsym == :(=) && !is_decorated(node)
+    elseif headsym === :(=) && !is_decorated(node)
         if is_eventually_call(args[1]) && !iteration_spec && !Meta.isexpr(args[2], :block)
             # Add block for short form function locations
             args[2] = Expr(:block, loc, args[2])
@@ -240,14 +242,14 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
     elseif headsym == :elseif
         # Block for conditional's source location
         args[1] = Expr(:block, loc, args[1])
-    elseif headsym == :(->)
+    elseif headsym === :(->)
         if Meta.isexpr(args[2], :block)
             pushfirst!(args[2].args, loc)
         else
             # Add block for source locations
             args[2] = Expr(:block, loc, args[2])
         end
-    elseif headsym == :function
+    elseif headsym === :function
         if length(args) > 1
             if Meta.isexpr(args[1], :tuple)
                 # Convert to weird Expr forms for long-form anonymous functions.
@@ -260,21 +262,21 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
             end
             pushfirst!(args[2].args, loc)
         end
-    elseif headsym == :macro
+    elseif headsym === :macro
         if length(args) > 1
             pushfirst!(args[2].args, loc)
         end
-    elseif headsym == :module
+    elseif headsym === :module
         pushfirst!(args[3].args, loc)
     elseif headsym == :inert || (headsym == :quote && length(args) == 1 &&
                  !(a1 = only(args); a1 isa Expr || a1 isa QuoteNode ||
                    a1 isa Bool  # <- compat hack, Julia 1.4+
                   ))
         return QuoteNode(only(args))
-    elseif headsym == :do
+    elseif headsym === :do
         @check length(args) == 3
         return Expr(:do, args[1], Expr(:->, args[2], args[3]))
-    elseif headsym == :let
+    elseif headsym === :let
         @check Meta.isexpr(args[1], :block)
         a1 = args[1].args
         # Ugly logic to strip the Expr(:block) in certian cases for compatibility
@@ -284,7 +286,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 args[1] = a
             end
         end
-    elseif headsym == :local || headsym == :global
+    elseif headsym === :local || headsym === :global
         if length(args) == 1 && Meta.isexpr(args[1], :const)
             # Normalize `local const` to `const local`
             args[1] = Expr(headsym, args[1].args...)
