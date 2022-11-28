@@ -210,6 +210,13 @@ end
 
 function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     z = BigFloat(;precision)
+    if precision < 53
+        ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
+        if isnan(x) && signbit(x) != signbit(z)
+            z.sign = -z.sign
+        end
+        return z
+    end
     z.sign = 1-2*signbit(x)
     if iszero(x) || !isfinite(x)
         if isinf(x)
