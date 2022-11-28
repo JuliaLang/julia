@@ -559,11 +559,12 @@ tests = [
         "try x finally y end"   =>  "(try (block x) false false false (block y))"
         # v1.8 only
         ((v=v"1.8",), "try catch ; else end") => "(try (block) false (block) (block) false)"
-        ((v=v"1.8",), "try else end") => "(try (block) false false (error (block)) false)"
+        ((v=v"1.8",), "try else x finally y end") => "(try (block) false false (error (block x)) (block y))"
         ((v=v"1.7",), "try catch ; else end")  =>  "(try (block) false (block) (error (block)) false)"
         # finally before catch :-(
         "try x finally y catch e z end"  =>  "(try_finally_catch (block x) false false false (block y) e (block z))" =>
             Expr(:try, Expr(:block, :x), :e, Expr(:block, :z), Expr(:block, :y))
+        "try x end" => "(try (block x) false false false false (error-t))"
     ],
     JuliaSyntax.parse_imports => [
         "import A as B: x"  => "(import (: (error (as (. A) B)) (. x)))"

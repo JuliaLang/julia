@@ -2215,7 +2215,7 @@ function parse_try(ps)
         bump(ps, TRIVIA_FLAG)
         parse_block(ps)
         if !has_catch
-            #v1.8: try else end ==> (try (block) false false (error (block)) false)
+            #v1.8: try else x finally y end ==> (try (block) false false (error (block x)) (block y))
             emit(ps, else_mark, K"error", error="Expected `catch` before `else`")
         end
         #v1.7: try catch ; else end ==> (try (block) false (block) (error (block)) false)
@@ -2242,6 +2242,10 @@ function parse_try(ps)
         parse_catch(ps)
         emit_diagnostic(ps, m, position(ps),
                         warning="`catch` after `finally` will execute out of order")
+    end
+    if !has_catch && !has_finally
+        # try x end  ==>  (try (block x) false false false false (error-t))
+        bump_invisible(ps, K"error", TRIVIA_FLAG, error="try without catch or finally")
     end
     bump_closing_token(ps, K"end")
     emit(ps, mark, out_kind, flags)
