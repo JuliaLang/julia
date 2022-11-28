@@ -20,7 +20,10 @@ function parse_int_literal(str::AbstractString)
 end
 
 function parse_uint_literal(str::AbstractString, k)
-    str = replace(replace(str, '_'=>""), '−'=>'-')
+    str = replace(str, '_'=>"")
+    if startswith(str, '+')
+        str = str[2:end]
+    end
     ndigits = length(str)-2
     if k == K"HexInt"
         return ndigits <= 2  ? Base.parse(UInt8, str)   :
@@ -30,7 +33,6 @@ function parse_uint_literal(str::AbstractString, k)
                ndigits <= 32 ? Base.parse(UInt128, str) :
                Base.parse(BigInt, str)
     elseif k == K"BinInt"
-        str = replace(replace(str, '_'=>""), '−'=>'-')
         ndigits = length(str)-2
         return ndigits <= 8   ? Base.parse(UInt8, str)   :
                ndigits <= 16  ? Base.parse(UInt16, str)  :
