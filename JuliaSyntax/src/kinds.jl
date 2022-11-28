@@ -100,7 +100,7 @@ const _kind_names =
     "BEGIN_ASSIGNMENTS"
         "="
         "+="
-        "-="
+        "-="   # Also used for "−="
         "*="
         "/="
         "//="
@@ -117,6 +117,9 @@ const _kind_names =
         "~"
         "\$="
         "⊻="
+        "≔"
+        "⩴"
+        "≕"
     "END_ASSIGNMENTS"
 
     "BEGIN_PAIRARROW"
@@ -253,7 +256,6 @@ const _kind_names =
         "⭌"
         "￩"
         "￫"
-        "↻"
         "⇜"
         "⇝"
         "↜"
@@ -279,6 +281,7 @@ const _kind_names =
         "↷"
         "↶"
         "↺"
+        "↻"
     "END_ARROW"
 
     # Level 4
@@ -331,6 +334,7 @@ const _kind_names =
         "∾"
         "≁"
         "≃"
+        "≂"
         "≄"
         "≅"
         "≆"
@@ -346,8 +350,6 @@ const _kind_names =
         "≑"
         "≒"
         "≓"
-        "≔"
-        "≕"
         "≖"
         "≗"
         "≘"
@@ -472,7 +474,6 @@ const _kind_names =
         "⩱"
         "⩲"
         "⩳"
-        "⩴"
         "⩵"
         "⩶"
         "⩷"
@@ -580,10 +581,10 @@ const _kind_names =
         "⫺"
         "⊢"
         "⊣"
+        "⟂"
         # ⫪,⫫ see https://github.com/JuliaLang/julia/issues/39350
         "⫪"
         "⫫"
-        "⟂"
     "END_COMPARISON"
 
     # Level 7
@@ -608,7 +609,7 @@ const _kind_names =
     "BEGIN_PLUS"
         "\$"
         "+"
-        "-"
+        "-" # also used for "−"
         "++"
         "⊕"
         "⊖"
@@ -622,7 +623,6 @@ const _kind_names =
         "∓"
         "∔"
         "∸"
-        "≂"
         "≏"
         "⊎"
         "⊻"
@@ -667,19 +667,12 @@ const _kind_names =
     "END_PLUS"
 
     # Level 10
-    "BEGIN_BITSHIFTS"
-        "<<"
-        ">>"
-        ">>>"
-    "END_BITSHIFTS"
-
-    # Level 11
     "BEGIN_TIMES"
         "*"
         "/"
         "÷"
         "%"
-        "⋅"
+        "⋅" # also used for lookalikes "·" and "·"
         "∘"
         "×"
         "\\"
@@ -755,10 +748,17 @@ const _kind_names =
         "⨟"
     "END_TIMES"
 
-    # Level 12
+    # Level 11
     "BEGIN_RATIONAL"
         "//"
     "END_RATIONAL"
+
+    # Level 12
+    "BEGIN_BITSHIFTS"
+        "<<"
+        ">>"
+        ">>>"
+    "END_BITSHIFTS"
 
     # Level 13
     "BEGIN_POWER"
