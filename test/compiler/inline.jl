@@ -299,21 +299,19 @@ end
 
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
-let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :arrayref)), ci.code)
+let ci = code_typed1(f_inline_global_getindex, Tuple{})
+    @test any(iscall((ci, Base.arrayref)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats
 f_29115(x) = (x...,)
 @test @allocated(f_29115(1)) == 0
 @test @allocated(f_29115(1=>2)) == 0
-let ci = code_typed(f_29115, Tuple{Int64})[1].first
-    @test length(ci.code) == 2 && isexpr(ci.code[1], :call) &&
-        ci.code[1].args[1] === GlobalRef(Core, :tuple)
+let ci = code_typed1(f_29115, Tuple{Int64})
+    @test length(ci.code) == 2 && iscall((ci, tuple))(ci.code[1])
 end
-let ci = code_typed(f_29115, Tuple{Pair{Int64, Int64}})[1].first
-    @test length(ci.code) == 4 && isexpr(ci.code[1], :call) &&
-        ci.code[end-1].args[1] === GlobalRef(Core, :tuple)
+let ci = code_typed1(f_29115, Tuple{Pair{Int64, Int64}})
+    @test length(ci.code) == 4 && iscall((ci, tuple))(ci.code[end-1])
 end
 
 # Issue #37182 & #37555 - Inlining of pending nodes
@@ -1842,4 +1840,10 @@ let src = code_typed1(make_issue47349(Val{4}()), (Any,))
     @test Base.return_types((Int,)) do x
         make_issue47349(Val(4))((x,nothing,Int))
     end |> only === Type{Int}
+end
+
+# inline inlineable global ref
+const INLINEABLE_GR = :INLINEABLE_GR
+@test fully_eliminated(; retval=:INLINEABLE_GR) do
+    return INLINEABLE_GR
 end

@@ -154,9 +154,14 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
                 return nothing
             end
             op[] = x
-        elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
-            op[] = NewSSAValue(insert_node!(ir, idx,
-                NewInstruction(val, typ_for_val(val, ci, ir.sptypes, idx, Any[]))).id - length(ir.stmts))
+        elseif isa(val, GlobalRef)
+            ty = typ_for_val(val, ci, ir.sptypes, idx, Any[])
+            if isa(ty, Const) && is_inlineable_constant(ty.val)
+                inst = NewInstruction(quoted(ty.val), ty)
+            else
+                inst = NewInstruction(val, ty)
+            end
+            op[] = NewSSAValue(insert_node!(ir, idx, inst).id - length(ir.stmts))
         elseif isexpr(val, :static_parameter)
             ty = typ_for_val(val, ci, ir.sptypes, idx, Any[])
             if isa(ty, Const)
