@@ -177,9 +177,17 @@ tests = [
         "isa::T"   => "(:: isa T)"
         "-2^x"     => "(call-pre - (call-i 2 ^ x))"
         "-2[1, 3]" => "(call-pre - (ref 2 1 3))"
+        # signed literals
         "-2"       => "-2"
         "+2.0"     => "2.0"
         "-1.0f0"   => "-1.0f0"
+        "-0xf.0p0" => "-15.0"
+        "+0b10010" => "0x12"
+        "+0o22"    => "0x12"
+        "+0x12"    => "0x12"
+        "-0b10010" => "(call-pre - 0x12)"
+        "-0o22"    => "(call-pre - 0x12)"
+        "-0x12"    => "(call-pre - 0x12)"
         # Standalone dotted operators are parsed as (|.| op)
         ".+"   =>  "(. +)"
         ".+\n" =>  "(. +)"

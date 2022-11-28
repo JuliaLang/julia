@@ -1157,9 +1157,12 @@ function parse_unary(ps::ParseState)
         parse_factor(ps)
         return
     end
+    t2 = peek_token(ps, 2)
+    k2 = kind(t2)
     if op_k in KSet"- +" && !is_decorated(op_t)
-        t2 = peek_token(ps, 2)
-        if !preceding_whitespace(t2) && kind(t2) in KSet"Integer Float Float32"
+        if !preceding_whitespace(t2) && (k2 in KSet"Integer Float Float32" ||
+                                         (op_k == K"+" && k2 in KSet"BinInt HexInt OctInt"))
+
             k3 = peek(ps, 3)
             if is_prec_power(k3) || k3 in KSet"[ {"
                 # `[`, `{` (issue #18851) and `^` have higher precedence than
@@ -1176,13 +1179,12 @@ function parse_unary(ps::ParseState)
                 # +2.0    ==>  2.0
                 # -1.0f0  ==>  -1.0f0
                 # -2*x    ==>  (call-i -2 * x)
+                # +0xff   ==>  0xff
                 bump_glue(ps, kind(t2), EMPTY_FLAGS, 2)
             end
             return
         end
     end
-    t2 = peek_token(ps, 2)
-    k2 = kind(t2)
     if is_closing_token(ps, k2) || k2 in KSet"NewlineWs ="
         if is_dotted(op_t)
             # Standalone dotted operators are parsed as (|.| op)
