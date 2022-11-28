@@ -268,6 +268,7 @@ tests = [
         # parse_call
         "f(x)"    =>  "(call f x)"
         "\$f(x)"  =>  "(call (\$ f) x)"
+        ".&(x,y)" =>  "(call .& x y)"
         # parse_call_chain
         "f(a).g(b)" => "(call (. (call f a) (quote g)) b)"
         "\$A.@x"    =>  "(macrocall (. (\$ A) (quote @x)))"

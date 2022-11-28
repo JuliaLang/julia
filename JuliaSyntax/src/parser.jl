@@ -1397,8 +1397,9 @@ end
 # flisp: parse-unary-prefix
 function parse_unary_prefix(ps::ParseState)
     mark = position(ps)
-    k = peek(ps)
-    if is_syntactic_unary_op(k)
+    t = peek_token(ps)
+    k = kind(t)
+    if is_syntactic_unary_op(k) && !is_dotted(t)
         k2 = peek(ps, 2)
         if k in KSet"& $" && (is_closing_token(ps, k2) || k2 == K"NewlineWs")
             # &)   ==>  &
@@ -1418,6 +1419,7 @@ function parse_unary_prefix(ps::ParseState)
             emit(ps, mark, k)
         end
     else
+        # .&(x,y)  ==>  (call .& x y)
         parse_atom(ps)
     end
 end
