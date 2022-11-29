@@ -305,3 +305,18 @@ end
 end
 @test f33243() === 2
 @test x33243 === 2
+
+# https://github.com/JuliaDebug/CassetteOverlay.jl/issues/12
+# generated function with varargs and unfortunately placed unused slot
+@generated function f_vararg_generated(args...)
+    :($args)
+end
+g_vararg_generated() = f_vararg_generated((;), (;), Base.inferencebarrier((;)))
+let tup = g_vararg_generated()
+    @test !any(==(Any), tup)
+    # This is just to make sure that the test is actually testing what we want -
+    # the test only works if there's an unused that matches the position of the
+    # inferencebarrier argument above (N.B. the generator function itself
+    # shifts everything over by 1)
+    @test code_lowered(first(methods(f_vararg_generated)).generator.gen)[1].slotflags[5] == UInt8(0x00)
+end
