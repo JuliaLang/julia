@@ -888,7 +888,6 @@ precompile_test_harness("code caching") do dir
         @test mi.specTypes.parameters[end] === Integer ? !hv : hv
     end
 
-    setglobal!(Main, :inval, invalidations)
     idxs = findall(==("verify_methods"), invalidations)
     idxsbits = filter(idxs) do i
         mi = invalidations[i-1]
