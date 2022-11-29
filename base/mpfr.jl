@@ -210,7 +210,9 @@ end
 
 function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
     z = BigFloat(;precision)
-    if precision < 53
+    # punt on the hard case where we might have to deal with rounding
+    # we could use this path in all cases, but mpfr_set_d has a lot of overhead.
+    if precision <= Base.significand_bits(Float64)
         ccall((:mpfr_set_d, :libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
         if isnan(x) && signbit(x) != signbit(z)
             z.sign = -z.sign
@@ -228,11 +230,12 @@ function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::In
         end
         return z
     end
-    z.exp = 1+exponent(x)
+    z.exp = 1 + exponent(x)
     # BigFloat doesn't have an implicit bit
     val = reinterpret(UInt64, significand(x))<<11 | typemin(Int64)
     nlimbs = (precision + 8*Core.sizeof(Limb) - 1) ÷ (8*Core.sizeof(Limb))
 
+    # Limb is a CLong which is a UInt32 on windows (thank M$) which makes this more complicated and slower.
     if Limb === UInt64
         for i in 1:nlimbs-1
             unsafe_store!(z.d, 0x0, i)
