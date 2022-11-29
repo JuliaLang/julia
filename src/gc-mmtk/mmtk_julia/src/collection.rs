@@ -54,7 +54,7 @@ impl Collection<JuliaVM> for VMCollection {
             BI_MARKING_METADATA_SPEC.bzero_metadata(Address::from_usize(BI_METADATA_START_ALIGNED_DOWN), BI_METADATA_END_ALIGNED_UP - BI_METADATA_START_ALIGNED_DOWN)
         }
 
-        info!("Live bytes = {}, free bytes = {}, total bytes = {}", crate::api::used_bytes(), crate::api::free_bytes(), crate::api::total_bytes());
+        info!("Live bytes = {}, total bytes = {}", crate::api::used_bytes(), crate::api::total_bytes());
         trace!("Resuming mutators.");
     }
 
