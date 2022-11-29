@@ -1885,6 +1885,12 @@ When an argument's type annotation is omitted, it's replaced with `Core.Typeof` 
 To invoke a method where an argument is untyped or explicitly typed as `Any`, annotate the
 argument with `::Any`.
 
+It also supports the following syntax:
+- `@invoke (x::X).f` expands to `invoke(getproperty, Tuple{X,Symbol}, x, :f)`
+- `@invoke (x::X).f = v::V` expands to `invoke(setproperty!, Tuple{X,Symbol,V}, x, :f, v)`
+- `@invoke (xs::Xs)[i::I]` expands to `invoke(getindex, Tuple{Xs,I}, xs, i)`
+- `@invoke (xs::Xs)[i::I] = v::V` expands to `invoke(setindex!, Tuple{Xs,V,I}, xs, v, i)`
+
 # Examples
 
 ```jldoctest
@@ -1893,6 +1899,18 @@ julia> @macroexpand @invoke f(x::T, y)
 
 julia> @invoke 420::Integer % Unsigned
 0x00000000000001a4
+
+julia> @macroexpand @invoke (x::X).f
+:(Core.invoke(Base.getproperty, Tuple{X, Core.Typeof(:f)}, x, :f))
+
+julia> @macroexpand @invoke (x::X).f = v::V
+:(Core.invoke(Base.setproperty!, Tuple{X, Core.Typeof(:f), V}, x, :f, v))
+
+julia> @macroexpand @invoke (xs::Xs)[i::I]
+:(Core.invoke(Base.getindex, Tuple{Xs, I}, xs, i))
+
+julia> @macroexpand @invoke (xs::Xs)[i::I] = v::V
+:(Core.invoke(Base.setindex!, Tuple{Xs, V, I}, xs, v, i))
 ```
 
 !!! compat "Julia 1.7"
@@ -1900,9 +1918,13 @@ julia> @invoke 420::Integer % Unsigned
 
 !!! compat "Julia 1.9"
     This macro is exported as of Julia 1.9.
+
+!!! compat "Julia 1.10"
+    The additional syntax is supported as of Julia 1.10.
 """
 macro invoke(ex)
-    f, args, kwargs = destructure_callex(ex)
+    topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
+    f, args, kwargs = destructure_callex(topmod, ex)
     types = Expr(:curly, :Tuple)
     out = Expr(:call, GlobalRef(Core, :invoke))
     isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
@@ -1927,29 +1949,90 @@ Provides a convenient way to call [`Base.invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
 
+It also supports the following syntax:
+- `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
+- `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
+- `@invokelatest xs[i]` expands to `invoke(getindex, xs, i)`
+- `@invokelatest xs[i] = v` expands to `invoke(setindex!, xs, v, i)`
+
+```jldoctest
+julia> @macroexpand @invokelatest f(x; kw=kwv)
+:(Base.invokelatest(f, x; kw = kwv))
+
+julia> @macroexpand @invokelatest x.f
+:(Base.invokelatest(Base.getproperty, x, :f))
+
+julia> @macroexpand @invokelatest x.f = v
+:(Base.invokelatest(Base.setproperty!, x, :f, v))
+
+julia> @macroexpand @invokelatest xs[i]
+:(Base.invokelatest(Base.getindex, xs, i))
+
+julia> @macroexpand @invokelatest xs[i] = v
+:(Base.invokelatest(Base.setindex!, xs, v, i))
+```
+
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
+
+!!! compat "Julia 1.10"
+    The additional syntax is supported as of Julia 1.10.
 """
 macro invokelatest(ex)
-    f, args, kwargs = destructure_callex(ex)
-    return esc(:($(GlobalRef(@__MODULE__, :invokelatest))($(f), $(args...); $(kwargs...))))
+    topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
+    f, args, kwargs = destructure_callex(topmod, ex)
+    out = Expr(:call, GlobalRef(Base, :invokelatest))
+    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
+    push!(out.args, f)
+    append!(out.args, args)
+    return esc(out)
 end
 
-function destructure_callex(ex)
-    isexpr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
-
-    f = first(ex.args)
-    args = []
-    kwargs = []
-    for x in ex.args[2:end]
-        if isexpr(x, :parameters)
-            append!(kwargs, x.args)
-        elseif isexpr(x, :kw)
-            push!(kwargs, x)
-        else
-            push!(args, x)
+function destructure_callex(topmod::Module, @nospecialize(ex))
+    function flatten(xs)
+        out = Any[]
+        for x in xs
+            if isexpr(x, :tuple)
+                append!(out, x.args)
+            else
+                push!(out, x)
+            end
         end
+        return out
     end
 
+    kwargs = Any[]
+    if isexpr(ex, :call) # `f(args...)`
+        f = first(ex.args)
+        args = Any[]
+        for x in ex.args[2:end]
+            if isexpr(x, :parameters)
+                append!(kwargs, x.args)
+            elseif isexpr(x, :kw)
+                push!(kwargs, x)
+            else
+                push!(args, x)
+            end
+        end
+    elseif isexpr(ex, :.)   # `x.f`
+        f = GlobalRef(topmod, :getproperty)
+        args = flatten(ex.args)
+    elseif isexpr(ex, :ref) # `x[i]`
+        f = GlobalRef(topmod, :getindex)
+        args = flatten(ex.args)
+    elseif isexpr(ex, :(=)) # `x.f = v` or `x[i] = v`
+        lhs, rhs = ex.args
+        if isexpr(lhs, :.)
+            f = GlobalRef(topmod, :setproperty!)
+            args = flatten(Any[lhs.args..., rhs])
+        elseif isexpr(lhs, :ref)
+            f = GlobalRef(topmod, :setindex!)
+            args = flatten(Any[lhs.args[1], rhs, lhs.args[2]])
+        else
+            throw(ArgumentError("expected a `setproperty!` expression `x.f = v` or `setindex!` expression `x[i] = v`"))
+        end
+    else
+        throw(ArgumentError("expected a `:call` expression `f(args...; kwargs...)`"))
+    end
     return f, args, kwargs
 end
