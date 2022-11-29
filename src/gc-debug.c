@@ -198,50 +198,50 @@ static void restore(void)
 
 static void gc_verify_track(jl_ptls_t ptls)
 {
-    do {
-        jl_gc_markqueue_t mq;
-        mq.current = mq.start = (ptls->mark_queue).start;
-        mq.end = (ptls->mark_queue).end;
-        arraylist_push(&lostval_parents_done, lostval);
-        jl_safe_printf("Now looking for %p =======\n", lostval);
-        clear_mark(GC_CLEAN);
-        gc_mark_queue_all_roots(ptls, &mq);
-        gc_mark_finlist(&mq, &to_finalize, 0);
-        for (int i = 0;i < jl_n_threads;i++) {
-            jl_ptls_t ptls2 = jl_all_tls_states[i];
-            gc_mark_finlist(&mq, &ptls2->finalizers, 0);
-        }
-        gc_mark_finlist(&mq, &finalizer_list_marked, 0);
-        gc_mark_loop_(ptls, &mq);
-        if (lostval_parents.len == 0) {
-            jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
-            break;
-        }
-        jl_value_t *lostval_parent = NULL;
-        for(int i = 0; i < lostval_parents.len; i++) {
-            lostval_parent = (jl_value_t*)lostval_parents.items[i];
-            int clean_len = bits_save[GC_CLEAN].len;
-            for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
-                void *p = bits_save[j >= clean_len ? GC_OLD : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
-                if (jl_valueof(p) == lostval_parent) {
-                    lostval = lostval_parent;
-                    lostval_parent = NULL;
-                    break;
-                }
-            }
-            if (lostval_parent != NULL) break;
-        }
-        if (lostval_parent == NULL) { // all parents of lostval were also scheduled for deletion
-            lostval = (jl_value_t*)arraylist_pop(&lostval_parents);
-        }
-        else {
-            jl_safe_printf("Missing write barrier found !\n");
-            jl_safe_printf("%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
-            jl_safe_printf("(details above)\n");
-            lostval = NULL;
-        }
-        restore();
-    } while(lostval != NULL);
+    // do {
+    //     jl_gc_markqueue_t mq;
+    //     mq.current = mq.start = (ptls->mark_queue).start;
+    //     mq.end = (ptls->mark_queue).end;
+    //     arraylist_push(&lostval_parents_done, lostval);
+    //     jl_safe_printf("Now looking for %p =======\n", lostval);
+    //     clear_mark(GC_CLEAN);
+    //     gc_mark_queue_all_roots(ptls, &mq);
+    //     gc_mark_finlist(&mq, &to_finalize, 0);
+    //     for (int i = 0;i < jl_n_threads;i++) {
+    //         jl_ptls_t ptls2 = jl_all_tls_states[i];
+    //         gc_mark_finlist(&mq, &ptls2->finalizers, 0);
+    //     }
+    //     gc_mark_finlist(&mq, &finalizer_list_marked, 0);
+    //     gc_mark_loop_(ptls, &mq);
+    //     if (lostval_parents.len == 0) {
+    //         jl_safe_printf("Could not find the missing link. We missed a toplevel root. This is odd.\n");
+    //         break;
+    //     }
+    //     jl_value_t *lostval_parent = NULL;
+    //     for(int i = 0; i < lostval_parents.len; i++) {
+    //         lostval_parent = (jl_value_t*)lostval_parents.items[i];
+    //         int clean_len = bits_save[GC_CLEAN].len;
+    //         for(int j = 0; j < clean_len + bits_save[GC_OLD].len; j++) {
+    //             void *p = bits_save[j >= clean_len ? GC_OLD : GC_CLEAN].items[j >= clean_len ? j - clean_len : j];
+    //             if (jl_valueof(p) == lostval_parent) {
+    //                 lostval = lostval_parent;
+    //                 lostval_parent = NULL;
+    //                 break;
+    //             }
+    //         }
+    //         if (lostval_parent != NULL) break;
+    //     }
+    //     if (lostval_parent == NULL) { // all parents of lostval were also scheduled for deletion
+    //         lostval = (jl_value_t*)arraylist_pop(&lostval_parents);
+    //     }
+    //     else {
+    //         jl_safe_printf("Missing write barrier found !\n");
+    //         jl_safe_printf("%p was written a reference to %p that was not recorded\n", lostval_parent, lostval);
+    //         jl_safe_printf("(details above)\n");
+    //         lostval = NULL;
+    //     }
+    //     restore();
+    // } while(lostval != NULL);
 }
 
 void gc_verify(jl_ptls_t ptls)
@@ -1272,24 +1272,24 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
 // `offset` will be added to `mq->current` for convenience in the debugger.
 NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_markqueue_t *mq, int offset)
 {
-    jl_jmp_buf *old_buf = jl_get_safe_restore();
-    jl_jmp_buf buf;
-    jl_set_safe_restore(&buf);
-    if (jl_setjmp(buf, 0) != 0) {
-        jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
-        jl_set_safe_restore(old_buf);
-        return;
-    }
-    jl_value_t **start = mq->start;
-    jl_value_t **end = mq->current + offset;
-    for (; start < end; start++) {
-        jl_value_t *obj = *start;
-        jl_taggedvalue_t *o = jl_astaggedvalue(obj);
-        jl_safe_printf("Queued object: %p :: (header: %zu) (bits: %zu)\n", obj, (uintptr_t)o->header,
-                        ((uintptr_t)o->header & 3));
-        jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
-    }
-    jl_set_safe_restore(old_buf);
+    // jl_jmp_buf *old_buf = jl_get_safe_restore();
+    // jl_jmp_buf buf;
+    // jl_set_safe_restore(&buf);
+    // if (jl_setjmp(buf, 0) != 0) {
+    //     jl_safe_printf("\n!!! ERROR when unwinding gc mark loop -- ABORTING !!!\n");
+    //     jl_set_safe_restore(old_buf);
+    //     return;
+    // }
+    // jl_value_t **start = mq->start;
+    // jl_value_t **end = mq->current + offset;
+    // for (; start < end; start++) {
+    //     jl_value_t *obj = *start;
+    //     jl_taggedvalue_t *o = jl_astaggedvalue(obj);
+    //     jl_safe_printf("Queued object: %p :: (header: %zu) (bits: %zu)\n", obj, (uintptr_t)o->header,
+    //                     ((uintptr_t)o->header & 3));
+    //     jl_((void*)(jl_datatype_t *)(o->header & ~(uintptr_t)0xf));
+    // }
+    // jl_set_safe_restore(old_buf);
 }
 
 static int gc_logging_enabled = 0;

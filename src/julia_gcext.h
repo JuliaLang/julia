@@ -35,7 +35,7 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_external_free(jl_gc_cb_notify_external_fre
         int enable);
 
 // Types for custom mark and sweep functions.
-typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj);
+typedef uintptr_t (*jl_markfunc_t)(jl_ptls_t, jl_value_t *obj) JL_NOTSAFEPOINT;
 typedef void (*jl_sweepfunc_t)(jl_value_t *obj);
 
 // Function to create a new foreign type with custom

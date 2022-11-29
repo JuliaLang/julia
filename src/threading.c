@@ -343,6 +343,12 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     small_arraylist_new(&ptls->locks, 0);
     jl_init_thread_heap(ptls);
 
+    uv_mutex_init(&ptls->sleep_lock);
+    uv_mutex_init(&ptls->gc_sleep_lock);
+
+    uv_cond_init(&ptls->wake_signal);
+    uv_cond_init(&ptls->gc_wake_signal);
+
     jl_all_tls_states[tid] = ptls;
 
     return ptls;

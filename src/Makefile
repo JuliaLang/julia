@@ -45,8 +45,8 @@ RUNTIME_SRCS := \
 	jltypes gf typemap smallintset ast builtins module interpreter symbol \
 	dlload sys init task array dump staticdata toplevel jl_uv datatype \
 	simplevector runtime_intrinsics precompile \
-	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler method \
-	jlapi signal-handling safepoint timing subtype \
+	threading partr stackwalk gc gc-debug gc-pages gc-stacks gc-alloc-profiler wsqueue \
+	method jlapi signal-handling safepoint timing subtype \
 	crc32c APInt-C processor ircode opaque_closure codegen-stubs coverage
 SRCS := jloptions runtime_ccall rtutils
 ifeq ($(OS),WINNT)
@@ -104,7 +104,7 @@ ifeq ($(USE_SYSTEM_LIBUV),0)
 UV_HEADERS += uv.h
 UV_HEADERS += uv/*.h
 endif
-PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
+PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h wsqueue.h)
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
 endif

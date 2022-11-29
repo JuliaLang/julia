@@ -5,6 +5,9 @@
 #define JL_THREADS_H
 
 #include "julia_atomics.h"
+#include "options.h"
+#include "uv.h"
+#include "wsqueue.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
 #endif
@@ -169,14 +172,15 @@ typedef struct {
 } jl_thread_heap_t;
 
 typedef struct {
-#ifndef GC_VERIFY
-    struct _jl_gc_chunk_t *chunk_start;
-    struct _jl_gc_chunk_t *current_chunk;
-    struct _jl_gc_chunk_t *chunk_end;
-#endif
+// Debugging infrastructure is limited to single threaded GC
+#ifdef GC_VERIFY
     struct _jl_value_t **start;
     struct _jl_value_t **current;
     struct _jl_value_t **end;
+#else
+    ws_queue_t q;
+    idemp_ws_queue_t cq;
+#endif
 } jl_gc_markqueue_t;
 
 typedef struct {
@@ -209,11 +213,13 @@ typedef struct _jl_tls_states_t {
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads
     // Whether it is safe to execute GC at the same time.
 #define JL_GC_STATE_WAITING 1
-    // gc_state = 1 means the thread is doing GC or is waiting for the GC to
-    //              finish.
+    // gc_state = 1 means the thread is waiting for the GC to finish or doing
+    //              sequential sweep work.
 #define JL_GC_STATE_SAFE 2
     // gc_state = 2 means the thread is running unmanaged code that can be
     //              execute at the same time with the GC.
+#define JL_GC_STATE_PARALLEL 3
+    // gc_state = 3 means the thread is doing parallel-mark work.
     _Atomic(int8_t) gc_state; // read from foreign threads
     // execution of certain certain impure
     // statements is prohibited from certain
@@ -275,6 +281,14 @@ typedef struct _jl_tls_states_t {
         uint64_t sleep_enter;
         uint64_t sleep_leave;
     )
+
+    // some hidden state (usually just because we don't have the type's size declaration)
+#ifdef LIBRARY_EXPORTS
+    uv_mutex_t sleep_lock;
+    uv_mutex_t gc_sleep_lock;
+    uv_cond_t wake_signal;
+    uv_cond_t gc_wake_signal;
+#endif
 } jl_tls_states_t;
 
 typedef jl_tls_states_t *jl_ptls_t;

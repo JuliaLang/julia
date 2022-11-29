@@ -43,6 +43,13 @@ uint8_t jl_safepoint_enable_cnt[3] = {0, 0, 0};
 // load/store so that threads waiting for the GC doesn't have to also
 // fight on the safepoint lock...
 uv_mutex_t safepoint_lock;
+uv_cond_t safepoint_cond;
+
+jl_mutex_t spinmaster_lock;
+const uint64_t timeout_ns = 1e5;
+
+extern _Atomic(int32_t) nworkers_marking;
+extern void gc_mark_loop(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
 static void jl_safepoint_enable(int idx) JL_NOTSAFEPOINT
 {
@@ -87,6 +94,7 @@ static void jl_safepoint_disable(int idx) JL_NOTSAFEPOINT
 void jl_safepoint_init(void)
 {
     uv_mutex_init(&safepoint_lock);
+    uv_cond_init(&safepoint_cond);
     // jl_page_size isn't available yet.
     size_t pgsz = jl_getpagesize();
 #ifdef _OS_WINDOWS_
@@ -123,7 +131,7 @@ int jl_safepoint_start_gc(void)
     uint32_t running = 0;
     if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
         uv_mutex_unlock(&safepoint_lock);
-        jl_safepoint_wait_gc();
+        jl_spinmaster_wait_gc();
         return 0;
     }
     jl_safepoint_enable(1);
@@ -146,21 +154,119 @@ void jl_safepoint_end_gc(void)
     jl_safepoint_disable(2);
     jl_safepoint_disable(1);
     jl_atomic_store_release(&jl_gc_running, 0);
-#  ifdef __APPLE__
-    // This wakes up other threads on mac.
-    jl_mach_gc_end();
-#  endif
+    uv_mutex_unlock(&safepoint_lock);
+    uv_cond_broadcast(&safepoint_cond);
+}
+
+// Thread recruitment scheme inspired by Hassanein's "spin-master",
+// `Understanding and Improving JVM GC Work Stealing at the
+// Data Center Scale`
+
+int jl_spinmaster_all_workers_done(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    return (jl_atomic_load_acquire(&nworkers_marking) == 0);
+}
+
+#ifndef GC_VERIFY
+int64_t jl_spinmaster_count_work(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    int64_t work = 0;
+    for (int i = 0; i < jl_n_threads; i++) {
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        jl_gc_markqueue_t *mq2 = &ptls2->mark_queue;
+        ws_queue_t *q2 = &mq2->q;
+        // This count can be slightly off, but it doesn't matter
+        // for recruitment heuristics
+        int64_t t2 = jl_atomic_load_relaxed(&q2->top);
+        int64_t b2 = jl_atomic_load_relaxed(&q2->bottom);
+        work += b2 - t2;
+    }
+    return work;
+}
+
+void jl_spinmaster_notify_all(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < jl_n_threads; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        uv_cond_signal(&ptls2->gc_wake_signal);
+    }
+}
+
+void jl_spinmaster_recruit_workers(jl_ptls_t ptls, size_t nworkers) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < jl_n_threads && nworkers > 0; i++) {
+        if (i == ptls->tid)
+            continue;
+        jl_ptls_t ptls2 = jl_all_tls_states[i];
+        if (jl_atomic_load_acquire(&ptls2->gc_state) == JL_GC_STATE_WAITING) {
+            uv_cond_signal(&ptls2->gc_wake_signal);
+            nworkers--;
+        }
+    }
+}
+#endif
+
+int jl_spinmaster_end_marking(jl_ptls_t ptls) JL_NOTSAFEPOINT
+{
+    // Fast path for mark-loop termination
+    if (jl_spinmaster_all_workers_done(ptls)) {
+        return 1;
+    }
+#ifndef GC_VERIFY
+    if (jl_mutex_trylock_nogc(&spinmaster_lock)) {
+        spin : {
+            if (!jl_spinmaster_all_workers_done(ptls)) {
+                int64_t work = jl_spinmaster_count_work(ptls);
+                if (work > 1) {
+                    jl_spinmaster_recruit_workers(ptls, work - 1);
+                    jl_mutex_unlock_nogc(&spinmaster_lock);
+                    gc_mark_loop(ptls);
+                    return 0;
+                }
+                jl_cpu_pause();
+                goto spin;
+            }
+        }
+        jl_spinmaster_notify_all(ptls);
+        jl_mutex_unlock_nogc(&spinmaster_lock);
+        return 1;
+    }
+#endif
+    return 0;
+}
+
+void jl_spinmaster_wait_pmark(void) JL_NOTSAFEPOINT
+{
+    jl_ptls_t ptls = jl_current_task->ptls;
+    while(!jl_spinmaster_end_marking(ptls)) {
+        uv_mutex_lock(&ptls->gc_sleep_lock);
+        int ret = uv_cond_timedwait(&ptls->gc_wake_signal,
+                                    &ptls->gc_sleep_lock, timeout_ns);
+        uv_mutex_unlock(&ptls->gc_sleep_lock);
+        if (ret == 0)
+            gc_mark_loop(ptls);
+    }
+}
+
+void jl_spinmaster_wait_sweeping(void) JL_NOTSAFEPOINT
+{
+    // Use system mutexes rather than spin locking to minimize wasted CPU
+    // time on the idle cores while we wait for the GC to finish.
+    // This is particularly important when run under rr.
+    uv_mutex_lock(&safepoint_lock);
+    if (jl_atomic_load_relaxed(&jl_gc_running))
+        uv_cond_wait(&safepoint_cond, &safepoint_lock);
     uv_mutex_unlock(&safepoint_lock);
 }
 
-void jl_safepoint_wait_gc(void)
+void jl_spinmaster_wait_gc(void) JL_NOTSAFEPOINT
 {
-    // The thread should have set this is already
-    assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) != 0);
-    // Use normal volatile load in the loop for speed until GC finishes.
-    // Then use an acquire load to make sure the GC result is visible on this thread.
-    while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
-        jl_cpu_pause(); // yield?
+    while (jl_atomic_load_relaxed(&jl_gc_running) ||
+           jl_atomic_load_acquire(&jl_gc_running)) {
+        jl_spinmaster_wait_pmark();
+        jl_spinmaster_wait_sweeping();
     }
 }
 
