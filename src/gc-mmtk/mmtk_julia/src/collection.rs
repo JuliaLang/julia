@@ -133,7 +133,7 @@ impl Collection<JuliaVM> for VMCollection {
         unsafe {
             ((*UPCALLS).set_jl_last_err)(last_err)
         };
-
+        info!("Finished blocking mutator for GC!");
     }
 
     fn spawn_gc_thread(tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
