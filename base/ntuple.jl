@@ -43,7 +43,7 @@ function ntupleany(f, n)
     (Any[f(i) for i = 1:n]...,)
 end
 
-# inferrable ntuple (enough for bootstrapping)
+# inferable ntuple (enough for bootstrapping)
 ntuple(f, ::Val{0}) = ()
 ntuple(f, ::Val{1}) = (@inline; (f(1),))
 ntuple(f, ::Val{2}) = (@inline; (f(1), f(2)))

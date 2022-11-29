@@ -238,7 +238,7 @@ is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
 Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
 which will be one of the following:
 
-- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferrable dispatch
+- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
 - `BackedgePair(invokesig, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
 - `BackedgePair(specsig, mt::MethodTable)`: an abstract call
 
@@ -291,11 +291,12 @@ end
 #########
 
 function singleton_type(@nospecialize(ft))
+    ft = widenslotwrapper(ft)
     if isa(ft, Const)
         return ft.val
     elseif isconstType(ft)
         return ft.parameters[1]
-    elseif ft isa DataType && isdefined(ft, :instance)
+    elseif issingletontype(ft)
         return ft.instance
     end
     return nothing
@@ -303,7 +304,7 @@ end
 
 function maybe_singleton_const(@nospecialize(t))
     if isa(t, DataType)
-        if isdefined(t, :instance)
+        if issingletontype(t)
             return Const(t.instance)
         elseif isconstType(t)
             return Const(t.parameters[1])

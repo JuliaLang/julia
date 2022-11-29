@@ -520,7 +520,7 @@ function lift_comparison! end
 
 function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    opt_lattice::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice = OptimizerLattice())
     args = stmt.args
     length(args) == 3 || return
     lhs, rhs = args[2], args[3]
@@ -536,23 +536,24 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     else
         return
     end
-    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx)
+    egal_tfunc_opt(@nospecialize(x), @nospecialize(y)) = egal_tfunc(𝕃ₒ, x, y)
+    lift_comparison_leaves!(egal_tfunc_opt, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    opt_lattice::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice = OptimizerLattice())
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    isa_tfunc_opt(@nospecialize(v), @nospecialize(typ)) = isa_tfunc(opt_lattice, v, typ)
+    isa_tfunc_opt(@nospecialize(v), @nospecialize(typ)) = isa_tfunc(𝕃ₒ, v, typ)
     lift_comparison_leaves!(isa_tfunc_opt, compact, val, cmp, lifting_cache, idx)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    opt_lattice::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice = OptimizerLattice())
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
@@ -852,7 +853,7 @@ In a case when all usages are fully eliminated, `struct` allocation may also be 
 a result of succeeding dead code elimination.
 """
 function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothing)
-    opt_lattice = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
+    𝕃ₒ = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
     lifting_cache = IdDict{Pair{AnySSAValue, Any}, AnySSAValue}()
@@ -946,9 +947,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             elseif is_known_call(stmt, Core._svec_ref, compact)
                 lift_svec_ref!(compact, idx, stmt)
             elseif is_known_call(stmt, (===), compact)
-                lift_comparison!(===, compact, idx, stmt, lifting_cache, opt_lattice)
+                lift_comparison!(===, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             elseif is_known_call(stmt, isa, compact)
-                lift_comparison!(isa, compact, idx, stmt, lifting_cache, opt_lattice)
+                lift_comparison!(isa, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             end
             continue
         end
@@ -968,7 +969,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
             struct_typ = unswitchtupleunion(struct_typ)
         end
         if isa(struct_typ, Union) && is_isdefined
-            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, opt_lattice)
+            lift_comparison!(isdefined, compact, idx, stmt, lifting_cache, 𝕃ₒ)
             continue
         end
         isa(struct_typ, DataType) || continue
@@ -1052,7 +1053,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
         # but before the DCE) for our predicate within `sroa_mutables!`, but we also
         # try an extra effort using a callback so that reference counts are updated
         used_ssas = copy(compact.used_ssas)
-        simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
+        simple_dce!(compact) do x::SSAValue
+            used_ssas[x.id] -= 1
+        end
         ir = complete(compact)
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
@@ -1090,7 +1093,7 @@ function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
     # Ok, we're committed to inlining the finalizer
     add_inlining_backedge!(et, mi)
 
-    # TOOD: Should there be a special line number node for inlined finalizers?
+    # TODO: Should there be a special line number node for inlined finalizers?
     inlined_at = ir[SSAValue(idx)][:line]
     ((sp_ssa, argexprs), linetable_offset) = ir_prepare_inlining!(InsertBefore(ir, SSAValue(idx)), ir,
         ir.linetable, src, mi.sparam_vals, mi.def, inlined_at, argexprs)
@@ -1350,7 +1353,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                         end
                         continue
                     elseif use.kind === :preserve
-                        if length(du.defs) == 1 # allocation with this field unintialized
+                        if length(du.defs) == 1 # allocation with this field uninitialized
                             # there is nothing to preserve, just ignore this use
                             du.uses[i] = NoPreserve()
                             continue
@@ -1391,7 +1394,7 @@ function sroa_mutables!(ir::IRCode, defuses::IdDict{Int, Tuple{SPCSet, SSADefUse
                     elseif use.kind === :isdefined
                         continue # already rewritten if possible
                     elseif use.kind === :nopreserve
-                        continue # nothing to preserve (may happen when there are unintialized fields)
+                        continue # nothing to preserve (may happen when there are uninitialized fields)
                     elseif use.kind === :preserve
                         newval = compute_value_for_use(ir, domtree, allblocks,
                             du, phinodes, fidx, use.idx)
@@ -1484,9 +1487,11 @@ end
 function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist) do val::SSAValue
+            phi_uses[val.id] -= 1
+        end
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
+        return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist)
     end
 end
 
@@ -2212,7 +2217,7 @@ function cfg_simplify!(ir::IRCode)
                                 resize!(values, length(values)+1)
                             end
                         elseif new_edge == -3
-                            # Mutliple predecessors, we need to expand out this phi
+                            # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]
                             function add_preds!(old_edge)
                                 for old_edge′ in bbs[old_edge].preds

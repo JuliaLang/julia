@@ -204,6 +204,7 @@ add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecialize(x)->Bool, 1)
 
 function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
+    cnd = widenslotwrapper(cnd)
     if isa(cnd, Const)
         if cnd.val === true
             return x
@@ -212,9 +213,7 @@ function ifelse_tfunc(@nospecialize(cnd), @nospecialize(x), @nospecialize(y))
         else
             return Bottom
         end
-    elseif isa(cnd, Conditional)
-        # optimized (if applicable) in abstract_call
-    elseif !(Bool ⊑ cnd)
+    elseif !hasintersect(widenconst(cnd), Bool)
         return Bottom
     end
     return tmerge(x, y)
@@ -226,27 +225,41 @@ function ifelse_nothrow(@specialize(𝕃::AbstractLattice), @nospecialize(cond),
     return cond ⊑ Bool
 end
 
-function egal_tfunc(@nospecialize(x), @nospecialize(y))
-    xx = widenconditional(x)
-    yy = widenconditional(y)
-    if isa(x, Conditional) && isa(yy, Const)
-        yy.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
-        yy.val === true && return x
+egal_tfunc(@specialize(𝕃::AbstractLattice), @nospecialize(x), @nospecialize(y)) =
+    egal_tfunc(widenlattice(𝕃), x, y)
+function egal_tfunc(@specialize(𝕃::MustAliasesLattice), @nospecialize(x), @nospecialize(y))
+    return egal_tfunc(widenlattice(𝕃), widenmustalias(x), widenmustalias(y))
+end
+function egal_tfunc(@specialize(𝕃::ConditionalsLattice), @nospecialize(x), @nospecialize(y))
+    if isa(x, Conditional)
+        y = widenconditional(y)
+        if isa(y, Const)
+            y.val === false && return Conditional(x.slot, x.elsetype, x.thentype)
+            y.val === true && return x
+            return Const(false)
+        end
+    elseif isa(y, Conditional)
+        x = widenconditional(x)
+        if isa(x, Const)
+            x.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
+            x.val === true && return y
+            return Const(false)
+        end
+    end
+    return egal_tfunc(widenlattice(𝕃), x, y)
+end
+function egal_tfunc(::ConstsLattice, @nospecialize(x), @nospecialize(y))
+    if isa(x, Const) && isa(y, Const)
+        return Const(x.val === y.val)
+    elseif !hasintersect(widenconst(x), widenconst(y))
         return Const(false)
-    elseif isa(y, Conditional) && isa(xx, Const)
-        xx.val === false && return Conditional(y.slot, y.elsetype, y.thentype)
-        xx.val === true && return y
-        return Const(false)
-    elseif isa(xx, Const) && isa(yy, Const)
-        return Const(xx.val === yy.val)
-    elseif !hasintersect(widenconst(xx), widenconst(yy))
-        return Const(false)
-    elseif (isa(xx, Const) && y === typeof(xx.val) && isdefined(y, :instance)) ||
-           (isa(yy, Const) && x === typeof(yy.val) && isdefined(x, :instance))
+    elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
+           (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
         return Const(true)
     end
     return Bool
 end
+egal_tfunc(::JLTypeLattice, @nospecialize(x), @nospecialize(y)) = Bool
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 function isdefined_nothrow(@specialize(𝕃::AbstractLattice), @nospecialize(x), @nospecialize(name))
@@ -326,8 +339,6 @@ function sizeof_nothrow(@nospecialize(x))
         if !isa(x.val, Type) || x.val === DataType
             return true
         end
-    elseif isa(x, Conditional)
-        return true
     end
     xu = unwrap_unionall(x)
     if isa(xu, Union)
@@ -374,7 +385,8 @@ function _const_sizeof(@nospecialize(x))
         end
     return Const(size)
 end
-function sizeof_tfunc(@nospecialize(x),)
+function sizeof_tfunc(@nospecialize(x))
+    x = widenmustalias(x)
     isa(x, Const) && return _const_sizeof(x.val)
     isa(x, Conditional) && return _const_sizeof(Bool)
     isconstType(x) && return _const_sizeof(x.parameters[1])
@@ -442,19 +454,25 @@ function typevar_tfunc(@nospecialize(n), @nospecialize(lb_arg), @nospecialize(ub
         isa(nval, Symbol) || return Union{}
         if isa(lb_arg, Const)
             lb = lb_arg.val
-        elseif isType(lb_arg)
-            lb = lb_arg.parameters[1]
-            lb_certain = false
         else
-            return TypeVar
+            lb_arg = widenslotwrapper(lb_arg)
+            if isType(lb_arg)
+                lb = lb_arg.parameters[1]
+                lb_certain = false
+            else
+                return TypeVar
+            end
         end
         if isa(ub_arg, Const)
             ub = ub_arg.val
-        elseif isType(ub_arg)
-            ub = ub_arg.parameters[1]
-            ub_certain = false
         else
-            return TypeVar
+            ub_arg = widenslotwrapper(ub_arg)
+            if isType(ub_arg)
+                ub = ub_arg.parameters[1]
+                ub_certain = false
+            else
+                return TypeVar
+            end
         end
         tv = TypeVar(nval, lb, ub)
         return PartialTypeVar(tv, lb_certain, ub_certain)
@@ -955,6 +973,11 @@ function _getfield_tfunc(@specialize(lattice::AnyConditionalsLattice), @nospecia
     return _getfield_tfunc(widenlattice(lattice), s00, name, setfield)
 end
 
+function _getfield_tfunc(@specialize(𝕃::AnyMustAliasesLattice), @nospecialize(s00), @nospecialize(name), setfield::Bool)
+    s00 = widenmustalias(s00)
+    return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
+end
+
 function _getfield_tfunc(@specialize(lattice::PartialsLattice), @nospecialize(s00), @nospecialize(name), setfield::Bool)
     if isa(s00, PartialStruct)
         s = widenconst(s00)
@@ -1317,6 +1340,7 @@ end
 
 fieldtype_tfunc(s0, name, boundscheck) = (@nospecialize; fieldtype_tfunc(s0, name))
 function fieldtype_tfunc(@nospecialize(s0), @nospecialize(name))
+    s0 = widenmustalias(s0)
     if s0 === Bottom
         return Bottom
     end
@@ -1514,6 +1538,7 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
 
 # TODO: handle e.g. apply_type(T, R::Union{Type{Int32},Type{Float64}})
 function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
+    headtypetype = widenslotwrapper(headtypetype)
     if isa(headtypetype, Const)
         headtype = headtypetype.val
     elseif isconstType(headtypetype)
@@ -1580,7 +1605,7 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     varnamectr = 1
     ua = headtype
     for i = 1:largs
-        ai = widenconditional(args[i])
+        ai = widenslotwrapper(args[i])
         if isType(ai)
             aip1 = ai.parameters[1]
             canconst &= !has_free_typevars(aip1)
@@ -1678,7 +1703,7 @@ add_tfunc(apply_type, 1, INT_INF, apply_type_tfunc, 10)
 # convert the dispatch tuple type argtype to the real (concrete) type of
 # the tuple of those values
 function tuple_tfunc(@specialize(lattice::AbstractLattice), argtypes::Vector{Any})
-    argtypes = anymap(widenconditional, argtypes)
+    argtypes = anymap(widenslotwrapper, argtypes)
     all_are_const = true
     for i in 1:length(argtypes)
         if !isa(argtypes[i], Const)
@@ -1728,7 +1753,7 @@ function tuple_tfunc(@specialize(lattice::AbstractLattice), argtypes::Vector{Any
     end
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
-    isdefined(typ, :instance) && return Const(typ.instance)
+    issingletontype(typ) && return Const(typ.instance)
     return anyinfo ? PartialStruct(typ, argtypes) : typ
 end
 tuple_tfunc(argtypes::Vector{Any}) = tuple_tfunc(fallback_lattice, argtypes)
@@ -2140,8 +2165,9 @@ end
 
 function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtypes::Vector{Any},
                            sv::Union{InferenceState,IRCode,Nothing})
+    𝕃ᵢ = typeinf_lattice(interp)
     if f === tuple
-        return tuple_tfunc(typeinf_lattice(interp), argtypes)
+        return tuple_tfunc(𝕃ᵢ, argtypes)
     end
     if isa(f, IntrinsicFunction)
         if is_pure_intrinsic_infer(f) && _all(@nospecialize(a) -> isa(a, Const), argtypes)
@@ -2188,7 +2214,11 @@ function builtin_tfunction(interp::AbstractInterpreter, @nospecialize(f), argtyp
         return Bottom
     end
     if f === getfield
-        return getfield_tfunc(typeinf_lattice(interp), argtypes...)
+        return getfield_tfunc(𝕃ᵢ, argtypes...)
+    elseif f === (===)
+        return egal_tfunc(𝕃ᵢ, argtypes...)
+    elseif f === isa
+        return isa_tfunc(𝕃ᵢ, argtypes...)
     end
     return tf[3](argtypes...)
 end
@@ -2310,9 +2340,9 @@ end
 # while this assumes that it is an absolutely precise and accurate and exact model of both
 function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, si::StmtInfo, sv::Union{InferenceState, IRCode})
     if length(argtypes) == 3
-        tt = argtypes[3]
+        tt = widenslotwrapper(argtypes[3])
         if isa(tt, Const) || (isType(tt) && !has_free_typevars(tt))
-            aft = argtypes[2]
+            aft = widenslotwrapper(argtypes[2])
             if isa(aft, Const) || (isType(aft) && !has_free_typevars(aft)) ||
                    (isconcretetype(aft) && !(aft <: Builtin))
                 af_argtype = isa(tt, Const) ? tt.val : (tt::DataType).parameters[1]
@@ -2334,7 +2364,7 @@ function return_type_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, s
                         call = abstract_call(interp, ArgInfo(nothing, argtypes_vec), si, sv, -1)
                     end
                     info = verbose_stmt_info(interp) ? MethodResultPure(ReturnTypeCallInfo(call.info)) : MethodResultPure()
-                    rt = widenconditional(call.rt)
+                    rt = widenslotwrapper(call.rt)
                     if isa(rt, Const)
                         # output was computed to be constant
                         return CallMeta(Const(typeof(rt.val)), EFFECTS_TOTAL, info)

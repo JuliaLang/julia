@@ -45,6 +45,8 @@ using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&);
 
+extern Optional<bool> always_have_fp16();
+
 namespace {
 constexpr uint32_t clone_mask =
     JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
@@ -281,7 +283,7 @@ private:
     function_ref<LoopInfo&(Function&)> GetLI;
     function_ref<CallGraph&()> GetCG;
 
-    // Map from original functiton to one based index in `fvars`
+    // Map from original function to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
     std::vector<uint32_t> func_infos{};
@@ -478,6 +480,14 @@ uint32_t CloneCtx::collect_func_info(Function &F)
             if (auto mathOp = dyn_cast<FPMathOperator>(&I)) {
                 if (mathOp->getFastMathFlags().any()) {
                     flag |= JL_TARGET_CLONE_MATH;
+                }
+            }
+            if(!always_have_fp16().hasValue()){
+                for (size_t i = 0; i < I.getNumOperands(); i++) {
+                    if(I.getOperand(i)->getType()->isHalfTy()){
+                        flag |= JL_TARGET_CLONE_FLOAT16;
+                    }
+                    // Check for BFloat16 when they are added to julia can be done here
                 }
             }
             if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {

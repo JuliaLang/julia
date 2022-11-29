@@ -2264,7 +2264,7 @@
 ;; `n`:    total nr of lhs args
 ;; `end`:  car collects statements to be executed afterwards.
 ;;         In general, actual assignments should only happen after
-;;         the whole iterater is desctructured (https://github.com/JuliaLang/julia/issues/40574)
+;;         the whole iterator is desctructured (https://github.com/JuliaLang/julia/issues/40574)
 (define (destructure- i lhss xx n st end)
   (if (null? lhss)
       '()
@@ -4404,6 +4404,9 @@ f(x) = yt(x)
             cnd)))
     (define (emit-cond cnd break-labels endl)
       (let* ((cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
+                      (flatten-ex 'block cnd)
+                      cnd))
+             (cnd (if (and (pair? cnd) (eq? (car cnd) 'block))
                        (begin (if (length> cnd 2) (compile (butlast cnd) break-labels #f #f))
                               (last cnd))
                        cnd))

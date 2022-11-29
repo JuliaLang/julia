@@ -573,7 +573,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
 static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 {
     size_t j;
-    // TOOD: This shouldn't be necessary
+    // TODO: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp)
@@ -609,7 +609,7 @@ static int typekey_eq(jl_datatype_t *tt, jl_value_t **key, size_t n)
 static int typekeyvalue_eq(jl_datatype_t *tt, jl_value_t *key1, jl_value_t **key, size_t n, int leaf)
 {
     size_t j;
-    // TOOD: This shouldn't be necessary
+    // TODO: This shouldn't be necessary
     JL_GC_PROMISE_ROOTED(tt);
     size_t tnp = jl_nparams(tt);
     if (n != tnp)
@@ -2581,7 +2581,7 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
                                        jl_perm_symsvec(2, "typ", "fields"),
-                                       jl_svec2(jl_datatype_type, jl_array_any_type),
+                                       jl_svec2(jl_any_type, jl_array_any_type),
                                        jl_emptysvec, 0, 0, 2);
 
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,

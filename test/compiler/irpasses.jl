@@ -440,7 +440,7 @@ let src = code_typed1() do
     @test count(isnew, src.code) == 1
 end
 
-# should eliminate allocation whose address isn't taked even if it has unintialized field(s)
+# should eliminate allocation whose address isn't taked even if it has uninitialized field(s)
 mutable struct BadRef
     x::String
     y::String

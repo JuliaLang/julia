@@ -769,7 +769,8 @@ end
 function fieldindex(t::UnionAll, name::Symbol, err::Bool=true)
     t = argument_datatype(t)
     if t === nothing
-        throw(ArgumentError("type does not have definite fields"))
+        err && throw(ArgumentError("type does not have definite fields"))
+        return 0
     end
     return fieldindex(t, name, err)
 end
@@ -949,7 +950,7 @@ function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing
     return _methods_by_ftype(t, mt, lim, world, false, RefValue{UInt}(typemin(UInt)), RefValue{UInt}(typemax(UInt)), Ptr{Int32}(C_NULL))
 end
 function _methods_by_ftype(@nospecialize(t), mt::Union{Core.MethodTable, Nothing}, lim::Int, world::UInt, ambig::Bool, min::Ref{UInt}, max::Ref{UInt}, has_ambig::Ref{Int32})
-    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
+    return ccall(:jl_matching_methods, Any, (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ptr{Int32}), t, mt, lim, ambig, world, min, max, has_ambig)::Union{Vector{Any},Nothing}
 end
 
 # high-level, more convenient method lookup functions
@@ -992,7 +993,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     ms = Method[]
     for m in _methods(f, t, -1, world)::Vector
         m = m::Core.MethodMatch
-        (mod === nothing || m.method.module ∈ mod) && push!(ms, m.method)
+        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
     end
     MethodList(ms, typeof(f).name.mt)
 end
@@ -1398,7 +1399,7 @@ function return_types(@nospecialize(f), @nospecialize(types=default_tt(f));
     if isa(f, Core.Builtin)
         argtypes = Any[to_tuple_type(types).parameters...]
         rt = Core.Compiler.builtin_tfunction(interp, f, argtypes, nothing)
-        return Any[rt]
+        return Any[Core.Compiler.widenconst(rt)]
     end
     rts = []
     for match in _methods(f, types, -1, world)::Vector
@@ -1483,8 +1484,15 @@ end
 
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
-function _which(@nospecialize(tt::Type), world=get_world_counter())
-    match, _ = Core.Compiler._findsup(tt, nothing, world)
+function _which(@nospecialize(tt::Type);
+    method_table::Union{Nothing,Core.MethodTable}=nothing,
+    world::UInt=get_world_counter())
+    if method_table === nothing
+        table = Core.Compiler.InternalMethodTable(world)
+    else
+        table = Core.Compiler.OverlayMethodTable(world, method_table)
+    end
+    match, = Core.Compiler.findsup(tt, table)
     if match === nothing
         error("no unique matching method found for the specified argument types")
     end
@@ -1561,15 +1569,26 @@ parentmodule(f::Function) = parentmodule(typeof(f))
 """
     parentmodule(f::Function, types) -> Module
 
-Determine the module containing a given definition of a generic function.
+Determine the module containing the first method of a generic function `f` matching
+the specified `types`.
 """
 function parentmodule(@nospecialize(f), @nospecialize(types))
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
     end
-    return first(m).module
+    return parentmodule(first(m))
 end
+
+"""
+    parentmodule(m::Method) -> Module
+
+Return the module in which the given method `m` is defined.
+
+!!! compat "Julia 1.9"
+    Passing a `Method` as an argument requires Julia 1.9 or later.
+"""
+parentmodule(m::Method) = m.module
 
 """
     hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
@@ -1632,7 +1651,7 @@ as written, called after all missing keyword-arguments have been assigned defaul
 `basemethod` is the method you obtain via [`which`](@ref) or [`methods`](@ref).
 """
 function bodyfunction(basemethod::Method)
-    fmod = basemethod.module
+    fmod = parentmodule(basemethod)
     # The lowered code for `basemethod` should look like
     #   %1 = mkw(kwvalues..., #self#, args...)
     #        return %1
@@ -1652,7 +1671,7 @@ function bodyfunction(basemethod::Method)
                         fsym = callexpr.args[3]
                     end
                     if isa(fsym, Symbol)
-                        return getfield(basemethod.module, fsym)::Function
+                        return getfield(fmod, fsym)::Function
                     elseif isa(fsym, GlobalRef)
                         return getfield(fsym.mod, fsym.name)::Function
                     elseif isa(fsym, Core.SSAValue)
@@ -1866,6 +1885,12 @@ When an argument's type annotation is omitted, it's replaced with `Core.Typeof` 
 To invoke a method where an argument is untyped or explicitly typed as `Any`, annotate the
 argument with `::Any`.
 
+It also supports the following syntax:
+- `@invoke (x::X).f` expands to `invoke(getproperty, Tuple{X,Symbol}, x, :f)`
+- `@invoke (x::X).f = v::V` expands to `invoke(setproperty!, Tuple{X,Symbol,V}, x, :f, v)`
+- `@invoke (xs::Xs)[i::I]` expands to `invoke(getindex, Tuple{Xs,I}, xs, i)`
+- `@invoke (xs::Xs)[i::I] = v::V` expands to `invoke(setindex!, Tuple{Xs,V,I}, xs, v, i)`
+
 # Examples
 
 ```jldoctest
@@ -1874,6 +1899,18 @@ julia> @macroexpand @invoke f(x::T, y)
 
 julia> @invoke 420::Integer % Unsigned
 0x00000000000001a4
+
+julia> @macroexpand @invoke (x::X).f
+:(Core.invoke(Base.getproperty, Tuple{X, Core.Typeof(:f)}, x, :f))
+
+julia> @macroexpand @invoke (x::X).f = v::V
+:(Core.invoke(Base.setproperty!, Tuple{X, Core.Typeof(:f), V}, x, :f, v))
+
+julia> @macroexpand @invoke (xs::Xs)[i::I]
+:(Core.invoke(Base.getindex, Tuple{Xs, I}, xs, i))
+
+julia> @macroexpand @invoke (xs::Xs)[i::I] = v::V
+:(Core.invoke(Base.setindex!, Tuple{Xs, V, I}, xs, v, i))
 ```
 
 !!! compat "Julia 1.7"
@@ -1881,9 +1918,13 @@ julia> @invoke 420::Integer % Unsigned
 
 !!! compat "Julia 1.9"
     This macro is exported as of Julia 1.9.
+
+!!! compat "Julia 1.10"
+    The additional syntax is supported as of Julia 1.10.
 """
 macro invoke(ex)
-    f, args, kwargs = destructure_callex(ex)
+    topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
+    f, args, kwargs = destructure_callex(topmod, ex)
     types = Expr(:curly, :Tuple)
     out = Expr(:call, GlobalRef(Core, :invoke))
     isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
@@ -1908,29 +1949,90 @@ Provides a convenient way to call [`Base.invokelatest`](@ref).
 `@invokelatest f(args...; kwargs...)` will simply be expanded into
 `Base.invokelatest(f, args...; kwargs...)`.
 
+It also supports the following syntax:
+- `@invokelatest x.f` expands to `Base.invokelatest(getproperty, x, :f)`
+- `@invokelatest x.f = v` expands to `Base.invokelatest(setproperty!, x, :f, v)`
+- `@invokelatest xs[i]` expands to `invoke(getindex, xs, i)`
+- `@invokelatest xs[i] = v` expands to `invoke(setindex!, xs, v, i)`
+
+```jldoctest
+julia> @macroexpand @invokelatest f(x; kw=kwv)
+:(Base.invokelatest(f, x; kw = kwv))
+
+julia> @macroexpand @invokelatest x.f
+:(Base.invokelatest(Base.getproperty, x, :f))
+
+julia> @macroexpand @invokelatest x.f = v
+:(Base.invokelatest(Base.setproperty!, x, :f, v))
+
+julia> @macroexpand @invokelatest xs[i]
+:(Base.invokelatest(Base.getindex, xs, i))
+
+julia> @macroexpand @invokelatest xs[i] = v
+:(Base.invokelatest(Base.setindex!, xs, v, i))
+```
+
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
+
+!!! compat "Julia 1.10"
+    The additional syntax is supported as of Julia 1.10.
 """
 macro invokelatest(ex)
-    f, args, kwargs = destructure_callex(ex)
-    return esc(:($(GlobalRef(@__MODULE__, :invokelatest))($(f), $(args...); $(kwargs...))))
+    topmod = Core.Compiler._topmod(__module__) # well, except, do not get it via CC but define it locally
+    f, args, kwargs = destructure_callex(topmod, ex)
+    out = Expr(:call, GlobalRef(Base, :invokelatest))
+    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
+    push!(out.args, f)
+    append!(out.args, args)
+    return esc(out)
 end
 
-function destructure_callex(ex)
-    isexpr(ex, :call) || throw(ArgumentError("a call expression f(args...; kwargs...) should be given"))
-
-    f = first(ex.args)
-    args = []
-    kwargs = []
-    for x in ex.args[2:end]
-        if isexpr(x, :parameters)
-            append!(kwargs, x.args)
-        elseif isexpr(x, :kw)
-            push!(kwargs, x)
-        else
-            push!(args, x)
+function destructure_callex(topmod::Module, @nospecialize(ex))
+    function flatten(xs)
+        out = Any[]
+        for x in xs
+            if isexpr(x, :tuple)
+                append!(out, x.args)
+            else
+                push!(out, x)
+            end
         end
+        return out
     end
 
+    kwargs = Any[]
+    if isexpr(ex, :call) # `f(args...)`
+        f = first(ex.args)
+        args = Any[]
+        for x in ex.args[2:end]
+            if isexpr(x, :parameters)
+                append!(kwargs, x.args)
+            elseif isexpr(x, :kw)
+                push!(kwargs, x)
+            else
+                push!(args, x)
+            end
+        end
+    elseif isexpr(ex, :.)   # `x.f`
+        f = GlobalRef(topmod, :getproperty)
+        args = flatten(ex.args)
+    elseif isexpr(ex, :ref) # `x[i]`
+        f = GlobalRef(topmod, :getindex)
+        args = flatten(ex.args)
+    elseif isexpr(ex, :(=)) # `x.f = v` or `x[i] = v`
+        lhs, rhs = ex.args
+        if isexpr(lhs, :.)
+            f = GlobalRef(topmod, :setproperty!)
+            args = flatten(Any[lhs.args..., rhs])
+        elseif isexpr(lhs, :ref)
+            f = GlobalRef(topmod, :setindex!)
+            args = flatten(Any[lhs.args[1], rhs, lhs.args[2]])
+        else
+            throw(ArgumentError("expected a `setproperty!` expression `x.f = v` or `setindex!` expression `x[i] = v`"))
+        end
+    else
+        throw(ArgumentError("expected a `:call` expression `f(args...; kwargs...)`"))
+    end
     return f, args, kwargs
 end

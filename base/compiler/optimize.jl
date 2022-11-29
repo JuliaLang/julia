@@ -186,6 +186,25 @@ function ir_to_codeinf!(opt::OptimizationState)
     return src
 end
 
+# widen all Const elements in type annotations
+function widen_all_consts!(src::CodeInfo)
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    for i = 1:length(ssavaluetypes)
+        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
+    end
+
+    for i = 1:length(src.code)
+        x = src.code[i]
+        if isa(x, PiNode)
+            src.code[i] = PiNode(x.val, widenconst(x.typ))
+        end
+    end
+
+    src.rettype = widenconst(src.rettype)
+
+    return src
+end
+
 #########
 # logic #
 #########
@@ -399,7 +418,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     # compute inlining and other related optimizations
     result = caller.result
     @assert !(result isa LimitedAccuracy)
-    result = isa(result, InterConditional) ? widenconditional(result) : result
+    result = widenslotwrapper(result)
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
@@ -718,7 +737,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
             return T_IFUNC_COST[iidx]
         end
-        if isa(f, Builtin)
+        if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex

@@ -130,7 +130,7 @@ static const char opts[]  =
     " --machine-file <file>     Run processes on hosts listed in <file>\n\n"
 
     // interactive options
-    " -i                         Interactive mode; REPL runs and `isinteractive()` is true\n"
+    " -i, --interactive          Interactive mode; REPL runs and `isinteractive()` is true\n"
     " -q, --quiet                Quiet startup: no banner, suppress REPL warnings\n"
     " --banner={yes|no|auto*}    Enable or disable startup banner\n"
     " --color={yes|no|auto*}     Enable or disable color text\n"
@@ -146,9 +146,9 @@ static const char opts[]  =
     " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level)\n"
     " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " -g [{0,1,2*}]              Set the level of debug info generation in the julia-debug build\n"
+        " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build\n"
 #else
-        " -g [{0,1*,2}]              Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
+        " -g, --debug-info=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
 #endif
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
@@ -256,6 +256,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "version",         no_argument,       0, 'v' },
         { "help",            no_argument,       0, 'h' },
         { "help-hidden",     no_argument,       0, opt_help_hidden },
+        { "interactive",     no_argument,       0, 'i' },
         { "quiet",           no_argument,       0, 'q' },
         { "banner",          required_argument, 0, opt_banner },
         { "home",            required_argument, 0, 'H' },
@@ -279,6 +280,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        optional_argument, 0, 'O' },
         { "min-optlevel",    optional_argument, 0, opt_optlevel_min },
+        { "debug-info",      optional_argument, 0, 'g' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
         { "output-bc",       required_argument, 0, opt_output_bc },
         { "output-unopt-bc", required_argument, 0, opt_output_unopt_bc },
@@ -790,8 +792,6 @@ restart_switch:
                             break;
                     }
                     jl_options.heap_size_hint = (uint64_t)(value * multiplier);
-
-                    jl_gc_set_max_memory(jl_options.heap_size_hint);
                 }
             }
             if (jl_options.heap_size_hint == 0)

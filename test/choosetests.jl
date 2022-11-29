@@ -172,6 +172,7 @@ function choosetests(choices = [])
         "LibGit2",
         "Sockets",
         "download",
+        "TOML",
     ])
     net_on = true
     JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>

@@ -88,7 +88,7 @@ extern "C" {
 // - we have to check for invalidation---the user might have loaded other
 //   packages that define methods that supersede some of the dispatches chosen
 //   when the package was precompiled, or this package might define methods that
-//   supercede dispatches for previously-loaded packages. These two
+//   supersede dispatches for previously-loaded packages. These two
 //   possibilities are checked during backedge and method insertion,
 //   respectively.
 // Both of these mean that deserialization requires one to look up a lot of
@@ -158,6 +158,8 @@ static htable_t external_mis;
 // Inference tracks newly-inferred MethodInstances during precompilation
 // and registers them by calling jl_set_newly_inferred
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED;
+// Mutex for newly_inferred
+static jl_mutex_t newly_inferred_mutex;
 
 // New roots to add to Methods. These can't be added until after
 // recaching is complete, so we have to hold on to them separately
@@ -902,7 +904,7 @@ static void jl_serialize_value_(jl_serializer_state *s, jl_value_t *v, int as_li
                     rletable = (uint64_t*)jl_array_data(m->root_blocks);
                     nblocks2 = jl_array_len(m->root_blocks);
                 }
-                // this visits every item, if it becomes a bottlneck we could hop blocks
+                // this visits every item, if it becomes a bottleneck we could hop blocks
                 while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
                     if (rootiter.key == key)
                         jl_serialize_value(s, jl_array_ptr_ref(m->roots, rootiter.i));
@@ -1396,7 +1398,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets)
                     int ambig = 0;
                     matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
                             -1, 0, world, &min_valid, &max_valid, &ambig);
-                    if (matches == jl_false) {
+                    if (matches == jl_nothing) {
                         callee_ids = NULL; // invalid
                         break;
                     }
@@ -2406,7 +2408,7 @@ static jl_array_t *jl_verify_edges(jl_array_t *targets)
             // TODO: possibly need to included ambiguities too (for the optimizer correctness)?
             matches = jl_matching_methods((jl_tupletype_t*)sig, jl_nothing,
                     -1, 0, world, &min_valid, &max_valid, &ambig);
-            if (matches == jl_false) {
+            if (matches == jl_nothing) {
                 valid = 0;
             }
             else {
@@ -2894,12 +2896,21 @@ JL_DLLEXPORT void jl_init_restored_modules(jl_array_t *init_order)
 
 // --- entry points ---
 
-// Register all newly-inferred MethodInstances
-// This gets called as the final step of Base.include_package_for_output
+// Register array of newly-inferred MethodInstances
+// This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 {
     assert(_newly_inferred == NULL || jl_is_array(_newly_inferred));
     newly_inferred = (jl_array_t*) _newly_inferred;
+}
+
+JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* linfo)
+{
+    JL_LOCK(&newly_inferred_mutex);
+    size_t end = jl_array_len(newly_inferred);
+    jl_array_grow_end(newly_inferred, 1);
+    jl_arrayset(newly_inferred, linfo, end);
+    JL_UNLOCK(&newly_inferred_mutex);
 }
 
 // Serialize the modules in `worklist` to file `fname`

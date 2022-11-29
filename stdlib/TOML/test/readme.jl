@@ -613,7 +613,7 @@ contributors = [
   { name = \"Baz Qux\", email = \"bazqux@example.com\", url = \"https://example.com/bazqux\" }
 ]
 """
-@test_broken roundtrip(str) # Printer doesn't handle inline tables in arrays?
+@test roundtrip(str)
 d = parse(str)
 @test d["integers"] == [1,2,3]
 @test d["colors"] == ["red", "yellow", "green"]
