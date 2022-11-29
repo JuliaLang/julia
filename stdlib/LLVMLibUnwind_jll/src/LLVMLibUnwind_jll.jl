@@ -34,10 +34,19 @@ end
 # JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
 # For instance, `find_artifact_dir()` won't actually be the artifact directory, because
 # there isn't one.  It instead returns the overall Julia prefix.
-is_available() = @static Sys.isapple() ? true : false
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_llvmlibunwind_path() = llvmlibunwind_path
+
+if isapple()
+    is_available() = true
+    find_artifact_dir() = artifact_dir
+    dev_jll() = error("stdlib JLLs cannot be dev'ed")
+    best_wrapper = nothing
+    get_llvmlibunwind_path() = llvmlibunwind_path
+else
+    is_available() = false
+    find_artifact_dir() = ""
+    dev_jll() = error("stdlib JLLs cannot be dev'ed")
+    best_wrapper = nothing
+    get_llvmlibunwind_path() = ""
+end
 
 end  # module LLVMLibUnwind_jll
