@@ -147,14 +147,18 @@ pub extern "C" fn initialize_collection(tls: VMThread) {
 
 #[no_mangle]
 pub extern "C" fn enable_collection() {
-    AtomicBool::store(&DISABLED_GC, false, Ordering::SeqCst);
-    memory_manager::enable_collection(&SINGLETON);
+    if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) {
+        memory_manager::enable_collection(&SINGLETON);
+        AtomicBool::store(&DISABLED_GC, false, Ordering::SeqCst);
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn disable_collection() {
-    AtomicBool::store(&DISABLED_GC, true, Ordering::SeqCst);
-    memory_manager::disable_collection(&SINGLETON);
+    if AtomicBool::load(&DISABLED_GC, Ordering::SeqCst) == false {
+        memory_manager::disable_collection(&SINGLETON);
+        AtomicBool::store(&DISABLED_GC, true, Ordering::SeqCst);
+    }
 
     if AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst) {
         return;
