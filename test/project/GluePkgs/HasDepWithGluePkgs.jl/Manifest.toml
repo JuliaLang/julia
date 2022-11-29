@@ -15,7 +15,7 @@ uuid = "55982ee5-2ad5-4c40-8cfe-5e9e1b01500d"
 version = "0.1.0"
 
 [[deps.HasGluePkgs]]
-gluedeps = ["GlueDep", "GlueDep2"]
+weakdeps = ["GlueDep", "GlueDep2"]
 path = "../HasGluePkgs.jl"
 uuid = "4d3288b3-3afc-4bb6-85f3-489fffe514c8"
 version = "0.1.0"
