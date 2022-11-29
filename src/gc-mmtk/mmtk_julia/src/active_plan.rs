@@ -1,16 +1,19 @@
-use mmtk::{Plan};
-use mmtk::vm::ActivePlan;
-use mmtk::Mutator;
 use crate::JuliaVM;
-use crate::{SINGLETON, MUTATORS, MUTATOR_TLS, get_next_julia_mutator, get_mutator_from_ref, reset_mutator_count};
+use crate::{
+    get_mutator_from_ref, get_next_julia_mutator, reset_mutator_count, MUTATORS, MUTATOR_TLS,
+    SINGLETON,
+};
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::Address;
+use mmtk::vm::ActivePlan;
+use mmtk::Mutator;
+use mmtk::Plan;
 use mmtk::{plan::ObjectQueue, scheduler::GCWorker, util::ObjectReference};
 
-pub struct VMActivePlan<> {}
+pub struct VMActivePlan {}
 
 impl ActivePlan<JuliaVM> for VMActivePlan {
-    fn global() -> &'static dyn Plan<VM=JuliaVM> {
+    fn global() -> &'static dyn Plan<VM = JuliaVM> {
         SINGLETON.get_plan()
     }
 
@@ -22,7 +25,7 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
         // FIXME have a tls field to check whether it is a mutator tls
         let tls_str = format!("{:?}", tls);
         let is_mutator = MUTATOR_TLS.read().unwrap().contains(&tls_str);
-        if !is_mutator { 
+        if !is_mutator {
             println!("Is the tls {:?} a mutator? {}", tls_str, is_mutator);
         }
         is_mutator
@@ -33,9 +36,7 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
     }
 
     fn reset_mutator_iterator() {
-        unsafe {
-            reset_mutator_count()
-        }
+        unsafe { reset_mutator_count() }
     }
 
     fn get_next_mutator() -> Option<&'static mut Mutator<JuliaVM>> {
@@ -50,16 +51,13 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
 
         let res = match mutator {
             Some(m) => {
-               let mutator = unsafe {
-                   get_mutator_from_ref(*m)
-               };
-            //    println!("Next mutator is: {:?}", mutator);
-               Some(unsafe { &mut *mutator })
-            },
-            None => None 
+                let mutator = unsafe { get_mutator_from_ref(*m) };
+                //    println!("Next mutator is: {:?}", mutator);
+                Some(unsafe { &mut *mutator })
+            }
+            None => None,
         };
 
-       
         res
     }
 
@@ -77,32 +75,25 @@ impl ActivePlan<JuliaVM> for VMActivePlan {
 pub extern "C" fn get_next_mutator_tls() -> OpaquePointer {
     let mutators = MUTATORS.read().unwrap();
 
-        let mutator_idx = unsafe { get_next_julia_mutator() };
-        let mutator = mutators.get(mutator_idx);
+    let mutator_idx = unsafe { get_next_julia_mutator() };
+    let mutator = mutators.get(mutator_idx);
 
-        let res = match mutator {
-            Some(m) => {
-               let mutator = unsafe {
-                   get_mutator_from_ref(*m)
-               };
-               
-               unsafe { (*mutator).mutator_tls.0.0 }
-            },
-            None => {
-                unsafe {
-                    reset_mutator_count()
-                }
-                OpaquePointer::from_address(unsafe { Address::zero() })
-            } 
-        };
+    let res = match mutator {
+        Some(m) => {
+            let mutator = unsafe { get_mutator_from_ref(*m) };
 
-       
-        res
+            unsafe { (*mutator).mutator_tls.0 .0 }
+        }
+        None => {
+            unsafe { reset_mutator_count() }
+            OpaquePointer::from_address(unsafe { Address::zero() })
+        }
+    };
+
+    res
 }
 
 #[no_mangle]
 pub extern "C" fn reset_count_tls() {
-    unsafe {
-        reset_mutator_count()
-    }
+    unsafe { reset_mutator_count() }
 }

@@ -1,31 +1,34 @@
 // All functions here are extern function. There is no point for marking them as unsafe.
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
+use crate::reference_glue::JuliaFinalizableObject;
+use crate::JuliaVM;
+use crate::Julia_Upcalls;
+use crate::SINGLETON;
+use crate::UPCALLS;
+use crate::{
+    get_mutator_ref, set_julia_obj_header_size, ARE_MUTATORS_BLOCKED, BUILDER, DISABLED_GC,
+    FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, STFF_COND, UC_COND, USER_TRIGGERED_GC,
+};
 use libc::c_char;
-use std::ffi::CStr;
+use log::info;
 use mmtk::memory_manager;
-use mmtk::AllocationSemantics;
-use mmtk::util::{ObjectReference, OpaquePointer, Address};
+use mmtk::scheduler::GCController;
 use mmtk::scheduler::GCWorker;
 use mmtk::util::opaque_pointer::*;
-use mmtk::scheduler::GCController;
+use mmtk::util::{Address, ObjectReference, OpaquePointer};
+use mmtk::AllocationSemantics;
 use mmtk::Mutator;
-use crate::JuliaVM;
-use crate::SINGLETON;
-use crate::Julia_Upcalls;
-use crate::UPCALLS;
-use std::sync::RwLockWriteGuard;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
-use crate::reference_glue::JuliaFinalizableObject;
-use crate::{ARE_MUTATORS_BLOCKED, BUILDER, UC_COND, STFF_COND, DISABLED_GC, FINALIZERS_RUNNING, USER_TRIGGERED_GC, MUTATORS, MUTATOR_TLS, get_mutator_ref, set_julia_obj_header_size};
-use log::info;
+use std::ffi::CStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::RwLockWriteGuard;
 
 #[no_mangle]
 pub extern "C" fn gc_init(heap_size: usize, calls: *const Julia_Upcalls, header_size: usize) {
-    unsafe { 
+    unsafe {
         UPCALLS = calls;
-        set_julia_obj_header_size(header_size); 
+        set_julia_obj_header_size(header_size);
     };
 
     {
@@ -64,14 +67,16 @@ pub extern "C" fn gc_init(heap_size: usize, calls: *const Julia_Upcalls, header_
 }
 
 #[no_mangle]
-pub extern "C" fn start_control_collector(tls: VMWorkerThread, gc_controller: *mut GCController<JuliaVM>) {
+pub extern "C" fn start_control_collector(
+    tls: VMWorkerThread,
+    gc_controller: *mut GCController<JuliaVM>,
+) {
     let mut gc_controller = unsafe { Box::from_raw(gc_controller) };
     memory_manager::start_control_collector(&SINGLETON, tls, &mut gc_controller);
 }
 
 #[no_mangle]
 pub extern "C" fn bind_mutator(tls: VMMutatorThread, tid: usize) -> *mut Mutator<JuliaVM> {
-
     let mut are_mutators_blocked: RwLockWriteGuard<HashMap<usize, AtomicBool>> =
         ARE_MUTATORS_BLOCKED.write().unwrap();
     are_mutators_blocked.insert(tid, AtomicBool::new(false));
@@ -79,14 +84,12 @@ pub extern "C" fn bind_mutator(tls: VMMutatorThread, tid: usize) -> *mut Mutator
 
     let res = Box::into_raw(mutator_box);
 
-    let mutator_ref = unsafe {
-        get_mutator_ref(res)
-    };
+    let mutator_ref = unsafe { get_mutator_ref(res) };
 
     info!("Binding mutator {:?} to thread id = {}", res, tid);
 
     MUTATORS.write().unwrap().push(mutator_ref);
-    
+
     let tls_str = format!("{:?}", tls.0);
     MUTATOR_TLS.write().unwrap().insert(tls_str);
     res
@@ -103,30 +106,47 @@ pub extern "C" fn destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
 }
 
 #[no_mangle]
-pub extern "C" fn alloc(mutator: *mut Mutator<JuliaVM>, size: usize,
-                    align: usize, offset: isize, semantics: AllocationSemantics) -> Address {
+pub extern "C" fn alloc(
+    mutator: *mut Mutator<JuliaVM>,
+    size: usize,
+    align: usize,
+    offset: isize,
+    semantics: AllocationSemantics,
+) -> Address {
     memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
-}   
-
-#[no_mangle]
-pub extern "C" fn alloc_large(mutator: *mut Mutator<JuliaVM>, size: usize,
-                    align: usize, offset: isize) -> Address {
-    memory_manager::alloc::<JuliaVM>(unsafe { &mut *mutator }, size, align, offset, AllocationSemantics::Los)
 }
 
+#[no_mangle]
+pub extern "C" fn alloc_large(
+    mutator: *mut Mutator<JuliaVM>,
+    size: usize,
+    align: usize,
+    offset: isize,
+) -> Address {
+    memory_manager::alloc::<JuliaVM>(
+        unsafe { &mut *mutator },
+        size,
+        align,
+        offset,
+        AllocationSemantics::Los,
+    )
+}
 
 #[no_mangle]
-pub extern "C" fn post_alloc(mutator: *mut Mutator<JuliaVM>, refer: ObjectReference,
-                                        bytes: usize, semantics: AllocationSemantics) {
+pub extern "C" fn post_alloc(
+    mutator: *mut Mutator<JuliaVM>,
+    refer: ObjectReference,
+    bytes: usize,
+    semantics: AllocationSemantics,
+) {
     match semantics {
         AllocationSemantics::Los => {
             memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
-        },
+        }
         _ => {
             memory_manager::post_alloc::<JuliaVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
         }
     }
-    
 }
 
 #[no_mangle]
@@ -170,17 +190,13 @@ pub extern "C" fn disable_collection() {
         let mut count = lock.lock().unwrap();
         *count += 1;
 
-        let old_state = unsafe {
-            ((*UPCALLS).wait_in_a_safepoint)()
-        };
+        let old_state = unsafe { ((*UPCALLS).wait_in_a_safepoint)() };
 
         while AtomicBool::load(&USER_TRIGGERED_GC, Ordering::SeqCst) {
             count = cvar.wait(count).unwrap();
         }
 
-        unsafe {
-            ((*UPCALLS).exit_from_safepoint)(old_state)
-        }
+        unsafe { ((*UPCALLS).exit_from_safepoint)(old_state) }
     }
 }
 
@@ -200,7 +216,7 @@ pub extern "C" fn total_bytes() -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn is_live_object(object: ObjectReference) -> bool{
+pub extern "C" fn is_live_object(object: ObjectReference) -> bool {
     object.is_live()
 }
 
@@ -254,25 +270,29 @@ pub extern "C" fn harness_end(_tls: OpaquePointer) {
 }
 
 #[no_mangle]
-pub extern "C" fn register_finalizer(obj: ObjectReference, finalizer_fn: Address, is_obj_ptr: bool) {
-    memory_manager::add_finalizer(&SINGLETON, JuliaFinalizableObject(obj, finalizer_fn, is_obj_ptr));
+pub extern "C" fn register_finalizer(
+    obj: ObjectReference,
+    finalizer_fn: Address,
+    is_obj_ptr: bool,
+) {
+    memory_manager::add_finalizer(
+        &SINGLETON,
+        JuliaFinalizableObject(obj, finalizer_fn, is_obj_ptr),
+    );
 }
 
 #[no_mangle]
 pub extern "C" fn run_finalizers_for_obj(obj: ObjectReference) {
-
     let finalizers_running = AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst);
 
     if !finalizers_running {
         AtomicBool::store(&FINALIZERS_RUNNING, true, Ordering::SeqCst);
     }
-    
+
     let finalizable_objs = memory_manager::get_finalizers_for(&SINGLETON, obj);
-                
+
     for obj in finalizable_objs {
-        unsafe {
-            ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2)
-        }
+        unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) }
     }
 
     if !finalizers_running {
@@ -288,7 +308,11 @@ pub extern "C" fn process(name: *const c_char, value: *const c_char) -> bool {
     let name_str: &CStr = unsafe { CStr::from_ptr(name) };
     let value_str: &CStr = unsafe { CStr::from_ptr(value) };
     let mut builder = BUILDER.lock().unwrap();
-    memory_manager::process(&mut builder, name_str.to_str().unwrap(), value_str.to_str().unwrap())
+    memory_manager::process(
+        &mut builder,
+        name_str.to_str().unwrap(),
+        value_str.to_str().unwrap(),
+    )
 }
 
 #[no_mangle]
@@ -321,13 +345,13 @@ pub extern "C" fn mmtk_malloc_aligned(size: usize, align: usize) -> Address {
     assert!(align % ptr_size == 0 && align != 0 && (align / ptr_size).is_power_of_two());
 
     let extra = (align - 1) + ptr_size + size_size;
-    let mem = memory_manager::counted_malloc(&SINGLETON, size+extra);
-    let result = (mem + extra) & !(align-1);
+    let mem = memory_manager::counted_malloc(&SINGLETON, size + extra);
+    let result = (mem + extra) & !(align - 1);
     let result = unsafe { Address::from_usize(result) };
 
     unsafe {
         (result - ptr_size).store::<Address>(mem);
-        (result - ptr_size - size_size).store::<usize>(size+extra);
+        (result - ptr_size - size_size).store::<usize>(size + extra);
     }
 
     return result;
@@ -346,7 +370,11 @@ pub extern "C" fn mmtk_calloc(num: usize, size: usize) -> Address {
 
 #[no_mangle]
 #[cfg(feature = "malloc_counted_size")]
-pub extern "C" fn mmtk_realloc_with_old_size(addr: Address, size: usize, old_size: usize) -> Address {
+pub extern "C" fn mmtk_realloc_with_old_size(
+    addr: Address,
+    size: usize,
+    old_size: usize,
+) -> Address {
     memory_manager::realloc_with_old_size::<JuliaVM>(&SINGLETON, addr, size, old_size)
 }
 
@@ -373,12 +401,14 @@ pub extern "C" fn mmtk_free_aligned(addr: Address) {
     let size_size = std::mem::size_of::<usize>();
 
     let (addr, old_size) = unsafe {
-        ((addr - ptr_size).load::<Address>(), (addr - ptr_size - size_size).load::<usize>())
+        (
+            (addr - ptr_size).load::<Address>(),
+            (addr - ptr_size - size_size).load::<usize>(),
+        )
     };
 
     memory_manager::free_with_size::<JuliaVM>(&SINGLETON, addr, old_size);
 }
-
 
 #[no_mangle]
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {

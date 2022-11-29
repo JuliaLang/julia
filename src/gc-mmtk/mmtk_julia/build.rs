@@ -30,6 +30,5 @@ fn main() {
 }
 
 fn built() {
-    built::write_built_file()
-        .expect("Failed to acquire build-time information");
+    built::write_built_file().expect("Failed to acquire build-time information");
 }
