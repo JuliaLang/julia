@@ -1722,11 +1722,11 @@ Int64
 
 julia> @code_warntype f(2)
 MethodInstance for f(::Int64)
-  from f(a) @ Main none:1
+  from f(a) in Main at REPL[3]:1
 Arguments
   #self#::Core.Const(f)
   a::Int64
-Body::UNION{FLOAT64, INT64}
+Body::Union{Float64, Int64}
 1 ─ %1 = (a > 1)::Bool
 └──      goto #3 if not %1
 2 ─      return 1
