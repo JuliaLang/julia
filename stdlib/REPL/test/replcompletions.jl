@@ -1738,3 +1738,19 @@ end
         @test length(c) == fieldcount(Regex)
     end
 end
+
+
+@testset "https://github.com/JuliaLang/julia/issues/47593" begin
+    let
+        m = Module()
+        @eval m begin
+            struct TEST_47594
+                var"("::Int
+            end
+            test_47594 = TEST_47594(1)
+        end
+
+        c, r = test_complete_context("test_47594.", m)
+        @test c == Any["var\"(\""]
+    end
+end

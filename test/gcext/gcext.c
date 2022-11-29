@@ -307,6 +307,7 @@ static size_t gc_alloc_size(jl_value_t *val)
 
 int internal_obj_scan(jl_value_t *val)
 {
+    // FIXME: `jl_gc_internal_obj_base_ptr` is not allowed to be called from outside GC
     if (jl_gc_internal_obj_base_ptr(val) == val) {
         size_t size = gc_alloc_size(val);
         char *addr = (char *)val;

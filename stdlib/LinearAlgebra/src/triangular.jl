@@ -428,6 +428,11 @@ function -(A::UnitUpperTriangular)
     UpperTriangular(Anew)
 end
 
+tr(A::LowerTriangular) = tr(A.data)
+tr(A::UnitLowerTriangular) = size(A, 1) * oneunit(eltype(A))
+tr(A::UpperTriangular) = tr(A.data)
+tr(A::UnitUpperTriangular) = size(A, 1) * oneunit(eltype(A))
+
 # copy and scale
 function copyto!(A::T, B::T) where T<:Union{UpperTriangular,UnitUpperTriangular}
     n = size(B,1)

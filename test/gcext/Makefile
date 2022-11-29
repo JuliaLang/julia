@@ -41,7 +41,7 @@ $(BIN)/gcext-debug$(EXE): $(SRCDIR)/gcext.c
 ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
 # for demonstration purposes, our demo code is also installed
 # in $BIN, although this would likely not be typical
-$(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
+$(BIN)/LocalTest.jl: $(SRCDIR)/LocalTest.jl
 	cp $< $@
 endif
 

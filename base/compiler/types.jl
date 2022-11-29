@@ -147,6 +147,10 @@ struct InferenceParams
     # tuple contains more than this many elements
     MAX_TUPLE_SPLAT::Int
 
+    # Assume that no new bindings will be added, i.e. a non-existing binding
+    # at inference time can be assumed to always error.
+    assume_bindings_static::Bool
+
     function InferenceParams(;
             ipo_constant_propagation::Bool = true,
             aggressive_constant_propagation::Bool = false,
@@ -156,6 +160,7 @@ struct InferenceParams
             apply_union_enum::Int = 8,
             tupletype_depth::Int = 3,
             tuple_splat::Int = 32,
+            assume_bindings_static::Bool = false,
         )
         return new(
             ipo_constant_propagation,
@@ -166,6 +171,7 @@ struct InferenceParams
             apply_union_enum,
             tupletype_depth,
             tuple_splat,
+            assume_bindings_static
         )
     end
 end
@@ -299,7 +305,7 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(BaseInferenceLattice.instance)
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
 abstract type CallInfo end
 

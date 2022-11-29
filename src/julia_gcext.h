@@ -120,6 +120,8 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
 // external allocations may not all be valid objects and that for those,
 // the user *must* validate that they have a proper type, i.e. that
 // jl_typeof(obj) is an actual type object.
+//
+// NOTE: Only valid to call from within a GC context.
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p);
 
 // Return a non-null pointer to the start of the stack area if the task
