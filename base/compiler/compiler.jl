@@ -15,13 +15,20 @@ const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
 
+const _included_files = Array{String, 1}()
+include(x) = include(Compiler, x)
+function include(mod, path)
+    if mod === Compiler
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), _included_files, UInt(1))
+        Core.arrayset(true, _included_files, ccall(:jl_prepend_cwd, Any, (Any,), path), Intrinsics.arraylen(_included_files))
+    end
+    Core.include(mod, path)
+end
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
 eval(x) = Core.eval(Compiler, x)
 eval(m, x) = Core.eval(m, x)
-
-include(x) = Core.include(Compiler, x)
-include(mod, x) = Core.include(mod, x)
 
 # The @inline/@noinline macros that can be applied to a function declaration are not available
 # until after array.jl, and so we will mark them within a function body instead.
