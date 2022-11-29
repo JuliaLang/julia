@@ -75,7 +75,7 @@ module MiniCassette
         end
 
         tt = Tuple{f, args...}
-        match = Base._which(tt, typemax(UInt))
+        match = Base._which(tt; world=typemax(UInt))
         mi = Core.Compiler.specialize_method(match)
         # Unsupported in this mini-cassette
         @assert !mi.def.isva

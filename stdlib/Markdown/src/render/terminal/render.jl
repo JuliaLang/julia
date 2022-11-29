@@ -88,7 +88,7 @@ function _term_header(io::IO, md, char, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        char != ' ' && print(io, '\n', ' '^(margin), char^line_width)
+        char != ' ' && print(io, '\n', ' '^(margin), char^(line_width-margin))
     end
 end
 

@@ -911,7 +911,7 @@ static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL
             if (mt != NULL)
                 return mt;
         }
-        if (jl_is_tuple_type(a)) {
+        else if (jl_is_tuple_type(a)) {
             if (jl_nparams(a) >= n)
                 return nth_methtable(jl_tparam(a, n - 1), 0);
         }

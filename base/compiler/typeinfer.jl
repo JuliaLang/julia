@@ -407,9 +407,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         if track_newly_inferred[]
             m = linfo.def
             if isa(m, Method) && m.module != Core
-                ccall(:jl_typeinf_lock_begin, Cvoid, ())
-                push!(newly_inferred, linfo)
-                ccall(:jl_typeinf_lock_end, Cvoid, ())
+                ccall(:jl_push_newly_inferred, Cvoid, (Any,), linfo)
             end
         end
     end

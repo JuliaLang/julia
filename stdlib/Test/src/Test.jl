@@ -1904,8 +1904,8 @@ be suppressed by supplying a collection of `GlobalRef`s for which
 the warning can be skipped. For example, setting
 
 ```
-allow_undefineds = Set([GlobalRef(Base, :active_repl),
-                        GlobalRef(Base, :active_repl_backend)])
+allowed_undefineds = Set([GlobalRef(Base, :active_repl),
+                          GlobalRef(Base, :active_repl_backend)])
 ```
 
 would suppress warnings about `Base.active_repl` and
