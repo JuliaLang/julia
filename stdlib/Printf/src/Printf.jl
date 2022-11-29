@@ -911,10 +911,6 @@ Use shorter of decimal or scientific 1.23 1.23e+07
 For a systematic specification of the format, see [here](https://www.cplusplus.com/reference/cstdio/printf/).
 See also [`@sprintf`](@ref) to get the result as a `String` instead of it being printed.
 
-If you need to use a programmatically generated format string, use
-`print(Printf.format(Printf.Format(format_string), args...))` instead.
-See [`Printf.format`](@ref) for more details.
-
 # Caveats
 `Inf` and `NaN` are printed consistently as `Inf` and `NaN` for flags `%a`, `%A`,
 `%e`, `%E`, `%f`, `%F`, `%g`, and `%G`. Furthermore, if a floating point number is
@@ -954,10 +950,6 @@ end
     @sprintf("%Fmt", args...)
 
 Return [`@printf`](@ref) formatted output as string.
-
-If you need to use a programmatically generated format string, use
-`Printf.format(Printf.Format(format_string), args...)` instead.
-See [`Printf.format`](@ref) for more details.
 
 # Examples
 ```jldoctest
