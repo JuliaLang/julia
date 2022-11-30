@@ -11,6 +11,7 @@ using Random
 using Random.DSFMT
 
 using Random: Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
+using Random: jump, long_jump, jump!, long_jump!
 
 import Future # randjump
 
