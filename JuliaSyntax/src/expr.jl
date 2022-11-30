@@ -31,7 +31,7 @@ function reorder_parameters!(args, params_pos)
 end
 
 function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
-                  eq_to_kw=false, inside_vect_or_braces=false)
+                  eq_to_kw=false, inside_vect_or_braces=false, inside_do=false)
     if !haschildren(node)
         val = node.val
         if val isa Union{Int128,UInt128,BigInt}
@@ -44,6 +44,10 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                       val isa UInt128 ? Symbol("@uint128_str") :
                       Symbol("@big_str")
             return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
+        elseif kind(node) == K"core_@doc"
+            return GlobalRef(Core, :var"@doc")
+        elseif kind(node) == K"core_@cmd"
+            return GlobalRef(Core, :var"@cmd")
         else
             return val
         end
