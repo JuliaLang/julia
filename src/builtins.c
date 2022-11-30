@@ -1201,7 +1201,7 @@ JL_CALLABLE(jl_f_getglobal)
 
 JL_CALLABLE(jl_f_setglobal)
 {
-    enum jl_memory_order order = jl_memory_order_monotonic;
+    enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(setglobal!, 3, 4);
     if (nargs == 4) {
         JL_TYPECHK(setglobal!, symbol, args[3]);

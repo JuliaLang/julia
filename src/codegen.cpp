@@ -2881,6 +2881,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     const jl_cgval_t &sym = argv[2];
     const jl_cgval_t &val = argv[3];
     enum jl_memory_order order = jl_memory_order_unspecified;
+    assert(f == jl_builtin_setglobal && modifyop == nullptr && "unimplemented");
 
     if (nargs == 4) {
         const jl_cgval_t &arg4 = argv[4];
@@ -2890,7 +2891,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return false;
     }
     else
-        order = jl_memory_order_monotonic;
+        order = jl_memory_order_release;
 
     if (order == jl_memory_order_invalid || order == jl_memory_order_notatomic) {
         emit_atomic_error(ctx, order == jl_memory_order_invalid ? "invalid atomic ordering" : "setglobal!: module binding cannot be written non-atomically");
@@ -4690,7 +4691,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
     }
     if (bp != NULL) {
-        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
+        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Release);
         // Global variable. Does not need debug info because the debugger knows about
         // its memory location.
     }
