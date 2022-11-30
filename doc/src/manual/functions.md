@@ -972,6 +972,82 @@ enclosing scope. For example, the variable `data` in the above example of
 `open...do` is captured from the outer scope. Captured variables
 can create performance challenges as discussed in [performance tips](@ref man-performance-captured).
 
+Note that a `do` block creates an inner function if it appears inside another function. This means, a
+`return` statement used within a `do` block will be performed on the inner function created by the `do`
+block. Consider this example:
+
+```jldoctest loop
+julia> function loop1(n)
+           for i in 1:n
+               i == 3 && return i^2
+               println("i = ", i)
+           end
+       end
+loop1 (generic function with 1 method)
+
+julia> function loop2(n)
+           map(1:n) do i
+               i == 3 && return i^2
+               println("i = ", i)
+           end
+       end
+loop2 (generic function with 1 method)
+```
+
+Without a close look, one would think the output of both functions will be the same if given the same `n`.
+However, that is not true:
+
+```jldoctest loop
+julia> loop1(5)
+i = 1
+i = 2
+9
+
+julia> loop2(5)
+i = 1
+i = 2
+i = 4
+i = 5
+5-element Vector{Union{Nothing, Int64}}:
+  nothing
+  nothing
+ 9
+  nothing
+  nothing
+```
+
+In `loop1(n)`, the body of the `for` block is executed, and the statement `println("i = ", i)` is executed.
+Once `i == 3` is evaluated as `true`, the `return` keyword returns the value `i^2` and breaks out of `loop1`
+immediately.
+
+In `loop2(n)`, the body of the `do` block is executed, and the statement `println("i = ", i)` is executed, with
+`nothing` (the value returned from `println("i = ", i)`, the last statement on the `do` block) returned back to
+`map`. However, once `i == 3` is evaluated as `true`, the `return` keyword does not breaks out of `loop2`, instead
+it breaks out from the inner `do` block, and it gives the value `i^2` back to `map`; then continues on the next `i`.
+And at the end of the `do` block, the values all returned to `map` are returned by `loop2`, since the `do` block is
+the last statement in `loop2`.
+
+Also, because `do` blocks actually creates inner functions, `break` and `continue` cannot be used inside such blocks:
+
+```julia-repl
+julia> function loop2(n)
+           map(1:n) do i
+               i == 3 && break
+               println(i)
+           end
+       end
+ERROR: syntax: break or continue outside loop
+
+julia> function loop2(n)
+           map(1:n) do i
+               i == 3 && continue
+               println(i)
+           end
+       end
+ERROR: syntax: break or continue outside loop
+```
+
+
 ## Function composition and piping
 
 Functions in Julia can be combined by composing or piping (chaining) them together.
