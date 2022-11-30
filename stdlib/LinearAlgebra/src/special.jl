@@ -234,16 +234,16 @@ end
 for op in (:+, :-)
     @eval begin
         function ($op)(A::UniformScaling, B::Tridiagonal)
-            newd = ($op).(Ref(A), B.d)
-            Tridiagonal(typeof(newd)(B.dl), newd, typeof(newd)(B.du))
+            d = ($op).(Ref(A), B.d)
+            Tridiagonal(convert(typeof(d), $op(B.dl)), d, convert(typeof(d), $op(B.du)))
         end
         function ($op)(A::UniformScaling, B::SymTridiagonal)
-            newdv = ($op).(Ref(A), B.dv)
-            SymTridiagonal(newdv, typeof(newdv)(B.ev))
+            dv = ($op).(Ref(A), B.dv)
+            SymTridiagonal(dv, convert(typeof(dv), $op(B.ev)))
         end
         function ($op)(A::UniformScaling, B::Bidiagonal)
-            newdv = ($op).(Ref(A), B.dv)
-            Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
+            dv = ($op).(Ref(A), B.dv)
+            Bidiagonal(dv, convert(typeof(dv), $op(B.ev)), B.uplo)
         end
         function ($op)(A::UniformScaling, B::Diagonal)
             Diagonal(($op).(Ref(A), B.diag))
