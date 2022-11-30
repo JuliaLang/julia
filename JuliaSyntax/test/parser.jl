@@ -38,7 +38,7 @@ tests = [
         "a;b;c"   => "(toplevel a b c)"
         "a;;;b;;" => "(toplevel a b)"
         """ "x" a ; "y" b """ =>
-            """(toplevel (macrocall :(Core.var"@doc") (string "x") a) (macrocall :(Core.var"@doc") (string "y") b))"""
+            """(toplevel (macrocall core_@doc (string "x") a) (macrocall core_@doc (string "y") b))"""
         "x y"  =>  "x (error-t y)"
     ],
     JuliaSyntax.parse_eq => [
@@ -457,7 +457,7 @@ tests = [
         "module do \n end"  =>  "(module true (error (do)) (block))"
         "module \$A end"    =>  "(module true (\$ A) (block))"
         "module A \n a \n b \n end"  =>  "(module true A (block a b))"
-        """module A \n "x"\na\n end""" => """(module true A (block (macrocall :(Core.var"@doc") (string "x") a)))"""
+        """module A \n "x"\na\n end""" => """(module true A (block (macrocall core_@doc (string "x") a)))"""
         # export
         "export a"   =>  "(export a)"  => Expr(:export, :a)
         "export @a"  =>  "(export @a)" => Expr(:export, Symbol("@a"))
@@ -750,9 +750,9 @@ tests = [
         # __dot__ macro
         "@. x" => "(macrocall @. x)" => Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1), :x)
         # cmd strings
-        "``"         =>  "(macrocall :(Core.var\"@cmd\") (cmdstring-r \"\"))"
-        "`cmd`"      =>  "(macrocall :(Core.var\"@cmd\") (cmdstring-r \"cmd\"))"
-        "```cmd```"  =>  "(macrocall :(Core.var\"@cmd\") (cmdstring-sr \"cmd\"))"
+        "``"         =>  "(macrocall core_@cmd (cmdstring-r \"\"))"
+        "`cmd`"      =>  "(macrocall core_@cmd (cmdstring-r \"cmd\"))"
+        "```cmd```"  =>  "(macrocall core_@cmd (cmdstring-sr \"cmd\"))"
         # literals
         "42"   => "42"
         "1.0e-1000"   => "0.0"
@@ -816,7 +816,7 @@ tests = [
         # Triple-quoted dedenting:
         "\"\"\"\nx\"\"\""   =>  raw"""(string-s "x")"""
         "\"\"\"\n\nx\"\"\"" =>  raw"""(string-s "\n" "x")"""
-        "```\n x\n y```"    =>  raw"""(macrocall :(Core.var"@cmd") (cmdstring-sr "x\n" "y"))"""
+        "```\n x\n y```"    =>  raw"""(macrocall core_@cmd (cmdstring-sr "x\n" "y"))"""
         # Various newlines (\n \r \r\n) and whitespace (' ' \t)
         "\"\"\"\n x\n y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
         "\"\"\"\r x\r y\"\"\""  =>  raw"""(string-s "x\n" "y")"""
@@ -875,11 +875,11 @@ tests = [
         """ "notdoc" ]        """ => "(string \"notdoc\")"
         """ "notdoc" \n]      """ => "(string \"notdoc\")"
         """ "notdoc" \n\n foo """ => "(string \"notdoc\")"
-        """ "doc" \n foo      """ => """(macrocall :(Core.var"@doc") (string "doc") foo)"""
-        """ "doc" foo         """ => """(macrocall :(Core.var"@doc") (string "doc") foo)"""
-        """ "doc \$x" foo     """ => """(macrocall :(Core.var"@doc") (string "doc " x) foo)"""
+        """ "doc" \n foo      """ => """(macrocall core_@doc (string "doc") foo)"""
+        """ "doc" foo         """ => """(macrocall core_@doc (string "doc") foo)"""
+        """ "doc \$x" foo     """ => """(macrocall core_@doc (string "doc " x) foo)"""
         # Allow docstrings with embedded trailing whitespace trivia
-        "\"\"\"\n doc\n \"\"\" foo"  => """(macrocall :(Core.var"@doc") (string-s "doc\\n") foo)"""
+        "\"\"\"\n doc\n \"\"\" foo"  => """(macrocall core_@doc (string-s "doc\\n") foo)"""
     ],
 ]
 

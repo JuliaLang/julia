@@ -94,9 +94,9 @@ function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead}, position::In
         elseif k == K"CmdMacroName"
             Symbol("@$(normalize_identifier(val_str))_cmd")
         elseif k == K"core_@doc"
-            GlobalRef(Core, :var"@doc")
+            Symbol("core_@doc")
         elseif k == K"core_@cmd"
-            GlobalRef(Core, :var"@cmd")
+            Symbol("core_@cmd")
         elseif is_syntax_kind(raw)
             nothing
         else
