@@ -239,4 +239,17 @@
     @testset "where" begin
         @test parse(Expr, "A where {X, Y; Z}") == Expr(:where, :A, Expr(:parameters, :Z), :X, :Y)
     end
+
+    @testset "macrocall" begin
+        # line numbers
+        @test parse(Expr, "@m\n") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1))
+        @test parse(Expr, "\n@m") == Expr(:macrocall, Symbol("@m"), LineNumberNode(2))
+        # parameters
+        @test parse(Expr, "@m(x; a)") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1),
+                                              Expr(:parameters, :a), :x)
+        @test parse(Expr, "@m(a=1; b=2)") == Expr(:macrocall, Symbol("@m"), LineNumberNode(1),
+                                                  Expr(:parameters, Expr(:kw, :b, 2)), Expr(:(=), :a, 1))
+        # @__dot__
+        @test parse(Expr, "@.") == Expr(:macrocall, Symbol("@__dot__"), LineNumberNode(1))
+    end
 end
