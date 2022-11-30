@@ -2618,6 +2618,7 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
             write_header(ff);
             // last word of the header is the checksumpos
             checksumpos_ff = ios_pos(ff) - sizeof(uint64_t);
+            write_uint64(ff, 0); // Reserve space for dataendpos
             write_mod_list(ff, mod_array);
         }
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
@@ -2646,6 +2647,7 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos_ff], dataendpos_ff - datastartpos_ff);
         ios_seek(ff, checksumpos_ff);
         write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
+        write_uint64(ff, dataendpos_ff);
     }
 
     JL_GC_POP();
