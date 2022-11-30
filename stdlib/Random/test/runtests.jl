@@ -1036,6 +1036,7 @@ guardseed() do
     end
 end
 
+<<<<<<< HEAD
 @testset "TaskLocalRNG: stream collision smoke test" begin
     # spawn a trinary tree of tasks:
     # - spawn three recursive child tasks in each
@@ -1079,10 +1080,56 @@ end
                 @async rand(UInt64)
             end
             @test y == rand(UInt64)
+=======
+# Xoshiro jumps
+@testset "Xoshiro jump, basic" begin
+    x1 = Xoshiro(1)
+    x2 = Xoshiro(1)
+
+    @test jump!(jump!(x1)) == jump!(x1, 2)
+
+    xo1 = Xoshiro(xo1seed...)
+    @test rand(jump(xo1), UInt64) == 0x87c158da8c35824d
+    @test rand(long_jump(xo1), UInt64) == 0xcaecd5afdd0847d5
+
+    @test rand(jump(xo1, 98765), UInt64) == 0xcbec1d5053142608
+    @test rand(long_jump(xo1, 98765), UInt64) == 0x3b97a94c44d66216
+
+    # Throws where appropriate
+    @test_throws DomainError jump(Xoshiro(1), -1)
+    @test_throws DomainError jump!(Xoshiro(1), -1)
+    @test_throws DomainError long_jump(Xoshiro(1), -1)
+    @test_throws DomainError long_jump!(Xoshiro(1), -1)
+
+    # clean copy when non-mut and no state advance
+    x = Xoshiro(1)
+    @test jump(x, 0) == x
+    @test jump(x, 0) !== x
+    @test long_jump(x, 0) == x
+    @test long_jump(x, 0) !== x
+
+    y = Xoshiro(1)
+    @test jump!(x, 0) == y
+    @test long_jump!(x, 0) == y
+end
+
+@testset "Xoshiro jump, various seeds" begin
+    for seed in (0, 1, 0xa0a3f09d0cecd878, 0x7ff8)
+        x = Xoshiro(seed)
+        @test jump(jump(jump(x))) == jump(x, 3)
+        x1 = Xoshiro(seed)
+        @test jump!(jump!(jump!(x1))) == jump(x, 3)
+        jump!(x1, 997)
+        x2 = jump!(Xoshiro(seed), 1000)
+        for T ∈ (Float64, UInt64, Int, Char, Bool)
+            @test rand(x1, T, 5) == rand(x2, T, 5)
+            @test rand(jump!(x1), T, 5) == rand(jump!(x2), T, 5)
+>>>>>>> ce11fe6e21 (Add jump functions (`jump`, `long_jump`) for `Xoshiro`)
         end
     end
 end
 
+<<<<<<< HEAD
 @testset "TaskLocalRNG: copy and copy! handle the splitmix state" begin
     seeds = rand(RandomDevice(), UInt64, 5)
     for seed in seeds
@@ -1103,5 +1150,19 @@ end
         @test TaskLocalRNG() == rng2
         @test y == fetch(@async rand(UInt64))
         @test TaskLocalRNG() == rng3
+=======
+@testset "Xoshiro long_jump, various seeds" begin
+    for seed in (0, 1, 0xa0a3f09d0cecd878, 0x7ff8)
+        x = Xoshiro(seed)
+        @test long_jump(long_jump(long_jump(x))) == long_jump(x, 3)
+        x1 = Xoshiro(seed)
+        @test long_jump!(long_jump!(long_jump!(x1))) == long_jump(x, 3)
+        long_jump!(x1, 997)
+        x2 = long_jump!(Xoshiro(seed), 1000)
+        for T ∈ (Float64, UInt64, Int, Char, Bool)
+            @test rand(x1, T, 5) == rand(x2, T, 5)
+            @test rand(long_jump!(x1), T, 5) == rand(long_jump!(x2), T, 5)
+        end
+>>>>>>> ce11fe6e21 (Add jump functions (`jump`, `long_jump`) for `Xoshiro`)
     end
 end
