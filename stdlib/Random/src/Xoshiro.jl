@@ -101,7 +101,7 @@ for (fname, JUMP) in ((:jump, (0x180ec6d33cfd0aba, 0xd5a61266f0c9392c, 0xa958261
                 s3 = s3 << 45 | s3 >> 19
             end
         end
-        Random.setstate!(rng, _s0, _s1, _s2, _s3)
+        setstate!(rng, _s0, _s1, _s2, _s3)
     end
     @eval $fname(rng::Xoshiro) = $fname!(copy(rng))
 
