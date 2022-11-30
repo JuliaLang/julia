@@ -3683,7 +3683,7 @@ void jl_gc_init(void)
 #ifdef _P64
     total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem != 0)
+    if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
 #endif
 
