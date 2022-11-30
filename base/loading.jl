@@ -1060,7 +1060,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
     local depmodnames
     io = open(path, "r")
     try
-        iszero(isvalid_cache_header(io)) || return ArgumentError("Invalid header in cache file $path.")
+        iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
         depmodnames, clone_targets = parse_cache_header(io)[3, 7]
         pkgimage = !isempty(clone_targets)
         if pkgimage

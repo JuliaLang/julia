@@ -3238,8 +3238,8 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
     // { // skip past the dependency list
     //     size_t deplen = read_uint64(f);
     //     ios_skip(f, deplen - sizeof(uint64_t));
-    //     *dataendpos = read_uint64(f);
     // }
+    *dataendpos = read_uint64(f);
 
     // verify that the system state is valid
     return read_verify_mod_list(f, depmods);
