@@ -173,19 +173,15 @@ function *(B::Bidiagonal, H::UpperHessenberg)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
-/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
-function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+function /(H::UpperHessenberg, B::Bidiagonal)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
-    A = _rdiv!(zeros(T, size(H)), H, B)
+    A = _rdiv!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
-\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
-function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+function \(B::Bidiagonal, H::UpperHessenberg)
     T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
-    A = ldiv!(zeros(T, size(H)), B, H)
+    A = ldiv!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 

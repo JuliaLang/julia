@@ -206,6 +206,18 @@ end
             end
         end
     end
+    diag = [randn(ComplexF64, 2, 2) for _ in 1:3]
+    odiag = [randn(ComplexF64, 2, 2) for _ in 1:2]
+    for op in (+,-)
+        for A in (Diagonal(diag),
+                    Bidiagonal(diag, odiag, :U),
+                    Bidiagonal(diag, odiag, :L),
+                    Tridiagonal(odiag, diag, odiag),
+                    SymTridiagonal(diag, odiag)), B in uniformscalingmats
+            @test (A + B)::typeof(A) == (B + A)::typeof(A)
+            @test (A - B)::typeof(A) == -((B - A)::typeof(A))
+        end
+    end
 end
 
 

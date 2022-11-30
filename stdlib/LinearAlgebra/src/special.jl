@@ -226,63 +226,29 @@ function (-)(A::SymTridiagonal, B::Bidiagonal)
 end
 
 # fixing uniform scaling problems from #28994
-# {<:Number} is required due to the test case from PR #27289 where eltype is a matrix.
+(+)(A::Tridiagonal, B::UniformScaling)    = B + A
+(+)(A::SymTridiagonal, B::UniformScaling) = B + A
+(+)(A::Bidiagonal, B::UniformScaling)     = B + A
+(+)(A::Diagonal, B::UniformScaling)       = B + A
 
-function (+)(A::Tridiagonal{<:Number}, B::UniformScaling)
-    newd = A.d .+ B.λ
-    Tridiagonal(typeof(newd)(A.dl), newd, typeof(newd)(A.du))
-end
-
-function (+)(A::SymTridiagonal{<:Number}, B::UniformScaling)
-    newdv = A.dv .+ B.λ
-    SymTridiagonal(newdv, typeof(newdv)(A.ev))
-end
-
-function (+)(A::Bidiagonal{<:Number}, B::UniformScaling)
-    newdv = A.dv .+ B.λ
-    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
-end
-
-function (+)(A::Diagonal{<:Number}, B::UniformScaling)
-    Diagonal(A.diag .+ B.λ)
-end
-
-function (+)(A::UniformScaling, B::Tridiagonal{<:Number})
-    newd = A.λ .+ B.d
-    Tridiagonal(typeof(newd)(B.dl), newd, typeof(newd)(B.du))
-end
-
-function (+)(A::UniformScaling, B::SymTridiagonal{<:Number})
-    newdv = A.λ .+ B.dv
-    SymTridiagonal(newdv, typeof(newdv)(B.ev))
-end
-
-function (+)(A::UniformScaling, B::Bidiagonal{<:Number})
-    newdv = A.λ .+ B.dv
-    Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
-end
-
-function (+)(A::UniformScaling, B::Diagonal{<:Number})
-    Diagonal(A.λ .+ B.diag)
-end
-
-function (-)(A::UniformScaling, B::Tridiagonal{<:Number})
-    newd = A.λ .- B.d
-    Tridiagonal(typeof(newd)(-B.dl), newd, typeof(newd)(-B.du))
-end
-
-function (-)(A::UniformScaling, B::SymTridiagonal{<:Number})
-    newdv = A.λ .- B.dv
-    SymTridiagonal(newdv, typeof(newdv)(-B.ev))
-end
-
-function (-)(A::UniformScaling, B::Bidiagonal{<:Number})
-    newdv = A.λ .- B.dv
-    Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
-end
-
-function (-)(A::UniformScaling, B::Diagonal{<:Number})
-    Diagonal(A.λ .- B.diag)
+for op in (:+, :-)
+    @eval begin
+        function ($op)(A::UniformScaling, B::Tridiagonal)
+            newd = ($op).(Ref(A), B.d)
+            Tridiagonal(typeof(newd)(B.dl), newd, typeof(newd)(B.du))
+        end
+        function ($op)(A::UniformScaling, B::SymTridiagonal)
+            newdv = ($op).(Ref(A), B.dv)
+            SymTridiagonal(newdv, typeof(newdv)(B.ev))
+        end
+        function ($op)(A::UniformScaling, B::Bidiagonal)
+            newdv = ($op).(Ref(A), B.dv)
+            Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
+        end
+        function ($op)(A::UniformScaling, B::Diagonal)
+            Diagonal(($op).(Ref(A), B.diag))
+        end
+    end
 end
 
 lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
