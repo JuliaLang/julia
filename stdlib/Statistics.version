@@ -1,4 +1,4 @@
-STATISTICS_BRANCH = master
-STATISTICS_SHA1 = 20fbe576ec406180b1dddf4c7fbe16458a7aef21
-STATISTICS_GIT_URL := https://github.com/JuliaStats/Statistics.jl.git
-STATISTICS_TAR_URL = https://api.github.com/repos/JuliaStats/Statistics.jl/tarball/$1
+STATISTICS_BRANCH = ib/glue
+STATISTICS_SHA1 = 86454ce6e8f6dc11e548921be8522d790dc1ea86
+STATISTICS_GIT_URL := https://github.com/IanButterworth/Statistics.jl.git
+STATISTICS_TAR_URL = https://api.github.com/repos/IanButterworth/Statistics.jl/tarball/$1
