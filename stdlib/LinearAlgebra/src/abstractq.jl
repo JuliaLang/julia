@@ -120,7 +120,6 @@ function (*)(A::AbstractMatrix, Q::AbstractQ)
     T = promote_type(eltype(A), eltype(Q))
     return rmul!(copy_similar(A, T), convert(AbstractQ{T}, Q))
 end
-# (*)(A::AdjointAbsMat, Q::AdjointQ) = @invoke *(A::AdjointAbsMat, Q::AbstractQ)
 (*)(u::AdjointAbsVec, Q::AbstractQ) = (Q'u')'
 
 # AbstractQ * Triangular
@@ -518,7 +517,6 @@ function (*)(adjA::AdjointQ{<:Any,<:LQPackedQ}, B::AbstractMatrix)
     T = promote_type(eltype(A), eltype(B))
     if size(B,1) == size(A.factors,2)
         C = copy_similar(B, T)
-        lmul!(convert(AbstractQ{T}, adjA), copy_similar(B, T))
     elseif size(B,1) == size(A.factors,1)
         C = [B; zeros(T, size(A.factors, 2) - size(A.factors, 1), size(B, 2))]
     else
