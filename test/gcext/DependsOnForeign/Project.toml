@@ -1,0 +1,6 @@
+name = "DependsOnForeign"
+uuid = "4b0716e0-dfb5-4e00-8b44-e2685a41517f"
+version = "0.1.0"
+
+[deps]
+Foreign = "de1f6f7a-d7b3-400f-91c2-33f248ee89c4"

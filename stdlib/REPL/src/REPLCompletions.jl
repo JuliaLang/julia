@@ -656,10 +656,10 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
     t_in = Tuple{funct, args_ex...}
     m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
         #=ambig=# true, Ref(typemin(UInt)), Ref(typemax(UInt)), Ptr{Int32}(C_NULL))
-    if m === false
+    if !isa(m, Vector)
         push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods, use SHIFT-TAB to show )"))
+        return
     end
-    m isa Vector || return
     for match in m
         # TODO: if kwargs_ex, filter out methods without kwargs?
         push!(out, MethodCompletion(match.spec_types, match.method))

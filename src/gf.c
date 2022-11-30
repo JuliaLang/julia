@@ -459,7 +459,7 @@ static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
     return 1;
 }
 
-static int foreach_mtable_in_module(
+int foreach_mtable_in_module(
         jl_module_t *m,
         int (*visit)(jl_methtable_t *mt, void *env),
         void *env)
@@ -1102,7 +1102,7 @@ static jl_method_instance_t *cache_method(
         size_t max_valid2 = ~(size_t)0;
         temp = ml_matches(mt, compilationsig, MAX_UNSPECIALIZED_CONFLICTS, 1, 1, world, 0, &min_valid2, &max_valid2, NULL);
         int guards = 0;
-        if (temp == jl_false) {
+        if (temp == jl_nothing) {
             cache_with_orig = 1;
         }
         else {
@@ -2304,7 +2304,7 @@ jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES
         *min_valid = min_valid2;
     if (*max_valid > max_valid2)
         *max_valid = max_valid2;
-    if (matches == jl_false || jl_array_len(matches) != 1 || ambig)
+    if (matches == jl_nothing || jl_array_len(matches) != 1 || ambig)
         return NULL;
     JL_GC_PUSH1(&matches);
     jl_method_match_t *match = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
@@ -2716,7 +2716,7 @@ static jl_method_match_t *_gf_invoke_lookup(jl_value_t *types JL_PROPAGATES_ROOT
     if (mt == jl_nothing)
         mt = NULL;
     jl_value_t *matches = ml_matches((jl_methtable_t*)mt, (jl_tupletype_t*)types, 1, 0, 0, world, 1, min_valid, max_valid, NULL);
-    if (matches == jl_false || jl_array_len(matches) != 1)
+    if (matches == jl_nothing || jl_array_len(matches) != 1)
         return NULL;
     jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(matches, 0);
     return matc;
@@ -3016,14 +3016,14 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         }
         if (!jl_typemap_intersection_visitor(jl_atomic_load_relaxed(&mt->defs), 0, &env.match)) {
             JL_GC_POP();
-            return jl_false;
+            return jl_nothing;
         }
     }
     else {
         // else: scan everything
         if (!jl_foreach_reachable_mtable(ml_mtable_visitor, &env.match)) {
             JL_GC_POP();
-            return jl_false;
+            return jl_nothing;
         }
     }
     *min_valid = env.min_valid;
@@ -3105,7 +3105,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 }
                 else if (lim == 1) {
                     JL_GC_POP();
-                    return jl_false;
+                    return jl_nothing;
                 }
             }
             else {
@@ -3249,7 +3249,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                     ndisjoint += 1;
                     if (ndisjoint > lim) {
                         JL_GC_POP();
-                        return jl_false;
+                        return jl_nothing;
                     }
                 }
             }
@@ -3396,7 +3396,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         *ambig = has_ambiguity;
     JL_GC_POP();
     if (lim >= 0 && len > lim)
-        return jl_false;
+        return jl_nothing;
     return env.t;
 }
 

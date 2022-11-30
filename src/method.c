@@ -1188,7 +1188,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     uint64_t modid = 0;
     if (mod) {
         assert(jl_is_module(mod));
-        modid = mod->build_id;
+        modid = mod->build_id.lo;
     }
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);
