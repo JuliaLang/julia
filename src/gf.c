@@ -2467,7 +2467,7 @@ static jl_value_t *jl_argtype_with_function(jl_function_t *f, jl_value_t *types0
     for(i=0; i < l; i++)
         jl_svecset(tt, i+1, jl_tparam(types,i));
     tt = (jl_value_t*)jl_apply_tuple_type((jl_svec_t*)tt);
-    tt = jl_rewrap_unionall(tt, types0);
+    tt = jl_rewrap_unionall_(tt, types0);
     JL_GC_POP();
     return tt;
 }

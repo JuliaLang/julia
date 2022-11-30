@@ -2890,8 +2890,8 @@ static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, 
     jl_value_t *super_pattern=NULL;
     JL_GC_PUSH2(&isuper, &super_pattern);
     jl_value_t *wrapper = xd->name->wrapper;
-    super_pattern = jl_rewrap_unionall((jl_value_t*)((jl_datatype_t*)jl_unwrap_unionall(wrapper))->super,
-                                       wrapper);
+    super_pattern = jl_rewrap_unionall_((jl_value_t*)((jl_datatype_t*)jl_unwrap_unionall(wrapper))->super,
+                                        wrapper);
     int envsz = jl_subtype_env_size(super_pattern);
     jl_value_t *ii = jl_bottom_type;
     {
@@ -3528,7 +3528,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             if (jl_is_uniontype(ans_unwrapped)) {
                 ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
                 if (ans_unwrapped != NULL) {
-                    *ans = jl_rewrap_unionall(ans_unwrapped, *ans);
+                    *ans = jl_rewrap_unionall_(ans_unwrapped, *ans);
                 }
             }
             JL_GC_POP();
