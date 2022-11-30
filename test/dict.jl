@@ -1363,3 +1363,35 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
 end
+
+@testset "Dict(;sizehint)" begin
+    allocs(n) = @allocations Dict(i => i^2 for i in 1:n)
+    @test 4 == allocs(0) == allocs(728)
+
+    function allocs(k, T, n)
+        d1 = T(sizehint = n)
+
+        d2 = T()
+        sizehint!(d2, n)
+        if T <: Dict
+            @test length(d1.slots) == length(d2.slots)
+        else
+            @test length(d1.ht.slots) == length(d2.ht.slots)
+        end
+
+        a = @allocated for i in 1:n
+            d1[k(i)] = 7
+        end
+        d3 = T()
+        b = @allocated for i in 1:n
+            d3[k(i)] = 7
+        end
+        @test a < b
+        a
+    end
+
+    @test 0 == allocs(identity, Dict{Int, Int}, 70)
+    allocs(identity, Dict, 82)
+    allocs(x -> [x], WeakKeyDict{Vector{Int}, Int}, 94)
+    allocs(x -> [x], WeakKeyDict, 106)
+end

@@ -20,14 +20,14 @@ mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
     dirty::Bool
 
     # Constructors mirror Dict's
-    function WeakKeyDict{K,V}() where V where K
-        t = new(Dict{Any,V}(), ReentrantLock(), identity, 0)
+    function WeakKeyDict{K,V}(;sizehint...) where V where K
+        t = new(Dict{Any,V}(;sizehint...), ReentrantLock(), identity, 0)
         t.finalizer = k -> t.dirty = true
         return t
     end
 end
 function WeakKeyDict{K,V}(kv) where V where K
-    h = WeakKeyDict{K,V}()
+    h = WeakKeyDict{K,V}(sizehint = haslength(kv) ? Int(length(kv))::Int : 0)
     for (k,v) in kv
         h[k] = v
     end
@@ -42,7 +42,7 @@ function WeakKeyDict{K,V}(ps::Pair...) where V where K
     end
     return h
 end
-WeakKeyDict() = WeakKeyDict{Any,Any}()
+WeakKeyDict(;sizehint...) = WeakKeyDict{Any,Any}(;sizehint...)
 
 WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
 copy(d::WeakKeyDict) = WeakKeyDict(d)
