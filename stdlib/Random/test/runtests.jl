@@ -1089,7 +1089,7 @@ end
 
     @test jump!(jump!(x1)) == jump!(x1, 2)
 
-    xo1 = Xoshiro(xo1seed...)
+    xo1 = Xoshiro(0xfff0241072ddab67, 0xc53bc12f4c3f0b4e, 0x56d451780b2dd4ba, 0x50a4aa153d208dd8)
     @test rand(jump(xo1), UInt64) == 0x87c158da8c35824d
     @test rand(long_jump(xo1), UInt64) == 0xcaecd5afdd0847d5
 
