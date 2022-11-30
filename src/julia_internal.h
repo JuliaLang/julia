@@ -20,6 +20,9 @@
 #else
 #define sleep(x) Sleep(1000*x)
 #endif
+#if defined(_CPU_ARM_)
+#include <sys/time.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -216,6 +219,26 @@ static inline uint64_t cycleclock(void) JL_NOTSAFEPOINT
     int64_t virtual_timer_value;
     __asm__ volatile("mrs %0, cntvct_el0" : "=r"(virtual_timer_value));
     return virtual_timer_value;
+#elif defined(_CPU_ARM_)
+    // V6 is the earliest arch that has a standard cyclecount
+#if (__ARM_ARCH >= 6)
+    uint32_t pmccntr;
+    uint32_t pmuseren;
+    uint32_t pmcntenset;
+    // Read the user mode perf monitor counter access permissions.
+    asm volatile("mrc p15, 0, %0, c9, c14, 0" : "=r"(pmuseren));
+    if (pmuseren & 1) {  // Allows reading perfmon counters for user mode code.
+        asm volatile("mrc p15, 0, %0, c9, c12, 1" : "=r"(pmcntenset));
+        if (pmcntenset & 0x80000000ul) {  // Is it counting?
+            asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(pmccntr));
+            // The counter is set up to count every 64th cycle
+            return (int64_t)(pmccntr) * 64;  // Should optimize to << 6
+        }
+    }
+#endif
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return (int64_t)(tv.tv_sec) * 1000000 + tv.tv_usec;
 #elif defined(_CPU_PPC64_)
     // This returns a time-base, which is not always precisely a cycle-count.
     // https://reviews.llvm.org/D78084
