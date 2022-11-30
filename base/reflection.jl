@@ -1498,7 +1498,8 @@ print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args..
 
 function _which(@nospecialize(tt::Type);
     method_table::Union{Nothing,Core.MethodTable}=nothing,
-    world::UInt=get_world_counter())
+    world::UInt=get_world_counter(),
+    raise::Bool=true)
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
     else
@@ -1506,7 +1507,8 @@ function _which(@nospecialize(tt::Type);
     end
     match, = Core.Compiler.findsup(tt, table)
     if match === nothing
-        error("no unique matching method found for the specified argument types")
+        raise && error("no unique matching method found for the specified argument types")
+        return nothing
     end
     return match
 end
