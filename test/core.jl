@@ -7873,3 +7873,16 @@ let # https://github.com/JuliaLang/julia/issues/46918
     @test isempty(String(take!(stderr))) # make sure no error has happened
     @test String(take!(stdout)) == "nothing IO IO"
 end
+
+# Modules allowed as type parameters and usable in generated functions
+module ModTparamTest
+    foo_test_mod_tparam() = 1
+end
+foo_test_mod_tparam() = 2
+
+struct ModTparamTestStruct{M}; end
+@generated function ModTparamTestStruct{M}() where {M}
+    return :($(GlobalRef(M, :foo_test_mod_tparam))())
+end
+@test ModTparamTestStruct{@__MODULE__}() == 2
+@test ModTparamTestStruct{ModTparamTest}() == 1
