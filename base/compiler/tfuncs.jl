@@ -1474,7 +1474,7 @@ add_tfunc(fieldtype, 2, 3, fieldtype_tfunc, 0)
 # Like `valid_tparam`, but in the type domain.
 valid_tparam_type(T::DataType) = valid_typeof_tparam(T)
 valid_tparam_type(U::Union) = valid_tparam_type(U.a) && valid_tparam_type(U.b)
-valid_tparam_type(U::UnionAll) = valid_tparam_type(unwrap_unionall(U))
+valid_tparam_type(U::UnionAll) = false
 
 function apply_type_nothrow(@specialize(lattice::AbstractLattice), argtypes::Vector{Any}, @nospecialize(rt))
     rt === Type && return false
