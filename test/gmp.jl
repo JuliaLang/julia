@@ -341,7 +341,8 @@ end
         @test digits(-n; base, pad) == digits(-N; base, pad)
         @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
     end
-    @test digits(UInt8, n; base=256) == digits(UInt8, N; base=256)
+    @test digits(UInt8, n; base=1<<8) == digits(UInt8, N; base=1<<8)
+    @test digits(UInt16, n; base=1<<16) == digits(UInt16, N; base=1<<16)
 end
 
 # serialization (#5133)
