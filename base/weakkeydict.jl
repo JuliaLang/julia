@@ -21,7 +21,7 @@ mutable struct WeakKeyDict{K,V} <: AbstractDict{K,V}
 
     # Constructors mirror Dict's
     function WeakKeyDict{K,V}(;sizehint...) where V where K
-        t = new(Dict{Any,V}(;sizehint...), ReentrantLock(), identity, 0)
+        t = new(Dict{WeakRef,V}(;sizehint...), ReentrantLock(), identity, 0)
         t.finalizer = k -> t.dirty = true
         return t
     end
