@@ -636,7 +636,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 static const int JI_FORMAT_VERSION = 12;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
-static void write_header(ios_t *s)
+static void write_header(ios_t *s, uint8_t pkgimage)
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -648,6 +648,7 @@ static void write_header(ios_t *s)
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
+    write_uint8(s, pkgimage);
     write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
 }
 
@@ -1262,7 +1263,7 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s)
+JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage)
 {
     uint16_t bom;
     if (readstr_verify(s, JI_MAGIC, 0) &&
@@ -1274,6 +1275,9 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s)
         readstr_verify(s, JULIA_VERSION_STRING, 1) &&
         readstr_verify(s, jl_git_branch(), 1) &&
         readstr_verify(s, jl_git_commit(), 1))
+    {
+        *pkgimage = read_uint8(s);
         return read_uint64(s);
+    }
     return 0;
 }

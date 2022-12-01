@@ -1918,7 +1918,7 @@ function module_build_id(m::Module)
     return (UInt128(hi) << 64) | lo
 end
 
-isvalid_cache_header(f::IOStream) = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid},), f.ios) # returns checksum id or zero
+isvalid_cache_header(f::IOStream) = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid}, Ptr{UInt8}), f.ios, Ref{UInt8}()) # returns checksum id or zero
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
 function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)

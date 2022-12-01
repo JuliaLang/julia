@@ -2568,7 +2568,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     assert(jl_precompile_toplevel_module == NULL);
     jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
-    write_header(f);
+    write_header(f, 0);
     // last word of the header is the checksumpos
     *checksumpos = ios_pos(f) - sizeof(uint64_t);
     // write description of contents (name, uuid, buildid)
@@ -2615,7 +2615,7 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
     if (worklist) {
         jl_write_header_for_incremental(f, worklist, &mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
-            write_header(ff);
+            write_header(ff, 1);
             // last word of the header is the checksumpos
             checksumpos_ff = ios_pos(ff) - sizeof(uint64_t);
             write_uint64(ff, 0); // Reserve space for dataendpos
@@ -3237,20 +3237,20 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos)
 {
-    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f)) || (*checksum >> 32 != 0xfafbfcfd)) {
+    uint8_t pkgimage = 0;
+    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f, &pkgimage)) || (*checksum >> 32 != 0xfafbfcfd)) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
-    // TODO: Differentiate between ji and so in the header?
-    // { // skip past the modlist
-    //     size_t len;
-    //     while ((len = read_int32(f)))
-    //         ios_skip(f, len + 3 * sizeof(uint64_t));
-    // }
-    // { // skip past the dependency list
-    //     size_t deplen = read_uint64(f);
-    //     ios_skip(f, deplen - sizeof(uint64_t));
-    // }
+    if (pkgimage == 0) {
+        // skip past the modlist
+        size_t len;
+        while ((len = read_int32(f)))
+            ios_skip(f, len + 3 * sizeof(uint64_t));
+        // skip past the dependency list
+        size_t deplen = read_uint64(f);
+        ios_skip(f, deplen - sizeof(uint64_t));
+    }
     *dataendpos = read_uint64(f);
 
     // verify that the system state is valid
