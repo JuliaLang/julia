@@ -991,27 +991,26 @@ end
     end
 end
 
-
-@testset "GluePkgs" begin
+@testset "Extensions" begin
     old_depot_path = copy(DEPOT_PATH)
     try
         tmp = mktempdir()
         push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
 
-        proj = joinpath(@__DIR__, "project", "GluePkgs", "HasDepWithGluePkgs.jl")
+        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
         for i in 1:2 # Once when requiring precomilation, once where it is already precompiled
             cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
                 begin
-                using HasGluePkgs
-                Base.get_gluepkg(HasGluePkgs, :GluePkg) === nothing || error("unexpectedly got a glue module")
-                HasGluePkgs.glue_loaded && error("glue_loaded set")
-                using HasDepWithGluePkgs
-                Base.get_gluepkg(HasGluePkgs, :GluePkg).gluevar == 1 || error("gluevar in GluePkg not set")
-                HasGluePkgs.glue_loaded || error("glue_loaded not set")
-                HasGluePkgs.glue_folder_loaded && error("glue_folder_loaded set")
-                HasDepWithGluePkgs.do_something() || error("do_something errored")
-                using GlueDep2
-                HasGluePkgs.glue_folder_loaded || error("glue_folder_loaded not set")
+                using HasExtensions
+                # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                HasExtensions.ext_loaded || error("ext_loaded not set")
+                HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
 
                 end
             '`

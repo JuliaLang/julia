@@ -348,45 +348,45 @@ The subscripted `rootsᵢ`, `graphᵢ` and `pathsᵢ` variables correspond to th
 2. Packages in non-primary environments can end up using incompatible versions of their dependencies even if their own environments are entirely compatible. This can happen when one of their dependencies is shadowed by a version in an earlier environment in the stack (either by graph or path, or both).
 
 Since the primary environment is typically the environment of a project you're working on, while environments later in the stack contain additional tools, this is the right trade-off: it's better to break your development tools but keep the project working. When such incompatibilities occur, you'll typically want to upgrade your dev tools to versions that are compatible with the main project.
-### "Glue" packages and dependencies
+### "Extension"s
 
-A "glue package" is a module that is automatically loaded when a specified set of other packages (its "glue dependencies") are loaded in the current Julia session. The glue dependencies of a glue package is a subset of those packages listed under the `[weakdeps]` section of a Project file. Glue packages are defined under the `[gluepkgs]` section in the project file:
+An "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. The extension dependencies of an extension is a subset of those packages listed under the `[weakdeps]` section of a Project file. Extensions are defined under the `[extensions]` section in the project file:
 
 ```toml
 name = "MyPackage"
 
 [weakdeps]
-GlueDep = "c9a23..." # uuid
-OtherGlueDep = "862e..." # uuid
+ExtDep = "c9a23..." # uuid
+OtherExtDep = "862e..." # uuid
 
-[gluepkgs]
-GlueBar = ["GlueDep", "OtherGlueDep"]
-GlueFoo = "GlueDep"
+[extensions]
+BarExt = ["ExtDep", "OtherExtDep"]
+FooExt = "ExtDep"
 ...
 ```
 
-The keys under `gluepkgs` are the name of the glue packages.
-They are loaded when all the packages on the right hand side (the glue dependencies) of that glue package are loaded.
-If a glue package only has one glue dependency the list of glue dependencies can be written as just a string for brevity.
-The location for the entry point of the glue package is either in `glue/GlueFoo.jl` or `glue/GlueFoo/GlueFoo.jl` for
-glue package `GlueFoo`.
-The content of a glue package is often structured as:
+The keys under `extensions` are the name of the extensions.
+They are loaded when all the packages on the right hand side (the extension dependencies) of that extension are loaded.
+If an extension only has one extension dependency the list of extension dependencies can be written as just a string for brevity.
+The location for the entry point of the extension is either in `ext/FooExt.jl` or `ext/FooExt/FooExt.jl` for
+extension `FooExt`.
+The content of an extension is often structured as:
 
 ```
-module GlueFoo
+module FooExt
 
-# Load main package and glue dependencies
-using MyPackage, GlueDep
+# Load main package and extension dependencies
+using MyPackage, ExtDep
 
-# Extend functionality in main package with types from the glue dependencies
-MyPackage.func(x::GlueDep.SomeStruct) = ...
+# Extend functionality in main package with types from the extension dependencies
+MyPackage.func(x::ExtDep.SomeStruct) = ...
 
 end
 ```
 
-When a package with glue packages is added to an environment, the `weakdeps` and `gluepkgs` sections
+When a package with extensions is added to an environment, the `weakdeps` and `extensions` sections
 are stored in the manifest file in the section for that package. The dependency lookup rules for
-a package are the same as for its "parent" except that the listed glue dependencies are also considered as
+a package are the same as for its "parent" except that the listed extension dependencies are also considered as
 dependencies.
 ### Package/Environment Preferences
 

@@ -745,17 +745,16 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                         end
                     end
                 end
-            else # Check for glue modules
-                gluepkgs = get(entry, "gluepkgs", nothing)
-                if gluepkgs !== nothing
-                    if where.name in keys(gluepkgs) && where.uuid == uuid5(UUID(uuid), where.name)
+            else # Check for extensions
+                extensions = get(entry, "extensions", nothing)
+                if extensions !== nothing
+                    if haskey(extensions, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
                         found_where = true
                         if name == dep_name
                             return PkgId(UUID(uuid), name)
                         end
-                        glue_entry = gluepkgs[where.name]
-                        if glue_entry isa String && name == glue_entry ||
-                          glue_entry isa Vector{String} && name in glue_entry
+                        exts = extensions[where.name]::Union{String, Vector{String}}
+                        if (exts isa String && name == exts) || (exts isa Vector{String} && name in exts)
                             weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                             if weakdeps !== nothing
                                 if weakdeps isa Vector{String}
@@ -772,7 +771,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                 end
                             end
                         end
-                        # `name` is not a glue pkg, do standard lookup as if this was the parent
+                        # `name` is not an ext, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
                 end
@@ -809,18 +808,16 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             end
         end
     end
-    # Glue
+    # Extensions
     for (name, entries::Vector{Any}) in d
         for entry in entries
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
-            weakdeps = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
-            if weakdeps !== nothing && haskey(weakdeps, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+            extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+            if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
                 p = normpath(dirname(locate_package(PkgId(UUID(uuid), name))), "..")
-                gluefile = joinpath(p, "glue", pkg.name * ".jl")
-                isfile(gluefile) && return gluefile
-                gluefiledir = joinpath(p, "glue", pkg.name, pkg.name * ".jl")
-                isfile(gluefiledir) && return gluefiledir
-                return nothing
+                extfiledir = joinpath(p, "ext", pkg.name, pkg.name * ".jl")
+                isfile(extfiledir) && return extfiledir
+                return joinpath(p, "ext", pkg.name * ".jl")
             end
         end
     end
@@ -1004,7 +1001,7 @@ end
 function run_package_callbacks(modkey::PkgId)
     assert_havelock(require_lock)
     unlock(require_lock)
-    run_glue_callbacks()
+    run_extension_callbacks()
     try
         for callback in package_callbacks
             invokelatest(callback, modkey)
@@ -1020,51 +1017,51 @@ function run_package_callbacks(modkey::PkgId)
 end
 
 
-########
-# Glue #
-########
+##############
+# Extensions #
+##############
 
-mutable struct GlueId
+mutable struct ExtensionId
     const id::PkgId # Could be symbol?
     const parentid::PkgId
-    const triggers::Vector{PkgId} # What packages have to be loaded for the glue module to get loaded
+    const triggers::Vector{PkgId} # What packages have to be loaded for the extension to get loaded
     triggered::Bool
     succeeded::Bool
 end
 
-const GLUE_PKG_DORMITORY = GlueId[]
+const EXT_DORMITORY = ExtensionId[]
 
-function insert_glue_triggers(pkg::PkgId)
+function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
     for env in load_path()
-        insert_glue_triggers(env, pkg)
+        insert_extension_triggers(env, pkg)
         break # For now, only insert triggers for packages in the first load_path.
     end
 end
 
-function insert_glue_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
+function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
     if project_file isa String
         proj = project_file_name_uuid(project_file, pkg.name)
         if proj == pkg
-            insert_glue_triggers_project(project_file, pkg)
+            insert_extension_triggers_project(project_file, pkg)
         else
-            return insert_glue_triggers_manifest(project_file, pkg)
+            return insert_extension_triggers_manifest(project_file, pkg)
         end
     end
     return nothing
 end
 
-function insert_glue_triggers_project(project_file::String, parent::PkgId)
+function insert_extension_triggers_project(project_file::String, parent::PkgId)
     d = parsed_toml(project_file)
     weakdeps = get(d, "weakdeps", nothing)::Union{Nothing, Dict{String, Any}}
-    gluepkgs = get(d, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
-    gluepkgs === nothing && return
+    extensions = get(d, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+    extensions === nothing && return
     weakdeps === nothing && return
-    _insert_glue_triggers(parent, gluepkgs, weakdeps)
+    _insert_extension_triggers(parent, extensions, weakdeps)
 end
 
-function insert_glue_triggers_manifest(project_file::String, parent::PkgId)
+function insert_extension_triggers_manifest(project_file::String, parent::PkgId)
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return
     d = get_deps(parsed_toml(manifest_file))
@@ -1076,11 +1073,11 @@ function insert_glue_triggers_manifest(project_file::String, parent::PkgId)
             uuid === nothing && continue
             if UUID(uuid) === parent.uuid
                 weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
-                gluepkgs = get(entry, "gluepkgs", nothing)::Union{Nothing, Dict{String, Any}}
-                gluepkgs === nothing && return
+                extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+                extensions === nothing && return
                 weakdeps === nothing && return
                 if weakdeps isa Dict{String, Any}
-                    return _insert_glue_triggers(parent, gluepkgs, weakdeps)
+                    return _insert_extension_triggers(parent, extensions, weakdeps)
                 end
 
                 d_weakdeps = Dict{String, String}()
@@ -1095,97 +1092,96 @@ function insert_glue_triggers_manifest(project_file::String, parent::PkgId)
                     d_weakdeps[dep_name] = uuid
                 end
                 @assert length(d_weakdeps) == length(weakdeps)
-                return _insert_glue_triggers(parent, gluepkgs, d_weakdeps)
+                return _insert_extension_triggers(parent, extensions, d_weakdeps)
             end
         end
     end
     return
 end
 
-function _insert_glue_triggers(parent::PkgId, gluepkgs::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
-    for (glue_entry::String, triggers::Union{String, Vector{String}}) in gluepkgs
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
+    for (ext::String, triggers::Union{String, Vector{String}}) in extensions
         triggers isa String && (triggers = [triggers])
         triggers_id = PkgId[]
-        id = PkgId(uuid5(parent.uuid, glue_entry), glue_entry)
+        id = PkgId(uuid5(parent.uuid, ext), ext)
         for trigger in triggers
             # TODO: Better error message if this lookup fails?
             uuid_trigger = UUID(weakdeps[trigger]::String)
             push!(triggers_id, PkgId(uuid_trigger, trigger))
         end
-        gid = GlueId(id, parent, triggers_id, false, false)
-        push!(GLUE_PKG_DORMITORY, gid)
+        gid = ExtensionId(id, parent, triggers_id, false, false)
+        push!(EXT_DORMITORY, gid)
     end
 end
 
-function run_glue_callbacks(; force::Bool=false)
+function run_extension_callbacks(; force::Bool=false)
     try
-        # TODO, if `GLUE_PKG_DORMITORY` becomes very long, do something smarter
-        for glueid in GLUE_PKG_DORMITORY
-            glueid.succeeded && continue
-            !force && glueid.triggered && continue
-            if all(in(keys(Base.loaded_modules)), glueid.triggers)
-                gluepkg_not_allowed_load = nothing
-                glueid.triggered = true
+        # TODO, if `EXT_DORMITORY` becomes very long, do something smarter
+        for extid in EXT_DORMITORY
+            extid.succeeded && continue
+            !force && extid.triggered && continue
+            if all(x -> haskey(Base.loaded_modules, x), extid.triggers)
+                ext_not_allowed_load = nothing
+                extid.triggered = true
                 # It is possible that some of the triggers were loaded in an environment
                 # below the one of the parent. This will cause a load failure when the
-                # glue pkg tries to load the triggers. Therefore, check this first
-                # before loading the glue pkg.
-                for trigger in glueid.triggers
-                    pkgenv = Base.identify_package_env(glueid.id, trigger.name)
+                # pkg ext tries to load the triggers. Therefore, check this first
+                # before loading the pkg ext.
+                for trigger in extid.triggers
+                    pkgenv = Base.identify_package_env(extid.id, trigger.name)
                     if pkgenv === nothing
-                        gluepkg_not_allowed_load = trigger
+                        ext_not_allowed_load = trigger
                         break
                     else
                         pkg, env = pkgenv
                         path = Base.locate_package(pkg, env)
                         if path === nothing
-                            gluepkg_not_allowed_load = trigger
+                            ext_not_allowed_load = trigger
                             break
                         end
                     end
                 end
-                if gluepkg_not_allowed_load !== nothing
-                    @debug "Glue package $(glueid.id.name) of $(glueid.parentid.name) not loaded due to \
-                            $(gluepkg_not_allowed_load.name) loaded in environment lower in load path"
+                if ext_not_allowed_load !== nothing
+                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) not loaded due to \
+                            $(ext_not_allowed_load.name) loaded in environment lower in load path"
                 else
-                    require(glueid.id)
-                    @debug "Glue package $(glueid.id.name) of $(glueid.parentid.name) loaded"
+                    require(extid.id)
+                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
                 end
-                glueid.succeeded = true
+                extid.succeeded = true
             end
         end
     catch
-        # Try to continue loading if loading a glue package errors
+        # Try to continue loading if loading an extension errors
         errs = current_exceptions()
-        @error "Error during loading of glue code" exception=errs
+        @error "Error during loading of extension" exception=errs
     end
     nothing
 end
 
 """
-    load_gluepkgs()
+    load_extensions()
 
-Loads all the (not yet loaded) glue packages that have their glue dependencies loaded. 
-This is used in cases where the automatic loading of a glue package failed
-due to some problem with the glue package. Instead of restarting the Julia session,
-the glue package can be fixed, and this function run.
+Loads all the (not yet loaded) extensions that have their extension-dependencies loaded.
+This is used in cases where the automatic loading of an extension failed
+due to some problem with the extension. Instead of restarting the Julia session,
+the extension can be fixed, and this function run.
 """
-retry_load_gluepkgs() = run_glue_callbacks(; force=true)
+retry_load_extensions() = run_extension_callbacks(; force=true)
 
 """
-    get_gluepkg(parent::Module, gluepkg::Symbol)
+    get_extension(parent::Module, extension::Symbol)
 
-Return the module for `gluepkg` of `parent` or return `nothing` if the glue
-package is not loaded.
+Return the module for `extension` of `parent` or return `nothing` if the extension is not loaded.
 """
-get_gluepkg(parent::Module, gluepkg::Symbol) = get_gluepkg(PkgId(parent), gluepkg)
-function get_gluepkg(parentid::PkgId, gluepkg::Symbol)
+get_extension(parent::Module, ext::Symbol) = get_extension(PkgId(parent), ext)
+function get_extension(parentid::PkgId, ext::Symbol)
     parentid.uuid === nothing && return nothing
-    gluepkgid = PkgId(uuid5(parentid.uuid, string(gluepkg)), string(gluepkg))
-    return get(loaded_modules, gluepkgid, nothing)
+    extid = PkgId(uuid5(parentid.uuid, string(ext)), string(ext))
+    return get(loaded_modules, extid, nothing)
 end
 
-# End glue
+# End extensions
 
 # loads a precompile cache file, after checking stale_cachefile tests
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
@@ -1210,7 +1206,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
                 notify(loading, loaded, all=true)
             end
             if loaded isa Module
-                insert_glue_triggers(modkey)
+                insert_extension_triggers(modkey)
                 run_package_callbacks(modkey)
             end
         end
@@ -1251,7 +1247,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::St
                 notify(loading, loaded, all=true)
             end
             if loaded isa Module
-                insert_glue_triggers(modkey)
+                insert_extension_triggers(modkey)
                 run_package_callbacks(modkey)
             end
         end
@@ -1506,7 +1502,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
             error("package `$(uuidkey.name)` did not define the expected \
                   module `$(uuidkey.name)`, check for typos in package module name")
         end
-        insert_glue_triggers(uuidkey)
+        insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
@@ -1697,7 +1693,7 @@ function _require_from_serialized(uuidkey::PkgId, path::String)
     set_pkgorigin_version_path(uuidkey, nothing)
     newm = _tryrequire_from_serialized(uuidkey, path)
     newm isa Module || throw(newm)
-    insert_glue_triggers(uuidkey)
+    insert_extension_triggers(uuidkey)
     # After successfully loading, notify downstream consumers
     run_package_callbacks(uuidkey)
     return newm
@@ -1930,7 +1926,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
-        empty!(Base.GLUE_PKG_DORMITORY) # If we have a custom sysimage with `GLUE_PKG_DORMITORY` prepopulated
+        empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)
