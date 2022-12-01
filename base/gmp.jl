@@ -257,7 +257,7 @@ function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Inte
     ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
         a, count, order, sizeof(T), endian, nails, n)
     @assert count[] ≤ length(a)
-    return a, count[]
+    return a, Int(count[])
 end
 
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
