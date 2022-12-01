@@ -2642,20 +2642,22 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         jl_precompile_toplevel_module = NULL;
     }
 
-    // Go back and update the checksum in the header
-    int64_t dataendpos = ios_pos(ff);
-    uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos], dataendpos - datastartpos);
-    ios_seek(ff, checksumpos_ff);
-    write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
-    write_uint64(ff, dataendpos);
+    if (worklist) {
+        // Go back and update the checksum in the header
+        int64_t dataendpos = ios_pos(ff);
+        uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos], dataendpos - datastartpos);
+        ios_seek(ff, checksumpos_ff);
+        write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
+        write_uint64(ff, dataendpos);
 
-    // Write the checksum to the split header if necessary
-    if (emit_split) {
-        int64_t cur = ios_pos(f);
-        ios_seek(f, checksumpos);
-        write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
-        ios_seek(f, cur);
-        // Next we will write the clone_targets and afterwards the srctext
+        // Write the checksum to the split header if necessary
+        if (emit_split) {
+            int64_t cur = ios_pos(f);
+            ios_seek(f, checksumpos);
+            write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
+            ios_seek(f, cur);
+            // Next we will write the clone_targets and afterwards the srctext
+        }
     }
 
     JL_GC_POP();
