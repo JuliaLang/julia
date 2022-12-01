@@ -782,7 +782,7 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
             # fast path using mpz_export
             origlen = length(a)
             _, writelen = MPZ.export!(a, n; nails = 8sizeof(T) - trailing_zeros(base))
-            resize!(a, origlen) # truncate to least-significant digits in case export! enlarged array
+            length(a) != origlen && resize!(a, origlen) # truncate to least-significant digits
             a[begin+writelen:end] .= zero(T)
             return isneg(n) ? map!(-,a,a) : a
         end
