@@ -124,11 +124,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     ios_t *s = NULL;
     ios_t *z = NULL;
     int64_t srctextpos = 0 ;
-    int64_t checksumpos = 0;
-    int64_t datastartpos = 0;
     jl_create_system_image(native_code, jl_options.incremental ? worklist : NULL, emit_split,
-                           &s, &z, &udeps,
-                           &srctextpos, &checksumpos, &datastartpos);
+                           &s, &z, &udeps, &srctextpos);
 
     if (!emit_split)
         z = s;
@@ -146,14 +143,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
     }
 
     if ((jl_options.outputji || emit_native) && jl_options.incremental) {
-        // Go back and update the checksum in the header
-        int64_t dataendpos = ios_pos(s);
-        uint32_t checksum = jl_crc32c(0, &s->buf[datastartpos], dataendpos - datastartpos);
-        ios_seek(s, checksumpos);
-        write_uint64(s, checksum | ((uint64_t)0xfafbfcfd << 32));
-        ios_seek(s, srctextpos);
-        write_uint64(s, dataendpos);
-
         write_srctext(s, udeps, srctextpos);
     }
 

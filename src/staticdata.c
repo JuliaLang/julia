@@ -2585,8 +2585,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 }
 
 JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklist, bool_t emit_split,
-                                         ios_t **s, ios_t **z, jl_array_t **udeps,
-                                         int64_t *srctextpos, int64_t *checksumpos, int64_t* datastartpos)
+                                         ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
 {
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
@@ -2609,17 +2608,20 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_specializations = NULL;
     jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
-    int64_t datastartpos_ff = 0;
+    int64_t datastartpos = 0;
     JL_GC_PUSH6(&mod_array, &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
     if (worklist) {
-        jl_write_header_for_incremental(f, worklist, &mod_array, udeps, srctextpos, checksumpos);
+        jl_write_header_for_incremental(f, worklist, &mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
             write_header(ff);
             // last word of the header is the checksumpos
             checksumpos_ff = ios_pos(ff) - sizeof(uint64_t);
             write_uint64(ff, 0); // Reserve space for dataendpos
             write_mod_list(ff, mod_array);
+        } else {
+            checksumpos_ff = checksumpos;
         }
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
@@ -2629,9 +2631,8 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
         } else {
             write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
-            datastartpos_ff = ios_pos(ff);
         }
-        *datastartpos = ios_pos(f);
+        datastartpos = ios_pos(ff);
     }
     native_functions = _native_data;
     jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
@@ -2641,13 +2642,20 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         jl_precompile_toplevel_module = NULL;
     }
 
+    // Go back and update the checksum in the header
+    int64_t dataendpos = ios_pos(ff);
+    uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos], dataendpos - datastartpos);
+    ios_seek(ff, checksumpos_ff);
+    write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
+    write_uint64(ff, dataendpos);
+
+    // Write the checksum to the split header if necessary
     if (emit_split) {
-        // Go back and update the checksum in the header
-        int64_t dataendpos_ff = ios_pos(ff);
-        uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos_ff], dataendpos_ff - datastartpos_ff);
-        ios_seek(ff, checksumpos_ff);
-        write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
-        write_uint64(ff, dataendpos_ff);
+        int64_t cur = ios_pos(f);
+        ios_seek(f, checksumpos);
+        write_uint64(f, checksum | ((uint64_t)0xfafbfcfd << 32));
+        ios_seek(f, cur);
+        // Next we will write the clone_targets and afterwards the srctext
     }
 
     JL_GC_POP();
