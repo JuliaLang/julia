@@ -43,22 +43,30 @@ function remove_all_linenums!(ex)
     remove_macro_linenums!(ex)
 end
 
-function show_expr_text_diff(showfunc, ex, f_ex; context=2)
+function show_expr_text_diff(io::IO, showfunc, e1, e2; context=2)
     if Sys.isunix()
         mktemp() do path1, io1
             mktemp() do path2, io2
-                showfunc(io1, ex);   close(io1)
-                showfunc(io2, f_ex); close(io2)
-                run(ignorestatus(`diff -U$context --color=always $path1 $path2`))
+                showfunc(io1, e1);   close(io1)
+                showfunc(io2, e2); close(io2)
+                run(pipeline(ignorestatus(`diff -U$context --color=always $path1 $path2`), io))
             end
         end
     else
-        showfunc(stdout, ex)
-        println("------------------------------------")
-        showfunc(stdout, f_ex)
+        showfunc(io, ex)
+        println(io, "------------------------------------")
+        showfunc(io, e2)
     end
+    nothing
 end
 
+# Parse text with JuliaSyntax vs reference parser and show a textural diff of
+# the resulting expressions
+function parse_diff(text, showfunc=dump)
+    ex = parse(Expr, text, filename="none")
+    fl_ex = fl_parse(text)
+    show_expr_text_diff(stdout, showfunc, ex, fl_ex)
+end
 
 function parsers_agree_on_file(filename; show_diff=false)
     text = try
@@ -80,7 +88,7 @@ function parsers_agree_on_file(filename; show_diff=false)
         parse!(stream)
         ex = build_tree(Expr, stream, filename=filename)
         if show_diff && ex != fl_ex
-            show_expr_text_diff(show, ex, fl_ex)
+            show_expr_text_diff(stdout, show, ex, fl_ex)
         end
         return !JuliaSyntax.any_error(stream) &&
             JuliaSyntax.remove_linenums!(ex) ==
@@ -251,7 +259,7 @@ function itest_parse(production, code; version::VersionNumber=v"1.6")
         show(stdout, MIME"text/plain"(), f_ex)
 
         printstyled(stdout, "\n\n# Diff of AST dump:\n", color=:red)
-        show_expr_text_diff(show, ex, f_ex, context=10)
+        show_expr_text_diff(stdout, show, ex, f_ex, context=10)
         # return (ex, f_ex)
         # return (code, stream, t, s, ex)
     end

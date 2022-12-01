@@ -1,3 +1,5 @@
+using Serialization
+using JuliaSyntax
 
 pkgspath = joinpath(@__DIR__, "pkgs")
 
@@ -20,3 +22,25 @@ for tars in Iterators.partition(readdir(pkgspath), 50)
     end
 end
 
+@info "Parsing files with reference parser"
+
+let i = 0
+    for (r, _, files) in walkdir(pkgspath)
+        for f in files
+            endswith(f, ".jl") || continue
+            fpath = joinpath(r, f)
+            outpath = joinpath(r, f*".Expr")
+            if isfile(fpath)
+                code = read(fpath, String)
+                fl_ex = JuliaSyntax.fl_parseall(code, filename=fpath)
+                i += 1
+                if i % 100 == 0
+                    @info "$i files parsed"
+                end
+                open(outpath, "w") do io
+                    serialize(io, fl_ex)
+                end
+            end
+        end
+    end
+end

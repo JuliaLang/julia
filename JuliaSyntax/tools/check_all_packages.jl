@@ -3,7 +3,9 @@
 #
 # Run this after registry_download.jl (so the pkgs directory is populated).
 
-using JuliaSyntax, Logging
+using JuliaSyntax, Logging, Serialization
+
+include("../test/test_utils.jl")
 
 logio = open(joinpath(@__DIR__, "logs.txt"), "w")
 logger = Logging.ConsoleLogger(logio)
@@ -15,22 +17,32 @@ Logging.with_logger(logger) do
     t = time()
     i = 0
     iob = IOBuffer()
-    ex_count = 0
+    exception_count = 0
+    mismatch_count = 0
     for (r, _, files) in walkdir(pkgspath)
         for f in files
             endswith(f, ".jl") || continue
             fpath = joinpath(r, f)
             if isfile(fpath)
-                file = read(fpath, String)
+                code = read(fpath, String)
+                expr_cache = fpath*".Expr"
+                #e2 = JuliaSyntax.fl_parseall(code)
+                e2 = open(deserialize, fpath*".Expr")
+                @assert Meta.isexpr(e2, :toplevel)
                 try
-                    e1 = JuliaSyntax.parseall(Expr, file)
+                    e1 = JuliaSyntax.parseall(Expr, code, filename=fpath)
+                    if JuliaSyntax.remove_linenums!(e1) != JuliaSyntax.remove_linenums!(e2)
+                        mismatch_count += 1
+                        @error("Parsers succeed but disagree",
+                               fpath,
+                               diff=Text(sprint(show_expr_text_diff, show, e1, e2)),
+                               )
+                    end
                 catch err
                     err isa InterruptException && rethrow()
                     ex = (err, catch_backtrace())
                     push!(exceptions, ex)
                     ref_parse = "success"
-                    e2 = JuliaSyntax.fl_parseall(file)
-                    @assert Meta.isexpr(e2, :toplevel)
                     if length(e2.args) >= 1 && Meta.isexpr(last(e2.args), (:error, :incomplete))
                         ref_parse = "fail"
                         if err isa JuliaSyntax.ParseError
@@ -40,10 +52,10 @@ Logging.with_logger(logger) do
                         end
                     end
 
-                    ex_count += 1
+                    exception_count += 1
                     parse_to_syntax = "success"
                     try
-                        JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, file)
+                        JuliaSyntax.parseall(JuliaSyntax.SyntaxNode, code)
                     catch err2
                         parse_to_syntax = "fail"
                     end
@@ -56,8 +68,8 @@ Logging.with_logger(logger) do
                 avg = round(runtime/i*1000, digits = 2)
                 print(iob, "\e[2J\e[0;0H")
                 println(iob, "$i files parsed")
-                println(iob, "> $(ex_count) failures compared to reference parser")
-                println(iob, "> $(length(exceptions)) errors in total")
+                println(iob, "> $(exception_count) failures compared to reference parser")
+                println(iob, "> $(mismatch_count) Expr mismatches")
                 println(iob, "> $(avg)ms per file, $(round(Int, runtime))s in total")
                 println(stderr, String(take!(iob)))
             end
