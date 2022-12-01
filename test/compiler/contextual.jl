@@ -70,12 +70,12 @@ module MiniCassette
     end
 
     function overdub_generator(self, c, f, args)
-        if !isdefined(f, :instance)
+        if !Base.issingletontype(f)
             return :(return f(args...))
         end
 
         tt = Tuple{f, args...}
-        match = Base._which(tt, typemax(UInt))
+        match = Base._which(tt; world=typemax(UInt))
         mi = Core.Compiler.specialize_method(match)
         # Unsupported in this mini-cassette
         @assert !mi.def.isva

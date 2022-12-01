@@ -308,10 +308,11 @@ LLVM_TOOLS_JLL_TAGS := -llvm_version+$(LLVM_VER_MAJ)
 endif
 
 $(eval $(call bb-install,llvm,LLVM,false,true))
-$(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
+$(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
 endif # USE_BINARYBUILDER_LLVM
 
+get-lld: get-llvm
 install-lld install-clang install-llvm-tools: install-llvm

@@ -294,7 +294,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
             mt = mt::Core.MethodTable
             result = findall(sig_n, method_table; limit = max_methods)
-            if result === missing
+            if result === nothing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
             (; matches, overlayed) = result
@@ -333,7 +333,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         end
         mt = mt::Core.MethodTable
         result = findall(atype, method_table; limit = max_methods)
-        if result === missing
+        if result === nothing
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
@@ -1671,7 +1671,7 @@ end
 @inline function egal_condition(c::Const, @nospecialize(xt), max_union_splitting::Int)
     thentype = c
     elsetype = widenslotwrapper(xt)
-    if elsetype isa Type && isdefined(typeof(c.val), :instance) # can only widen a if it is a singleton
+    if elsetype isa Type && issingletontype(typeof(c.val)) # can only widen a if it is a singleton
         elsetype = typesubtract(elsetype, typeof(c.val), max_union_splitting)
     end
     return ConditionalTypes(thentype, elsetype)
@@ -2385,10 +2385,14 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         elseif isa(sym, Symbol)
             if isdefined(sv.mod, sym)
                 t = Const(true)
+            elseif sv.params.assume_bindings_static
+                t = Const(false)
             end
         elseif isa(sym, GlobalRef)
             if isdefined(sym.mod, sym.name)
                 t = Const(true)
+            elseif sv.params.assume_bindings_static
+                t = Const(false)
             end
         elseif isexpr(sym, :static_parameter)
             n = sym.args[1]::Int
@@ -2499,6 +2503,9 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, fram
         end
     elseif isdefined_globalref(g)
         nothrow = true
+    elseif isa(frame, InferenceState) && frame.params.assume_bindings_static
+        consistent = inaccessiblememonly = ALWAYS_TRUE
+        rt = Union{}
     end
     merge_effects!(interp, frame, Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly))
     return rt

@@ -1502,6 +1502,9 @@ ascending order.
 See also [`sortperm!`](@ref), [`partialsortperm`](@ref), [`invperm`](@ref), [`indexin`](@ref).
 To sort slices of an array, refer to [`sortslices`](@ref).
 
+!!! compat "Julia 1.9"
+    The method accepting `dims` requires at least Julia 1.9.
+
 # Examples
 ```jldoctest
 julia> v = [3, 1, 2];
@@ -1564,6 +1567,9 @@ end
 
 Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.  If `initialized` is `false`
 (the default), `ix` is initialized to contain the values `LinearIndices(A)`.
+
+!!! compat "Julia 1.9"
+    The method accepting `dims` requires at least Julia 1.9.
 
 # Examples
 ```jldoctest

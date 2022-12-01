@@ -112,6 +112,8 @@ enum {
     JL_TARGET_MINSIZE = 1 << 7,
     // Clone when the function queries CPU features
     JL_TARGET_CLONE_CPU = 1 << 8,
+    // Clone when the function uses fp16
+    JL_TARGET_CLONE_FLOAT16 = 1 << 9,
 };
 
 #define JL_FEATURE_DEF_NAME(name, bit, llvmver, str) JL_FEATURE_DEF(name, bit, llvmver)
@@ -164,6 +166,7 @@ typedef struct _jl_sysimg_fptrs_t {
  * Return the data about the function pointers selected.
  */
 jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl);
+jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);

@@ -1323,7 +1323,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
-            if !isdefined(ty, :instance)
+            if !Base.issingletontype(ty)
                 singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
                 # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)

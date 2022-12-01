@@ -151,7 +151,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
-                    if isa(atyp, DataType) && isdefined(atyp, :instance)
+                    if issingletontype(atyp)
                         # replace singleton types with their equivalent Const object
                         vargtype_elements[i] = Const(atyp.instance)
                     elseif isconstType(atyp)
@@ -180,7 +180,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 tail_index -= 1
             end
             atyp = unwraptv(atyp)
-            if isa(atyp, DataType) && isdefined(atyp, :instance)
+            if issingletontype(atyp)
                 # replace singleton types with their equivalent Const object
                 atyp = Const(atyp.instance)
             elseif isconstType(atyp)
