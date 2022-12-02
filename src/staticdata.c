@@ -2621,6 +2621,7 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
             write_uint64(ff, 0); // Reserve space for dataendpos
             write_mod_list(ff, mod_array);
         } else {
+            write_uint64(f, 0); // Reserve space for dataendpos
             checksumpos_ff = checksumpos;
         }
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
@@ -2649,6 +2650,7 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         ios_seek(ff, checksumpos_ff);
         write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
         write_uint64(ff, dataendpos);
+        ios_seek(ff, dataendpos);
 
         // Write the checksum to the split header if necessary
         if (emit_split) {

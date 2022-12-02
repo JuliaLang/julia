@@ -1764,16 +1764,15 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
         crc = _crc32c(something(Base.active_project(), ""))
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        # TODO: Hash options that have effect codegen
-        # -C: Should not hash on, we support multi-versioning, but we need to choose compatible
-        #     cache file.
-        # --optimize: ??? We might want to cache a higher optimization level than runtime
-        # --min-optlevel: ??? same?
-        # -g ???
-        # --math-mode :sweat:
-        # --inline / --check-bounds
-        # --code-coverage / --track-allocation
-        # --use_pkgimage_native_code so that `.ji` and `.so` can co-exist
+        flags = UInt8(0)
+        flags |= JLOptions().debug_level & 3
+        flags |= (JLOptions().check_bounds & 1) << 2
+        flags |= (JLOptions().use_pkgimage_native_code & 1) << 3
+        # NOTES:
+        # In contrast to check-bounds, inline has no "observable effect"
+        # TODO:
+        # opt_level/opt_level_min: Choose pkgimage with highest opt_level
+
         crc = _crc32c(prefs_hash, crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
