@@ -86,6 +86,8 @@
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
 
+#include "llvm-opt-profiling.h"
+
 using namespace llvm;
 
 //Drag some useful type functions into our namespace
@@ -8133,17 +8135,7 @@ jl_llvm_functions_t jl_emit_code(
         "functions compiled with custom codegen params must not be cached");
     JL_TRY {
         decls = emit_function(m, li, src, jlrettype, params);
-        auto stream = *jl_ExecutionEngine->get_dump_emitted_mi_name_stream();
-        if (stream) {
-            jl_printf(stream, "%s\t", decls.specFunctionObject.c_str());
-            // NOTE: We print the Type Tuple without surrounding quotes, because the quotes
-            // break CSV parsing if there are any internal quotes in the Type name (e.g. in
-            // Symbol("...")). The \t delineator should be enough to ensure whitespace is
-            // handled correctly. (And we don't need to worry about any tabs in the printed
-            // string, because tabs are printed as "\t" by `show`.)
-            jl_static_show(stream, li->specTypes);
-            jl_printf(stream, "\n");
-        }
+        maybe_record_llvm_mi_to_profile(decls.specFunctionObject.c_str(), li->specTypes);
     }
     JL_CATCH {
         // Something failed! This is very, very bad.
