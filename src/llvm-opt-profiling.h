@@ -26,7 +26,6 @@ JL_DLLEXPORT jl_llvm_opt_profiling_mi_raw_results_t jl_clear_and_fetch_llvm_opt_
 
 void _maybe_record_llvm_mi_to_profile(const char *module_name, jl_value_t *spec_types) JL_NOTSAFEPOINT;
 
-extern jl_mutex_t g_llvm_opt_profiling_lock;
 extern int g_llvm_opt_profile_enabled;
 
 static inline void maybe_record_llvm_mi_to_profile(const char *module_name, jl_value_t *spec_types) JL_NOTSAFEPOINT {
