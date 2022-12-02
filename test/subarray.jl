@@ -660,8 +660,15 @@ end
 @testset "unaliascopy trimming; Issue #26263" begin
     A = rand(5,5,5,5)
     V = view(A, 2:5, :, 2:5, 1:2:5)
-    @test @inferred(Base.unaliascopy(V)) == V == A[2:5, :, 2:5, 1:2:5]
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[2:5, :, 2:5, 1:2:5]
     @test @inferred(sum(Base.unaliascopy(V))) ≈ sum(V) ≈ sum(A[2:5, :, 2:5, 1:2:5])
+    i1 = collect(CartesianIndices((2:5)))
+    i2 = [CartesianIndex(), CartesianIndex()]
+    i3 = collect(CartesianIndices((2:5, 1:2:5)))
+    V = view(A, i1, 1:5, i2, i3)
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i2, i3]
+    V = view(A, i1, 1:5, i3, i2)
+    @test @inferred(Base.unaliascopy(V))::typeof(V) == V == A[i1, 1:5, i3, i2]
 end
 
 @testset "issue #27632" begin

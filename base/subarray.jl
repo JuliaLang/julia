@@ -111,15 +111,32 @@ unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.i
 # When the parent is an Array we can trim the size down a bit. In the future this
 # could possibly be extended to any mutable array.
 function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{Real,AbstractRange,Array}}},LD}
-    dest = Array{T}(undef, index_lengths(V.indices...))
-    copyto!(dest, V)
+    dest = Array{T}(undef, _trimmed_shape(V.indices...))
+    copyto!(dest, view(V, _trimmed_vind(V.indices...)...))
     SubArray{T,N,A,I,LD}(dest, map(_trimmedindex, V.indices), 0, Int(LD))
 end
+# We can avoid the repeation from `AbstractArray{CartesianIndex{0}}`
+@inline _trimmed_vind(A, rest...) = (_trimmed_vind1(A)..., _trimmed_vind(rest...)...)
+_trimmed_vind() = ()
+_trimmed_vind1(i::AbstractArray{<:AbstractCartesianIndex{0}}) = map(firstindex, axes(i))
+_trimmed_vind1(i) = axes(i)
+# Get the proper trimmed shape
+@inline _trimmed_shape(A, rest...) = (_trimmed_shape1(A)..., _trimmed_shape(rest...)...)
+_trimmed_shape() = ()
+_trimmed_shape1(::Real) = (1,)
+_trimmed_shape1(i::AbstractArray{<:Integer}) = (length(i),)
+_trimmed_shape1(i::AbstractArray{<:AbstractCartesianIndex{0}}) = ()
+_trimmed_shape1(i::AbstractArray{<:AbstractCartesianIndex{N}}) where {N} = (length(i), ntuple(Returns(1), Val(N - 1))...)
 # Transform indices to be "dense"
 _trimmedindex(i::Real) = oftype(i, 1)
-_trimmedindex(i::AbstractUnitRange) = oftype(i, oneto(length(i)))
-_trimmedindex(i::AbstractArray) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
-
+_trimmedindex(i::AbstractUnitRange{<:Integer}) = oftype(i, oneto(length(i)))
+_trimmedindex(i::AbstractArray{<:Integer}) = oftype(i, reshape(eachindex(IndexLinear(), i), axes(i)))
+_trimmedindex(i::AbstractArray{<:AbstractCartesianIndex{0}}) = oftype(i, copy(i))
+function _trimmedindex(i::AbstractArray{<:AbstractCartesianIndex{N}}) where {N}
+    padding = ntuple(Returns(1), Val(N - 1))
+    ax1 = eachindex(IndexLinear(), i)
+    return oftype(i, reshape(CartesianIndices((ax1, padding...)), axes(i)))
+end
 ## SubArray creation
 # We always assume that the dimensionality of the parent matches the number of
 # indices that end up getting passed to it, so we store the parent as a
