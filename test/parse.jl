@@ -47,8 +47,7 @@ Base.ncodeunits(::InlineStringIssue57) = 4
 Base.lastindex(::InlineStringIssue57) = 4
 Base.isvalid(::InlineStringIssue57, i::Integer) = 0 < i < 5
 Base.iterate(::InlineStringIssue57, i::Integer=1) = i == 1 ? ('t', 2) : i == 2 ? ('r', 3) : i == 3 ? ('u', 4) : i == 4 ? ('e', 5) : nothing
-import Base: ==
-==(::SubString{InlineStringIssue57}, x::String) = x == "true"
+Base.:(==)(::SubString{InlineStringIssue57}, x::String) = x == "true"
 
 @test parse(Bool, InlineStringIssue57())
 
