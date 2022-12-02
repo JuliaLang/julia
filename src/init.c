@@ -821,7 +821,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     jl_init_serializer();
 
     if (!jl_options.image_file) {
-        jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
         jl_core_module->parent = jl_core_module;
         jl_type_typename->mt->module = jl_core_module;
         jl_top_module = jl_core_module;
