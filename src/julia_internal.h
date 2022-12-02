@@ -1684,7 +1684,9 @@ JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 #endif
 
 #ifdef USE_DTRACE
-#include "uprobes.h.gen"
+// Generated file, needs to be searched in include paths so that the builddir
+// retains priority
+#include <uprobes.h.gen>
 
 // uprobes.h.gen on systems with DTrace, is auto-generated to include
 // `JL_PROBE_{PROBE}` and `JL_PROBE_{PROBE}_ENABLED()` macros for every probe
