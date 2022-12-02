@@ -165,13 +165,10 @@ JL_DLLEXPORT void *jl_dlopen(const char *filename, unsigned flags) JL_NOTSAFEPOI
     {
         /* If loading with LOAD_WITH_ALTERED_SEARCH_PATH fails,
            search user directories added with `AddDllDirectory`.
-           
            In Julia on Windows, user directories can be added to the DLL search path as follows.
            `library::String = pwd()`
            `@ccall "kernel32".AddDllDirectory(library::Cwstring)::Ptr{Nothing}`
-           
            https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-adddlldirectory
-           
            Consider `LOAD_LIBRARY_SEARCH_DEFAULT_DIRS` or
           `LOAD_LIBRARY_DEFAULT_DIRS | LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR` for use below. */
         lib = LoadLibraryExW(wfilename, NULL, LOAD_LIBRARY_SEARCH_USER_DIRS);
