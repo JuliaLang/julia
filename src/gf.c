@@ -1951,13 +1951,22 @@ JL_DLLEXPORT jl_value_t *jl_matching_methods(jl_tupletype_t *types, jl_value_t *
     return ml_matches((jl_methtable_t*)mt, types, lim, include_ambiguous, 1, world, 1, min_valid, max_valid, ambig);
 }
 
-jl_method_instance_t *jl_get_unspecialized(jl_method_instance_t *method JL_PROPAGATES_ROOT)
+jl_method_instance_t *jl_get_unspecialized_from_mi(jl_method_instance_t *method JL_PROPAGATES_ROOT)
+{
+    jl_method_t *def = method->def.method;
+    jl_method_instance_t *mi = jl_get_unspecialized(def);
+    if (mi == NULL) {
+        return method;
+    }
+    return mi;
+}
+
+jl_method_instance_t *jl_get_unspecialized(jl_method_t *def JL_PROPAGATES_ROOT)
 {
     // one unspecialized version of a function can be shared among all cached specializations
-    jl_method_t *def = method->def.method;
     if (!jl_is_method(def) || def->source == NULL) {
         // generated functions might instead randomly just never get inferred, sorry
-        return method;
+        return NULL;
     }
     if (def->unspecialized == NULL) {
         JL_LOCK(&def->writelock);
@@ -2078,7 +2087,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
 
     codeinst = jl_generate_fptr(mi, world);
     if (!codeinst) {
-        jl_method_instance_t *unspec = jl_get_unspecialized(mi);
+        jl_method_instance_t *unspec = jl_get_unspecialized_from_mi(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         // ask codegen to make the fptr for unspec
         if (jl_atomic_load_relaxed(&ucache->invoke) == NULL) {
