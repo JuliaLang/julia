@@ -2,7 +2,6 @@
 
 # tests the output of the embedding example is correct
 using Test
-using Pkg
 
 if Sys.iswindows()
     # libjulia needs to be in the same directory as the embedding executable or in path
@@ -43,36 +42,4 @@ end
     #    n -> n == 0)
     @test checknum(lines[5], r"([0-9]+) corrupted auxiliary roots",
         n -> n == 0)
-end
-
-@testset "Package with foreign type" begin
-    load_path = copy(LOAD_PATH)
-    push!(LOAD_PATH, joinpath(@__DIR__, "Foreign"))
-    push!(LOAD_PATH, joinpath(@__DIR__, "DependsOnForeign"))
-    try
-        # Force recaching
-        Base.compilecache(Base.identify_package("Foreign"))
-        Base.compilecache(Base.identify_package("DependsOnForeign"))
-
-        push!(LOAD_PATH, joinpath(@__DIR__, "ForeignObjSerialization"))
-        @test_throws ErrorException  Base.compilecache(Base.identify_package("ForeignObjSerialization"), Base.DevNull())
-        pop!(LOAD_PATH)
-
-        (@eval (using Foreign))
-        @test Base.invokelatest(Foreign.get_nmark)  == 0
-        @test Base.invokelatest(Foreign.get_nsweep) == 0
-
-        obj = Base.invokelatest(Foreign.FObj)
-        GC.@preserve obj begin
-            GC.gc(true)
-        end
-        @test Base.invokelatest(Foreign.get_nmark)  > 0
-        @time Base.invokelatest(Foreign.test, 10)
-        GC.gc(true)
-        @test Base.invokelatest(Foreign.get_nsweep) > 0
-        (@eval (using DependsOnForeign))
-        Base.invokelatest(DependsOnForeign.f, obj)
-    finally
-        copy!(LOAD_PATH, load_path)
-    end
 end

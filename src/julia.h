@@ -315,7 +315,7 @@ typedef struct _jl_method_t {
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
     // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
     // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
-    jl_array_t *root_blocks;   // RLE (build_id.lo, offset) pairs (even/odd indexing)
+    jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
     int32_t nroots_sysimg;     // # of roots stored in the system image
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
@@ -592,7 +592,7 @@ typedef struct _jl_module_t {
     // hidden fields:
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    jl_uuid_t build_id;
+    uint64_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;
     _Atomic(uint32_t) counter;
@@ -841,7 +841,6 @@ extern void JL_GC_PUSH3(void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
-extern void JL_GC_PUSH8(void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
@@ -880,9 +879,6 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #define JL_GC_PUSH7(arg1, arg2, arg3, arg4, arg5, arg6, arg7)                                           \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(7), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7}; \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-#define JL_GC_PUSH8(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)                                     \
-  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(8), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 
@@ -1767,14 +1763,15 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
-JL_DLLEXPORT ios_t *jl_create_system_image(void *, jl_array_t *worklist);
+JL_DLLEXPORT ios_t *jl_create_system_image(void *);
+JL_DLLEXPORT void jl_save_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete);
-
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
-JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
-JL_DLLEXPORT void jl_write_compiler_output(void);
+JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *linfo);
+JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
 
 // parsing
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,

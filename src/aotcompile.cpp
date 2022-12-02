@@ -92,7 +92,7 @@ typedef struct {
     std::vector<GlobalValue*> jl_sysimg_fvars;
     std::vector<GlobalValue*> jl_sysimg_gvars;
     std::map<jl_code_instance_t*, std::tuple<uint32_t, uint32_t>> jl_fvar_map;
-    std::vector<void*> jl_value_to_llvm;
+    std::map<void*, int32_t> jl_value_to_llvm; // uses 1-based indexing
 } jl_native_code_desc_t;
 
 extern "C" JL_DLLEXPORT
@@ -110,12 +110,17 @@ void jl_get_function_id_impl(void *native_code, jl_code_instance_t *codeinst,
 }
 
 extern "C" JL_DLLEXPORT
-void jl_get_llvm_gvs_impl(void *native_code, arraylist_t *gvs)
+int32_t jl_get_llvm_gv_impl(void *native_code, jl_value_t *p)
 {
-    // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
+    // map a jl_value_t memory location to a GlobalVariable
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    arraylist_grow(gvs, data->jl_value_to_llvm.size());
-    memcpy(gvs->items, data->jl_value_to_llvm.data(), gvs->len * sizeof(void*));
+    if (data) {
+        auto it = data->jl_value_to_llvm.find(p);
+        if (it != data->jl_value_to_llvm.end()) {
+            return it->second;
+        }
+    }
+    return 0;
 }
 
 extern "C" JL_DLLEXPORT
@@ -143,6 +148,7 @@ static void emit_offset_table(Module &mod, const std::vector<GlobalValue*> &vars
 {
     // Emit a global variable with all the variable addresses.
     // The cloning pass will convert them into offsets.
+    assert(!vars.empty());
     size_t nvars = vars.size();
     std::vector<Constant*> addrs(nvars);
     for (size_t i = 0; i < nvars; i++) {
@@ -252,9 +258,9 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions. The `policy` flag switches between the default
-// mode `0`, the extern mode `1`.
+// mode `0`, the extern mode `1`, and imaging mode `2`.
 extern "C" JL_DLLEXPORT
-void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy, int _imaging_mode)
+void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _policy)
 {
     ++CreateNativeCalls;
     CreateNativeMax.updateMax(jl_array_len(methods));
@@ -262,7 +268,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         cgparams = &jl_default_cgparams;
     jl_native_code_desc_t *data = new jl_native_code_desc_t;
     CompilationPolicy policy = (CompilationPolicy) _policy;
-    bool imaging = imaging_default() || _imaging_mode == 1;
+    bool imaging = imaging_default() || policy == CompilationPolicy::ImagingMode;
     jl_workqueue_t emitted;
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
@@ -336,11 +342,10 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
     // process the globals array, before jl_merge_module destroys them
     std::vector<std::string> gvars;
-    data->jl_value_to_llvm.resize(params.globals.size());
 
     for (auto &global : params.globals) {
-        data->jl_value_to_llvm.at(gvars.size()) = global.first;
         gvars.push_back(std::string(global.second->getName()));
+        data->jl_value_to_llvm[global.first] = gvars.size();
     }
     CreateNativeMethods += emitted.size();
 
@@ -570,7 +575,7 @@ void jl_dump_native_impl(void *native_code,
     Type *T_psize = T_size->getPointerTo();
 
     // add metadata information
-    if (imaging_default() || jl_options.outputo) {
+    if (imaging_default()) {
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
         emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 

@@ -144,12 +144,8 @@ end
 const BacktraceCache = Dict{BTElement,Vector{StackFrame}}
 
 # copied from julia_internal.h
-JL_BUFF_TAG::UInt = ccall(:jl_get_buff_tag, UInt, ())
+const JL_BUFF_TAG = UInt(0x4eadc000)
 const JL_GC_UNKNOWN_TYPE_TAG = UInt(0xdeadaa03)
-
-function __init__()
-    global JL_BUFF_TAG = ccall(:jl_get_buff_tag, UInt, ())
-end
 
 struct CorruptType end
 struct BufferType end
