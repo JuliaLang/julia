@@ -108,13 +108,13 @@ for op in (:+, :-)
 end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
-    TS = promote_op(matprod, eltype(H), eltype(B))
-    A = A_mul_B_td!(zeros(TS, size(H)), H, B)
+    T = promote_op(matprod, eltype(H), eltype(B))
+    A = mul!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
-    TS = promote_op(matprod, eltype(B), eltype(H))
-    A = A_mul_B_td!(zeros(TS, size(H)), B, H)
+    T = promote_op(matprod, eltype(B), eltype(H))
+    A = mul!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
