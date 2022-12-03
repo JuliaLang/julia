@@ -1100,7 +1100,7 @@ There is a convenient syntax for naming such types, similar to the short form of
 definition syntax:
 
 ```julia
-Vector{T} = Array{T, 1}
+const Vector{T} = Array{T, 1}
 ```
 
 This is equivalent to `const Vector = Array{T,1} where T`.
