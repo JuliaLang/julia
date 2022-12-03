@@ -2191,7 +2191,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
 // Version information
-#include "julia_version.h"
+#include <julia_version.h> // Generated file
 
 JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);
