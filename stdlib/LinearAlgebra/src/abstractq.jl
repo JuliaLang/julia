@@ -57,12 +57,21 @@ copy(Q::AbstractQ) = copymutable(Q)
 # getindex
 getindex(Q::AbstractQ, inds...) = copymutable(Q)[inds...]
 getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
+function getindex(Q::AbstractQ, ::Colon, J::AbstractVector{<:Integer})
+    checkbounds(Q, :, J)
+    Y = zeros(eltype(Q), size(Q, 2), length(J))
+    for (i,j) in enumerate(J)
+        Y[j,i] = oneunit(eltype(Q))
+    end
+    lmul!(Q, Y)
+end
 function getindex(Q::AbstractQ, ::Colon, j::Int)
+    checkbounds(Q, :, j)
     y = zeros(eltype(Q), size(Q, 2))
-    y[j] = 1
+    y[j] = oneunit(eltype(Q))
     lmul!(Q, y)
 end
-getindex(Q::AbstractQ, i::Int, j::Int) = Q[:, j][i]
+getindex(Q::AbstractQ, i::Int, j::Int) = Q[:,j][i]
 
 # needed because AbstractQ does not subtype AbstractMatrix
 qr(Q::AbstractQ{T}, arg...; kwargs...) where {T} = qr!(Matrix{_qreltype(T)}(Q), arg...; kwargs...)
@@ -95,7 +104,7 @@ function copyto!(dest::PermutedDimsArray{T,2,perm}, src::AbstractQ) where {T,per
     return dest
 end
 
-function show(io::IO, mime::MIME{Symbol("text/plain")}, Q::AbstractQ)
+function show(io::IO, ::MIME{Symbol("text/plain")}, Q::AbstractQ)
     print(io, Base.dims2string(size(Q)), ' ', summary(Q))
 end
 

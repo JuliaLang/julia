@@ -35,8 +35,13 @@ n = 5
         @test I*Q ≈ Q.Q*I rtol=2eps()
         @test I*Q' ≈ I*Q.Q' rtol=2eps()
         y = rand(T, n)
-        @test Q * y ≈ Q.Q * y
-        @test Q' * y ≈ Q.Q' * y
+        @test Q * y ≈ Q.Q * y ≈ Q' \ y ≈ ldiv!(Q', copy(y)) ≈ ldiv!(zero(y), Q', y)
+        @test Q'y ≈ Q.Q' * y ≈ Q \ y ≈ ldiv!(Q, copy(y)) ≈ ldiv!(zero(y), Q, y)
+        @test y'Q ≈ y'Q.Q ≈ y' / Q'
+        @test y'Q' ≈ y'Q.Q' ≈ y' / Q
+        y = Matrix(y')
+        @test y*Q ≈ y*Q.Q ≈ y / Q' ≈ rdiv!(copy(y), Q')
+        @test y*Q' ≈ y*Q.Q' ≈ y / Q ≈ rdiv!(copy(y), Q)
         Y = rand(T, n, n); X = similar(Y)
         for transQ in (identity, adjoint), transY in (identity, adjoint), Y in (Y, Y')
             @test mul!(X, transQ(Q), transY(Y)) ≈ transQ(Q) * transY(Y) ≈ transQ(Q.Q) * transY(Y)
@@ -48,6 +53,13 @@ n = 5
         @test Q[:,1] == Q.Q[:,1]
         @test Q[1,1] == Q.Q[1,1]
         @test Q[:] == Q.Q[:]
+        @test Q[:,1:3] == Q.Q[:,1:3] == Matrix(Q)[:,1:3]
+        @test_throws BoundsError Q[0,1]
+        @test_throws BoundsError Q[n+1,1]
+        @test_throws BoundsError Q[1,0]
+        @test_throws BoundsError Q[1,n+1]
+        @test_throws BoundsError Q[:,1:n+1]
+        @test_throws BoundsError Q[:,0:n]
         for perm in ((1, 2), (2, 1))
             P = PermutedDimsArray(zeros(T, size(Q)), perm)
             @test copyto!(P, Q) ≈ Matrix(Q)
