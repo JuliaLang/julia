@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
+JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_names)
 {
     jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
@@ -19,7 +19,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
                                                jl_module_type);
     assert(jl_is_symbol(name));
     m->name = name;
-    m->parent = NULL;
+    m->parent = parent;
     m->istopmod = 0;
     m->uuid = uuid_zero;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
@@ -34,6 +34,8 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
+    m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
+        bitmix(name->hash, parent->hash);
     JL_MUTEX_INIT(&m->lock);
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -50,9 +52,9 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, uint8_t default_names)
     return m;
 }
 
-JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name)
+JL_DLLEXPORT jl_module_t *jl_new_module(jl_sym_t *name, jl_module_t *parent)
 {
-    return jl_new_module_(name, 1);
+    return jl_new_module_(name, parent, 1);
 }
 
 uint32_t jl_module_next_counter(jl_module_t *m)
@@ -63,10 +65,9 @@ uint32_t jl_module_next_counter(jl_module_t *m)
 JL_DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name, uint8_t std_imports, uint8_t default_names)
 {
     // TODO: should we prohibit this during incremental compilation?
-    jl_module_t *m = jl_new_module_(name, default_names);
+    // TODO: the parent module is a lie
+    jl_module_t *m = jl_new_module_(name, jl_main_module, default_names);
     JL_GC_PUSH1(&m);
-    m->parent = jl_main_module; // TODO: this is a lie
-    jl_gc_wb(m, m->parent);
     if (std_imports)
         jl_add_standard_imports(m);
     JL_GC_POP();

@@ -1165,7 +1165,8 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
             end
         end
     end
-    non_va_args = method.isva ? method.nargs - 1 : method.nargs
+    nargs = Int(method.nargs)
+    non_va_args = method.isva ? nargs - 1 : nargs
     for i = 1:non_va_args
         if !isdispatchelem(at.parameters[i])
             if (ast_slotflag(code, 1 + i + nsparams) & SLOT_USED) != 0
@@ -1176,7 +1177,7 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
     if method.isva
         # If the va argument is used, we need to ensure that all arguments that
         # contribute to the va tuple are dispatchelemes
-        if (ast_slotflag(code, 1 + method.nargs + nsparams) & SLOT_USED) != 0
+        if (ast_slotflag(code, 1 + nargs + nsparams) & SLOT_USED) != 0
             for i = (non_va_args+1):length(at.parameters)
                 if !isdispatchelem(at.parameters[i])
                     return false
@@ -1498,7 +1499,8 @@ print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args..
 
 function _which(@nospecialize(tt::Type);
     method_table::Union{Nothing,Core.MethodTable}=nothing,
-    world::UInt=get_world_counter())
+    world::UInt=get_world_counter(),
+    raise::Bool=true)
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
     else
@@ -1506,7 +1508,8 @@ function _which(@nospecialize(tt::Type);
     end
     match, = Core.Compiler.findsup(tt, table)
     if match === nothing
-        error("no unique matching method found for the specified argument types")
+        raise && error("no unique matching method found for the specified argument types")
+        return nothing
     end
     return match
 end

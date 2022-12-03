@@ -1580,6 +1580,23 @@ end
     @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
 end
 
+
+precompile_test_harness("Module tparams") do load_path
+    write(joinpath(load_path, "ModuleTparams.jl"),
+        """
+        module ModuleTparams
+            module TheTParam
+            end
+
+            struct ParamStruct{T}; end
+            const the_struct = ParamStruct{TheTParam}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleTparams"))
+    (@eval (using ModuleTparams))
+    @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
