@@ -191,7 +191,7 @@ end
         push!(mats, SymTridiagonal(Vector{T}(diag), Vector{T}(offdiag)))
     end
 
-    for op in (+,*) # to do: fix when operation is - and the matrix has a range as the underlying representation and we get a step size of 0.
+    for op in (+,-,*)
         for A in mats
             for B in mats
                 @test (op)(A, B) ≈ (op)(Matrix(A), Matrix(B)) ≈ Matrix((op)(A, B))

@@ -225,32 +225,21 @@ function (-)(A::SymTridiagonal, B::Bidiagonal)
     Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)-B.ev) : (_evview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
 end
 
-# fixing uniform scaling problems from #28994
-(+)(A::Tridiagonal, B::UniformScaling)    = B + A
-(+)(A::SymTridiagonal, B::UniformScaling) = B + A
-(+)(A::Bidiagonal, B::UniformScaling)     = B + A
-(+)(A::Diagonal, B::UniformScaling)       = B + A
-
-for op in (:+, :-)
-    @eval begin
-        function ($op)(A::UniformScaling, B::Tridiagonal)
-            d = ($op).(Ref(A), B.d)
-            Tridiagonal(convert(typeof(d), $op(B.dl)), d, convert(typeof(d), $op(B.du)))
-        end
-        function ($op)(A::UniformScaling, B::SymTridiagonal)
-            dv = ($op).(Ref(A), B.dv)
-            SymTridiagonal(dv, convert(typeof(dv), $op(B.ev)))
-        end
-        function ($op)(A::UniformScaling, B::Bidiagonal)
-            dv = ($op).(Ref(A), B.dv)
-            Bidiagonal(dv, convert(typeof(dv), $op(B.ev)), B.uplo)
-        end
-        function ($op)(A::UniformScaling, B::Diagonal)
-            Diagonal(($op).(Ref(A), B.diag))
-        end
-    end
+function (-)(A::UniformScaling, B::Tridiagonal)
+    d = Ref(A) .- B.d
+    Tridiagonal(convert(typeof(d), -B.dl), d, convert(typeof(d), -B.du))
 end
-
+function (-)(A::UniformScaling, B::SymTridiagonal)
+    dv = Ref(A) .- B.dv
+    SymTridiagonal(dv, convert(typeof(dv), -B.ev))
+end
+function (-)(A::UniformScaling, B::Bidiagonal)
+    dv = Ref(A) .- B.dv
+    Bidiagonal(dv, convert(typeof(dv), -B.ev), B.uplo)
+end
+function (-)(A::UniformScaling, B::Diagonal)
+    Diagonal(Ref(A) .- B.diag)
+end
 lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
 lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
 lmul!(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = lmul!(Q, full!(B))
