@@ -98,7 +98,7 @@ function Dict{K,V}(ps::Pair...) where V where K
     return h
 end
 # Note the constructors of WeakKeyDict mirror these here, keep in sync.
-Dict(;sizehint...) = Dict{Any,Any}(;sizehint...)
+Dict(; sizehint = 0) = Dict{Any,Any}(; sizehint)
 Dict(kv::Tuple{}) = Dict()
 copy(d::Dict) = Dict(d)
 

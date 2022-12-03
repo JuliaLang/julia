@@ -42,7 +42,7 @@ function WeakKeyDict{K,V}(ps::Pair...) where V where K
     end
     return h
 end
-WeakKeyDict(;sizehint...) = WeakKeyDict{Any,Any}(;sizehint...)
+WeakKeyDict(; sizehint = 0) = WeakKeyDict{Any,Any}(; sizehint)
 
 WeakKeyDict(kv::Tuple{}) = WeakKeyDict()
 copy(d::WeakKeyDict) = WeakKeyDict(d)
