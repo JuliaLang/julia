@@ -898,7 +898,7 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
     end
 
     @debug "Loading cache file $path for $pkg"
-    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any), path, depmods)
+    sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)
     if isa(sv, Exception)
         return sv
     end
@@ -973,7 +973,7 @@ function run_package_callbacks(modkey::PkgId)
 end
 
 # loads a precompile cache file, after checking stale_cachefile tests
-function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt64)
+function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     assert_havelock(require_lock)
     loaded = nothing
     if root_module_exists(modkey)
@@ -1021,7 +1021,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::St
             for i in 1:length(depmods)
                 dep = depmods[i]
                 dep isa Module && continue
-                _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt64}
+                _, depkey, depbuild_id = dep::Tuple{String, PkgId, UInt128}
                 @assert root_module_exists(depkey)
                 dep = root_module(depkey)
                 depmods[i] = dep
@@ -1052,7 +1052,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String)
     local depmodnames
     io = open(path, "r")
     try
-        isvalid_cache_header(io) || return ArgumentError("Invalid header in cache file $path.")
+        iszero(isvalid_cache_header(io)) && return ArgumentError("Invalid header in cache file $path.")
         depmodnames = parse_cache_header(io)[3]
         isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
     finally
@@ -1074,7 +1074,7 @@ end
 
 # returns `nothing` if require found a precompile cache for this sourcepath, but couldn't load it
 # returns the set of modules restored if the cache load succeeded
-@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, build_id::UInt64)
+@constprop :none function _require_search_from_serialized(pkg::PkgId, sourcepath::String, build_id::UInt128)
     assert_havelock(require_lock)
     paths = find_all_in_cache_path(pkg)
     for path_to_try in paths::Vector{String}
@@ -1087,7 +1087,7 @@ end
         for i in 1:length(staledeps)
             dep = staledeps[i]
             dep isa Module && continue
-            modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt64}
+            modpath, modkey, modbuild_id = dep::Tuple{String, PkgId, UInt128}
             modpaths = find_all_in_cache_path(modkey)
             modfound = false
             for modpath_to_try in modpaths::Vector{String}
@@ -1101,7 +1101,7 @@ end
                 break
             end
             if !modfound
-                @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $modbuild_id is missing from the cache."
+                @debug "Rejecting cache file $path_to_try because required dependency $modkey with build ID $(UUID(modbuild_id)) is missing from the cache."
                 staledeps = true
                 break
             end
@@ -1153,7 +1153,7 @@ const package_callbacks = Any[]
 const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
-const _concrete_dependencies = Pair{PkgId,UInt64}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
+const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, path, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 function _include_dependency(mod::Module, _path::AbstractString)
@@ -1406,7 +1406,7 @@ function _require(pkg::PkgId, env=nothing)
 
         # attempt to load the module file via the precompile cache locations
         if JLOptions().use_compiled_modules != 0
-            m = _require_search_from_serialized(pkg, path, UInt64(0))
+            m = _require_search_from_serialized(pkg, path, UInt128(0))
             if m isa Module
                 return m
             end
@@ -1416,7 +1416,7 @@ function _require(pkg::PkgId, env=nothing)
         # but it was not handled by the precompile loader, complain
         for (concrete_pkg, concrete_build_id) in _concrete_dependencies
             if pkg == concrete_pkg
-                @warn """Module $(pkg.name) with build ID $concrete_build_id is missing from the cache.
+                @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
                      This may mean $pkg does not support precompilation but is imported by a module that does."""
                 if JLOptions().incremental != 0
                     # during incremental precompilation, this should be fail-fast
@@ -1785,9 +1785,13 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
         close(tmpio)
         p = create_expr_cache(pkg, path, tmppath, concrete_deps, internal_stderr, internal_stdout)
         if success(p)
-            # append checksum to the end of the .ji file:
-            open(tmppath, "a+") do f
-                write(f, _crc32c(seekstart(f)))
+            # append extra crc to the end of the .ji file:
+            open(tmppath, "r+") do f
+                if iszero(isvalid_cache_header(f))
+                    error("Invalid header for $pkg in new cache file $(repr(tmppath)).")
+                end
+                seekstart(f)
+                write(f, _crc32c(f))
             end
             # inherit permission from the source file (and make them writable)
             chmod(tmppath, filemode(path) & 0o777 | 0o200)
@@ -1807,7 +1811,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 end
             end
 
-            # this is atomic according to POSIX:
+            # this is atomic according to POSIX (not Win32):
             rename(tmppath, cachefile; force=true)
             return cachefile
         end
@@ -1817,13 +1821,16 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $pkg to $tmppath.")
+        error("Failed to precompile $pkg to $(repr(tmppath)).")
     end
 end
 
-module_build_id(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), m)
+function module_build_id(m::Module)
+    hi, lo = ccall(:jl_module_build_id, NTuple{2,UInt64}, (Any,), m)
+    return (UInt128(hi) << 64) | lo
+end
 
-isvalid_cache_header(f::IOStream) = (0 != ccall(:jl_read_verify_header, Cint, (Ptr{Cvoid},), f.ios))
+isvalid_cache_header(f::IOStream) = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid},), f.ios) # returns checksum id or zero
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
 struct CacheHeaderIncludes
@@ -1897,13 +1904,14 @@ function parse_cache_header(f::IO)
     totbytes -= 8
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
-    required_modules = Vector{Pair{PkgId, UInt64}}()
+    required_modules = Vector{Pair{PkgId, UInt128}}()
     while true
         n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id = read(f, UInt64) # build id
+        build_id = UInt128(read(f, UInt64)) << 64
+        build_id |= read(f, UInt64)
         push!(required_modules, PkgId(uuid, sym) => build_id)
     end
     return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash
@@ -1912,17 +1920,17 @@ end
 function parse_cache_header(cachefile::String; srcfiles_only::Bool=false)
     io = open(cachefile, "r")
     try
-        !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         ret = parse_cache_header(io)
         srcfiles_only || return ret
-        modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = ret
+        _, (includes, _), _, srctextpos, _... = ret
         srcfiles = srctext_files(io, srctextpos)
         delidx = Int[]
         for (i, chi) in enumerate(includes)
             chi.filename ∈ srcfiles || push!(delidx, i)
         end
         deleteat!(includes, delidx)
-        return modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash
+        return ret
     finally
         close(io)
     end
@@ -1930,11 +1938,11 @@ end
 
 
 
-preferences_hash(f::IO) = parse_cache_header(f)[end]
+preferences_hash(f::IO) = parse_cache_header(f)[6]
 function preferences_hash(cachefile::String)
     io = open(cachefile, "r")
     try
-        if !isvalid_cache_header(io)
+        if iszero(isvalid_cache_header(io))
             throw(ArgumentError("Invalid header in cache file $cachefile."))
         end
         return preferences_hash(io)
@@ -1945,14 +1953,14 @@ end
 
 
 function cache_dependencies(f::IO)
-    defs, (includes, requires), modules, srctextpos, prefs, prefs_hash = parse_cache_header(f)
+    _, (includes, _), modules, _... = parse_cache_header(f)
     return modules, map(chi -> (chi.filename, chi.mtime), includes)  # return just filename and mtime
 end
 
 function cache_dependencies(cachefile::String)
     io = open(cachefile, "r")
     try
-        !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         return cache_dependencies(io)
     finally
         close(io)
@@ -1960,7 +1968,7 @@ function cache_dependencies(cachefile::String)
 end
 
 function read_dependency_src(io::IO, filename::AbstractString)
-    modules, (includes, requires), required_modules, srctextpos, prefs, prefs_hash = parse_cache_header(io)
+    srctextpos = parse_cache_header(io)[4]
     srctextpos == 0 && error("no source-text stored in cache file")
     seek(io, srctextpos)
     return _read_dependency_src(io, filename)
@@ -1983,7 +1991,7 @@ end
 function read_dependency_src(cachefile::String, filename::AbstractString)
     io = open(cachefile, "r")
     try
-        !isvalid_cache_header(io) && throw(ArgumentError("Invalid header in cache file $cachefile."))
+        iszero(isvalid_cache_header(io)) && throw(ArgumentError("Invalid header in cache file $cachefile."))
         return read_dependency_src(io, filename)
     finally
         close(io)
@@ -2173,12 +2181,13 @@ get_compiletime_preferences(::Nothing) = String[]
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
-    return stale_cachefile(PkgId(""), UInt64(0), modpath, cachefile; ignore_loaded)
+    return stale_cachefile(PkgId(""), UInt128(0), modpath, cachefile; ignore_loaded)
 end
-@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt64, modpath::String, cachefile::String; ignore_loaded::Bool = false)
+@constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modpath::String, cachefile::String; ignore_loaded::Bool = false)
     io = open(cachefile, "r")
     try
-        if !isvalid_cache_header(io)
+        checksum = isvalid_cache_header(io)
+        if iszero(checksum)
             @debug "Rejecting cache file $cachefile due to it containing an invalid cache header"
             return true # invalid cache file
         end
@@ -2191,9 +2200,12 @@ end
             @debug "Rejecting cache file $cachefile for $modkey since it is for $id instead"
             return true
         end
-        if build_id != UInt64(0) && id.second != build_id
-            @debug "Ignoring cache file $cachefile for $modkey since it is does not provide desired build_id"
-            return true
+        if build_id != UInt128(0)
+            id_build = (UInt128(checksum) << 64) | id.second
+            if id_build != build_id
+                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it is does not provide desired build_id ($((UUID(build_id))))"
+                return true
+            end
         end
         id = id.first
         modules = Dict{PkgId, UInt64}(modules)
@@ -2233,11 +2245,12 @@ end
         for (req_key, req_build_id) in _concrete_dependencies
             build_id = get(modules, req_key, UInt64(0))
             if build_id !== UInt64(0)
+                build_id |= UInt128(checksum) << 64
                 if build_id === req_build_id
                     skip_timecheck = true
                     break
                 end
-                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $build_id) for $req_key (want $req_build_id)"
+                @debug "Rejecting cache file $cachefile because it provides the wrong build_id (got $((UUID(build_id)))) for $req_key (want $(UUID(req_build_id)))"
                 return true # cachefile doesn't provide the required version of the dependency
             end
         end

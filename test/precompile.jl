@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 original_depot_path = copy(Base.DEPOT_PATH)
+original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
 
@@ -37,7 +38,7 @@ end
 
 # method root provenance
 
-rootid(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), Base.parentmodule(m))
+rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
 rootid(m::Method) = rootid(m.module)
 
 function root_provenance(m::Method, i::Int)
@@ -344,7 +345,7 @@ precompile_test_harness(false) do dir
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
-        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
+        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
@@ -1554,8 +1555,23 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
-empty!(Base.DEPOT_PATH)
-append!(Base.DEPOT_PATH, original_depot_path)
+precompile_test_harness("Recursive types") do load_path
+    write(joinpath(load_path, "RecursiveTypeDef.jl"),
+        """
+        module RecursiveTypeDef
+
+        struct C{T,O} end
+        struct A{T,N,O} <: AbstractArray{C{T,A{T,N,O}},N}
+            sz::NTuple{N,Int}
+        end
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("RecursiveTypeDef"))
+    (@eval (using RecursiveTypeDef))
+    a = Base.invokelatest(RecursiveTypeDef.A{Float64,2,String}, (3, 3))
+    @test isa(a, AbstractArray)
+end
 
 @testset "issue 46778" begin
     f46778(::Any, ::Type{Int}) = 1
@@ -1563,3 +1579,25 @@ append!(Base.DEPOT_PATH, original_depot_path)
     @test precompile(Tuple{typeof(f46778), Int, DataType})
     @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
 end
+
+
+precompile_test_harness("Module tparams") do load_path
+    write(joinpath(load_path, "ModuleTparams.jl"),
+        """
+        module ModuleTparams
+            module TheTParam
+            end
+
+            struct ParamStruct{T}; end
+            const the_struct = ParamStruct{TheTParam}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleTparams"))
+    (@eval (using ModuleTparams))
+    @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)
+empty!(Base.LOAD_PATH)
+append!(Base.LOAD_PATH, original_load_path)

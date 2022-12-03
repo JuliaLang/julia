@@ -1049,7 +1049,7 @@ The Stable version of Julia is the latest released version of Julia, this is the
 It has the latest features, including improved performance.
 The Stable version of Julia is versioned according to [SemVer](https://semver.org/) as v1.x.y.
 A new minor release of Julia corresponding to a new Stable version is made approximately every 4-5 months after a few weeks of testing as a release candidate.
-Unlike the LTS version the a Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
+Unlike the LTS version the Stable version will not normally receive bugfixes after another Stable version of Julia has been released.
 However, upgrading to the next Stable release will always be possible as each release of Julia v1.x will continue to run code written for earlier versions.
 
 You may prefer the LTS (Long Term Support) version of Julia if you are looking for a very stable code base.

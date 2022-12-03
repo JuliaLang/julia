@@ -1289,8 +1289,10 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
             return issub;
         }
         while (xd != jl_any_type && xd->name != yd->name) {
-            if (xd->super == NULL)
+            if (xd->super == NULL) {
+                assert(xd->parameters && jl_is_typename(xd->name));
                 jl_errorf("circular type parameter constraint in definition of %s", jl_symbol_name(xd->name->name));
+            }
             xd = xd->super;
         }
         if (xd == jl_any_type) return 0;

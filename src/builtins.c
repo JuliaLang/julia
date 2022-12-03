@@ -198,7 +198,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
             return egal_types(vma->N, vmb->N, env, tvar_names);
         return !vma->N && !vmb->N;
     }
-    if (dt == jl_symbol_type)
+    if (dt == jl_symbol_type || dt == jl_module_type)
         return 0;
     assert(!dt->name->mutabl);
     return jl_egal__bits(a, b, dt);
@@ -413,6 +413,10 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
 #else
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
+    }
+    if (dt == jl_module_type) {
+        jl_module_t *m = (jl_module_t*)v;
+        return m->hash;
     }
     if (dt->name->mutabl)
         return inthash((uintptr_t)v);
@@ -1201,7 +1205,7 @@ JL_CALLABLE(jl_f_getglobal)
 
 JL_CALLABLE(jl_f_setglobal)
 {
-    enum jl_memory_order order = jl_memory_order_monotonic;
+    enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(setglobal!, 3, 4);
     if (nargs == 4) {
         JL_TYPECHK(setglobal!, symbol, args[3]);
@@ -1269,7 +1273,8 @@ static int is_nestable_type_param(jl_value_t *t)
         size_t i, l = jl_nparams(t);
         for (i = 0; i < l; i++) {
             jl_value_t *pi = jl_tparam(t, i);
-            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi)))
+            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi) ||
+        jl_is_module(pi)))
                 return 0;
         }
         return 1;
@@ -1284,7 +1289,8 @@ int jl_valid_type_param(jl_value_t *v)
     if (jl_is_vararg(v))
         return 0;
     // TODO: maybe more things
-    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v)) ||
+        jl_is_module(v);
 }
 
 JL_CALLABLE(jl_f_apply_type)
@@ -1896,7 +1902,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 
 void jl_init_intrinsic_functions(void) JL_GC_DISABLED
 {
-    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
+    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"), NULL);
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);

@@ -2222,7 +2222,8 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    assert(!ctx.emission_context.imaging);
+    if (ctx.emission_context.imaging)
+        return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
@@ -2232,7 +2233,8 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
-    assert(!ctx.emission_context.imaging);
+    if (ctx.emission_context.imaging)
+        return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     Value *addend = sync
@@ -2879,6 +2881,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     const jl_cgval_t &sym = argv[2];
     const jl_cgval_t &val = argv[3];
     enum jl_memory_order order = jl_memory_order_unspecified;
+    assert(f == jl_builtin_setglobal && modifyop == nullptr && "unimplemented");
 
     if (nargs == 4) {
         const jl_cgval_t &arg4 = argv[4];
@@ -2888,7 +2891,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return false;
     }
     else
-        order = jl_memory_order_monotonic;
+        order = jl_memory_order_release;
 
     if (order == jl_memory_order_invalid || order == jl_memory_order_notatomic) {
         emit_atomic_error(ctx, order == jl_memory_order_invalid ? "invalid atomic ordering" : "setglobal!: module binding cannot be written non-atomically");
@@ -4020,6 +4023,8 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     std::string name;
                     StringRef protoname;
                     bool need_to_emit = true;
+                    // TODO: We should check if the code is available externally
+                    //       and then emit a trampoline.
                     if (ctx.use_cache) {
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
@@ -4686,7 +4691,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
     }
     if (bp != NULL) {
-        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
+        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Release);
         // Global variable. Does not need debug info because the debugger knows about
         // its memory location.
     }
@@ -6785,7 +6790,7 @@ static jl_llvm_functions_t
         }();
 
         std::string wrapName;
-        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_" << globalUniqueGeneratedNames++;
+        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_"  << globalUniqueGeneratedNames++;
         declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
@@ -8260,6 +8265,10 @@ void jl_compile_workqueue(
         StringRef preal_decl = "";
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+        // TODO: available_extern
+        // We need to emit a trampoline that loads the target address in an extern_module from a GV
+        // Right now we will unecessarily emit a function we have already compiled in a native module
+        // again in a calling module.
         if (params.cache && invoke != NULL) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (invoke == jl_fptr_args_addr) {

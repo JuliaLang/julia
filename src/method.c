@@ -911,7 +911,7 @@ static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL
             if (mt != NULL)
                 return mt;
         }
-        if (jl_is_tuple_type(a)) {
+        else if (jl_is_tuple_type(a)) {
             if (jl_nparams(a) >= n)
                 return nth_methtable(jl_tparam(a, n - 1), 0);
         }
@@ -1188,7 +1188,7 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     uint64_t modid = 0;
     if (mod) {
         assert(jl_is_module(mod));
-        modid = mod->build_id;
+        modid = mod->build_id.lo;
     }
     assert(jl_is_method(m));
     prepare_method_for_roots(m, modid);

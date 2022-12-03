@@ -149,7 +149,7 @@ function size(A::SymTridiagonal, d::Integer)
 end
 
 similar(S::SymTridiagonal, ::Type{T}) where {T} = SymTridiagonal(similar(S.dv, T), similar(S.ev, T))
-similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(S::SymTridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(S.dv, T, dims)
 
 copyto!(dest::SymTridiagonal, src::SymTridiagonal) =
     (copyto!(dest.dv, src.dv); copyto!(dest.ev, _evview(src)); dest)
@@ -214,56 +214,6 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 \(B::Number, A::SymTridiagonal) = SymTridiagonal(B\A.dv, B\A.ev)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (_evview(A)==_evview(B))
-
-@inline mul!(A::AbstractVector, B::SymTridiagonal, C::AbstractVector,
-             alpha::Number, beta::Number) =
-    _mul!(A, B, C, MulAddMul(alpha, beta))
-@inline mul!(A::AbstractMatrix, B::SymTridiagonal, C::AbstractVecOrMat,
-             alpha::Number, beta::Number) =
-    _mul!(A, B, C, MulAddMul(alpha, beta))
-# disambiguation
-@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Transpose{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
-@inline mul!(C::AbstractMatrix, A::SymTridiagonal, B::Adjoint{<:Any,<:AbstractVecOrMat},
-             alpha::Number, beta::Number) =
-    _mul!(C, A, B, MulAddMul(alpha, beta))
-
-@inline function _mul!(C::AbstractVecOrMat, S::SymTridiagonal, B::AbstractVecOrMat,
-                          _add::MulAddMul)
-    m, n = size(B, 1), size(B, 2)
-    if !(m == size(S, 1) == size(C, 1))
-        throw(DimensionMismatch("A has first dimension $(size(S,1)), B has $(size(B,1)), C has $(size(C,1)) but all must match"))
-    end
-    if n != size(C, 2)
-        throw(DimensionMismatch("second dimension of B, $n, doesn't match second dimension of C, $(size(C,2))"))
-    end
-
-    if m == 0
-        return C
-    elseif iszero(_add.alpha)
-        return _rmul_or_fill!(C, _add.beta)
-    end
-
-    α = S.dv
-    β = S.ev
-    @inbounds begin
-        for j = 1:n
-            x₊ = B[1, j]
-            x₀ = zero(x₊)
-            # If m == 1 then β[1] is out of bounds
-            β₀ = m > 1 ? zero(β[1]) : zero(eltype(β))
-            for i = 1:m - 1
-                x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
-                β₋, β₀ = β₀, β[i]
-                _modify!(_add, β₋*x₋ + α[i]*x₀ + β₀*x₊, C, (i, j))
-            end
-            _modify!(_add, β₀*x₀ + α[m]*x₊, C, (m, j))
-        end
-    end
-
-    return C
-end
 
 function dot(x::AbstractVector, S::SymTridiagonal, y::AbstractVector)
     require_one_based_indexing(x, y)
@@ -605,7 +555,7 @@ Matrix(M::Tridiagonal{T}) where {T} = Matrix{promote_type(T, typeof(zero(T)))}(M
 Array(M::Tridiagonal) = Matrix(M)
 
 similar(M::Tridiagonal, ::Type{T}) where {T} = Tridiagonal(similar(M.dl, T), similar(M.d, T), similar(M.du, T))
-similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(M::Tridiagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(M.d, T, dims)
 
 # Operations on Tridiagonal matrices
 copyto!(dest::Tridiagonal, src::Tridiagonal) = (copyto!(dest.dl, src.dl); copyto!(dest.d, src.d); copyto!(dest.du, src.du); dest)
