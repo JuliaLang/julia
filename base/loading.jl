@@ -1768,6 +1768,7 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
         flags |= JLOptions().debug_level & 3
         flags |= (JLOptions().check_bounds & 1) << 2
         flags |= (JLOptions().use_pkgimage_native_code & 1) << 3
+        crc = _crc32c(flags, crc)
         # NOTES:
         # In contrast to check-bounds, inline has no "observable effect"
         # TODO:
@@ -1795,8 +1796,6 @@ function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout:
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)
-
-
 
 function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, internal_stdout::IO = stdout,
                       keep_loaded_modules::Bool = true)
@@ -1849,11 +1848,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # we don't actually know what the list of compile-time preferences are without compiling)
             prefs_hash = preferences_hash(tmppath)
             cachefile = compilecache_path(pkg, prefs_hash)
-            if cache_objects
-                ocachefile = ocachefile_from_cachefile(cachefile)
-            else
-                ocachefile = nothing
-            end
+            ocachefile = cache_objects ? ocachefile_from_cachefile(cachefile) : nothing
 
             # append checksum for so to the end of the .ji file:
             crc_so = UInt32(0)
@@ -2303,7 +2298,7 @@ end
                 return true
             end
             if !isfile(ocachefile)
-                @debug "Rejection cache file $cachefile for $modkey since pkgimage $ocachefile was expected to exist"
+                @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
                 return true
             end
         else

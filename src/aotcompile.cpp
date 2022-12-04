@@ -377,7 +377,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
                                                 F->getName());
 
 
-        // Need to insert load instruction... can't RAUW
+        // Need to insert load instruction, thus we can't use replace all uses with
         for (Value *Use: F->users()) {
             if (auto CI = dyn_cast<CallInst>(Use)) {
                 auto Callee = new LoadInst(T_funcp, GV, "", false, Align(1), CI); // TODO correct Align?
@@ -682,7 +682,7 @@ void jl_dump_native_impl(void *native_code,
 
         postopt.run(M, empty.MAM);
 
-        // Snoop on multiversioning
+        // Get target by snooping on multiversioning
         GlobalVariable *target_ids = M.getNamedGlobal("jl_dispatch_target_ids");
         if (s && target_ids) {
             if(auto targets = dyn_cast<ConstantDataArray>(target_ids->getInitializer())) {

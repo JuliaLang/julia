@@ -84,7 +84,6 @@ function lld(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
     return Cmd(Cmd([lld_path[]]); env)
 end
 
-import Base.Libc: Libdl
 function ld()
     default_args = ``
     @static if Sys.iswindows()
