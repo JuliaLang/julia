@@ -71,9 +71,9 @@ function __init__()
     PATH[] = dirname(lld_path[])
     if Sys.iswindows()
         # On windows, the dynamic libraries (.dll) are in Sys.BINDIR ("usr\\bin")
-        append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), Sys.BINDIR])
+        append!(LIBPATH_list, [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), Sys.BINDIR])
     else
-        append!(LIBPATH_list, [joinpath(Sys.BINDIR, Base.LIBDIR, "julia"), joinpath(Sys.BINDIR, Base.LIBDIR)])
+        append!(LIBPATH_list, [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), abspath(Sys.BINDIR, Base.LIBDIR)])
     end
     LIBPATH[] = join(LIBPATH_list, pathsep)
     return
@@ -136,14 +136,7 @@ function link_image_cmd(path, out)
     SHLIBDIR = "-L$(shlibdir())"
     LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") : ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
-        if Sys.ARCH == :x86_64
-            libgcc_s = "-lgcc_s_seh-1"
-        else
-            libgcc_s = "-lgcc_s_sjlj-1"
-        end
-
-        LIBS = (LIBS..., "-lopenlibm", "-lssp-0") # Are we okay with system libm?
-        LIBS = (LIBS..., libgcc_s, "-lgcc", "-lmsvcrt")
+        LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
     end
 
     V = VERBOSE[] ? "--verbose" : ""
