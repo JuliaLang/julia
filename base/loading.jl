@@ -1765,9 +1765,9 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         flags = UInt8(0)
-        flags |= JLOptions().debug_level & 3
-        flags |= (JLOptions().check_bounds & 1) << 2
-        flags |= (JLOptions().use_pkgimage_native_code & 1) << 3
+        flags |= (JLOptions().debug_level & 3) % UInt8
+        flags |= ((JLOptions().check_bounds & 1) << 2) % UInt8
+        flags |= ((JLOptions().use_pkgimage_native_code & 1) << 3) % UInt8
         crc = _crc32c(flags, crc)
         # NOTES:
         # In contrast to check-bounds, inline has no "observable effect"
