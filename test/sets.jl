@@ -437,6 +437,10 @@ end
                    (true, 1:2:3, 2:3:5),
                    (true, 1:4:5, 2:1:4),
                    (false, 4:12:124, 1:1:8),
+                   # potential overflow
+                   (false, 0x1:0x3:0x4, 0x4:0x3:0x4),
+                   (true, 0x3:0x3:0x6, 0x4:0x3:0x4),
+                   (false, typemax(Int8):3:typemax(Int8), typemin(Int8):3:typemax(Int8)),
                    # Chars
                    (true, 'a':'l', 'o':'p'), # not overlapping
                    (false, 'a':'l', 'h':'p'), # partial overlap
