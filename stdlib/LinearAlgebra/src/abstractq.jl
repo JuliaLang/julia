@@ -55,23 +55,27 @@ copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
 copy(Q::AbstractQ) = copymutable(Q)
 
 # getindex
-getindex(Q::AbstractQ, inds...) = copymutable(Q)[inds...]
-getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
-function getindex(Q::AbstractQ, ::Colon, J::AbstractVector{<:Integer})
-    checkbounds(Q, :, J)
+@inline function getindex(Q::AbstractQ, inds...)
+    @boundscheck Base.checkbounds_indices(Bool, axes(Q), inds) || Base.throw_boundserror(Q, inds)
+    return _getindex(Q, inds...)
+end
+@inline getindex(Q::AbstractQ, ::Colon) = copymutable(Q)[:]
+@inline getindex(Q::AbstractQ, ::Colon, ::Colon) = copy(Q)
+
+@inline _getindex(Q::AbstractQ, inds...) = @inbounds copymutable(Q)[inds...]
+@inline function _getindex(Q::AbstractQ, ::Colon, J::AbstractVector{<:Integer})
     Y = zeros(eltype(Q), size(Q, 2), length(J))
-    for (i,j) in enumerate(J)
+    @inbounds for (i,j) in enumerate(J)
         Y[j,i] = oneunit(eltype(Q))
     end
     lmul!(Q, Y)
 end
-function getindex(Q::AbstractQ, ::Colon, j::Int)
-    checkbounds(Q, :, j)
+@inline function _getindex(Q::AbstractQ, ::Colon, j::Int)
     y = zeros(eltype(Q), size(Q, 2))
     y[j] = oneunit(eltype(Q))
     lmul!(Q, y)
 end
-getindex(Q::AbstractQ, i::Int, j::Int) = Q[:,j][i]
+@inline _getindex(Q::AbstractQ, i::Int, j::Int) = @inbounds Q[:,j][i]
 
 # needed because AbstractQ does not subtype AbstractMatrix
 qr(Q::AbstractQ{T}, arg...; kwargs...) where {T} = qr!(Matrix{_qreltype(T)}(Q), arg...; kwargs...)
