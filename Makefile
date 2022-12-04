@@ -269,10 +269,10 @@ endif
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_bindir)/libgcc_s.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_bindir)/libgcc.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_bindir)/libmsvcrt.dll.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_bindir)/libssp.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libgcc.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libmsvcrt.a $(DESTDIR)$(libdir)/
+	-$(INSTALL_M) $(build_libdir)/libssp.a $(DESTDIR)$(libdir)/
 else
 
 # Copy over .dSYM directories directly for Darwin
