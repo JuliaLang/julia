@@ -4,7 +4,9 @@
 #define JULIA_H
 
 #ifdef LIBRARY_EXPORTS
-#include "jl_internal_funcs.inc"
+// Generated file, needs to be searched in include paths so that the builddir
+// retains priority
+#include <jl_internal_funcs.inc>
 #undef jl_setjmp
 #undef jl_longjmp
 #undef jl_egal
@@ -2190,7 +2192,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
 // Version information
-#include "julia_version.h"
+#include <julia_version.h> // Generated file
 
 JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);
