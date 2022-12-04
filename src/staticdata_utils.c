@@ -636,7 +636,7 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 static const int JI_FORMAT_VERSION = 12;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
-static void write_header(ios_t *s, uint8_t pkgimage)
+static int64_t write_header(ios_t *s, uint8_t pkgimage)
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -649,7 +649,10 @@ static void write_header(ios_t *s, uint8_t pkgimage)
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
     write_uint8(s, pkgimage);
+    int64_t checksumpos = ios_pos(s);
     write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
+    write_uint64(s, 0); // eventually will hold dataendpos
+    return checksumpos;
 }
 
 // serialize information about the result of deserializing this file
@@ -1263,9 +1266,10 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage)
+JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos)
 {
     uint16_t bom;
+    uint64_t checksum = 0;
     if (readstr_verify(s, JI_MAGIC, 0) &&
         read_uint16(s) == JI_FORMAT_VERSION &&
         ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
@@ -1277,7 +1281,8 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage)
         readstr_verify(s, jl_git_commit(), 1))
     {
         *pkgimage = read_uint8(s);
-        return read_uint64(s);
+        checksum = read_uint64(s);
+        *dataendpos = (int64_t)read_uint64(s);
     }
-    return 0;
+    return checksum;
 }

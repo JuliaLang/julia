@@ -2568,9 +2568,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     assert(jl_precompile_toplevel_module == NULL);
     jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
 
-    write_header(f, 0);
-    // last word of the header is the checksumpos
-    *checksumpos = ios_pos(f) - sizeof(uint64_t);
+    *checksumpos = write_header(f, 0);
     // write description of contents (name, uuid, buildid)
     write_worklist_for_header(f, worklist);
     // Determine unique (module, abspath, mtime) dependencies for the files defining modules in the worklist
@@ -2615,13 +2613,9 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
     if (worklist) {
         jl_write_header_for_incremental(f, worklist, &mod_array, udeps, srctextpos, &checksumpos);
         if (emit_split) {
-            write_header(ff, 1);
-            // last word of the header is the checksumpos
-            checksumpos_ff = ios_pos(ff) - sizeof(uint64_t);
-            write_uint64(ff, 0); // Reserve space for dataendpos
+            checksumpos_ff = write_header(ff, 1);
             write_mod_list(ff, mod_array);
         } else {
-            write_uint64(f, 0); // Reserve space for dataendpos
             checksumpos_ff = checksumpos;
         }
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
@@ -3240,7 +3234,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos)
 {
     uint8_t pkgimage = 0;
-    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f, &pkgimage)) || (*checksum >> 32 != 0xfafbfcfd)) {
+    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos)) || (*checksum >> 32 != 0xfafbfcfd)) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
@@ -3253,7 +3247,6 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
         size_t deplen = read_uint64(f);
         ios_skip(f, deplen - sizeof(uint64_t));
     }
-    *dataendpos = read_uint64(f);
 
     // verify that the system state is valid
     return read_verify_mod_list(f, depmods);
