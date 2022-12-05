@@ -566,9 +566,9 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && (o isa Perm{DirectOrdering} || o isa PermUnstable{DirectOrdering}) &&
+    elseif eltype(v) <: Integer && (o isa Perm{DirectOrdering} || o isa PermFast{DirectOrdering}) &&
             nonmissingtype(eltype(o.data)) != eltype(o.data)
-        PermT = o isa Perm{DirectOrdering} ? Perm : PermUnstable
+        PermT = o isa Perm{DirectOrdering} ? Perm : PermFast
         lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
         _sort!(v, a.next, PermT(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
@@ -609,11 +609,11 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
         else
             _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi, scratch))
         end
-    elseif eltype(v) <: Integer && (o isa Perm || o isa PermUnstable) && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
+    elseif eltype(v) <: Integer && (o isa Perm || o isa PermFast) && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
         lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
         j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
-        PermT = o isa Perm{DirectOrdering} ? Perm : PermUnstable
+        PermT = o isa Perm{DirectOrdering} ? Perm : PermFast
         scratch = _sort!(v, a.next, PermT(Reverse, ip), (;kw..., lo, hi=j))
         if scratch === nothing # Union split
             _sort!(v, a.next, PermT(Forward, ip), (;kw..., lo=j+1, hi, scratch))
@@ -1562,7 +1562,7 @@ function sortperm(A::AbstractArray;
     end
     ix = copymutable(LinearIndices(A))
     if alg == DEFAULT_STABLE
-        sort!(ix; alg, order = PermUnstable(ordr, vec(A)), scratch, dims...)
+        sort!(ix; alg, order = PermFast(ordr, vec(A)), scratch, dims...)
     else
         sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
     end
@@ -1625,7 +1625,7 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     if alg == DEFAULT_STABLE
         sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
     else
-        sort!(ix; alg, order = PermUnstable(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+        sort!(ix; alg, order = PermFast(ord(lt, by, rev, order), vec(A)), scratch, dims...)
     end
 end
 

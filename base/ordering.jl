@@ -13,7 +13,7 @@ import .Base:
 
 export # not exported by Base
     Ordering, Forward, Reverse,
-    By, Lt, Perm, PermUnstable,
+    By, Lt, Perm, PermFast,
     ReverseOrdering, ForwardOrdering,
     DirectOrdering,
     lt, ord, ordtype
@@ -107,20 +107,20 @@ struct Perm{O<:Ordering,V<:AbstractVector} <: Ordering
 end
 
 """
-    PermUnstable(order::Ordering, data::AbstractVector)
+    PermFast(order::Ordering, data::AbstractVector)
 `Ordering` on the indices of `data` where `i` is less than `j` if `data[i]` is
 less than `data[j]` according to `order`. In the case that `data[i]` and
 `data[j]` are equal, the ordering is undefined. Thus, it is designed to be
 faster than `Perm` when a stable sorting algorithm is used.
 """
-struct PermUnstable{O<:Ordering,V<:AbstractVector} <: Ordering
+struct PermFast{O<:Ordering,V<:AbstractVector} <: Ordering
     order::O
     data::V
 end
 
 ReverseOrdering(by::By) = By(by.by, ReverseOrdering(by.order))
 ReverseOrdering(perm::Perm) = Perm(ReverseOrdering(perm.order), perm.data)
-ReverseOrdering(perm::PermUnstable) = PermUnstable(ReverseOrdering(perm.order), perm.data)
+ReverseOrdering(perm::PermFast) = PermFast(ReverseOrdering(perm.order), perm.data)
 
 """
     lt(o::Ordering, a, b)
@@ -138,7 +138,7 @@ lt(o::Lt,                    a, b) = o.lt(a,b)
     (lt(p.order, da, db)::Bool) | (!(lt(p.order, db, da)::Bool) & (a < b))
 end
 
-@propagate_inbounds function lt(p::PermUnstable, a::Integer, b::Integer)
+@propagate_inbounds function lt(p::PermFast, a::Integer, b::Integer)
     da = p.data[a]
     db = p.data[b]
     lt(p.order, da, db)::Bool
