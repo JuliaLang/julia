@@ -225,66 +225,21 @@ function (-)(A::SymTridiagonal, B::Bidiagonal)
     Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)-B.ev) : (_evview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
 end
 
-# fixing uniform scaling problems from #28994
-# {<:Number} is required due to the test case from PR #27289 where eltype is a matrix.
-
-function (+)(A::Tridiagonal{<:Number}, B::UniformScaling)
-    newd = A.d .+ B.λ
-    Tridiagonal(typeof(newd)(A.dl), newd, typeof(newd)(A.du))
+function (-)(A::UniformScaling, B::Tridiagonal)
+    d = Ref(A) .- B.d
+    Tridiagonal(convert(typeof(d), -B.dl), d, convert(typeof(d), -B.du))
 end
-
-function (+)(A::SymTridiagonal{<:Number}, B::UniformScaling)
-    newdv = A.dv .+ B.λ
-    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+function (-)(A::UniformScaling, B::SymTridiagonal)
+    dv = Ref(A) .- B.dv
+    SymTridiagonal(dv, convert(typeof(dv), -B.ev))
 end
-
-function (+)(A::Bidiagonal{<:Number}, B::UniformScaling)
-    newdv = A.dv .+ B.λ
-    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+function (-)(A::UniformScaling, B::Bidiagonal)
+    dv = Ref(A) .- B.dv
+    Bidiagonal(dv, convert(typeof(dv), -B.ev), B.uplo)
 end
-
-function (+)(A::Diagonal{<:Number}, B::UniformScaling)
-    Diagonal(A.diag .+ B.λ)
+function (-)(A::UniformScaling, B::Diagonal)
+    Diagonal(Ref(A) .- B.diag)
 end
-
-function (+)(A::UniformScaling, B::Tridiagonal{<:Number})
-    newd = A.λ .+ B.d
-    Tridiagonal(typeof(newd)(B.dl), newd, typeof(newd)(B.du))
-end
-
-function (+)(A::UniformScaling, B::SymTridiagonal{<:Number})
-    newdv = A.λ .+ B.dv
-    SymTridiagonal(newdv, typeof(newdv)(B.ev))
-end
-
-function (+)(A::UniformScaling, B::Bidiagonal{<:Number})
-    newdv = A.λ .+ B.dv
-    Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
-end
-
-function (+)(A::UniformScaling, B::Diagonal{<:Number})
-    Diagonal(A.λ .+ B.diag)
-end
-
-function (-)(A::UniformScaling, B::Tridiagonal{<:Number})
-    newd = A.λ .- B.d
-    Tridiagonal(typeof(newd)(-B.dl), newd, typeof(newd)(-B.du))
-end
-
-function (-)(A::UniformScaling, B::SymTridiagonal{<:Number})
-    newdv = A.λ .- B.dv
-    SymTridiagonal(newdv, typeof(newdv)(-B.ev))
-end
-
-function (-)(A::UniformScaling, B::Bidiagonal{<:Number})
-    newdv = A.λ .- B.dv
-    Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
-end
-
-function (-)(A::UniformScaling, B::Diagonal{<:Number})
-    Diagonal(A.λ .- B.diag)
-end
-
 lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
 lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
 lmul!(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = lmul!(Q, full!(B))
