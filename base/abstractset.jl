@@ -491,8 +491,7 @@ _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T 
 
 function _overlapping_range_isdisjoint(a::AbstractRange{T}, b::AbstractRange{T}) where T<:Integer
     if abs(step(a)) == abs(step(b))
-        m1, m2 = minmax(minimum.((a,b))...)
-        return mod(m2 - m1, step(a)) != 0
+        return mod(minimum(a), step(a)) != mod(minimum(b), step(a))
     else
         return invoke(isdisjoint, Tuple{Any,Any}, a, b)
     end
