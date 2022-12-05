@@ -15,6 +15,30 @@ function runtests(name, path, isolate=true; seed=nothing)
             m = Main
         end
         @eval(m, using Test, Random)
+        @eval(m, function sandbox(current_file)
+                    # Restarts the current file in an isolated process
+                    # with a fresh JULIA_DEPOT_PATH and JULIA_LOAD_PATH
+                    # We need this since on Windows we can't self-remove cachefiles.
+                    LOAD_PATH = copy(Base.LOAD_PATH)
+                    DEPOT_PATH = copy(Base.DEPOT_PATH)
+                    load_path = mktempdir()
+                    depot_path = mktempdir()
+                    pushfirst!(LOAD_PATH, load_path)
+                    pushfirst!(DEPOT_PATH, depot_path)
+
+                    try
+                        env = copy(ENV)
+                        pathsep = Sys.iswindows() ? ';' : ':'
+                        env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep)
+                        env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
+                        env["JULIA_TEST_SANDBOXED"] = "true"
+                        cmd = Cmd(`$(Base.julia_cmd()) $current_file`; env)
+                        @test success(run(cmd))
+                    finally
+                        rm(load_path, recursive=true, force=true)
+                        rm(depot_path, recursive=true, force=true)
+                    end
+                end)
         let id = myid()
             wait(@spawnat 1 print_testworker_started(name, id))
         end

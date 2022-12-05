@@ -2,6 +2,7 @@
 
 # Cassette
 # ========
+using Test
 
 module MiniCassette
     # A minimal demonstration of the cassette mechanism. Doesn't support all the
@@ -166,22 +167,41 @@ methods = Base._methods_by_ftype(Tuple{typeof(sin), Float64}, OverlayModule.mt, 
 methods = Base._methods_by_ftype(Tuple{typeof(sin), Int}, OverlayModule.mt, 1, Base.get_world_counter())
 @test isempty(methods)
 
-# precompilation
-load_path = mktempdir()
-depot_path = mktempdir()
-try
-    pushfirst!(LOAD_PATH, load_path)
-    pushfirst!(DEPOT_PATH, depot_path)
-    env = copy(ENV)
-    pathsep = Sys.iswindows() ? ';' : ':'
-    env["JULIA_LOAD_PATH"] = join(LOAD_PATH, pathsep)
-    env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
-    path = joinpath(@__DIR__, "contextual_sandboxed.jl")
-    cmd = Cmd(`$(Base.julia_cmd()) $path`; env)
-    @test success(run(cmd))
-finally
-    rm(load_path, recursive=true, force=true)
-    rm(depot_path, recursive=true, force=true)
-    filter!((≠)(load_path), LOAD_PATH)
-    filter!((≠)(depot_path), DEPOT_PATH)
+if !haskey(ENV, "JULIA_TEST_SANDBOXED")
+    sandbox(@__FILE__)
+else
+    load_path = first(Base.LOAD_PATH)
+    write(joinpath(load_path, "Foo.jl"),
+        """
+        module Foo
+        Base.Experimental.@MethodTable(mt)
+        Base.Experimental.@overlay mt sin(x::Int) = 1
+        end
+        """)
+
+    # precompiling Foo serializes the overlay method through the `mt` binding in the module
+    Foo = Base.require(Main, :Foo)
+    @test length(Foo.mt) == 1
+
+    write(joinpath(load_path, "Bar.jl"),
+        """
+        module Bar
+        Base.Experimental.@MethodTable(mt)
+        end
+        """)
+
+    write(joinpath(load_path, "Baz.jl"),
+        """
+        module Baz
+        using Bar
+        Base.Experimental.@overlay Bar.mt sin(x::Int) = 1
+        end
+        """)
+
+    # when referring an method table in another module,
+    # the overlay method needs to be discovered explicitly
+    Bar = Base.require(Main, :Bar)
+    @test length(Bar.mt) == 0
+    Baz = Base.require(Main, :Baz)
+    @test length(Bar.mt) == 1
 end
