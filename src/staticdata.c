@@ -2643,6 +2643,7 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         uint32_t checksum = jl_crc32c(0, &ff->buf[datastartpos], dataendpos - datastartpos);
         ios_seek(ff, checksumpos_ff);
         write_uint64(ff, checksum | ((uint64_t)0xfafbfcfd << 32));
+        write_uint64(ff, datastartpos);
         write_uint64(ff, dataendpos);
         ios_seek(ff, dataendpos);
 
@@ -3231,21 +3232,22 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     jl_gc_enable(en);
 }
 
-static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos)
+static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_t *checksum, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint8_t pkgimage = 0;
-    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos)) || (*checksum >> 32 != 0xfafbfcfd)) {
+    if (ios_eof(f) || 0 == (*checksum = jl_read_verify_header(f, &pkgimage, dataendpos, datastartpos)) || (*checksum >> 32 != 0xfafbfcfd)) {
         return jl_get_exceptionf(jl_errorexception_type,
                 "Precompile file header verification checks failed.");
     }
-    if (pkgimage == 0) {
-        // skip past the modlist
+    if (!pkgimage) {
+        // skip past the worklist
         size_t len;
         while ((len = read_int32(f)))
             ios_skip(f, len + 3 * sizeof(uint64_t));
         // skip past the dependency list
         size_t deplen = read_uint64(f);
         ios_skip(f, deplen - sizeof(uint64_t));
+        read_uint64(f); // where is this write coming from?
     }
 
     // verify that the system state is valid
@@ -3257,9 +3259,13 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
 {
     uint64_t checksum = 0;
     int64_t dataendpos = 0;
-    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos);
+    int64_t datastartpos = 0;
+    jl_value_t *verify_fail = jl_validate_cache_file(f, depmods, &checksum, &dataendpos, &datastartpos);
+
     if (verify_fail)
         return verify_fail;
+
+    assert(datastartpos > 0 && datastartpos < dataendpos);
 
     jl_value_t *restored = NULL;
     jl_array_t *init_order = NULL, *extext_methods = NULL, *new_specializations = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
@@ -3271,11 +3277,9 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
         JL_SIGATOMIC_BEGIN();
-        size_t len_begin = LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT);
-        assert(len_begin > 0 && len_begin < dataendpos);
-        size_t len = dataendpos - len_begin;
+        size_t len = dataendpos - datastartpos;
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
-        ios_seek(f, len_begin);
+        ios_seek(f, datastartpos);
         if (ios_readall(f, sysimg, len) != len || jl_crc32c(0, sysimg, len) != (uint32_t)checksum) {
             restored = jl_get_exceptionf(jl_errorexception_type, "Error reading system image file.");
             JL_SIGATOMIC_END();

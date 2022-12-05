@@ -395,6 +395,7 @@
     XX(jl_queue_work) \
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
+    XX(jl_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \

@@ -632,6 +632,17 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
+JL_DLLEXPORT uint8_t jl_cache_flags(void)
+{
+    uint8_t flags = 0;
+    flags |= jl_options.debug_level & 3;
+    flags |= (jl_options.check_bounds & 1) << 2;
+    flags |= (jl_options.use_pkgimage_native_code & 1) << 3;
+    // NOTES:
+    // In contrast to check-bounds, inline has no "observable effect"
+    return flags;
+}
+
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 12;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
@@ -648,10 +659,12 @@ static int64_t write_header(ios_t *s, uint8_t pkgimage)
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
+    write_uint8(s, jl_cache_flags());
     write_uint8(s, pkgimage);
     int64_t checksumpos = ios_pos(s);
     write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
     write_uint64(s, 0); // eventually will hold dataendpos
+    write_uint64(s, 0); // eventually will hold datastartpos
     return checksumpos;
 }
 
@@ -1266,7 +1279,7 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos)
+JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint16_t bom;
     uint64_t checksum = 0;
@@ -1278,10 +1291,12 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t
         readstr_verify(s, JL_BUILD_ARCH, 1) &&
         readstr_verify(s, JULIA_VERSION_STRING, 1) &&
         readstr_verify(s, jl_git_branch(), 1) &&
-        readstr_verify(s, jl_git_commit(), 1))
+        readstr_verify(s, jl_git_commit(), 1) &&
+        read_uint8(s) == jl_cache_flags())
     {
         *pkgimage = read_uint8(s);
         checksum = read_uint64(s);
+        *datastartpos = (int64_t)read_uint64(s);
         *dataendpos = (int64_t)read_uint64(s);
     }
     return checksum;

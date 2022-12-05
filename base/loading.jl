@@ -1764,13 +1764,8 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
         crc = _crc32c(something(Base.active_project(), ""))
         crc = _crc32c(unsafe_string(JLOptions().image_file), crc)
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
-        flags = UInt8(0)
-        flags |= (JLOptions().debug_level & 3) % UInt8
-        flags |= ((JLOptions().check_bounds & 1) << 2) % UInt8
-        flags |= ((JLOptions().use_pkgimage_native_code & 1) << 3) % UInt8
-        crc = _crc32c(flags, crc)
-        # NOTES:
-        # In contrast to check-bounds, inline has no "observable effect"
+        crc = _crc32c(ccall(:jl_cache_flags, UInt8, ()), crc)
+
         # TODO:
         # opt_level/opt_level_min: Choose pkgimage with highest opt_level
 
@@ -1914,8 +1909,7 @@ end
 
 function isvalid_cache_header(f::IOStream)
     ispkgimage = Ref{Bool}()
-    dataendpos = Ref{Int64}()
-    checksum = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid}, Ptr{Bool}, Ptr{Int64}), f.ios, ispkgimage, dataendpos) # returns checksum id or zero
+    checksum = ccall(:jl_read_verify_header, UInt64, (Ptr{Cvoid}, Ptr{Bool}, Ptr{Int64}, Ptr{Int64}), f.ios, ispkgimage, Ref{Int64}(), Ref{Int64}()) # returns checksum id or zero
     @assert !ispkgimage[]
     return checksum
 end
