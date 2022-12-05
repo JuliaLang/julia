@@ -440,7 +440,7 @@ end
                    # potential overflow
                    (false, 0x1:0x3:0x4, 0x4:0x3:0x4),
                    (true, 0x3:0x3:0x6, 0x4:0x3:0x4),
-                   (false, typemax(Int8):3:typemax(Int8), typemin(Int8):3:typemax(Int8)),
+                   (false, typemax(Int8):Int8(3):typemax(Int8), typemin(Int8):Int8(3):typemax(Int8)),
                    # Chars
                    (true, 'a':'l', 'o':'p'), # not overlapping
                    (false, 'a':'l', 'h':'p'), # partial overlap
