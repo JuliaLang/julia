@@ -612,8 +612,7 @@ int main()
     jl_gc_set_cb_root_scanner(abort_with_error, 1);
     jl_gc_set_cb_root_scanner(abort_with_error, 0);
     // Create module to store types in.
-    module = jl_new_module(jl_symbol("TestGCExt"));
-    module->parent = jl_main_module;
+    module = jl_new_module(jl_symbol("TestGCExt"), jl_main_module);
     jl_set_const(jl_main_module, jl_symbol("TestGCExt"), (jl_value_t *)module);
     // Define Julia types for our stack implementation.
     datatype_stack = jl_new_foreign_type(
