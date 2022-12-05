@@ -462,10 +462,18 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     exename = params[:exename]
     exeflags = params[:exeflags]
     bind_to = manager.restrict ? `127.0.0.1` : `$(LPROC.bind_addr)`
+    env = Dict{String,String}(params[:env])
+
+    # If we haven't explicitly asked for threaded BLAS, prevent OpenBLAS from starting
+    # up with multiple threads, thereby sucking up a bunch of wasted memory on Windows.
+    if !params[:enable_threaded_blas] &&
+       get(env, "OPENBLAS_NUM_THREADS", nothing) === nothing
+        env["OPENBLAS_NUM_THREADS"] = "1"
+    end
 
     for i in 1:manager.np
         cmd = `$(julia_cmd(exename)) $exeflags --bind-to $bind_to --worker`
-        io = open(detach(setenv(cmd, dir=dir)), "r+")
+        io = open(detach(setenv(addenv(cmd, env), dir=dir)), "r+")
         write_cookie(io)
 
         wconfig = WorkerConfig()
