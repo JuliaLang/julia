@@ -1498,13 +1498,15 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type);
-    method_table::Union{Nothing,Core.MethodTable}=nothing,
+    method_table::Union{Nothing,Core.MethodTable,Core.Compiler.MethodTableView}=nothing,
     world::UInt=get_world_counter(),
     raise::Bool=true)
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
-    else
+    elseif method_table isa Core.MethodTable
         table = Core.Compiler.OverlayMethodTable(world, method_table)
+    else
+        table = method_table
     end
     match, = Core.Compiler.findsup(tt, table)
     if match === nothing
