@@ -566,9 +566,11 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm{DirectOrdering} && nonmissingtype(eltype(o.data)) != eltype(o.data)
+    elseif eltype(v) <: Integer && (o isa Perm{DirectOrdering} || o isa PermUnstable{DirectOrdering}) &&
+            nonmissingtype(eltype(o.data)) != eltype(o.data)
+        PermT = o isa Perm{DirectOrdering} ? Perm : PermUnstable
         lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
-        _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
+        _sort!(v, a.next, PermT(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
         _sort!(v, a.next, o, kw)
     end
@@ -607,15 +609,16 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
         else
             _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi, scratch))
         end
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
+    elseif eltype(v) <: Integer && (o isa Perm || o isa PermUnstable) && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
         lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
         j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
-        scratch = _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
+        PermT = o isa Perm{DirectOrdering} ? Perm : PermUnstable
+        scratch = _sort!(v, a.next, PermT(Reverse, ip), (;kw..., lo, hi=j))
         if scratch === nothing # Union split
-            _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
+            _sort!(v, a.next, PermT(Forward, ip), (;kw..., lo=j+1, hi, scratch))
         else
-            _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
+            _sort!(v, a.next, PermT(Forward, ip), (;kw..., lo=j+1, hi, scratch))
         end
     else
         _sort!(v, a.next, o, kw)
@@ -1558,7 +1561,11 @@ function sortperm(A::AbstractArray;
         end
     end
     ix = copymutable(LinearIndices(A))
-    sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
+    if alg == DEFAULT_STABLE
+        sort!(ix; alg, order = PermUnstable(ordr, vec(A)), scratch, dims...)
+    else
+        sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
+    end
 end
 
 
@@ -1615,7 +1622,11 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     if !initialized
         ix .= LinearIndices(A)
     end
-    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+    if alg == DEFAULT_STABLE
+        sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+    else
+        sort!(ix; alg, order = PermUnstable(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+    end
 end
 
 # sortperm for vectors of few unique integers
