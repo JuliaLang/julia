@@ -570,7 +570,7 @@ the index of the last element which for which `f` returns `false`.
 
 Preserves the order of the elements.
 """
-function send_to_end_stable!(f::F, v::AbstractVector; lo=firstindex(v), hi=lastindex(v)) where F <: Function 
+function send_to_end_stable!(f::F, v::AbstractVector; lo=firstindex(v), hi=lastindex(v)) where F <: Function
     tmp=copy(v)
     offset = 0
     @inbounds begin
@@ -594,7 +594,7 @@ function send_to_end_stable!(f::F, v::AbstractVector; lo=firstindex(v), hi=lasti
 end
 
 @inline send_to_end_stable!(f::F, v::AbstractVector, ::ForwardOrdering; lo, hi) where F <: Function = (lo, send_to_end_stable!(f, v; lo, hi))
-@inline send_to_end_stable!(f::F, v::AbstractVector, ::ReverseOrdering; lo, hi) where F <: Function = (hi-send_to_end_stable!(f, view(v, hi:-1:lo))+1, hi) 
+@inline send_to_end_stable!(f::F, v::AbstractVector, ::ReverseOrdering; lo, hi) where F <: Function = (hi-send_to_end_stable!(f, view(v, hi:-1:lo))+1, hi)
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     @getkw lo hi
