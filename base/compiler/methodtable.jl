@@ -1,7 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-abstract type MethodTableView; end
-
 struct MethodLookupResult
     # Really Vector{Core.MethodMatch}, but it's easier to represent this as
     # and work with Vector{Any} on the C side.

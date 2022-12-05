@@ -31,6 +31,9 @@ macro noinline() Expr(:meta, :noinline) end
 convert(::Type{Any}, Core.@nospecialize x) = x
 convert(::Type{T}, x::T) where {T} = x
 
+# mostly used by compiler/methodtable.jl, but also by reflection.jl
+abstract type MethodTableView end
+
 # essential files and libraries
 include("essentials.jl")
 include("ctypes.jl")
