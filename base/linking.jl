@@ -36,12 +36,10 @@ function adjust_ENV!(env::Dict, PATH::String, LIBPATH::String, adjust_PATH::Bool
         end
     end
     if adjust_PATH && (LIBPATH_env != "PATH" || !adjust_LIBPATH)
-        if adjust_PATH
-            if !isempty(get(env, "PATH", ""))
-                env["PATH"] = string(PATH, pathsep, env["PATH"])
-            else
-                env["PATH"] = PATH
-            end
+        if !isempty(get(env, "PATH", ""))
+            env["PATH"] = string(PATH, pathsep, env["PATH"])
+        else
+            env["PATH"] = PATH
         end
     end
     return env
