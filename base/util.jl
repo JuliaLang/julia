@@ -133,7 +133,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
     printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -148,10 +148,15 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 
 !!! compat "Julia 1.5"
     The flags `--color` and `--startup-file` were added in Julia 1.5.
+
+!!! compat "Julia 1.9"
+    The keyword argument `cpu_target` was added.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
     opts = JLOptions()
-    cpu_target = unsafe_string(opts.cpu_target)
+    if cpu_target === nothing
+        cpu_target = unsafe_string(opts.cpu_target)
+    end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
     let compile = if opts.compile_enabled == 0

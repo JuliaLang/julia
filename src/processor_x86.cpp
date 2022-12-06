@@ -1019,16 +1019,9 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
-JL_DLLEXPORT int8_t jl_is_pkgimage_viable(char *data)
+JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
 {
-    int8_t success = 0;
-    JL_TRY {
-        pkgimg_init_cb(data);
-        success = 1;
-    }
-    JL_CATCH {
-    }
-    return success;
+    pkgimg_init_cb(data);
 }
 
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)

@@ -1724,15 +1724,17 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     end
 
     if output_o !== nothing
+        cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
         opts = `--output-o $(output_o) --output-ji $(output) --output-incremental=yes`
     else
+        cpu_target = nothing
         opts = `--output-ji $(output) --output-incremental=yes`
     end
 
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
     trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
-    io = open(pipeline(addenv(`$(julia_cmd()::Cmd) -O0 $(opts)
+    io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) -O0 $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
                               $trace
@@ -2268,6 +2270,15 @@ get_compiletime_preferences(uuid::UUID) = collect(get(Vector{String}, COMPILETIM
 get_compiletime_preferences(m::Module) = get_compiletime_preferences(PkgId(m).uuid)
 get_compiletime_preferences(::Nothing) = String[]
 
+function check_clone_targets(clone_targets)
+    try
+        ccall(:jl_check_pkgimage_clones, Cvoid, (Ptr{Cchar},), clone_targets)
+        return true
+    catch
+        return false
+    end
+end
+
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
 @constprop :none function stale_cachefile(modpath::String, cachefile::String; ignore_loaded::Bool = false)
@@ -2293,7 +2304,7 @@ end
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 return true
             end
-            if ccall(:jl_is_pkgimage_viable, Int8, (Ptr{Cchar},), clone_targets) == 0
+            if !check_clone_targets(clone_targets)
                 @debug "Rejecting cache file $cachefile for $modkey since pkgimage can't be loaded on this target"
                 return true
             end
