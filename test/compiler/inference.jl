@@ -946,7 +946,7 @@ end
 
 # issue #21410
 f21410(::V, ::Pair{V,E}) where {V, E} = E
-@test code_typed(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})[1].second ==
+@test only(Base.return_types(f21410, Tuple{Ref, Pair{Ref{T},Ref{T}} where T<:Number})) ==
     Type{E} where E <: (Ref{T} where T<:Number)
 
 # issue #21369
