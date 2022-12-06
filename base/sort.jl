@@ -1667,9 +1667,9 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
         ix .= LinearIndices(A)
     end
     if alg == DEFAULT_STABLE
-        sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
-    else
         sort!(ix; alg, order = PermFast(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+    else
+        sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
     end
 end
 
