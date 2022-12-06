@@ -851,25 +851,10 @@ minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
 _isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
 
-const _minmaxtypes = [(:f64, :Float64, :double), (:f32, :Float32, :float)] #TODO: Add a way to detect native f16
-const _minmaxops = [(:min, :minimum), (:max, :maximum)]
-for op in _minmaxops
-    jlop,llvmop = op
-    for type in _minmaxtypes
-        fntyp, jltyp, llvmtyp = type
-        @eval @inline @assume_effects :total function $(Symbol("llvm_", jlop))(x::$jltyp,y::$jltyp)
-                Base.llvmcall(
-                    ($"""declare $llvmtyp @llvm.$llvmop.$fntyp($llvmtyp,$llvmtyp)
-                        define $llvmtyp @entry($llvmtyp,$llvmtyp) #0 {
-                        2:
-                            %3 = call $llvmtyp @llvm.$llvmop.$fntyp($llvmtyp %0, $llvmtyp %1)
-                            ret $llvmtyp %3
-                        }
-                        attributes #0 = { alwaysinline }
-                        """, "entry"), $jltyp, Tuple{$jltyp,$jltyp}, x,y)
-        end
-    end
-end
+Base.@assume_effects :total @inline llvm_min(x::Float64, y::Float64) = ccall("llvm.minimum.f64", llvmcall, Float64, (Float64, Float64), x, y)
+Base.@assume_effects :total @inline llvm_min(x::Float32, y::Float32) = ccall("llvm.minimum.f32", llvmcall, Float32, (Float32, Float32), x, y)
+Base.@assume_effects :total @inline llvm_max(x::Float64, y::Float64) = ccall("llvm.maximum.f64", llvmcall, Float64, (Float64, Float64), x, y)
+Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("llvm.maximum.f32", llvmcall, Float32, (Float32, Float32), x, y)
 
 const has_native_fminmax = Sys.ARCH === :aarch64
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
