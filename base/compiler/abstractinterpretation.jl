@@ -19,7 +19,7 @@ call_result_unused(si::StmtInfo) = !si.used
 
 function get_max_methods(mod::Module, interp::AbstractInterpreter)
     max_methods = ccall(:jl_get_module_max_methods, Cint, (Any,), mod) % Int
-    max_methods < 0 ? InferenceParams(interp).MAX_METHODS : max_methods
+    max_methods < 0 ? InferenceParams(interp).max_methods : max_methods
 end
 
 function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpreter)
@@ -62,7 +62,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
             # no overlayed calls, try an additional effort now to check if this call
             # isn't overlayed rather than just handling it conservatively
             matches = find_matching_methods(arginfo.argtypes, atype, method_table(interp),
-                InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+                InferenceParams(interp).max_union_splitting, max_methods)
             if !isa(matches, FailedMethodMatch)
                 nonoverlayed = matches.nonoverlayed
             end
@@ -78,7 +78,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
 
     argtypes = arginfo.argtypes
     matches = find_matching_methods(argtypes, atype, method_table(interp),
-        InferenceParams(interp).MAX_UNION_SPLITTING, max_methods)
+        InferenceParams(interp).max_union_splitting, max_methods)
     if isa(matches, FailedMethodMatch)
         add_remark!(interp, sv, matches.reason)
         return CallMeta(Any, Effects(), NoCallInfo())
@@ -122,7 +122,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
         splitunions = false
         # TODO: this used to trigger a bug in inference recursion detection, and is unmaintained now
         # sigtuple = unwrap_unionall(sig)::DataType
-        # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).MAX_UNION_SPLITTING
+        # splitunions = 1 < unionsplitcost(sigtuple.parameters) * napplicable <= InferenceParams(interp).max_union_splitting
         if splitunions
             splitsigs = switchtupleunion(sig)
             for sig_n in splitsigs
@@ -276,9 +276,9 @@ end
 any_ambig(m::UnionSplitMethodMatches) = any(any_ambig, m.info.matches)
 
 function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), method_table::MethodTableView,
-                               union_split::Int, max_methods::Int)
+                               max_union_splitting::Int, max_methods::Int)
     # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
-    if 1 < unionsplitcost(argtypes) <= union_split
+    if 1 < unionsplitcost(argtypes) <= max_union_splitting
         split_argtypes = switchtupleunion(argtypes)
         infos = MethodMatchInfo[]
         applicable = Any[]
@@ -599,7 +599,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         end
 
         # see if the type is actually too big (relative to the caller), and limit it if required
-        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, spec_len)
+        newsig = limit_type_size(sig, comparison, hardlimit ? comparison : sv.linfo.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, spec_len)
 
         if newsig !== sig
             # continue inference, but note that we've limited parameter complexity
@@ -641,7 +641,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
         #     while !(newsig in seen)
         #         push!(seen, newsig)
         #         lsig = length((unwrap_unionall(sig)::DataType).parameters)
-        #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).TUPLE_COMPLEXITY_LIMIT_DEPTH, lsig)
+        #         newsig = limit_type_size(newsig, sig, sv.linfo.specTypes, InferenceParams(interp).tuple_complexity_limit_depth, lsig)
         #         recomputed = ccall(:jl_type_intersection_with_env, Any, (Any, Any), newsig, method.sig)::SimpleVector
         #         newsig = recomputed[2]
         #     end
@@ -1436,13 +1436,13 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     calls = CallMeta[call]
     stateordonet_widened = widenconst(stateordonet)
 
-    # Try to unroll the iteration up to MAX_TUPLE_SPLAT, which covers any finite
+    # Try to unroll the iteration up to max_tuple_splat, which covers any finite
     # length iterators, or interesting prefix
     while true
         if stateordonet_widened === Nothing
             return ret, AbstractIterationInfo(calls)
         end
-        if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).MAX_TUPLE_SPLAT
+        if Nothing <: stateordonet_widened || length(ret) >= InferenceParams(interp).max_tuple_splat
             break
         end
         if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
@@ -1520,7 +1520,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     end
     res = Union{}
     nargs = length(aargtypes)
-    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).MAX_APPLY_UNION_ENUM
+    splitunions = 1 < unionsplitcost(aargtypes) <= InferenceParams(interp).max_apply_union_enum
     ctypes = [Any[aft]]
     infos = Vector{MaybeAbstractIterationInfo}[MaybeAbstractIterationInfo[]]
     effects = EFFECTS_TOTAL
@@ -1728,14 +1728,14 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             a = ssa_def_slot(fargs[2], sv)
             a2 = argtypes[2]
             if isa(a, SlotNumber)
-                cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).MAX_UNION_SPLITTING, rt)
+                cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting, rt)
                 if cndt !== nothing
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 end
             end
             if isa(a2, MustAlias)
                 if !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).MAX_UNION_SPLITTING)
+                    cndt = isa_condition(a2, argtypes[3], InferenceParams(interp).max_union_splitting)
                     if cndt !== nothing
                         return form_mustalias_conditional(a2, cndt.thentype, cndt.elsetype)
                     end
@@ -1749,18 +1749,18 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
             # if doing a comparison to a singleton, consider returning a `Conditional` instead
             if isa(aty, Const)
                 if isa(b, SlotNumber)
-                    cndt = egal_condition(aty, bty, InferenceParams(interp).MAX_UNION_SPLITTING, rt)
+                    cndt = egal_condition(aty, bty, InferenceParams(interp).max_union_splitting, rt)
                     return Conditional(b, cndt.thentype, cndt.elsetype)
                 elseif isa(bty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).MAX_UNION_SPLITTING)
+                    cndt = egal_condition(aty, bty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(bty, cndt.thentype, cndt.elsetype)
                 end
             elseif isa(bty, Const)
                 if isa(a, SlotNumber)
-                    cndt = egal_condition(bty, aty, InferenceParams(interp).MAX_UNION_SPLITTING, rt)
+                    cndt = egal_condition(bty, aty, InferenceParams(interp).max_union_splitting, rt)
                     return Conditional(a, cndt.thentype, cndt.elsetype)
                 elseif isa(aty, MustAlias) && !isa(rt, Const) # skip refinement when the field is known precisely (just optimization)
-                    cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).MAX_UNION_SPLITTING)
+                    cndt = egal_condition(bty, aty.fldtyp, InferenceParams(interp).max_union_splitting)
                     return form_mustalias_conditional(aty, cndt.thentype, cndt.elsetype)
                 end
             end
