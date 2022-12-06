@@ -320,3 +320,15 @@ let tup = g_vararg_generated()
     # shifts everything over by 1)
     @test only(code_lowered(only(methods(f_vararg_generated)).generator.gen)).slotflags[5] == UInt8(0x00)
 end
+
+# respect a given linetable in code generation
+# https://github.com/JuliaLang/julia/pull/47750
+let match = Base._which(Tuple{typeof(sin),Int})
+    mi = Core.Compiler.specialize_method(match)
+    lwr = Core.Compiler.retrieve_code_info(mi)
+    @test all(lin->lin.method===:sin, lwr.linetable)
+    @generated sin_generated(a) = lwr
+    src = only(code_lowered(sin_generated, (Int,)))
+    @test all(lin->lin.method===:sin, src.linetable)
+    @test sin_generated(42) == sin(42)
+end
