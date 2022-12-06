@@ -857,7 +857,7 @@ for op in _minmaxops
     jlop,llvmop = op
     for type in _minmaxtypes
         fntyp, jltyp, llvmtyp = type
-        @eval @inline function $(Symbol("llvm_", jlop))(x::$jltyp,y::$jltyp)
+        @eval @inline @assume_effects :total function $(Symbol("llvm_", jlop))(x::$jltyp,y::$jltyp)
                 Base.llvmcall(
                     ($"""declare $llvmtyp @llvm.$llvmop.$fntyp($llvmtyp,$llvmtyp)
                         define $llvmtyp @entry($llvmtyp,$llvmtyp) #0 {
@@ -871,8 +871,9 @@ for op in _minmaxops
     end
 end
 
+const has_native_fminmax = Sys.ARCH === :aarch64
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if Sys.ARCH === :aarch64
+    if has_native_fminmax
         return llvm_min(x,y)
     else
     diff = x - y
@@ -883,7 +884,7 @@ function min(x::T, y::T) where {T<:Union{Float32,Float64}}
 end
 
 function max(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if Sys.ARCH === :aarch64
+    if has_native_fminmax
         return llvm_max(x,y)
     else
     diff = x - y
@@ -894,7 +895,7 @@ function max(x::T, y::T) where {T<:Union{Float32,Float64}}
 end
 
 function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if Sys.ARCH === :aarch64
+    if has_native_fminmax
         return llvm_min(x, y), llvm_max(x, y)
     else
     diff = x - y
