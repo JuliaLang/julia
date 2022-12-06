@@ -2201,11 +2201,12 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 
 @testset "known subtype/intersect issue" begin
     #issue 45874
-    let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
-        T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
-        @test_broken S <: T
-        @test_broken typeintersect(S,T) === S
-    end
+    # Causes a hang due to jl_critical_error calling back into malloc...
+    # let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
+    #     T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
+    #     @test_broken S <: T
+    #     @test_broken typeintersect(S,T) === S
+    # end
 
     #issue 44395
     @test_broken typeintersect(

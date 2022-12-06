@@ -376,7 +376,7 @@ table = md"""
 # mime output
 let out =
     @test sprint(show, "text/plain", book) ==
-        "  Title\n  ≡≡≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  ===================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
+        "  Title\n  ≡≡≡≡≡\n\n  Some discussion\n\n  │  A quote\n\n  Section important\n  =================\n\n  Some bolded\n\n    •  list1\n\n    •  list2"
     @test sprint(show, "text/markdown", book) ==
         """
         # Title

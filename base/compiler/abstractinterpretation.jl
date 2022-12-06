@@ -294,7 +294,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
             mt === nothing && return FailedMethodMatch("Could not identify method table for call")
             mt = mt::Core.MethodTable
             result = findall(sig_n, method_table; limit = max_methods)
-            if result === missing
+            if result === nothing
                 return FailedMethodMatch("For one of the union split cases, too many methods matched")
             end
             (; matches, overlayed) = result
@@ -333,7 +333,7 @@ function find_matching_methods(argtypes::Vector{Any}, @nospecialize(atype), meth
         end
         mt = mt::Core.MethodTable
         result = findall(atype, method_table; limit = max_methods)
-        if result === missing
+        if result === nothing
             # this means too many methods matched
             # (assume this will always be true, so we don't compute / update valid age in this case)
             return FailedMethodMatch("Too many methods matched")
@@ -1959,7 +1959,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         return CallMeta(rt, effects, NoCallInfo())
     elseif isa(f, Core.OpaqueClosure)
         # calling an OpaqueClosure about which we have no information returns no information
-        return CallMeta(Any, Effects(), NoCallInfo())
+        return CallMeta(typeof(f).parameters[2], Effects(), NoCallInfo())
     elseif f === TypeVar
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
@@ -2085,20 +2085,25 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtIn
     argtypes = arginfo.argtypes
     ft = widenslotwrapper(argtypes[1])
     f = singleton_type(ft)
-    if isa(ft, PartialOpaque)
-        newargtypes = copy(argtypes)
-        newargtypes[1] = ft.env
-        return abstract_call_opaque_closure(interp,
-            ft, ArgInfo(arginfo.fargs, newargtypes), si, sv, #=check=#true)
-    elseif (uft = unwrap_unionall(widenconst(ft)); isa(uft, DataType) && uft.name === typename(Core.OpaqueClosure))
-        return CallMeta(rewrap_unionall((uft::DataType).parameters[2], widenconst(ft)), Effects(), NoCallInfo())
-    elseif f === nothing
-        # non-constant function, but the number of arguments is known
-        # and the ft is not a Builtin or IntrinsicFunction
-        if hasintersect(widenconst(ft), Union{Builtin, Core.OpaqueClosure})
+    if f === nothing
+        if isa(ft, PartialOpaque)
+            newargtypes = copy(argtypes)
+            newargtypes[1] = ft.env
+            return abstract_call_opaque_closure(interp,
+                ft, ArgInfo(arginfo.fargs, newargtypes), si, sv, #=check=#true)
+        end
+        wft = widenconst(ft)
+        if hasintersect(wft, Builtin)
             add_remark!(interp, sv, "Could not identify method table for call")
             return CallMeta(Any, Effects(), NoCallInfo())
+        elseif hasintersect(wft, Core.OpaqueClosure)
+            uft = unwrap_unionall(wft)
+            if isa(uft, DataType)
+                return CallMeta(rewrap_unionall(uft.parameters[2], wft), Effects(), NoCallInfo())
+            end
+            return CallMeta(Any, Effects(), NoCallInfo())
         end
+        # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
         max_methods = max_methods === nothing ? get_max_methods(sv.mod, interp) : max_methods
         return abstract_call_gf_by_type(interp, nothing, arginfo, si, argtypes_to_type(argtypes), sv, max_methods)
     end

@@ -487,6 +487,13 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     if get(env, "JULIA_DEPOT_PATH", nothing) === nothing
         env["JULIA_DEPOT_PATH"] = join(DEPOT_PATH, pathsep)
     end
+
+    # If we haven't explicitly asked for threaded BLAS, prevent OpenBLAS from starting
+    # up with multiple threads, thereby sucking up a bunch of wasted memory on Windows.
+    if !params[:enable_threaded_blas] &&
+       get(env, "OPENBLAS_NUM_THREADS", nothing) === nothing
+        env["OPENBLAS_NUM_THREADS"] = "1"
+    end
     # Set the active project on workers using JULIA_PROJECT.
     # Users can opt-out of this by (i) passing `env = ...` or (ii) passing
     # `--project=...` as `exeflags` to addprocs(...).

@@ -469,7 +469,9 @@ _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
 _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 
-_crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
+    unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+end
 
 function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
