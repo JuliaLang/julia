@@ -1042,61 +1042,42 @@ end
 function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
     project_file = env_project_file(env)
     if project_file isa String
-        proj = project_file_name_uuid(project_file, pkg.name)
-        if proj == pkg
-            insert_extension_triggers_project(project_file, pkg)
-        else
-            return insert_extension_triggers_manifest(project_file, pkg)
-        end
-    end
-    return nothing
-end
-
-function insert_extension_triggers_project(project_file::String, parent::PkgId)
-    d = parsed_toml(project_file)
-    weakdeps = get(d, "weakdeps", nothing)::Union{Nothing, Dict{String, Any}}
-    extensions = get(d, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
-    extensions === nothing && return
-    weakdeps === nothing && return
-    _insert_extension_triggers(parent, extensions, weakdeps)
-end
-
-function insert_extension_triggers_manifest(project_file::String, parent::PkgId)
-    manifest_file = project_file_manifest_path(project_file)
-    manifest_file === nothing && return
-    d = get_deps(parsed_toml(manifest_file))
-    for (dep_name, entries) in d
-        entries::Vector{Any}
-        for entry in entries
-            entry = entry::Dict{String, Any}
-            uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
-            uuid === nothing && continue
-            if UUID(uuid) === parent.uuid
-                weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
-                extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
-                extensions === nothing && return
-                weakdeps === nothing && return
-                if weakdeps isa Dict{String, Any}
-                    return _insert_extension_triggers(parent, extensions, weakdeps)
-                end
-
-                d_weakdeps = Dict{String, String}()
-                for (dep_name, entries) in d
-                    dep_name in weakdeps || continue
-                    entries::Vector{Any}
-                    if length(entries) != 1
-                        error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+        manifest_file = project_file_manifest_path(project_file)
+        manifest_file === nothing && return
+        d = get_deps(parsed_toml(manifest_file))
+        for (dep_name, entries) in d
+            entries::Vector{Any}
+            for entry in entries
+                entry = entry::Dict{String, Any}
+                uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                uuid === nothing && continue
+                if UUID(uuid) == pkg.uuid
+                    weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
+                    extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+                    extensions === nothing && return
+                    weakdeps === nothing && return
+                    if weakdeps isa Dict{String, Any}
+                        return _insert_extension_triggers(pkg, extensions, weakdeps)
                     end
-                    entry = first(entries)::Dict{String, Any}
-                    uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
-                    d_weakdeps[dep_name] = uuid
+
+                    d_weakdeps = Dict{String, String}()
+                    for (dep_name, entries) in d
+                        dep_name in weakdeps || continue
+                        entries::Vector{Any}
+                        if length(entries) != 1
+                            error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+                        end
+                        entry = first(entries)::Dict{String, Any}
+                        uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                        d_weakdeps[dep_name] = uuid
+                    end
+                    @assert length(d_weakdeps) == length(weakdeps)
+                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
                 end
-                @assert length(d_weakdeps) == length(weakdeps)
-                return _insert_extension_triggers(parent, extensions, d_weakdeps)
             end
         end
     end
-    return
+    return nothing
 end
 
 function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
