@@ -858,6 +858,113 @@ or thousands of variants compiled for it. Each of these increases the size of th
 code, the length of internal lists of methods, etc. Excess enthusiasm for values-as-parameters
 can easily waste enormous resources.
 
+## ["Unionize" collections](@id unionize-collections)
+
+When working e.g with agent based models or finite elements with varying element geometries, a common pattern is the occurence of collections (e.g. Vectors) of objects of different types on which one wants to perform certain actions depending on their type. By default, the element type of a vector of objects of different struct types is a common supertype, often `Any`. For dispatch -- choosing the right method of a function to be applied -- the compiler needs
+to assume that new matching types can be added  after compilation. Thus arises the need for expensive [dynamic dispatch](https://discourse.julialang.org/t/dynamic-dispatch/6963/2) at runtime.
+
+
+```jldoctest unionsplit; setup = :(using Random; Random.seed!(1234)), filter = r"[0-9\.]+ seconds \(.*?\)"
+N=100_000
+
+struct T1 end
+
+f(::T1,x)=1x
+
+function sumup_f(collection)
+	s=0.0
+	for i=1:length(collection)
+		s+=f(collection[i],1)
+	end
+	s
+end
+
+t1_collection=[T1() for i=1:N]
+sumup_f(t1_collection) # compile
+typeof(t1_collection)
+# output
+Vector{T1} (alias for Array{T1, 1})
+```
+
+
+Define further types:
+```jldoctest unionsplit; filter = r"[0-9\.]+ seconds \(.*?\)"
+struct T2 end
+struct T3 end
+struct T4 end
+struct T5 end
+
+f(::T2,x)=2x
+f(::T3,x)=3x
+f(::T4,x)=4x
+f(::T5,x)=5x
+
+any_collection=[rand((T1,T2,T3,T4,T5))() for i=1:N]
+sumup_f(any_collection) # compile
+typeof(any_collection)
+# output
+Vector{Any} (alias for Array{Any, 1})
+```
+
+When defining the collection in the default way (resulting in a `Vector{Any}`, each access of an element is linked to an allocation with significant runtime overhead due to __dynamic dispatch__:
+```jldoctest unionsplit; filter = r"[0-9\.]+ seconds \(.*?\)"
+@time sumup_f(t1_collection); nothing
+@time sumup_f(any_collection); nothing
+# output
+  0.000095 seconds (1 allocation: 16 bytes)
+  0.005557 seconds (100.00 k allocations: 1.526 MiB)
+```
+
+
+With __"manual dispatch"__,  each time when c is accessed as a function parameter, due to the test via `isa`, the compiler knows the type of `c` and can choose the proper method of `f` at compile time, resulting in signficant savings at runtime:
+```jldoctest unionsplit; filter = r"[0-9\.]+ seconds \(.*?\)"
+function sumup_f_manual(collection)
+	s=0.0
+	for i=1:length(collection)
+		c=collection[i]
+		if isa(c,T1)
+			s+=f(c,1)
+		elseif isa(c,T2)
+			s+=f(c,1)
+		elseif isa(c,T3)
+			s+=f(c,1)
+		elseif isa(c,T4)
+			s+=f(c,1)
+		elseif isa(c,T5)
+			s+=f(c,1)
+		end
+	end
+	s
+end
+sumup_f_manual(any_collection) # compile
+@time sumup_f_manual(any_collection); nothing
+# output
+  0.000796 seconds (1 allocation: 16 bytes)
+```
+
+While it is possible to generate the manual dispatch code with macros, another remedy of this situation is more acessible. "Unionizing" the collection means that one pins its element type to to the union of possible types of entries:
+
+```jldoctest unionsplit; filter = r"[0-9\.]+ seconds \(.*?\)"
+const UnionT=Union{T1,T2,T3,T4,T5}
+union_collection=UnionT[s for s ∈ any_collection]
+sumup_f(union_collection) # compile
+typeof(union_collection)
+# output
+Vector{Union{T1, T2, T3, T4, T5}} (alias for Array{Union{T1, T2, T3, T4, T5}, 1})
+```
+
+The compiler then  knows that the number of possible types of the elements of the collection is finite -- constrained by the list of types in the union. Consequently, it can automatically create code similar to the manual dispatch statement above. This feature is called __[union splitting](https://julialang.org/blog/2018/08/union-splitting/)__ and provides similar or better performance compared to  the "manual" approach.
+```jldoctest unionsplit; filter = r"[0-9\.]+ seconds \(.*?\)"
+@time  sumup_f(union_collection); nothing
+# output
+  0.000097 seconds (1 allocation: 16 bytes)
+```
+This pattern can be applied in at least the following situations
+
+- __Collection of objects:__  as discussed above via e.g. defining `Vector{Union{T1,T2,T3,T4,T5}}`.
+- __Collection of types:__  Julia allows to use types as variables. These can be stored  in a collection as well, and it is possible to  dispatch on a (concrete or abstract) type parameter by defining `f(::Type{T})`. A corresponding "unionized" collection can be defined e.g. as  `Vector{Union{Type{T1},Type{T2},Type{T3},Type{T4},Type{T5}}}`.
+- __Collection of functions:__ Instead of objects or types, one also can store functions in a collection. As each function has its own type, accessing a function as a member of a collection once again will lead to dynamic dispatch, unless this collection is defined similar to `Vector{Union{typeof(f1),typeof(f2),typeof(f3),typeof(f4),typeof(f5)}}`.
+
 ## [Access arrays in memory order, along columns](@id man-performance-column-major)
 
 Multidimensional arrays in Julia are stored in column-major order. This means that arrays are

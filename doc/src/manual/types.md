@@ -553,8 +553,7 @@ ERROR: TypeError: in typeassert, expected Union{Int64, AbstractString}, got a va
 
 The compilers for many languages have an internal union construct for reasoning about types; Julia
 simply exposes it to the programmer. The Julia compiler is able to generate efficient code in the
-presence of `Union` types with a small number of types [^1], by generating specialized code
-in separate branches for each possible type.
+presence of `Union` types, by generating specialized code in separate branches for each possible type.
 
 A particularly useful case of a `Union` type is `Union{T, Nothing}`, where `T` can be any type and
 [`Nothing`](@ref) is the singleton type whose only instance is the object [`nothing`](@ref). This pattern
@@ -1118,7 +1117,7 @@ Immutable composite types with no fields are called *singletons*. Formally, if
 1. `T` is an immutable composite type (i.e. defined with `struct`),
 1. `a isa T && b isa T` implies `a === b`,
 
-then `T` is a singleton type.[^2] [`Base.issingletontype`](@ref) can be used to check if a
+then `T` is a singleton type.[^1] [`Base.issingletontype`](@ref) can be used to check if a
 type is a singleton type. [Abstract types](@ref man-abstract-types) cannot be singleton
 types by construction.
 
@@ -1615,5 +1614,4 @@ in unfavorable cases, you can easily end up making the performance of your code 
  In particular, you would never want to write actual code as illustrated above.  For more information
 about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
-[^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.
-[^2]: A few popular languages have singleton types, including Haskell, Scala and Ruby.
+[^1]: A few popular languages have singleton types, including Haskell, Scala and Ruby.
