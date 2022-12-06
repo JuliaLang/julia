@@ -566,7 +566,7 @@ elements that are not
 Send every element of `v` for which `f` returns `true` to the end of the vector and return
 the index of the last element which for which `f` returns `false`.
 
-`send_to_end!(f, v, lo, hi)` is equivalent to `send_to_end!(f, view(v, lo:hi))+lo-1`
+`send_to_end_stable!(f, v, lo, hi)` is equivalent to `send_to_end_stable!(f, view(v, lo:hi))+lo-1`
 
 Preserves the order of the elements.
 """
@@ -655,7 +655,6 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
             _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
         end
     elseif eltype(v) <: Integer && o isa PermFast && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
-        scratch1 = similar(v)
         lo, hi = send_to_end_stable!(i -> isnan(@inbounds o.data[i]), v, o.order; lo, hi)
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
         j = send_to_end_stable!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
