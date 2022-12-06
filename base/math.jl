@@ -851,26 +851,58 @@ minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
 _isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
 
+const _minmaxtypes = [(:f64, :Float64, :double), (:f32, :Float32, :float)] #TODO: Add a way to detect native f16
+const _minmaxops = [(:min, :minimum), (:max, :maximum)]
+for op in _minmaxops
+    jlop,llvmop = op
+    for type in _minmaxtypes
+        fntyp, jltyp, llvmtyp = type
+        @eval @inline function $(Symbol("llvm_", jlop))(x::$jltyp,y::$jltyp)
+                Base.llvmcall(
+                    ($"""declare $llvmtyp @llvm.$llvmop.$fntyp($llvmtyp,$llvmtyp)
+                        define $llvmtyp @entry($llvmtyp,$llvmtyp) #0 {
+                        2:
+                            %3 = call $llvmtyp @llvm.$llvmop.$fntyp($llvmtyp %0, $llvmtyp %1)
+                            ret $llvmtyp %3
+                        }
+                        attributes #0 = { alwaysinline }
+                        """, "entry"), $jltyp, Tuple{$jltyp,$jltyp}, x,y)
+        end
+    end
+end
+
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
+    @static if Sys.ARCH === :aarch64
+        return llvm_min(x,y)
+    else
     diff = x - y
     argmin = ifelse(signbit(diff), x, y)
     anynan = isnan(x)|isnan(y)
-    ifelse(anynan, diff, argmin)
+    return ifelse(anynan, diff, argmin)
+    end
 end
 
 function max(x::T, y::T) where {T<:Union{Float32,Float64}}
+    @static if Sys.ARCH === :aarch64
+        return llvm_max(x,y)
+    else
     diff = x - y
     argmax = ifelse(signbit(diff), y, x)
     anynan = isnan(x)|isnan(y)
-    ifelse(anynan, diff, argmax)
+    return ifelse(anynan, diff, argmax)
+    end
 end
 
 function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
+    @static if Sys.ARCH === :aarch64
+        return llvm_min(x, y), llvm_max(x, y)
+    else
     diff = x - y
     sdiff = signbit(diff)
     min, max = ifelse(sdiff, x, y), ifelse(sdiff, y, x)
     anynan = isnan(x)|isnan(y)
-    ifelse(anynan, diff, min), ifelse(anynan, diff, max)
+    return ifelse(anynan, diff, min), ifelse(anynan, diff, max)
+    end
 end
 
 """
