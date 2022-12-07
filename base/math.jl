@@ -858,7 +858,7 @@ Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("ll
 
 const has_native_fminmax = Sys.ARCH === :aarch64
 function min(x::T, y::T) where {T<:Union{Float32,Float64}}
-    if has_native_fminmax
+    @static if has_native_fminmax
         return llvm_min(x,y)
     else
     diff = x - y
