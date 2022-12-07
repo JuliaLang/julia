@@ -504,7 +504,10 @@ void jl_add_function_name_to_lineinfo(jl_code_info_t *ci, jl_value_t *name)
         jl_value_t *file = jl_fieldref_noalloc(ln, 2);
         lno = jl_fieldref(ln, 3);
         inl = jl_fieldref(ln, 4);
-        jl_value_t *ln_name = (jl_is_int32(inl) && jl_unbox_int32(inl) == 0) ? name : jl_fieldref_noalloc(ln, 1);
+        // respect a given linetable if available
+        jl_value_t *ln_name = jl_fieldref_noalloc(ln, 1);
+        if (jl_is_symbol(ln_name) && (jl_sym_t*)ln_name == jl_symbol("none") && jl_is_int32(inl) && jl_unbox_int32(inl) == 0)
+            ln_name = name;
         rt = jl_new_struct(jl_lineinfonode_type, mod, ln_name, file, lno, inl);
         jl_array_ptr_set(li, i, rt);
     }
@@ -587,7 +590,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         else {
             // Lower the user's expression and resolve references to the type parameters
             func = jl_expand_and_resolve(ex, def->module, linfo->sparam_vals);
-
             if (!jl_is_code_info(func)) {
                 if (jl_is_expr(func) && ((jl_expr_t*)func)->head == jl_error_sym) {
                     ct->ptls->in_pure_callback = 0;
