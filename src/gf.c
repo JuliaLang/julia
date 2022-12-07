@@ -414,13 +414,13 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     if ((const_flags & 2) == 0)
         inferred_const = NULL;
     codeinst->rettype_const = inferred_const;
-    jl_atomic_store_relaxed(&codeinst->invoke, NULL);
     jl_atomic_store_relaxed(&codeinst->specptr.fptr, NULL);
+    jl_atomic_store_relaxed(&codeinst->invoke, NULL);
     if ((const_flags & 1) != 0) {
         assert(const_flags & 2);
         jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_const_return);
     }
-    codeinst->isspecsig = 0;
+    codeinst->specsigflags = 0;
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     codeinst->ipo_purity_bits = ipo_effects;
@@ -2248,14 +2248,22 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             jl_method_instance_t *unspecmi = jl_atomic_load_relaxed(&def->unspecialized);
             if (unspecmi) {
                 jl_code_instance_t *unspec = jl_atomic_load_relaxed(&unspecmi->cache);
-                if (unspec && jl_atomic_load_acquire(&unspec->invoke)) {
+                jl_callptr_t unspec_invoke = NULL;
+                if (unspec && (unspec_invoke = jl_atomic_load_acquire(&unspec->invoke))) {
                     jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                         (jl_value_t*)jl_any_type, NULL, NULL,
                         0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
-                    codeinst->isspecsig = 0;
-                    codeinst->specptr = unspec->specptr;
+                    void *unspec_fptr = jl_atomic_load_relaxed(&unspec->specptr.fptr);
+                    if (unspec_fptr) {
+                        // wait until invoke and specsigflags are properly set
+                        while (!(jl_atomic_load_acquire(&unspec->specsigflags) & 0b10)) {
+                            jl_cpu_pause();
+                        }
+                        unspec_invoke = jl_atomic_load_relaxed(&unspec->invoke);
+                    }
+                    jl_atomic_store_release(&codeinst->specptr.fptr, unspec_fptr);
                     codeinst->rettype_const = unspec->rettype_const;
-                    jl_atomic_store_relaxed(&codeinst->invoke, jl_atomic_load_relaxed(&unspec->invoke));
+                    jl_atomic_store_release(&codeinst->invoke, unspec_invoke);
                     jl_mi_cache_insert(mi, codeinst);
                     record_precompile_statement(mi);
                     return codeinst;
@@ -2272,7 +2280,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             jl_code_instance_t *codeinst = jl_new_codeinst(mi,
                 (jl_value_t*)jl_any_type, NULL, NULL,
                 0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
-            jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_interpret_call);
+            jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
             record_precompile_statement(mi);
             return codeinst;
@@ -2289,7 +2297,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_method_instance_t *unspec = jl_get_unspecialized_from_mi(mi);
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         // ask codegen to make the fptr for unspec
-        if (jl_atomic_load_acquire(&ucache->invoke) == NULL) {
+        jl_callptr_t ucache_invoke = jl_atomic_load_acquire(&ucache->invoke);
+        if (ucache_invoke == NULL) {
             if (def->source == jl_nothing && (jl_atomic_load_relaxed(&ucache->def->uninferred) == jl_nothing ||
                                               jl_atomic_load_relaxed(&ucache->def->uninferred) == NULL)) {
                 jl_printf(JL_STDERR, "source not available for ");
@@ -2298,19 +2307,29 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 jl_error("source missing for method that needs to be compiled");
             }
             jl_generate_fptr_for_unspecialized(ucache);
+            ucache_invoke = jl_atomic_load_acquire(&ucache->invoke);
         }
-        assert(jl_atomic_load_relaxed(&ucache->invoke) != NULL);
-        if (jl_atomic_load_relaxed(&ucache->invoke) != jl_fptr_sparam &&
-            jl_atomic_load_relaxed(&ucache->invoke) != jl_fptr_interpret_call) {
+        assert(ucache_invoke != NULL);
+        if (ucache_invoke != jl_fptr_sparam &&
+            ucache_invoke != jl_fptr_interpret_call) {
             // only these care about the exact specTypes, otherwise we can use it directly
             return ucache;
         }
         codeinst = jl_new_codeinst(mi, (jl_value_t*)jl_any_type, NULL, NULL,
             0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
-        codeinst->isspecsig = 0;
-        codeinst->specptr = ucache->specptr;
+        void *unspec_fptr = jl_atomic_load_relaxed(&ucache->specptr.fptr);
+        if (unspec_fptr) {
+            // wait until invoke and specsigflags are properly set
+            while (!(jl_atomic_load_acquire(&ucache->specsigflags) & 0b10)) {
+                jl_cpu_pause();
+            }
+            ucache_invoke = jl_atomic_load_relaxed(&ucache->invoke);
+        }
+        // unspec is always not specsig, but might use specptr
+        codeinst->specsigflags = jl_atomic_load_relaxed(&ucache->specsigflags) & 0b10;
+        jl_atomic_store_relaxed(&codeinst->specptr.fptr, unspec_fptr);
         codeinst->rettype_const = ucache->rettype_const;
-        jl_atomic_store_relaxed(&codeinst->invoke, jl_atomic_load_relaxed(&ucache->invoke));
+        jl_atomic_store_release(&codeinst->invoke, ucache_invoke);
         jl_mi_cache_insert(mi, codeinst);
     }
     else {
@@ -2667,7 +2686,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mfunc->cache);
     while (codeinst) {
         if (codeinst->min_world <= world && world <= codeinst->max_world) {
-            jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
             if (invoke != NULL) {
                 jl_value_t *res = invoke(F, args, nargs, codeinst);
                 return verify_type(res);
@@ -2687,7 +2706,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    jl_callptr_t invoke = jl_atomic_load_relaxed(&codeinst->invoke);
+    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
     jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
 }
