@@ -631,23 +631,25 @@ end
 
 function _delete!(h::Dict{K,V}, index) where {K,V}
     @inbounds begin
-    sz = length(h.slots)
-    nextind = (index & (sz-1)) + 1
+    slots = h.slots
+    sz = length(slots)
+    _unsetindex!(h.keys, index)
+    _unsetindex!(h.vals, index)
     # if the next slot is empty we don't need a tombstone
     # and can remove all tombstones that were required by the element we just deleted
+    ndel = 1
+    nextind = (index & (sz-1)) + 1
     if isslotempty(h, nextind)
         while true
-            h.ndel -= 1
-            h.slots[index] = 0x00
+            ndel -= 1
+            slots[index] = 0x00
             index = ((index - 2) & (sz-1)) + 1
             isslotmissing(h, index) || break
         end
     else
-        h.slots[index] = 0x7f
+        slots[index] = 0x7f
     end
-    _unsetindex!(h.keys, index)
-    _unsetindex!(h.vals, index)
-    h.ndel += 1
+    h.ndel += ndel
     h.count -= 1
     h.age += 1
     return h
