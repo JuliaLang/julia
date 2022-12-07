@@ -245,8 +245,8 @@ end
 
 Inexact equality comparison. Two numbers compare equal if their relative distance *or* their
 absolute distance is within tolerance bounds: `isapprox` returns `true` if
-`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` is zero and the
-default `rtol` depends on the types of `x` and `y`. The keyword argument `nans` determines
+`norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))`. The default `atol` (absolute tolerance) is zero and the
+default `rtol` (relative tolerance) depends on the types of `x` and `y`. The keyword argument `nans` determines
 whether or not NaN values are considered equal (defaults to false).
 
 For real or complex floating-point values, if an `atol > 0` is not specified, `rtol` defaults to
