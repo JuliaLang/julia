@@ -2095,7 +2095,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             is_empty_tuple = peek(ps, skip_newlines=true) == K")"
             opts = parse_brackets(ps, K")") do _, _, _, _
                 _parsed_call = was_eventually_call(ps)
-                _is_anon_func = peek(ps, 2) != K"(" && !_parsed_call
+                _is_anon_func = peek(ps, 2) ∉ KSet"( ." && !_parsed_call
                 return (needs_parameters = _is_anon_func,
                         is_anon_func     = _is_anon_func,
                         parsed_call      = _parsed_call)
@@ -2115,6 +2115,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function ()(x) end  ==> (function (call (tuple) x) (block))
                 emit(ps, mark, K"tuple")
             else
+                # function (A).f() end  ==> (function (call (. A (quote f))) (block))
                 # function (:)() end    ==> (function (call :) (block))
                 # function (x::T)() end ==> (function (call (:: x T)) (block))
                 # function (::T)() end  ==> (function (call (:: T)) (block))
