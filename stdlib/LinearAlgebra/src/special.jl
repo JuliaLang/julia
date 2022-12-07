@@ -189,12 +189,12 @@ end
 end
 
 function (-)(A::Bidiagonal, B::SymTridiagonal)
-    newdv = A.dv-B.dv
+    newdv = A.dv - B.dv
     Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-_evview(B)), newdv, A.ev-_evview(B)) : (A.ev-_evview(B), newdv, typeof(newdv)(-_evview(B))))...)
 end
 
 function (-)(A::SymTridiagonal, B::Bidiagonal)
-    newdv = A.dv-B.dv
+    newdv = A.dv - B.dv
     Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)-B.ev) : (_evview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
 end
 
