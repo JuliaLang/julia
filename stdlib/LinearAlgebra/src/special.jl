@@ -117,7 +117,7 @@ end
 # the off diagonal could be a different type after the operation resulting in
 # an error. See issue #28994
 
-function (+)(A::Bidiagonal, B::Diagonal)
+@commutative function (+)(A::Bidiagonal, B::Diagonal)
     newdv = A.dv + B.diag
     Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
 end
@@ -127,86 +127,64 @@ function (-)(A::Bidiagonal, B::Diagonal)
     Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
 end
 
-function (+)(A::Diagonal, B::Bidiagonal)
-    newdv = A.diag + B.dv
-    Bidiagonal(newdv, typeof(newdv)(B.ev), B.uplo)
-end
-
 function (-)(A::Diagonal, B::Bidiagonal)
-    newdv = A.diag-B.dv
+    newdv = A.diag - B.dv
     Bidiagonal(newdv, typeof(newdv)(-B.ev), B.uplo)
 end
 
-function (+)(A::Diagonal, B::SymTridiagonal)
-    newdv = A.diag+B.dv
-    SymTridiagonal(A.diag+B.dv, typeof(newdv)(B.ev))
+@commutative function (+)(A::Diagonal, B::SymTridiagonal)
+    newdv = A.diag + B.dv
+    SymTridiagonal(A.diag + B.dv, typeof(newdv)(B.ev))
 end
 
 function (-)(A::Diagonal, B::SymTridiagonal)
-    newdv = A.diag-B.dv
+    newdv = A.diag - B.dv
     SymTridiagonal(newdv, typeof(newdv)(-B.ev))
 end
 
-function (+)(A::SymTridiagonal, B::Diagonal)
-    newdv = A.dv+B.diag
-    SymTridiagonal(newdv, typeof(newdv)(A.ev))
-end
-
 function (-)(A::SymTridiagonal, B::Diagonal)
-    newdv = A.dv-B.diag
+    newdv = A.dv - B.diag
     SymTridiagonal(newdv, typeof(newdv)(A.ev))
 end
 
 # this set doesn't have the aforementioned problem
 
-+(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+_evview(B), A.d+B.dv, A.du+_evview(B))
+@commutative (+)(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl+_evview(B), A.d+B.dv, A.du+_evview(B))
 -(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-_evview(B), A.d-B.dv, A.du-_evview(B))
-+(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(_evview(A)+B.dl, A.dv+B.d, _evview(A)+B.du)
 -(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(_evview(A)-B.dl, A.dv-B.d, _evview(A)-B.du)
 
-
-function (+)(A::Diagonal, B::Tridiagonal)
-    newdv = A.diag+B.d
+@commutative function (+)(A::Diagonal, B::Tridiagonal)
+    newdv = A.diag + B.d
     Tridiagonal(typeof(newdv)(B.dl), newdv, typeof(newdv)(B.du))
 end
 
 function (-)(A::Diagonal, B::Tridiagonal)
-    newdv = A.diag-B.d
+    newdv = A.diag - B.d
     Tridiagonal(typeof(newdv)(-B.dl), newdv, typeof(newdv)(-B.du))
 end
 
-function (+)(A::Tridiagonal, B::Diagonal)
-    newdv = A.d+B.diag
-    Tridiagonal(typeof(newdv)(A.dl), newdv, typeof(newdv)(A.du))
-end
-
 function (-)(A::Tridiagonal, B::Diagonal)
-    newdv = A.d-B.diag
+    newdv = A.d - B.diag
     Tridiagonal(typeof(newdv)(A.dl), newdv, typeof(newdv)(A.du))
 end
 
-function (+)(A::Bidiagonal, B::Tridiagonal)
-    newdv = A.dv+B.d
+@commutative function (+)(A::Bidiagonal, B::Tridiagonal)
+    newdv = A.dv + B.d
     Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(B.dl), newdv, A.ev+B.du) : (A.ev+B.dl, newdv, typeof(newdv)(B.du)))...)
 end
 
 function (-)(A::Bidiagonal, B::Tridiagonal)
-    newdv = A.dv-B.d
+    newdv = A.dv - B.d
     Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-B.dl), newdv, A.ev-B.du) : (A.ev-B.dl, newdv, typeof(newdv)(-B.du)))...)
 end
 
-function (+)(A::Tridiagonal, B::Bidiagonal)
-    newdv = A.d+B.dv
-    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.dl), newdv, A.du+B.ev) : (A.dl+B.ev, newdv, typeof(newdv)(A.du)))...)
-end
-
 function (-)(A::Tridiagonal, B::Bidiagonal)
-    newdv = A.d-B.dv
+    newdv = A.d - B.dv
     Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(A.dl), newdv, A.du-B.ev) : (A.dl-B.ev, newdv, typeof(newdv)(A.du)))...)
 end
 
-function (+)(A::Bidiagonal, B::SymTridiagonal)
-    newdv = A.dv+B.dv
+@commutative function (+)(A::Bidiagonal, B::SymTridiagonal)
+    newdv = A.dv + B.dv
     Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(_evview(B)), A.dv+B.dv, A.ev+_evview(B)) : (A.ev+_evview(B), A.dv+B.dv, typeof(newdv)(_evview(B))))...)
 end
 
@@ -215,16 +193,32 @@ function (-)(A::Bidiagonal, B::SymTridiagonal)
     Tridiagonal((A.uplo == 'U' ? (typeof(newdv)(-_evview(B)), newdv, A.ev-_evview(B)) : (A.ev-_evview(B), newdv, typeof(newdv)(-_evview(B))))...)
 end
 
-function (+)(A::SymTridiagonal, B::Bidiagonal)
-    newdv = A.dv+B.dv
-    Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)+B.ev) : (_evview(A)+B.ev, newdv, typeof(newdv)(_evview(A))))...)
-end
-
 function (-)(A::SymTridiagonal, B::Bidiagonal)
     newdv = A.dv-B.dv
     Tridiagonal((B.uplo == 'U' ? (typeof(newdv)(_evview(A)), newdv, _evview(A)-B.ev) : (_evview(A)-B.ev, newdv, typeof(newdv)(_evview(A))))...)
 end
 
+@commutative function (+)(A::Tridiagonal, B::UniformScaling)
+    newd = A.d .+ Ref(B)
+    Tridiagonal(typeof(newd)(A.dl), newd, typeof(newd)(A.du))
+end
+
+@commutative function (+)(A::SymTridiagonal, B::UniformScaling)
+    newdv = A.dv .+ Ref(B)
+    SymTridiagonal(newdv, typeof(newdv)(A.ev))
+end
+
+@commutative function (+)(A::Bidiagonal, B::UniformScaling)
+    newdv = A.dv .+ Ref(B)
+    Bidiagonal(newdv, typeof(newdv)(A.ev), A.uplo)
+end
+
+@commutative function (+)(A::Diagonal, B::UniformScaling)
+    Diagonal(A.diag .+ Ref(B))
+end
+
+# StructuredMatrix - UniformScaling = StructuredMatrix + (-UniformScaling) =>
+# no need to define reversed order
 function (-)(A::UniformScaling, B::Tridiagonal)
     d = Ref(A) .- B.d
     Tridiagonal(convert(typeof(d), -B.dl), d, convert(typeof(d), -B.du))
@@ -240,6 +234,7 @@ end
 function (-)(A::UniformScaling, B::Diagonal)
     Diagonal(Ref(A) .- B.diag)
 end
+
 lmul!(Q::AbstractQ, B::AbstractTriangular) = lmul!(Q, full!(B))
 lmul!(Q::QRPackedQ, B::AbstractTriangular) = lmul!(Q, full!(B)) # disambiguation
 lmul!(Q::Adjoint{<:Any,<:AbstractQ}, B::AbstractTriangular) = lmul!(Q, full!(B))
