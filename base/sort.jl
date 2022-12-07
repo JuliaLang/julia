@@ -830,7 +830,7 @@ maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
 function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
-    range = o === Reverse ? mn-mx : mx-mn
+    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
     offs = 1 - (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
