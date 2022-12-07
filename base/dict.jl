@@ -344,7 +344,7 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     h.vals[index] = v
     h.count += 1
     h.age += 1
-    h.ndel = ifelse(@inbounds(isslotmissing(h, index)), h.ndel - 1, h.ndel)
+    h.ndel = ifelse(isslotmissing(h, index), h.ndel - 1, h.ndel)
     if index < h.idxfloor
         h.idxfloor = index
     end
