@@ -652,6 +652,7 @@ function _delete!(h::Dict{K,V}, index) where {K,V}
     h.age += 1
     return h
     end
+end
 
 """
     delete!(collection, key)
