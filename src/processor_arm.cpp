@@ -1818,7 +1818,7 @@ jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl)
     return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
-JL_DLLEXPORT void jl_check_pkgimage_clones(void *data)
+JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
 {
     pkgimg_init_cb(data);
 }
