@@ -73,7 +73,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 DataLayout jl_create_datalayout(TargetMachine &TM);
 
 static inline bool imaging_default() {
-    return jl_options.image_codegen || jl_generating_output());
+    return jl_options.image_codegen || jl_generating_output();
 }
 
 struct OptimizationOptions {
