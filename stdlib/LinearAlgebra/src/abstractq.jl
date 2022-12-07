@@ -70,6 +70,7 @@ end
     end
     lmul!(Q, Y)
 end
+@inline _getindex(Q::AbstractQ, I::AbstractVector{Int}, J::AbstractVector{Int}) = @inbounds Q[:,J][I,:]
 @inline function _getindex(Q::AbstractQ, ::Colon, j::Int)
     y = zeros(eltype(Q), size(Q, 2))
     y[j] = oneunit(eltype(Q))
@@ -223,7 +224,9 @@ QRCompactWYQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ(convert(AbstractMatrix
 AbstractQ{S}(Q::QRPackedQ) where {S} = QRPackedQ{S}(Q)
 AbstractQ{S}(Q::QRCompactWYQ) where {S} = QRCompactWYQ{S}(Q)
 # override generic square fallback
-Matrix{T}(Q::Union{QRCompactWYQ{S},QRPackedQ{S}}) where {T,S} = convert(Matrix{T}, lmul!(Q, Matrix{S}(I, size(Q, 1), min(size(Q.factors)...))))
+Matrix{T}(Q::Union{QRCompactWYQ{S},QRPackedQ{S}}) where {T,S} =
+    convert(Matrix{T}, lmul!(Q, Matrix{S}(I, size(Q, 1), min(size(Q.factors)...))))
+Matrix(Q::Union{QRCompactWYQ{S},QRPackedQ{S}}) where {S} = Matrix{S}(Q)
 
 convert(::Type{AbstractQ{T}}, Q::QRPackedQ) where {T} = QRPackedQ{T}(Q)
 convert(::Type{AbstractQ{T}}, Q::QRCompactWYQ) where {T} = QRCompactWYQ{T}(Q)

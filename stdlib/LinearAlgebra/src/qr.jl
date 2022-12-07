@@ -514,13 +514,13 @@ size(F::Union{QR,QRCompactWY,QRPivoted}) = size(getfield(F, :factors))
 size(F::Union{QR,QRCompactWY,QRPivoted}, dim::Integer) = size(getfield(F, :factors), dim)
 
 
-function ldiv!(A::QRCompactWY{T}, b::AbstractVector{T}) where {T<:BlasFloat}
+function ldiv!(A::QRCompactWY{T}, b::AbstractVector{T}) where {T}
     require_one_based_indexing(b)
     m, n = size(A)
     ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), b), 1:size(A, 2)))
     return b
 end
-function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T<:BlasFloat}
+function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T}
     require_one_based_indexing(B)
     m, n = size(A)
     ldiv!(UpperTriangular(view(A.factors, 1:min(m,n), 1:n)), view(lmul!(adjoint(A.Q), B), 1:size(A, 2), 1:size(B, 2)))
@@ -528,7 +528,7 @@ function ldiv!(A::QRCompactWY{T}, B::AbstractMatrix{T}) where {T<:BlasFloat}
 end
 
 # Julia implementation similar to xgelsy
-function ldiv!(A::QRPivoted{T}, B::AbstractMatrix{T}, rcond::Real) where T<:BlasFloat
+function ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}, rcond::Real) where {T<:BlasFloat}
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
@@ -564,9 +564,9 @@ function ldiv!(A::QRPivoted{T}, B::AbstractMatrix{T}, rcond::Real) where T<:Blas
     B[A.p,:] = B[1:nA,:]
     return B, rnk
 end
-ldiv!(A::QRPivoted{T}, B::AbstractVector{T}) where {T<:BlasFloat} =
+ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractVector{T}) where {T<:BlasFloat} =
     vec(ldiv!(A, reshape(B, length(B), 1)))
-ldiv!(A::QRPivoted{T}, B::AbstractVecOrMat{T}) where {T<:BlasFloat} =
+ldiv!(A::QRPivoted{T,<:StridedMatrix}, B::AbstractMatrix{T}) where {T<:BlasFloat} =
     ldiv!(A, B, min(size(A)...)*eps(real(float(one(eltype(B))))))[1]
 function _wide_qr_ldiv!(A::QR{T}, B::AbstractMatrix{T}) where T
     m, n = size(A)
