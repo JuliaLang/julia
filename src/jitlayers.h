@@ -478,6 +478,8 @@ private:
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 
+    std::mutex EmissionMutex;
+
     //Compilation streams
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
