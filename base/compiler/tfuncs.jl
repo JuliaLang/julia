@@ -809,13 +809,14 @@ function try_compute_fieldidx(typ::DataType, @nospecialize(field))
     return field
 end
 
-function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Type{Bool}}
+function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing}
     if length(argtypes) == 2
         return true
     elseif length(argtypes) == 3
         boundscheck = argtypes[3]
-        if boundscheck === Const(:not_atomic) # TODO: this is assuming not atomic
-            boundscheck = Bool
+        isvarargtype(boundscheck) && return nothing
+        if widenconst(boundscheck) === Symbol
+            return true
         end
     elseif length(argtypes) == 4
         boundscheck = argtypes[4]
@@ -823,22 +824,43 @@ function getfield_boundscheck(argtypes::Vector{Any}) # ::Union{Bool, Nothing, Ty
         return nothing
     end
     isvarargtype(boundscheck) && return nothing
-    widenconst(boundscheck) !== Bool && return nothing
+    widenconst(boundscheck) === Bool || return nothing
     boundscheck = widenconditional(boundscheck)
     if isa(boundscheck, Const)
-        return boundscheck.val
+        return boundscheck.val::Bool
     else
-        return Bool
+        return nothing
     end
 end
 
-function getfield_nothrow(argtypes::Vector{Any})
-    boundscheck = getfield_boundscheck(argtypes)
+function getfield_nothrow(argtypes::Vector{Any}, boundscheck::Union{Bool,Nothing}=getfield_boundscheck(argtypes))
+    @specialize boundscheck
     boundscheck === nothing && return false
-    return getfield_nothrow(argtypes[1], argtypes[2], !(boundscheck === false))
+    ordering = Const(:not_atomic)
+    if length(argtypes) == 3
+        isvarargtype(argtypes[3]) && return false
+        if widenconst(argtypes[3]) !== Bool
+            ordering = argtypes[3]
+        end
+    elseif length(argtypes) == 4
+        ordering = argtypes[4]
+    elseif length(argtypes) != 2
+        return false
+    end
+    isvarargtype(ordering) && return false
+    widenconst(ordering) === Symbol || return false
+    if isa(ordering, Const)
+        ordering = ordering.val::Symbol
+        if ordering !== :not_atomic # TODO: this is assuming not atomic
+            return false
+        end
+        return getfield_nothrow(argtypes[1], argtypes[2], !(boundscheck === false))
+    else
+        return false
+    end
 end
 function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::Bool)
-    # If we don't have boundscheck and don't know the field, don't even bother
+    # If we don't have boundscheck off and don't know the field, don't even bother
     if boundscheck
         isa(name, Const) || return false
     end
@@ -880,7 +902,6 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
     if isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         # If all fields are always initialized, and bounds check is disabled, we can assume
         # we don't throw
         if !boundscheck && s.name.n_uninitialized == 0
@@ -890,6 +911,7 @@ function getfield_nothrow(@nospecialize(s00), @nospecialize(name), boundscheck::
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
+        isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         field <= datatype_min_ninitialized(s) && return true
         # `try_compute_fieldidx` already check for field index bound.
         !isvatuple(s) && isbitstype(fieldtype(s0, field)) && return true
@@ -1210,12 +1232,12 @@ function setfield!_nothrow(@specialize(𝕃::AbstractLattice), s00, name, v)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
         ismutabletype(s) || return false
-        s.name.atomicfields == C_NULL || return false # TODO: currently we're only testing for ordering === :not_atomic
         isa(name, Const) || return false
         field = try_compute_fieldidx(s, name.val)
         field === nothing && return false
         # `try_compute_fieldidx` already check for field index bound.
         isconst(s, field) && return false
+        isfieldatomic(s, field) && return false # TODO: currently we're only testing for ordering === :not_atomic
         v_expected = fieldtype(s0, field)
         return v ⊑ v_expected
     end
@@ -2074,20 +2096,14 @@ function getfield_effects(argtypes::Vector{Any}, @nospecialize(rt))
     if !(length(argtypes) ≥ 2 && getfield_notundefined(widenconst(obj), argtypes[2]))
         consistent = ALWAYS_FALSE
     end
-    if getfield_boundscheck(argtypes) !== true
+    nothrow = getfield_nothrow(argtypes, true)
+    if !nothrow && getfield_boundscheck(argtypes) !== true
         # If we cannot independently prove inboundsness, taint consistency.
         # The inbounds-ness assertion requires dynamic reachability, while
         # :consistent needs to be true for all input values.
         # N.B. We do not taint for `--check-bounds=no` here -that happens in
         # InferenceState.
-        if length(argtypes) ≥ 2 && getfield_nothrow(argtypes[1], argtypes[2], true)
-            nothrow = true
-        else
-            consistent = ALWAYS_FALSE
-            nothrow = false
-        end
-    else
-        nothrow = getfield_nothrow(argtypes)
+        consistent = ALWAYS_FALSE
     end
     if hasintersect(widenconst(obj), Module)
         inaccessiblememonly = getglobal_effects(argtypes, rt).inaccessiblememonly
