@@ -125,7 +125,7 @@ end
 @testset "get_bool_env" begin
     @testset "truthy" begin
         for v in ("t", "true", "y", "yes", "1")
-            for _v in (v, uppercase(v))
+            for _v in (v, uppercasefirst(v), uppercase(v))
                 ENV["testing_gbe"] = _v
                 @test Base.get_bool_env("testing_gbe") == true
                 @test Base.get_bool_env("testing_gbe", false) == true
@@ -135,7 +135,7 @@ end
     end
     @testset "falsy" begin
         for v in ("f", "false", "n", "no", "0")
-            for _v in (v, uppercase(v))
+            for _v in (v, uppercasefirst(v), uppercase(v))
                 ENV["testing_gbe"] = _v
                 @test Base.get_bool_env("testing_gbe") == false
                 @test Base.get_bool_env("testing_gbe", true) == false
@@ -159,9 +159,9 @@ end
     @testset "unrecognized" begin
         for v in ("truw", "falls")
             ENV["testing_gbe"] = v
-            @test_throws ErrorException Base.get_bool_env("testing_gbe")
-            @test_throws ErrorException Base.get_bool_env("testing_gbe", true)
-            @test_throws ErrorException Base.get_bool_env("testing_gbe", false)
+            @test Base.get_bool_env("testing_gbe") === nothing
+            @test Base.get_bool_env("testing_gbe", true) === nothing
+            @test Base.get_bool_env("testing_gbe", false) === nothing
         end
     end
     delete!(ENV, "testing_gbe")
