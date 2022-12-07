@@ -339,12 +339,12 @@ end
 ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
 
 @propagate_inbounds function _setindex!(h::Dict, v, key, index, sh = _shorthash7(hash(key)))
+    h.ndel -= isslotmissing(h, index)
     h.slots[index] = sh
     h.keys[index] = key
     h.vals[index] = v
     h.count += 1
     h.age += 1
-    h.ndel -= isslotmissing(h, index)
     if index < h.idxfloor
         h.idxfloor = index
     end
