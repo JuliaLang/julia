@@ -98,10 +98,10 @@ See also: [`withenv`](@ref), [`addenv`](@ref).
 const ENV = EnvDict()
 
 """
-    Base.get_bool_env(name::String, default::Bool = false)::Bool
+    Base.get_bool_env(name::String, default::Bool = false)::Union{Bool,Nothing}
 
-Evaluate whether the value of environnment variable `name` is truthy or falsy,
-and error if none are recognized. If the variable is not set, or is set to "",
+Evaluate whether the value of environnment variable `name` is a truthy or falsy string,
+and return `nothing` if it is not recognized as either. If the variable is not set, or is set to "",
 return `default`.
 
 Recognized values are:
@@ -120,12 +120,7 @@ function get_bool_env(name::String, default::Bool = false)
     elseif val in falsy
         return false
     else
-        error("""
-        Failed to parse the value `$val` of environment variable `$name` as Boolean.
-        Recognized values are:
-            truthy: $(join(repr.(truthy), ", "))
-            falsy:  $(join(repr.(falsy), ", "))
-        """)
+        return nothing
     end
 end
 
