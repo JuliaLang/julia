@@ -371,8 +371,18 @@ endif
 	fi;
 endif
 
-	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.  We only need to do this for Linux/FreeBSD
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+	# Set rpath for libjulia-internal, which is moving from `../lib` to `../lib/julia`.
+ifeq ($(OS), Darwin)
+ifneq ($(DARWIN_FRAMEWORK),1)
+ifeq ($(JULIA_BUILD_MODE),release)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
+else ifeq ($(JULIA_BUILD_MODE),debug)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
+	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel)/ $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
+endif
+endif
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	$(PATCHELF) --set-rpath '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
