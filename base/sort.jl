@@ -843,7 +843,7 @@ function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering,
         lastidx = idx + counts[i] - 1
         val = i-offs
         for j = idx:lastidx
-            v[j] = val
+            v[j] = val isa Unsigned && eltype(v) <: Signed ? signed(val) : val
         end
         idx = lastidx + 1
     end
