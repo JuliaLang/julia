@@ -63,6 +63,7 @@ using namespace llvm;
 #include "jitlayers.h"
 #include "serialize.h"
 #include "julia_assert.h"
+#include "codegen_shared.h"
 
 #define DEBUG_TYPE "julia_aotcompile"
 
@@ -259,6 +260,8 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
     *ci_out = codeinst;
 }
 
+void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
+
 // takes the running content that has collected in the shadow module and dump it to disk
 // this builds the object file portion of the sysimage files for fast startup, and can
 // also be used be extern consumers like GPUCompiler.jl to obtain a module containing
@@ -361,6 +364,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     size_t offset = gvars.size();
     data->jl_external_to_llvm.resize(params.external_fns.size());
 
+    auto tbaa_const = tbaa_make_child_with_context(*ctxt.getContext(), "jtbaa_const", nullptr, true).first;
     for (auto &extern_fn : params.external_fns) {
         jl_code_instance_t *this_code = std::get<0>(extern_fn.first);
         bool specsig = std::get<1>(extern_fn.first);
@@ -378,6 +382,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
 
         // Need to insert load instruction, thus we can't use replace all uses with
+        replaceUsesWithLoad(*F, [GV](Instruction &) { return GV; }, tbaa_const);
         for (Value *Use: F->users()) {
             if (auto CI = dyn_cast<CallInst>(Use)) {
                 auto Callee = new LoadInst(T_funcp, GV, "", false, Align(1), CI); // TODO correct Align?
