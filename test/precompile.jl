@@ -28,8 +28,18 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
         pushfirst!(DEPOT_PATH, load_cache_path)
         f(load_path)
     finally
-        rm(load_path, recursive=true, force=true)
-        separate && rm(load_cache_path, recursive=true, force=true)
+        try
+            rm(load_path, force=true, recursive=true)
+        catch err
+            @show err
+        end
+        if separate
+            try
+                rm(load_cache_path, force=true, recursive=true)
+            catch err
+                @show err
+            end
+        end
         filter!((≠)(load_path), LOAD_PATH)
         separate && filter!((≠)(load_cache_path), DEPOT_PATH)
     end
