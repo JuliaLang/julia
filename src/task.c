@@ -308,6 +308,11 @@ void JL_NORETURN jl_finish_task(jl_task_t *t)
     ct->ptls->in_pure_callback = 0;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     // let the runtime know this task is dead and find a new task to run
+
+    // Empty out the closure and the task local state so that GC can free those values.
+    ct->start = jl_nothing;
+    ct->tls = jl_nothing;
+
     jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
         done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
