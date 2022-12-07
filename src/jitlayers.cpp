@@ -1374,6 +1374,7 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     // (can't handle compilation recursion)
     for (auto &sym : cantFail(ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports))) {
         assert(sym.second);
+        (void) sym;
     }
 }
 
