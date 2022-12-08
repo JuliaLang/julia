@@ -266,8 +266,10 @@ test_field_operators(ARefxy{Float64}(123_10, 123_20))
     nothing
 end
 @noinline function test_field_orderings(r, x, y)
-    _test_field_orderings(Ref(copy(r)), x, y)
-    _test_field_orderings(Ref{Any}(copy(r)), x, y)
+    @testset "$r" begin
+        _test_field_orderings(Ref(copy(r)), x, y)
+        _test_field_orderings(Ref{Any}(copy(r)), x, y)
+    end
     nothing
 end
 @noinline test_field_orderings(x, y) = (@nospecialize; test_field_orderings(ARefxy(x, y), x, y))

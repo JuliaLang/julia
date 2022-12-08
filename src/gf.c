@@ -874,7 +874,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
         if ((jl_value_t*)mt != jl_nothing) {
             // try to refine estimate of min and max
             if (kwmt && kwmt != jl_type_type_mt && kwmt != jl_nonfunction_mt && kwmt != jl_kwcall_mt)
-                nspec_min = kwmt->max_args + 2 + 2 * (mt == jl_kwcall_mt);
+                nspec_min = jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt);
             else
                 nspec_max = nspec_min;
         }
@@ -1081,7 +1081,7 @@ static jl_method_instance_t *cache_method(
     int cache_with_orig = 1;
     jl_tupletype_t *compilationsig = tt;
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(definition->sig) : mt;
-    intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? definition->nargs + 1 : kwmt->max_args + 2 + 2 * (mt == jl_kwcall_mt));
+    intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? definition->nargs + 1 : jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt));
     jl_compilation_sig(tt, sparams, definition, nspec, &newparams);
     if (newparams) {
         compilationsig = jl_apply_tuple_type(newparams);
@@ -1368,8 +1368,9 @@ static void update_max_args(jl_methtable_t *mt, jl_value_t *type)
     size_t na = jl_nparams(type);
     if (jl_va_tuple_kind((jl_datatype_t*)type) == JL_VARARG_UNBOUND)
         na--;
-    if (na > mt->max_args)
-        mt->max_args = na;
+    // update occurs inside mt->writelock
+    if (na > jl_atomic_load_relaxed(&mt->max_args))
+        jl_atomic_store_relaxed(&mt->max_args, na);
 }
 
 jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED = NULL;
@@ -2160,8 +2161,8 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_code_instance_t *ucache = jl_get_method_inferred(unspec, (jl_value_t*)jl_any_type, 1, ~(size_t)0);
         // ask codegen to make the fptr for unspec
         if (jl_atomic_load_acquire(&ucache->invoke) == NULL) {
-            if (def->source == jl_nothing && (ucache->def->uninferred == jl_nothing ||
-                                              ucache->def->uninferred == NULL)) {
+            if (def->source == jl_nothing && (jl_atomic_load_relaxed(&ucache->def->uninferred) == jl_nothing ||
+                                              jl_atomic_load_relaxed(&ucache->def->uninferred) == NULL)) {
                 jl_printf(JL_STDERR, "source not available for ");
                 jl_static_show(JL_STDERR, (jl_value_t*)mi);
                 jl_printf(JL_STDERR, "\n");
@@ -2245,7 +2246,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     jl_svec_t *newparams = NULL;
     JL_GC_PUSH2(&tt, &newparams);
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(m->sig) : mt;
-    intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? m->nargs + 1 : kwmt->max_args + 2 + 2 * (mt == jl_kwcall_mt));
+    intptr_t nspec = (kwmt == NULL || kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || kwmt == jl_kwcall_mt ? m->nargs + 1 : jl_atomic_load_relaxed(&kwmt->max_args) + 2 + 2 * (mt == jl_kwcall_mt));
     jl_compilation_sig(ti, env, m, nspec, &newparams);
     tt = (newparams ? jl_apply_tuple_type(newparams) : ti);
     int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple ||
@@ -2408,7 +2409,7 @@ static void jl_compile_now(jl_method_instance_t *mi)
 JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tupletype_t *types, size_t world)
 {
     size_t tworld = jl_typeinf_world;
-    mi->precompiled = 1;
+    jl_atomic_store_relaxed(&mi->precompiled, 1);
     if (jl_generating_output()) {
         jl_compile_now(mi);
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
@@ -2421,14 +2422,14 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
             jl_value_t *types2 = NULL;
             JL_GC_PUSH2(&tpenv2, &types2);
             types2 = jl_type_intersection_env((jl_value_t*)types, (jl_value_t*)mi->def.method->sig, &tpenv2);
-            jl_method_instance_t *li2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
+            jl_method_instance_t *mi2 = jl_specializations_get_linfo(mi->def.method, (jl_value_t*)types2, tpenv2);
             JL_GC_POP();
-            li2->precompiled = 1;
-            if (jl_rettype_inferred(li2, world, world) == jl_nothing)
-                (void)jl_type_infer(li2, world, 1);
+            jl_atomic_store_relaxed(&mi2->precompiled, 1);
+            if (jl_rettype_inferred(mi2, world, world) == jl_nothing)
+                (void)jl_type_infer(mi2, world, 1);
             if (jl_typeinf_func && mi->def.method->primary_world <= tworld) {
-                if (jl_rettype_inferred(li2, tworld, tworld) == jl_nothing)
-                    (void)jl_type_infer(li2, tworld, 1);
+                if (jl_rettype_inferred(mi2, tworld, tworld) == jl_nothing)
+                    (void)jl_type_infer(mi2, tworld, 1);
             }
         }
     }

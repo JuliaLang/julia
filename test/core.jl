@@ -16,14 +16,30 @@ for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:def, :rettype, :rettype_const, :ipo_purity_bits, :argescapes]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :pure, :is_for_opaque_closure, :constprop=#]),
-        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals]=#]),
+        (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :min_world, :max_world, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
         (Core.TypeName, [:name, :module, :names, :atomicfields, :constfields, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
+        (TypeVar, [:name, :ub, :lb]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
+end
+#
+# sanity tests that our built-in types are marked correctly for atomic fields
+for (T, c) in (
+        (Core.CodeInfo, []),
+        (Core.CodeInstance, [:next, :inferred, :purity_bits, :invoke, :specptr, :precompile]),
+        (Core.Method, []),
+        (Core.MethodInstance, [:uninferred, :cache, :precompiled]),
+        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.TypeMapEntry, [:next]),
+        (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
+        (Core.TypeName, [:cache, :linearcache]),
+        (DataType, [:types, :layout]),
+    )
+    @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
 
 @test_throws(ErrorException("setfield!: const field .name of type DataType cannot be changed"),
