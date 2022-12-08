@@ -765,6 +765,7 @@ end
 
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
+    @test issorted(sort(vcat(rand(Int8, 600), [missing])))
 end
 
 @testset "Specific algorithms" begin
