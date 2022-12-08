@@ -216,60 +216,62 @@ end
     return h
 end
 
-@constprop :none function rehash_inplace!(h::Dict{K,V}) where V where K
-    # Metadata: empty => 0x00, removed => 0x7f, full => 0b1[7 most significant hash bits]
-    # Temp metadata: tmp_removed => 0x70, tmp_full => 0x01
-    sz = length(h.slots)
-    for i = 1:sz
-        # Change to temporary values
-        slot = h.slots[i]
-        h.slots[i] = slot == 0x7f ? 0x70 : ((slot & 0x80) != 0x0 ? 0x01 : 0x00)
-    end
+function _find_first_free_slot(h::Dict{K,V}, key::K) where V where K
+    iter = 0
+    maxprobe = h.maxprobe
+    index, sh = hashindex(key, sz)
+    keys = h.keys
 
-    function find_first_free_slot(key)
-        iter = 0
-        maxprobe = h.maxprobe
-        index, sh = hashindex(key, sz)
-        keys = h.keys
+    @inbounds while true
+        slot = h.slots[index]
+        if slot == 0x00 || slot == 0x7f || slot == 0x70
+            return index, sh
+        end
 
-        @inbounds while true
-            slot = h.slots[i]
-            if slot == 0x00 || slot == 0x7f || slot == 0x70
+        if h.slots[index] == sh
+            k = keys[index]
+            if key === k || isequal(key, k)
                 return index, sh
             end
-
-            if h.slots[index] == sh
-                k = keys[index]
-                if key === k || isequal(key, k)
-                    return index, sh
-                end
-            end
-
-            index = (index & (sz-1)) + 1
-            iter += 1
-            @assert iter <= maxprobe "Reached maxprobe during in-place rehashing."
         end
+
+        index = (index & (sz-1)) + 1
+        iter += 1
+        @assert iter <= maxprobe "Reached maxprobe during in-place rehashing."
+    end
+end
+
+@constprop :none function rehash_inplace!(h::Dict{K,V}) where V where K
+    # Temp metadata: tmp_removed => 0x70
+    sz = length(h.slots)
+    @inbounds for i = 1:sz
+        # Change to temporary values
+        slot = h.slots[i]
+        # removed => tmp_removed
+        h.slots[i] = slot == 0x7f ? 0x70 : slot
     end
 
-    for i = 1:sz
+    @inbounds for i = 1:sz
         # Try to find a better position
         slot = h.slots[i]
         slot != 0x01 && continue
-        index, h.slots[index] = find_first_free_slot(h.keys[i])
+        index, h.slots[index] = find_first_free_slot(h, h.keys[i])
         i == index && continue
         h.slots[i] = 0x7f
         # Change the element's position
-        h.keys[i], h.keys[index] = h.keys[index], h.keys[i]
-        h.vals[i], h.vals[index] = h.vals[index], h.vals[i]
+        h.keys[index] = h.keys[i]
+        h.vals[index] = h.vals[i]
+        _unsetindex!(h.keys, i)
+        _unsetindex!(h.vals, i)
     end
 
     h.ndel = 0
-    for i = 1:sz
+    @inbounds for i = 1:sz
         # Delete old tombstones
         slot = h.slots[i]
-        unnecessary = slot == 0x70
-        h.slots[i] = unnecessary ? 0x00 : slot
-        h.ndel += slot == 0x7f
+        tmp_removed = (slot == 0x70)
+        h.slots[i] = tmp_removed ? 0x00 : slot
+        h.ndel += (slot == 0x7f)
     end
     return h
 end
@@ -411,8 +413,8 @@ ht_keyindex2!(h::Dict, key) = ht_keyindex2_shorthash!(h, key)[1]
     if h.count*3 > sz*2
         # > 2/3 full
         rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
-    elseif h.ndel >= (sz>>2)
-        # > 1/4 deleted
+    elseif h.ndel >= (sz>>1)
+        # > 1/2 deleted
         rehash_inplace!(h)
     end
     nothing
