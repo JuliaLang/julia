@@ -1089,27 +1089,25 @@ namespace {
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
-                {
-                    auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
-                    if (stream) {
-                        // Print LLVM function statistics _before_ optimization
-                        // Print all the information about this invocation as a YAML object
-                        jl_printf(stream, "- \n");
-                        // We print the name and some statistics for each function in the module, both
-                        // before optimization and again afterwards.
-                        jl_printf(stream, "  before: \n");
-                        for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                                continue;
-                            }
-                            // Each function is printed as a YAML object with several attributes
-                            jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
-                            jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
+                auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
+                if (stream) {
+                    // Print LLVM function statistics _before_ optimization
+                    // Print all the information about this invocation as a YAML object
+                    jl_printf(stream, "- \n");
+                    // We print the name and some statistics for each function in the module, both
+                    // before optimization and again afterwards.
+                    jl_printf(stream, "  before: \n");
+                    for (auto &F : M.functions()) {
+                        if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            continue;
                         }
-
-                        start_time = jl_hrtime();
+                        // Each function is printed as a YAML object with several attributes
+                        jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
+                        jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
+                        jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                     }
+
+                    start_time = jl_hrtime();
                 }
 
                 JL_TIMING(LLVM_OPT);
@@ -1120,23 +1118,20 @@ namespace {
                 assert(!verifyModule(M, &errs()));
 
                 uint64_t end_time = 0;
-                {
-                    auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
-                    if (stream) {
-                        end_time = jl_hrtime();
-                        jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
-                        jl_printf(stream, "  optlevel: %d\n", optlevel);
+                if (stream) {
+                    end_time = jl_hrtime();
+                    jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
+                    jl_printf(stream, "  optlevel: %d\n", optlevel);
 
-                        // Print LLVM function statistics _after_ optimization
-                        jl_printf(stream, "  after: \n");
-                        for (auto &F : M.functions()) {
-                            if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
-                                continue;
-                            }
-                            jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
-                            jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
+                    // Print LLVM function statistics _after_ optimization
+                    jl_printf(stream, "  after: \n");
+                    for (auto &F : M.functions()) {
+                        if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
+                            continue;
                         }
+                        jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
+                        jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
+                        jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
                     }
                 }
             });
