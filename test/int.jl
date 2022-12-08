@@ -369,7 +369,7 @@ end
                 @test div(x,-y,rnd) == round(x/-y,rnd)
             end
             @test divrem(x,y,RoundFromZero) == (div(x,y,RoundFromZero), rem(x,y,RoundFromZero))
-            @test divrem(x,-y,RoundFromZero) == (div(x,-y,RoundFromZero)z, rem(x,-y,RoundFromZero))
+            @test divrem(x,-y,RoundFromZero) == (div(x,-y,RoundFromZero), rem(x,-y,RoundFromZero))
         end
     end
     for (a, b, nearest, away, up, from_zero) in (
