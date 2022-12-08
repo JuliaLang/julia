@@ -1218,11 +1218,12 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #endif
+    LockLayer(ObjectLayer),
     Pipelines{
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 1),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
+        std::make_unique<PipelineT>(LockLayer, *TM, 0),
+        std::make_unique<PipelineT>(LockLayer, *TM, 1),
+        std::make_unique<PipelineT>(LockLayer, *TM, 2),
+        std::make_unique<PipelineT>(LockLayer, *TM, 3),
     },
     OptSelLayer(Pipelines)
 {
@@ -1363,10 +1364,6 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
 #endif
     });
-
-#ifndef JL_USE_JITLINK
-    std::lock_guard<std::mutex> EmissionLock(EmissionMutex);
-#endif
 
     // TODO: what is the performance characteristics of this?
     cantFail(OptSelLayer.add(JD, std::move(TSM)));

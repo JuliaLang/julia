@@ -268,6 +268,21 @@ public:
 #else
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 #endif
+    struct LockLayerT : public orc::ObjectLayer {
+
+        LockLayerT(orc::ObjectLayer &BaseLayer) : orc::ObjectLayer(BaseLayer.getExecutionSession()), BaseLayer(BaseLayer) {}
+
+        void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
+                            std::unique_ptr<MemoryBuffer> O) override {
+#ifndef JL_USE_JITLINK
+            std::lock_guard<std::mutex> lock(EmissionMutex);
+#endif
+            BaseLayer.emit(std::move(R), std::move(O));
+        }
+    private:
+        orc::ObjectLayer &BaseLayer;
+        std::mutex EmissionMutex;
+    };
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
@@ -478,8 +493,6 @@ private:
     int RLST_inc = 0;
     DenseMap<void*, std::string> ReverseLocalSymbolTable;
 
-    std::mutex EmissionMutex;
-
     //Compilation streams
     jl_locked_stream dump_emitted_mi_name_stream;
     jl_locked_stream dump_compiles_stream;
@@ -494,6 +507,7 @@ private:
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
+    LockLayerT LockLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
 };
