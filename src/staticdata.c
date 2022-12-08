@@ -1344,7 +1344,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
             else if (jl_is_method_instance(v)) {
                 jl_method_instance_t *newmi = (jl_method_instance_t*)&s->s->buf[reloc_offset];
-                newmi->precompiled = 0;
+                jl_atomic_store_relaxed(&newmi->precompiled, 0);
             }
             else if (jl_is_code_instance(v)) {
                 // Handle the native-code pointers
@@ -2062,7 +2062,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     if (jl_options.strip_ir) {
-        record_field_change(&mi->uninferred, NULL);
+        record_field_change((jl_value_t**)&mi->uninferred, NULL);
         record_field_change((jl_value_t**)&mi->backedges, NULL);
         record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }

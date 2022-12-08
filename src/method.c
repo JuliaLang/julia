@@ -442,12 +442,12 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     li->def.value = NULL;
     li->specTypes = NULL;
     li->sparam_vals = jl_emptysvec;
-    li->uninferred = NULL;
+    jl_atomic_store_relaxed(&li->uninferred, NULL);
     li->backedges = NULL;
     li->callbacks = NULL;
     jl_atomic_store_relaxed(&li->cache, NULL);
     li->inInference = 0;
-    li->precompiled = 0;
+    jl_atomic_store_relaxed(&li->precompiled, 0);
     return li;
 }
 
@@ -555,8 +555,10 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
 // effectively described by the tuple (specTypes, env, Method) inside linfo
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 {
-    if (linfo->uninferred) {
-        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)linfo->uninferred);
+    jl_value_t *uninferred = jl_atomic_load_relaxed(&linfo->uninferred);
+    if (uninferred) {
+        assert(jl_is_code_info(uninferred)); // make sure this did not get `nothing` put here
+        return (jl_code_info_t*)jl_copy_ast((jl_value_t*)uninferred);
     }
 
     JL_TIMING(STAGED_FUNCTION);
@@ -599,13 +601,22 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
             }
         }
 
+        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
+
         // If this generated function has an opaque closure, cache it for
         // correctness of method identity
         for (int i = 0; i < jl_array_len(func->code); ++i) {
             jl_value_t *stmt = jl_array_ptr_ref(func->code, i);
             if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == jl_new_opaque_closure_sym) {
-                linfo->uninferred = jl_copy_ast((jl_value_t*)func);
-                jl_gc_wb(linfo, linfo->uninferred);
+                jl_value_t *uninferred = jl_copy_ast((jl_value_t*)func);
+                jl_value_t *old = NULL;
+                if (jl_atomic_cmpswap(&linfo->uninferred, &old, uninferred)) {
+                    jl_gc_wb(linfo, uninferred);
+                }
+                else {
+                    assert(jl_is_code_info(old));
+                    func = (jl_code_info_t*)old;
+                }
                 break;
             }
         }
@@ -613,7 +624,6 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
         ct->ptls->in_pure_callback = last_in;
         jl_lineno = last_lineno;
         ct->world_age = last_age;
-        jl_add_function_name_to_lineinfo(func, (jl_value_t*)def->name);
     }
     JL_CATCH {
         ct->ptls->in_pure_callback = last_in;
