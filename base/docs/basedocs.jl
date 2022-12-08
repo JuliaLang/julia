@@ -60,6 +60,25 @@ See the [manual section about modules](@ref modules) for details.
 kw"export"
 
 """
+    as
+
+`as` is used as a keyword to rename an identifier brought into scope by
+`import` or `using`, for the purpose of working around name conflicts as
+well as for shortening names.
+
+`import CSV as C` brings the imported `CSV` package into scope as `C`.
+
+`import CSV: read as rd, write as wd` brings the `read` and `write` methods
+from `CSV` into scope as `rd` and `wd` respectively.
+
+`as` works with `using` only when single identifiers are brought into scope.
+E.g `using CSV: read as rd` or `using CSV: read as rd, write as wd` works,
+but this: `using CSV as rd`, throws an error, since it operates on all of the
+`export`ed names in `CSV`.
+"""
+kw"as"
+
+"""
     abstract type
 
 `abstract type` declares a type that cannot be instantiated, and serves only as a node in the
