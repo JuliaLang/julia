@@ -10,6 +10,7 @@
 using std::vector;
 
 // == Global lock to guard access to profiling arrays ==
+jl_mutex_t g_llvm_opt_profiling_lock;
 int g_llvm_opt_profile_enabled = false;
 vector<jl_raw_llvm_mi_t> g_llvm_opt_mi_names;
 
