@@ -420,7 +420,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         assert(const_flags & 2);
         jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_const_return);
     }
-    codeinst->specsigflags = 0;
+    jl_atomic_store_relaxed(&codeinst->specsigflags, 0);
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     codeinst->ipo_purity_bits = ipo_effects;
@@ -2326,7 +2326,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
             ucache_invoke = jl_atomic_load_relaxed(&ucache->invoke);
         }
         // unspec is always not specsig, but might use specptr
-        codeinst->specsigflags = jl_atomic_load_relaxed(&ucache->specsigflags) & 0b10;
+        jl_atomic_store_relaxed(&codeinst->specsigflags, jl_atomic_load_relaxed(&ucache->specsigflags) & 0b10);
         jl_atomic_store_relaxed(&codeinst->specptr.fptr, unspec_fptr);
         codeinst->rettype_const = ucache->rettype_const;
         jl_atomic_store_release(&codeinst->invoke, ucache_invoke);
