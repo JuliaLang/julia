@@ -358,7 +358,7 @@ create_serialization_stream() do s # user-defined type array
     serialize(s, t)
     seek(s, 0)
     r = deserialize(s)
-    @test r.storage[:v] == 2
+    @test r.storage == nothing
     @test r.state === :done
     @test r.exception === nothing
 end
