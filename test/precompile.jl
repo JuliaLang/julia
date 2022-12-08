@@ -1275,7 +1275,11 @@ end
         end
     finally
         cd(save_cwd)
-        rm(temp_path, recursive=true)
+        try
+            rm(temp_path, recursive=true)
+        catch err
+            @show err
+        end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
