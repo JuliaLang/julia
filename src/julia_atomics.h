@@ -258,6 +258,7 @@ extern "C" {
 #define jl_atomic_exchange_relaxed jl_atomic_exchange
 
 #undef jl_atomic_cmpswap
+#undef jl_atomic_cmpswap_acqrel
 #undef jl_atomic_cmpswap_relaxed
 #define jl_atomic_cmpswap(obj, expected, desired) \
     (__extension__({ \
@@ -271,6 +272,7 @@ extern "C" {
                 *x__analyzer__ = temp__analyzer__; \
             eq__analyzer__; \
         }))
+#define jl_atomic_cmpswap_acqrel jl_atomic_cmpswap
 #define jl_atomic_cmpswap_relaxed jl_atomic_cmpswap
 
 #undef jl_atomic_store

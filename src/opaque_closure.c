@@ -90,7 +90,7 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
             oc->captures = ci->rettype_const;
         }
         else {
-            oc->invoke = (jl_fptr_args_t)jl_atomic_load_relaxed(&ci->specptr.fptr1);
+            oc->invoke = (jl_fptr_args_t) invoke;
         }
     }
     oc->world = world;
