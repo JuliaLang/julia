@@ -3416,8 +3416,6 @@ int jl_has_concrete_subtype(jl_value_t *typ)
     return ((jl_datatype_t*)typ)->has_concrete_subtype;
 }
 
-#define typeinf_lock jl_codegen_lock
-
 JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
     jl_task_t *ct = jl_current_task;

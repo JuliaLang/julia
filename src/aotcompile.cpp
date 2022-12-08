@@ -267,7 +267,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     jl_method_instance_t *mi = NULL;
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
-    JL_LOCK(&jl_codegen_lock);
     auto ct = jl_current_task;
     ct->reentrant_codegen++;
     orc::ThreadSafeContext ctx;
@@ -278,16 +277,18 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     }
     orc::ThreadSafeModule &clone = llvmmod ? *unwrap(llvmmod) : backing;
     auto ctxt = clone.getContext();
-    jl_codegen_params_t params(ctxt);
-    params.params = cgparams;
+
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
 
-    params.imaging = imaging;
-
     // compile all methods for the current world and type-inference world
+
+    JL_LOCK(&jl_codegen_lock);
+    jl_codegen_params_t params(ctxt);
+    params.params = cgparams;
+    params.imaging = imaging;
     size_t compile_for[] = { jl_typeinf_world, jl_atomic_load_acquire(&jl_world_counter) };
     for (int worlds = 0; worlds < 2; worlds++) {
         params.world = compile_for[worlds];
@@ -332,15 +333,18 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         // finally, make sure all referenced methods also get compiled or fixed up
         jl_compile_workqueue(emitted, *clone.getModuleUnlocked(), params, policy);
     }
+    JL_UNLOCK(&jl_codegen_lock); // Might GC
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
-    std::vector<std::string> gvars;
+    std::vector<std::string> gvars(params.globals.size());
     data->jl_value_to_llvm.resize(params.globals.size());
 
+    size_t idx = 0;
     for (auto &global : params.globals) {
-        data->jl_value_to_llvm.at(gvars.size()) = global.first;
-        gvars.push_back(std::string(global.second->getName()));
+        gvars[idx] = global.second->getName().str();
+        data->jl_value_to_llvm[idx] = global.first;
+        idx++;
     }
     CreateNativeMethods += emitted.size();
 
@@ -423,7 +427,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
     ct->reentrant_codegen--;
-    JL_UNLOCK(&jl_codegen_lock); // Might GC
     return (void*)data;
 }
 
@@ -1013,17 +1016,18 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
 
     // emit this function into a new llvm module
     if (src && jl_is_code_info(src)) {
-        JL_LOCK(&jl_codegen_lock);
         auto ctx = jl_ExecutionEngine->getContext();
-        jl_codegen_params_t output(*ctx);
-        output.world = world;
-        output.params = &params;
-        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), output.tsctx, output.imaging);
+        orc::ThreadSafeModule m = jl_create_llvm_module(name_from_method_instance(mi), *ctx, imaging_default());
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
             compiler_start_time = jl_hrtime();
+        JL_LOCK(&jl_codegen_lock);
+        jl_codegen_params_t output(*ctx);
+        output.world = world;
+        output.params = &params;
         auto decls = jl_emit_code(m, mi, src, jlrettype, output);
+        JL_UNLOCK(&jl_codegen_lock); // Might GC
 
         Function *F = NULL;
         if (m) {
@@ -1059,7 +1063,6 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
         JL_GC_POP();
         if (measure_compile_time_enabled)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
-        JL_UNLOCK(&jl_codegen_lock); // Might GC
         if (F) {
             dump->TSM = wrap(new orc::ThreadSafeModule(std::move(m)));
             dump->F = wrap(F);
