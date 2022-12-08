@@ -251,7 +251,7 @@ Waiting tasks are woken and the function `callback` is called after an initial d
 seconds, and then repeating with the given `interval` in seconds. If `interval` is equal to `0`, the
 callback is only run once. The function `callback` is called with a single argument, the timer
 itself. Stop a timer by calling `close`. The `callback` may still be run one final time, if the timer
-has alrady expired.
+has already expired.
 
 # Examples
 
