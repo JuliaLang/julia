@@ -103,7 +103,7 @@ function va_process_argtypes(@nospecialize(va_handler!), given_argtypes::Vector{
             else
                 last = nargs
             end
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
+            isva_given_argtypes[nargs] = tuple_tfunc(fallback_lattice, given_argtypes[last:end])
             va_handler!(isva_given_argtypes, last)
         end
         return isva_given_argtypes
@@ -158,7 +158,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                         vargtype_elements[i] = Const(atyp.parameters[1])
                     end
                 end
-                vargtype = tuple_tfunc(vargtype_elements)
+                vargtype = tuple_tfunc(fallback_lattice, vargtype_elements)
             end
         end
         cache_argtypes[nargs] = vargtype
