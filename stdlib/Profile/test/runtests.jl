@@ -272,4 +272,13 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+@testset "HeapSnapshot" begin
+    fname = tempname()
+    Profile.take_heap_snapshot(fname)
+
+    open(fname) do fs
+        @test readline(fs) != ""
+    end
+end
+
 include("allocs.jl")
