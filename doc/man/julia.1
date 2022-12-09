@@ -110,7 +110,13 @@ Load <file> immediately on all processors
 
 .TP
 -t, --threads <n>
-Enable n threads
+Enable n threads; "auto" tries to infer a useful default number
+of threads to use but the exact behavior might change in the future.
+Currently, "auto" uses the number of CPUs assigned to this julia
+process based on the OS-specific affinity assignment interface, if
+supported (Linux and Windows). If this is not supported (macOS) or
+process affinity is not configured, it uses the number of CPU
+threads.
 
 .TP
 -p, --procs {N|auto}

@@ -112,8 +112,13 @@ static const char opts[]  =
     " -L, --load <file>          Load <file> immediately on all processors\n\n"
 
     // parallel options
-    " -t, --threads {N|auto}     Enable N threads; \"auto\" currently sets N to the number of local\n"
-    "                            CPU threads but this might change in the future\n"
+    " -t, --threads {N|auto}    Enable N threads; \"auto\" tries to infer a useful default number\n"
+    "                           of threads to use but the exact behavior might change in the future.\n"
+    "                           Currently, \"auto\" uses the number of CPUs assigned to this julia\n"
+    "                           process based on the OS-specific affinity assignment interface, if\n"
+    "                           supported (Linux and Windows). If this is not supported (macOS) or\n"
+    "                           process affinity is not configured, it uses the number of CPU\n"
+    "                           threads.\n"
     " -p, --procs {N|auto}       Integer value N launches N additional local worker processes\n"
     "                            \"auto\" launches as many workers as the number of local CPU threads (logical cores)\n"
     " --machine-file <file>      Run processes on hosts listed in <file>\n\n"
@@ -456,7 +461,7 @@ restart_switch:
         case 'p': // procs
             errno = 0;
             if (!strcmp(optarg,"auto")) {
-                jl_options.nprocs = jl_cpu_threads();
+                jl_options.nprocs = jl_effective_threads();
             }
             else {
                 long nprocs = strtol(optarg, &endptr, 10);

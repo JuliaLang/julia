@@ -455,7 +455,7 @@ void jl_init_threading(void)
     // how many threads available, usable
     jl_n_threads = JULIA_NUM_THREADS;
     if (jl_options.nthreads < 0) { // --threads=auto
-        jl_n_threads = jl_cpu_threads();
+        jl_n_threads = jl_effective_threads();
     }
     else if (jl_options.nthreads > 0) { // --threads=N
         jl_n_threads = jl_options.nthreads;
@@ -464,7 +464,7 @@ void jl_init_threading(void)
         if (strcmp(cp, "auto"))
             jl_n_threads = (uint64_t)strtol(cp, NULL, 10); // ENV[NUM_THREADS_NAME] == "N"
         else
-            jl_n_threads = jl_cpu_threads(); // ENV[NUM_THREADS_NAME] == "auto"
+            jl_n_threads = jl_effective_threads(); // ENV[NUM_THREADS_NAME] == "auto"
     }
     if (jl_n_threads <= 0)
         jl_n_threads = 1;
