@@ -219,6 +219,7 @@ end
 function _find_first_free_slot(h::Dict{K,V}, key::K) where V where K
     iter = 0
     maxprobe = h.maxprobe
+    sz = length(h.slots)
     index, sh = hashindex(key, sz)
     keys = h.keys
 

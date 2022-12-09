@@ -1363,3 +1363,16 @@ end
     sizehint!(d, 10)
     @test length(d.slots) < 100
 end
+
+@testset "non-allocating delete" begin
+    function insert_and_remove(d, reps)
+        for i in 1:reps
+            d[i] = 1
+            delete!(d, i)
+        end
+        d
+    end
+    d = Dict(-1 => 2)
+    @test insert_and_remove(d, 10000) == Dict(-1 => 2)
+    @test (@allocated insert_and_remove(d, 10000)) == 0
+end
