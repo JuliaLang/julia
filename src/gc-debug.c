@@ -1227,20 +1227,17 @@ void gc_count_pool(void)
     jl_safe_printf("************************\n");
 }
 
-int gc_slot_to_fieldidx(void *obj, void *slot)
+int gc_slot_to_fieldidx(void *obj, void *slot, jl_datatype_t *vt) JL_NOTSAFEPOINT
 {
-    jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
     int nf = (int)jl_datatype_nfields(vt);
-    for (int i = 0; i < nf; i++) {
-        void *fieldaddr = (char*)obj + jl_field_offset(vt, i);
-        if (fieldaddr >= slot) {
-            return i;
-        }
+    for (int i = 1; i < nf; i++) {
+        if (slot < (void*)((char*)obj + jl_field_offset(vt, i)))
+            return i - 1;
     }
-    return -1;
+    return nf - 1;
 }
 
-int gc_slot_to_arrayidx(void *obj, void *_slot)
+int gc_slot_to_arrayidx(void *obj, void *_slot) JL_NOTSAFEPOINT
 {
     char *slot = (char*)_slot;
     jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(obj);
@@ -1258,8 +1255,6 @@ int gc_slot_to_arrayidx(void *obj, void *_slot)
     }
     else if (vt->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)obj;
-        if (!a->flags.ptrarray)
-            return -1;
         start = (char*)a->data;
         len = jl_array_len(a);
         elsize = a->elsize;

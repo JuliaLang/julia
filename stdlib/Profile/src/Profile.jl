@@ -1239,6 +1239,27 @@ function warning_empty(;summary = false)
     end
 end
 
+
+"""
+    Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+
+Write a snapshot of the heap, in the JSON format expected by the Chrome
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to the given
+file path or IO stream. If all_one is true, then report the size of
+every object as one so they can be easily counted. Otherwise, report
+the actual size.
+"""
+function take_heap_snapshot(io::IOStream, all_one::Bool=false)
+    @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
+end
+function take_heap_snapshot(filepath::String, all_one::Bool=false)
+    open(filepath, "w") do io
+        take_heap_snapshot(io, all_one)
+    end
+end
+
+
 include("Allocs.jl")
 
 end # module
