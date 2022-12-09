@@ -115,4 +115,3 @@ end
 
 @simple_deprecate(Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period, Base.round(oneunit(P), x, r))
 @simple_deprecate(Base.round(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period, Base.round(oneunit(P), Date(x), r))
-
