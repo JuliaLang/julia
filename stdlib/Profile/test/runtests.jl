@@ -273,12 +273,17 @@ end
 end
 
 @testset "HeapSnapshot" begin
-    fname = tempname()
-    Profile.take_heap_snapshot(fname)
+    fname = strip(String(read(
+        `$(Base.julia_cmd()) --startup-file=no -E "using Profile; Profile.take_heap_snapshot()"`
+    )), ['\n', '\"'])
+
+    @test isfile(fname)
 
     open(fname) do fs
         @test readline(fs) != ""
     end
+
+    rm(fname)
 end
 
 include("allocs.jl")

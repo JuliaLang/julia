@@ -1243,12 +1243,14 @@ end
 """
     Profile.take_heap_snapshot(io::IOStream, all_one::Bool=false)
     Profile.take_heap_snapshot(filepath::String, all_one::Bool=false)
+    Profile.take_heap_snapshot(all_one::Bool=false)
 
 Write a snapshot of the heap, in the JSON format expected by the Chrome
-Devtools Heap Snapshot viewer (.heapsnapshot extension), to the given
-file path or IO stream. If all_one is true, then report the size of
-every object as one so they can be easily counted. Otherwise, report
-the actual size.
+Devtools Heap Snapshot viewer (.heapsnapshot extension), to a file
+(`\$pid_\$timestamp.heapsnapshot`) in the current directory, or the given
+file path, or IO stream. If `all_one` is true, then report the size of
+every object as one so they can be easily counted. Otherwise, report the
+actual size.
 """
 function take_heap_snapshot(io::IOStream, all_one::Bool=false)
     @Base._lock_ios(io, ccall(:jl_gc_take_heap_snapshot, Cvoid, (Ptr{Cvoid}, Cchar), io.handle, Cchar(all_one)))
@@ -1257,6 +1259,11 @@ function take_heap_snapshot(filepath::String, all_one::Bool=false)
     open(filepath, "w") do io
         take_heap_snapshot(io, all_one)
     end
+    return filepath
+end
+function take_heap_snapshot(all_one::Bool=false)
+    f = joinpath(pwd(), "$(getpid())_$(time_ns()).heapsnapshot")
+    return take_heap_snapshot(f, all_one)
 end
 
 
