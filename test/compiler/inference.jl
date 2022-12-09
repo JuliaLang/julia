@@ -4633,3 +4633,19 @@ end |> only === Type{Float64}
 # Issue #46839: `abstract_invoke` should handle incorrect call type
 @test only(Base.return_types(()->invoke(BitSet, Any, x), ())) === Union{}
 @test only(Base.return_types(()->invoke(BitSet, Union{Tuple{Int32},Tuple{Int64}}, 1), ())) === Union{}
+
+# Issue #47688: Abstract iteration should take into account `iterate` effects
+global it_count47688 = 0
+struct CountsIterate47688{N}; end
+function Base.iterate(::CountsIterate47688{N}, n=0) where N
+	global it_count47688 += 1
+	n <= N ? (n, n+1) : nothing
+end
+foo47688() = tuple(CountsIterate47688{5}()...)
+bar47688() = foo47688()
+@test only(Base.return_types(bar47688)) == NTuple{6, Int}
+@test it_count47688 == 0
+@test isa(bar47688(), NTuple{6, Int})
+@test it_count47688 == 7
+@test isa(foo47688(), NTuple{6, Int})
+@test it_count47688 == 14
