@@ -208,6 +208,11 @@ end
                     # #47835, TODO implement interval arithmetic analysis
                     @test_broken Core.Compiler.is_nothrow(Base.infer_effects(op, (T, T2)))
                 end
+                # TODO enable these tests once we enable interval analysis in the base compiler
+                # @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
+                # # TODO fold out `0 ≤ x::UInt` to `Const(true)`
+                # T2 === Int128 && (T === UInt64 || T === UInt128) && continue
+                # @test Core.Compiler.is_removable_if_unused(Base.infer_effects(op, (T, T2)))
             end
         end
     end

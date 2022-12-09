@@ -23,6 +23,9 @@ Adds `@nospecialize` annotation to non-annotated arguments of `def`.
 macro nospecs(ex)
     is_function_def(ex) || throw(ArgumentError("expected function definition"))
     args, body = ex.args
+    while isexpr(args, :where)
+        args = args.args[1]
+    end
     if isexpr(args, :call)
         args = args.args[2:end] # skip marking `@nospecialize` on the function itself
     else
@@ -152,10 +155,34 @@ end
 @nospecs bitcast_tfunc(::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
 @nospecs conversion_tfunc(𝕃::AbstractLattice, t, x) = conversion_tfunc(widenlattice(𝕃), t, x)
 @nospecs conversion_tfunc(::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
+@nospecs sext_int_tfunc(𝕃::AbstractLattice, t, x) = sext_int_tfunc(widenlattice(𝕃), t, x)
+@nospecs sext_int_tfunc(𝕃::IntervalsLattice, t, x) = ext_int_interval(t, x)
+@nospecs sext_int_tfunc(𝕃::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
+@nospecs zext_int_tfunc(𝕃::AbstractLattice, t, x) = zext_int_tfunc(widenlattice(𝕃), t, x)
+@nospecs zext_int_tfunc(𝕃::IntervalsLattice, t, x) = ext_int_interval(t, x)
+@nospecs zext_int_tfunc(𝕃::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
+@nospecs trunc_int_tfunc(𝕃::AbstractLattice, t, x) = trunc_int_tfunc(widenlattice(𝕃), t, x)
+@nospecs trunc_int_tfunc(𝕃::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
+
+function ext_int_interval(@nospecialize(a), @nospecialize(b))
+    aty = instanceof_tfunc(a)[1]
+    if isconcretetype(aty)
+        bw = widenconst(b)
+        if isconcretetype(bw) && bw <: BitInteger
+            sizeof(aty) > sizeof(bw) || return Bottom
+            if aty <: SignedInt
+                return Interval(aty, aty(typemin(bw)), aty(typemax(bw)))
+            elseif aty <: Unsigned
+                return Interval(aty, zero(aty), aty(typemax(bw)))
+            end
+        end
+    end
+    return aty
+end
 
 add_tfunc(bitcast, 2, 2, bitcast_tfunc, 1)
-add_tfunc(sext_int, 2, 2, conversion_tfunc, 1)
-add_tfunc(zext_int, 2, 2, conversion_tfunc, 1)
+add_tfunc(sext_int, 2, 2, sext_int_tfunc, 1)
+add_tfunc(zext_int, 2, 2, zext_int_tfunc, 1)
 add_tfunc(trunc_int, 2, 2, conversion_tfunc, 1)
 add_tfunc(fptoui, 2, 2, conversion_tfunc, 1)
 add_tfunc(fptosi, 2, 2, conversion_tfunc, 1)
@@ -233,19 +260,109 @@ add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
 # comparisons
 # -----------
 
+@nospecs function interval_equality_tfunc(tfunc::F, typ, iseq::Bool, 𝕃::IntervalsLattice, a, b) where F<:Function
+    if isa(a, Interval)
+        if isa(b, Interval)
+            issametype(a, b) || return Bottom
+            if a.typ <: typ
+                isempty(a ∩ b) && return Const(!iseq)
+            end
+            b = wideninterval(b)
+        elseif isa(b, Const)
+            issametype(a, b) || return Bottom
+            if a.typ <: typ
+                isempty(a ∩ b) && return Const(!iseq)
+            end
+        end
+        a = wideninterval(a)
+    elseif isa(b, Interval)
+        if isa(a, Const)
+            issametype(a, b) || return Bottom
+            if b.typ <: typ
+                isempty(a ∩ b) && return Const(!iseq)
+            end
+        end
+        b = wideninterval(b)
+    end
+    return tfunc(widenlattice(𝕃), a, b)
+end
+
+@nospecs function interval_inequality_tfunc(tfunc::F, typ, iseq::Bool, 𝕃::IntervalsLattice, a, b) where F<:Function
+    if isa(a, Interval)
+        if isa(b, Interval)
+            issametype(a, b) || return Bottom
+            if a.typ <: typ
+                op = intrinsicop(iseq ? :≤ : :<, a.typ)
+                op(a.max, b.min) && return Const(true)
+                op(a.min, b.max) || return Const(false)
+            end
+            b = wideninterval(b)
+        elseif isa(b, Const)
+            issametype(a, b) || return Bottom
+            if a.typ <: typ
+                op = intrinsicop(iseq ? :≤ : :<, a.typ)
+                op(a.max, b.val) && return Const(true)
+                op(a.min, b.val) || return Const(false)
+            end
+        end
+        a = wideninterval(a)
+    elseif isa(b, Interval)
+        if isa(a, Const)
+            issametype(a, b) || return Bottom
+            if b.typ <: typ
+                op = intrinsicop(iseq ? :≤ : :<, b.typ)
+                op(a.val, b.min) && return Const(true)
+                op(a.val, b.max) || return Const(false)
+            end
+        end
+        b = wideninterval(b)
+    end
+    return tfunc(widenlattice(𝕃), a, b)
+end
+
+@nospecs eq_int_tfunc(𝕃::AbstractLattice, a, b) = eq_int_tfunc(widenlattice(𝕃), a, b)
+@nospecs eq_int_tfunc(𝕃::IntervalsLattice, a, b) = interval_equality_tfunc(eq_int_tfunc, BitInteger, true, 𝕃, a, b)
+@nospecs eq_int_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs ne_int_tfunc(𝕃::AbstractLattice, a, b) = ne_int_tfunc(widenlattice(𝕃), a, b)
+@nospecs ne_int_tfunc(𝕃::IntervalsLattice, a, b) = interval_equality_tfunc(ne_int_tfunc, BitInteger, false, 𝕃, a, b)
+@nospecs ne_int_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs slt_int_tfunc(𝕃::AbstractLattice, a, b) = slt_int_tfunc(widenlattice(𝕃), a, b)
+@nospecs slt_int_tfunc(𝕃::IntervalsLattice, a, b) = interval_inequality_tfunc(slt_int_tfunc, SignedInt, false, 𝕃, a, b)
+@nospecs slt_int_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs ult_int_tfunc(𝕃::AbstractLattice, a, b) = ult_int_tfunc(widenlattice(𝕃), a, b)
+@nospecs ult_int_tfunc(𝕃::IntervalsLattice, a, b) = interval_inequality_tfunc(ult_int_tfunc, UnsignedInt, false, 𝕃, a, b)
+@nospecs ult_int_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs sle_int_tfunc(𝕃::AbstractLattice, a, b) = sle_int_tfunc(widenlattice(𝕃), a, b)
+@nospecs sle_int_tfunc(𝕃::IntervalsLattice, a, b) = interval_inequality_tfunc(sle_int_tfunc, SignedInt, true, 𝕃, a, b)
+@nospecs sle_int_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs ule_int_tfunc(𝕃::AbstractLattice, a, b) = ule_int_tfunc(widenlattice(𝕃), a, b)
+@nospecs ule_int_tfunc(𝕃::IntervalsLattice, a, b) = interval_inequality_tfunc(ule_int_tfunc, UnsignedInt, true, 𝕃, a, b)
+@nospecs ule_int_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs eq_float_tfunc(𝕃::AbstractLattice, a, b) = eq_float_tfunc(widenlattice(𝕃), a, b)
+@nospecs eq_float_tfunc(𝕃::IntervalsLattice, a, b) = interval_equality_tfunc(eq_float_tfunc, IEEEFloat, true, 𝕃, a, b)
+@nospecs eq_float_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs ne_float_tfunc(𝕃::AbstractLattice, a, b) = ne_float_tfunc(widenlattice(𝕃), a, b)
+@nospecs ne_float_tfunc(𝕃::IntervalsLattice, a, b) = interval_equality_tfunc(ne_float_tfunc, IEEEFloat, false, 𝕃, a, b)
+@nospecs ne_float_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs lt_float_tfunc(𝕃::AbstractLattice, a, b) = lt_float_tfunc(widenlattice(𝕃), a, b)
+@nospecs lt_float_tfunc(𝕃::IntervalsLattice, a, b) = interval_inequality_tfunc(lt_float_tfunc, IEEEFloat, false, 𝕃, a, b)
+@nospecs lt_float_tfunc(𝕃::JLTypeLattice, a, b) = Bool
+@nospecs le_float_tfunc(𝕃::AbstractLattice, a, b) = le_float_tfunc(widenlattice(𝕃), a, b)
+@nospecs le_float_tfunc(𝕃::IntervalsLattice, a, b) = interval_inequality_tfunc(le_float_tfunc, IEEEFloat, false, 𝕃, a, b)
+@nospecs le_float_tfunc(𝕃::JLTypeLattice, a, b) = Bool
 @nospecs cmp_tfunc(𝕃::AbstractLattice, a, b) = cmp_tfunc(widenlattice(𝕃), a, b)
 @nospecs cmp_tfunc(::JLTypeLattice, a, b) = Bool
 
-add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
-add_tfunc(ne_int, 2, 2, cmp_tfunc, 1)
-add_tfunc(slt_int, 2, 2, cmp_tfunc, 1)
-add_tfunc(ult_int, 2, 2, cmp_tfunc, 1)
-add_tfunc(sle_int, 2, 2, cmp_tfunc, 1)
-add_tfunc(ule_int, 2, 2, cmp_tfunc, 1)
-add_tfunc(eq_float, 2, 2, cmp_tfunc, 2)
-add_tfunc(ne_float, 2, 2, cmp_tfunc, 2)
-add_tfunc(lt_float, 2, 2, cmp_tfunc, 2)
-add_tfunc(le_float, 2, 2, cmp_tfunc, 2)
+add_tfunc(eq_int, 2, 2, eq_int_tfunc, 1)
+add_tfunc(ne_int, 2, 2, ne_int_tfunc, 1)
+add_tfunc(slt_int, 2, 2, slt_int_tfunc, 1)
+add_tfunc(ult_int, 2, 2, ult_int_tfunc, 1)
+add_tfunc(sle_int, 2, 2, sle_int_tfunc, 1)
+add_tfunc(ule_int, 2, 2, ule_int_tfunc, 1)
+add_tfunc(eq_float, 2, 2, eq_float_tfunc, 2)
+add_tfunc(ne_float, 2, 2, ne_float_tfunc, 2)
+add_tfunc(lt_float, 2, 2, lt_float_tfunc, 2)
+add_tfunc(le_float, 2, 2, le_float_tfunc, 2)
 add_tfunc(fpiseq, 2, 2, cmp_tfunc, 1)
 add_tfunc(eq_float_fast, 2, 2, cmp_tfunc, 1)
 add_tfunc(ne_float_fast, 2, 2, cmp_tfunc, 1)
@@ -327,6 +444,26 @@ end
             x.val === true && return y
             return Const(false)
         end
+    end
+    return egal_tfunc(widenlattice(𝕃), x, y)
+end
+@nospecs function egal_tfunc(𝕃::IntervalsLattice, x, y)
+    if isa(x, Interval)
+        if isa(y, Interval)
+            issametype(x, y) || return Const(false)
+            isempty(x ∩ y) && return Const(false)
+            y = wideninterval(y)
+        elseif isa(y, Const)
+            issametype(x, y) || return Const(false)
+            isempty(x ∩ y) && return Const(false)
+        end
+        x = wideninterval(x)
+    elseif isa(y, Interval)
+        if isa(x, Const)
+            issametype(x, y) || return Const(false)
+            isempty(x ∩ y) && return Const(false)
+        end
+        y = wideninterval(y)
     end
     return egal_tfunc(widenlattice(𝕃), x, y)
 end
@@ -1102,6 +1239,10 @@ end
 
 @nospecs function _getfield_tfunc(𝕃::AnyMustAliasesLattice, s00, name, setfield::Bool)
     return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), name, setfield)
+end
+
+@nospecs function _getfield_tfunc(𝕃::IntervalsLattice, s00, name, setfield::Bool)
+    return _getfield_tfunc(widenlattice(𝕃), wideninterval(s00), name, setfield)
 end
 
 @nospecs function _getfield_tfunc(𝕃::PartialsLattice, s00, name, setfield::Bool)

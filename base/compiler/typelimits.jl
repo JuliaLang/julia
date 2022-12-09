@@ -552,6 +552,23 @@ end
     return tmerge(widenlattice(𝕃), typea, typeb)
 end
 
+function tmerge(𝕃::IntervalsLattice, @nospecialize(typea), @nospecialize(typeb))
+    if isa(typea, Interval)
+        if isa(typeb, Interval)
+            if typea.typ === typeb.typ
+                min = intrinsicop(:min, typea.typ)
+                max = intrinsicop(:max, typea.typ)
+                return Interval(typea.typ, min(typea.min, typeb.min), max(typea.max, typeb.max))
+            end
+            typeb = wideninterval(typeb)
+        end
+        typea = wideninterval(typea)
+    elseif isa(typeb, Interval)
+        typeb = wideninterval(typeb)
+    end
+    return tmerge(widenlattice(𝕃), typea, typeb)
+end
+
 # N.B. This can also be called with both typea::Const and typeb::Const to
 # to recover PartialStruct from `Const`s with overlapping fields.
 @nospecializeinfer function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))

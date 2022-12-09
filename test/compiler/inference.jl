@@ -5021,3 +5021,47 @@ let 𝕃 = Core.Compiler.OptimizerLattice()
         map(T -> Issue49785{S,T}, (a = S,))
     end isa Vector
 end
+
+# interval arithmetics analysis
+using Core.Compiler:
+    InferenceLattice, OptimizerLattice, ConditionalsLattice, InterConditionalsLattice,
+    WithIntervalLattice
+import Core.Compiler:
+    typeinf_lattice, ipo_lattice, optimizer_lattice
+
+include("newinterp.jl")
+@newinterp IntervalInterpreter
+let CC = Core.Compiler
+    CC.typeinf_lattice(::IntervalInterpreter) = InferenceLattice(ConditionalsLattice(WithIntervalLattice.instance))
+    CC.ipo_lattice(::IntervalInterpreter) = InferenceLattice(InterConditionalsLattice(WithIntervalLattice.instance))
+    CC.optimizer_lattice(::IntervalInterpreter) = OptimizerLattice(WithIntervalLattice.instance)
+    # disable the semi-concrete interpretation for now:
+    # we need https://github.com/JuliaLang/julia/pull/47994 to be landed again for the
+    # interval analysis to work in the presence of the semi-concrete interpretation
+    function CC.concrete_eval_eligible(interp::IntervalInterpreter,
+        @nospecialize(f), result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+        ret = @invoke Core.Compiler.concrete_eval_eligible(interp::CC.AbstractInterpreter,
+            f::Any, result::CC.MethodCallResult, arginfo::CC.ArgInfo, sv::CC.AbsIntState)
+        if ret === :semi_concrete_eval
+            return :none
+        end
+        return ret
+    end
+end
+
+@test Base.return_types((Int32,); interp=IntervalInterpreter()) do x
+    x < typemax(Int) ? 0 : nothing
+end |> only === Int
+@test Base.return_types((Int32,); interp=IntervalInterpreter()) do x
+    x ≤ typemax(Int) ? 0 : nothing
+end |> only === Int
+@test Base.return_types((Int32,); interp=IntervalInterpreter()) do x
+    x > typemax(Int) ? 0 : nothing
+end |> only === Nothing
+@test Base.return_types((Int32,); interp=IntervalInterpreter()) do x
+    x ≥ typemax(Int) ? 0 : nothing
+end |> only === Nothing
+@test Base.return_types((Int32,); interp=IntervalInterpreter()) do x
+    x == typemax(Int) ? 0 : nothing
+end |> only === Nothing
+@test Core.Compiler.is_nothrow(Base.infer_effects(>>, (UInt32,Int32); interp=IntervalInterpreter()))
