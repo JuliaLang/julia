@@ -71,5 +71,7 @@ function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearest
 end
 
 Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(x, oneunit(P))
-
 Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(x, oneunit(P))
+
+@deprecate argerror(msg::String) ArgumentError(msg) false
+@deprecate argerror() nothing false
