@@ -772,6 +772,7 @@ extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
+int jl_effective_threads(void);
 
 // Whether the GC is running
 extern char *jl_safepoint_pages;

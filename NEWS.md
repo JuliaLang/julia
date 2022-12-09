@@ -73,6 +73,8 @@ Command-line option changes
   code when building a system image. The resulting image will only work if `--compile=all` is
   used, or if all needed code is precompiled ([#42925]).
 * When the program file is `-` the code to be executed is read from standard in ([#43191]).
+* In Linux and Windows, `--threads=auto` now tries to infer usable number of CPUs from the
+  process affinity which is set typically in HPC and cloud environments ([#42340]).
 
 Multi-threading changes
 -----------------------
