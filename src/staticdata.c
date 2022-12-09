@@ -165,13 +165,13 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_int64_type);
         INSERT_TAG(jl_bool_type);
         INSERT_TAG(jl_uint8_type);
+        INSERT_TAG(jl_uint16_type);
         INSERT_TAG(jl_uint32_type);
         INSERT_TAG(jl_uint64_type);
         INSERT_TAG(jl_char_type);
         INSERT_TAG(jl_weakref_type);
         INSERT_TAG(jl_int8_type);
         INSERT_TAG(jl_int16_type);
-        INSERT_TAG(jl_uint16_type);
         INSERT_TAG(jl_float16_type);
         INSERT_TAG(jl_float32_type);
         INSERT_TAG(jl_float64_type);
