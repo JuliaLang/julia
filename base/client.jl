@@ -514,10 +514,6 @@ MainInclude.include
 function _start()
     empty!(ARGS)
     append!(ARGS, Core.ARGS)
-    if ccall(:jl_generating_output, Cint, ()) != 0 && JLOptions().incremental == 0
-        # clear old invalid pointers
-        PCRE.__init__()
-    end
     try
         exec_options(JLOptions())
     catch
