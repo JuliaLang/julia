@@ -276,7 +276,7 @@ julia> B[invperm(v)]
 """
 function invperm(a::AbstractVector)
     require_one_based_indexing(a)
-    b = zero(a) # similar vector of zeros
+    fill!(similar(a), zero(eltype(a))) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
         ((1 <= j <= n) && b[j] == 0) ||
