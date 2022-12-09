@@ -42,14 +42,12 @@ Take the given `DateTime` and return the number of milliseconds since the roundi
 """
 datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
 
-@depreciate Base.floor(dt::Date, p::Year) = Base.floor(p, dt)
 function Base.floor(p::Year, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     years = year(dt)
     return Date(years - mod(years, value(p)))
 end
 
-@deprecate Base.floor(dt::Date, p::Month) = Base.floor(p, dt)
 function Base.floor(p::Month, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     y, m = yearmonth(dt)
@@ -60,12 +58,10 @@ function Base.floor(p::Month, dt::Date)
     return Date(target_year, target_month)
 end
 
-@deprecate Base.floor(dt::Date, p::Quarter) = Base.floor(p, dt)
 function Base.floor(p::Quarter, dt::Date)
     return floor(dt, Month(p))
 end
 
-@deprecate Base.floor(dt::Date, p::Week) = Base.floor(p, dt)
 function Base.floor(p::Week, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     days = value(dt) - WEEKEPOCH
@@ -73,17 +69,14 @@ function Base.floor(p::Week, dt::Date)
     return Date(UTD(WEEKEPOCH + Int64(days)))
 end
 
-@deprecate Base.floor(dt::Date, p::Day) = Base.floor(p, dt)
 function Base.floor(p::Day, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     days = date2epochdays(dt)
     return epochdays2date(days - mod(days, value(p)))
 end
 
-@deprecate Base.floor(dt::DateTime, p::DatePeriod) = Base.floor(p, dt)
 Base.floor(p::DatePeriod, dt::DateTime) = DateTime(Base.floor(p, Date(dt)))
 
-@deprecate Base.floor(dt::DateTime, p::TimePeriod) = Base.floor(p, dt)
 function Base.floor(p::TimePeriod, dt::DateTime)
     value(p) < 1 && throw(DomainError(p))
     milliseconds = datetime2epochms(dt)
@@ -118,7 +111,6 @@ function Base.floor(precision::T, x::ConvertiblePeriod) where T <: ConvertiblePe
     _x, _precision = promote(x, precision)
     return T(_x - mod(_x, _precision))
 end
-@deprecate Base.floor(x::ConvertiblePeriod, precision::T) = Base.floor(precision, x)
 
 """
     floor(p::Period, dt::TimeType) -> TimeType
@@ -164,7 +156,6 @@ function Base.ceil(p::Period, dt::TimeType)
     f = floor(p, dt)
     return (dt == f) ? f : f + p
 end
-@deprecate Base.ceil(dt::TimeType, p::Period) = Base.ceil(p, dt)
 
 """
     ceil(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> T
@@ -193,7 +184,6 @@ function Base.ceil(precision::ConvertiblePeriod, x::ConvertiblePeriod)
     f = floor(precision, x)
     return (x == f) ? f : f + precision
 end
-@deprecate Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod) = Base.ceil(precision, x)
 
 """
     floorceil(p::Period, dt::TimeType) -> (TimeType, TimeType)
@@ -201,11 +191,10 @@ end
 Simultaneously return the `floor` and `ceil` of a `Date` or `DateTime` at resolution `p`.
 More efficient than calling both `floor` and `ceil` individually.
 """
-function floorceil(dt::TimeType, p::Period)
+function floorceil(p::Period, dt::TimeType)
     f = floor(p, dt)
     return f, (dt == f) ? f : f + p
 end
-@deprecate floorceil(dt::TimeType, p::Period) = floorceil(x, precision)
 
 """
     floorceil(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> (T, T)
@@ -213,11 +202,10 @@ end
 Simultaneously return the `floor` and `ceil` of `Period` at resolution `p`.  More efficient
 than calling both `floor` and `ceil` individually.
 """
-function floorceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)
+function floorceil(precision::ConvertiblePeriod, x::ConvertiblePeriod)
     f = floor(precision, x)
     return f, (x == f) ? f : f + precision
 end
-@deprecate floorceil(x::ConvertiblePeriod, precision::ConvertiblePeriod) = floorceil(x, precision)
 
 """
     round(p::Period, dt::TimeType, [r::RoundingMode]) -> TimeType
@@ -246,7 +234,6 @@ function Base.round(p::Period, dt::TimeType, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(p, dt)
     return (dt - f) < (c - dt) ? f : c
 end
-@depreciate Base.round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}) = Base.round(p, dt, r)
 
 """
     round(precision::T, , x::Period, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T
@@ -281,43 +268,29 @@ function Base.round(precision::ConvertiblePeriod, x::ConvertiblePeriod, r::Round
     _x, _f, _c = promote(x, f, c)
     return (_x - _f) < (_c - _x) ? f : c
 end
-@depreciate Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp}) = Base.round(precision, x, r)
 
-
-@depreciate Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}) = Base.floor(p, x)
 Base.round(p::Period, x::TimeTypeOrPeriod, r::RoundingMode{:Down}) = Base.floor(p, x)
-@depreciate Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Up}) = Base.ceil(p, x)
 Base.round(p::Period, x::TimeTypeOrPeriod, r::RoundingMode{:Up}) = Base.ceil(p, x)
 
 # No implementation of other `RoundingMode`s: rounding to nearest "even" is skipped because
 # "even" is not defined for Period; rounding toward/away from zero is skipped because ISO
 # 8601's year 0000 is not really "zero".
-@depreciate Base.round(::TimeTypeOrPeriod, p::Period, ::RoundingMode) = throw(DomainError(p))
 Base.round(p::Period, ::TimeTypeOrPeriod, ::RoundingMode) = throw(DomainError(p))
 
 # Default to RoundNearestTiesUp.
-@depreciate Base.round(x::TimeTypeOrPeriod, p::Period) = Base.round(p, x, RoundNearestTiesUp)
 Base.round(p::Period, x::TimeTypeOrPeriod) = Base.round(p, x, RoundNearestTiesUp)
+# This is a reduced scope to cover the ambigous commened out deprecated method above 
 
 # Make rounding functions callable using Period types in addition to values.
-@depreciate Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(oneunit(P), x)
 Base.floor(::Type{P}, x::TimeTypeOrPeriod) where P <: Period = Base.floor(oneunit(P), x)
-
-@depreciate Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(oneunit(P), x)
 Base.ceil(::Type{P}, x::TimeTypeOrPeriod)  where P <: Period = Base.ceil(oneunit(P), x)
-
-@depreciate Base.floor(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(oneunit(P), Date(x))
 Base.floor(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}) where P <: Period = Base.floor(oneunit(P), Date(x))
-
-@depreciate Base.ceil(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(oneunit(P), Date(x))
 Base.ceil(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}) where P <: Period = Base.ceil(oneunit(P), Date(x))
 
-@depreciate Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period = Base.round(oneunit(P), x, r)
 function Base.round(::Type{P}, x::TimeTypeOrPeriod, r::RoundingMode=RoundNearestTiesUp) where P <: Period
     return Base.round(oneunit(P), x, r)
 end
 
-@deprecate Base.round(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period = Base.round(oneunit(P), Date(x), r)
 function Base.round(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
     return Base.round(Date(x), oneunit(P), r)
 end

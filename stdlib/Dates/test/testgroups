@@ -4,6 +4,7 @@ query
 periods
 ranges
 rounding
+rounding_deprecate
 types
 io
 arithmetic
