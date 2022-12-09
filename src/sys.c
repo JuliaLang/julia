@@ -661,7 +661,7 @@ JL_DLLEXPORT int jl_cpu_threads(void) JL_NOTSAFEPOINT
 #endif
 }
 
-int jl_effective_threads(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_effective_threads(void) JL_NOTSAFEPOINT
 {
     int cpu = jl_cpu_threads();
     int masksize = uv_cpumask_size();
