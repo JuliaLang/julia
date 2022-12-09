@@ -1036,7 +1036,7 @@ StringRef JuliaOJIT::getFunctionAtAddress(uint64_t Addr, jl_code_instance_t *cod
 
 #ifdef JL_USE_JITLINK
 # if JL_LLVM_VERSION < 140000
-#  warning "JIT debugging (GDB integration) not available on LLVM < 14.0 (for JITLink)"
+#  pragma message("JIT debugging (GDB integration) not available on LLVM < 14.0 (for JITLink)")
 void JuliaOJIT::enableJITDebuggingSupport() {}
 # else
 extern "C" orc::shared::CWrapperFunctionResult

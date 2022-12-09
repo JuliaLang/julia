@@ -31,7 +31,7 @@
 // for Mac/aarch64.
 #if defined(_OS_DARWIN_) && defined(_CPU_AARCH64_)
 # if JL_LLVM_VERSION < 130000
-#  warning "On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults"
+#  pragma message("On aarch64-darwin, LLVM version >= 13 is required for JITLink; fallback suffers from occasional segfaults")
 # endif
 # define JL_USE_JITLINK
 #endif

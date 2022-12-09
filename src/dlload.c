@@ -159,6 +159,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
     // number of extensions to try — if modname already ends with the
     // standard extension, then we don't try adding additional extensions
     int n_extensions = endswith_extension(modname) ? 1 : N_EXTENSIONS;
+    int ret;
 
     /*
       this branch returns handle of libjulia-internal
@@ -228,8 +229,12 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
                     path[0] = '\0';
                     if (relocated[len-1] == PATHSEPSTRING[0])
                         snprintf(path, PATHBUF, "%s%s%s", relocated, modname, ext);
-                    else
-                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", relocated, modname, ext);
+                    else {
+                        ret = snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", relocated, modname, ext);
+                        if (ret < 0)
+                            jl_errorf("path is longer than %d\n", PATHBUF);
+                    }
+
 #ifdef _OS_WINDOWS_
                     if (i == 0) { // LoadLibrary already tested the extensions, we just need to check the `stat` result
 #endif
@@ -299,7 +304,7 @@ JL_DLLEXPORT int jl_dlsym(void *handle, const char *symbol, void ** value, int t
      */
     symbol_found = *value != NULL;
 #ifndef _OS_WINDOWS_
-    const char *err;
+    const char *err = "";
     if (!symbol_found) {
         dlerror(); /* Reset error status. */
         *value = dlsym(handle, symbol);

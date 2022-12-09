@@ -3299,7 +3299,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         Value *ptindex = ctx.builder.CreateInBoundsGEP(getInt8Ty(ctx.builder.getContext()), emit_bitcast(ctx, maybe_decay_tracked(ctx, addr), getInt8PtrTy(ctx.builder.getContext())), ConstantInt::get(getSizeTy(ctx.builder.getContext()), fsz));
         if (needlock)
             emit_lockstate_value(ctx, strct, true);
-        BasicBlock *ModifyBB;
+        BasicBlock *ModifyBB = NULL;
         if (ismodifyfield) {
             ModifyBB = BasicBlock::Create(ctx.builder.getContext(), "modify_xchg", ctx.f);
             ctx.builder.CreateBr(ModifyBB);

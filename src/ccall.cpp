@@ -346,7 +346,7 @@ static bool is_native_simd_type(jl_datatype_t *dt) {
 #elif defined _CPU_PPC64_
   typedef ABI_PPC64leLayout DefaultAbiState;
 #else
-#  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
+#  pragma message("ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination")
   typedef ABI_LLVMLayout DefaultAbiState;
 #endif
 

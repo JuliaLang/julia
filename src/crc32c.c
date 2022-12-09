@@ -346,7 +346,7 @@ static crc32c_func_t crc32c_dispatch(unsigned long hwcap)
 #    define crc32c_dispatch() crc32c_dispatch(getauxval(AT_HWCAP))
 #    define crc32c_dispatch_ifunc "crc32c_dispatch"
 #  else
-#  warning CRC32 feature detection not implemented for this OS. Falling back to software version.
+#  pragma message("CRC32 feature detection not implemented for this OS. Falling back to software version.")
 #  endif
 #else
 // If we don't have any accelerated version to define, just make the _sw version define
