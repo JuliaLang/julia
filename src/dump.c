@@ -1071,6 +1071,7 @@ static void serialize_htable_keys(jl_serializer_state *s, htable_t *ht, int nite
     write_int32(s->s, nitems);
     void **table = ht->table;
     size_t i, n = 0, sz = ht->size;
+    (void)n;
     for (i = 0; i < sz; i += 2) {
         if (table[i+1] != HT_NOTFOUND) {
             jl_serialize_value(s, (jl_value_t*)table[i]);
