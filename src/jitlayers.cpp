@@ -1091,9 +1091,12 @@ namespace {
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
                 std::stringstream before_stats_ss;
+                bool should_dump_opt_stats = false;
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream) {
+                        // Ensures that we don't _just_ write the second part of the YAML object
+                        should_dump_opt_stats = true;
                         // We use a stringstream to later atomically write a YAML object
                         // without the need to hold the stream lock over the optimization
                         // Print LLVM function statistics _before_ optimization
@@ -1126,7 +1129,7 @@ namespace {
                 uint64_t end_time = 0;
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
-                    if (stream) {
+                    if (stream && should_dump_opt_stats) {
                         jl_printf(stream, "%s", before_stats_ss.str().c_str());
                         end_time = jl_hrtime();
                         jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
