@@ -1262,7 +1262,7 @@ function take_heap_snapshot(filepath::String, all_one::Bool=false)
     return filepath
 end
 function take_heap_snapshot(all_one::Bool=false)
-    f = joinpath(pwd(), "$(getpid())_$(time_ns()).heapsnapshot")
+    f = abspath("$(getpid())_$(time_ns()).heapsnapshot")
     return take_heap_snapshot(f, all_one)
 end
 
