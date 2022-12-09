@@ -1364,7 +1364,8 @@ end
     @test length(d.slots) < 100
 end
 
-@testset "non-allocating delete" begin
+@testset "in-place rehash" begin
+    # Comes from #47823
     function insert_and_remove(d, reps)
         for i in 1:reps
             d[i] = 1
@@ -1375,4 +1376,12 @@ end
     d = Dict(-1 => 2)
     @test insert_and_remove(d, 10000) == Dict(-1 => 2)
     @test (@allocated insert_and_remove(d, 10000)) == 0
+
+    x = rand(1000)
+    s = Set(x)
+    for a=x[10:end]; delete!(s, a); end
+    @test s == Set(x[1:9])
+    Base.rehash_inplace!(s.dict)
+    Base.rehash_inplace!(s.dict)
+    @test s.dict.ndel == 0
 end
