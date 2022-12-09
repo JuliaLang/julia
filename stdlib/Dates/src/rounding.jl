@@ -42,13 +42,15 @@ Take the given `DateTime` and return the number of milliseconds since the roundi
 """
 datetime2epochms(dt::DateTime) = value(dt) - DATETIMEEPOCH
 
-function Base.floor(dt::Date, p::Year)
+@depreciate Base.floor(dt::Date, p::Year) = Base.floor(p, dt)
+function Base.floor(p::Year, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     years = year(dt)
     return Date(years - mod(years, value(p)))
 end
 
-function Base.floor(dt::Date, p::Month)
+@deprecate Base.floor(dt::Date, p::Month) = Base.floor(p, dt)
+function Base.floor(p::Month, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     y, m = yearmonth(dt)
     months_since_epoch = y * 12 + m - 1
@@ -58,81 +60,86 @@ function Base.floor(dt::Date, p::Month)
     return Date(target_year, target_month)
 end
 
-function Base.floor(dt::Date, p::Quarter)
+@deprecate Base.floor(dt::Date, p::Quarter) = Base.floor(p, dt)
+function Base.floor(p::Quarter, dt::Date)
     return floor(dt, Month(p))
 end
 
-
-function Base.floor(dt::Date, p::Week)
+@deprecate Base.floor(dt::Date, p::Week) = Base.floor(p, dt)
+function Base.floor(p::Week, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     days = value(dt) - WEEKEPOCH
     days = days - mod(days, value(Day(p)))
     return Date(UTD(WEEKEPOCH + Int64(days)))
 end
 
-function Base.floor(dt::Date, p::Day)
+@deprecate Base.floor(dt::Date, p::Day) = Base.floor(p, dt)
+function Base.floor(p::Day, dt::Date)
     value(p) < 1 && throw(DomainError(p))
     days = date2epochdays(dt)
     return epochdays2date(days - mod(days, value(p)))
 end
 
-Base.floor(dt::DateTime, p::DatePeriod) = DateTime(Base.floor(Date(dt), p))
+@deprecate Base.floor(dt::DateTime, p::DatePeriod) = Base.floor(p, dt)
+Base.floor(p::DatePeriod, dt::DateTime) = DateTime(Base.floor(p, Date(dt)))
 
-function Base.floor(dt::DateTime, p::TimePeriod)
+@deprecate Base.floor(dt::DateTime, p::TimePeriod) = Base.floor(p, dt)
+function Base.floor(p::TimePeriod, dt::DateTime)
     value(p) < 1 && throw(DomainError(p))
     milliseconds = datetime2epochms(dt)
     return epochms2datetime(milliseconds - mod(milliseconds, value(Millisecond(p))))
 end
 
 """
-    floor(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T
+    floor(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> T
 
 Round `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
-For convenience, `precision` may be a type instead of a value: `floor(x, Dates.Hour)` is a
-shortcut for `floor(x, Dates.Hour(1))`.
+For convenience, `precision` may be a type instead of a value: `floor(Dates.Hour, x)` is a
+shortcut for `floor(Dates.Hour(1), x)`.
 
 ```jldoctest
-julia> floor(Day(16), Week)
+julia> floor(Week, Day(16))
 2 weeks
 
-julia> floor(Minute(44), Minute(15))
+julia> floor(Minute(15), Minute(44))
 30 minutes
 
-julia> floor(Hour(36), Day)
+julia> floor(Day, Hour(36))
 1 day
 ```
 
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
+@deprecate Base.floor(x::ConvertiblePeriod, precision::T) = Base.floor(precision, x)
+function Base.floor(precision::T, x::ConvertiblePeriod) where T <: ConvertiblePeriod
     value(precision) < 1 && throw(DomainError(precision))
     _x, _precision = promote(x, precision)
     return T(_x - mod(_x, _precision))
 end
 
 """
-    floor(dt::TimeType, p::Period) -> TimeType
+    floor(p::Period, dt::TimeType) -> TimeType
 
 Return the nearest `Date` or `DateTime` less than or equal to `dt` at resolution `p`.
 
-For convenience, `p` may be a type instead of a value: `floor(dt, Dates.Hour)` is a shortcut
-for `floor(dt, Dates.Hour(1))`.
+For convenience, `p` may be a type instead of a value: `floor(Dates.Hour, dt)` is a shortcut
+for `floor(Dates.Hour(1), dt)`.
 
 ```jldoctest
-julia> floor(Date(1985, 8, 16), Month)
+julia> floor(Month, Date(1985, 8, 16))
 1985-08-01
 
-julia> floor(DateTime(2013, 2, 13, 0, 31, 20), Minute(15))
+julia> floor(Minute(15), DateTime(2013, 2, 13, 0, 31, 20))
 2013-02-13T00:30:00
 
-julia> floor(DateTime(2016, 8, 6, 12, 0, 0), Day)
+julia> floor(Day, DateTime(2016, 8, 6, 12, 0, 0))
 2016-08-06T00:00:00
 ```
 """
-Base.floor(::Dates.TimeType, ::Dates.Period)
+Base.floor(::Dates.Period, ::Dates.TimeType)
 
 """
     ceil(dt::TimeType, p::Period) -> TimeType
