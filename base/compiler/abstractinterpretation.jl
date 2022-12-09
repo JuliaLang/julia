@@ -1445,6 +1445,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     ret = Any[]
     calls = CallMeta[call]
     stateordonet_widened = widenconst(stateordonet)
+    𝕃ᵢ = typeinf_lattice(interp)
 
     # Try to unroll the iteration up to max_tuple_splat, which covers any finite
     # length iterators, or interesting prefix
@@ -1458,13 +1459,13 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         if !isa(stateordonet_widened, DataType) || !(stateordonet_widened <: Tuple) || isvatuple(stateordonet_widened) || length(stateordonet_widened.parameters) != 2
             break
         end
-        nstatetype = getfield_tfunc(typeinf_lattice(interp), stateordonet, Const(2))
+        nstatetype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(2))
         # If there's no new information in this statetype, don't bother continuing,
         # the iterator won't be finite.
-        if ⊑(typeinf_lattice(interp), nstatetype, statetype)
+        if ⊑(𝕃ᵢ, nstatetype, statetype)
             return AbstractIterationResult(Any[Bottom], AbstractIterationInfo(calls, false), EFFECTS_THROWS)
         end
-        valtype = getfield_tfunc(typeinf_lattice(interp), stateordonet, Const(1))
+        valtype = getfield_tfunc(𝕃ᵢ, stateordonet, Const(1))
         push!(ret, valtype)
         statetype = nstatetype
         call = abstract_call_known(interp, iteratef, ArgInfo(nothing, Any[Const(iteratef), itertype, statetype]), StmtInfo(true), sv)
@@ -1476,8 +1477,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
     # the precise (potentially const) state type
     # statetype and valtype are reinitialized in the first iteration below from the
     # (widened) stateordonet, which has not yet been fully analyzed in the loop above
-    statetype = Bottom
-    valtype = Bottom
+    valtype = statetype = Bottom
     may_have_terminated = Nothing <: stateordonet_widened
     while valtype !== Any
         nounion = typeintersect(stateordonet_widened, Tuple{Any,Any})
@@ -1824,7 +1824,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 thentype = Bottom
                 elsetype = Bottom
                 for ty in uniontypes(uty)
-                    cnd = isdefined_tfunc(ty, fld)
+                    cnd = isdefined_tfunc(𝕃ᵢ, ty, fld)
                     if isa(cnd, Const)
                         if cnd.val::Bool
                             thentype = tmerge(thentype, ty)
@@ -1987,7 +1987,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(n, lb_var, ub_var), EFFECTS_UNKNOWN, NoCallInfo())
+        return CallMeta(typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var), EFFECTS_UNKNOWN, NoCallInfo())
     elseif f === UnionAll
         return CallMeta(abstract_call_unionall(argtypes), EFFECTS_UNKNOWN, NoCallInfo())
     elseif f === Tuple && la == 2
@@ -2248,7 +2248,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                                       sv::Union{InferenceState, IRCode}, mi::Union{MethodInstance, Nothing})::RTEffects
     effects = EFFECTS_UNKNOWN
     ehead = e.head
-    ⊑ᵢ = ⊑(typeinf_lattice(interp))
+    𝕃ᵢ = typeinf_lattice(interp)
+    ⊑ᵢ = ⊑(𝕃ᵢ)
     if ehead === :call
         ea = e.args
         argtypes = collect_argtypes(interp, ea, vtypes, sv)
@@ -2280,7 +2281,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 at = widenslotwrapper(abstract_eval_value(interp, e.args[i+1], vtypes, sv))
                 ft = fieldtype(t, i)
                 nothrow && (nothrow = at ⊑ᵢ ft)
-                at = tmeet(typeinf_lattice(interp), at, ft)
+                at = tmeet(𝕃ᵢ, at, ft)
                 at === Bottom && @goto always_throw
                 if ismutable && !isconst(t, i)
                     ats[i] = ft # can't constrain this field (as it may be modified later)
@@ -2288,8 +2289,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 end
                 allconst &= isa(at, Const)
                 if !anyrefine
-                    anyrefine = has_nontrivial_const_info(typeinf_lattice(interp), at) || # constant information
-                                ⋤(typeinf_lattice(interp), at, ft) # just a type-level information, but more precise than the declared type
+                    anyrefine = has_nontrivial_const_info(𝕃ᵢ, at) || # constant information
+                                ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
                 end
                 ats[i] = at
             end
@@ -2354,7 +2355,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 t = Bottom
             else
                 mi′ = isa(sv, InferenceState) ? sv.linfo : mi
-                t = _opaque_closure_tfunc(argtypes[1], argtypes[2], argtypes[3],
+                t = _opaque_closure_tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3],
                     argtypes[4], argtypes[5:end], mi′)
                 if isa(t, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
                     # Infer this now so that the specialization is available to
