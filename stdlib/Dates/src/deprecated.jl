@@ -98,7 +98,7 @@ end
 @simple_deprecate(Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod), Base.ceil(precision, x))
 
 @simple_deprecate(Base.round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}), Base.round(p, dt, r))
-# The definitions were excluded due to ambiguities, and it didn't effeect test results
+# The definitions were excluded due to ambiguities, and it didn't effect test results
 # @simple_deprecate(Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp}), Base.round(precision, x, r))
 # @simple_deprecate(Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}), Base.round(p,x,r))
 # @simple_deprecate(Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Up}), Base.round(p,x,r))
