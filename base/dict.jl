@@ -246,17 +246,15 @@ end
     # Temp metadata: tmp_removed => 0x70
     sz = length(h.slots)
     @inbounds for i = 1:sz
-        # Change to temporary values
+        # Change to temporary values (removed => tmp_removed)
         slot = h.slots[i]
-        # removed => tmp_removed
-        h.slots[i] = slot == 0x7f ? 0x70 : slot
+        h.slots[i] = (slot == 0x7f ? 0x70 : slot)
     end
 
     @inbounds for i = 1:sz
         # Try to find a better position
-        slot = h.slots[i]
-        slot != 0x01 && continue
-        index, h.slots[index] = find_first_free_slot(h, h.keys[i])
+        !isslotfilled(h, i) && continue
+        index, h.slots[index] = _find_first_free_slot(h, h.keys[i])
         i == index && continue
         h.slots[i] = 0x7f
         # Change the element's position
