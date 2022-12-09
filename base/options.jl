@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# NOTE: This type needs to be kept in sync with jl_options in src/julia.h
+# NOTE: This type needs to be kept in sync with jl_options in src/jloptions.h
 struct JLOptions
     quiet::Int8
     banner::Int8
@@ -9,7 +9,9 @@ struct JLOptions
     commands::Ptr{Ptr{UInt8}} # (e)eval, (E)print, (L)load
     image_file::Ptr{UInt8}
     cpu_target::Ptr{UInt8}
-    nthreads::Int32
+    nthreadpools::Int16
+    nthreads::Int16
+    nthreads_per_pool::Ptr{Int16}
     nprocs::Int32
     machine_file::Ptr{UInt8}
     project::Ptr{UInt8}

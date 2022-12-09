@@ -134,6 +134,9 @@
 #  define JULIA_NUM_THREADS 1
 #endif
 
+// threadpools specification
+#define THREADPOOLS_NAME                "JULIA_THREADPOOLS"
+
 // affinitization behavior
 #define MACHINE_EXCLUSIVE_NAME          "JULIA_EXCLUSIVE"
 #define DEFAULT_MACHINE_EXCLUSIVE       0

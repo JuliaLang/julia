@@ -800,6 +800,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->started = 0;
     t->priority = 0;
     jl_atomic_store_relaxed(&t->tid, t->copy_stack ? jl_atomic_load_relaxed(&ct->tid) : -1); // copy_stacks are always pinned since they can't be moved
+    t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
     t->world_age = ct->world_age;
 
@@ -1361,6 +1362,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->gcstack = NULL;
     ct->excstack = NULL;
     jl_atomic_store_relaxed(&ct->tid, ptls->tid);
+    ct->threadpoolid = jl_threadpoolid(ptls->tid);
     ct->sticky = 1;
     ct->ptls = ptls;
     ct->world_age = 1; // OK to run Julia code on this task
@@ -1405,6 +1407,11 @@ JL_DLLEXPORT int jl_is_task_started(jl_task_t *t) JL_NOTSAFEPOINT
 JL_DLLEXPORT int16_t jl_get_task_tid(jl_task_t *t) JL_NOTSAFEPOINT
 {
     return jl_atomic_load_relaxed(&t->tid);
+}
+
+JL_DLLEXPORT int8_t jl_get_task_threadpoolid(jl_task_t *t)
+{
+    return t->threadpoolid;
 }
 
 
