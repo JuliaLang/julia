@@ -22,7 +22,7 @@ being used for this purpose alone.
 """
 module Timings
 
-using Core.Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
+using Core.Compiler: -, +, :, >, Vector, length, first, empty!, push!, pop!, @inline,
     @inbounds, copy, backtrace
 
 # What we record for any given frame we infer during type inference.
@@ -46,12 +46,12 @@ function _typeinf_identifier(frame::Core.Compiler.InferenceState)
 end
 
 """
-    Core.Compiler.Timing(mi_info, start_time, ...)
+    Core.Compiler.Timings.Timing(mi_info, start_time, ...)
 
 Internal type containing the timing result for running type inference on a single
 MethodInstance.
 """
-struct Timing
+mutable struct Timing
     mi_info::InferenceFrameInfo
     start_time::UInt64
     cur_start_time::UInt64
@@ -64,6 +64,27 @@ Timing(mi_info, start_time) = Timing(mi_info, start_time, start_time, UInt64(0),
 
 _time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base not yet available.
 
+"""
+    Core.Compiler.Timings.clear_and_fetch_timings()
+
+Return, then clear, the previously recorded type inference timings (`Core.Compiler._timings`).
+
+This fetches a vector of all of the type inference timings that have _finished_ as of this call. Note
+that there may be concurrent invocations of inference that are still running in another thread, but
+which haven't yet been added to this buffer. Those can be fetched in a future call.
+"""
+function clear_and_fetch_timings()
+    # Pass in the type, since the C code doesn't know about our Timing struct.
+    ccall(:jl_typeinf_profiling_clear_and_fetch, Any, (Any, Any,),
+          _finished_timings, Vector{Timing})::Vector{Timing}
+end
+
+function finish_timing_profile(timing::Timing)
+    ccall(:jl_typeinf_profiling_push_timing, Cvoid, (Any, Any,), _finished_timings, timing)
+end
+
+const _finished_timings = Timing[]
+
 # We keep a stack of the Timings for each of the MethodInstances currently being timed.
 # Since type inference currently operates via a depth-first search (during abstract
 # evaluation), this vector operates like a call stack. The last node in _timings is the
@@ -72,6 +93,7 @@ _time_ns() = ccall(:jl_hrtime, UInt64, ())  # Re-implemented here because Base n
 # call structure through type inference is recorded. (It's recorded as a tree, not a graph,
 # because we create a new node for duplicates.)
 const _timings = Timing[]
+
 # ROOT() is an empty function used as the top-level Timing node to measure all time spent
 # *not* in type inference during a given recording trace. It is used as a "dummy" node.
 function ROOT() end
@@ -79,9 +101,10 @@ const ROOTmi = Core.Compiler.specialize_method(
     first(Core.Compiler.methods(ROOT)), Tuple{typeof(ROOT)}, Core.svec())
 """
     Core.Compiler.reset_timings()
-
 Empty out the previously recorded type inference timings (`Core.Compiler._timings`), and
 start the ROOT() timer again. `ROOT()` measures all time spent _outside_ inference.
+
+DEPRECATED: this will be removed; use `clear_and_fetch_timings` instead.
 """
 function reset_timings()
     empty!(_timings)
@@ -91,7 +114,6 @@ function reset_timings()
         _time_ns()))
     return nothing
 end
-reset_timings()
 
 # (This is split into a function so that it can be called both in this module, at the top
 # of `enter_new_timer()`, and once at the Very End of the operation, by whoever started
@@ -103,16 +125,9 @@ reset_timings()
     parent_timer = _timings[end]
     accum_time = stop_time - parent_timer.cur_start_time
 
-    # Add in accum_time ("modify" the immutable struct)
+    # Add in accum_time
     @inbounds begin
-        _timings[end] = Timing(
-            parent_timer.mi_info,
-            parent_timer.start_time,
-            parent_timer.cur_start_time,
-            parent_timer.time + accum_time,
-            parent_timer.children,
-            parent_timer.bt,
-        )
+        _timings[end].time += accum_time
     end
     return nothing
 end
@@ -120,27 +135,21 @@ end
 @inline function enter_new_timer(frame)
     # Very first thing, stop the active timer: get the current time and add in the
     # time since it was last started to its aggregate exclusive time.
-    close_current_timer()
-
-    mi_info = _typeinf_identifier(frame)
+    if length(_timings) > 0
+        close_current_timer()
+    end
 
     # Start the new timer right before returning
+    mi_info = _typeinf_identifier(frame)
     push!(_timings, Timing(mi_info, UInt64(0)))
     len = length(_timings)
     new_timer = @inbounds _timings[len]
+
     # Set the current time _after_ appending the node, to try to exclude the
     # overhead from measurement.
     start = _time_ns()
-
-    @inbounds begin
-        _timings[len] = Timing(
-            new_timer.mi_info,
-            start,
-            start,
-            new_timer.time,
-            new_timer.children,
-        )
-    end
+    new_timer.start_time = start
+    new_timer.cur_start_time = start
 
     return nothing
 end
@@ -160,35 +169,30 @@ end
     new_timer = pop!(_timings)
     Core.Compiler.@assert new_timer.mi_info.mi === expected_mi_info.mi
 
-    # Prepare to unwind one level of the stack and record in the parent
-    parent_timer = _timings[end]
+    # check for two cases: normal case & backcompat case
+    is_profile_root_normal = length(_timings) === 0
+    is_profile_root_backcompat = length(_timings) === 1 && _timings[1] === ROOTmi
+    is_profile_root = is_profile_root_normal || is_profile_root_backcompat
 
     accum_time = stop_time - new_timer.cur_start_time
     # Add in accum_time ("modify" the immutable struct)
-    new_timer = Timing(
-        new_timer.mi_info,
-        new_timer.start_time,
-        new_timer.cur_start_time,
-        new_timer.time + accum_time,
-        new_timer.children,
-        parent_timer.mi_info.mi === ROOTmi ? backtrace() : nothing,
-    )
-    # Record the final timing with the original parent timer
-    push!(parent_timer.children, new_timer)
-
-    # And finally restart the parent timer:
-    len = length(_timings)
-    @inbounds begin
-        _timings[len] = Timing(
-            parent_timer.mi_info,
-            parent_timer.start_time,
-            _time_ns(),
-            parent_timer.time,
-            parent_timer.children,
-            parent_timer.bt,
-        )
+    new_timer.time += accum_time
+    if is_profile_root
+        new_timer.bt = backtrace()
     end
 
+    # Prepare to unwind one level of the stack and record in the parent
+    if is_profile_root
+        finish_timing_profile(new_timer)
+    else
+        parent_timer = _timings[end]
+
+        # Record the final timing with the original parent timer
+        push!(parent_timer.children, new_timer)
+
+        # And finally restart the parent timer:
+        parent_timer.cur_start_time = _time_ns()
+    end
     return nothing
 end
 

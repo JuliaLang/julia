@@ -478,6 +478,8 @@
     XX(jl_typeassert) \
     XX(jl_typeinf_begin) \
     XX(jl_typeinf_end) \
+    XX(jl_typeinf_profiling_clear_and_fetch) \
+    XX(jl_typeinf_profiling_push_timing) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \

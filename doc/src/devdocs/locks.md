@@ -35,6 +35,7 @@ The following is a leaf lock (level 2), and only acquires level 1 locks (safepoi
 
 >   * typecache
 >   * Module->lock
+>   * typeinf_profiling_lock
 
 The following is a level 3 lock, which can only acquire level 1 or level 2 locks internally:
 

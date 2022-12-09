@@ -3390,15 +3390,19 @@ f37532(T, x) = (Core.bitcast(Ptr{T}, x); x)
 # Helper functions for Core.Compiler.Timings. These are normally accessed via a package -
 # usually (SnoopCompileCore).
 function time_inference(f)
-    Core.Compiler.Timings.reset_timings()
     Core.Compiler.__set_measure_typeinf(true)
     f()
     Core.Compiler.__set_measure_typeinf(false)
-    Core.Compiler.Timings.close_current_timer()
-    return Core.Compiler.Timings._timings[1]
+    return Core.Compiler.Timings.clear_and_fetch_timings()
 end
-function depth(t::Core.Compiler.Timings.Timing)
-    maximum(depth.(t.children), init=0) + 1
+function max_depth(t::Vector{Core.Compiler.Timings.Timing})
+    maximum(max_depth.(t), init=0) + 1
+end
+function max_depth(t::Core.Compiler.Timings.Timing)
+    maximum(max_depth.(t.children), init=0) + 1
+end
+function flatten_times(t::Vector{Core.Compiler.Timings.Timing})
+    collect(Iterators.flatten(flatten_times(el) for el in t))
 end
 function flatten_times(t::Core.Compiler.Timings.Timing)
     collect(Iterators.flatten([(t.time => t.mi_info,), flatten_times.(t.children)...]))
@@ -3415,14 +3419,14 @@ end
     timing1 = time_inference() do
         @eval M1.g(2, 3.0)
     end
-    @test occursin(r"Core.Compiler.Timings.Timing\(InferenceFrameInfo for Core.Compiler.Timings.ROOT\(\)\) with \d+ children", sprint(show, timing1))
+    @test timing1 isa Vector{Core.Compiler.Timings.Timing}
     # The last two functions to be inferred should be `i` and `i2`, inferred at runtime with
     # their concrete types.
     @test sort([mi_info.mi.def.name for (time,mi_info) in flatten_times(timing1)[end-1:end]]) == [:i, :i2]
-    @test all(child->isa(child.bt, Vector), timing1.children)
-    @test all(child->child.bt===nothing, timing1.children[1].children)
+    @test all(child->isa(child.bt, Vector), timing1)
+    @test all(child->child.bt===nothing, timing1[1].children)
     # Test the stacktrace
-    @test isa(stacktrace(timing1.children[1].bt), Vector{Base.StackTraces.StackFrame})
+    @test isa(stacktrace(timing1[1].bt), Vector{Base.StackTraces.StackFrame})
     # Test that inference has cached some of the Method Instances
     timing2 = time_inference() do
         @eval M1.g(2, 3.0)
@@ -3443,7 +3447,7 @@ end
             end
         end
     end
-    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod.children))
+    @test occursin("thunk from $(@__MODULE__) starting at $(@__FILE__):$((@__LINE__) - 5)", string(timingmod))
     # END LINE NUMBER SENSITIVITY
 
     # Recursive function
@@ -3451,8 +3455,8 @@ end
     timing = time_inference() do
         @eval _Recursive.f(Base.inferencebarrier(5))
     end
-    @test 2 <= depth(timing) <= 3  # root -> f (-> +)
-    @test 2 <= length(flatten_times(timing)) <= 3  # root, f, +
+    @test 1 <= max_depth(timing) <= 2  # f (-> +)
+    @test 1 <= length(flatten_times(timing)) <= 2  # f, +
 
     # Functions inferred with multiple constants
     @eval module C
@@ -3480,7 +3484,6 @@ end
     @test !isempty(ft)
     str = sprint(show, ft)
     @test occursin("InferenceFrameInfo for /(1::$Int, ::$Int)", str)  # inference constants
-    @test occursin("InferenceFrameInfo for Core.Compiler.Timings.ROOT()", str) # qualified
     # loopc has internal slots, check constant printing in this case
     sel = filter(ti -> ti.second.mi.def.name === :loopc, ft)
     ifi = sel[end].second
