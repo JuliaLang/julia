@@ -66,7 +66,8 @@ kw"export"
 `import` or `using`, for the purpose of working around name conflicts as
 well as for shortening names.
 
-`import CSV as C` brings the imported `CSV` package into scope as `C`.
+`import BenchMarkTools as BT` brings the imported `BenchMarkTools` package
+into scope as `BT`.
 
 `import CSV: read as rd, write as wd` brings the `read` and `write` methods
 from `CSV` into scope as `rd` and `wd` respectively.
