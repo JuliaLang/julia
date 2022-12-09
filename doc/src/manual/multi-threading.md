@@ -361,7 +361,7 @@ There are a few approaches to dealing with this problem:
 
 3. A related third strategy is to use a yield-free queue. We don't currently
    have a lock-free queue implemented in Base, but
-   `Base.InvasiveLinkedListSynchronized{T}` is suitable. This can frequently be a
+   `Base.IntrusiveLinkedListSynchronized{T}` is suitable. This can frequently be a
    good strategy to use for code with event loops. For example, this strategy is
    employed by `Gtk.jl` to manage lifetime ref-counting. In this approach, we
    don't do any explicit work inside the `finalizer`, and instead add it to a queue

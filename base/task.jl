@@ -650,14 +650,14 @@ end
 
 ## scheduler and work queue
 
-struct InvasiveLinkedListSynchronized{T}
-    queue::InvasiveLinkedList{T}
+struct IntrusiveLinkedListSynchronized{T}
+    queue::IntrusiveLinkedList{T}
     lock::Threads.SpinLock
-    InvasiveLinkedListSynchronized{T}() where {T} = new(InvasiveLinkedList{T}(), Threads.SpinLock())
+    IntrusiveLinkedListSynchronized{T}() where {T} = new(IntrusiveLinkedList{T}(), Threads.SpinLock())
 end
-isempty(W::InvasiveLinkedListSynchronized) = isempty(W.queue)
-length(W::InvasiveLinkedListSynchronized) = length(W.queue)
-function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+isempty(W::IntrusiveLinkedListSynchronized) = isempty(W.queue)
+length(W::IntrusiveLinkedListSynchronized) = length(W.queue)
+function push!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         push!(W.queue, t)
@@ -666,7 +666,7 @@ function push!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function pushfirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         pushfirst!(W.queue, t)
@@ -675,7 +675,7 @@ function pushfirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     end
     return W
 end
-function pop!(W::InvasiveLinkedListSynchronized)
+function pop!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return pop!(W.queue)
@@ -683,7 +683,7 @@ function pop!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function popfirst!(W::InvasiveLinkedListSynchronized)
+function popfirst!(W::IntrusiveLinkedListSynchronized)
     lock(W.lock)
     try
         return popfirst!(W.queue)
@@ -691,7 +691,7 @@ function popfirst!(W::InvasiveLinkedListSynchronized)
         unlock(W.lock)
     end
 end
-function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
+function list_deletefirst!(W::IntrusiveLinkedListSynchronized{T}, t::T) where T
     lock(W.lock)
     try
         list_deletefirst!(W.queue, t)
@@ -701,30 +701,36 @@ function list_deletefirst!(W::InvasiveLinkedListSynchronized{T}, t::T) where T
     return W
 end
 
-const StickyWorkqueue = InvasiveLinkedListSynchronized{Task}
-global const Workqueues = [StickyWorkqueue()]
-global const Workqueue = Workqueues[1] # default work queue is thread 1
-function __preinit_threads__()
-    nt = Threads.nthreads()
-    if length(Workqueues) < nt
-        resize!(Workqueues, nt)
-        for i = 2:nt
-            Workqueues[i] = StickyWorkqueue()
-        end
+const StickyWorkqueue = IntrusiveLinkedListSynchronized{Task}
+global Workqueues::Vector{StickyWorkqueue} = [StickyWorkqueue()]
+const Workqueues_lock = Threads.SpinLock()
+const Workqueue = Workqueues[1] # default work queue is thread 1 // TODO: deprecate this variable
+
+function workqueue_for(tid::Int)
+    qs = Workqueues
+    if length(qs) >= tid && isassigned(qs, tid)
+        return @inbounds qs[tid]
     end
-    Partr.multiq_init(nt)
-    nothing
+    # slow path to allocate it
+    l = Workqueues_lock
+    @lock l begin
+        qs = Workqueues
+        if length(qs) < tid
+            nt = Threads.nthreads()
+            @assert tid <= nt
+            global Workqueues = qs = copyto!(typeof(qs)(undef, length(qs) + nt - 1), qs)
+        end
+        if !isassigned(qs, tid)
+            @inbounds qs[tid] = StickyWorkqueue()
+        end
+        return @inbounds qs[tid]
+    end
 end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-    tid = Threads.threadid(t)
-    # Note there are three reasons a Task might be put into a sticky queue
-    # even if t.sticky == false:
-    # 1. The Task's stack is currently being used by the scheduler for a certain thread.
-    # 2. There is only 1 thread.
-    # 3. The multiq is full (can be fixed by making it growable).
     if t.sticky || Threads.nthreads() == 1
+        tid = Threads.threadid(t)
         if tid == 0
             # Issue #41324
             # t.sticky && tid == 0 is a task that needs to be co-scheduled with
@@ -735,18 +741,10 @@ function enq_work(t::Task)
             tid = Threads.threadid()
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
         end
-        push!(Workqueues[tid], t)
+        push!(workqueue_for(tid), t)
     else
-        if !Partr.multiq_insert(t, t.priority)
-            # if multiq is full, give to a random thread (TODO fix)
-            if tid == 0
-                tid = mod(time_ns() % Int, Threads.nthreads()) + 1
-                ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
-            end
-            push!(Workqueues[tid], t)
-        else
-            tid = 0
-        end
+        Partr.multiq_insert(t, t.priority)
+        tid = 0
     end
     ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
     return t
@@ -887,12 +885,12 @@ end
 
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
-    W = Workqueues[Threads.threadid()]
+    W = workqueue_for(Threads.threadid())
     if ct !== othertask && othertask._state === task_state_runnable
         # we failed to yield to othertask
         # return it to the head of a queue to be retried later
         tid = Threads.threadid(othertask)
-        Wother = tid == 0 ? W : Workqueues[tid]
+        Wother = tid == 0 ? W : workqueue_for(tid)
         pushfirst!(Wother, othertask)
     end
     # if the current task was queued,
@@ -919,9 +917,7 @@ function trypoptask(W::StickyWorkqueue)
     return Partr.multiq_deletemin()
 end
 
-function checktaskempty()
-    return Partr.multiq_check_empty()
-end
+checktaskempty = Partr.multiq_check_empty
 
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
@@ -934,7 +930,7 @@ end
 
 function wait()
     GC.safepoint()
-    W = Workqueues[Threads.threadid()]
+    W = workqueue_for(Threads.threadid())
     poptask(W)
     result = try_yieldto(ensure_rescheduled)
     process_events()

@@ -588,12 +588,12 @@ function test_thread_too_few_iters()
 end
 test_thread_too_few_iters()
 
-@testset "InvasiveLinkedList" begin
-    @test eltype(Base.InvasiveLinkedList{Integer}) == Integer
+@testset "IntrusiveLinkedList" begin
+    @test eltype(Base.IntrusiveLinkedList{Integer}) == Integer
     @test eltype(Base.LinkedList{Integer}) == Integer
-    @test eltype(Base.InvasiveLinkedList{<:Integer}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Integer}) == Any
     @test eltype(Base.LinkedList{<:Integer}) == Any
-    @test eltype(Base.InvasiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
+    @test eltype(Base.IntrusiveLinkedList{<:Base.LinkedListItem{Integer}}) == Any
 
     t = Base.LinkedList{Integer}()
     @test eltype(t) == Integer
