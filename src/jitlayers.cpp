@@ -3,6 +3,7 @@
 #include "llvm-version.h"
 #include "platform.h"
 #include <stdint.h>
+#include <sstream>
 
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/Statistic.h>
@@ -1089,23 +1090,26 @@ namespace {
         OptimizerResultT operator()(orc::ThreadSafeModule TSM, orc::MaterializationResponsibility &R) {
             TSM.withModuleDo([&](Module &M) {
                 uint64_t start_time = 0;
+                std::stringstream before_stats_ss;
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream) {
+                        // We use a stringstream to later atomically write a YAML object
+                        // without the need to hold the stream lock over the optimization
                         // Print LLVM function statistics _before_ optimization
                         // Print all the information about this invocation as a YAML object
-                        jl_printf(stream, "- \n");
+                        before_stats_ss << "- \n";
                         // We print the name and some statistics for each function in the module, both
                         // before optimization and again afterwards.
-                        jl_printf(stream, "  before: \n");
+                        before_stats_ss << "  before: \n";
                         for (auto &F : M.functions()) {
                             if (F.isDeclaration() || F.getName().startswith("jfptr_")) {
                                 continue;
                             }
                             // Each function is printed as a YAML object with several attributes
-                            jl_printf(stream, "    \"%s\":\n", F.getName().str().c_str());
-                            jl_printf(stream, "        instructions: %u\n", F.getInstructionCount());
-                            jl_printf(stream, "        basicblocks: %zd\n", countBasicBlocks(F));
+                            before_stats_ss << "    \"" << F.getName().str().c_str() << "\":\n";
+                            before_stats_ss << "        instructions: " << F.getInstructionCount() << "\n";
+                            before_stats_ss << "        basicblocks: " << countBasicBlocks(F) << "\n";
                         }
 
                         start_time = jl_hrtime();
@@ -1123,6 +1127,7 @@ namespace {
                 {
                     auto stream = *jl_ExecutionEngine->get_dump_llvm_opt_stream();
                     if (stream) {
+                        jl_printf(stream, "%s", before_stats_ss.str().c_str());
                         end_time = jl_hrtime();
                         jl_printf(stream, "  time_ns: %" PRIu64 "\n", end_time - start_time);
                         jl_printf(stream, "  optlevel: %d\n", optlevel);
