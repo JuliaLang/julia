@@ -84,20 +84,20 @@ macro simple_deprecate(old, new)
 end
 
 @simple_deprecate(Base.floor(dt::Date, p::Year) , Base.floor(p, dt)) #@depreciate
-
-
 @simple_deprecate(Base.floor(dt::Date, p::Month), Base.floor(p, dt))
 @simple_deprecate(Base.floor(dt::Date, p::Quarter), Base.floor(p, dt))
 @simple_deprecate(Base.floor(dt::Date, p::Week), Base.floor(p, dt))
 @simple_deprecate(Base.floor(dt::Date, p::Day), Base.floor(p, dt))
+
 @simple_deprecate(Base.floor(dt::DateTime, p::DatePeriod), Base.floor(p, dt))
 @simple_deprecate(Base.floor(dt::DateTime, p::TimePeriod), Base.floor(p, dt))
+
 @simple_deprecate(Base.floor(x::ConvertiblePeriod, precision::T)  where T <: ConvertiblePeriod, Base.floor(precision, x))
+
 @simple_deprecate(Base.ceil(dt::TimeType, p::Period), Base.ceil(p, dt))
 @simple_deprecate(Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod), Base.ceil(precision, x))
 
 @simple_deprecate(Base.round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}), Base.round(p, dt, r))
-
 # The definitions were excluded due to ambiguities, and it didn't effeect test results
 # @simple_deprecate(Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp}), Base.round(precision, x, r))
 # @simple_deprecate(Base.round(x::TimeTypeOrPeriod, p::Period, r::RoundingMode{:Down}), Base.round(p,x,r))
