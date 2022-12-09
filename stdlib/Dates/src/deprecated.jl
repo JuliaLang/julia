@@ -66,5 +66,10 @@ for op in (:+, :-)
     end
 end
 
-@deprecate argerror(msg::String) ArgumentError(msg) false
-@deprecate argerror() nothing false
+function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
+    return Base.round(x, oneunit(P), r)
+end
+
+Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(x, oneunit(P))
+
+Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(x, oneunit(P))
