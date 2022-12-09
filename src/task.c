@@ -798,7 +798,7 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->gcstack = NULL;
     t->excstack = NULL;
     t->started = 0;
-    t->prio = -1;
+    t->priority = 0;
     jl_atomic_store_relaxed(&t->tid, t->copy_stack ? jl_atomic_load_relaxed(&ct->tid) : -1); // copy_stacks are always pinned since they can't be moved
     t->ptls = NULL;
     t->world_age = ct->world_age;
