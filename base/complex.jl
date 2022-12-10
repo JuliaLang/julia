@@ -561,6 +561,21 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
+function nthroot(z::Complex, n::Int)
+    z = float(z)
+    x, y = reim(z)
+    if x==y==0
+        return Complex(zero(x),y)
+    end
+    r = abs(z)
+    θ = angle(z)
+    roots = Array{Complex}(undef, n)
+    for k in 1:n
+        roots[k] = r^(1/n)*(cos((θ+2*pi*(k-1))/n) + sin((θ+2*pi*(k-1))/n)im)
+    end
+    return roots
+end
+
 """
     cis(x)
 

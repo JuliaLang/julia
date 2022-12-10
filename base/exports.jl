@@ -349,6 +349,7 @@ export
     sinh,
     sinpi,
     sqrt,
+    nthroot,
     tan,
     tand,
     tanh,
