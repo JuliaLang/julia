@@ -979,18 +979,22 @@ function rename(src::AbstractString, dst::AbstractString; force::Bool=false)
     # on error, default to cp && rm
     if err < 0
         # debugging
-        @error "jl_fs_rename errored" err src dst force
-        if isdir(src)
-            @show readdir(src)
+        if Sys.isunix() && err == -18
+            @info "jl_fs_rename failed (-18) because rename cannot work when src and dst are on different mounts" src dst
         else
-            @show isfile(src)
-            isfile(src) && display(stat(src))
-        end
-        if isdir(dst)
-            @show readdir(dst)
-        else
-            @show isfile(dst)
-            isfile(dst) && display(stat(dst))
+            @error "jl_fs_rename failed" err src dst force
+            if isdir(src)
+                @show readdir(src)
+            else
+                @show isfile(src)
+                isfile(src) && display(stat(src))
+            end
+            if isdir(dst)
+                @show readdir(dst)
+            else
+                @show isfile(dst)
+                isfile(dst) && display(stat(dst))
+            end
         end
         ##
         cp(src, dst; force=force, follow_symlinks=false)
