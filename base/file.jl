@@ -978,6 +978,19 @@ function rename(src::AbstractString, dst::AbstractString; force::Bool=false)
     err = ccall(:jl_fs_rename, Int32, (Cstring, Cstring), src, dst)
     # on error, default to cp && rm
     if err < 0
+        # debugging
+        @error "jl_fs_rename errored" err src dst force
+        if isdir(src)
+            @show readdir(src)
+        else
+            @show isfile(src)
+        end
+        if isdir(dst)
+            @show readdir(dst)
+        else
+            @show isfile(dst)
+        end
+        ##
         cp(src, dst; force=force, follow_symlinks=false)
         rm(src; recursive=true)
     end
