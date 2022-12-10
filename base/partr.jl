@@ -46,14 +46,15 @@ end
 
 function multiq_sift_down(heap::taskheap, idx::Int32)
     if idx <= heap.ntasks
-        for child = (heap_d * idx - heap_d + Int32(2)):(heap_d * idx + Int32(1))
+        for child = (heap_d * idx - heap_d + 2):(heap_d * idx + 1)
+            child = Int(child)
             child > length(heap.tasks) && break
-            if isassigned(heap.tasks, Int(child)) &&
+            if isassigned(heap.tasks, child) &&
                     heap.tasks[child].priority <= heap.tasks[idx].priority
                 t = heap.tasks[idx]
                 heap.tasks[idx] = heap.tasks[child]
                 heap.tasks[child] = t
-                multiq_sift_down(heap, child)
+                multiq_sift_down(heap, Int32(child))
             end
         end
     end
