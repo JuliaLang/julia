@@ -984,11 +984,13 @@ function rename(src::AbstractString, dst::AbstractString; force::Bool=false)
             @show readdir(src)
         else
             @show isfile(src)
+            isfile(src) && display(stat(src))
         end
         if isdir(dst)
             @show readdir(dst)
         else
             @show isfile(dst)
+            isfile(dst) && display(stat(dst))
         end
         ##
         cp(src, dst; force=force, follow_symlinks=false)
