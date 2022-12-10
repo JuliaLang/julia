@@ -217,41 +217,37 @@ end
 end
 
 @constprop :none function rehash_inplace!(h::Dict{K,V}) where V where K
-    # Temp metadata: tmp_removed => 0x70
     sz = length(h.slots)
     slots = h.slots
     keys = h.keys
     vals = h.vals
     @inbounds for i = 1:sz
-        # Change to temporary values (removed => tmp_removed)
-        slots[i] = (slots[i] == 0x7f ? 0x70 : slots[i])
+        # Remove old tumbstones
+        slots[i] = ((slots[i] & 0x80) == 0 ? 0x00 : slots[i])
     end
 
     @inbounds for i = 1:sz
         # Try to find a better position
-        !isslotfilled(h, i) && continue
-        index, sh = hashindex(keys[i], sz)
-        i == index && continue
-        while true
-            (!isslotfilled(h, i) || i == index) && break
-            index = (index & (sz-1)) + 1
+        if (slots[i] & 0x80) != 0
+            index, _ = hashindex(keys[i], sz)
+            while i != index && (slots[index] & 0x80) != 0
+                index = (index & (sz-1)) + 1
+            end
+            if i != index
+                # Change the element's position
+                h.slots[index] = h.slots[i]
+                h.slots[i] = 0x7f
+                keys[index] = keys[i]
+                vals[index] = vals[i]
+                _unsetindex!(keys, i)
+                _unsetindex!(vals, i)
+            end
         end
-        h.slots[i] = 0x7f
-        h.slots[index] = sh
-        # Change the element's position
-        keys[index] = keys[i]
-        vals[index] = vals[i]
-        _unsetindex!(keys, i)
-        _unsetindex!(vals, i)
     end
 
     h.ndel = 0
     @inbounds for i = 1:sz
-        # Delete old tombstones
-        slot = slots[i]
-        tmp_removed = (slot == 0x70)
-        slots[i] = tmp_removed ? 0x00 : slot
-        h.ndel += (slot == 0x7f)
+        h.ndel += (slots[i] == 0x7f)
     end
     return h
 end
