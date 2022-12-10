@@ -1150,6 +1150,7 @@ function is_const_prop_profitable_arg(@nospecialize(arg))
         end
     end
     isa(arg, PartialOpaque) && return true
+    isa(arg, PartialTypeVar) && return false # this isn't forwardable
     isa(arg, Const) || return true
     val = arg.val
     # don't consider mutable values useful constants
