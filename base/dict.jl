@@ -216,60 +216,41 @@ end
     return h
 end
 
-function _find_first_free_slot(h::Dict{K,V}, key::K) where V where K
-    iter = 0
-    maxprobe = h.maxprobe
-    sz = length(h.slots)
-    index, sh = hashindex(key, sz)
-    keys = h.keys
-
-    @inbounds while true
-        slot = h.slots[index]
-        if slot == 0x00 || slot == 0x7f || slot == 0x70
-            return index, sh
-        end
-
-        if h.slots[index] == sh
-            k = keys[index]
-            if key === k || isequal(key, k)
-                return index, sh
-            end
-        end
-
-        index = (index & (sz-1)) + 1
-        iter += 1
-        @assert iter <= maxprobe "Reached maxprobe during in-place rehashing."
-    end
-end
-
 @constprop :none function rehash_inplace!(h::Dict{K,V}) where V where K
     # Temp metadata: tmp_removed => 0x70
     sz = length(h.slots)
+    slots = h.slots
+    keys = h.keys
+    vals = h.vals
     @inbounds for i = 1:sz
         # Change to temporary values (removed => tmp_removed)
-        slot = h.slots[i]
-        h.slots[i] = (slot == 0x7f ? 0x70 : slot)
+        slots[i] = (slots[i] == 0x7f ? 0x70 : slots[i])
     end
 
     @inbounds for i = 1:sz
         # Try to find a better position
         !isslotfilled(h, i) && continue
-        index, h.slots[index] = _find_first_free_slot(h, h.keys[i])
+        index, sh = hashindex(keys[i], sz)
         i == index && continue
+        while true
+            (!isslotfilled(h, i) || i == index) && break
+            index = (index & (sz-1)) + 1
+        end
         h.slots[i] = 0x7f
+        h.slots[index] = sh
         # Change the element's position
-        h.keys[index] = h.keys[i]
-        h.vals[index] = h.vals[i]
-        _unsetindex!(h.keys, i)
-        _unsetindex!(h.vals, i)
+        keys[index] = keys[i]
+        vals[index] = vals[i]
+        _unsetindex!(keys, i)
+        _unsetindex!(vals, i)
     end
 
     h.ndel = 0
     @inbounds for i = 1:sz
         # Delete old tombstones
-        slot = h.slots[i]
+        slot = slots[i]
         tmp_removed = (slot == 0x70)
-        h.slots[i] = tmp_removed ? 0x00 : slot
+        slots[i] = tmp_removed ? 0x00 : slot
         h.ndel += (slot == 0x7f)
     end
     return h
