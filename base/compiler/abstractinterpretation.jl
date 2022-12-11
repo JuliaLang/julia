@@ -1144,10 +1144,14 @@ end
 function is_const_prop_profitable_arg(@nospecialize(arg))
     # have new information from argtypes that wasn't available from the signature
     if isa(arg, PartialStruct)
-        for b in arg.fields
-            isconstType(b) && return true
-            is_const_prop_profitable_arg(b) && return true
-        end
+        return true # might be a bit aggressive, may want to enable some check like follows:
+        # for i = 1:length(arg.fields)
+        #     fld = arg.fields[i]
+        #     isconstType(fld) && return true
+        #     is_const_prop_profitable_arg(fld) && return true
+        #     fld ⊏ fieldtype(arg.typ, i) && return true
+        # end
+        # return false
     end
     isa(arg, PartialOpaque) && return true
     isa(arg, Const) || return true
