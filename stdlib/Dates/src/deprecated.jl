@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @deprecate, depwarn
+using Base: @deprecate, show_unquoted, remove_linenums!
 
 # 1.0 deprecations
 function (+)(x::AbstractArray{<:TimeType}, y::GeneralPeriod)
@@ -66,12 +66,13 @@ for op in (:+, :-)
     end
 end
 
-function Base.round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period
-    return Base.round(x, oneunit(P), r)
-end
-
-Base.ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.ceil(x, oneunit(P))
-Base.floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period = Base.floor(x, oneunit(P))
-
 @deprecate argerror(msg::String) ArgumentError(msg) false
 @deprecate argerror() nothing false
+
+import Base: ceil, round, floor
+
+Base.@deprecate(floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period, floor(x, oneunit(P)))
+
+Base.@deprecate(ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period, ceil(x, oneunit(P)))
+
+Base.@deprecate(round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period, round(x, oneunit(P), r))
