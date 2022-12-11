@@ -322,6 +322,19 @@ close(proc.in)
     end
 end
 
+@testset "threads clean up task local state" begin
+    function func_that_captures(x::Vector)
+        @async length(x)
+    end
+    a = []
+    r = WeakRef(a)
+    t = func_that_captures(a)
+    a = nothing
+    wait(t)
+    GC.gc()
+    @test r.value === nothing
+end
+
 @testset "bad arguments to @threads" begin
     @test_throws ArgumentError @macroexpand(@threads 1 2) # wrong number of args
     @test_throws ArgumentError @macroexpand(@threads 1) # arg isn't an Expr
