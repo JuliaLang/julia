@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-import .Base.Math.throw_complex_domainerror
 """
     Complex{T<:Real} <: Number
 
@@ -578,7 +577,8 @@ end
 
 function nthroot(x::Real, n::Integer)
     if (iseven(abs(n)) && x < zero(x))
-        throw_complex_domainerror(:nthroot, x)
+        throw(DomainError(x,
+        LazyString(:nthroot," will only return a complex result if called with a complex argument. Try ", :nthroot,"(Complex(x)).")))
     end
     return copysign(abs(x)^(1/n), x)
 end
