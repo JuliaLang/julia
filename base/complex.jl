@@ -1,5 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
+import .Base.Math.throw_complex_domainerror
 """
     Complex{T<:Real} <: Number
 
@@ -561,7 +561,7 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
-function nthroot(z::Complex, n::Int)
+function nthroot(z::Complex, n::Integer)
     z = float(z)
     x, y = reim(z)
     if x==y==0
@@ -569,11 +569,18 @@ function nthroot(z::Complex, n::Int)
     end
     r = abs(z)
     θ = angle(z)
-    roots = Array{Complex}(undef, n)
+    roots = Complex[]
     for k in 1:n
-        roots[k] = r^(1/n)*(cos((θ+2*pi*(k-1))/n) + sin((θ+2*pi*(k-1))/n)im)
+        push!(roots, r^(1/n)*(Float16(cos((θ+2*pi*(k-1))/n)) + Float16(sin((θ+2*pi*(k-1))/n))im))
     end
     return roots
+end
+
+function nthroot(x::Real, n::Integer)
+    if (iseven(abs(n)) && x < zero(x))
+        throw_complex_domainerror(:nthroot, x)
+    end
+    return copysign(abs(x)^(1/n), x)
 end
 
 """
