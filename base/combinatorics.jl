@@ -279,7 +279,7 @@ function invperm(a::AbstractVector)
     b = fill!(similar(a), zero(eltype(a))) # similar vector of zeros
     n = length(a)
     @inbounds for (i, j) in enumerate(a)
-        (1 <= j <= n) ||
+        ((1 <= j <= n) && b[j] == 0) ||
             throw(ArgumentError("argument is not a permutation"))
         b[j] = i
     end
