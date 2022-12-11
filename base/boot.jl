@@ -503,16 +503,19 @@ Array{T}(A::AbstractArray{S,N}) where {T,N,S} = Array{T,N}(A)
 AbstractArray{T}(A::AbstractArray{S,N}) where {T,S,N} = AbstractArray{T,N}(A)
 
 # primitive Symbol constructors
+
+## Helper for proper GC rooting without unsafe_convert
+eval(Core, quote
+    _Symbol(ptr::Ptr{UInt8}, sz::Int, root::Any) = $(Expr(:foreigncall, QuoteNode(:jl_symbol_n),
+        Ref{Symbol}, svec(Ptr{UInt8}, Int), 0, QuoteNode(:ccall), :ptr, :sz, :root))
+end)
+
 function Symbol(s::String)
     @_foldable_meta
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s),
-                 sizeof(s))
+    return _Symbol(ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s), sizeof(s), s)
 end
 function Symbol(a::Array{UInt8,1})
-    return ccall(:jl_symbol_n, Ref{Symbol}, (Ptr{UInt8}, Int),
-                 ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a),
-                 Intrinsics.arraylen(a))
+    return _Symbol(ccall(:jl_array_ptr, Ptr{UInt8}, (Any,), a), Intrinsics.arraylen(a), a)
 end
 Symbol(s::Symbol) = s
 
