@@ -560,7 +560,16 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
-function nthroot(z::Complex, n::Integer)
+struct RootsVector{T<:Complex} <: AbstractVector{T}
+    z::T
+    n::Int
+end
+
+Base.size(S::RootsVector) = S.n
+Base.IndexStyle(S::RootsVector) = IndexLinear()
+Base.getindex(S::RootsVector, i::Int) = abs(S.z)^(1/S.n)*(Float16(cos((angle(S.z)+2*pi*(i-1))/S.n)) + Float16(sin((angle(S.z)+2*pi*(i-1))/S.n))im)
+
+function nthroot(z::Complex, n::Int)
     z = float(z)
     x, y = reim(z)
     if x==y==0

@@ -74,6 +74,7 @@ export
     Regex,
     RegexMatch,
     Returns,
+    RootVector,
     RoundFromZero,
     RoundDown,
     RoundingMode,
