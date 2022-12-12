@@ -5837,7 +5837,7 @@ then `ilo` and `ihi` are the outputs of `gebal!`. Otherwise they should be
 `ilo = 1` and `ihi = size(H,2)`. `tau` contains the elementary reflectors of
 the factorization.
 """
-hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer, H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
+hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer, H::AbstractMatrix, Z::AbstractMatrix)
 
 for (hetrd, elty) in
     ((:dsytrd_,Float64),
