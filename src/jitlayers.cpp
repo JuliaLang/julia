@@ -1218,11 +1218,12 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #endif
+    LockLayer(ObjectLayer),
     Pipelines{
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 1),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
+        std::make_unique<PipelineT>(LockLayer, *TM, 0),
+        std::make_unique<PipelineT>(LockLayer, *TM, 1),
+        std::make_unique<PipelineT>(LockLayer, *TM, 2),
+        std::make_unique<PipelineT>(LockLayer, *TM, 3),
     },
     OptSelLayer(Pipelines)
 {
@@ -1332,13 +1333,14 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_MODULE_FINISH);
     ++ModulesAdded;
-    std::vector<std::string> NewExports;
+    orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) {
         jl_decorate_module(M);
         shareStrings(M);
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                NewExports.push_back(getMangledName(F.getName()));
+                auto Name = ES.intern(getMangledName(F.getName()));
+                NewExports.add(std::move(Name));
             }
         }
 #if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
@@ -1362,13 +1364,15 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
 #endif
     });
+
     // TODO: what is the performance characteristics of this?
     cantFail(OptSelLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
-    for (auto Name : NewExports)
-        cantFail(ES.lookup({&JD}, Name));
-
+    for (auto &sym : cantFail(ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports))) {
+        assert(sym.second);
+        (void) sym;
+    }
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
