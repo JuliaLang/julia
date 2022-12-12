@@ -1330,7 +1330,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
-        elseif isconcretetype(RT) && has_nontrivial_const_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
+        elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
         info = ModifyFieldInfo(callinfo.info)
@@ -1799,7 +1799,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_nontrivial_const_info(𝕃, x)
+        if has_nontrivial_extended_info(𝕃, x)
             anyinfo = true
         else
             if !isvarargtype(x)
