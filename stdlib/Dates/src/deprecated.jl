@@ -1,7 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Base: @deprecate, show_unquoted, remove_linenums!
-
+using Base: @deprecate
 # 1.0 deprecations
 function (+)(x::AbstractArray{<:TimeType}, y::GeneralPeriod)
     # depwarn("non-broadcasted arithmetic is deprecated for Dates.TimeType; use broadcasting instead", nothing)
@@ -71,8 +70,18 @@ end
 
 import Base: ceil, round, floor
 
-Base.@deprecate(floor(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period, floor(x, oneunit(P)))
+Base.@deprecate(round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}), round(p, dt, r))
 
-Base.@deprecate(ceil(x::TimeTypeOrPeriod, ::Type{P}) where P <: Period, ceil(x, oneunit(P)))
+Base.@deprecate(round(x::TimeType, p::Period), round(p, x))
 
-Base.@deprecate(round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period, round(x, oneunit(P), r))
+Base.@deprecate(floor(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period, floor(p, x))
+
+Base.@deprecate(ceil(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period, ceil(p, x))
+
+Base.@deprecate(floor(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period, floor(oneunit(P), Date(x)))
+
+Base.@deprecate(ceil(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period, ceil(oneunit(P), Date(x)))
+
+Base.@deprecate(round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period, round(oneunit(P), x, r))
+
+Base.@deprecate(round(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period, round(oneunit(P), Date(x), r))
