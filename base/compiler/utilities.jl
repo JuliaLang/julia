@@ -77,6 +77,12 @@ function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
 
+############
+# inlining #
+############
+
+const MAX_INLINE_CONST_SIZE = 256
+
 function count_const_size(@nospecialize(x), count_self::Bool = true)
     (x isa Type || x isa Symbol) && return 0
     ismutable(x) && return MAX_INLINE_CONST_SIZE + 1
