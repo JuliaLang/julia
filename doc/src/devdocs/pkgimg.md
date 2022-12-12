@@ -28,7 +28,7 @@ another compiler driver, we therefore reimplement some of the logic from `llvm-p
 To avoid having to deal with `link.exe` we use `-flavor gnu`, effectively turning `lld` into a cross-linker from a mingw32 environment. Windows DLLs are required to contain a `_DllMainCRTStartup` function and to minimize our dependenc on mingw32 libraries we inject a stub definition ourselves.
 
 #### MacOS
-Dynamic libraries on MacOS need to link against `-lSystem`. On recent MacOS versions `-lSystem` is only available for linking when XCode is available.
+Dynamic libraries on MacOS need to link against `-lSystem`. On recent MacOS versions `-lSystem` is only available for linking when Xcode is available.
 To that effect we link with `-undefined dynamic_lookup`.
 
 ## Package images optimized for multiple microarchitectures
