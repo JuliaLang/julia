@@ -2218,12 +2218,33 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 mi, codeinst2->rettype,
                 codeinst2->min_world, codeinst2->max_world);
         if (jl_atomic_load_relaxed(&codeinst->invoke) == NULL) {
-            // once set, don't change invoke-ptr, as that leads to race conditions
-            // with the (not) simultaneous updates to invoke and specptr
-            codeinst->isspecsig = codeinst2->isspecsig;
             codeinst->rettype_const = codeinst2->rettype_const;
-            jl_atomic_store_release(&codeinst->specptr.fptr, jl_atomic_load_relaxed(&codeinst2->specptr.fptr));
-            jl_atomic_store_release(&codeinst->invoke, jl_atomic_load_relaxed(&codeinst2->invoke));
+            uint8_t specsigflags = jl_atomic_load_acquire(&codeinst2->specsigflags);
+            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst2->invoke);
+            void *fptr = jl_atomic_load_relaxed(&codeinst2->specptr.fptr);
+            if (fptr != NULL) {
+                while (!(specsigflags & 0b10)) {
+                    jl_cpu_pause();
+                    specsigflags = jl_atomic_load_acquire(&codeinst2->specsigflags);
+                }
+                invoke = jl_atomic_load_relaxed(&codeinst2->invoke);
+                void *prev_fptr = NULL;
+                // see jitlayers.cpp for the ordering restrictions here
+                if (jl_atomic_cmpswap_acqrel(&codeinst->specptr.fptr, &prev_fptr, fptr)) {
+                    jl_atomic_store_relaxed(&codeinst->specsigflags, specsigflags & 0b1);
+                    jl_atomic_store_release(&codeinst->invoke, invoke);
+                    jl_atomic_store_release(&codeinst->specsigflags, specsigflags);
+                } else {
+                    // someone else already compiled it
+                    while (!(jl_atomic_load_acquire(&codeinst->specsigflags) & 0b10)) {
+                        jl_cpu_pause();
+                    }
+                    // codeinst is now set up fully, safe to return
+                }
+            } else {
+                jl_callptr_t prev = NULL;
+                jl_atomic_cmpswap_acqrel(&codeinst->invoke, &prev, invoke);
+            }
         }
         // don't call record_precompile_statement here, since we already compiled it as mi2 which is better
         return codeinst;
@@ -2346,24 +2367,30 @@ jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t narg
 
 jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
-    jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
+    jl_fptr_args_t invoke = jl_atomic_load_acquire(&m->specptr.fptr1);
     while (1) {
         if (invoke)
             return invoke(f, args, nargs);
+        // wait a little, then try again
+        jl_cpu_pause();
         invoke = jl_atomic_load_acquire(&m->specptr.fptr1); // require forward progress with acquire annotation
     }
+    return invoke(f, args, nargs);
 }
 
 jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_svec_t *sparams = m->def->sparam_vals;
     assert(sparams != jl_emptysvec);
-    jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
+    jl_fptr_sparam_t invoke = jl_atomic_load_acquire(&m->specptr.fptr3);
     while (1) {
         if (invoke)
             return invoke(f, args, nargs, sparams);
+        // wait a little, then try again
+        jl_cpu_pause();
         invoke = jl_atomic_load_acquire(&m->specptr.fptr3); // require forward progress with acquire annotation
     }
+    return invoke(f, args, nargs, sparams);
 }
 
 JL_DLLEXPORT jl_callptr_t jl_fptr_args_addr = &jl_fptr_args;

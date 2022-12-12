@@ -275,7 +275,7 @@ static jl_callptr_t _jl_compile_codeinst(
                 jl_atomic_store_release(&this_code->specsigflags, (uint8_t) (0b10 | isspecsig));
             } else {
                 //someone else beat us, don't commit any results
-                while (!(jl_atomic_load_relaxed(&this_code->specsigflags) & 0b10)) {
+                while (!(jl_atomic_load_acquire(&this_code->specsigflags) & 0b10)) {
                     jl_cpu_pause();
                 }
                 addr = jl_atomic_load_relaxed(&this_code->invoke);
