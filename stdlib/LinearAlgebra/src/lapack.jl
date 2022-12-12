@@ -5825,8 +5825,8 @@ for (hseqr, elty) in
         end
     end
 end
-hseqr!(H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty}) = hseqr!('S', 'V', 1, size(H, 1), H, Z)
-hseqr!(H::AbstractMatrix{$elty}) = hseqr!('S', 'V', 1, size(H, 1), H, one(H))
+hseqr!(H::AbstractMatrix, Z::AbstractMatrix) = hseqr!('S', 'V', 1, size(H, 1), H, Z)
+hseqr!(H::AbstractMatrix) = hseqr!('S', 'V', 1, size(H, 1), H, one(H))
 
 """
     hseqr!(job, compz, ilo, ihi, H, Z) -> (H, Z, w)
