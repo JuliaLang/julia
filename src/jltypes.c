@@ -1093,12 +1093,36 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v)
 }
 
 // wrap `t` in the same unionalls that surround `u`
+// where `t` is derived from `u`, so the error checks in jl_type_unionall are unnecessary
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
 {
     if (!jl_is_unionall(u))
         return t;
-    JL_GC_PUSH1(&t);
     t = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
+    jl_tvar_t *v = ((jl_unionall_t*)u)->var;
+    // normalize `T where T<:S` => S
+    if (t == (jl_value_t*)v)
+        return v->ub;
+    // where var doesn't occur in body just return body
+    if (!jl_has_typevar(t, v))
+        return t;
+    JL_GC_PUSH1(&t);
+    //if (v->lb == v->ub)  // TODO maybe
+    //    t = jl_substitute_var(body, v, v->ub);
+    //else
+    t = jl_new_struct(jl_unionall_type, v, t);
+    JL_GC_POP();
+    return t;
+}
+
+// wrap `t` in the same unionalls that surround `u`
+// where `t` is extended from `u`, so the checks in jl_rewrap_unionall are unnecessary
+jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
+{
+    if (!jl_is_unionall(u))
+        return t;
+    t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
+    JL_GC_PUSH1(&t);
     t = jl_new_struct(jl_unionall_type, ((jl_unionall_t*)u)->var, t);
     JL_GC_POP();
     return t;

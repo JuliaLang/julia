@@ -406,7 +406,7 @@ f11366(x::Type{Ref{T}}) where {T} = Ref{x}
 
 
 let f(T) = Type{T}
-    @test Base.return_types(f, Tuple{Type{Int}}) == [Type{Type{Int}}]
+    @test Base.return_types(f, Tuple{Type{Int}}) == Any[Type{Type{Int}}]
 end
 
 # issue #9222
