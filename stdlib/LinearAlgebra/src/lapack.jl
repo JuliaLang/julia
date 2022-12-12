@@ -5751,7 +5751,7 @@ for (hseqr, elty) in
         # *     ..
         # *     .. Array Arguments ..
         #       COMPLEX*16         H( LDH, * ), Z( LDZ, * ), WORK( * )
-        function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer, 
+        function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer,
                         H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
             require_one_based_indexing(H, Z)
             chkstride1(H)
@@ -5793,7 +5793,7 @@ for (hseqr, elty) in
         # *     ..
         # *     .. Array Arguments ..
         #       COMPLEX*16         H( LDH, * ), Z( LDZ, * ), WORK( * )
-        function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer, 
+        function hseqr!(job::AbstractChar, compz::AbstractChar, ilo::Integer, ihi::Integer,
                         H::AbstractMatrix{$elty}, Z::AbstractMatrix{$elty})
             require_one_based_indexing(H, Z)
             chkstride1(H)
@@ -5831,7 +5831,7 @@ hseqr!(H::AbstractMatrix) = hseqr!('S', 'V', 1, size(H, 1), H, one(H))
 """
     hseqr!(job, compz, ilo, ihi, H, Z) -> (H, Z, w)
 
-Computes all eigenvalues and (optionally) the Schur factorization of a matrix 
+Computes all eigenvalues and (optionally) the Schur factorization of a matrix
 reduced to Hessenberg form. If `H` is balanced with `gebal!`
 then `ilo` and `ihi` are the outputs of `gebal!`. Otherwise they should be
 `ilo = 1` and `ihi = size(H,2)`. `tau` contains the elementary reflectors of
