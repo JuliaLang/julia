@@ -296,7 +296,7 @@ julia> mysum(1.0, 2.0)
 
 Julia will compile `mysum` twice, once for `x::Int, y::Int` and again for `x::Float64, y::Float64`.
 The point of compiling twice is performance: the methods that get called for `+` (which `mysum` uses) vary depending on the specific types of `x` and `y`, and by compiling different specializations Julia can do all the method lookup ahead of time. This allows the program to run much more quickly, since it doesn't have to bother with method lookup while it is running.
-Julia's automatic specialization allows you to write "generic" algorithms and expect that the compiler will generate efficient, specialized code to handle each case when you need it.
+Julia's automatic specialization allows you to write generic algorithms and expect that the compiler will generate efficient, specialized code to handle each case you need.
 
 In cases where the number of potential specializations might be effectively unlimited, Julia may avoid this default specialization. See [Be aware of when Julia avoids specializing](@ref) for more information.
 
