@@ -284,11 +284,8 @@ Base.round(p::Period, x::TimeTypeOrPeriod) = Base.round(p, x, RoundNearestTiesUp
 # Make rounding functions callable using Period types in addition to values.
 
 Base.floor(::Type{P}, x::TimeTypeOrPeriod) where P <: Period = Base.floor(oneunit(P), x)
-
 Base.ceil(::Type{P}, x::TimeTypeOrPeriod)  where P <: Period = Base.ceil(oneunit(P), x)
-
 Base.floor(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}) where P <: Period = Base.floor(oneunit(P), Date(x))
-
 Base.ceil(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}) where P <: Period = Base.ceil(oneunit(P), Date(x))
 
 function Base.round(::Type{P}, x::TimeTypeOrPeriod, r::RoundingMode=RoundNearestTiesUp) where P <: Period
