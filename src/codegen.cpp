@@ -533,6 +533,51 @@ static AttributeList get_attrs_zext(LLVMContext &C)
                 {Attributes(C, {Attribute::ZExt})});
 }
 
+static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci)
+{
+    uint32_t e = ci->ipo_purity_bits;
+    uint8_t consistent = (e >> 0) & 0x07;
+    uint8_t effect_free = (e >> 3) & 0x03;
+    uint8_t nothrow = (e >> 5) & 0x01;
+    uint8_t terminates = (e >> 6) & 0x01;
+    uint8_t notaskstate = (e >> 7) & 0x01;
+    uint8_t inaccessiblememonly = (e >> 8) & 0x03;
+    uint8_t nonoverlayed = (e >> 10) & 0x01;
+#if JL_LLVM_VERSION >= 140000
+    AttrBuilder attr(C);
+#else
+    AttrBuilder attr;
+#endif
+    if (consistent == 0){
+        attr.addAttribute("consistent");
+    }
+    if (effect_free == 0)
+        attr.addAttribute("effect_free");
+    if (nothrow == 1){
+        attr.addAttribute("nothrow");
+        attr.addAttribute(Attribute::NoUnwind); // Is this even correct, because nothrow allows for try/catch
+    }
+    if (terminates == 1){
+        attr.addAttribute(Attribute::WillReturn);
+        attr.addAttribute("terminates");
+    }
+    if (consistent == 0 && terminates == 1 && effect_free == 0 && terminates == 1 && inaccessiblememonly == 0)
+        // attr.addAttribute(Attribute::Speculatable);
+    if (notaskstate == 1)
+        attr.addAttribute("notaskstate");
+    if (inaccessiblememonly == 0){
+        attr.addAttribute("inaccessiblememonly");
+        // attr.addAttribute(Attribute::InaccessibleMemOnly);
+        }
+    if (inaccessiblememonly == 2){
+        attr.addAttribute("inaccessiblememorargmemonly");
+        // attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
+    }
+    if (nonoverlayed == 1)
+        attr.addAttribute("nonoverlayed");
+    attr.addAttribute(std::to_string(e));
+    return AttributeList::get(C,AttributeSet::get(C, attr), AttributeSet(), None);
+}
 
 // global vars
 static const auto jlRTLD_DEFAULT_var = new JuliaVariable{
@@ -3854,6 +3899,10 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     // emit specialized call site
     bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
     jl_returninfo_t returninfo = get_specsig_function(ctx, jl_Module, specFunctionObject, mi->specTypes, jlretty, is_opaque_closure);
+    jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+    if (ci != jl_nothing)
+        returninfo.decl->setAttributes(AttributeList::get(ctx.builder.getContext(), {returninfo.decl->getAttributes(), get_attrs_ipoeffects(ctx.builder.getContext(), codeinst)}));
     FunctionType *cft = returninfo.decl->getFunctionType();
     *cc = returninfo.cc;
     *return_roots = returninfo.return_roots;
@@ -3924,7 +3973,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     }
     assert(idx == nfargs);
     CallInst *call = ctx.builder.CreateCall(returninfo.decl, ArrayRef<Value*>(&argvals[0], nfargs));
-    call->setAttributes(returninfo.decl->getAttributes());
+    call->setAttributes(returninfo.decl->getAttributes().removeFnAttributes(ctx.builder.getContext()));
 
     jl_cgval_t retval;
     switch (returninfo.cc) {
@@ -3962,12 +4011,16 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, jl_method_instance_
     return update_julia_type(ctx, retval, inferred_retty);
 }
 
-static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty, StringRef specFunctionObject,
+static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_method_instance_t *mi, jl_value_t *jlretty, StringRef specFunctionObject,
                                           const jl_cgval_t *argv, size_t nargs, jl_value_t *inferred_retty)
 {
     auto theFptr = cast<Function>(
         jl_Module->getOrInsertFunction(specFunctionObject, ctx.types().T_jlfunc).getCallee());
     addRetAttr(theFptr, Attribute::NonNull);
+    jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+    if (ci != jl_nothing)
+        theFptr->setAttributes(AttributeList::get(ctx.builder.getContext(), {theFptr->getAttributes(), get_attrs_ipoeffects(ctx.builder.getContext(), codeinst)}));
     Value *ret = emit_jlcall(ctx, theFptr, nullptr, argv, nargs, julia_call);
     return update_julia_type(ctx, mark_julia_type(ctx, ret, true, jlretty), inferred_retty);
 }
@@ -4003,7 +4056,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
             FunctionType *ft = ctx.f->getFunctionType();
             StringRef protoname = ctx.f->getName();
             if (ft == ctx.types().T_jlfunc) {
-                result = emit_call_specfun_boxed(ctx, ctx.rettype, protoname, argv, nargs, rt);
+                result = emit_call_specfun_boxed(ctx, mi, ctx.rettype, protoname, argv, nargs, rt);
                 handled = true;
             }
             else if (ft != ctx.types().T_jlfuncparams) {
@@ -4057,7 +4110,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     if (specsig)
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
                     else
-                        result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
+                        result = emit_call_specfun_boxed(ctx, mi, codeinst->rettype, protoname, argv, nargs, rt);
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -5388,7 +5441,7 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     theFarg = track_pjlvalue(ctx, theFarg);
     auto args = f->arg_begin();
     CallInst *r = ctx.builder.CreateCall(theFunc, { &*args, &*++args, &*++args, theFarg });
-    r->setAttributes(theFunc->getAttributes());
+    r->setAttributes(theFunc->getAttributes().removeFnAttributes(ctx.builder.getContext()));
     ctx.builder.CreateRet(r);
     return f;
 }
@@ -6293,6 +6346,11 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     ctx.rettype = jlretty;
     ctx.world = 0;
 
+    jl_value_t *ci = ctx.params->lookup(lam, ctx.world, ctx.world);
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+    if (ci != jl_nothing)
+        w->setAttributes(AttributeList::get(M->getContext(), {w->getAttributes(), get_attrs_ipoeffects(M->getContext(), codeinst)}));
+
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", w);
     ctx.builder.SetInsertPoint(b0);
     DebugLoc noDbg;
@@ -6813,6 +6871,10 @@ static jl_llvm_functions_t
         returninfo.decl = f;
         declarations.functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
     }
+    jl_value_t *ci = ctx.params->lookup(lam, ctx.world, ctx.world);
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
+    if (ci != jl_nothing)
+        f->setAttributes(AttributeList::get(ctx.builder.getContext(), {f->getAttributes(), get_attrs_ipoeffects(ctx.builder.getContext(), codeinst)}));
 
 #if JL_LLVM_VERSION >= 140000
     AttrBuilder FnAttrs(ctx.builder.getContext(), f->getAttributes().getFnAttrs());
