@@ -600,5 +600,5 @@ manually. The state of this command line flag is passed to `Pkg.build` to disabl
 precompilation triggering when installing, updating, and explicitly building packages.
 
 You can also debug some precompilation failures with environment variables. Setting
-`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of [compiled
-native code](@ref pkgimages).
+`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of compiled
+native code. See the `devdocs` section of the manual for further details.
