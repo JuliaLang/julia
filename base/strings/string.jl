@@ -191,13 +191,47 @@ end
 end
 
 ## checking UTF-8 & ACSII validity ##
+# This table is used by the shift base DFA validation for UTF-8
+const dfa_table = [      
+       fill(UInt64(384), 128);
+       fill(UInt64(6860978528477184), 16);
+       fill(UInt64(107228354863104), 16);
+       fill(UInt64(107202588205056), 32);
+       fill(UInt64(0), 2);
+       fill(UInt64(768), 30);
+       fill(UInt64(1152), 1);
+       fill(UInt64(1536), 12);
+       fill(UInt64(1920), 1);
+       fill(UInt64(1536), 2);
+       fill(UInt64(2304), 1);
+       fill(UInt64(2688), 3);
+       fill(UInt64(3072), 1);
+       fill(UInt64(0), 11)
+]::Vector{UInt64}
 
-byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) =
-    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), s, sizeof(s))
+# This is a shift based utf-8 DFA
+function _isvalid_utf8(bytes::Vector{UInt8})
+    f(byte) = @inbounds dfa_table[byte]
+    op(state, byte_dfa) = byte_dfa >> (state & UInt64(63))
+    return mapfoldl(f, op, bytes, init=UInt64(6)) == UInt64(6)
+end
+
+_isvalid_utf8(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
+
+#Classifcations of string
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
+function byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}; ascii_fasttrack = true )
+    bytes = unsafe_wrap(Vector{UInt8}, s)
+    ascii_fasttrack && all(c -> iszero(c & 0x80), bytes) && return 1
+    valid = _isvalid_utf8(bytes)
+    return ifelse(valid, 2, 0)
+end
 
+# The commented line below should be faster than an impimentation using byte_string_classify but compiler optimizations make it so that 
+# the benefit doesn't show up.   It would also remove the ascii fast track that is faster for inputs that are all ascii
+# isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) =  _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
 isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
 isvalid(s::String) = isvalid(String, s)
 
