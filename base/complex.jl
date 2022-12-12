@@ -564,8 +564,7 @@ struct RootsVector{T<:Complex} <: AbstractVector{T}
     z::T
     n::Int
 end
-
-Base.size(S::RootsVector) = S.n
+Base.size(S::RootsVector) = (S.n,)
 Base.IndexStyle(S::RootsVector) = IndexLinear()
 Base.getindex(S::RootsVector, i::Int) = abs(S.z)^(1/S.n)*(Float16(cos((angle(S.z)+2*pi*(i-1))/S.n)) + Float16(sin((angle(S.z)+2*pi*(i-1))/S.n))im)
 
