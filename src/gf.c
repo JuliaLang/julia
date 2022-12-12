@@ -3421,6 +3421,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 }
             }
             // then we'll merge those numbers to assign each item in the group the same number
+            // (similar to Kosaraju's SCC algorithm?)
             uint32_t groupid = 0;
             uint32_t grouphi = 0;
             for (i = 0; i < len; i++) {
