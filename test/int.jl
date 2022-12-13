@@ -205,8 +205,8 @@ end
                     @test Core.Compiler.is_total(Base.infer_effects(op, (T, T2)))
                 else
                     @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
-                    # nothrow analysis of recursion needs fixing
-                    @test_broken Core.Compiler.is_total(Base.infer_effects(op, (T, T2)))
+                    # #47835, TODO implement interval arithmetic analysis
+                    @test_broken Core.Compiler.is_nothrow(Base.infer_effects(op, (T, T2)))
                 end
             end
         end
