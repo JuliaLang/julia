@@ -269,7 +269,7 @@ static void jl_compile_all_defs(jl_array_t *mis)
     size_t i, l = jl_array_len(allmeths);
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
-        if (jl_isa_compileable_sig((jl_tupletype_t*)m->sig, m)) {
+        if (jl_is_datatype(m->sig) && jl_isa_compileable_sig((jl_tupletype_t*)m->sig, jl_emptysvec, m)) {
             // method has a single compilable specialization, e.g. its definition
             // signature is concrete. in this case we can just hint it.
             jl_compile_hint((jl_tupletype_t*)m->sig);
@@ -354,7 +354,7 @@ static void *jl_precompile_(jl_array_t *m)
             mi = (jl_method_instance_t*)item;
             size_t min_world = 0;
             size_t max_world = ~(size_t)0;
-            if (mi != jl_atomic_load_relaxed(&mi->def.method->unspecialized) && !jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->def.method))
+            if (mi != jl_atomic_load_relaxed(&mi->def.method->unspecialized) && !jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->sparam_vals, mi->def.method))
                 mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
             if (mi)
                 jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
