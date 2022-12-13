@@ -93,7 +93,7 @@ JL_DLLEXPORT void jl_init_options(void)
 
 static const char usage[] = "\n    julia [switches] -- [programfile] [args...]\n\n";
 static const char opts[]  =
-    "Switches (a '*' marks the default value, if applicable):\n\n"
+    "Switches (a '*' marks the default value, if applicable; settings marked '($)' may trigger package precompilation):\n\n"
     " -v, --version              Display version information\n"
     " -h, --help                 Print this message (--help-hidden for more)\n"
     " --help-hidden              Uncommon options not shown by `-h`\n\n"
@@ -108,7 +108,7 @@ static const char opts[]  =
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
     " --pkgimage-native-code={yes*|no}\n"
-    "                            Use native code from package images if available\n"
+    "                            Use native code from package images if available ($)\n"
     " --compiled-modules={yes*|no}\n"
     "                            Enable or disable incremental precompilation of modules\n\n"
 
@@ -146,16 +146,16 @@ static const char opts[]  =
 
     // code generation options
     " -C, --cpu-target <target>  Limit usage of CPU features up to <target>; set to `help` to see the available options\n"
-    " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level)\n"
+    " -O, --optimize={0,1,2*,3}  Set the optimization level (level 3 if `-O` is used without a level) ($)\n"
     " --min-optlevel={0*,1,2,3}  Set a lower bound on the optimization level\n"
 #ifdef JL_DEBUG_BUILD
-        " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build\n"
+        " -g, --debug-info=[{0,1,2*}] Set the level of debug info generation in the julia-debug build ($)\n"
 #else
-        " -g, --debug-info=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level)\n"
+        " -g, --debug-info=[{0,1*,2}] Set the level of debug info generation (level 2 if `-g` is used without a level) ($)\n"
 #endif
     " --inline={yes*|no}         Control whether inlining is permitted, including overriding @inline declarations\n"
     " --check-bounds={yes|no|auto*}\n"
-    "                            Emit bounds checks always, never, or respect @inbounds declarations\n"
+    "                            Emit bounds checks always, never, or respect @inbounds declarations ($)\n"
 #ifdef USE_POLLY
     " --polly={yes*|no}          Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)\n"
 #endif

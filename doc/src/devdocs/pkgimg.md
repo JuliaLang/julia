@@ -1,7 +1,7 @@
 # Package Images
 
 Julia package images provide object (native code) caches for Julia packages.
-They are similar to Julia's [system image](@dev-sysimg) and support many of the same features.
+They are similar to Julia's [system image](@ref dev-sysimg) and support many of the same features.
 In fact the underlying serialization format is the same, and the system image is the base image that the package images are build against.
 
 ## High-level overview
@@ -33,14 +33,14 @@ To that effect we link with `-undefined dynamic_lookup`.
 
 ## Package images optimized for multiple microarchitectures
 Similar to [multi-versioning](@ref sysimg-multi-versioning) for system images, package images support multi-versioning. If you are in a heterogenous environment, with a unified cache,
-you can set the environment variable `JULIA_CPU_TARGET` to multi-version the object caches.
+you can set the environment variable `JULIA_CPU_TARGET=generic` to multi-version the object caches.
 
 ## Flags that impact package image creation and selection
 
 These are the Julia command line flags that impact cache selection. Package images
 that were created with different flags will be rejected.
 
-- `-g`: Exact match required since it changes code generation.
+- `-g`, `--debug-info`: Exact match required since it changes code generation.
 - `--check-bounds`: Exact match required since it changes code generation.
 - `--pkgimage-native-code`: To allow running without object caching enabled.
 - `-O`, `--optimize`: Reject package images generated for a lower optimization level,
