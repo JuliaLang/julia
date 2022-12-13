@@ -6346,10 +6346,6 @@ static Function *gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *jlret
     ctx.rettype = jlretty;
     ctx.world = 0;
 
-    jl_value_t *ci = ctx.params->lookup(lam, ctx.world, ctx.world);
-    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-    if (ci != jl_nothing)
-        w->setAttributes(AttributeList::get(M->getContext(), {w->getAttributes(), get_attrs_ipoeffects(M->getContext(), codeinst)}));
 
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", w);
     ctx.builder.SetInsertPoint(b0);
@@ -6871,10 +6867,6 @@ static jl_llvm_functions_t
         returninfo.decl = f;
         declarations.functionObject = needsparams ? "jl_fptr_sparam" : "jl_fptr_args";
     }
-    jl_value_t *ci = ctx.params->lookup(lam, ctx.world, ctx.world);
-    jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
-    if (ci != jl_nothing)
-        f->setAttributes(AttributeList::get(ctx.builder.getContext(), {f->getAttributes(), get_attrs_ipoeffects(ctx.builder.getContext(), codeinst)}));
 
 #if JL_LLVM_VERSION >= 140000
     AttrBuilder FnAttrs(ctx.builder.getContext(), f->getAttributes().getFnAttrs());
