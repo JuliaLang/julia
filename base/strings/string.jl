@@ -98,6 +98,7 @@ String(s::AbstractString) = print_to_string(s)
 @assume_effects :total String(s::Symbol) = unsafe_string(unsafe_convert(Ptr{UInt8}, s))
 
 unsafe_wrap(::Type{Vector{UInt8}}, s::String) = ccall(:jl_string_to_array, Ref{Vector{UInt8}}, (Any,), s)
+unsafe_wrap(::Type{Vector{UInt8}}, s::FastContiguousSubArray{UInt8,1,Vector{UInt8}}) = unsafe_wrap(Vector{UInt8}, pointer(s), size(s))
 
 Vector{UInt8}(s::CodeUnits{UInt8,String}) = copyto!(Vector{UInt8}(undef, length(s)), s)
 Vector{UInt8}(s::String) = Vector{UInt8}(codeunits(s))
@@ -192,44 +193,49 @@ end
 
 ## checking UTF-8 & ACSII validity ##
 # This table is used by the shift base DFA validation for UTF-8
-const dfa_table = [      
-       fill(UInt64(384), 128);
-       fill(UInt64(6860978528477184), 16);
-       fill(UInt64(107228354863104), 16);
-       fill(UInt64(107202588205056), 32);
-       fill(UInt64(0), 2);
-       fill(UInt64(768), 30);
-       fill(UInt64(1152), 1);
-       fill(UInt64(1536), 12);
-       fill(UInt64(1920), 1);
-       fill(UInt64(1536), 2);
-       fill(UInt64(2304), 1);
-       fill(UInt64(2688), 3);
-       fill(UInt64(3072), 1);
-       fill(UInt64(0), 11)
-]::Vector{UInt64}
+const dfa_table = [
+    fill(UInt64(109802048057794944), 128);
+    fill(UInt64(113232530780455302), 16);
+    fill(UInt64(109855655693648262), 16);
+    fill(UInt64(109855649351860614), 32);
+    fill(UInt64(109802048057794950), 2);
+    fill(UInt64(109802048057794956), 30);
+    fill(UInt64(109802048057794968), 1);
+    fill(UInt64(109802048057794962), 12);
+    fill(UInt64(109802048057794974), 1);
+    fill(UInt64(109802048057794962), 2);
+    fill(UInt64(109802048057794980), 1);
+    fill(UInt64(109802048057794986), 3);
+    fill(UInt64(109802048057794992), 1);
+    fill(UInt64(109802048057794950), 11)
+    ]::Vector{UInt64}
 
 # This is a shift based utf-8 DFA
 function _isvalid_utf8(bytes::Vector{UInt8})
-    f(byte) = @inbounds dfa_table[byte]
+    f(byte) = @inbounds dfa_table[byte+1]
     op(state, byte_dfa) = byte_dfa >> (state & UInt64(63))
-    return mapfoldl(f, op, bytes, init=UInt64(6)) == UInt64(6)
+    final_state = mapfoldl(f, op, bytes, init = UInt64(0))
+    return (final_state & UInt64(63)) == UInt64(0)
 end
 
-_isvalid_utf8(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
+_isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
 
 # Classifcations of string
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
-function byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}; ascii_fasttrack = true )
+function byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}; kwargs...)
     bytes = unsafe_wrap(Vector{UInt8}, s)
+    byte_string_classify(bytes, kwargs...)
+end
+
+function byte_string_classify(bytes::Vector{UInt8}; ascii_fasttrack = true )
     ascii_fasttrack && all(c -> iszero(c & 0x80), bytes) && return 1
     valid = _isvalid_utf8(bytes)
     return ifelse(valid, 2, 0)
 end
 
-# The commented line below should be faster than an impimentation using byte_string_classify but compiler optimizations make it so that 
+# The commented line below should be faster than an impimentation using byte_string_classify but compiler optimizations make it so that
 # the benefit doesn't show up.   It would also remove the ascii fast track that is faster for inputs that are all ascii
 # isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) =  _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
 isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
