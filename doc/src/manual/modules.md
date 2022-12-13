@@ -601,4 +601,4 @@ precompilation triggering when installing, updating, and explicitly building pac
 
 You can also debug some precompilation failures with environment variables. Setting
 `JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of compiled
-native code. See the `devdocs` section of the manual for further details.
+native code. See the **Developer Documentation** part of the Julia manual, where you will find further details in the section documenting Julia's internals under "Package Images".
