@@ -1433,7 +1433,7 @@ STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isconcretetype;
 }
 
-JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_method_t *definition);
+JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_svec_t *sparams, jl_method_t *definition);
 
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule, int abstract, int mutabl);
