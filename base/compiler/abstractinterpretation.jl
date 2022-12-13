@@ -30,8 +30,6 @@ function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpre
     return get_max_methods(mod, interp)
 end
 
-const empty_bitset = BitSet()
-
 function should_infer_this_call(sv::InferenceState)
     if sv.params.unoptimize_throw_blocks
         # Disable inference of calls in throw blocks, since we're unlikely to
