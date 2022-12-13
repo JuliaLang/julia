@@ -392,7 +392,7 @@ dependencies.
 ### [Package/Environment Preferences](@id preferences)
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.
-The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that the chosen precompilation files were built with the same preferences as the current environment before loading them.
+The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that the precompilation files selected by Julia were built with the same preferences as the current environment before loading them.
 The public API for modifying Preferences is contained within the [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl) package.
 Preferences are stored as TOML dictionaries within a `(Julia)LocalPreferences.toml` file next to the currently-active project.
 If a preference is "exported", it is instead stored within the `(Julia)Project.toml` instead.
