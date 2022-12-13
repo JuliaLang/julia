@@ -155,7 +155,7 @@ true
 ```
 """
 schur(A::AbstractMatrix{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
-schur(A::UpperHessenberg{T}) where {T<:BlasFloat} = schur!(copy_similar(A, eigtype(T)))
+schur(A::UpperHessenberg{T}) where {T} = schur!(copy_similar(A, eigtype(T)))
 function schur(A::RealHermSymComplexHerm)
     F = eigen(A; sortby=nothing)
     return Schur(typeof(F.vectors)(Diagonal(F.values)), F.vectors, F.values)
