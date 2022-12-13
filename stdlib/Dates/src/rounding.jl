@@ -107,7 +107,7 @@ julia> floor(Day, Hour(36))
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.floor(precision::T, x::ConvertiblePeriod) where T <: ConvertiblePeriod
+function Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
     value(precision) < 1 && throw(DomainError(precision))
     _x, _precision = promote(x, precision)
     return T(_x - mod(_x, _precision))
@@ -181,7 +181,7 @@ julia> ceil(Day, Hour(36))
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.ceil(precision::ConvertiblePeriod, x::ConvertiblePeriod)
+function Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)
     f = floor(precision, x)
     return (x == f) ? f : f + precision
 end
@@ -264,7 +264,7 @@ Valid rounding modes for `round(::Period, ::T, ::RoundingMode)` are `RoundNeares
 Rounding to a `precision` of `Month`s or `Year`s is not supported, as these `Period`s are of
 inconsistent length.
 """
-function Base.round(precision::ConvertiblePeriod, x::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
+function Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
     f, c = floorceil(precision, x)
     _x, _f, _c = promote(x, f, c)
     return (_x - _f) < (_c - _x) ? f : c
