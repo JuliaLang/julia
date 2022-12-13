@@ -193,7 +193,7 @@ end
 
 ## checking UTF-8 & ACSII validity ##
 # This table is used by the shift base DFA validation for UTF-8
-const dfa_table = [
+const _UTF8_DFA_TABLE = [
     fill(UInt64(109802048057794944), 128);
     fill(UInt64(113232530780455302), 16);
     fill(UInt64(109855655693648262), 16);
@@ -210,12 +210,25 @@ const dfa_table = [
     fill(UInt64(109802048057794950), 11)
     ]::Vector{UInt64}
 
-# This is a shift based utf-8 DFA
+const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of any valid string
+const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
+
+# This function is designed so that you could use it on strings with discontinous memmory layouts
+#   by only feeding it contiguous block and keeping track of the state inbetween. 
+# Furthermore you could check in returned value is _UTF8_DFA_INVALID and stop as invalid if it was.
+# For a contiguous bytestream other states are valid other than _UTF8_DFA_ACCEPT aslong as you aren't
+#  at the begining or end
+function _isvalid_utf8_dfa(bytes::Vector{UInt8},state::UInt64 = _UTF8_DFA_ACCEPT)
+    f(byte) = @inbounds _UTF8_DFA_TABLE[byte+1]
+    op(s, byte_dfa) = byte_dfa >> (s & UInt64(63))
+    final_state = mapfoldl(f, op, bytes, init = state)
+    return (final_state & UInt64(63)) 
+end
+
+# This is a shift based utf-8 DFA that works on string that are a contiguous block
 function _isvalid_utf8(bytes::Vector{UInt8})
-    f(byte) = @inbounds dfa_table[byte+1]
-    op(state, byte_dfa) = byte_dfa >> (state & UInt64(63))
-    final_state = mapfoldl(f, op, bytes, init = UInt64(0))
-    return (final_state & UInt64(63)) == UInt64(0)
+    final_state = _isvalid_utf8_dfa(bytes, _UTF8_DFA_ACCEPT)
+    return (final_state & UInt64(63)) == _UTF8_DFA_ACCEPT
 end
 
 _isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
@@ -237,8 +250,8 @@ end
 
 # The commented line below should be faster than an impimentation using byte_string_classify but compiler optimizations make it so that
 # the benefit doesn't show up.   It would also remove the ascii fast track that is faster for inputs that are all ascii
-# isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) =  _isvalid_utf8(unsafe_wrap(Vector{UInt8}, s))
-isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
+# isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) =  _isvalid_utf8(s)
+ isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
 isvalid(s::String) = isvalid(String, s)
 
 is_valid_continuation(c) = c & 0xc0 == 0x80
