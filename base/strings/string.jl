@@ -224,7 +224,7 @@ _isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = 
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
-function byte_string_classify(s::Union{String,Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}}}; kwargs...)
+function byte_string_classify(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}; kwargs...)
     bytes = unsafe_wrap(Vector{UInt8}, s)
     byte_string_classify(bytes, kwargs...)
 end
