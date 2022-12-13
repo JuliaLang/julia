@@ -536,14 +536,14 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
     c = 0
     @assert pos.range_index > 0
     parent = stream.ranges[pos.range_index]
-    i = pos.range_index-1
-    while i >= 1
-        if stream.ranges[i].first_token >= parent.first_token &&
-               (c == 0 || stream.ranges[i].first_token < stream.ranges[c].first_token) &&
-               !is_trivia(stream.ranges[i])
+    for i = pos.range_index-1:-1:1
+        if stream.ranges[i].first_token < parent.first_token
+            break
+        end
+        if (c == 0 || stream.ranges[i].first_token < stream.ranges[c].first_token) &&
+           !is_trivia(stream.ranges[i])
             c = i
         end
-        i -= 1
     end
 
     # Find first nontrivia token
@@ -558,7 +558,8 @@ function first_child_position(stream::ParseStream, pos::ParseStreamPosition)
     if c != 0
         if t != 0
             if stream.ranges[c].first_token > t
-                return ParseStreamPosition(t, c-1)
+                # Need a child index strictly before `t`. `c=0` works.
+                return ParseStreamPosition(t, 0)
             else
                 return ParseStreamPosition(stream.ranges[c].last_token, c)
             end

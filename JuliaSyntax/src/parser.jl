@@ -308,10 +308,11 @@ function was_eventually_call(ps::ParseState)
     stream = ps.stream
     p = position(ps)
     while true
-        kb = peek_behind(stream, p).kind
-        if kb == K"call"
+        b = peek_behind(stream, p)
+        if b.kind == K"call"
             return true
-        elseif kb == K"where" || kb == K"::"
+        elseif b.kind == K"where" || (b.kind == K"::" &&
+                                      has_flags(b.flags, INFIX_FLAG))
             p = first_child_position(ps, p)
         else
             return false
@@ -1353,20 +1354,20 @@ function parse_factor_after(ps::ParseState)
 end
 
 # Parse type declarations and lambda syntax
-# a::b      ==>   (:: a b)
+# a::b      ==>   (::-i a b)
 # a->b      ==>   (-> a b)
 #
 # flisp: parse-decl-with-initial-ex
 function parse_decl_with_initial_ex(ps::ParseState, mark)
     while peek(ps) == K"::"
-        # a::b::c   ==>   (:: (:: a b) c)
+        # a::b::c   ==>   (::-i (::-i a b) c)
         bump(ps, TRIVIA_FLAG)
         parse_where(ps, parse_call)
-        emit(ps, mark, K"::")
+        emit(ps, mark, K"::", INFIX_FLAG)
     end
     if peek(ps) == K"->"
         # x -> y    ==>  (-> x y)
-        # a::b->c   ==>  (-> (:: a b) c)
+        # a::b->c   ==>  (-> (::-i a b) c)
         bump(ps, TRIVIA_FLAG)
         # -> is unusual: it binds tightly on the left and loosely on the right.
         parse_eq_star(ps)
@@ -1393,7 +1394,7 @@ end
 # parse syntactic unary operators
 #
 # &a   ==>  (& a)
-# ::a  ==>  (:: a)
+# ::a  ==>  (::-pre a)
 # $a   ==>  ($ a)
 #
 # flisp: parse-unary-prefix
@@ -1418,7 +1419,9 @@ function parse_unary_prefix(ps::ParseState)
                 # $&a  ==>  ($ (& a))
                 parse_unary_prefix(ps)
             end
-            emit(ps, mark, k)
+            # Only need PREFIX_OP_FLAG for ::
+            f = k == K"::" ? PREFIX_OP_FLAG : EMPTY_FLAGS
+            emit(ps, mark, k, f)
         end
     else
         # .&(x,y)  ==>  (call .& x y)
@@ -1431,7 +1434,7 @@ function parse_identifier_or_interpolate(ps::ParseState)
     mark = position(ps)
     parse_unary_prefix(ps)
     b = peek_behind(ps)
-    # export (x::T) ==> (export (error (:: x T)))
+    # export (x::T) ==> (export (error (::-i x T)))
     # export outer  ==> (export outer)
     # export ($f)   ==> (export ($ f))
     ok = (b.is_leaf  && (b.kind == K"Identifier" || is_operator(b.kind))) ||
@@ -1792,7 +1795,7 @@ function parse_resword(ps::ParseState)
             m = position(ps)
             n_subexprs = parse_comma_separated(ps, parse_eq_star)
             kb = peek_behind(ps).kind
-            # let x::1 ; end    ==>  (let (block (:: x 1)) (block))
+            # let x::1 ; end    ==>  (let (block (::-i x 1)) (block))
             # let x ; end       ==>  (let (block x) (block))
             # let x=1,y=2 ; end ==>  (let (block (= x 1) (= y 2) (block)))
             # let x+=1 ; end    ==>  (let (block (+= x 1)) (block))
@@ -1897,7 +1900,7 @@ function parse_resword(ps::ParseState)
         bump_closing_token(ps, K"end")
         emit(ps, mark, K"abstract")
     elseif word in KSet"struct mutable"
-        # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (:: a X)))
+        # struct A <: B \n a::X \n end  ==>  (struct false (<: A B) (block (::-i a X)))
         # struct A \n a \n b \n end  ==>  (struct false A (block a b))
         #v1.7: struct A const a end  ==>  (struct false A (block (error (const a))))
         #v1.8: struct A const a end  ==>  (struct false A (block (const a)))
@@ -2104,7 +2107,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             parsed_call = opts.parsed_call
             if is_anon_func
                 # function (x) body end ==>  (function (tuple x) (block body))
-                # function (x::f()) end ==>  (function (tuple (:: x (call f))) (block))
+                # function (x::f()) end ==>  (function (tuple (::-i x (call f))) (block))
                 # function (x,y) end    ==>  (function (tuple x y) (block))
                 # function (x=1) end    ==>  (function (tuple (= x 1)) (block))
                 # function (;x=1) end   ==>  (function (tuple (parameters (= x 1))) (block))
@@ -2117,8 +2120,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
             else
                 # function (A).f() end  ==> (function (call (. A (quote f))) (block))
                 # function (:)() end    ==> (function (call :) (block))
-                # function (x::T)() end ==> (function (call (:: x T)) (block))
-                # function (::T)() end  ==> (function (call (:: T)) (block))
+                # function (x::T)() end ==> (function (call (::-i x T)) (block))
+                # function (::T)() end  ==> (function (call (::-pre T)) (block))
             end
         else
             parse_unary_prefix(ps)
@@ -2134,7 +2137,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
                 # function \n f() end  ==>  (function (call f) (block))
                 # function $f() end    ==>  (function (call ($ f)) (block))
                 # function (:)() end  ==>  (function (call :) (block))
-                # function (::Type{T})(x) end ==> (function (call (:: (curly Type T)) x) (block))
+                # function (::Type{T})(x) end ==> (function (call (::-pre (curly Type T)) x) (block))
             end
         end
     end
@@ -2155,11 +2158,11 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
     end
     if is_function && peek(ps) == K"::"
         # Function return type
-        # function f()::T    end   ==>  (function (:: (call f) T) (block))
-        # function f()::g(T) end   ==>  (function (:: (call f) (call g T)) (block))
+        # function f()::T    end   ==>  (function (::-i (call f) T) (block))
+        # function f()::g(T) end   ==>  (function (::-i (call f) (call g T)) (block))
         bump(ps, TRIVIA_FLAG)
         parse_call(ps)
-        emit(ps, mark, K"::")
+        emit(ps, mark, K"::", INFIX_FLAG)
     end
     if peek(ps) == K"where"
         # Function signature where syntax
@@ -2167,7 +2170,7 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
         # function f() where T   end   ==>  (function (where (call f) T) (block))
         parse_where_chain(ps, mark)
     end
-    # function f()::S where T end ==> (function (where (:: (call f) S) T) (block))
+    # function f()::S where T end ==> (function (where (::-i (call f) S) T) (block))
     #
     # Ugly cases for compat where extra parentheses existed and we've
     # already parsed at least the call part of the signature
@@ -2175,8 +2178,8 @@ function parse_function_signature(ps::ParseState, is_function::Bool)
     # function (f() where T) end         ==> (function (where (call f) T) (block))
     # function (f()) where T end         ==> (function (where (call f) T) (block))
     # function (f() where T) where U end ==> (function (where (where (call f) T) U) (block))
-    # function (f()::S) end              ==> (function (:: (call f) S) (block))
-    # function ((f()::S) where T) end    ==> (function (where (:: (call f) S) T) (block))
+    # function (f()::S) end              ==> (function (::-i (call f) S) (block))
+    # function ((f()::S) where T) end    ==> (function (where (::-i (call f) S) T) (block))
     #
     # TODO: Warn for use of parens? The precedence of `::` and
     # `where` don't work inside parens so this is a bit of a syntax

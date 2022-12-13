@@ -173,8 +173,8 @@ tests = [
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote T)"
-        "in::T"    => "(:: in T)"
-        "isa::T"   => "(:: isa T)"
+        "in::T"    => "(::-i in T)"
+        "isa::T"   => "(::-i isa T)"
         "-2^x"     => "(call-pre - (call-i 2 ^ x))"
         "-2[1, 3]" => "(call-pre - (ref 2 1 3))"
         # signed literals
@@ -197,7 +197,7 @@ tests = [
         # Standalone non-dotted operators
         "+)"   =>  "+"
         # Call with type parameters or non-unary prefix call
-        "+{T}(x::T)"  =>  "(call (curly + T) (:: x T))"
+        "+{T}(x::T)"  =>  "(call (curly + T) (::-i x T))"
         "*(x)"        =>  "(call * x)"
         ".*(x)"       =>  "(call .* x)"
         # Prefix function calls for operators which are both binary and unary
@@ -240,19 +240,19 @@ tests = [
         "x^y"      =>  "(call-i x ^ y)"
         "x^y^z"    =>  "(call-i x ^ (call-i y ^ z))"
         "x .^ y"   =>  "(dotcall-i x ^ y)"
-        "begin x end::T"  =>  "(:: (block x) T)"
+        "begin x end::T"  =>  "(::-i (block x) T)"
         # parse_decl_with_initial_ex
-        "a::b"     =>  "(:: a b)"
+        "a::b"     =>  "(::-i a b)"
         "a->b"     =>  "(-> a b)"
-        "a::b::c"  =>  "(:: (:: a b) c)"
-        "a::b->c"  =>  "(-> (:: a b) c)"
+        "a::b::c"  =>  "(::-i (::-i a b) c)"
+        "a::b->c"  =>  "(-> (::-i a b) c)"
     ],
     JuliaSyntax.parse_unary_subtype => [
         "<: )"    =>  "<:"
         "<: \n"   =>  "<:"
         "<: ="    =>  "<:"
-        "<:{T}(x::T)"   =>  "(call (curly <: T) (:: x T))"
-        "<:(x::T)"      =>  "(<:-pre (:: x T))"
+        "<:{T}(x::T)"   =>  "(call (curly <: T) (::-i x T))"
+        "<:(x::T)"      =>  "(<:-pre (::-i x T))"
         "<: x"          =>  "(<:-pre x)"
         "<: A where B"  =>  "(<:-pre (where A B))"
         # Really for parse_where
@@ -268,7 +268,7 @@ tests = [
         "&)"   => "&"
         "\$\n" => "\$"
         "&a"   => "(& a)"
-        "::a"  => "(:: a)"
+        "::a"  => "(::-pre a)"
         "\$a"  => "(\$ a)"
         "\$\$a"  => "(\$ (\$ a))"
     ],
@@ -417,7 +417,7 @@ tests = [
         "let x=1\n end"    =>  "(let (block (= x 1)) (block))"  => Expr(:let, Expr(:(=), :x, 1),  Expr(:block))
         "let x=1 ; end"    =>  "(let (block (= x 1)) (block))"  => Expr(:let, Expr(:(=), :x, 1),  Expr(:block))
         "let x ; end"      =>  "(let (block x) (block))"        => Expr(:let, :x,                 Expr(:block))
-        "let x::1 ; end"   =>  "(let (block (:: x 1)) (block))" => Expr(:let, Expr(:(::), :x, 1), Expr(:block))
+        "let x::1 ; end"   =>  "(let (block (::-i x 1)) (block))" => Expr(:let, Expr(:(::), :x, 1), Expr(:block))
         "let x=1,y=2 end"  =>  "(let (block (= x 1) (= y 2)) (block))" => Expr(:let, Expr(:block, Expr(:(=), :x, 1), Expr(:(=), :y, 2)), Expr(:block))
         "let x+=1 ; end"   =>  "(let (block (+= x 1)) (block))" => Expr(:let, Expr(:block, Expr(:+=, :x, 1)), Expr(:block))
         "let ; end"        =>  "(let (block) (block))"          => Expr(:let, Expr(:block), Expr(:block))
@@ -436,7 +436,7 @@ tests = [
         "primitive type A \$N end"  =>  "(primitive A (\$ N))"
         "primitive type A <: B \n 8 \n end"  =>  "(primitive (<: A B) 8)"
         # struct
-        "struct A <: B \n a::X \n end" =>  "(struct false (<: A B) (block (:: a X)))" => Expr(:struct, false, Expr(:<:, :A, :B), Expr(:block, Expr(:(::), :a, :X)))
+        "struct A <: B \n a::X \n end" =>  "(struct false (<: A B) (block (::-i a X)))" => Expr(:struct, false, Expr(:<:, :A, :B), Expr(:block, Expr(:(::), :a, :X)))
         "struct A \n a \n b \n end"    =>  "(struct false A (block a b))"             => Expr(:struct, false, :A, Expr(:block, :a, :b))
         "mutable struct A end"         =>  "(struct true A (block))"
         ((v=v"1.8",), "struct A const a end") => "(struct false A (block (const a)))" => Expr(:struct, false, :A, Expr(:block, Expr(:const, :a)))
@@ -466,7 +466,7 @@ tests = [
         "export +, =="     =>  "(export + ==)"     => Expr(:export, :+, :(==))
         "export \n a"      =>  "(export a)"        => Expr(:export, :a)
         "export \$a, \$(a*b)"  =>  "(export (\$ a) (\$ (call-i a * b)))"  => Expr(:export, Expr(:$, :a), Expr(:$, Expr(:call, :*, :a, :b)))
-        "export (x::T)"  =>  "(export (error (:: x T)))"
+        "export (x::T)"  =>  "(export (error (::-i x T)))"
         "export outer"  =>  "(export outer)"   =>  Expr(:export, :outer)
         "export (\$f)"  =>  "(export (\$ f))"  =>  Expr(:export, Expr(:$, :f))
     ],
@@ -517,15 +517,17 @@ tests = [
         "function ()(x) end"   =>  "(function (call (tuple) x) (block))"
         "function (A).f() end" =>  "(function (call (. A (quote f))) (block))"
         "function (:)() end"   =>  "(function (call :) (block))"
-        "function (x::T)() end"=>  "(function (call (:: x T)) (block))"
-        "function (::T)() end" =>  "(function (call (:: T)) (block))"
+        "function (x::T)() end"=>  "(function (call (::-i x T)) (block))"
+        "function (::g(x))() end" => "(function (call (::-pre (call g x))) (block))"
+        "function (f::T{g(i)})() end" => "(function (call (::-i f (curly T (call g i)))) (block))"
+        "function (::T)() end" =>  "(function (call (::-pre T)) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"
         "function \n f() end"  =>  "(function (call f) (block))"
         "function \$f() end"   =>  "(function (call (\$ f)) (block))"
         "function (:)() end"   =>  "(function (call :) (block))"
-        "function (::Type{T})(x) end"  =>  "(function (call (:: (curly Type T)) x) (block))"
+        "function (::Type{T})(x) end"  =>  "(function (call (::-pre (curly Type T)) x) (block))"
         # Function/macro definition with no methods
         "function f end"      =>  "(function f)"
         "function f \n\n end" =>  "(function f)"
@@ -536,18 +538,18 @@ tests = [
         "function f{T}() end"    =>  "(function (call (curly f T)) (block))"
         "function A.f()   end"   =>  "(function (call (. A (quote f))) (block))"
         "function f body end"    =>  "(function (error f) (block body))"
-        "function f()::T    end" =>  "(function (:: (call f) T) (block))"
-        "function f()::g(T) end" =>  "(function (:: (call f) (call g T)) (block))"
+        "function f()::T    end" =>  "(function (::-i (call f) T) (block))"
+        "function f()::g(T) end" =>  "(function (::-i (call f) (call g T)) (block))"
         "function f() where {T} end"  => "(function (where (call f) T) (block))"
         "function f() where T   end"  => "(function (where (call f) T) (block))"
-        "function f()::S where T end" => "(function (where (:: (call f) S) T) (block))"
+        "function f()::S where T end" => "(function (where (::-i (call f) S) T) (block))"
         # Ugly cases for compat where extra parentheses existed and we've
         # already parsed at least the call part of the signature
         "function (f() where T) end" => "(function (where (call f) T) (block))" => Expr(:function, Expr(:where, Expr(:call, :f), :T), Expr(:block))
         "function (f()) where T end" => "(function (where (call f) T) (block))"
         "function (f() where T) where U end" => "(function (where (where (call f) T) U) (block))"
-        "function (f()::S) end"=>  "(function (:: (call f) S) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
-        "function ((f()::S) where T) end" => "(function (where (:: (call f) S) T) (block))"
+        "function (f()::S) end"=>  "(function (::-i (call f) S) (block))"         => Expr(:function, Expr(:(::), Expr(:call, :f), :S), Expr(:block))
+        "function ((f()::S) where T) end" => "(function (where (::-i (call f) S) T) (block))"
         # body
         "function f() \n a \n b end"  =>  "(function (call f) (block a b))"
         "function f() end"       =>  "(function (call f) (block))"
