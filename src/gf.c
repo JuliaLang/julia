@@ -3539,8 +3539,6 @@ int jl_has_concrete_subtype(jl_value_t *typ)
     return ((jl_datatype_t*)typ)->has_concrete_subtype;
 }
 
-#define typeinf_lock jl_codegen_lock
-
 JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
     jl_task_t *ct = jl_current_task;
@@ -3563,7 +3561,7 @@ JL_DLLEXPORT void jl_typeinf_timing_end(void)
 
 JL_DLLEXPORT void jl_typeinf_lock_begin(void)
 {
-    JL_LOCK(&typeinf_lock);
+    JL_LOCK(&jl_codegen_lock);
     //Although this is claiming to be a typeinfer lock, it is actually
     //affecting the codegen lock count, not type inference's inferencing count
     jl_task_t *ct = jl_current_task;
@@ -3574,7 +3572,7 @@ JL_DLLEXPORT void jl_typeinf_lock_end(void)
 {
     jl_task_t *ct = jl_current_task;
     ct->reentrant_codegen--;
-    JL_UNLOCK(&typeinf_lock);
+    JL_UNLOCK(&jl_codegen_lock);
 }
 
 #ifdef __cplusplus
