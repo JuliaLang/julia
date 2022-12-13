@@ -299,10 +299,8 @@ const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of a
 const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
 
 # This function is designed so that you could use it on strings with discontinous memmory layouts
-#   by only feeding it contiguous block and keeping track of the state inbetween. 
+# by only feeding it contiguous block and keeping track of the state inbetween. 
 # Furthermore you could check in returned value is _UTF8_DFA_INVALID and stop as invalid if it was.
-# For a contiguous bytestream other states are valid other than _UTF8_DFA_ACCEPT aslong as you aren't
-#  at the begining or end
 function _isvalid_utf8_dfa(bytes::Vector{UInt8},state::UInt64 = _UTF8_DFA_ACCEPT)
     f(byte) = @inbounds _UTF8_DFA_TABLE[byte+1]
     op(s, byte_dfa) = byte_dfa >> (s & UInt64(63))
