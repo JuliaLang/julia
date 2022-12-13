@@ -237,21 +237,26 @@ _isvalid_utf8(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}) = 
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
-function byte_string_classify(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}}; kwargs...)
+function byte_string_classify(s::Union{String,FastContiguousSubArray{UInt8,1,Vector{UInt8}}})
     bytes = unsafe_wrap(Vector{UInt8}, s)
     byte_string_classify(bytes, kwargs...)
 end
 
-function byte_string_classify(bytes::Vector{UInt8}; ascii_fasttrack = true )
-    ascii_fasttrack && all(c -> iszero(c & 0x80), bytes) && return 1
+function byte_string_classify(bytes::Vector{UInt8})
+    all(c -> iszero(c & 0x80), bytes) && return 1
     valid = _isvalid_utf8(bytes)
     return ifelse(valid, 2, 0)
 end
 
-# The commented line below should be faster than an impimentation using byte_string_classify but compiler optimizations make it so that
-# the benefit doesn't show up.   It would also remove the ascii fast track that is faster for inputs that are all ascii
-# isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) =  _isvalid_utf8(s)
- isvalid(::Type{String}, s::Union{Vector{UInt8},FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) = byte_string_classify(s) ≠ 0
+function isvalid(::Type{String}, s::Union{FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) 
+    bytes = unsafe_wrap(Vector{UInt8}, s)
+    isvalid(String,bytes)
+end
+function isvalid(::Type{String}, bytes::Vector{UInt8}) 
+    valid = _isvalid_utf8(bytes)
+    return ifelse(valid, true, false)
+end
+
 isvalid(s::String) = isvalid(String, s)
 
 is_valid_continuation(c) = c & 0xc0 == 0x80
