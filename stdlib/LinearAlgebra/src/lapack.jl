@@ -5826,7 +5826,7 @@ for (hseqr, elty) in
     end
 end
 hseqr!(H::StridedMatrix{T}, Z::AbstractMatrix{T}) where {T<:BlasFloat} = hseqr!('S', 'V', 1, size(H, 1), H, Z)
-hseqr!(H::StridedMatrix{T}) where {T<:BlasFloat} = hseqr!('S', 'V', 1, size(H, 1), H, one(H))
+hseqr!(H::StridedMatrix{T}) where {T<:BlasFloat} = hseqr!('S', 'I', 1, size(H, 1), H, similar(H))
 
 """
     hseqr!(job, compz, ilo, ihi, H, Z) -> (H, Z, w)
