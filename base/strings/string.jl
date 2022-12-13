@@ -216,7 +216,7 @@ end
                 9 | 1  1  0  2  1  2  3  3  1  1
                10 | 1  1  1  1  1  1  1  1  1  1
                11 | 6  1  1  1  1  1  1  1  1  1
-    
+
     Each character class row is encoding 10 states shift in 6 bits combined into a UInt64 such that
     it contains the number of bit needed to shift the state it is transitioning to shifted into
     the position of the current state.
@@ -229,7 +229,7 @@ end
     UInt64(113232530780455302) =   0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110
 
     Now if the current state was 5 the state::UInt64 would have the first 6 bit representing 5*6 = 30
-    so when the next character class is 7 row is in row::UInt64: 
+    so when the next character class is 7 row is in row::UInt64:
             The reduction operation:
                 state =  byte_dfa         >>                        (state & UInt64(63))
                         | Shift to get the next state shift  | Mask first 6 bits of starting state to get the current shift ie 30
@@ -299,13 +299,13 @@ const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of a
 const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
 
 # This function is designed so that you could use it on strings with discontinous memmory layouts
-# by only feeding it contiguous block and keeping track of the state inbetween. 
+# by only feeding it contiguous block and keeping track of the state inbetween.
 # Furthermore you could check in returned value is _UTF8_DFA_INVALID and stop as invalid if it was.
 function _isvalid_utf8_dfa(bytes::Vector{UInt8},state::UInt64 = _UTF8_DFA_ACCEPT)
     f(byte) = @inbounds _UTF8_DFA_TABLE[byte+1]
     op(s, byte_dfa) = byte_dfa >> (s & UInt64(63))
     final_state = mapfoldl(f, op, bytes, init = state)
-    return (final_state & UInt64(63)) 
+    return (final_state & UInt64(63))
 end
 
 # This is a shift based utf-8 DFA that works on string that are a contiguous block
@@ -331,7 +331,7 @@ function byte_string_classify(bytes::Vector{UInt8})
     return ifelse(valid, 2, 0)
 end
 
-function isvalid(::Type{String}, s::Union{FastContiguousSubArray{UInt8,1,Vector{UInt8}},String}) 
+function isvalid(::Type{String}, s::Union{FastContiguousSubArray{UInt8,1,Vector{UInt8}},String})
     bytes = unsafe_wrap(Vector{UInt8}, s)
     isvalid(String,bytes)
 end
