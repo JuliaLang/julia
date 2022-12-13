@@ -97,7 +97,7 @@ shortcut for `floor(Dates.Hour(1), x)`.
 julia> floor(Week, Day(16))
 2 weeks
 
-julia> floor(Minute(15) ,Minute(44))
+julia> floor(Minute(44), Minute(15))
 30 minutes
 
 julia> floor(Day, Hour(36))
