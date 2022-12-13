@@ -192,7 +192,92 @@ end
 end
 
 ## checking UTF-8 & ACSII validity ##
-# This table is used by the shift base DFA validation for UTF-8
+#=
+    The UTF-8 Validation is performed by a shift based DFA.
+    Using the state machine diagram found @ https://bjoern.hoehrmann.de/utf-8/decoder/dfa/
+
+        Important States
+            0 -> UTF8_ACCEPT is the start state and represents a complete UTF-8 String as well
+                        ASCII only strings will never leave this state
+            1 -> UTF8_INVALID is only reached by invalid bytes and once in this state will not
+            2 -> This is the state before the last byte of a multibyte character is read
+            9 -> Not important and not used which is why it is all ones
+                        Current State
+                    0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
+                0 | 0  1  1  1  1  1  1  1  1  1
+                1 | 1  1  0  2  1  2  1  3  3  1
+                2 | 2  1  1  1  1  1  1  1  1  1
+                3 | 3  1  1  1  1  1  1  1  1  1
+                4 | 5  1  1  1  1  1  1  1  1  1
+    Character   5 | 8  1  1  1  1  1  1  1  1  1
+    Class       6 | 7  1  1  1  1  1  1  1  1  1
+                7 | 1  1  0  2  2  1  3  3  1  1
+                8 | 1  1  1  1  1  1  1  1  1  1
+                9 | 1  1  0  2  1  2  3  3  1  1
+               10 | 1  1  1  1  1  1  1  1  1  1
+               11 | 6  1  1  1  1  1  1  1  1  1
+    
+    Each character class row is encoding 10 states shift in 6 bits combined into a UInt64 such that
+    it contains the number of bit needed to shift the state it is transitioning to shifted into
+    the position of the current state.
+
+    Example: character class 1 is encoded in below
+                    Current State        |    9 |    8 |    7 |    6 |    5 |    4 |    3 |    2 |    1 |    0 |
+                    Next State           |    1 |    3 |    3 |    1 |    2 |    1 |    2 |    0 |    1 |    1 |
+                    Shift required       |  6*1 |  6*3 |  6*3 |  6*1 |  6*2 |  6*1 |  6*2 |  6*0 |  6*1 |  6*1 |
+                                         |    6 |   18 |   18 |    6 |   12 |    6 |   12 |    0 |    6 |    6 |
+    UInt64(113232530780455302) =   0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110
+
+    Now if the current state was 5 the state::UInt64 would have the first 6 bit representing 5*6 = 30
+    so when the next character class is 7 row is in row::UInt64: 
+            The reduction operation:
+                state =  byte_dfa         >>                        (state & UInt64(63))
+                        | Shift to get the next state shift  | Mask first 6 bits of starting state to get the current shift ie 30
+            Would result in the state being 2 which is a shift of 12:
+                state = 0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110 >> 30
+                state = 0b0000|000000|000000|000000|000000|000000|000110|010010|010010|000110|001100|
+
+    The code below will create the _UTF8_DFA_TABLE to be pasted in source.
+    It is included here in an effort to document a contrived process.
+    Do Not Uncomment the code below in this file it should be pasted into REPL
+
+            function build_utf8_validation_statemachine_table(; num_classes=12, num_states=10, bit_per_state = 6)
+
+                # class_repeats represents the 256 byte's classes by storing the (class, #of repeats)
+                class_repeats = [ (0, 128), (1, 16), (9, 16), (7, 32), (8, 2), (2, 30), (10, 1),
+                                (3,  12), (4,  1), (3,  2), (11, 1), (6, 3), (5,  1), (8, 11)]
+
+                # See discription above
+                state_arrays = [[ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 1, 1, 0, 2, 1, 2, 1, 3, 3, 1],
+                                [ 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 3, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 5, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 8, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 7, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 1, 1, 0, 2, 2, 1, 3, 3, 1, 1],
+                                [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 1, 1, 0, 2, 1, 2, 3, 3, 1, 1],
+                                [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 6, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
+                #This converts the state_arrays into the shift encoded UInt64
+                class_row = zeros(UInt64, num_classes)
+                for i = 1:num_classes
+                    row = UInt64(0)
+                    for j in 1:num_states
+                        to_shift = UInt8((state_arrays[i][j]) * bit_per_state)
+                        row = row | (UInt64(to_shift) << ((j - 1) * bit_per_state))
+                    end
+                    class_row[i]=row
+                end
+                print("\nconst _UTF8_DFA_TABLE = [\n")
+                for (class, repeats) in class_repeats
+                    print("    fill(UInt64($(class_row[class+1])), $repeats);\n")
+                end
+                print("    ]\n")
+            end
+=#
+# This table will be filled with 256 UInt64 representing the DFA transitions for all bytes
 const _UTF8_DFA_TABLE = [
     fill(UInt64(109802048057794944), 128);
     fill(UInt64(113232530780455302), 16);
@@ -208,7 +293,7 @@ const _UTF8_DFA_TABLE = [
     fill(UInt64(109802048057794986), 3);
     fill(UInt64(109802048057794992), 1);
     fill(UInt64(109802048057794950), 11)
-    ]::Vector{UInt64}
+    ]
 
 const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of any valid string
 const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
@@ -252,10 +337,7 @@ function isvalid(::Type{String}, s::Union{FastContiguousSubArray{UInt8,1,Vector{
     bytes = unsafe_wrap(Vector{UInt8}, s)
     isvalid(String,bytes)
 end
-function isvalid(::Type{String}, bytes::Vector{UInt8}) 
-    valid = _isvalid_utf8(bytes)
-    return ifelse(valid, true, false)
-end
+isvalid(::Type{String}, bytes::Vector{UInt8}) = @inline _isvalid_utf8(bytes)
 
 isvalid(s::String) = isvalid(String, s)
 
