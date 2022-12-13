@@ -568,7 +568,7 @@ function afoldl(op, a, bs...)
     end
     return y
 end
-typeof(afoldl).name.mt.max_args = 34
+setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
@@ -641,10 +641,9 @@ See also [`>>`](@ref), [`>>>`](@ref), [`exp2`](@ref), [`ldexp`](@ref).
 """
 function <<(x::Integer, c::Integer)
     @inline
-    0 <= c <= typemax(UInt) && return x << (c % UInt)
-    -c <= typemax(UInt) && return x >> (-c % UInt)
-    (x >= 0 || c >= 0) && return zero(x) << UInt(0)  # for type stability
-    return oftype(x, -1) << UInt(0)
+    typemin(Int) <= c <= typemax(Int) && return x << (c % Int)
+    (x >= 0 || c >= 0) && return zero(x) << 0  # for type stability
+    oftype(x, -1)
 end
 function <<(x::Integer, c::Unsigned)
     @inline
@@ -653,6 +652,7 @@ function <<(x::Integer, c::Unsigned)
     end
     c <= typemax(UInt) ? x << (c % UInt) : zero(x) << UInt(0)
 end
+<<(x::Integer, c::Int) = c >= 0 ? x << unsigned(c) : x >> unsigned(-c)
 
 """
     >>(x, n)
@@ -689,11 +689,11 @@ function >>(x::Integer, c::Integer)
     if c isa UInt
         throw(MethodError(>>, (x, c)))
     end
-    0 <= c <= typemax(UInt) && return x >> (c % UInt)
-    -c <= typemax(UInt) && return x << (-c % UInt)
+    typemin(Int) <= c <= typemax(Int) && return x >> (c % Int)
     (x >= 0 || c < 0) && return zero(x) >> 0
     oftype(x, -1)
 end
+>>(x::Integer, c::Int) = c >= 0 ? x >> unsigned(c) : x << unsigned(-c)
 
 """
     >>>(x, n)
@@ -724,9 +724,7 @@ See also [`>>`](@ref), [`<<`](@ref).
 """
 function >>>(x::Integer, c::Integer)
     @inline
-    0 <= c <= typemax(UInt) && return x >>> (c % UInt)
-    -c <= typemax(UInt) && return x << (-c % UInt)
-    zero(x) >>> 0
+    typemin(Int) <= c <= typemax(Int) ? x >>> (c % Int) : zero(x) >>> 0
 end
 function >>>(x::Integer, c::Unsigned)
     @inline
@@ -735,6 +733,7 @@ function >>>(x::Integer, c::Unsigned)
     end
     c <= typemax(UInt) ? x >>> (c % UInt) : zero(x) >>> 0
 end
+>>>(x::Integer, c::Int) = c >= 0 ? x >>> unsigned(c) : x << unsigned(-c)
 
 # operator alias
 

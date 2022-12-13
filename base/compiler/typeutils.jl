@@ -46,21 +46,7 @@ function isTypeDataType(@nospecialize t)
     return true
 end
 
-function has_nontrivial_const_info(lattice::PartialsLattice, @nospecialize t)
-    isa(t, PartialStruct) && return true
-    isa(t, PartialOpaque) && return true
-    return has_nontrivial_const_info(widenlattice(lattice), t)
-end
-function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
-    isa(t, PartialTypeVar) && return true
-    if isa(t, Const)
-        val = t.val
-        return !issingletontype(typeof(val)) && !(isa(val, Type) && hasuniquerep(val))
-    end
-    return has_nontrivial_const_info(widenlattice(lattice), t)
-end
-
-has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -164,14 +150,14 @@ end
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
-function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::Int)
+function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::Int)
     if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
     ua = unwrap_unionall(a)
     if isa(ua, Union)
-        uua = typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING)
-        uub = typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)
+        uua = typesubtract(rewrap_unionall(ua.a, a), b, max_union_splitting)
+        uub = typesubtract(rewrap_unionall(ua.b, a), b, max_union_splitting)
         return Union{valid_as_lattice(uua) ? uua : Union{},
                      valid_as_lattice(uub) ? uub : Union{}}
     elseif a isa DataType
@@ -179,7 +165,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
         if ub isa DataType
             if a.name === ub.name === Tuple.name &&
                     length(a.parameters) == length(ub.parameters)
-                if 1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
+                if 1 < unionsplitcost(a.parameters) <= max_union_splitting
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
                 elseif b isa DataType
@@ -200,7 +186,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
                             ap = a.parameters[i]
                             bp = b.parameters[i]
                             (isvarargtype(ap) || isvarargtype(bp)) && return a
-                            ta[i] = typesubtract(ap, bp, min(2, MAX_UNION_SPLITTING))
+                            ta[i] = typesubtract(ap, bp, min(2, max_union_splitting))
                             return Tuple{ta...}
                         end
                     end

@@ -765,6 +765,7 @@ end
 
 @testset "Unions with missing" begin
     @test issorted(sort(shuffle!(vcat(fill(missing, 10), rand(Int, 100)))))
+    @test issorted(sort(vcat(rand(Int8, 600), [missing])))
 end
 
 @testset "Specific algorithms" begin
@@ -897,6 +898,7 @@ end
 @testset "Count sort near the edge of its range" begin
     @test issorted(sort(rand(typemin(Int):typemin(Int)+100, 1000)))
     @test issorted(sort(rand(typemax(Int)-100:typemax(Int), 1000)))
+    @test issorted(sort(rand(Int8, 600)))
 end
 
 # This testset is at the end of the file because it is slow.

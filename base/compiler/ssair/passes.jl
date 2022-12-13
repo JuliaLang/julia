@@ -504,7 +504,7 @@ end
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
-    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
 
 Replaces `cmp(φ(x, y)::Union{X,Y}, constant)` by `φ(cmp(x, constant), cmp(y, constant))`,
 where `cmp(x, constant)` and `cmp(y, constant)` can be replaced with constant `Bool`eans.
@@ -520,7 +520,7 @@ function lift_comparison! end
 
 function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     lhs, rhs = args[2], args[3]
@@ -536,35 +536,34 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     else
         return
     end
-    egal_tfunc_opt(@nospecialize(x), @nospecialize(y)) = egal_tfunc(𝕃ₒ, x, y)
-    lift_comparison_leaves!(egal_tfunc_opt, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    isa_tfunc_opt(@nospecialize(v), @nospecialize(typ)) = isa_tfunc(𝕃ₒ, v, typ)
-    lift_comparison_leaves!(isa_tfunc_opt, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
     val = args[2]
-    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
-    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int)
+    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
+    𝕃ₒ::AbstractLattice)
     typeconstraint = widenconst(argextype(val, compact))
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
@@ -577,7 +576,7 @@ function lift_comparison_leaves!(@specialize(tfunc),
     lifted_leaves = nothing
     for i = 1:length(leaves)
         leaf = leaves[i]
-        result = tfunc(argextype(leaf, compact), cmp)
+        result = tfunc(𝕃ₒ, argextype(leaf, compact), cmp)
         if isa(result, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()

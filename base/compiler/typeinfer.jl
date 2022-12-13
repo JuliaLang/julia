@@ -347,7 +347,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
         return ci
     end
     if may_discard_trees(interp)
-        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, def))
+        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
     else
         cache_the_tree = true
     end
