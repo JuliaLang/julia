@@ -560,36 +560,18 @@ end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
 
-struct RootsVector{T<:Complex} <: AbstractVector{T}
+struct RootsVector{T<:Union{Real,Complex}} <: AbstractVector{T}
     z::T
     n::Int
+    option::Char
 end
-Base.size(S::RootsVector) = (S.n,)
+RootsVector(z::Complex, n::Int) = RootsVector(z, n, 'm')
+RootsVector(z::Real, n::Int) = RootsVector(z, n, 's')
+
+Base.size(S::RootsVector) = (S.option == 's') ? (1,) : ((S.option == 'm') && ((S.z != zero(S.z)) ? (typeof(S.z)<:Complex) ? (S.n,) : ((iseven(S.n) && (S.z > zero(S.z)) ? (2,) : (1,))) : (1,)))
 Base.IndexStyle(S::RootsVector) = IndexLinear()
-Base.getindex(S::RootsVector, i::Int) = abs(S.z)^(1/S.n)*(Float16(cos((angle(S.z)+2*pi*(i-1))/S.n)) + Float16(sin((angle(S.z)+2*pi*(i-1))/S.n))im)
-
-function nthroot(z::Complex, n::Int)
-    z = float(z)
-    x, y = reim(z)
-    if x==y==0
-        return Complex(zero(x),y)
-    end
-    r = abs(z)
-    θ = angle(z)
-    roots = Complex[]
-    for k in 1:n
-        push!(roots, r^(1/n)*(Float16(cos((θ+2*pi*(k-1))/n)) + Float16(sin((θ+2*pi*(k-1))/n))im))
-    end
-    return roots
-end
-
-function nthroot(x::Real, n::Integer)
-    if (iseven(abs(n)) && x < zero(x))
-        throw(DomainError(x,
-        LazyString(:nthroot," will only return a complex result if called with a complex argument. Try ", :nthroot,"(Complex(x)).")))
-    end
-    return copysign(abs(x)^(1/n), x)
-end
+Base.getindex(S::RootsVector, i::Int) = (typeof(S.z)<:Complex) ? abs(S.z)^(1/S.n)*cis((angle(S.z)+2*pi*(i-1))/S.n) : (isodd(S.n) ? copysign(abs(S.z)^(1/S.n), S.z) : ((S.z > zero(S.z)) ? copysign(abs(S.z)^(1/S.n), (-1)^(i-1)) : NaN))
+# Base.getindex(S::RootsVector, i::Int) = (isa(typeof(S.z), Complex)) ? abs(S.z)^(1/S.n)*cis((angle(S.z)+2*pi*(i-1))/S.n) : (isodd(S.n) ? copysign(abs(S.z)^(1/S.n), S.z) : ((S.z > zero(S.z)) ? copysign(abs(S.z)^(1/S.n), (-1)^(i-1)) : throw(DomainError(S.z, LazyString(:RootsVector," will only return a complex result if called with a complex argument. Try ", :RootsVector,"(Complex(x), n).")))))
 
 """
     cis(x)
