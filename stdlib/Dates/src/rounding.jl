@@ -171,7 +171,7 @@ shortcut for `ceil(Dates.Hour(1), x)`.
 julia> ceil(Week, Day(16))
 3 weeks
 
-julia> ceil(Minute(15), Minute(44))
+julia> ceil(Minute(44), Minute(15))
 45 minutes
 
 julia> ceil(Day, Hour(36))
@@ -251,7 +251,7 @@ shortcut for `round(Dates.Hour(1), x)`.
 julia> round(Week, Day(16))
 2 weeks
 
-julia> round(Minute(15), Minute(44))
+julia> round(Minute(44), Minute(15))
 45 minutes
 
 julia> round(Day, Hour(36))
