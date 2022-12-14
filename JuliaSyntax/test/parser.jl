@@ -799,6 +799,8 @@ tests = [
         ((v=v"1.7",), "[a b \n ;; c]")  =>  "(ncat-2 (row a b (error-t)) c)"
         # Can't mix spaces and multiple ;'s
         ((v=v"1.7",), "[a b ;; c]")  =>  "(ncat-2 (row a b (error-t)) c)"
+        # Linebreaks not significant before closing `]`
+        "[a b\n\n]" =>  "(hcat a b)"
         # Treat a linebreak prior to a value as a semicolon (ie, separator for
         # the first dimension) if no previous semicolons observed
         "[a \n b]"  =>  "(vcat a b)"
