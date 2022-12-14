@@ -83,6 +83,8 @@ qr(Q::AbstractQ{T}, arg...; kwargs...) where {T} = qr!(Matrix{_qreltype(T)}(Q), 
 lq(Q::AbstractQ{T}, arg...; kwargs...) where {T} = lq!(Matrix{lq_eltype(T)}(Q), arg...; kwargs...)
 hessenberg(Q::AbstractQ{T}) where {T} = hessenberg!(Matrix{eigtype(T)}(Q))
 
+# needed when used interchangeably with AbstractMatrix (analogous to views of ranges)
+view(A::AbstractQ, I...) = getindex(A, I...)
 
 # specialization avoiding the fallback using slow `getindex`
 function copyto!(dest::AbstractMatrix, src::AbstractQ)
