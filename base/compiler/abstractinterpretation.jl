@@ -2490,7 +2490,7 @@ function abstract_eval_globalref(g::GlobalRef)
         g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
         return Const(getglobal(g.mod, g.name))
     end
-    ty = ccall(:jl_binding_type, Any, (Any, Any), g.mod, g.name)
+    ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any
     return ty
 end

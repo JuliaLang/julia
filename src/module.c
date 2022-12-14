@@ -160,7 +160,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
 {
     jl_task_t *ct = jl_current_task;
     assert(jl_is_symbol(name));
-    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc_buf(ct->ptls, sizeof(jl_binding_t));
+    jl_binding_t *b = (jl_binding_t*)jl_gc_alloc(ct->ptls, sizeof(jl_binding_t), jl_binding_type);
     b->name = name;
     jl_atomic_store_relaxed(&b->value, NULL);
     b->owner = NULL;
@@ -197,7 +197,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
         b->owner = m;
         *bp = b;
         JL_GC_PROMISE_ROOTED(b);
-        jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
+        jl_gc_wb(m, b);
     }
     else {
         b = NULL;
@@ -263,7 +263,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         b->owner = m;
         *bp = b;
         JL_GC_PROMISE_ROOTED(b);
-        jl_gc_wb_buf(m, b, sizeof(jl_binding_t));
+        jl_gc_wb(m, b);
     }
 
     JL_UNLOCK(&m->lock);
@@ -393,7 +393,7 @@ JL_DLLEXPORT jl_value_t *jl_binding_owner(jl_module_t *m, jl_sym_t *var)
 }
 
 // get type of binding m.var, without resolving the binding
-JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var)
 {
     JL_LOCK(&m->lock);
     jl_binding_t *b = _jl_get_module_binding(m, var);
@@ -568,7 +568,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_s
             nb->imported = (explici!=0);
             nb->deprecated = b->deprecated;
             *bp = nb;
-            jl_gc_wb_buf(to, nb, sizeof(jl_binding_t));
+            jl_gc_wb(to, nb);
         }
         JL_UNLOCK(&to->lock);
     }
@@ -647,7 +647,7 @@ JL_DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s)
         // don't yet know who the owner is
         b->owner = NULL;
         *bp = b;
-        jl_gc_wb_buf(from, b, sizeof(jl_binding_t));
+        jl_gc_wb(from, b);
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;
