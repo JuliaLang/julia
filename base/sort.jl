@@ -644,25 +644,22 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
         else
             _sort!(iv, a.next, Forward, (;kw..., lo=j+1, hi, scratch))
         end
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
-        lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
+    elseif eltype(v) <: Integer && (o isa Perm || o isa PermFast) && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
+        if o isa Perm
+            lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
+            j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
+            PermT = Perm
+        else
+            lo, hi = send_to_end_stable!(i -> isnan(@inbounds o.data[i]), v, o.order; lo, hi)
+            j = send_to_end_stable!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
+            PermT = PermFast
+        end
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
-        j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
         scratch = _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
         if scratch === nothing # Union split
-            _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, nothing))
+            _sort!(v, a.next, PermT(Forward, ip), (;kw..., lo=j+1, hi, nothing))
         else
-            _sort!(v, a.next, Perm(Forward, ip), (;kw..., lo=j+1, hi, scratch))
-        end
-    elseif eltype(v) <: Integer && o isa PermFast && o.order isa DirectOrdering && is_concrete_IEEEFloat(eltype(o.data))
-        lo, hi = send_to_end_stable!(i -> isnan(@inbounds o.data[i]), v, o.order; lo, hi)
-        ip = reinterpret(UIntType(eltype(o.data)), o.data)
-        j = send_to_end_stable!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
-        scratch = _sort!(v, a.next, PermFast(Reverse, ip), (;kw..., lo, hi=j))
-        if scratch === nothing # Union split
-            _sort!(v, a.next, PermFast(Forward, ip), (;kw..., lo=j+1, hi, nothing))
-        else
-            _sort!(v, a.next, PermFast(Forward, ip), (;kw..., lo=j+1, hi, scratch))
+            _sort!(v, a.next, PermT(Forward, ip), (;kw..., lo=j+1, hi, scratch))
         end
     else
         _sort!(v, a.next, o, kw)
