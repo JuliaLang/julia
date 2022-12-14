@@ -2081,10 +2081,11 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
 
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    cachefile = joinpath(cachepath, cachefiles[idx])
-                    rm(cachefile; force=true)
+                    evicted_cachefile = joinpath(cachepath, cachefiles[idx])
+                    @debug "Evicting file from cache" evicted_cachefile
+                    rm(evicted_cachefile; force=true)
                     try
-                        rm(ocachefile_from_cachefile(cachefile); force=true)
+                        rm(ocachefile_from_cachefile(evicted_cachefile); force=true)
                     catch
                     end
                 end
