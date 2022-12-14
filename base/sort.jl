@@ -603,7 +603,7 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
     elseif eltype(v) <: Integer && (o isa Perm{DirectOrdering} || o isa PermFast{DirectOrdering}) &&
             nonmissingtype(eltype(o.data)) != eltype(o.data)
-        PermT = o isa Perm{DirectOrdering} ? Perm : PermFast
+        PermT = o isa PermFast ? PermFast : Perm
         lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
         _sort!(v, a.next, PermT(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
