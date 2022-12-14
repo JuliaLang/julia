@@ -8,7 +8,8 @@ In fact the underlying serialization format is the same, and the system image is
 
 Package images are shared libraries that contain both code and data. Like `.ji` cache files, they are generated per package. The data section contains both global data (global variables in the package) as well as the necessary metadata about what methods and types are defined by the package. The code section contains native objects that cache the final output of Julia's LLVM-based compiler.
 
-The command line option `--pkgimage-native-code=no` can be used to turn-off object caching for this session. Note that this means that cache files have to be regenerated.
+The command line option `--pkgimage-native-code=no` can be used to turn off object caching for this session. Note that this means that cache files have to likely be regenerated.
+See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref env-max-num-precompile-files) for the upper limit of variants Julia caches per default.
 
 !!! note
     While the package images present themselves as native shared libraries, they are only an approximation thereof. You will not be able to link against them from a native program and they must be loaded from Julia.
