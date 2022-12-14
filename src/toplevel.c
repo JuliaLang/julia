@@ -579,7 +579,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 static jl_method_instance_t *method_instance_for_thunk(jl_code_info_t *src, jl_module_t *module)
 {
     jl_method_instance_t *li = jl_new_method_instance_uninit();
-    li->uninferred = (jl_value_t*)src;
+    jl_atomic_store_relaxed(&li->uninferred, (jl_value_t*)src);
     li->specTypes = (jl_value_t*)jl_emptytuple_type;
     li->def.module = module;
     return li;
