@@ -13,7 +13,7 @@
 // Ref https://www.uclibc.org/docs/tls.pdf
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
-#ifdef _OS_LINUX_
+#if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
 #  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
