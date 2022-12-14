@@ -196,11 +196,13 @@ end
     The UTF-8 Validation is performed by a shift based DFA.
     Using the state machine diagram found @ https://bjoern.hoehrmann.de/utf-8/decoder/dfa/
 
-        Important States
+        Validation States
             0 -> UTF8_ACCEPT is the start state and represents a complete UTF-8 String as well
                         ASCII only strings will never leave this state
             1 -> UTF8_INVALID is only reached by invalid bytes and once in this state will not
-            2 -> This is the state before the last byte of a multibyte character is read
+            2 -> One valid continuation byte needed to return to state 0
+        3,4,5 -> Two valid continuation bytes needed to return to state 0
+        6,7,8 -> Three valids continuation bytes needed to return to state 0
             9 -> Not important and not used which is why it is all ones
                         Current State
                     0̲  1̲  2̲  3̲  4̲  5̲  6̲  7̲  8̲  9̲
