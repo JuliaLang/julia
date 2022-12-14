@@ -191,7 +191,6 @@ typedef struct {
     jl_binding_t **begin; // The first slot to be scanned.
     jl_binding_t **end; // The end address (after the last slot to be scanned)
     uintptr_t nptr; // See notes about `nptr` above.
-    uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
 } gc_mark_binding_t;
 
 // Finalizer (or object) list

@@ -1404,9 +1404,9 @@ end
 
 function out_transform(@nospecialize(x), n::Ref{Int})
     return quote
-        let x = $x
-            $capture_result($n, x)
-            x
+        let __temp_val_a72df459 = $x
+            $capture_result($n, __temp_val_a72df459)
+            __temp_val_a72df459
         end
     end
 end
