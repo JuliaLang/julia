@@ -823,15 +823,15 @@ function parse_number_or_date_start(l::Parser)
         elseif accept(l, 'x')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_hex)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_hex(l, contains_underscore)
         elseif accept(l, 'o')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_oct)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_oct(l, contains_underscore)
         elseif accept(l, 'b')
             parsed_sign && return ParserError(ErrSignInNonBase10Number)
             ate, contains_underscore = @try accept_batch_underscore(l, isvalid_binary)
-            ate && return parse_int(l, contains_underscore)
+            ate && return parse_bin(l, contains_underscore)
         elseif accept(l, isdigit)
             return parse_local_time(l)
         end
@@ -899,10 +899,95 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Base.BitSigned}
     s = take_string_or_substring(l, contains_underscore)
+    len = length(s)
     v = try
-        Base.parse(Int64, s; base=base)
+        if len ≤ 4
+            Base.parse(Int8, s; base=base)
+        elseif 4 < len ≤ 6
+            Base.parse(Int16, s; base=base)
+        elseif 6 < len ≤ 11
+            Base.parse(Int32, s; base=base)
+        elseif 11 < len ≤ 20
+            Base.parse(Int64, s; base=base)
+        elseif 20 < len ≤ 40
+            Base.parse(Int128, s; base=base)
+        else
+            Base.parse(BigInt, s; base=base)
+        end
+    catch e
+        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+    end
+    return v
+end
+
+function parse_hex(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUnsigned}
+    s = take_string_or_substring(l, contains_underscore)
+    len = length(s)
+    v = try
+        if len ≤ 4
+            Base.parse(UInt8, s; base)
+        elseif 4 < len ≤ 6
+            Base.parse(UInt16, s; base)
+        elseif 6 < len ≤ 10
+            Base.parse(UInt32, s; base)
+        elseif 10 < len ≤ 18
+            Base.parse(UInt64, s; base)
+        elseif 18 < len ≤ 34
+            Base.parse(UInt128, s; base)
+        else
+            Base.parse(BigInt, s; base)
+        end
+    catch e
+        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+    end
+    return v
+end
+
+function parse_oct(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUnsigned}
+    s = take_string_or_substring(l, contains_underscore)
+    len = length(s)
+    v = try
+        if len ≤ 5
+            Base.parse(UInt8, s; base)
+        elseif 5 < len ≤ 8
+            Base.parse(UInt16, s; base)
+        elseif 8 < len ≤ 13
+            Base.parse(UInt32, s; base)
+        elseif 13 < len ≤ 24
+            Base.parse(UInt64, s; base)
+        elseif 24 < len ≤ 45
+            Base.parse(UInt128, s; base)
+        else
+            Base.parse(BigInt, s; base)
+        end
+    catch e
+        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+    end
+    return v
+end
+
+function parse_bin(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUnsigned}
+    s = take_string_or_substring(l, contains_underscore)
+    l = length(s)
+    v = try
+        if l ≤ 10
+            Base.parse(UInt8, s; base)
+        elseif 10 < l ≤ 18
+            Base.parse(UInt16, s; base)
+        elseif 18 < l ≤ 34
+            Base.parse(UInt32, s; base)
+        elseif 34 < l ≤ 66
+            Base.parse(UInt64, s; base)
+        elseif 66 < l ≤ 130
+            Base.parse(UInt128, s; base)
+        else
+            Base.parse(BigInt, s; base)
+        end
     catch e
         e isa Base.OverflowError && return(ParserError(ErrOverflowError))
         error("internal parser error: did not correctly discredit $(repr(s)) as an int")
