@@ -563,21 +563,20 @@ elements that are not
 """
     send_to_end_stable!(f::Function, v::AbstractVector; [lo, hi])
 
-Send every element of `v` for which `f` returns `true` to the end of the vector and return
+Send every element of `v` for which `f` returns `true` to the end of the vector `out` and return
 the index of the last element which for which `f` returns `false`.
 
-`send_to_end_stable!(f, v, lo, hi)` is equivalent to `send_to_end_stable!(f, view(v, lo:hi))+lo-1`
+`send_to_end_stable!(f, v, out, lo, hi)` is equivalent to `send_to_end_stable!(f, view(v, lo:hi), view(out, lo:hi))+lo-1`
 
 Preserves the order of the elements.
 """
-function send_to_end_stable!(f::F, v::AbstractVector; lo=firstindex(v), hi=lastindex(v)) where F <: Function
-    tmp=copy(v)
+function send_to_end_stable!(f::F, v::AbstractVector, out::AbstractVector; lo=firstindex(v), hi=lastindex(v)) where F <: Function
     offset = 0
     @inbounds begin
         while lo <= hi
-            x = tmp[lo]
+            x = v[lo]
             fx = f(x)::Bool
-            v[(fx ? hi : lo) - offset] = x
+            out[(fx ? hi : lo) - offset] = x
             offset += fx
             lo += 1
         end
@@ -585,16 +584,18 @@ function send_to_end_stable!(f::F, v::AbstractVector; lo=firstindex(v), hi=lasti
 
     # This is similar to the partition function
     pivot_index = lo-offset-1
-    # t[<=pivot_index] <* f(x) = false
-    # t[>pivot_index]  >* f(x) = true
+    # out[<=pivot_index] <* f(x) = false
+    # out[>pivot_index]  >* f(x) = true
 
     # Make the results stable
-    reverse!(v, pivot_index+1, hi)
+    reverse!(out, pivot_index+1, hi)
     return pivot_index
 end
 
-@inline send_to_end_stable!(f::F, v::AbstractVector, ::ForwardOrdering; lo, hi) where F <: Function = (lo, send_to_end_stable!(f, v; lo, hi))
-@inline send_to_end_stable!(f::F, v::AbstractVector, ::ReverseOrdering; lo, hi) where F <: Function = (hi-send_to_end_stable!(f, view(v, hi:-1:lo))+1, hi)
+@inline send_to_end_stable!(f::F, v::AbstractVector, out::AbstractVector, ::ForwardOrdering; lo, hi) where F <: Function =
+    (lo, send_to_end_stable!(f, v, out; lo, hi))
+@inline send_to_end_stable!(f::F, v::AbstractVector, out::AbstractVector, ::ReverseOrdering; lo, hi) where F <: Function =
+    (hi-send_to_end_stable!(f, view(v, hi:-1:lo), view(out, hi:-1:lo))+1, hi)
 
 function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     @getkw lo hi
@@ -633,7 +634,7 @@ after_zero(::ForwardOrdering, x) = !signbit(x)
 after_zero(::ReverseOrdering, x) = signbit(x)
 is_concrete_IEEEFloat(T::Type) = T <: Base.IEEEFloat && isconcretetype(T)
 function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
-    @getkw lo hi
+    @getkw lo hi scratch
     if is_concrete_IEEEFloat(eltype(v)) && o isa DirectOrdering
         lo, hi = send_to_end!(isnan, v, o, true; lo, hi)
         iv = reinterpret(UIntType(eltype(v)), v)
@@ -649,13 +650,19 @@ function _sort!(v::AbstractVector, a::IEEEFloatOptimization, o::Ordering, kw)
             lo, hi = send_to_end!(i -> isnan(@inbounds o.data[i]), v, o.order, true; lo, hi)
             j = send_to_end!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
             PermT = Perm
+            kw = (;kw..., lo, hi=j)
         else
-            lo, hi = send_to_end_stable!(i -> isnan(@inbounds o.data[i]), v, o.order; lo, hi)
-            j = send_to_end_stable!(i -> after_zero(o.order, @inbounds o.data[i]), v; lo, hi)
+            scratch, t  = make_scratch(scratch, eltype(v), hi-lo+1)
+            lo2, hi2 = send_to_end_stable!(i -> isnan(@inbounds o.data[i]), v, scratch, o.order; lo, hi)
+            ran = lo < lo2 ? (lo:lo2-1) : (hi2+1:hi)
+            v[ran] = view(scratch, ran)
+            lo, hi = lo2, hi2
+            j = send_to_end_stable!(i -> after_zero(o.order, @inbounds o.data[i]), scratch, v; lo, hi)
             PermT = PermFast
+            kw = (;kw..., lo, hi=j, scratch=scratch)
         end
         ip = reinterpret(UIntType(eltype(o.data)), o.data)
-        scratch = _sort!(v, a.next, Perm(Reverse, ip), (;kw..., lo, hi=j))
+        scratch = _sort!(v, a.next, Perm(Reverse, ip), kw)
         if scratch === nothing # Union split
             _sort!(v, a.next, PermT(Forward, ip), (;kw..., lo=j+1, hi, nothing))
         else
