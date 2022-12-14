@@ -613,11 +613,11 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
 
 JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
-    // ??OOPCDD
+    // ??OOCDDP
     uint8_t flags = 0;
-    flags |= jl_options.debug_level & 3;
+    flags |= (jl_options.use_pkgimage_native_code & 1);
+    flags |= (jl_options.debug_level & 3) << 1;
     flags |= (jl_options.check_bounds & 1) << 2;
-    flags |= (jl_options.use_pkgimage_native_code & 1) << 3;
     flags |= (jl_options.opt_level & 3) << 4;
     // NOTES:
     // In contrast to check-bounds, inline has no "observable effect"
@@ -626,11 +626,21 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
 
 JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
 {
+    // 1. Check which flags are relevant
     uint8_t current_flags = jl_cache_flags();
+    uint8_t supports_pkgimage = (current_flags & 1);
+    uint8_t is_pkgimage = (flags & 1);
+
+    // For .ji packages ignore other flags
+    if (!supports_pkgimage && !is_pkgimage) {
+        return 1;
+    }
+
+    // 2. Check all flags that must be exact
     uint8_t mask = (1 << 4)-1;
     if ((flags & mask) != (current_flags & mask))
         return 0;
-    // allow for higher optimization flags in cache
+    // 3. allow for higher optimization flags in cache
     flags >>= 4;
     current_flags >>= 4;
     return flags >= current_flags;

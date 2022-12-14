@@ -2508,12 +2508,12 @@ end
         if isempty(modules)
             return true # ignore empty file
         end
+        if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
+            @debug "Rejecting cache file $cachefile for $modkey since the flags are mismatched" cachefile_flags=flags current_flags=ccall(:jl_cache_flags, UInt8, ())
+            return true
+        end
         pkgimage = !isempty(clone_targets)
         if pkgimage
-            if ccall(:jl_match_cache_flags, UInt8, (UInt8,), flags) == 0
-                @debug "Rejecting cache file $cachefile for $modkey since the flags are mismatched" cachefile_flags=flags current_flags=ccall(:jl_cache_flags, UInt8, ())
-                return true
-            end
             ocachefile = ocachefile_from_cachefile(cachefile)
             if JLOptions().use_pkgimage_native_code == 0
                 # presence of clone_targets means native code cache
