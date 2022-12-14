@@ -531,8 +531,7 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
-    expr = expr::Expr
+    isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -546,29 +545,33 @@ macro kwdef(expr)
     # overflow on construction
     if !isempty(params_ex.args)
         if T isa Symbol
-            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
-        elseif T isa Expr && T.head === :curly
-            T = T::Expr
+            sig = :(($(esc(T)))($params_ex))
+            call = :(($(esc(T)))($(call_args...)))
+            body = Expr(:block, __source__, call)
+            kwdefs = Expr(:function, sig, body)
+        elseif isexpr(T, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            kwdefs = quote
-                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
-                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
-                    ($(esc(SQ)))($(call_args...))
-            end
+            body1 = Expr(:block, __source__, :(($(esc(S)))($(call_args...))))
+            sig1 = :(($(esc(S)))($params_ex))
+            def1 = Expr(:function, sig1, body1)
+            body2 = Expr(:block, __source__, :(($(esc(SQ)))($(call_args...))))
+            sig2 = :(($(esc(SQ)))($params_ex) where {$(esc.(P)...)})
+            def2 = Expr(:function, sig2, body2)
+            kwdefs = Expr(:block, def1, def2)
         else
             error("Invalid usage of @kwdef")
         end
     else
         kwdefs = nothing
     end
-    quote
-        Base.@__doc__($(esc(expr)))
+    return quote
+        Base.@__doc__ $(esc(expr))
         $kwdefs
     end
 end
