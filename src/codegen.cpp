@@ -536,13 +536,13 @@ static AttributeList get_attrs_zext(LLVMContext &C)
 static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci)
 {
     uint32_t e = ci->ipo_purity_bits;
-    uint8_t consistent = (e >> 0) & 0x07;
-    uint8_t effect_free = (e >> 3) & 0x03;
-    uint8_t nothrow = (e >> 5) & 0x01;
-    uint8_t terminates = (e >> 6) & 0x01;
-    uint8_t notaskstate = (e >> 7) & 0x01;
+    bool consistent = (e >> 0) & 0x07;
+    bool effect_free = (e >> 3) & 0x03;
+    bool nothrow = (e >> 5) & 0x01;
+    bool terminates = (e >> 6) & 0x01;
+    bool notaskstate = (e >> 7) & 0x01;
     uint8_t inaccessiblememonly = (e >> 8) & 0x03;
-    uint8_t nonoverlayed = (e >> 10) & 0x01;
+    bool nonoverlayed = (e >> 10) & 0x01;
 #if JL_LLVM_VERSION >= 140000
     AttrBuilder attr(C);
 #else
@@ -551,11 +551,24 @@ static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci
     if (consistent == 0){
         attr.addAttribute("consistent");
     }
-    if (effect_free == 0)
+    if (effect_free == 0){
         attr.addAttribute("effect_free");
+        // attr.addAttribute(Attribute::NoUnwind);
+    }
+    if (consistent == 0 && effect_free == 0){
+        // attr.addAttribute(Attribute::ReadNone);
+    } else if (effect_free == 0) {
+        // attr.addAttribute(Attribute::ReadOnly);
+    } else if (inaccessiblememonly == 0) {
+        attr.addAttribute("inaccessiblememonly");
+        attr.addAttribute(Attribute::InaccessibleMemOnly);
+    } else if (inaccessiblememonly == 2){
+        attr.addAttribute("inaccessiblememorargmemonly");
+        attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
+    }
     if (nothrow == 1){
         attr.addAttribute("nothrow");
-        attr.addAttribute(Attribute::NoUnwind); // Is this even correct, because nothrow allows for try/catch
+        // attr.addAttribute(Attribute::NoUnwind); // Is this even correct, because nothrow allows for try/catch
     }
     if (terminates == 1){
         attr.addAttribute(Attribute::WillReturn);
@@ -565,14 +578,7 @@ static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci
         // attr.addAttribute(Attribute::Speculatable);
     if (notaskstate == 1)
         attr.addAttribute("notaskstate");
-    if (inaccessiblememonly == 0){
-        attr.addAttribute("inaccessiblememonly");
-        // attr.addAttribute(Attribute::InaccessibleMemOnly);
-        }
-    if (inaccessiblememonly == 2){
-        attr.addAttribute("inaccessiblememorargmemonly");
-        // attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
-    }
+
     if (nonoverlayed == 1)
         attr.addAttribute("nonoverlayed");
     attr.addAttribute(std::to_string(e));
@@ -7526,8 +7532,8 @@ static jl_llvm_functions_t
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
     // step 11a. Emit the entry safepoint
-    if (JL_FEAT_TEST(ctx, safepoint_on_entry))
-        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
+    // if (JL_FEAT_TEST(ctx, safepoint_on_entry))
+        // emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
     // step 11b. Do codegen in control flow order
     std::vector<int> workstack;
