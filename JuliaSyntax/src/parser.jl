@@ -2882,10 +2882,16 @@ function parse_array_separator(ps, array_order)
     k = kind(t)
     if k == K"NewlineWs"
         bump_trivia(ps)
-        # Treat a linebreak prior to a value as a semicolon (ie, separator for
-        # the first dimension) if no previous semicolons observed
-        # [a \n b]  ==> (vcat a b)
-        return (1, -1)
+        if peek(ps) == K"]"
+            # Linebreaks not significant before closing `]`
+            # [a b\n\n]  ==>  (hcat a b)
+            return (typemin(Int), typemin(Int))
+        else
+            # Treat a linebreak prior to a value as a semicolon (ie, separator
+            # for the first dimension) if no previous semicolons observed
+            # [a \n b]  ==> (vcat a b)
+            return (1, -1)
+        end
     elseif k == K","
         # Treat `,` as semicolon for the purposes of recovery
         # [a; b, c] ==> (vcat a b (error-t) c)
