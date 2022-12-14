@@ -30,6 +30,11 @@
 #  include <link.h>
 #endif
 
+// `ElfW` was added to FreeBSD in 12.3 but we still support 12.2
+#if defined(_OS_FREEBSD_) && !defined(ElfW)
+#  define ElfW(x) __ElfN(x)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
