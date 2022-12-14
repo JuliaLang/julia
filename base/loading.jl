@@ -2077,10 +2077,16 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
             # prune the directory with cache files
             if pkg.uuid !== nothing
                 entrypath, entryfile = cache_file_entry(pkg)
-                cachefiles = filter!(x -> startswith(x, entryfile * "_"), readdir(cachepath))
+                cachefiles = filter!(x -> startswith(x, entryfile * "_") && endswith(x, ".ji"), readdir(cachepath))
+
                 if length(cachefiles) >= MAX_NUM_PRECOMPILE_FILES[]
                     idx = findmin(mtime.(joinpath.(cachepath, cachefiles)))[2]
-                    rm(joinpath(cachepath, cachefiles[idx]); force=true)
+                    cachefile = joinpath(cachepath, cachefiles[idx])
+                    rm(cachefile; force=true)
+                    try
+                        rm(ocachefile_from_cachefile(cachefile); force=true)
+                    catch
+                    end
                 end
             end
 
