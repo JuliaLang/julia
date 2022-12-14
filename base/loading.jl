@@ -1966,6 +1966,12 @@ function compilecache_path(pkg::PkgId, prefs_hash::UInt64)::String
         crc = _crc32c(unsafe_string(JLOptions().julia_bin), crc)
         crc = _crc32c(ccall(:jl_cache_flags, UInt8, ()), crc)
 
+        cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
+        if cpu_target === nothing
+            cpu_target = unsafe_string(JLOptions().cpu_target)
+        end
+        crc = _crc32c(cpu_target, crc)
+
         crc = _crc32c(prefs_hash, crc)
         project_precompile_slug = slug(crc, 5)
         abspath(cachepath, string(entryfile, "_", project_precompile_slug, ".ji"))
