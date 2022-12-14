@@ -208,7 +208,14 @@ end
     fact1 = schur(A)
     fact2 = schur(B)
     @test fact1.values ≈ fact2.values
-    @test fact1.Z * fact1.T * fact1.Z' ≈ A
+    @test fact1.Z * fact1.T * fact1.Z' ≈ B
+
+    A = UpperHessenberg(rand(Int32, 50, 50))
+    B = Array(A)
+    fact1 = schur(A)
+    fact2 = schur(B)
+    @test fact1.values ≈ fact2.values
+    @test fact1.Z * fact1.T * fact1.Z' ≈ B
 end
 
 end # module TestSchur
