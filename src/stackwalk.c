@@ -661,7 +661,7 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
         if (jl_is_method_instance(code)) {
             // When interpreting a method instance, need to unwrap to find the code info
-            code = ((jl_method_instance_t*)code)->uninferred;
+            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;

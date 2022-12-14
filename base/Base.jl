@@ -112,7 +112,7 @@ function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
-typeof(invoke).name.mt.max_args = 3 # invoke, f, T, args...
+setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
 
 # core operations & types
 include("promotion.jl")

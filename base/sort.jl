@@ -509,12 +509,12 @@ struct WithoutMissingVector{T, U} <: AbstractVector{T}
         new{nonmissingtype(eltype(data)), typeof(data)}(data)
     end
 end
-Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i::Integer)
+Base.@propagate_inbounds function Base.getindex(v::WithoutMissingVector, i)
     out = v.data[i]
     @assert !(out isa Missing)
     out::eltype(v)
 end
-Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector{T}, x::T, i) where T
+Base.@propagate_inbounds function Base.setindex!(v::WithoutMissingVector, x, i)
     v.data[i] = x
     v
 end
@@ -603,7 +603,7 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
     elseif eltype(v) <: Integer && (o isa Perm{DirectOrdering} || o isa PermFast{DirectOrdering}) &&
             nonmissingtype(eltype(o.data)) != eltype(o.data)
-        PermT = o isa Perm{DirectOrdering} ? Perm : PermFast
+        PermT = o isa PermFast ? PermFast : Perm
         lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
         _sort!(v, a.next, PermT(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
@@ -874,7 +874,7 @@ maybe_reverse(o::ForwardOrdering, x) = x
 maybe_reverse(o::ReverseOrdering, x) = reverse(x)
 function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering, kw)
     @getkw lo hi mn mx scratch
-    range = o === Reverse ? mn-mx : mx-mn
+    range = maybe_unsigned(o === Reverse ? mn-mx : mx-mn)
     offs = 1 - (o === Reverse ? mx : mn)
 
     counts = fill(0, range+1) # TODO use scratch (but be aware of type stability)
@@ -887,7 +887,7 @@ function _sort!(v::AbstractVector{<:Integer}, ::CountingSort, o::DirectOrdering,
         lastidx = idx + counts[i] - 1
         val = i-offs
         for j = idx:lastidx
-            v[j] = val
+            v[j] = val isa Unsigned && eltype(v) <: Signed ? signed(val) : val
         end
         idx = lastidx + 1
     end
