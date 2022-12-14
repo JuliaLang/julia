@@ -90,8 +90,7 @@ end
 Round `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
-For convenience, `precision` may be a type instead of a value: `floor(Dates.Hour, x)` is a
-shortcut for `floor(Dates.Hour(1), x)`.
+Warning: Argument order of this floor method differs from the standard rounding argument order.
 
 ```jldoctest
 julia> floor(Week, Day(16))
@@ -164,8 +163,7 @@ end
 Round `x` up to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
-For convenience, `precision` may be a type instead of a value: `ceil(Dates.Hour, x)` is a
-shortcut for `ceil(Dates.Hour(1), x)`.
+Warning: Argument order of this ceil method differs from the standard rounding argument order.
 
 ```jldoctest
 julia> ceil(Week, Day(16))
@@ -244,8 +242,7 @@ subtypes of `Period`, the return value will have the same type as `precision`. B
 (`RoundNearestTiesUp`), ties (e.g., rounding 90 minutes to the nearest hour) will be rounded
 up.
 
-For convenience, `precision` may be a type instead of a value: `round(Dates.Hour, x)` is a
-shortcut for `round(Dates.Hour(1), x)`.
+Warning: Argument order of this round method differs from the standard rounding argument order.
 
 ```jldoctest
 julia> round(Week, Day(16))

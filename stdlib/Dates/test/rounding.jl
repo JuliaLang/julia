@@ -193,11 +193,11 @@ end
     now_ = DateTime(2020, 9, 1, 13)
     for p in (Year, Month, Day)
         for r in (RoundUp, RoundDown)
-            @test round(Date, now_, p, r) == round(Date(now_), p, r)
+            @test round(p, Date, now_, r) == round(p, Date(now_), r)
         end
-        @test round(Date, now_, p) == round(Date, now_, p, RoundNearestTiesUp)
-        @test floor(Date, now_, p) == round(Date, now_, p, RoundDown)
-        @test ceil(Date, now_, p)  == round(Date, now_, p, RoundUp)
+        @test round(p, Date, now_) == round(p, Date, now_, RoundNearestTiesUp)
+        @test floor(p, Date, now_) == round(p, Date, now_, RoundDown)
+        @test ceil(p, Date, now_)  == round(p, Date, now_, RoundUp)
     end
 end
 @testset "Rounding for periods that should not need rounding" begin
@@ -205,37 +205,37 @@ end
         local x
         for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
             local p
-            @test floor(x, p) == p(x)
-            @test ceil(x, p) == p(x)
+            @test floor(p, x) == p(x)
+            @test ceil(p, x) == p(x)
         end
     end
 end
 @testset "Various available RoundingModes for periods" begin
     x = Dates.Hour(36)
-    @test round(x, Dates.Day, RoundNearestTiesUp) == Dates.Day(2)
-    @test round(x, Dates.Day, RoundUp) == Dates.Day(2)
-    @test round(x, Dates.Day, RoundDown) == Dates.Day(1)
-    @test_throws DomainError round(x, Dates.Day, RoundNearest)
-    @test_throws DomainError round(x, Dates.Day, RoundNearestTiesAway)
-    @test_throws DomainError round(x, Dates.Day, RoundToZero)
-    @test round(x, Dates.Day) == round(x, Dates.Day, RoundNearestTiesUp)
+    @test round(Dates.Day, x, RoundNearestTiesUp) == Dates.Day(2)
+    @test round(Dates.Day, x, RoundUp) == Dates.Day(2)
+    @test round(Dates.Day, x, RoundDown) == Dates.Day(1)
+    @test_throws DomainError round(Dates.Day, x, RoundNearest)
+    @test_throws DomainError round(Dates.Day, x, RoundNearestTiesAway)
+    @test_throws DomainError round(Dates.Day, x, RoundToZero)
+    @test round(x, Dates.Day) == round(Dates.Day, x, RoundNearestTiesUp)
 end
 @testset "Rounding periods to invalid resolutions" begin
     x = Dates.Hour(86399)
     for p in [Dates.Week, Dates.Day, Dates.Hour, Dates.Second, Dates.Millisecond, Dates.Microsecond, Dates.Nanosecond]
         local p
         for v in [-1, 0]
-            @test_throws DomainError floor(x, p(v))
-            @test_throws DomainError ceil(x, p(v))
-            @test_throws DomainError round(x, p(v))
+            @test_throws DomainError floor(p(v), x)
+            @test_throws DomainError ceil(p(v), x)
+            @test_throws DomainError round(p(v), x)
         end
     end
     for p in [Dates.Year, Dates.Month]
         local p
         for v in [-1, 0, 1]
-            @test_throws MethodError floor(x, p(v))
-            @test_throws MethodError ceil(x, p(v))
-            @test_throws DomainError round(x, p(v))
+            @test_throws MethodError floor(p(v), x)
+            @test_throws MethodError ceil(p(v), x)
+            @test_throws DomainError round(p(v), x)
         end
     end
 end
