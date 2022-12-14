@@ -378,7 +378,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     id = $(log_data._id)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if _invoked_shouldlog(logger, level, _module, group, id)
+                    if invokelatest(shouldlog, logger, level, _module, group, id)
                         file = $(log_data._file)
                         if file isa String
                             file = Base.fixup_stdlib_path(file)

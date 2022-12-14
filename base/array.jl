@@ -2731,6 +2731,7 @@ keepat!(a::Vector, m::AbstractVector{Bool}) = _keepat!(a, m)
 # These are moderately efficient, preserve order, and remove dupes.
 
 _unique_filter!(pred::P, update!::U, state) where {P,U} = function (x)
+    # P, U force specialization
     if pred(x, state)
         update!(state, x)
         true
