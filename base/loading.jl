@@ -946,7 +946,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
     if ocachepath !== nothing
         @debug "Loading object cache file $ocachepath for $pkg"
-        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any), ocachepath, depmods)
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachepath, depmods, false)
     else
         @debug "Loading cache file $path for $pkg"
         sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), path, depmods, false)

@@ -1616,6 +1616,61 @@ precompile_test_harness("Module tparams") do load_path
     @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
 end
 
+precompile_test_harness("PkgCacheInspector") do load_path
+    # Test functionality needed by PkgCacheInspector.jl
+    write(joinpath(load_path, "PCI.jl"),
+        """
+        module PCI
+        Base.repl_cmd() = 55            # external method
+        f() = Base.repl_cmd(7, "hello")   # external specialization (should never exist otherwise)
+        try
+            f()
+        catch
+        end
+        end
+        """)
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("PCI"))
+
+    # Get the depmods
+    local depmods
+    @lock Base.require_lock begin
+        local depmodnames
+        io = open(cachefile, "r")
+        try
+            # isvalid_cache_header returns checksum id or zero
+            Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
+            depmodnames = Base.parse_cache_header(io)[3]
+            Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
+        finally
+            close(io)
+        end
+        ndeps = length(depmodnames)
+        depmods = Vector{Any}(undef, ndeps)
+        for i in 1:ndeps
+            modkey, build_id = depmodnames[i]
+            dep = Base._tryrequire_from_serialized(modkey, build_id)
+            if !isa(dep, Module)
+                return dep
+            end
+            depmods[i] = dep
+        end
+    end
+
+    if ocachefile !== nothing
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachefile, depmods, true)
+    else
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), cachefile, depmods, true)
+    end
+
+    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
+    m = only(external_methods)
+    @test m.name == :repl_cmd && m.nargs < 2
+    @test any(new_specializations) do ci
+        mi = ci.def
+        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int64, String}
+    end
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
 empty!(Base.LOAD_PATH)
