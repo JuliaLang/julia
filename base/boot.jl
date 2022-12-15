@@ -414,7 +414,6 @@ eval(Core, quote
     end
     LineInfoNode(mod::Module, @nospecialize(method), file::Symbol, line::Int32, inlined_at::Int32) =
         $(Expr(:new, :LineInfoNode, :mod, :method, :file, :line, :inlined_at))
-    GlobalRef(m::Module, s::Symbol, binding::Ptr{Nothing}) = $(Expr(:new, :GlobalRef, :m, :s, :binding))
     SlotNumber(n::Int) = $(Expr(:new, :SlotNumber, :n))
     TypedSlot(n::Int, @nospecialize(t)) = $(Expr(:new, :TypedSlot, :n, :t))
     PhiNode(edges::Array{Int32, 1}, values::Array{Any, 1}) = $(Expr(:new, :PhiNode, :edges, :values))
@@ -422,17 +421,6 @@ eval(Core, quote
     PhiCNode(values::Array{Any, 1}) = $(Expr(:new, :PhiCNode, :values))
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
-    function CodeInstance(
-        mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
-        @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-        ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
-        relocatability::UInt8)
-        return ccall(:jl_new_codeinst, Ref{CodeInstance},
-            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
-            mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-            ipo_effects, effects, argescapes,
-            relocatability)
-    end
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
     # NOTE the main constructor is defined within `Core.Compiler`
     _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
@@ -441,6 +429,18 @@ eval(Core, quote
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
 end)
 
+function CodeInstance(
+    mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
+    @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
+    ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+    relocatability::UInt8)
+    return ccall(:jl_new_codeinst, Ref{CodeInstance},
+        (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
+        mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
+        ipo_effects, effects, argescapes,
+        relocatability)
+end
+GlobalRef(m::Module, s::Symbol) = ccall(:jl_module_globalref, Ref{GlobalRef}, (Any, Any), m, s)
 Module(name::Symbol=:anonymous, std_imports::Bool=true, default_names::Bool=true) = ccall(:jl_f_new_module, Ref{Module}, (Any, Bool, Bool), name, std_imports, default_names)
 
 function _Task(@nospecialize(f), reserved_stack::Int, completion_future)
@@ -817,8 +817,6 @@ Unsigned(x::Union{Float16, Float32, Float64, Bool}) = UInt(x)
 
 Integer(x::Integer) = x
 Integer(x::Union{Float16, Float32, Float64}) = Int(x)
-
-GlobalRef(m::Module, s::Symbol) = GlobalRef(m, s, bitcast(Ptr{Nothing}, 0))
 
 # Binding for the julia parser, called as
 #

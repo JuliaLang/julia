@@ -55,7 +55,6 @@
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
-    XX(jl_binding_owner) \
     XX(jl_binding_resolved_p) \
     XX(jl_bitcast) \
     XX(jl_boundp) \
