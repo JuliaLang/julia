@@ -954,31 +954,8 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     if isa(sv, Exception)
         return sv
     end
-    sv = sv::SimpleVector
-    restored = sv[1]::Vector{Any}
-    for M in restored
-        M = M::Module
-        if isdefined(M, Base.Docs.META) && getfield(M, Base.Docs.META) !== nothing
-            push!(Base.Docs.modules, M)
-        end
-        if parentmodule(M) === M
-            register_root_module(M)
-        end
-    end
 
-    # Register this cache path now - If Requires.jl is loaded, Revise may end
-    # up looking at the cache path during the init callback.
-    get!(PkgOrigin, pkgorigins, pkg).cachepath = path
-
-    inits = sv[2]::Vector{Any}
-    if !isempty(inits)
-        unlock(require_lock) # temporarily _unlock_ during these callbacks
-        try
-            ccall(:jl_init_restored_modules, Cvoid, (Any,), inits)
-        finally
-            lock(require_lock)
-        end
-    end
+    restored = register_restored_modules(sv, pkg, path)
 
     for M in restored
         M = M::Module
@@ -1005,6 +982,35 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
     finally
         timing_imports && cumulative_compile_timing(false)
     end
+end
+
+function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
+    # This function is also used by PkgCacheInspector.jl
+    restored = sv[1]::Vector{Any}
+    for M in restored
+        M = M::Module
+        if isdefined(M, Base.Docs.META) && getfield(M, Base.Docs.META) !== nothing
+            push!(Base.Docs.modules, M)
+        end
+        if parentmodule(M) === M
+            register_root_module(M)
+        end
+    end
+
+    # Register this cache path now - If Requires.jl is loaded, Revise may end
+    # up looking at the cache path during the init callback.
+    get!(PkgOrigin, pkgorigins, pkg).cachepath = path
+
+    inits = sv[2]::Vector{Any}
+    if !isempty(inits)
+        unlock(require_lock) # temporarily _unlock_ during these callbacks
+        try
+            ccall(:jl_init_restored_modules, Cvoid, (Any,), inits)
+        finally
+            lock(require_lock)
+        end
+    end
+    return restored
 end
 
 function run_package_callbacks(modkey::PkgId)
