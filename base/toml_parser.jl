@@ -899,19 +899,13 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Base.BitSigned}
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitSigned, BigInt}}
     s = take_string_or_substring(l, contains_underscore)
     len = length(s)
     v = try
-        if len ≤ 4
-            Base.parse(Int8, s; base=base)
-        elseif 4 < len ≤ 6
-            Base.parse(Int16, s; base=base)
-        elseif 6 < len ≤ 11
-            Base.parse(Int32, s; base=base)
-        elseif 11 < len ≤ 20
+        if len ≤ 17
             Base.parse(Int64, s; base=base)
-        elseif 20 < len ≤ 40
+        elseif 17 < len ≤ 33
             Base.parse(Int128, s; base=base)
         else
             Base.parse(BigInt, s; base=base)
@@ -923,17 +917,11 @@ function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Base.BitSi
     return v
 end
 
-function parse_hex(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUnsigned}
+function parse_hex(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitUnsigned, BigInt}}
     s = take_string_or_substring(l, contains_underscore)
     len = length(s)
     v = try
-        if len ≤ 4
-            Base.parse(UInt8, s; base)
-        elseif 4 < len ≤ 6
-            Base.parse(UInt16, s; base)
-        elseif 6 < len ≤ 10
-            Base.parse(UInt32, s; base)
-        elseif 10 < len ≤ 18
+        if len ≤ 18
             Base.parse(UInt64, s; base)
         elseif 18 < len ≤ 34
             Base.parse(UInt128, s; base)
@@ -947,17 +935,11 @@ function parse_hex(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUn
     return v
 end
 
-function parse_oct(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUnsigned}
+function parse_oct(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitUnsigned, BigInt}}
     s = take_string_or_substring(l, contains_underscore)
     len = length(s)
     v = try
-        if len ≤ 5
-            Base.parse(UInt8, s; base)
-        elseif 5 < len ≤ 8
-            Base.parse(UInt16, s; base)
-        elseif 8 < len ≤ 13
-            Base.parse(UInt32, s; base)
-        elseif 13 < len ≤ 24
+        if len ≤ 24
             Base.parse(UInt64, s; base)
         elseif 24 < len ≤ 45
             Base.parse(UInt128, s; base)
@@ -971,17 +953,11 @@ function parse_oct(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUn
     return v
 end
 
-function parse_bin(l::Parser, contains_underscore, base=nothing)::Err{Base.BitUnsigned}
+function parse_bin(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitUnsigned, BigInt}}
     s = take_string_or_substring(l, contains_underscore)
     l = length(s)
     v = try
-        if l ≤ 10
-            Base.parse(UInt8, s; base)
-        elseif 10 < l ≤ 18
-            Base.parse(UInt16, s; base)
-        elseif 18 < l ≤ 34
-            Base.parse(UInt32, s; base)
-        elseif 34 < l ≤ 66
+        if l ≤ 66
             Base.parse(UInt64, s; base)
         elseif 66 < l ≤ 130
             Base.parse(UInt128, s; base)
