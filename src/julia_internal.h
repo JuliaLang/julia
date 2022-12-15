@@ -560,14 +560,11 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;
 void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) JL_NOTSAFEPOINT // val isa jl_value_t*
 {
-    if (__unlikely(jl_astaggedvalue(bnd)->bits.gc == 3 &&
-                   (jl_astaggedvalue(val)->bits.gc & 1) == 0))
-        jl_gc_queue_binding(bnd);
+    jl_gc_wb(bnd, val);
 }
 
 STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
@@ -1544,6 +1541,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_return_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lineinfo_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lambda_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_assign_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_binding_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_globalref_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_do_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_method_sym;

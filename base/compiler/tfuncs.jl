@@ -2526,7 +2526,7 @@ end
 
 function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
     if isdefined(M, s) && !isconst(M, s)
-        ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+        ty = ccall(:jl_get_binding_type, Any, (Any, Any), M, s)
         return ty === nothing || newty ⊑ ty
     end
     return false
@@ -2536,7 +2536,7 @@ end
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            return ccall(:jl_binding_type, Any, (Any, Any), M, s) !== nothing
+            return ccall(:jl_get_binding_type, Any, (Any, Any), M, s) !== nothing
         end
     end
     return false

@@ -7870,15 +7870,15 @@ end
 @test methods(SpecializeModuleTest.f)[1].nospecialize & 0b11 == 0b10
 
 let # https://github.com/JuliaLang/julia/issues/46918
-    # jl_binding_type shouldn't be unstable
+    # jl_get_binding_type shouldn't be unstable
     code = quote
-        res1 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+        res1 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
 
         stderr
 
-        res2 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+        res2 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
 
-        res3 = ccall(:jl_binding_type, Any, (Any, Any), Main, :stderr)
+        res3 = ccall(:jl_get_binding_type, Any, (Any, Any), Main, :stderr)
 
         print(stdout, res1, " ", res2, " ", res3)
     end |> x->join(x.args, ';')

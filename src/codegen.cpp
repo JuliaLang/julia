@@ -2608,7 +2608,7 @@ static void emit_globalset(jl_codectx_t &ctx, jl_binding_t *bnd, Value *bp, cons
             StoreInst *v = ctx.builder.CreateAlignedStore(rval, julia_binding_pvalue(ctx, bp), Align(sizeof(void*)));
             v->setOrdering(Order);
             tbaa_decorate(ctx.tbaa().tbaa_binding, v);
-            emit_write_barrier_binding(ctx, bp, rval);
+            emit_write_barrier(ctx, bp, rval);
             return;
         }
     }

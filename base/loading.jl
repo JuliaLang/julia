@@ -809,7 +809,8 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
         end
     end
     # Extensions
-    for (name, entries::Vector{Any}) in d
+    for (name, entries) in d
+        entries = entries::Vector{Any}
         for entry in entries
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
