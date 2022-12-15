@@ -92,9 +92,8 @@ end
 # '0':'9' -> 0:9
 # 'A':'Z' -> 10:26
 # 'a':'z' -> 10:26 if base <= 36, 36:62 otherwise
-# input outside of that is mapped to base as an UInt32
-# current callers only ever call this with UInt32...
-@inline function __convert_digit(_c::UInt32, base)
+# input outside of that is mapped to base
+@inline function __convert_digit(_c::UInt32, base::UInt32)
     _0 = UInt32('0')
     _9 = UInt32('9')
     _A = UInt32('A')
@@ -105,7 +104,7 @@ end
     d = _0 <= _c <= _9 ? _c-_0             :
         _A <= _c <= _Z ? _c-_A+ UInt32(10) :
         _a <= _c <= _z ? _c-_a+a           :
-        base % UInt32 # we should have errored earlier anyway, but this prevents an InexactError that can't happen in our callers
+        base
 end
 
 
