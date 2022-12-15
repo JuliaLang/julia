@@ -215,7 +215,7 @@ end
 end
 
 @testset "comments" begin
-    toks = collect(tokenize("""
+    ts = collect(tokenize("""
        #
        \"\"\"
        f
@@ -227,7 +227,12 @@ end
              K"\"\"\"", K"String", K"String", K"\"\"\"", K"NewlineWs",
              K"Integer", K"NewlineWs",
              K"EndMarker"]
-    @test kind.(toks) == kinds
+    @test kind.(ts) == kinds
+
+    @test toks("#=# text=#") == ["#=# text=#"=>K"Comment"]
+
+    @test toks("#=#==#=#") == ["#=#==#=#"=>K"Comment"]
+    @test toks("#=#==#=")  == ["#=#==#="=>K"ErrorEofMultiComment"]
 end
 
 
@@ -789,11 +794,6 @@ end
     @test tok("1.+ ").kind == K"error"
     @test tok("1.⤋").kind  == K"error"
     @test tok("1.?").kind == K"error"
-end
-
-@testset "comments" begin
-    s = "#=# text=#"
-    @test length(collect(tokenize(s))) == 2
 end
 
 @testset "invalid hexadecimal" begin
