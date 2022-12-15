@@ -1881,8 +1881,12 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
             # .
             print(io, '.')
             # item
-            parens = !(field isa Symbol) || (field::Symbol in quoted_syms)
-            quoted = parens || isoperator(field)
+            if isa(field, Symbol)
+                parens = field in quoted_syms
+                quoted = parens || isoperator(field)
+            else
+                parens = quoted = true
+            end
             quoted && print(io, ':')
             parens && print(io, '(')
             show_unquoted(io, field, indent, 0, quote_level)
@@ -2006,10 +2010,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
 
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
+            func = func::Symbol    # operator_precedence returns func_prec == 0 for non-Symbol
             na = length(func_args)
-            if (na == 2 || (na > 2 && isa(func, Symbol) && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
+            if (na == 2 || (na > 2 && func in (:+, :++, :*)) || (na == 3 && func === :(:))) &&
                     all(a -> !isa(a, Expr) || a.head !== :..., func_args)
-                sep = func === :(:) ? "$func" : " " * convert(String, string(func))::String * " "   # if func::Any, avoid string interpolation (invalidation)
+                sep = func === :(:) ? "$func" : " $func "
 
                 if func_prec <= prec
                     show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, quote_level, true)
