@@ -1467,7 +1467,7 @@ function infer_effects(@nospecialize(f), @nospecialize(types=default_tt(f));
     effects = Core.Compiler.EFFECTS_TOTAL
     if matches.ambig || !any(match::Core.MethodMatch->match.fully_covers, matches.matches)
         # account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-        effects = Core.Compiler.Effects(effects; nothrow=false)
+        effects = Core.Compiler.Effects(effects; nothrow=Core.Compiler.ALWAYS_FALSE)
     end
     for match in matches.matches
         match = match::Core.MethodMatch

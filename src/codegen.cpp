@@ -538,11 +538,11 @@ static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci
     uint32_t e = ci->ipo_purity_bits;
     bool consistent = (e >> 0) & 0x07;
     bool effect_free = (e >> 3) & 0x03;
-    bool nothrow = (e >> 5) & 0x01;
-    bool terminates = (e >> 6) & 0x01;
-    bool notaskstate = (e >> 7) & 0x01;
-    uint8_t inaccessiblememonly = (e >> 8) & 0x03;
-    bool nonoverlayed = (e >> 10) & 0x01;
+    bool nothrow = (e >> 5) & 0x03;
+    bool terminates = (e >> 7) & 0x01;
+    bool notaskstate = (e >> 8) & 0x01;
+    uint8_t inaccessiblememonly = (e >> 9) & 0x03;
+    bool nonoverlayed = (e >> 11) & 0x01;
 #if JL_LLVM_VERSION >= 140000
     AttrBuilder attr(C);
 #else
@@ -566,9 +566,9 @@ static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci
         attr.addAttribute("inaccessiblememorargmemonly");
         attr.addAttribute(Attribute::InaccessibleMemOrArgMemOnly);
     }
-    if (nothrow == 1){
+    if (nothrow == 0){ // nothrow === ALWAYS_TRUE means strict nothrow
         attr.addAttribute("nothrow");
-        // attr.addAttribute(Attribute::NoUnwind); // Is this even correct, because nothrow allows for try/catch
+        attr.addAttribute(Attribute::NoUnwind);
     }
     if (terminates == 1){
         attr.addAttribute(Attribute::WillReturn);
@@ -578,7 +578,6 @@ static AttributeList get_attrs_ipoeffects(LLVMContext &C, jl_code_instance_t *ci
         // attr.addAttribute(Attribute::Speculatable);
     if (notaskstate == 1)
         attr.addAttribute("notaskstate");
-
     if (nonoverlayed == 1)
         attr.addAttribute("nonoverlayed");
     attr.addAttribute(std::to_string(e));
