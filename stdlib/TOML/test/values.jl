@@ -51,7 +51,7 @@ end
     @test testval("1_000"  , 1000  |> Int64)
     @test testval("+1_000" , 1000  |> Int64)
     @test testval("-1_000" , -1000 |> Int64)
-    
+
     @test testval("0x6E"    ,0x6E|> UInt64)
     @test testval("0x8f1e"  , 0x8f1e|> UInt64)
     @test testval("0x765f3173"  , 0x765f3173|> UInt64)
