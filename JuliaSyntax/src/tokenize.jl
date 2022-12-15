@@ -542,33 +542,38 @@ function lex_whitespace(l::Lexer, c)
     return emit(l, k)
 end
 
-function lex_comment(l::Lexer, doemit=true)
+function lex_comment(l::Lexer)
     if peekchar(l) != '='
         while true
             pc = peekchar(l)
             if pc == '\n' || pc == EOF_CHAR
-                return doemit ? emit(l, K"Comment") : EMPTY_TOKEN
+                return emit(l, K"Comment")
             end
             readchar(l)
         end
     else
-        pc = '#'
         c = readchar(l) # consume the '='
-        n_start, n_end = 1, 0
+        skip = true  # true => c was part of the prev comment marker pair
+        nesting = 1
         while true
             if c == EOF_CHAR
-                return doemit ? emit_error(l, K"ErrorEofMultiComment") : EMPTY_TOKEN
+                return emit_error(l, K"ErrorEofMultiComment")
             end
             nc = readchar(l)
-            if c == '#' && nc == '='
-                n_start += 1
-            elseif c == '=' && nc == '#' && pc != '#'
-                n_end += 1
+            if skip
+                skip = false
+            else
+                if c == '#' && nc == '='
+                    nesting += 1
+                    skip = true
+                elseif c == '=' && nc == '#'
+                    nesting -= 1
+                    skip = true
+                    if nesting == 0
+                        return emit(l, K"Comment")
+                    end
+                end
             end
-            if n_start == n_end
-                return doemit ? emit(l, K"Comment") : EMPTY_TOKEN
-            end
-            pc = c
             c = nc
         end
     end
