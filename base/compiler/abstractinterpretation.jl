@@ -30,8 +30,6 @@ function get_max_methods(@nospecialize(f), mod::Module, interp::AbstractInterpre
     return get_max_methods(mod, interp)
 end
 
-const empty_bitset = BitSet()
-
 function should_infer_this_call(sv::InferenceState)
     if sv.params.unoptimize_throw_blocks
         # Disable inference of calls in throw blocks, since we're unlikely to
@@ -917,6 +915,8 @@ struct ConstCallResults
         new(rt, const_result, effects, edge)
 end
 
+# TODO MustAlias forwarding
+
 struct ConditionalArgtypes <: ForwardableArgtypes
     arginfo::ArgInfo
     sv::InferenceState
@@ -1069,7 +1069,7 @@ function maybe_get_const_prop_profitable(interp::AbstractInterpreter,
         add_remark!(interp, sv, "[constprop] Disabled by argument and rettype heuristics")
         return nothing
     end
-    all_overridden = is_all_overridden(arginfo, sv)
+    all_overridden = is_all_overridden(interp, arginfo, sv)
     if !force && !const_prop_function_heuristic(interp, f, arginfo, nargs, all_overridden,
             is_nothrow(sv.ipo_effects), sv)
         add_remark!(interp, sv, "[constprop] Disabled by function heuristic")
@@ -1128,32 +1128,19 @@ end
 
 # determines heuristically whether if constant propagation can be worthwhile
 # by checking if any of given `argtypes` is "interesting" enough to be propagated
-function const_prop_argument_heuristic(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
+function const_prop_argument_heuristic(interp::AbstractInterpreter, arginfo::ArgInfo, sv::InferenceState)
+    𝕃ᵢ = typeinf_lattice(interp)
+    argtypes = arginfo.argtypes
     for i in 1:length(argtypes)
         a = argtypes[i]
-        if isa(a, Conditional) && fargs !== nothing
-            is_const_prop_profitable_conditional(a, fargs, sv) && return true
+        if has_conditional(𝕃ᵢ) && isa(a, Conditional) && arginfo.fargs !== nothing
+            is_const_prop_profitable_conditional(a, arginfo.fargs, sv) && return true
         else
             a = widenslotwrapper(a)
-            has_nontrivial_const_info(typeinf_lattice(interp), a) && is_const_prop_profitable_arg(a) && return true
+            has_nontrivial_extended_info(𝕃ᵢ, a) && is_const_prop_profitable_arg(𝕃ᵢ, a) && return true
         end
     end
     return false
-end
-
-function is_const_prop_profitable_arg(@nospecialize(arg))
-    # have new information from argtypes that wasn't available from the signature
-    if isa(arg, PartialStruct)
-        for b in arg.fields
-            isconstType(b) && return true
-            is_const_prop_profitable_arg(b) && return true
-        end
-    end
-    isa(arg, PartialOpaque) && return true
-    isa(arg, Const) || return true
-    val = arg.val
-    # don't consider mutable values useful constants
-    return isa(val, Symbol) || isa(val, Type) || !ismutable(val)
 end
 
 function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{Any}, sv::InferenceState)
@@ -1162,7 +1149,7 @@ function is_const_prop_profitable_conditional(cnd::Conditional, fargs::Vector{An
         return true
     end
     # as a minor optimization, we just check the result is a constant or not,
-    # since both `has_nontrivial_const_info`/`is_const_prop_profitable_arg` return `true`
+    # since both `has_nontrivial_extended_info`/`is_const_prop_profitable_arg` return `true`
     # for `Const(::Bool)`
     return isa(widenconditional(cnd), Const)
 end
@@ -1179,14 +1166,14 @@ function find_constrained_arg(cnd::Conditional, fargs::Vector{Any}, sv::Inferenc
 end
 
 # checks if all argtypes has additional information other than what `Type` can provide
-function is_all_overridden((; fargs, argtypes)::ArgInfo, sv::InferenceState)
+function is_all_overridden(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, sv::InferenceState)
+    𝕃ᵢ = typeinf_lattice(interp)
     for i in 1:length(argtypes)
         a = argtypes[i]
-        if isa(a, Conditional) && fargs !== nothing
+        if has_conditional(𝕃ᵢ) && isa(a, Conditional) && fargs !== nothing
             is_const_prop_profitable_conditional(a, fargs, sv) || return false
         else
-            a = widenslotwrapper(a)
-            is_forwardable_argtype(a) || return false
+            is_forwardable_argtype(𝕃ᵢ, widenslotwrapper(a)) || return false
         end
     end
     return true
@@ -1199,11 +1186,11 @@ function force_const_prop(interp::AbstractInterpreter, @nospecialize(f), method:
            istopfunction(f, :setproperty!)
 end
 
-function const_prop_function_heuristic(
-    interp::AbstractInterpreter, @nospecialize(f), (; argtypes)::ArgInfo,
+function const_prop_function_heuristic(interp::AbstractInterpreter, @nospecialize(f), arginfo::ArgInfo,
     nargs::Int, all_overridden::Bool, still_nothrow::Bool, _::InferenceState)
-    ⊑ᵢ = ⊑(typeinf_lattice(interp))
+    argtypes = arginfo.argtypes
     if nargs > 1
+        𝕃ᵢ = typeinf_lattice(interp)
         if istopfunction(f, :getindex) || istopfunction(f, :setindex!)
             arrty = argtypes[2]
             # don't propagate constant index into indexing of non-constant array
@@ -1213,12 +1200,12 @@ function const_prop_function_heuristic(
                 if !still_nothrow || ismutabletype(arrty)
                     return false
                 end
-            elseif arrty ⊑ᵢ Array
+            elseif ⊑(𝕃ᵢ, arrty, Array)
                 return false
             end
         elseif istopfunction(f, :iterate)
             itrty = argtypes[2]
-            if itrty ⊑ᵢ Array
+            if ⊑(𝕃ᵢ, itrty, Array)
                 return false
             end
         end
@@ -2289,7 +2276,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 end
                 allconst &= isa(at, Const)
                 if !anyrefine
-                    anyrefine = has_nontrivial_const_info(𝕃ᵢ, at) || # constant information
+                    anyrefine = has_nontrivial_extended_info(𝕃ᵢ, at) || # extended lattice information
                                 ⋤(𝕃ᵢ, at, ft) # just a type-level information, but more precise than the declared type
                 end
                 ats[i] = at
@@ -2503,7 +2490,7 @@ function abstract_eval_globalref(g::GlobalRef)
         g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
         return Const(getglobal(g.mod, g.name))
     end
-    ty = ccall(:jl_binding_type, Any, (Any, Any), g.mod, g.name)
+    ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any
     return ty
 end
@@ -2561,18 +2548,6 @@ struct BestguessInfo{Interp<:AbstractInterpreter}
     end
 end
 
-"""
-    widenreturn(@nospecialize(rt), info::BestguessInfo) -> new_bestguess
-
-Appropriately converts inferred type of a return value `rt` to such a type
-that we know we can store in the cache and is valid and good inter-procedurally,
-E.g. if `rt isa Conditional` then `rt` should be converted to `InterConditional`
-or the other cachable lattice element.
-
-External lattice `𝕃ₑ::ExternalLattice` may overload:
-- `widenreturn(𝕃ₑ::ExternalLattice, @nospecialize(rt), info::BestguessInfo)`
-- `widenreturn_noslotwrapper(𝕃ₑ::ExternalLattice, @nospecialize(rt), info::BestguessInfo)`
-"""
 function widenreturn(@nospecialize(rt), info::BestguessInfo)
     return widenreturn(typeinf_lattice(info.interp), rt, info)
 end
@@ -2686,7 +2661,7 @@ function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info:
             a = isvarargtype(a) ? a : widenreturn_noslotwrapper(𝕃, a, info)
             if !anyrefine
                 # TODO: consider adding && const_prop_profitable(a) here?
-                anyrefine = has_const_info(a) ||
+                anyrefine = has_extended_info(a) ||
                             ⊏(𝕃, a, fieldtype(rt.typ, i))
             end
             fields[i] = a

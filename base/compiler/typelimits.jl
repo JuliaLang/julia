@@ -6,7 +6,6 @@
 
 const MAX_TYPEUNION_COMPLEXITY = 3
 const MAX_TYPEUNION_LENGTH = 3
-const MAX_INLINE_CONST_SIZE = 256
 
 #########################
 # limitation heuristics #
@@ -534,14 +533,13 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
                 end
                 fields[i] = tyi
                 if !anyrefine
-                    anyrefine = has_nontrivial_const_info(lattice, tyi) || # constant information
+                    anyrefine = has_nontrivial_extended_info(lattice, tyi) || # extended information
                                 ⋤(lattice, tyi, ft) # just a type-level information, but more precise than the declared type
                 end
             end
             return anyrefine ? PartialStruct(aty, fields) : aty
         end
     end
-
 
     # Don't widen const here - external AbstractInterpreter might insert lattice
     # layers between us and `ConstsLattice`.

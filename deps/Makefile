@@ -168,6 +168,8 @@ DEP_LIBS += libwhich
 endif
 endif
 
+DEP_LIBS_STAGED := $(DEP_LIBS)
+
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \

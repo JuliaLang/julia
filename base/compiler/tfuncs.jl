@@ -1330,7 +1330,7 @@ function abstract_modifyfield!(interp::AbstractInterpreter, argtypes::Vector{Any
         TF2 = tmeet(callinfo.rt, widenconst(TF))
         if TF2 === Bottom
             RT = Bottom
-        elseif isconcretetype(RT) && has_nontrivial_const_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
+        elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
             RT = PartialStruct(RT, Any[TF, TF2])
         end
         info = ModifyFieldInfo(callinfo.info)
@@ -1799,7 +1799,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     anyinfo = false
     for i in 1:length(argtypes)
         x = argtypes[i]
-        if has_nontrivial_const_info(𝕃, x)
+        if has_nontrivial_extended_info(𝕃, x)
             anyinfo = true
         else
             if !isvarargtype(x)
@@ -2526,7 +2526,7 @@ end
 
 function global_assignment_nothrow(M::Module, s::Symbol, @nospecialize(newty))
     if isdefined(M, s) && !isconst(M, s)
-        ty = ccall(:jl_binding_type, Any, (Any, Any), M, s)
+        ty = ccall(:jl_get_binding_type, Any, (Any, Any), M, s)
         return ty === nothing || newty ⊑ ty
     end
     return false
@@ -2536,7 +2536,7 @@ end
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            return ccall(:jl_binding_type, Any, (Any, Any), M, s) !== nothing
+            return ccall(:jl_get_binding_type, Any, (Any, Any), M, s) !== nothing
         end
     end
     return false
