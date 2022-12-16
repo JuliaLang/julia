@@ -109,7 +109,7 @@ end
         rm("pidfile")
         deleted = true
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(rmtask)
+    Base.errormonitor(rmtask)
     @test isfile("pidfile")
     @test !deleted
 
@@ -146,7 +146,7 @@ end
         rm("pidfile")
         deleted = true
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(rmtask)
+    Base.errormonitor(rmtask)
     @test isfile("pidfile")
     @test !deleted
     # open the pidfile again (should wait for it to disappear first)
@@ -177,7 +177,7 @@ end
             @test Pidfile.tryrmopenfile("pidfile")
             deleted = true
         end
-        isdefined(Base, :errormonitor) && Base.errormonitor(rmtask)
+        Base.errormonitor(rmtask)
 
         t1 = time()
         @test_throws ErrorException open_exclusive("pidfile", wait=false)
@@ -243,7 +243,7 @@ end
             return close(lockf)
         end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(waittask)
+    Base.errormonitor(waittask)
 
     # mkpidlock with no waiting
     t = @elapsed @test_throws ErrorException mkpidlock("pidfile", wait=false)
@@ -272,8 +272,14 @@ end
 
     # Just for coverage's sake, run a test with do-block syntax
     lock_times = Float64[]
+    synchronizer = Base.Event()
+    synchronizer2 = Base.Event()
     t_loop = @async begin
         for idx in 1:100
+            if idx == 1
+                wait(synchronizer)
+                notify(synchronizer2)
+            end
             t = @elapsed mkpidlock("do_block_pidfile") do
                 # nothing
             end
@@ -281,12 +287,14 @@ end
             push!(lock_times, t)
         end
     end
-    isdefined(Base, :errormonitor) && Base.errormonitor(t_loop)
+    Base.errormonitor(t_loop)
     mkpidlock("do_block_pidfile") do
+        notify(synchronizer)
+        wait(synchronizer2)
         sleep(3)
     end
     wait(t_loop)
-    @test maximum(lock_times) > 2
+    @test lock_times[1] >= 3
     @test minimum(lock_times) < 1
 end
 

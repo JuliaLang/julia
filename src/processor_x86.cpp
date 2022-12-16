@@ -71,6 +71,7 @@ enum class CPU : uint32_t {
     intel_corei7_icelake_client,
     intel_corei7_icelake_server,
     intel_corei7_tigerlake,
+    intel_corei7_alderlake,
     intel_corei7_sapphirerapids,
     intel_knights_landing,
     intel_knights_mill,
@@ -92,6 +93,7 @@ enum class CPU : uint32_t {
     amd_barcelona,
     amd_znver1,
     amd_znver2,
+    amd_znver3,
 };
 
 static constexpr size_t feature_sz = 11;
@@ -136,6 +138,7 @@ static constexpr FeatureDep deps[] = {
     {vaes, aes},
     {vpclmulqdq, avx},
     {vpclmulqdq, pclmul},
+    {avxvnni, avx2},
     {avx512f, avx2},
     {avx512dq, avx512f},
     {avx512ifma, avx512f},
@@ -202,6 +205,8 @@ constexpr auto icelake = cannonlake | get_feature_masks(avx512bitalg, vaes, avx5
 constexpr auto icelake_server = icelake | get_feature_masks(pconfig, wbnoinvd);
 constexpr auto tigerlake = icelake | get_feature_masks(avx512vp2intersect, movdiri,
                                                        movdir64b, shstk);
+constexpr auto alderlake = skylake | get_feature_masks(clwb, sha, waitpkg, shstk, gfni, vaes, vpclmulqdq, pconfig,
+                                                       rdpid, movdiri, pku, movdir64b, serialize, ptwrite, avxvnni);
 constexpr auto sapphirerapids = icelake_server |
     get_feature_masks(amx_tile, amx_int8, amx_bf16, avx512bf16, serialize, cldemote, waitpkg,
                       ptwrite, tsxldtrk, enqcmd, shstk, avx512vp2intersect, movdiri, movdir64b);
@@ -222,6 +227,7 @@ constexpr auto bdver4 = bdver3 | get_feature_masks(avx2, bmi2, mwaitx, movbe, rd
 constexpr auto znver1 = haswell | get_feature_masks(adx, aes, clflushopt, clzero, mwaitx, prfchw,
                                                     rdseed, sha, sse4a, xsavec, xsaves);
 constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid, wbnoinvd);
+constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 
 }
 
@@ -255,6 +261,8 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
      Feature::icelake_server},
     {"tigerlake", CPU::intel_corei7_tigerlake, CPU::intel_corei7_icelake_client, 100000,
      Feature::tigerlake},
+    {"alderlake", CPU::intel_corei7_alderlake, CPU::intel_corei7_skylake, 120000,
+     Feature::alderlake},
     {"sapphirerapids", CPU::intel_corei7_sapphirerapids, CPU::intel_corei7_icelake_server, 120000,
      Feature::sapphirerapids},
 
@@ -280,6 +288,7 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
 
     {"znver1", CPU::amd_znver1, CPU::generic, 0, Feature::znver1},
     {"znver2", CPU::amd_znver2, CPU::generic, 0, Feature::znver2},
+    {"znver3", CPU::amd_znver3, CPU::amd_znver2, 120000, Feature::znver3},
 };
 static constexpr size_t ncpu_names = sizeof(cpus) / sizeof(cpus[0]);
 
@@ -411,6 +420,10 @@ static CPU get_intel_processor_name(uint32_t family, uint32_t model, uint32_t br
         case 0x8c:
         case 0x8d:
             return CPU::intel_corei7_tigerlake;
+            //Alder Lake
+        case 0x97:
+        case 0x9a:
+            return CPU::intel_corei7_alderlake;
 
             // Sapphire Rapids
         case 0x8f:
@@ -543,6 +556,10 @@ static CPU get_amd_processor_name(uint32_t family, uint32_t model, const uint32_
         if (model >= 0x30)
             return CPU::amd_znver2;
         return CPU::amd_znver1;
+    case 0x19:  // AMD Family 19h
+        if (model <= 0x0f || model == 0x21)
+            return CPU::amd_znver3;  // 00h-0Fh, 21h: Zen3
+        return CPU::amd_znver3; // fallback
     }
 }
 
@@ -861,6 +878,19 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
+static uint32_t pkgimg_init_cb(const void *id)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: pkgimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+    return match.best_idx;
+}
+
 static void ensure_jit_target(bool imaging)
 {
     auto &cmdline = get_cmdline_targets();
@@ -999,6 +1029,15 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

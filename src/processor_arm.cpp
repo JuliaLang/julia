@@ -1586,6 +1586,20 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
+static uint32_t pkgimg_init_cb(const void *id)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: pkgimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+
+    return match.best_idx;
+}
+
 static void ensure_jit_target(bool imaging)
 {
     auto &cmdline = get_cmdline_targets();
@@ -1602,12 +1616,19 @@ static void ensure_jit_target(bool imaging)
         auto &t = jit_targets[i];
         if (t.en.flags & JL_TARGET_CLONE_ALL)
             continue;
+        auto &features0 = jit_targets[t.base].en.features;
         // Always clone when code checks CPU features
         t.en.flags |= JL_TARGET_CLONE_CPU;
+        static constexpr uint32_t clone_fp16[] = {Feature::fp16fml,Feature::fullfp16};
+        for (auto fe: clone_fp16) {
+            if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
+                t.en.flags |= JL_TARGET_CLONE_FLOAT16;
+                break;
+            }
+        }
         // The most useful one in general...
         t.en.flags |= JL_TARGET_CLONE_LOOP;
 #ifdef _CPU_ARM_
-        auto &features0 = jit_targets[t.base].en.features;
         static constexpr uint32_t clone_math[] = {Feature::vfp3, Feature::vfp4, Feature::neon};
         for (auto fe: clone_math) {
             if (!test_nbit(features0, fe) && test_nbit(t.en.features, fe)) {
@@ -1786,6 +1807,15 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

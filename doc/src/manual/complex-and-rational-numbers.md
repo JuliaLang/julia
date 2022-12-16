@@ -48,7 +48,7 @@ julia> 3(2 - 5im)^2
 -63 - 60im
 
 julia> 3(2 - 5im)^-1.0
-0.20689655172413796 + 0.5172413793103449im
+0.20689655172413793 + 0.5172413793103449im
 ```
 
 The promotion mechanism ensures that combinations of operands of different types just work:
@@ -254,7 +254,7 @@ julia> float(3//4)
 ```
 
 Conversion from rational to floating-point respects the following identity for any integral values
-of `a` and `b`, with the exception of the case `a == 0` and `b == 0`:
+of `a` and `b`, with the exception of the two cases `b == 0` and `a == 0 && b < 0`:
 
 ```jldoctest
 julia> a = 1; b = 2;

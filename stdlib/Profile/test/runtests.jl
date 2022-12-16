@@ -3,6 +3,8 @@
 using Test, Profile, Serialization, Logging
 using Base.StackTraces: StackFrame
 
+@test_throws "The profiling data buffer is not initialized. A profile has not been requested this session." Profile.print()
+
 Profile.clear()
 Profile.init()
 
@@ -64,8 +66,8 @@ end
     iobuf = IOBuffer()
     with_logger(NullLogger()) do
         @testset for format in [:flat, :tree]
-            @testset for threads in Any[1:Threads.nthreads(), 1, 1:1, 1:2, [1,2]]
-                @testset for groupby in [:none, :thread, :task, [:thread, :task], [:task, :thread]]
+            @testset for threads in Any[1:typemax(Int), 1, 1:1, 1:2, [1,2]]
+                @testset for groupby in Any[:none, :thread, :task, [:thread, :task], [:task, :thread]]
                     Profile.print(iobuf; groupby, threads, format)
                     @test !isempty(String(take!(iobuf)))
                 end
@@ -118,11 +120,10 @@ end
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
-    nthreads = Sys.iswindows() ? 1 : Threads.nthreads()
     sample_size_bytes = sizeof(Ptr)
     def_n = Sys.iswindows() && Sys.WORD_SIZE == 32 ? 1_000_000 : 10_000_000
-    if Sys.WORD_SIZE == 32 && (def_n * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (def_n * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == def_n
     end
@@ -131,8 +132,8 @@ end
     @test delay_ == def_delay
     Profile.init(n=1_000_001, delay=0.0005)
     n_, delay_ = Profile.init()
-    if Sys.WORD_SIZE == 32 && (1_000_001 * nthreads * sample_size_bytes) > 2^29
-        @test n_ * nthreads * sample_size_bytes <= 2^29
+    if Sys.WORD_SIZE == 32 && (1_000_001 * sample_size_bytes) > 2^29
+        @test n_ * sample_size_bytes <= 2^29
     else
         @test n_ == 1_000_001
     end
@@ -151,14 +152,14 @@ end
     @profile busywait(1, 20)
     _, fdict0 = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = function(list)
-        modify((sf, n)) = sf.func == :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
+        modify((sf, n)) = sf.func === :busywait ? (StackTraces.StackFrame(sf.func, sf.file, sf.line+2, sf.linfo, sf.from_c, sf.inlined, sf.pointer), n) : (sf, n)
         map!(modify, list, list)
     end
     _, fdictc = Profile.flatten(Profile.retrieve()...)
     Base.update_stackframes_callback[] = identity
     function getline(sfs)
         for sf in sfs
-            sf.func == :busywait && return sf.line
+            sf.func === :busywait && return sf.line
         end
         nothing
     end
@@ -263,11 +264,23 @@ end
     Profile.tree!(root, backtraces, lidict, #= C =# true, :off)
     @test length(root.down) == 2
     for k in keys(root.down)
-        @test k.file == :file1
+        @test k.file === :file1
         @test k.line ∈ (1, 2)
     end
     node = root.down[stackframe(:f1, :file1, 2)]
     @test only(node.down).first == lidict[8]
+end
+
+@testset "HeapSnapshot" begin
+    fname = read(`$(Base.julia_cmd()) --startup-file=no -e "using Profile; print(Profile.take_heap_snapshot())"`, String)
+
+    @test isfile(fname)
+
+    open(fname) do fs
+        @test readline(fs) != ""
+    end
+
+    rm(fname)
 end
 
 include("allocs.jl")

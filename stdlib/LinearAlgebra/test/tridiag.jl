@@ -71,11 +71,13 @@ end
             @test ST == Matrix(ST)
             @test ST.dv === x
             @test ST.ev === y
+            @test typeof(ST)(ST) === ST
             TT = (Tridiagonal(y, x, y))::Tridiagonal{elty, typeof(x)}
             @test TT == Matrix(TT)
             @test TT.dl === y
             @test TT.d  === x
             @test TT.du === y
+            @test typeof(TT)(TT) === TT
         end
         ST = SymTridiagonal{elty}([1,2,3,4], [1,2,3])
         @test eltype(ST) == elty
@@ -261,6 +263,13 @@ end
             @test (@inferred diag(GA))::typeof(GenericArray(d)) == GenericArray(d)
             @test (@inferred diag(GA, -1))::typeof(GenericArray(d)) == GenericArray(dl)
         end
+        @testset "trace" begin
+            if real(elty) <: Integer
+                @test tr(A) == tr(fA)
+            else
+                @test tr(A) ≈ tr(fA) rtol=2eps(real(elty))
+            end
+        end
         @testset "Idempotent tests" begin
             for func in (conj, transpose, adjoint)
                 @test func(func(A)) == A
@@ -434,7 +443,11 @@ end
         @testset "generalized dot" begin
             x = fill(convert(elty, 1), n)
             y = fill(convert(elty, 1), n)
-            @test dot(x, A, y) ≈ dot(A'x, y)
+            @test dot(x, A, y) ≈ dot(A'x, y) ≈ dot(x, A*y)
+            @test dot([1], SymTridiagonal([1], Int[]), [1]) == 1
+            @test dot([1], Tridiagonal(Int[], [1], Int[]), [1]) == 1
+            @test dot(Int[], SymTridiagonal(Int[], Int[]), Int[]) === 0
+            @test dot(Int[], Tridiagonal(Int[], Int[], Int[]), Int[]) === 0
         end
     end
 end

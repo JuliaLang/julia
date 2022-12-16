@@ -55,9 +55,9 @@ function setindex(x::Tuple, v, i::Integer)
     _setindex(v, i, x...)
 end
 
-function _setindex(v, i::Integer, args...)
+function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), length(args))
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
 end
 
 
@@ -186,7 +186,7 @@ function _split_rest(a::Union{AbstractArray, Core.SimpleVector}, n::Int)
     return a[begin:end-n], a[end-n+1:end]
 end
 
-split_rest(t::Tuple, n::Int, i=1) = t[i:end-n], t[end-n+1:end]
+@eval split_rest(t::Tuple, n::Int, i=1) = ($(Expr(:meta, :aggressive_constprop)); (t[i:end-n], t[end-n+1:end]))
 
 # Use dispatch to avoid a branch in first
 first(::Tuple{}) = throw(ArgumentError("tuple must be non-empty"))
@@ -326,8 +326,6 @@ function map(f, t1::Any32, t2::Any32, ts::Any32...)
     (A...,)
 end
 
-_foldl_impl(op, init, itr::Tuple) = afoldl(op, init, itr...)
-
 # type-stable padding
 fill_to_length(t::NTuple{N,Any}, val, ::Val{N}) where {N} = t
 fill_to_length(t::Tuple{}, val, ::Val{1}) = (val,)
@@ -345,7 +343,7 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 if nameof(@__MODULE__) === :Base
 
 function tuple_type_tail(T::Type)
-    @_total_may_throw_meta # TODO: this method is wrong (and not :total_may_throw)
+    @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
         return UnionAll(T.var, tuple_type_tail(T.body))
     elseif isa(T, Union)
@@ -383,7 +381,7 @@ function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
     # inference may give up in recursive calls, so annotate here to force accurate return type to be propagated
     rT = tuple_type_tail(T)
     ts = _totuple(rT, itr, y[2])::rT
-    return (t1, ts...)
+    return (t1, ts...)::T
 end
 
 # use iterative algorithm for long tuples
@@ -404,6 +402,7 @@ _totuple(::Type{Tuple}, itr, s...) = (collect(Iterators.rest(itr,s...))...,)
 _totuple(::Type{Tuple}, itr::Array) = (itr...,)
 _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
+_totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
 end
 
@@ -419,9 +418,16 @@ function _findfirst_loop(f::Function, t)
 end
 findfirst(f::Function, t::Tuple) = length(t) < 32 ? _findfirst_rec(f, 1, t) : _findfirst_loop(f, t)
 
-function findlast(f::Function, x::Tuple)
+findlast(f::Function, t::Tuple) = length(t) < 32 ? _findlast_rec(f, t) : _findlast_loop(f, t)
+function _findlast_rec(f::Function, x::Tuple)
     r = findfirst(f, reverse(x))
     return isnothing(r) ? r : length(x) - r + 1
+end
+function _findlast_loop(f::Function, t)
+    for i in reverse(1:length(t))
+        f(t[i]) && return i
+    end
+    return nothing
 end
 
 ## filter ##
@@ -526,7 +532,7 @@ isless(::Tuple, ::Tuple{}) = false
 """
     isless(t1::Tuple, t2::Tuple)
 
-Returns true when t1 is less than t2 in lexicographic order.
+Return `true` when `t1` is less than `t2` in lexicographic order.
 """
 function isless(t1::Tuple, t2::Tuple)
     a, b = t1[1], t2[1]
@@ -573,15 +579,6 @@ any(x::Tuple{Bool}) = x[1]
 any(x::Tuple{Bool, Bool}) = x[1]|x[2]
 any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
-# equivalent to any(f, t), to be used only in bootstrap
-_tuple_any(f::Function, t::Tuple) = _tuple_any(f, false, t...)
-function _tuple_any(f::Function, tf::Bool, a, b...)
-    @inline
-    _tuple_any(f, tf | f(a), b...)
-end
-_tuple_any(f::Function, tf::Bool) = tf
-
-
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}})
     @_total_meta
@@ -596,7 +593,7 @@ in(x::Symbol, @nospecialize itr::Tuple{Vararg{Symbol}}) = sym_in(x, itr)
 """
     empty(x::Tuple)
 
-Returns an empty tuple, `()`.
+Return an empty tuple, `()`.
 """
 empty(@nospecialize x::Tuple) = ()
 

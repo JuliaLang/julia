@@ -227,6 +227,7 @@ let a, b
     @test 0 == sum(BigInt[]) isa BigInt
     @test prod(b) == foldl(*, b)
     @test 1 == prod(BigInt[]) isa BigInt
+    @test prod(BigInt[0, 0, 0]) == 0 # issue #46665
 end
 
 @testset "Iterated arithmetic" begin

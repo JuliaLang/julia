@@ -128,7 +128,9 @@ macro view(ex)
         if Meta.isexpr(ex, :ref)
             ex = Expr(:call, view, ex.args...)
         else # ex replaced by let ...; foo[...]; end
-            @assert Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref)
+            if !(Meta.isexpr(ex, :let) && Meta.isexpr(ex.args[2], :ref))
+                error("invalid expression")
+            end
             ex.args[2] = Expr(:call, view, ex.args[2].args...)
         end
         Expr(:&&, true, esc(ex))

@@ -1280,7 +1280,7 @@ struct BadFloatWrapper <: AbstractFloat
     x::Float64
 end
 
-@testset "not impelemented errors" begin
+@testset "not implemented errors" begin
     x = BadFloatWrapper(1.9)
     for f in (sin, cos, tan, sinh, cosh, tanh, atan, acos, asin, asinh, acosh, atanh, exp, log1p, expm1, log) #exp2, exp10 broken for now
         @test_throws MethodError f(x)
@@ -1318,25 +1318,41 @@ end
 end
 
 @testset "pow" begin
+    # tolerance by type for regular powers
+    POW_TOLS = Dict(Float16=>[.51, .51, 2.0, 1.5],
+                    Float32=>[.51, .51, 2.0, 1.5],
+                    Float64=>[1.0, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
-                got, expected = T(x)^T(y), T(big(x))^T(y)
-                @test isnan_type(T, got) && isnan_type(T, expected) || (got === expected)
+                got, expected = T(x)^T(y), T(big(x)^T(y))
+                if isnan(expected)
+                    @test isnan_type(T, got) || T.((x,y))
+                else
+                    @test got == expected || T.((x,y))
+                end
             end
         end
         for _ in 1:2^16
+            # note x won't be subnormal here
             x=rand(T)*100; y=rand(T)*200-100
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= 1.3*eps(T(expected)) || (x,y)
+                if y == T(-2) # unfortunately x^-2 is less accurate for performance reasons.
+                    @test abs(expected-got) <= POW_TOLS[T][3]*eps(T(expected)) || (x,y)
+                elseif y == T(3) # unfortunately x^3 is less accurate for performance reasons.
+                    @test abs(expected-got) <= POW_TOLS[T][4]*eps(T(expected)) || (x,y)
+                else
+                    @test abs(expected-got) <= POW_TOLS[T][1]*eps(T(expected)) || (x,y)
+                end
             end
         end
-        for _ in 1:2^10
-            x=rand(T)*floatmin(T); y=rand(T)*2-1
+        for _ in 1:2^14
+            # test subnormal(x), y in -1.2, 1.8 since anything larger just overflows.
+            x=rand(T)*floatmin(T); y=rand(T)*3-T(1.2)
             got, expected = x^y, widen(x)^y
             if isfinite(eps(T(expected)))
-                @test abs(expected-got) <= 1.3*eps(T(expected)) || (x,y)
+                @test abs(expected-got) <= POW_TOLS[T][2]*eps(T(expected)) || (x,y)
             end
         end
         # test (-x)^y for y larger than typemax(Int)
@@ -1346,6 +1362,7 @@ end
     end
     # test for large negative exponent where error compensation matters
     @test 0.9999999955206014^-1.0e8 == 1.565084574870928
+    @test 3e18^20 == Inf
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
@@ -1436,4 +1453,23 @@ end
 @testset "Issue #44336" begin
     f44336()
     @test (@allocated f44336()) == 0
+end
+
+# test constant-foldability
+for fn in (:sin, :cos, :tan, :log, :log2, :log10, :log1p, :exponent, :sqrt, :cbrt,
+           :asin, :atan, :acos, :sinh, :cosh, :tanh, :asinh, :acosh, :atanh,
+           :exp, :exp2, :exp10, :expm1
+           )
+    for T in (Float16, Float32, Float64)
+        f = getfield(@__MODULE__, fn)
+        eff = Base.infer_effects(f, (T,))
+        @test Core.Compiler.is_foldable(eff)
+    end
+end
+for T in (Float16, Float32, Float64)
+    for f in (exp, exp2, exp10)
+        @test Core.Compiler.is_removable_if_unused(Base.infer_effects(f, (T,)))
+    end
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,Int)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(^, (T,T)))
 end

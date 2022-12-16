@@ -159,9 +159,9 @@ function Base.show(io::IO, mime::MIME{Symbol("text/plain")}, lbt::LBTConfig)
     println(io, "Libraries: ")
     for (i,l) in enumerate(lbt.loaded_libs)
         char = i == length(lbt.loaded_libs) ? "└" : "├"
-        interface_str = if l.interface == :ilp64
+        interface_str = if l.interface === :ilp64
             "ILP64"
-        elseif l.interface == :lp64
+        elseif l.interface === :lp64
             " LP64"
         else
             "UNKWN"
@@ -240,7 +240,7 @@ If the given `symbol_name` is not contained within the list of exported symbols,
 function lbt_find_backing_library(symbol_name, interface::Symbol;
                                   config::LBTConfig = lbt_get_config())
     if interface ∉ (:ilp64, :lp64)
-        throw(Argument("Invalid interface specification: '$(interface)'"))
+        throw(ArgumentError("Invalid interface specification: '$(interface)'"))
     end
     symbol_idx = findfirst(s -> s == symbol_name, config.exported_symbols)
     if symbol_idx === nothing

@@ -132,7 +132,7 @@ rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
 
 # rand_generic methods are intended to help RNG implementors with common operations
 # we don't call them simply `rand` as this can easily contribute to create
-# amibuities with user-side methods (forcing the user to resort to @eval)
+# ambiguities with user-side methods (forcing the user to resort to @eval)
 
 rand_generic(r::AbstractRNG, T::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}) =
     rand(r, UInt52Raw()) % T[]
@@ -210,7 +210,7 @@ SamplerRangeFast(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeFast(r, uint_sup(T))
 
 function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
     bw = (sizeof(U) << 3 - leading_zeros(m)) % UInt # bit-width
     mask = ((1 % U) << bw) - (1 % U)
@@ -284,7 +284,7 @@ SamplerRangeInt(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeInt(r, uint_sup(T))
 
 function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     a = first(r)
     m = (last(r) - first(r)) % unsigned(T) % U
     k = m + one(U)
@@ -330,7 +330,7 @@ struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
 end
 
 function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
-    isempty(r) && throw(ArgumentError("range must be non-empty"))
+    isempty(r) && throw(ArgumentError("collection must be non-empty"))
     a = first(r)
     U = uint_sup(T)
     s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
@@ -369,7 +369,7 @@ end
 function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=Val(Inf)
                        ) where {RNG<:AbstractRNG}
     m = last(r) - first(r)
-    m.size < 0 && throw(ArgumentError("range must be non-empty"))
+    m.size < 0 && throw(ArgumentError("collection must be non-empty"))
     nlimbs = Int(m.size)
     hm = nlimbs == 0 ? Limb(0) : GC.@preserve m unsafe_load(m.d, nlimbs)
     highsp = Sampler(RNG, Limb(0):hm, N)

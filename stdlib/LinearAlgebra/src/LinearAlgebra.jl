@@ -18,8 +18,9 @@ import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, as
     vec, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
     @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    splat
+    Splat
 using Base.Broadcast: Broadcasted, broadcasted
+using Base.PermutedDimsArrays: CommutativeOps
 using OpenBLAS_jll
 using libblastrampoline_jll
 import Libdl
@@ -48,6 +49,7 @@ export
     LU,
     LDLt,
     NoPivot,
+    RowNonZero,
     QR,
     QRPivoted,
     LQ,
@@ -103,6 +105,7 @@ export
     istril,
     istriu,
     kron,
+    kron!,
     ldiv!,
     ldlt!,
     ldlt,
@@ -173,6 +176,7 @@ struct QRIteration <: Algorithm end
 
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
+struct RowNonZero <: PivotingStrategy end
 struct RowMaximum <: PivotingStrategy end
 struct ColumnNorm <: PivotingStrategy end
 
@@ -279,6 +283,10 @@ The reason for this is that factorization itself is both expensive and typically
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
+
 # Examples
 ```jldoctest
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
@@ -315,6 +323,10 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
+
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
 
 # Examples
 ```jldoctest
@@ -353,6 +365,10 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
+
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
 """
 rdiv!(A, B)
 
@@ -445,18 +461,45 @@ _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 # SymTridiagonal ev can be the same length as dv, but the last element is
-# ignored. However, some methods can fail if they read the entired ev
+# ignored. However, some methods can fail if they read the entire ev
 # rather than just the meaningful elements. This is a helper function
 # for getting only the meaningful elements of ev. See #41089
-_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
+_evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
+# convert to Vector, if necessary
+_makevector(x::Vector) = x
+_makevector(x::AbstractVector) = Vector(x)
+
+# append a zero element / drop the last element
+_pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
+_droplast!(A) = deleteat!(A, lastindex(A))
+
+# some trait like this would be cool
+# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
+# but we are actually asking for oneunit(T), that is, however, defined for generic T as
+# `T(one(T))`, so the question is equivalent for whether one(T) is defined
+onedefined(::Type) = false
+onedefined(::Type{<:Number}) = true
+
+# initialize return array for op(A, B)
+_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(matprod(oneunit(TA), oneunit(TB))) :
+        promote_op(matprod, TA, TB)
+_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(op(oneunit(TA), oneunit(TB))) :
+        promote_op(op, TA, TB)
+_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
+    similar(C, _init_eltype(op, TA, TB), size(C))
+
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
-# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
 # we restrict this method to only the LAPACK factorizations in LinearAlgebra.
 # The definition is put here since it explicitly references all the Factorizion structs so it has
 # to be located after all the files that define the structs.
@@ -546,21 +589,37 @@ function versioninfo(io::IO=stdout)
         println(io, indent, "--> ", lib.libname, " (", interface, ")")
     end
     println(io, "Threading:")
-    println(io, indent, "Threads.nthreads() = ", Base.Threads.nthreads())
+    println(io, indent, "Threads.threadpoolsize() = ", Threads.threadpoolsize())
+    println(io, indent, "Threads.maxthreadid() = ", Base.Threads.maxthreadid())
     println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
     println(io, "Relevant environment variables:")
     env_var_names = [
         "JULIA_NUM_THREADS",
         "MKL_DYNAMIC",
         "MKL_NUM_THREADS",
-        "OPENBLAS_NUM_THREADS",
+         # OpenBLAS has a hierarchy of environment variables for setting the
+         # number of threads, see
+         # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
+        ("OPENBLAS_NUM_THREADS", "GOTO_NUM_THREADS", "OMP_NUM_THREADS"),
     ]
     printed_at_least_one_env_var = false
+    print_var(io, indent, name) = println(io, indent, name, " = ", ENV[name])
     for name in env_var_names
-        if haskey(ENV, name)
-            value = ENV[name]
-            println(io, indent, name, " = ", value)
-            printed_at_least_one_env_var = true
+        if name isa Tuple
+            # If `name` is a Tuple, then find the first environment which is
+            # defined, and disregard the following ones.
+            for nm in name
+                if haskey(ENV, nm)
+                    print_var(io, indent, nm)
+                    printed_at_least_one_env_var = true
+                    break
+                end
+            end
+        else
+            if haskey(ENV, name)
+                print_var(io, indent, name)
+                printed_at_least_one_env_var = true
+            end
         end
     end
     if !printed_at_least_one_env_var
@@ -578,6 +637,15 @@ function __init__()
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+
+    # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "GOTO_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
+        @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+        else
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+        end
+    end
 end
 
 end # module LinearAlgebra

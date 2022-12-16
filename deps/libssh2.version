@@ -1,2 +1,7 @@
+## jll artifact
+LIBSSH2_JLL_NAME := LibSSH2
+
+## source build
+LIBSSH2_VER := 1.10.2
 LIBSSH2_BRANCH=libssh2-1.10.0
 LIBSSH2_SHA1=635caa90787220ac3773c1d5ba11f1236c22eae8
