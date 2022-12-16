@@ -352,7 +352,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
             // do a full import to prevent the result of this lookup
             // from changing, for example if this var is assigned to
             // later.
-            module_import_(m, b->owner, var, var, 0);
+            module_import_(m, b->owner, b->name, var, 0);
             return b;
         }
         return NULL;
@@ -419,7 +419,7 @@ JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var)
         if (jl_atomic_cmpswap_relaxed(&b->globalref, &globalref, newref)) {
             JL_GC_PROMISE_ROOTED(newref);
             globalref = newref;
-            jl_gc_wb(m, globalref);
+            jl_gc_wb_binding(b, globalref);
         }
     }
     JL_UNLOCK(&m->lock); // may GC

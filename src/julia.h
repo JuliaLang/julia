@@ -4,7 +4,9 @@
 #define JULIA_H
 
 #ifdef LIBRARY_EXPORTS
-#include "jl_internal_funcs.inc"
+// Generated file, needs to be searched in include paths so that the builddir
+// retains priority
+#include <jl_internal_funcs.inc>
 #undef jl_setjmp
 #undef jl_longjmp
 #undef jl_egal
@@ -1633,9 +1635,10 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 }
 
 // eq hash tables
-JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, jl_value_t *key, jl_value_t *val, int *inserted);
-JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
-jl_value_t *jl_eqtable_getkey(jl_array_t *h, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h JL_ROOTING_ARGUMENT, jl_value_t *key, jl_value_t *val JL_ROOTED_ARGUMENT, int *inserted);
+JL_DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h JL_PROPAGATES_ROOT, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_eqtable_pop(jl_array_t *h, jl_value_t *key, jl_value_t *deflt, int *found);
+jl_value_t *jl_eqtable_getkey(jl_array_t *h JL_PROPAGATES_ROOT, jl_value_t *key, jl_value_t *deflt) JL_NOTSAFEPOINT;
 
 // system information
 JL_DLLEXPORT int jl_errno(void) JL_NOTSAFEPOINT;
@@ -1811,6 +1814,7 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
+
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);
@@ -2140,7 +2144,7 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
 // Version information
-#include "julia_version.h"
+#include <julia_version.h> // Generated file
 
 JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);

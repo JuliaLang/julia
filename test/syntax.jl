@@ -2520,7 +2520,10 @@ end
 
 module Mod2
 import ..Mod.x as x_from_mod
+import ..Mod.x as x_from_mod2
 const y = 2
+
+export x_from_mod2
 end
 
 import .Mod: x as x2
@@ -2565,6 +2568,12 @@ import .Mod2.x_from_mod
 
 @test @isdefined(x_from_mod)
 @test x_from_mod == Mod.x
+
+using .Mod2
+
+@test_nowarn @eval x_from_mod2
+@test @isdefined(x_from_mod2)
+@test x_from_mod2 == x_from_mod == Mod.x
 end
 
 import .TestImportAs.Mod2 as M2
@@ -3288,3 +3297,33 @@ f45162(f) = f(x=1)
 @test Meta.lower(@__MODULE__, :(global const x::Int)) == Expr(:error, "expected assignment after \"const\"")
 @test Meta.lower(@__MODULE__, :(const global x)) == Expr(:error, "expected assignment after \"const\"")
 @test Meta.lower(@__MODULE__, :(const global x::Int)) == Expr(:error, "expected assignment after \"const\"")
+
+# issue #47410
+# note `eval` is needed since this needs to be at the top level
+@test eval(:(if false
+             elseif false || (()->true)()
+                 42
+             end)) == 42
+
+macro _macroexpand(x, m=__module__)
+    :($__source__; macroexpand($m, Expr(:var"hygienic-scope", $(esc(Expr(:quote, x))), $m)))
+end
+
+@testset "unescaping in :global expressions" begin
+    m = @__MODULE__
+    @test @_macroexpand(global x::T) == :(global x::$(GlobalRef(m, :T)))
+    @test @_macroexpand(global (x, $(esc(:y)))) == :(global (x, y))
+    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T)))) ==
+        :(global (x::$(GlobalRef(m, :S)), y::T))
+    @test @_macroexpand(global (; x, $(esc(:y)))) == :(global (; x, y))
+    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T)))) ==
+        :(global (; x::$(GlobalRef(m, :S)), y::T))
+
+    @test @_macroexpand(global x::T = a) == :(global x::$(GlobalRef(m, :T)) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (x, $(esc(:y))) = a) == :(global (x, y) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (x::S, $(esc(:y))::$(esc(:T))) = a) ==
+        :(global (x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (; x, $(esc(:y))) = a) == :(global (; x, y) = $(GlobalRef(m, :a)))
+    @test @_macroexpand(global (; x::S, $(esc(:y))::$(esc(:T))) = a) ==
+        :(global (; x::$(GlobalRef(m, :S)), y::T) = $(GlobalRef(m, :a)))
+end

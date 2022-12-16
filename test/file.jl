@@ -1519,11 +1519,11 @@ if !Sys.iswindows()
             chmod(joinpath(d, "empty_outer", "empty_inner"), 0o333)
 
             # Test that an empty directory, even when we can't read its contents, is deletable
-            rm(joinpath(d, "empty_outer"); recursive=true, force=true)
+            rm(joinpath(d, "empty_outer"); recursive=true)
             @test !isdir(joinpath(d, "empty_outer"))
 
             # But a non-empty directory is not
-            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true, force=true)
+            @test_throws Base.IOError rm(joinpath(d, "nonempty"); recursive=true)
             chmod(joinpath(d, "nonempty"), 0o777)
             rm(joinpath(d, "nonempty"); recursive=true, force=true)
             @test !isdir(joinpath(d, "nonempty"))

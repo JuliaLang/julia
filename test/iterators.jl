@@ -902,3 +902,11 @@ end
     @test last(Iterators.map(identity, 1:3)) == 3
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end
+
+@testset "empty product iterators" begin
+    v = nothing
+    for (z,) in zip(Iterators.product())
+        v = z
+    end
+    @test v == ()
+end
