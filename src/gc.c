@@ -3635,20 +3635,23 @@ void jl_gc_init(void)
         malloc_fun = &mi_malloc;
         calloc_fun = &mi_calloc;
         realloc_fun = &mi_realloc;
-        posix_memalign_fun = &mi_posix_memalign;
+
         #if defined(_OS_WINDOWS_)
         malloc_aligned_fun = &mi_malloc_aligned;
         realloc_aligned_fun = &mi_realloc_aligned;
+        #else
+        posix_memalign_fun = &mi_posix_memalign;
         #endif
         free_fun = &mi_free;
     } else {
         malloc_fun = &malloc;
         calloc_fun = &calloc;
         realloc_fun = &realloc;
-        posix_memalign_fun = &posix_memalign;
         #if defined(_OS_WINDOWS_)
         malloc_aligned_fun = &_aligned_malloc;
         realloc_aligned_fun = & _aligned_realloc;
+        #else
+        posix_memalign_fun = &posix_memalign;
         #endif
         free_fun = &free;
     }
