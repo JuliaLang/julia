@@ -66,7 +66,17 @@ function kill_def_use!(tpdum::TwoPhaseDefUseMap, def::Int, use::Int)
     if !tpdum.complete
         tpdum.ssa_uses[def] -= 1
     else
-        @assert false && "TODO"
+        range = tpdum.ssa_uses[def]:(def == length(tpdum.ssa_uses) ? length(tpdum.data) : (tpdum.ssa_uses[def + 1] - 1))
+        # TODO: Sorted
+        useidx = findfirst(idx->tpdum.data[idx] == use, range)
+        @assert useidx !== nothing
+        idx = range[useidx]
+        while idx < lastindex(range)
+            ndata = tpdum.data[idx+1]
+            ndata == 0 && break
+            tpdum.data[idx] = ndata
+        end
+        tpdum.data[idx + 1] = 0
     end
 end
 kill_def_use!(tpdum::TwoPhaseDefUseMap, def::SSAValue, use::Int) =
@@ -95,6 +105,9 @@ struct IRInterpretationState
     function IRInterpretationState(interp::AbstractInterpreter,
         ir::IRCode, mi::MethodInstance, world::UInt, argtypes::Vector{Any})
         argtypes = va_process_argtypes(argtypes, mi)
+        for i = 1:length(argtypes)
+            argtypes[i] = widenslotwrapper(argtypes[i])
+        end
         argtypes_refined = Bool[!⊑(typeinf_lattice(interp), ir.argtypes[i], argtypes[i]) for i = 1:length(argtypes)]
         empty!(ir.argtypes)
         append!(ir.argtypes, argtypes)
@@ -259,11 +272,11 @@ function process_terminator!(ir::IRCode, idx::Int, bb::Int,
         end
         return false
     elseif isa(inst, GotoNode)
-        backedge = inst.label < bb
+        backedge = inst.label <= bb
         !backedge && push!(ip, inst.label)
         return backedge
     elseif isa(inst, GotoIfNot)
-        backedge = inst.dest < bb
+        backedge = inst.dest <= bb
         !backedge && push!(ip, inst.dest)
         push!(ip, bb + 1)
         return backedge

@@ -44,7 +44,7 @@ function matching_cache_argtypes(linfo::MethodInstance, simple_argtypes::SimpleA
     (; argtypes) = simple_argtypes
     given_argtypes = Vector{Any}(undef, length(argtypes))
     for i = 1:length(argtypes)
-        given_argtypes[i] = widenconditional(argtypes[i])
+        given_argtypes[i] = widenslotwrapper(argtypes[i])
     end
     given_argtypes = va_process_argtypes(given_argtypes, linfo)
     return pick_const_args(linfo, given_argtypes)
@@ -68,21 +68,14 @@ function pick_const_args!(cache_argtypes::Vector{Any}, overridden_by_const::BitV
     return cache_argtypes, overridden_by_const
 end
 
-function is_argtype_match(lattice::AbstractLattice,
+function is_argtype_match(𝕃::AbstractLattice,
                           @nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if is_forwardable_argtype(given_argtype)
-        return is_lattice_equal(lattice, given_argtype, cache_argtype)
+    if is_forwardable_argtype(𝕃, given_argtype)
+        return is_lattice_equal(𝕃, given_argtype, cache_argtype)
     end
     return !overridden_by_const
-end
-
-function is_forwardable_argtype(@nospecialize x)
-    return isa(x, Const) ||
-           isa(x, Conditional) ||
-           isa(x, PartialStruct) ||
-           isa(x, PartialOpaque)
 end
 
 va_process_argtypes(given_argtypes::Vector{Any}, linfo::MethodInstance) =
@@ -102,7 +95,7 @@ function va_process_argtypes(@nospecialize(va_handler!), given_argtypes::Vector{
             else
                 last = nargs
             end
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
+            isva_given_argtypes[nargs] = tuple_tfunc(fallback_lattice, given_argtypes[last:end])
             va_handler!(isva_given_argtypes, last)
         end
         return isva_given_argtypes
@@ -150,14 +143,14 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 end
                 for i in 1:length(vargtype_elements)
                     atyp = vargtype_elements[i]
-                    if isa(atyp, DataType) && isdefined(atyp, :instance)
+                    if issingletontype(atyp)
                         # replace singleton types with their equivalent Const object
                         vargtype_elements[i] = Const(atyp.instance)
                     elseif isconstType(atyp)
                         vargtype_elements[i] = Const(atyp.parameters[1])
                     end
                 end
-                vargtype = tuple_tfunc(vargtype_elements)
+                vargtype = tuple_tfunc(fallback_lattice, vargtype_elements)
             end
         end
         cache_argtypes[nargs] = vargtype
@@ -179,7 +172,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                 tail_index -= 1
             end
             atyp = unwraptv(atyp)
-            if isa(atyp, DataType) && isdefined(atyp, :instance)
+            if issingletontype(atyp)
                 # replace singleton types with their equivalent Const object
                 atyp = Const(atyp.instance)
             elseif isconstType(atyp)
@@ -223,7 +216,7 @@ function cache_lookup(lattice::AbstractLattice, linfo::MethodInstance, given_arg
         cache_argtypes = cached_result.argtypes
         cache_overridden_by_const = cached_result.overridden_by_const
         for i in 1:nargs
-            if !is_argtype_match(lattice, given_argtypes[i],
+            if !is_argtype_match(lattice, widenmustalias(given_argtypes[i]),
                                  cache_argtypes[i],
                                  cache_overridden_by_const[i])
                 cache_match = false

@@ -418,7 +418,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     # compute inlining and other related optimizations
     result = caller.result
     @assert !(result isa LimitedAccuracy)
-    result = isa(result, InterConditional) ? widenconditional(result) : result
+    result = widenslotwrapper(result)
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
@@ -737,7 +737,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
             return T_IFUNC_COST[iidx]
         end
-        if isa(f, Builtin)
+        if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex

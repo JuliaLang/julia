@@ -1089,7 +1089,7 @@ function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
     deserialize_cycle(s, linfo)
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
-        linfo.uninferred = handle_deserialize(s, tag)::CodeInfo
+        setfield!(linfo, :uninferred, handle_deserialize(s, tag)::CodeInfo, :monotonic)
     end
     tag = Int32(read(s.io, UInt8)::UInt8)
     if tag != UNDEFREF_TAG
@@ -1323,7 +1323,7 @@ function deserialize_typename(s::AbstractSerializer, number)
         tn.max_methods = maxm
         if has_instance
             ty = ty::DataType
-            if !isdefined(ty, :instance)
+            if !Base.issingletontype(ty)
                 singleton = ccall(:jl_new_struct, Any, (Any, Any...), ty)
                 # use setfield! directly to avoid `fieldtype` lowering expecting to see a Singleton object already on ty
                 ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), ty, Base.fieldindex(DataType, :instance)-1, singleton)
@@ -1342,7 +1342,7 @@ function deserialize_typename(s::AbstractSerializer, number)
                 mt.offs = 0
             end
             mt.name = mtname
-            mt.max_args = maxa
+            setfield!(mt, :max_args, maxa, :monotonic)
             ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
             for def in defs
                 if isdefined(def, :sig)

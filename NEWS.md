@@ -4,7 +4,6 @@ Julia v1.10 Release Notes
 New language features
 ---------------------
 
-
 Language changes
 ----------------
 
@@ -39,6 +38,10 @@ Standard library changes
 
 #### Package Manager
 
+- "Package Extensions": support for loading a piece of code based on other
+  packages being loaded in the Julia session.
+  This has similar applications as the Requires.jl package but also
+  supports precompilation and setting compatibility.
 #### LinearAlgebra
 
 

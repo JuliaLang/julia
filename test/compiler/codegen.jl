@@ -785,3 +785,8 @@ f_isa_type(@nospecialize(x)) = isa(x, Type)
 # Issue #47247
 f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
+
+@testset "regression in generic_bitcast: should support Union{} values" begin
+    f(x) = Core.bitcast(UInt64, x)
+    @test occursin("llvm.trap", get_llvm(f, Tuple{Union{}}))
+end

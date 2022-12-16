@@ -568,7 +568,7 @@ function afoldl(op, a, bs...)
     end
     return y
 end
-typeof(afoldl).name.mt.max_args = 34
+setfield!(typeof(afoldl).name.mt, :max_args, 34, :monotonic)
 
 for op in (:+, :*, :&, :|, :xor, :min, :max, :kron)
     @eval begin
