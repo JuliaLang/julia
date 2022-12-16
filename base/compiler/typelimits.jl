@@ -515,8 +515,12 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
                     tyi = ai
                 elseif is_lattice_equal(lattice, bi, ft)
                     tyi = bi
+                elseif (tyi′ = tmerge_field(lattice, ai, bi); tyi′ !== nothing)
+                    # allow external lattice implementation to provide a custom field-merge strategy
+                    tyi = tyi′
                 else
-                    # Otherwise choose between using the fieldtype or some other simple merged type.
+                    # Otherwise use the default aggressive field-merge implementation, and
+                    # choose between using the fieldtype or some other simple merged type.
                     # The wrapper type never has restrictions on complexity,
                     # so try to use that to refine the estimated type too.
                     tni = _typename(widenconst(ai))

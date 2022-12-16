@@ -132,6 +132,23 @@ remaining mostly associative and commutative.
 function tmerge end
 
 """
+    tmerge_field(𝕃::AbstractLattice, a, b) -> nothing or lattice element
+
+Compute a lattice join of elements `a` and `b` over the lattice `𝕃`,
+where `a` and `b` are fields of `PartialStruct` or `Const`.
+This is an opt-in interface to allow external lattice implementation to provide its own
+field-merge strategy. If it returns `nothing`, `tmerge(::PartialsLattice, ...)`
+will use the default aggressive type merge implementation that does not use `tmerge`
+recursively to reach convergence.
+"""
+function tmerge_field end
+
+function tmerge_field(𝕃::AbstractLattice, @nospecialize(a), @nospecialize(b))
+    return tmerge_field(widenlattice(𝕃), a, b)
+end
+tmerge_field(::JLTypeLattice, @nospecialize(a), @nospecialize(b)) = nothing
+
+"""
     ⊑(𝕃::AbstractLattice, a, b)
 
 Compute the lattice ordering (i.e. less-than-or-equal) relationship between
