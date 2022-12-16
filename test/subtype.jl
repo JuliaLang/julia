@@ -2188,7 +2188,16 @@ for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
 end
 abstract type C38497{e,g<:Tuple,i} end
 struct Q38497{o,e<:NTuple{o},g} <: C38497{e,g,Array{o}} end
-@testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{1, Tuple{Int}, <:Tuple})
+@testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{<:Any, Tuple{Int}, <:Tuple})
+# n.b. the only concrete instance of this type is Q38497{1, Tuple{Int}, <:Tuple} (since NTuple{o} also adds an ::Int constraint)
+# but this abstract type is also part of the intersection abstractly
+
+abstract type X38497{T<:Number} end
+abstract type Y38497{T>:Integer} <: X38497{T} end
+struct Z38497{T>:Int} <: Y38497{T} end
+@testintersect(Z38497, X38497, Z38497{T} where Int<:T<:Number)
+@testintersect(Z38497, Y38497, Z38497{T} where T>:Integer)
+@testintersect(X38497, Y38497, Y38497{T} where Integer<:T<:Number)
 
 #issue #33138
 @test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
