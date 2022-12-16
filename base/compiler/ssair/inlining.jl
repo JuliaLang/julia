@@ -729,7 +729,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
         def = argexprs[i]
         def_type = argtypes[i]
         thisarginfo = arginfos[i-arg_start]
-        if thisarginfo === nothing
+        if thisarginfo === nothing || !thisarginfo.complete
             if def_type isa PartialStruct
                 # def_type.typ <: Tuple is assumed
                 def_argtypes = def_type.fields
@@ -778,7 +778,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                 # See if we can inline this call to `iterate`
                 handle_call!(todo, ir, state1.id, new_stmt, new_info, flag, new_sig, istate)
                 if i != length(thisarginfo.each)
-                    valT = getfield_tfunc(call.rt, Const(1))
+                    valT = getfield_tfunc(OptimizerLattice(), call.rt, Const(1))
                     val_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 1),
                         valT))
@@ -786,7 +786,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                     push!(new_argtypes, valT)
                     state_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 2),
-                        getfield_tfunc(call.rt, Const(2))))
+                        getfield_tfunc(OptimizerLattice(), call.rt, Const(2))))
                     state = Core.svec(state_extracted)
                 end
             end
@@ -839,8 +839,7 @@ end
 # the general resolver for usual and const-prop'ed calls
 function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceResult},
         argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt8,
-        state::InliningState; invokesig::Union{Nothing,Vector{Any}}=nothing,
-        override_effects::Effects = EFFECTS_UNKNOWN′)
+        state::InliningState; invokesig::Union{Nothing,Vector{Any}}=nothing)
     et = InliningEdgeTracker(state.et, invokesig)
 
     #XXX: update_valid_age!(min_valid[1], max_valid[1], sv)
@@ -859,10 +858,6 @@ function resolve_todo(mi::MethodInstance, result::Union{MethodMatch,InferenceRes
             return cached_result
         end
         (; src, effects) = cached_result
-    end
-
-    if override_effects !== EFFECTS_UNKNOWN′
-        effects = override_effects
     end
 
     # the duplicated check might have been done already within `analyze_method!`, but still
@@ -942,8 +937,7 @@ can_inline_typevars(m::MethodMatch, argtypes::Vector{Any}) = can_inline_typevars
 
 function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
-    allow_typevars::Bool, invokesig::Union{Nothing,Vector{Any}}=nothing,
-    override_effects::Effects=EFFECTS_UNKNOWN′)
+    allow_typevars::Bool, invokesig::Union{Nothing,Vector{Any}}=nothing)
     method = match.method
     spec_types = match.spec_types
 
@@ -973,13 +967,12 @@ function analyze_method!(match::MethodMatch, argtypes::Vector{Any},
     mi = specialize_method(match; preexisting=true) # Union{Nothing, MethodInstance}
     if mi === nothing
         et = InliningEdgeTracker(state.et, invokesig)
-        effects = override_effects
-        effects === EFFECTS_UNKNOWN′ && (effects = info_effects(nothing, match, state))
+        effects = info_effects(nothing, match, state)
         return compileable_specialization(match, effects, et, info;
             compilesig_invokes=state.params.compilesig_invokes)
     end
 
-    return resolve_todo(mi, match, argtypes, info, flag, state; invokesig, override_effects)
+    return resolve_todo(mi, match, argtypes, info, flag, state; invokesig)
 end
 
 function retrieve_ir_for_inlining(mi::MethodInstance, src::Array{UInt8, 1})
@@ -1026,7 +1019,7 @@ rewrite_invoke_exprargs!(expr::Expr) = (expr.args = invoke_rewrite(expr.args); e
 
 function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::OptimizationParams)
     if isa(typ, Const) && (v = typ.val; isa(v, SimpleVector))
-        length(v) > params.MAX_TUPLE_SPLAT && return false
+        length(v) > params.max_tuple_splat && return false
         for p in v
             is_inlineable_constant(p) || return false
         end
@@ -1039,26 +1032,27 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
     end
     isa(typ, DataType) || return false
     if typ.name === Tuple.name
-        return !isvatuple(typ) && length(typ.parameters) <= params.MAX_TUPLE_SPLAT
+        return !isvatuple(typ) && length(typ.parameters) <= params.max_tuple_splat
     else
         return false
     end
 end
 
 function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt))
-    nf = nfields_tfunc(rt)
+    𝕃ₒ = OptimizerLattice()
+    nf = nfields_tfunc(𝕃ₒ, rt)
     if nf isa Const
         eargs = stmt.args
         tup = eargs[2]
         tt = argextype(tup, ir)
-        tnf = nfields_tfunc(tt)
+        tnf = nfields_tfunc(𝕃ₒ, tt)
         # TODO: hoisting this tnf.val === nf.val check into codegen
         # would enable us to almost always do this transform
         if tnf isa Const && tnf.val === nf.val
             n = tnf.val::Int
             new_argexprs = Any[eargs[1]]
             for j = 1:n
-                atype = getfield_tfunc(tt, Const(j))
+                atype = getfield_tfunc(𝕃ₒ, tt, Const(j))
                 new_call = Expr(:call, Core.getfield, tup, j)
                 new_argexpr = insert_node!(ir, idx, NewInstruction(new_call, atype))
                 push!(new_argexprs, new_argexpr)
@@ -1067,7 +1061,7 @@ function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt))
             stmt.args = new_argexprs
         end
     end
-    nothing
+    return nothing
 end
 
 function call_sig(ir::IRCode, stmt::Expr)
@@ -1141,9 +1135,9 @@ function inline_apply!(todo::Vector{Pair{Int,Any}},
         for i = (arg_start + 1):length(argtypes)
             thisarginfo = nothing
             if !is_valid_type_for_apply_rewrite(argtypes[i], state.params)
-                if isa(info, ApplyCallInfo) && info.arginfo[i-arg_start] !== nothing
-                    thisarginfo = info.arginfo[i-arg_start]
-                else
+                isa(info, ApplyCallInfo) || return nothing
+                thisarginfo = info.arginfo[i-arg_start]
+                if thisarginfo === nothing || !thisarginfo.complete
                     return nothing
                 end
             end
@@ -1178,7 +1172,6 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     end
     result = info.result
     invokesig = sig.argtypes
-    override_effects = EFFECTS_UNKNOWN′
     if isa(result, ConcreteResult)
         item = concrete_result_item(result, state, info; invokesig)
     else
@@ -1187,12 +1180,12 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
             mi = result.result.linfo
             validate_sparams(mi.sparam_vals) || return nothing
             if argtypes_to_type(argtypes) <: mi.def.sig
-                item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig, override_effects)
+                item = resolve_todo(mi, result.result, argtypes, info, flag, state; invokesig)
                 handle_single_case!(todo, ir, idx, stmt, item, state.params, true)
                 return nothing
             end
         end
-        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig, override_effects)
+        item = analyze_method!(match, argtypes, info, flag, state; allow_typevars=false, invokesig)
     end
     handle_single_case!(todo, ir, idx, stmt, item, state.params, true)
     return nothing
@@ -1305,7 +1298,6 @@ function handle_any_const_result!(cases::Vector{InliningCase},
     @nospecialize(result), match::MethodMatch, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt8, state::InliningState;
     allow_abstract::Bool, allow_typevars::Bool)
-    override_effects = EFFECTS_UNKNOWN′
     if isa(result, ConcreteResult)
         return handle_concrete_result!(cases, result, state, info)
     end
@@ -1319,7 +1311,7 @@ function handle_any_const_result!(cases::Vector{InliningCase},
         return handle_const_prop_result!(cases, result, argtypes, info, flag, state; allow_abstract, allow_typevars)
     else
         @assert result === nothing
-        return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars, override_effects)
+        return handle_match!(cases, match, argtypes, info, flag, state; allow_abstract, allow_typevars)
     end
 end
 
@@ -1450,14 +1442,14 @@ end
 function handle_match!(cases::Vector{InliningCase},
     match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), flag::UInt8,
     state::InliningState;
-    allow_abstract::Bool, allow_typevars::Bool, override_effects::Effects)
+    allow_abstract::Bool, allow_typevars::Bool)
     spec_types = match.spec_types
     allow_abstract || isdispatchtuple(spec_types) || return false
     # We may see duplicated dispatch signatures here when a signature gets widened
     # during abstract interpretation: for the purpose of inlining, we can just skip
     # processing this dispatch candidate (unless unmatched type parameters are present)
     !allow_typevars && _any(case->case.sig === spec_types, cases) && return true
-    item = analyze_method!(match, argtypes, info, flag, state; allow_typevars, override_effects)
+    item = analyze_method!(match, argtypes, info, flag, state; allow_typevars)
     item === nothing && return false
     push!(cases, InliningCase(spec_types, item))
     return true

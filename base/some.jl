@@ -85,6 +85,9 @@ julia> something(nothing, 1)
 julia> something(Some(1), nothing)
 1
 
+julia> something(Some(nothing), 2) === nothing
+true
+
 julia> something(missing, nothing)
 missing
 

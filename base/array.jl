@@ -2730,7 +2730,8 @@ keepat!(a::Vector, m::AbstractVector{Bool}) = _keepat!(a, m)
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-_unique_filter!(pred, update!, state) = function (x)
+_unique_filter!(pred::P, update!::U, state) where {P,U} = function (x)
+    # P, U force specialization
     if pred(x, state)
         update!(state, x)
         true
@@ -2756,7 +2757,7 @@ union!(v::AbstractVector{T}, itrs...) where {T} =
 symdiff!(v::AbstractVector{T}, itrs...) where {T} =
     _grow!(_shrink_filter!(symdiff!(Set{T}(), v, itrs...)), v, itrs)
 
-function _shrink!(shrinker!, v::AbstractVector, itrs)
+function _shrink!(shrinker!::F, v::AbstractVector, itrs) where F
     seen = Set{eltype(v)}()
     filter!(_grow_filter!(seen), v)
     shrinker!(seen, itrs...)
@@ -2768,7 +2769,7 @@ setdiff!(  v::AbstractVector, itrs...) = _shrink!(setdiff!, v, itrs)
 
 vectorfilter(T::Type, f, v) = T[x for x in v if f(x)]
 
-function _shrink(shrinker!, itr, itrs)
+function _shrink(shrinker!::F, itr, itrs) where F
     T = promote_eltype(itr, itrs...)
     keep = shrinker!(Set{T}(itr), itrs...)
     vectorfilter(T, _shrink_filter!(keep), itr)

@@ -188,6 +188,7 @@ Base.fieldcount
 Base.hasfield
 Core.nfields
 Base.isconst
+Base.isfieldatomic
 ```
 
 ### Memory layout

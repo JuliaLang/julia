@@ -722,25 +722,23 @@ function CyclePadding(T::DataType)
     CyclePadding(pad, as)
 end
 
-using .Iterators: Stateful
 @assume_effects :total function array_subpadding(S, T)
-    checked_size = 0
     lcm_size = lcm(sizeof(S), sizeof(T))
-    s, t = Stateful{<:Any, Any}(CyclePadding(S)),
-           Stateful{<:Any, Any}(CyclePadding(T))
+    s, t = CyclePadding(S), CyclePadding(T)
     isempty(t) && return true
     isempty(s) && return false
+    checked_size = 0
+    ps, sstate = iterate(s)   # use of Stateful harms inference and makes this vulnerable to invalidation
+    pad, tstate = iterate(t)
     while checked_size < lcm_size
-        # Take padding in T
-        pad = popfirst!(t)
-        # See if there's corresponding padding in S
         while true
-            ps = peek(s)
+            # See if there's corresponding padding in S
             ps.offset > pad.offset && return false
             intersect(ps, pad) == pad && break
-            popfirst!(s)
+            ps, sstate = iterate(s, sstate)
         end
         checked_size = pad.offset + pad.size
+        pad, tstate = iterate(t, tstate)
     end
     return true
 end

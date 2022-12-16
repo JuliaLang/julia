@@ -24,13 +24,14 @@ end
 """
     Diagonal(V::AbstractVector)
 
-Construct a matrix with `V` as its diagonal.
+Construct a lazy matrix with `V` as its diagonal.
 
-See also [`diag`](@ref), [`diagm`](@ref).
+See also [`UniformScaling`](@ref) for the lazy identity matrix `I`,
+[`diagm`](@ref) to make a dense matrix, and [`diag`](@ref) to extract diagonal elements.
 
 # Examples
 ```jldoctest
-julia> Diagonal([1, 10, 100])
+julia> d = Diagonal([1, 10, 100])
 3×3 Diagonal{$Int, Vector{$Int}}:
  1   ⋅    ⋅
  ⋅  10    ⋅
@@ -40,6 +41,30 @@ julia> diagm([7, 13])
 2×2 Matrix{$Int}:
  7   0
  0  13
+
+julia> ans + I
+2×2 Matrix{Int64}:
+ 8   0
+ 0  14
+
+julia> I(2)
+2×2 Diagonal{Bool, Vector{Bool}}:
+ 1  ⋅
+ ⋅  1
+```
+
+Note that a one-column matrix is not treated like a vector, but instead calls the
+method `Diagonal(A::AbstractMatrix)` which extracts 1-element `diag(A)`:
+
+```jldoctest
+julia> A = transpose([7.0 13.0])
+2×1 transpose(::Matrix{Float64}) with eltype Float64:
+  7.0
+ 13.0
+
+julia> Diagonal(A)
+1×1 Diagonal{Float64, Vector{Float64}}:
+ 7.0
 ```
 """
 Diagonal(V::AbstractVector)
@@ -96,7 +121,7 @@ Construct an uninitialized `Diagonal{T}` of length `n`. See `undef`.
 Diagonal{T}(::UndefInitializer, n::Integer) where T = Diagonal(Vector{T}(undef, n))
 
 similar(D::Diagonal, ::Type{T}) where {T} = Diagonal(similar(D.diag, T))
-similar(::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = zeros(T, dims...)
+similar(D::Diagonal, ::Type{T}, dims::Union{Dims{1},Dims{2}}) where {T} = similar(D.diag, T, dims)
 
 copyto!(D1::Diagonal, D2::Diagonal) = (copyto!(D1.diag, D2.diag); D1)
 
@@ -245,8 +270,12 @@ function (*)(D::Diagonal, V::AbstractVector)
 end
 
 (*)(A::AbstractMatrix, D::Diagonal) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
+(*)(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
 (*)(D::Diagonal, A::AbstractMatrix) =
+    mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
+(*)(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
 rmul!(A::AbstractMatrix, D::Diagonal) = @inline mul!(A, A, D)
