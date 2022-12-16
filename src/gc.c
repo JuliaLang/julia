@@ -3034,7 +3034,7 @@ static void sweep_finalizer_list(arraylist_t *list)
 }
 
 // collector entry point and control
-static _Atomic(uint32_t) jl_gc_disable_counter = 1;
+_Atomic(uint32_t) jl_gc_disable_counter = 1;
 
 JL_DLLEXPORT int jl_gc_enable(int on)
 {
@@ -3601,23 +3601,39 @@ void jl_gc_init(void)
 #endif
 
 #ifdef MMTKHEAP
-    long long heap_size;
-    char* size_def = getenv("MMTK_HEAP_SIZE");
-    char* size_gb = getenv("MMTK_HEAP_SIZE_G");
+    long long min_heap_size;
+    long long max_heap_size;
+    char* min_size_def = getenv("MMTK_MIN_HSIZE");
+    char* min_size_gb = getenv("MMTK_MIN_HSIZE_G");
 
-    if (size_def != NULL) {
+    char* max_size_def = getenv("MMTK_MAX_HSIZE");
+    char* max_size_gb = getenv("MMTK_MAX_HSIZE_G");
+
+    if (min_size_def != NULL) {
         char *p;
-        double size = strtod(size_def, &p);
-        heap_size = (long) 1024 * 1024 * size;
-    } else if (size_gb != NULL) {
+        double min_size = strtod(min_size_def, &p);
+        min_heap_size = (long) 1024 * 1024 * min_size;
+    } else if (min_size_gb != NULL) {
         char *p;
-        double size = strtod(size_gb, &p);
-        heap_size = (long) 1024 * 1024 * 1024 * size;
+        double min_size = strtod(min_size_gb, &p);
+        min_heap_size = (long) 1024 * 1024 * 1024 * min_size;
     } else {
-        heap_size = uv_get_free_memory() > 1024 * 1024 * 1024 * (long) 6 ? 1024 * 1024 * 1024 * (long) 6 : uv_get_free_memory() / 10 * 70;
+        min_heap_size = default_collect_interval;
     }
 
-    gc_init(heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t))); // currently set as 6GB or 70% the free memory in the system
+    if (max_size_def != NULL) {
+        char *p;
+        double max_size = strtod(max_size_def, &p);
+        max_heap_size = (long) 1024 * 1024 * max_size;
+    } else if (max_size_gb != NULL) {
+        char *p;
+        double max_size = strtod(max_size_gb, &p);
+        max_heap_size = (long) 1024 * 1024 * 1024 * max_size;
+    } else {
+        max_heap_size = uv_get_free_memory() * 70 / 100;
+    }
+
+    gc_init(min_heap_size, max_heap_size, &mmtk_upcalls, (sizeof(jl_taggedvalue_t))); // currently set as 6GB or 70% the free memory in the system
 #endif
     jl_gc_mark_sp_t sp = {NULL, NULL, NULL, NULL};
     gc_mark_loop(NULL, sp);

@@ -487,7 +487,7 @@ STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) JL_NOTSAFEPOIN
 #ifndef MMTKHEAP
     if (__unlikely(jl_astaggedvalue(bnd)->bits.gc == 3 &&
                    (jl_astaggedvalue(val)->bits.gc & 1) == 0))
-        jl_gc_queue_binding(bnd);
+        gc_queue_binding(bnd);
 #endif
 }
 
