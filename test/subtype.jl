@@ -2211,7 +2211,7 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 # issue 24333
 @test Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T
 @test Type{Union{Pair,Cvoid}} <: Type{Union{T,Cvoid}} where T
-@test Type{Union{Val{Val{T}} where {T},Cvoid}} <: Type{Union{T,Cvoid}} where T
+@test only(intersection_env(Val{Union{Val{Val{T}} where {T},Int}}, Val{Union{T,Int}} where T)[2]) === Val{Val{T}} where {T}
 
 # issue 47654
 Vec47654{T} = Union{AbstractVector{T}, AbstractVector{Union{T,Nothing}}}

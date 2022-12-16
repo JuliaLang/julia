@@ -344,6 +344,13 @@ static int in_union(jl_value_t *u, jl_value_t *x) JL_NOTSAFEPOINT
     return in_union(((jl_uniontype_t*)u)->a, x) || in_union(((jl_uniontype_t*)u)->b, x);
 }
 
+static int typevar_in_union(jl_value_t *u) JL_NOTSAFEPOINT
+{
+    if (jl_is_typevar(u)) return 1;
+    if (!jl_is_uniontype(u)) return 0;
+    return typevar_in_union(((jl_uniontype_t*)u)->a) || typevar_in_union(((jl_uniontype_t*)u)->b);
+}
+
 static int obviously_disjoint(jl_value_t *a, jl_value_t *b, int specificity)
 {
     if (a == b || a == (jl_value_t*)jl_any_type || b == (jl_value_t*)jl_any_type)
@@ -1172,7 +1179,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
     if (jl_is_uniontype(y)) {
         if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
             return 1;
-        if (jl_is_unionall(x))
+        if (jl_is_unionall(x) && !typevar_in_union(y))
             return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
         int ui = 1;
         if (jl_is_typevar(x)) {
