@@ -568,7 +568,7 @@ static void gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f) JL_NOTSAFEPOINT
 {
 #ifndef MMTKHEAP
-    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
+    gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
 #else
     register_finalizer(v, f, 1);
 #endif
