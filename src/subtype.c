@@ -733,12 +733,7 @@ static jl_value_t *fix_inferred_var_bound(jl_tvar_t *var, jl_value_t *ty JL_MAYB
     return ty;
 }
 
-static int var_occurs_inside_skip(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv, jl_value_t *skip) JL_NOTSAFEPOINT;
-
-static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv) JL_NOTSAFEPOINT
-{
-    return var_occurs_inside_skip(v, var, inside, want_inv, NULL);
-}
+static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv) JL_NOTSAFEPOINT;
 
 typedef int (*tvar_callback)(void*, int8_t, jl_stenv_t *, int);
 
@@ -818,14 +813,13 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
 
     jl_varbinding_t *btemp = e->vars;
     if (vb.lb != vb.ub) {
-        jl_value_t *skip = jl_unwrap_unionall(u->body);
         while (btemp != NULL) {
             jl_value_t *vu = btemp->ub;
             jl_value_t *vl = btemp->lb;
             // TODO: this takes a significant amount of time
             if (btemp->depth0 != vb.depth0 &&
-                ((vu != (jl_value_t*)vb.var && btemp->var->ub != vu && var_occurs_inside_skip(vu, vb.var, 0, 1, skip)) ||
-                 (vl != (jl_value_t*)vb.var && btemp->var->lb != vl && var_occurs_inside_skip(vl, vb.var, 0, 1, skip)))) {
+                ((vu != (jl_value_t*)vb.var && btemp->var->ub != vu && var_occurs_inside(vu, vb.var, 0, 1)) ||
+                 (vl != (jl_value_t*)vb.var && btemp->var->lb != vl && var_occurs_inside(vl, vb.var, 0, 1)))) {
                 ans = 0; break;
             }
             btemp = btemp->prev;
@@ -2432,29 +2426,29 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
 // test whether `var` occurs inside constructors. `want_inv` tests only inside
 // invariant constructors. `inside` means we are currently inside a constructor of the
 // requested kind.
-static int var_occurs_inside_skip(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv, jl_value_t *skip) JL_NOTSAFEPOINT
+static int var_occurs_inside(jl_value_t *v, jl_tvar_t *var, int inside, int want_inv) JL_NOTSAFEPOINT
 {
-    if (v == (jl_value_t*)var)
+    if (v == (jl_value_t*)var) {
         return inside;
-    if (jl_is_uniontype(v))
-        return var_occurs_inside_skip(((jl_uniontype_t*)v)->a, var, inside, want_inv, skip) ||
-            var_occurs_inside_skip(((jl_uniontype_t*)v)->b, var, inside, want_inv, skip);
-    if (skip && in_union(skip, v))
-        return 0;
+    }
+    else if (jl_is_uniontype(v)) {
+        return var_occurs_inside(((jl_uniontype_t*)v)->a, var, inside, want_inv) ||
+            var_occurs_inside(((jl_uniontype_t*)v)->b, var, inside, want_inv);
+    }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
         if (ua->var == var)
             return 0;
-        if (var_occurs_inside_skip(ua->var->lb, var, inside, want_inv, skip) || var_occurs_inside_skip(ua->var->ub, var, inside, want_inv, skip))
+        if (var_occurs_inside(ua->var->lb, var, inside, want_inv) || var_occurs_inside(ua->var->ub, var, inside, want_inv))
             return 1;
-        return var_occurs_inside_skip(ua->body, var, inside, want_inv, skip);
+        return var_occurs_inside(ua->body, var, inside, want_inv);
     }
     else if (jl_is_vararg(v)) {
         jl_vararg_t *vm = (jl_vararg_t*)v;
         if (vm->T) {
-            if (var_occurs_inside_skip(vm->T, var, inside || !want_inv, want_inv, skip))
+            if (var_occurs_inside(vm->T, var, inside || !want_inv, want_inv))
                 return 1;
-            return vm->N && var_occurs_inside_skip(vm->N, var, 1, want_inv, skip);
+            return vm->N && var_occurs_inside(vm->N, var, 1, want_inv);
         }
     }
     else if (jl_is_datatype(v)) {
@@ -2462,7 +2456,7 @@ static int var_occurs_inside_skip(jl_value_t *v, jl_tvar_t *var, int inside, int
         int istuple = jl_is_tuple_type(v);
         for (i=0; i < jl_nparams(v); i++) {
             int ins_i = inside || !want_inv || !istuple;
-            if (var_occurs_inside_skip(jl_tparam(v,i), var, ins_i, want_inv, skip))
+            if (var_occurs_inside(jl_tparam(v,i), var, ins_i, want_inv))
                 return 1;
         }
     }
