@@ -48,7 +48,8 @@ impl Scanning<JuliaVM> for VMScanning {
 
         // roots may contain mmtk objects
         for obj in roots.drain() {
-            roots_to_scan.push(unsafe { obj.to_object_reference() });
+            let obj_ref = ObjectReference::from_raw_address(obj);
+            roots_to_scan.push(obj_ref);
         }
 
         factory.create_process_node_roots_work(roots_to_scan);
@@ -80,7 +81,7 @@ impl Scanning<JuliaVM> for VMScanning {
 }
 
 pub fn process_object(object: ObjectReference, closure: &mut dyn EdgeVisitor<JuliaVMEdge>) {
-    let addr = object.to_address();
+    let addr = object.to_raw_address();
 
     #[cfg(feature = "scan_obj_c")]
     {

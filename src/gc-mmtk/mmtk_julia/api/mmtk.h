@@ -107,7 +107,7 @@ typedef struct {
 /**
  * Misc
  */
-extern void gc_init(long long heap_size, Julia_Upcalls *calls, long header_size);
+extern void gc_init(long long min_heap_size, long long max_heap_size, Julia_Upcalls *calls, long header_size);
 extern bool will_never_move(void* object);
 extern bool process(char* name, char* value);
 extern void scan_region(void);

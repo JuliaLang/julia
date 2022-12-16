@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLockWriteGuard;
 
 #[no_mangle]
-pub extern "C" fn gc_init(heap_size: usize, calls: *const Julia_Upcalls, header_size: usize) {
+pub extern "C" fn gc_init(min_heap_size: usize, max_heap_size: usize, calls: *const Julia_Upcalls, header_size: usize) {
     unsafe {
         UPCALLS = calls;
         set_julia_obj_header_size(header_size);
@@ -54,8 +54,9 @@ pub extern "C" fn gc_init(heap_size: usize, calls: *const Julia_Upcalls, header_
         if let Some(plan) = force_plan {
             builder.options.plan.set(plan);
         }
-        let success = builder.options.heap_size.set(heap_size);
-        assert!(success, "Failed to set heap size to {}", heap_size);
+        let success = builder.options.gc_trigger.set(mmtk::util::options::GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size));
+        // let success = builder.options.heap_size.set(heap_size);
+        assert!(success, "Failed to set heap size to {}-{}", min_heap_size, max_heap_size);
         let success = builder.options.no_reference_types.set(false);
         assert!(success, "Failed to set no_reference_types to false");
     }
@@ -102,7 +103,7 @@ pub extern "C" fn add_mutator_ref(mutator_ref: ObjectReference) {
 
 #[no_mangle]
 pub extern "C" fn destroy_mutator(mutator: *mut Mutator<JuliaVM>) {
-    memory_manager::destroy_mutator(unsafe { Box::from_raw(mutator) })
+    memory_manager::destroy_mutator(unsafe { &mut *mutator })
 }
 
 #[no_mangle]

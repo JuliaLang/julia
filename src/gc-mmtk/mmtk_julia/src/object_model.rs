@@ -51,6 +51,8 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         VMLocalForwardingBitsSpec::in_header(0);
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = MARKING_METADATA_SPEC;
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = LOS_METADATA_SPEC;
+    const UNIFIED_OBJECT_REFERENCE_ADDRESS: bool = false;
+    const OBJECT_REF_OFFSET_LOWER_BOUND: isize = 0;
 
     fn copy(
         _from: ObjectReference,
@@ -95,17 +97,29 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
         unimplemented!()
     }
 
-    fn object_start_ref(object: ObjectReference) -> Address {
+    #[inline(always)]
+    fn ref_to_object_start(object: ObjectReference) -> Address {
         let res = if is_object_in_los(&object) {
-            object.to_address() - 48
+            object.to_raw_address() - 48
         } else {
             unsafe { ((*UPCALLS).get_object_start_ref)(object) }
         };
         res
     }
 
+    #[inline(always)]
     fn ref_to_address(object: ObjectReference) -> Address {
-        object.to_address()
+        object.to_raw_address()
+    }
+
+    #[inline(always)]
+    fn address_to_ref(address: Address) -> ObjectReference {
+        ObjectReference::from_raw_address(address)
+    }
+
+    #[inline(always)]
+    fn ref_to_header(object: ObjectReference) -> Address {
+        object.to_raw_address()
     }
 
     fn dump_object(_object: ObjectReference) {
@@ -114,7 +128,7 @@ impl ObjectModel<JuliaVM> for VMObjectModel {
 }
 
 pub fn is_object_in_los(object: &ObjectReference) -> bool {
-    (*object).to_address().as_usize() > 0x60000000000
+    (*object).to_raw_address().as_usize() > 0x60000000000
 }
 
 #[no_mangle]

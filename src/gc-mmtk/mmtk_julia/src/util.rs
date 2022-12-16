@@ -63,7 +63,7 @@ pub extern "C" fn add_object_to_mmtk_roots(addr: Address) {
 
 #[inline(always)]
 pub fn store_obj_size(obj: ObjectReference, size: usize) {
-    let addr_size = obj.to_address() - 16;
+    let addr_size = obj.to_raw_address() - 16;
     unsafe {
         addr_size.store::<u64>(size as u64);
     }
@@ -71,7 +71,7 @@ pub fn store_obj_size(obj: ObjectReference, size: usize) {
 
 #[no_mangle]
 pub extern "C" fn store_obj_size_c(obj: ObjectReference, size: usize) {
-    let addr_size = obj.to_address() - 16;
+    let addr_size = obj.to_raw_address() - 16;
     unsafe {
         addr_size.store::<u64>(size as u64);
     }
@@ -80,7 +80,7 @@ pub extern "C" fn store_obj_size_c(obj: ObjectReference, size: usize) {
 #[no_mangle]
 pub extern "C" fn get_obj_size(obj: ObjectReference) -> usize {
     unsafe {
-        let addr_size = obj.to_address() - 2 * JULIA_HEADER_SIZE;
+        let addr_size = obj.to_raw_address() - 2 * JULIA_HEADER_SIZE;
         addr_size.load::<u64>() as usize
     }
 }

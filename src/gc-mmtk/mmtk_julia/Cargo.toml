@@ -23,12 +23,13 @@ built = "*"
 [dependencies]
 libc = "0.2"
 lazy_static = "1.1"
-mmtk = { git = "https://github.com/udesou/mmtk-core.git", branch="mmtk-julia-v1.8.2", version = "*" }
+mmtk = { git = "https://github.com/udesou/mmtk-core.git", branch="v1.8.2-variable-heap", version = "*" }
 # mmtk = { git = "https://github.com/mmtk/mmtk-core.git", branch="master", version = "*" }
 # mmtk = { path = "/home/eduardo/mmtk-core", version="*" }
 log = {version = "0.4", features = ["max_level_trace", "release_max_level_off"] }
 enum-map = "=2.1"
 atomic = "0.4.6"
+chrono = "*"
 
 # ykstackmaps = { git = "https://github.com/udesou/ykstackmaps.git", branch = "udesou-master", version = "*" }
 

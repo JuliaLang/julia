@@ -318,7 +318,7 @@ fn read_stack(addr: Address, offset: usize, lb: usize, ub: usize) -> Address {
 #[inline(always)]
 pub fn process_edge(closure: &mut dyn EdgeVisitor<JuliaVMEdge>, slot: Address) {
     let internal_obj: ObjectReference = unsafe { slot.load() };
-    let internal_obj_addr = internal_obj.to_address();
+    let internal_obj_addr = internal_obj.to_raw_address();
     if internal_obj_addr.is_zero() {
         return;
     }
@@ -345,7 +345,7 @@ pub fn process_offset_edge(
     offset: usize,
 ) {
     let internal_obj: ObjectReference = unsafe { slot.load() };
-    let internal_obj_addr = internal_obj.to_address();
+    let internal_obj_addr = internal_obj.to_raw_address();
     if internal_obj_addr.is_zero() {
         return;
     }

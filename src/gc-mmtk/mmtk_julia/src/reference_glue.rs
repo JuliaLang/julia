@@ -25,7 +25,7 @@ impl Finalizable for JuliaFinalizableObject {
     fn keep_alive<E: ProcessEdgesWork>(&mut self, trace: &mut E) {
         self.set_reference(trace.trace_object(self.get_reference()));
         if crate::scanning::object_is_managed_by_mmtk(self.1.as_usize()) {
-            trace.trace_object(unsafe { self.1.to_object_reference() });
+            trace.trace_object(ObjectReference::from_raw_address(self.1));
         }
     }
 }
@@ -36,29 +36,29 @@ impl ReferenceGlue<JuliaVM> for VMReferenceGlue {
     type FinalizableType = JuliaFinalizableObject;
     fn set_referent(reference: ObjectReference, referent: ObjectReference) {
         unsafe {
-            let mut reff = reference.to_address().to_mut_ptr::<mmtk_jl_weakref_t>();
-            let referent_raw = referent.to_address().to_mut_ptr::<mmtk_jl_value_t>();
+            let mut reff = reference.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
+            let referent_raw = referent.to_raw_address().to_mut_ptr::<mmtk_jl_value_t>();
             (*reff).value = referent_raw;
         }
     }
 
     fn clear_referent(new_reference: ObjectReference) {
         Self::set_referent(new_reference, unsafe {
-            Address::from_mut_ptr(jl_nothing).to_object_reference()
+            ObjectReference::from_raw_address(Address::from_mut_ptr(jl_nothing))
         });
     }
 
     fn get_referent(object: ObjectReference) -> ObjectReference {
         let referent;
         unsafe {
-            let reff = object.to_address().to_mut_ptr::<mmtk_jl_weakref_t>();
-            referent = Address::from_mut_ptr((*reff).value).to_object_reference();
+            let reff = object.to_raw_address().to_mut_ptr::<mmtk_jl_weakref_t>();
+            referent = ObjectReference::from_raw_address(Address::from_mut_ptr((*reff).value));
         }
         referent
     }
 
     fn is_referent_cleared(referent: ObjectReference) -> bool {
-        unsafe { referent.to_address().to_mut_ptr() == jl_nothing }
+        unsafe { referent.to_raw_address().to_mut_ptr() == jl_nothing }
     }
 
     fn enqueue_references(_references: &[ObjectReference], _tls: VMWorkerThread) {}

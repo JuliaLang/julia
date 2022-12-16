@@ -65,11 +65,11 @@ impl Edge for OffsetEdge {
     fn load(&self) -> ObjectReference {
         let middle = unsafe { (*self.slot_addr).load(atomic::Ordering::Relaxed) };
         let begin = middle - self.offset;
-        unsafe { begin.to_object_reference() }
+        ObjectReference::from_raw_address(begin)
     }
 
     fn store(&self, object: ObjectReference) {
-        let begin = object.to_address();
+        let begin = object.to_raw_address();
         let middle = begin + self.offset;
         unsafe { (*self.slot_addr).store(middle, atomic::Ordering::Relaxed) }
     }
