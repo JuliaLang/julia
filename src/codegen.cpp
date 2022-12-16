@@ -842,7 +842,12 @@ static const auto jl_alloc_obj_func = new JuliaFunction{
     },
     [](LLVMContext &C) { return AttributeList::get(C,
             AttributeSet::get(C, makeArrayRef({Attribute::getWithAllocSizeArgs(C, 1, None)})), // returns %1 bytes
-            Attributes(C, {Attribute::NoAlias, Attribute::NonNull}),
+
+            Attributes(C, {Attribute::NoAlias, Attribute::NonNull,
+#if JL_LLVM_VERSION >= 150000
+            Attribute::get(C, Attribute::AllocKind, AllocFnKind::Alloc | AllocFnKind::Uninitialized | AllocFnKind::Aligned),
+#endif
+            }),
             None); },
 };
 static const auto jl_newbits_func = new JuliaFunction{
