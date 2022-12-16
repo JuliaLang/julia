@@ -348,7 +348,46 @@ The subscripted `rootsᵢ`, `graphᵢ` and `pathsᵢ` variables correspond to th
 2. Packages in non-primary environments can end up using incompatible versions of their dependencies even if their own environments are entirely compatible. This can happen when one of their dependencies is shadowed by a version in an earlier environment in the stack (either by graph or path, or both).
 
 Since the primary environment is typically the environment of a project you're working on, while environments later in the stack contain additional tools, this is the right trade-off: it's better to break your development tools but keep the project working. When such incompatibilities occur, you'll typically want to upgrade your dev tools to versions that are compatible with the main project.
+### "Extension"s
 
+An "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of a Project file. Extensions are defined under the `[extensions]` section in the project file:
+
+```toml
+name = "MyPackage"
+
+[weakdeps]
+ExtDep = "c9a23..." # uuid
+OtherExtDep = "862e..." # uuid
+
+[extensions]
+BarExt = ["ExtDep", "OtherExtDep"]
+FooExt = "ExtDep"
+...
+```
+
+The keys under `extensions` are the name of the extensions.
+They are loaded when all the packages on the right hand side (the extension dependencies) of that extension are loaded.
+If an extension only has one extension dependency the list of extension dependencies can be written as just a string for brevity.
+The location for the entry point of the extension is either in `ext/FooExt.jl` or `ext/FooExt/FooExt.jl` for
+extension `FooExt`.
+The content of an extension is often structured as:
+
+```
+module FooExt
+
+# Load main package and extension dependencies
+using MyPackage, ExtDep
+
+# Extend functionality in main package with types from the extension dependencies
+MyPackage.func(x::ExtDep.SomeStruct) = ...
+
+end
+```
+
+When a package with extensions is added to an environment, the `weakdeps` and `extensions` sections
+are stored in the manifest file in the section for that package. The dependency lookup rules for
+a package are the same as for its "parent" except that the listed extension dependencies are also considered as
+dependencies.
 ### Package/Environment Preferences
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.

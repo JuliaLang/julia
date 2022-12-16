@@ -85,7 +85,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
     else {
         std::string name = "ccalllib_";
         name += llvm::sys::path::filename(f_lib);
-        name += std::to_string(globalUniqueGeneratedNames++);
+        name += std::to_string(jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1));
         runtime_lib = true;
         auto &libgv = ctx.emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
@@ -105,7 +105,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
         std::string name = "ccall_";
         name += f_name;
         name += "_";
-        name += std::to_string(globalUniqueGeneratedNames++);
+        name += std::to_string(jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1));
         auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
@@ -215,7 +215,7 @@ static Value *runtime_sym_lookup(
         std::string gvname = "libname_";
         gvname += f_name;
         gvname += "_";
-        gvname += std::to_string(globalUniqueGeneratedNames++);
+        gvname += std::to_string(jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1));
         llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), gvname);
@@ -244,7 +244,7 @@ static GlobalVariable *emit_plt_thunk(
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
     std::string fname;
-    raw_string_ostream(fname) << "jlplt_" << f_name << "_" << globalUniqueGeneratedNames++;
+    raw_string_ostream(fname) << "jlplt_" << f_name << "_" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
     Function *plt = Function::Create(functype,
                                      GlobalVariable::ExternalLinkage,
                                      fname, M);
@@ -858,7 +858,7 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     // Make sure to find a unique name
     std::string ir_name;
     while (true) {
-        raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUniqueGeneratedNames++;
+        raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << jl_atomic_fetch_add(&globalUniqueGeneratedNames, 1);
         if (jl_Module->getFunction(ir_name) == NULL)
             break;
     }

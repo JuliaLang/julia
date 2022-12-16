@@ -564,7 +564,7 @@ function manifest_deps_get(env::String, where::PkgId, name::String)::Union{Nothi
             return PkgId(pkg_uuid, name)
         end
         # look for manifest file and `where` stanza
-        return explicit_manifest_deps_get(project_file, uuid, name)
+        return explicit_manifest_deps_get(project_file, where, name)
     elseif project_file
         # if env names a directory, search it
         return implicit_manifest_deps_get(env, where, name)
@@ -578,7 +578,7 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
         proj = project_file_name_uuid(project_file, pkg.name)
         if proj == pkg
             # if `pkg` matches the project, return the project itself
-            return project_file_path(project_file, pkg.name)
+            return project_file_path(project_file)
         end
         # look for manifest file and `where` stanza
         return explicit_manifest_uuid_path(project_file, pkg)
@@ -598,7 +598,7 @@ function project_file_name_uuid(project_file::String, name::String)::PkgId
     return PkgId(uuid, name)
 end
 
-function project_file_path(project_file::String, name::String)
+function project_file_path(project_file::String)
     d = parsed_toml(project_file)
     joinpath(dirname(project_file), get(d, "path", "")::String)
 end
@@ -716,7 +716,7 @@ end
 
 # find `where` stanza and return the PkgId for `name`
 # return `nothing` if it did not find `where` (indicating caller should continue searching)
-function explicit_manifest_deps_get(project_file::String, where::UUID, name::String)::Union{Nothing,PkgId}
+function explicit_manifest_deps_get(project_file::String, where::PkgId, name::String)::Union{Nothing,PkgId}
     manifest_file = project_file_manifest_path(project_file)
     manifest_file === nothing && return nothing # manifest not found--keep searching LOAD_PATH
     d = get_deps(parsed_toml(manifest_file))
@@ -728,22 +728,51 @@ function explicit_manifest_deps_get(project_file::String, where::UUID, name::Str
             entry = entry::Dict{String, Any}
             uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
             uuid === nothing && continue
-            if UUID(uuid) === where
+            if UUID(uuid) === where.uuid
                 found_where = true
                 # deps is either a list of names (deps = ["DepA", "DepB"]) or
                 # a table of entries (deps = {"DepA" = "6ea...", "DepB" = "55d..."}
                 deps = get(entry, "deps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
-                deps === nothing && continue
                 if deps isa Vector{String}
                     found_name = name in deps
                     break
-                else
+                elseif deps isa Dict{String, Any}
                     deps = deps::Dict{String, Any}
                     for (dep, uuid) in deps
                         uuid::String
                         if dep === name
                             return PkgId(UUID(uuid), name)
                         end
+                    end
+                end
+            else # Check for extensions
+                extensions = get(entry, "extensions", nothing)
+                if extensions !== nothing
+                    if haskey(extensions, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
+                        found_where = true
+                        if name == dep_name
+                            return PkgId(UUID(uuid), name)
+                        end
+                        exts = extensions[where.name]::Union{String, Vector{String}}
+                        if (exts isa String && name == exts) || (exts isa Vector{String} && name in exts)
+                            weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                            if weakdeps !== nothing
+                                if weakdeps isa Vector{String}
+                                    found_name = name in weakdeps
+                                    break
+                                elseif weakdeps isa Dict{String, Any}
+                                    weakdeps = weakdeps::Dict{String, Any}
+                                    for (dep, uuid) in weakdeps
+                                        uuid::String
+                                        if dep === name
+                                            return PkgId(UUID(uuid), name)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                        # `name` is not an ext, do standard lookup as if this was the parent
+                        return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
                 end
             end
@@ -769,13 +798,28 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
 
     d = get_deps(parsed_toml(manifest_file))
     entries = get(d, pkg.name, nothing)::Union{Nothing, Vector{Any}}
-    entries === nothing && return nothing # TODO: allow name to mismatch?
-    for entry in entries
-        entry = entry::Dict{String, Any}
-        uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
-        uuid === nothing && continue
-        if UUID(uuid) === pkg.uuid
-            return explicit_manifest_entry_path(manifest_file, pkg, entry)
+    if entries !== nothing
+        for entry in entries
+            entry = entry::Dict{String, Any}
+            uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
+            uuid === nothing && continue
+            if UUID(uuid) === pkg.uuid
+                return explicit_manifest_entry_path(manifest_file, pkg, entry)
+            end
+        end
+    end
+    # Extensions
+    for (name, entries) in d
+        entries = entries::Vector{Any}
+        for entry in entries
+            uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
+            extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+            if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+                p = normpath(dirname(locate_package(PkgId(UUID(uuid), name))), "..")
+                extfiledir = joinpath(p, "ext", pkg.name, pkg.name * ".jl")
+                isfile(extfiledir) && return extfiledir
+                return joinpath(p, "ext", pkg.name * ".jl")
+            end
         end
     end
     return nothing
@@ -958,6 +1002,7 @@ end
 function run_package_callbacks(modkey::PkgId)
     assert_havelock(require_lock)
     unlock(require_lock)
+    run_extension_callbacks()
     try
         for callback in package_callbacks
             invokelatest(callback, modkey)
@@ -971,6 +1016,154 @@ function run_package_callbacks(modkey::PkgId)
     end
     nothing
 end
+
+
+##############
+# Extensions #
+##############
+
+mutable struct ExtensionId
+    const id::PkgId # Could be symbol?
+    const parentid::PkgId
+    const triggers::Vector{PkgId} # What packages have to be loaded for the extension to get loaded
+    triggered::Bool
+    succeeded::Bool
+end
+
+const EXT_DORMITORY = ExtensionId[]
+
+function insert_extension_triggers(pkg::PkgId)
+    pkg.uuid === nothing && return
+    for env in load_path()
+        insert_extension_triggers(env, pkg)
+        break # For now, only insert triggers for packages in the first load_path.
+    end
+end
+
+function insert_extension_triggers(env::String, pkg::PkgId)::Union{Nothing,Missing}
+    project_file = env_project_file(env)
+    if project_file isa String
+        manifest_file = project_file_manifest_path(project_file)
+        manifest_file === nothing && return
+        d = get_deps(parsed_toml(manifest_file))
+        for (dep_name, entries) in d
+            entries::Vector{Any}
+            for entry in entries
+                entry = entry::Dict{String, Any}
+                uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                uuid === nothing && continue
+                if UUID(uuid) == pkg.uuid
+                    weakdeps = get(entry, "weakdeps", nothing)::Union{Nothing, Vector{String}, Dict{String,Any}}
+                    extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+                    extensions === nothing && return
+                    weakdeps === nothing && return
+                    if weakdeps isa Dict{String, Any}
+                        return _insert_extension_triggers(pkg, extensions, weakdeps)
+                    end
+
+                    d_weakdeps = Dict{String, String}()
+                    for (dep_name, entries) in d
+                        dep_name in weakdeps || continue
+                        entries::Vector{Any}
+                        if length(entries) != 1
+                            error("expected a single entry for $(repr(name)) in $(repr(project_file))")
+                        end
+                        entry = first(entries)::Dict{String, Any}
+                        uuid = get(entry, "uuid", nothing)::Union{String, Nothing}
+                        d_weakdeps[dep_name] = uuid
+                    end
+                    @assert length(d_weakdeps) == length(weakdeps)
+                    return _insert_extension_triggers(pkg, extensions, d_weakdeps)
+                end
+            end
+        end
+    end
+    return nothing
+end
+
+function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, <:Any}, weakdeps::Dict{String, <:Any})
+    for (ext::String, triggers::Union{String, Vector{String}}) in extensions
+        triggers isa String && (triggers = [triggers])
+        triggers_id = PkgId[]
+        id = PkgId(uuid5(parent.uuid, ext), ext)
+        for trigger in triggers
+            # TODO: Better error message if this lookup fails?
+            uuid_trigger = UUID(weakdeps[trigger]::String)
+            push!(triggers_id, PkgId(uuid_trigger, trigger))
+        end
+        gid = ExtensionId(id, parent, triggers_id, false, false)
+        push!(EXT_DORMITORY, gid)
+    end
+end
+
+function run_extension_callbacks(; force::Bool=false)
+    try
+        # TODO, if `EXT_DORMITORY` becomes very long, do something smarter
+        for extid in EXT_DORMITORY
+            extid.succeeded && continue
+            !force && extid.triggered && continue
+            if all(x -> haskey(Base.loaded_modules, x), extid.triggers)
+                ext_not_allowed_load = nothing
+                extid.triggered = true
+                # It is possible that some of the triggers were loaded in an environment
+                # below the one of the parent. This will cause a load failure when the
+                # pkg ext tries to load the triggers. Therefore, check this first
+                # before loading the pkg ext.
+                for trigger in extid.triggers
+                    pkgenv = Base.identify_package_env(extid.id, trigger.name)
+                    if pkgenv === nothing
+                        ext_not_allowed_load = trigger
+                        break
+                    else
+                        pkg, env = pkgenv
+                        path = Base.locate_package(pkg, env)
+                        if path === nothing
+                            ext_not_allowed_load = trigger
+                            break
+                        end
+                    end
+                end
+                if ext_not_allowed_load !== nothing
+                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) not loaded due to \
+                            $(ext_not_allowed_load.name) loaded in environment lower in load path"
+                else
+                    require(extid.id)
+                    @debug "Extension $(extid.id.name) of $(extid.parentid.name) loaded"
+                end
+                extid.succeeded = true
+            end
+        end
+    catch
+        # Try to continue loading if loading an extension errors
+        errs = current_exceptions()
+        @error "Error during loading of extension" exception=errs
+    end
+    nothing
+end
+
+"""
+    load_extensions()
+
+Loads all the (not yet loaded) extensions that have their extension-dependencies loaded.
+This is used in cases where the automatic loading of an extension failed
+due to some problem with the extension. Instead of restarting the Julia session,
+the extension can be fixed, and this function run.
+"""
+retry_load_extensions() = run_extension_callbacks(; force=true)
+
+"""
+    get_extension(parent::Module, extension::Symbol)
+
+Return the module for `extension` of `parent` or return `nothing` if the extension is not loaded.
+"""
+get_extension(parent::Module, ext::Symbol) = get_extension(PkgId(parent), ext)
+function get_extension(parentid::PkgId, ext::Symbol)
+    parentid.uuid === nothing && return nothing
+    extid = PkgId(uuid5(parentid.uuid, string(ext)), string(ext))
+    return get(loaded_modules, extid, nothing)
+end
+
+# End extensions
 
 # loads a precompile cache file, after checking stale_cachefile tests
 function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
@@ -995,6 +1188,7 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
                 notify(loading, loaded, all=true)
             end
             if loaded isa Module
+                insert_extension_triggers(modkey)
                 run_package_callbacks(modkey)
             end
         end
@@ -1035,6 +1229,7 @@ function _tryrequire_from_serialized(modkey::PkgId, path::String, sourcepath::St
                 notify(loading, loaded, all=true)
             end
             if loaded isa Module
+                insert_extension_triggers(modkey)
                 run_package_callbacks(modkey)
             end
         end
@@ -1239,7 +1434,7 @@ function require(into::Module, mod::Symbol)
     LOADING_CACHE[] = LoadingCache()
     try
         uuidkey_env = identify_package_env(into, String(mod))
-        # Core.println("require($(PkgId(into)), $mod) -> $uuidkey from env \"$env\"")
+        # Core.println("require($(PkgId(into)), $mod) -> $uuidkey_env")
         if uuidkey_env === nothing
             where = PkgId(into)
             if where.uuid === nothing
@@ -1279,14 +1474,6 @@ function require(into::Module, mod::Symbol)
     end
 end
 
-mutable struct PkgOrigin
-    path::Union{String,Nothing}
-    cachepath::Union{String,Nothing}
-    version::Union{VersionNumber,Nothing}
-end
-PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
-const pkgorigins = Dict{PkgId,PkgOrigin}()
-
 require(uuidkey::PkgId) = @lock require_lock _require_prelocked(uuidkey)
 
 function _require_prelocked(uuidkey::PkgId, env=nothing)
@@ -1297,6 +1484,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
             error("package `$(uuidkey.name)` did not define the expected \
                   module `$(uuidkey.name)`, check for typos in package module name")
         end
+        insert_extension_triggers(uuidkey)
         # After successfully loading, notify downstream consumers
         run_package_callbacks(uuidkey)
     else
@@ -1304,6 +1492,14 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
     end
     return newm
 end
+
+mutable struct PkgOrigin
+    path::Union{String,Nothing}
+    cachepath::Union{String,Nothing}
+    version::Union{VersionNumber,Nothing}
+end
+PkgOrigin() = PkgOrigin(nothing, nothing, nothing)
+const pkgorigins = Dict{PkgId,PkgOrigin}()
 
 const loaded_modules = Dict{PkgId,Module}()
 const loaded_modules_order = Vector{Module}()
@@ -1479,6 +1675,7 @@ function _require_from_serialized(uuidkey::PkgId, path::String)
     set_pkgorigin_version_path(uuidkey, nothing)
     newm = _tryrequire_from_serialized(uuidkey, path)
     newm isa Module || throw(newm)
+    insert_extension_triggers(uuidkey)
     # After successfully loading, notify downstream consumers
     run_package_callbacks(uuidkey)
     return newm
@@ -1711,6 +1908,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, concrete_d
               "w", stdout)
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
+        empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
         Base.include_package_for_output($(pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $deps, $(repr(source_path(nothing))))
         """)

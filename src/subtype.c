@@ -2882,48 +2882,14 @@ static void flip_vars(jl_stenv_t *e)
 // intersection where xd nominally inherits from yd
 static jl_value_t *intersect_sub_datatype(jl_datatype_t *xd, jl_datatype_t *yd, jl_stenv_t *e, int R, int param)
 {
+    // attempt to populate additional constraints into `e`
+    // if that attempt fails, then return bottom
+    // otherwise return xd (finish_unionall will later handle propagating those constraints)
     jl_value_t *isuper = R ? intersect((jl_value_t*)yd, (jl_value_t*)xd->super, e, param) :
                              intersect((jl_value_t*)xd->super, (jl_value_t*)yd, e, param);
-    if (isuper == jl_bottom_type) return jl_bottom_type;
-    if (jl_nparams(xd) == 0 || jl_nparams(xd->super) == 0 || !jl_has_free_typevars((jl_value_t*)xd))
-        return (jl_value_t*)xd;
-    jl_value_t *super_pattern=NULL;
-    JL_GC_PUSH2(&isuper, &super_pattern);
-    jl_value_t *wrapper = xd->name->wrapper;
-    super_pattern = jl_rewrap_unionall((jl_value_t*)((jl_datatype_t*)jl_unwrap_unionall(wrapper))->super,
-                                       wrapper);
-    int envsz = jl_subtype_env_size(super_pattern);
-    jl_value_t *ii = jl_bottom_type;
-    {
-        jl_value_t **env;
-        JL_GC_PUSHARGS(env, envsz);
-        jl_stenv_t tempe;
-        init_stenv(&tempe, env, envsz);
-        tempe.intersection = tempe.ignore_free = 1;
-        if (subtype_in_env(isuper, super_pattern, &tempe)) {
-            jl_value_t *wr = wrapper;
-            int i;
-            for(i=0; i<envsz; i++) {
-                // if a parameter is not constrained by the supertype, use the original
-                // parameter value from `x`. this is detected by the value in `env` being
-                // the exact typevar from the type's `wrapper`, or a free typevar.
-                jl_value_t *ei = env[i];
-                if (ei == (jl_value_t*)((jl_unionall_t*)wr)->var ||
-                    (jl_is_typevar(ei) && lookup(e, (jl_tvar_t*)ei) == NULL))
-                    env[i] = jl_tparam(xd,i);
-                wr = ((jl_unionall_t*)wr)->body;
-            }
-            JL_TRY {
-                ii = jl_apply_type(wrapper, env, envsz);
-            }
-            JL_CATCH {
-                ii = jl_bottom_type;
-            }
-        }
-        JL_GC_POP();
-    }
-    JL_GC_POP();
-    return ii;
+    if (isuper == jl_bottom_type)
+        return jl_bottom_type;
+    return (jl_value_t*)xd;
 }
 
 static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -3528,7 +3494,7 @@ jl_value_t *jl_type_intersection_env_s(jl_value_t *a, jl_value_t *b, jl_svec_t *
             if (jl_is_uniontype(ans_unwrapped)) {
                 ans_unwrapped = switch_union_tuple(((jl_uniontype_t*)ans_unwrapped)->a, ((jl_uniontype_t*)ans_unwrapped)->b);
                 if (ans_unwrapped != NULL) {
-                    *ans = jl_rewrap_unionall(ans_unwrapped, *ans);
+                    *ans = jl_rewrap_unionall_(ans_unwrapped, *ans);
                 }
             }
             JL_GC_POP();

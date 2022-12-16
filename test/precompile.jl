@@ -1493,8 +1493,8 @@ end
         f(x, y) = x + y
         f(x::Int, y) = 2x + y
     end
-    precompile(M.f, (Int, Any))
-    precompile(M.f, (AbstractFloat, Any))
+    @test precompile(M.f, (Int, Any))
+    @test precompile(M.f, (AbstractFloat, Any))
     mis = map(methods(M.f)) do m
         m.specializations[1]
     end
@@ -1578,6 +1578,23 @@ end
     f46778(::Any, ::DataType) = 2
     @test precompile(Tuple{typeof(f46778), Int, DataType})
     @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
+end
+
+
+precompile_test_harness("Module tparams") do load_path
+    write(joinpath(load_path, "ModuleTparams.jl"),
+        """
+        module ModuleTparams
+            module TheTParam
+            end
+
+            struct ParamStruct{T}; end
+            const the_struct = ParamStruct{TheTParam}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleTparams"))
+    (@eval (using ModuleTparams))
+    @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
 end
 
 empty!(Base.DEPOT_PATH)
