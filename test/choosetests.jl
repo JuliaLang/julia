@@ -149,6 +149,7 @@ function choosetests(choices = [])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "stdlib", STDLIBS)
+    filtertests!(tests, "internet_required", ["download", "Downloads", "LibGit2/online", "Pkg"])
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")
 
