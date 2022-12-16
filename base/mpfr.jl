@@ -222,6 +222,7 @@ function BigFloat(x::Float64, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::In
     ccall((:mpfr_set_d, libmpfr), Int32, (Ref{BigFloat}, Float64, MPFRRoundingMode), z, x, r)
     if isnan(x) && signbit(x) != signbit(z)
         z.sign = -z.sign
+    end
     z = BigFloat(;precision)
     # punt on the hard case where we might have to deal with rounding
     # we could use this path in all cases, but mpfr_set_d has a lot of overhead.

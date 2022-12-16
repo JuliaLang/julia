@@ -86,6 +86,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-metadata
                         0, // strip-ir
                         0, // heap-size-hint
+                        JL_OPTIONS_USE_LIBCMALLOC, // alloc
     };
     jl_options_initialized = 1;
 }
@@ -181,6 +182,8 @@ static const char opts[]  =
 
     " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than that value.\n"
     "                            The memory hint might be specified in megabytes(500M) or gigabytes(1G)\n\n"
+    " --alloc[={default*|mimalloc}\n "
+    "                            Choose which malloc allocator julia will use\n"
 ;
 
 static const char opts_hidden[]  =
@@ -247,6 +250,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_metadata,
            opt_strip_ir,
            opt_heap_size_hint,
+           opt_alloc
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:";
     static const struct option longopts[] = {
@@ -305,6 +309,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-metadata",  no_argument,       0, opt_strip_metadata },
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "alloc",           required_argument, 0, opt_alloc},
         { 0, 0, 0, 0 }
     };
 
@@ -797,6 +802,15 @@ restart_switch:
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
 
+            break;
+            case opt_alloc:
+                if (!strcmp(optarg,"default"))
+                    jl_options.alloc = JL_OPTIONS_USE_LIBCMALLOC;
+                else if (!strcmp(optarg,"mimalloc"))
+                    jl_options.alloc = JL_OPTIONS_USE_MIMALLOC;
+                else
+                    jl_errorf("julia: invalid argument to --alloc (%s)", optarg);
+                break;
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

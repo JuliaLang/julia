@@ -437,7 +437,7 @@ $(build_shlibdir)/lib%Plugin.$(SHLIB_EXT): $(SRCDIR)/clangsa/%.cpp $(LLVM_CONFIG
 # and dependencies are properly installed:
 #   make -C src install-analysis-deps
 install-analysis-deps:
-	$(MAKE) -C $(JULIAHOME)/deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind
+	$(MAKE) -C $(JULIAHOME)/deps install-llvm install-clang install-llvm-tools install-libuv install-utf8proc install-unwind install-mimalloc
 
 analyzegc-deps-check: $(BUILDDIR)/julia_version.h $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
 ifeq ($(USE_BINARYBUILDER_LLVM),0)

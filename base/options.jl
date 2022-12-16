@@ -53,6 +53,7 @@ struct JLOptions
     strip_metadata::Int8
     strip_ir::Int8
     heap_size_hint::UInt64
+    alloc::Int8
 end
 
 # This runs early in the sysimage != is not defined yet
