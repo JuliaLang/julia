@@ -470,7 +470,8 @@ form, `T` is deduced automatically), parameterized by a `ref`erence
 value, a `step`, and the `len`gth. By default `ref` is the starting
 value `r[1]`, but alternatively you can supply it as the value of
 `r[offset]` for some other index `1 <= offset <= len`. The syntax `a:b`
-or `a:b:c` with `a`, `b`, and `c` all floating-points creates a `StepRangeLen`.
+or `a:b:c`, where any of `a`, `b`, or `c` are floating-point numbers, creates a
+`StepRangeLen`.
 In conjunction with `TwicePrecision` this can be used to implement ranges that
 are free of roundoff error.
 
