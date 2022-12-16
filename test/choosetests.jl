@@ -174,30 +174,32 @@ function choosetests(choices = [])
         "download",
         "TOML",
     ])
-    net_on = true
-    JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
-                                      strip |>
-                                      lowercase |>
-                                      s -> tryparse(Bool, s) |>
-                                      x -> x === true
-    # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set to `true`, we
-    # always set `net_on` to `true`.
+    net_on = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
+             strip |>
+             lowercase |>
+             s -> tryparse(Bool, s)
+    # If the `JULIA_TEST_NETWORKING_AVAILABLE` environment variable is set, we always
+    # set `net_on` to the corresponding value.
     # Otherwise, we set `net_on` to true if and only if networking is actually available.
-    if !JULIA_TEST_NETWORKING_AVAILABLE
+    if net_on === nothing
         try
             getipaddr()
+            net_on = true
         catch
             if ci_option_passed
                 @error("Networking unavailable, but `--ci` was passed")
                 rethrow()
             end
             net_on = false
-            if isempty(net_required_for)
-                @warn "Networking unavailable"
-            else
-                @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
-                filter!(!in(net_required_for), tests)
-            end
+        end
+    end
+
+    if !net_on
+        if isempty(net_required_for)
+            @warn "Networking unavailable"
+        else
+            @warn "Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]"
+            filter!(!in(net_required_for), tests)
         end
     end
 
