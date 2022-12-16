@@ -2208,6 +2208,19 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 @testintersect(T46784{T,S} where {T,S}, T46784, !Union{})
 @test_broken T46784 <: T46784{T,S} where {T,S}
 
+# issue 24333
+@test Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T
+@test Type{Union{Pair,Cvoid}} <: Type{Union{T,Cvoid}} where T
+@test Type{Union{Val{Val{T}} where {T},Cvoid}} <: Type{Union{T,Cvoid}} where T
+
+# issue 47654
+Vec47654{T} = Union{AbstractVector{T}, AbstractVector{Union{T,Nothing}}}
+struct Wrapper47654{T, V<:Vec47654{T}}
+    v::V
+end
+abstract type P47654{A} end
+@test Wrapper47654{P47654, Vector{Union{P47654,Nothing}}} <: Wrapper47654
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
@@ -2247,9 +2260,6 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 
     #issue 26487
     @test_broken typeintersect(Tuple{Type{Tuple{T,Val{T}}}, Val{T}} where T, Tuple{Type{Tuple{Val{T},T}}, Val{T}} where T) <: Any
-
-    # issue 24333
-    @test_broken (Type{Union{Ref,Cvoid}} <: Type{Union{T,Cvoid}} where T)
 
     # issue 22123
     t1 = Ref{Ref{Ref{Union{Int64, T}}} where T}
