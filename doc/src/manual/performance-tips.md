@@ -611,8 +611,8 @@ end
 This can be written more concisely and efficiently as:
 
 ```julia
-norm(x::Vector) = sqrt(real(dot(x, x)))
-norm(A::Matrix) = maximum(svdvals(A))
+mynorm(x::Vector) = sqrt(real(dot(x, x)))
+mynorm(A::Matrix) = maximum(svdvals(A))
 ```
 
 It should however be noted that the compiler is quite efficient at optimizing away the dead branches in code
