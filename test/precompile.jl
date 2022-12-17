@@ -1667,7 +1667,7 @@ precompile_test_harness("PkgCacheInspector") do load_path
     @test m.name == :repl_cmd && m.nargs < 2
     @test any(new_specializations) do ci
         mi = ci.def
-        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int64, String}
+        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
     end
 end
 
