@@ -165,8 +165,11 @@ end
     @test endswith(z, z)
     @test endswith(z)(z)
     #40616 startswith for IO objects
-    io = IOBuffer("JuliaLang")
-    @test startswith(io, "Julia")
+    let s = "JuliaLang", io = IOBuffer(s)
+        for prefix in ("Julia", "July", s^2, "Ju", 'J', 'x', ('j','J'))
+            @test startswith(io, prefix) == startswith(s, prefix)
+        end
+    end
 end
 
 @testset "SubStrings and Views" begin
