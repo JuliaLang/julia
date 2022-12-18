@@ -70,8 +70,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         NULL, // cookie
                         JL_OPTIONS_HANDLE_SIGNALS_ON,
                         JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
-                        JL_OPTIONS_USE_PKGIMAGE_NATIVE_CODE_YES,
                         JL_OPTIONS_USE_COMPILED_MODULES_YES,
+                        JL_OPTIONS_USE_PKGIMAGES_YES,
                         NULL, // bind-to
                         NULL, // output-bc
                         NULL, // output-unopt-bc
@@ -107,10 +107,10 @@ static const char opts[]  =
     " --handle-signals={yes*|no} Enable or disable Julia's default signal handlers\n"
     " --sysimage-native-code={yes*|no}\n"
     "                            Use native code from system image if available\n"
-    " --pkgimage-native-code={yes*|no}\n"
-    "                            Use native code from package images if available ($)\n"
     " --compiled-modules={yes*|no}\n"
-    "                            Enable or disable incremental precompilation of modules\n\n"
+    "                            Enable or disable incremental precompilation of modules\n"
+    " --pkgimages={yes*|no}\n"
+    "                            Enable or disable usage of native code caching in the form of pkgimages\n\n"
 
     // actions
     " -e, --eval <expr>          Evaluate <expr>\n"
@@ -241,8 +241,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_help_hidden,
            opt_banner,
            opt_sysimage_native_code,
-           opt_pkgimage_native_code,
            opt_compiled_modules,
+           opt_pkgimages,
            opt_machine_file,
            opt_project,
            opt_bug_report,
@@ -270,8 +270,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "bug-report",      required_argument, 0, opt_bug_report },
         { "sysimage",        required_argument, 0, 'J' },
         { "sysimage-native-code", required_argument, 0, opt_sysimage_native_code },
-        { "pkgimage-native-code", required_argument, 0, opt_pkgimage_native_code },
         { "compiled-modules",required_argument, 0, opt_compiled_modules },
+        { "pkgimages",       required_argument, 0, opt_pkgimages },
         { "cpu-target",      required_argument, 0, 'C' },
         { "procs",           required_argument, 0, 'p' },
         { "threads",         required_argument, 0, 't' },
@@ -442,15 +442,6 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
             break;
-        case opt_pkgimage_native_code:
-            pkgimage_explicit = 1;
-            if (!strcmp(optarg,"yes"))
-                jl_options.use_pkgimage_native_code = JL_OPTIONS_USE_PKGIMAGE_NATIVE_CODE_YES;
-            else if (!strcmp(optarg,"no"))
-                jl_options.use_pkgimage_native_code = JL_OPTIONS_USE_PKGIMAGE_NATIVE_CODE_NO;
-            else
-                jl_errorf("julia: invalid argument to --pkgimage-native-code={yes|no} (%s)", optarg);
-            break;
         case opt_compiled_modules:
             if (!strcmp(optarg,"yes"))
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_YES;
@@ -458,6 +449,15 @@ restart_switch:
                 jl_options.use_compiled_modules = JL_OPTIONS_USE_COMPILED_MODULES_NO;
             else
                 jl_errorf("julia: invalid argument to --compiled-modules={yes|no} (%s)", optarg);
+            break;
+        case opt_pkgimages:
+            pkgimage_explicit = 1;
+            if (!strcmp(optarg,"yes"))
+                jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_YES;
+            else if (!strcmp(optarg,"no"))
+                jl_options.use_pkgimages = JL_OPTIONS_USE_PKGIMAGES_NO;
+            else
+                jl_errorf("julia: invalid argument to --pkgimage={yes|no} (%s)", optarg);
             break;
         case 'C': // cpu-target
             jl_options.cpu_target = strdup(optarg);
@@ -819,11 +819,11 @@ restart_switch:
         }
     }
     if (codecov || malloclog) {
-        if (pkgimage_explicit && jl_options.use_pkgimage_native_code) {
-            jl_errorf("julia: Can't use --pkgimage-native-code=yes together "
+        if (pkgimage_explicit && jl_options.use_pkgimages) {
+            jl_errorf("julia: Can't use --pkgimages=yes together "
                       "with --track-allocation or --code-coverage.");
         }
-        jl_options.use_pkgimage_native_code = 0;
+        jl_options.use_pkgimages = 0;
     }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;

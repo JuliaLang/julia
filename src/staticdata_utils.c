@@ -615,7 +615,7 @@ JL_DLLEXPORT uint8_t jl_cache_flags(void)
 {
     // ??OOCDDP
     uint8_t flags = 0;
-    flags |= (jl_options.use_pkgimage_native_code & 1);
+    flags |= (jl_options.use_pkgimages & 1);
     flags |= (jl_options.debug_level & 3) << 1;
     flags |= (jl_options.check_bounds & 1) << 2;
     flags |= (jl_options.opt_level & 3) << 4;

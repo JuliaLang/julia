@@ -594,7 +594,7 @@ It is sometimes helpful during module development to turn off incremental precom
 command line flag `--compiled-modules={yes|no}` enables you to toggle module precompilation on and
 off. When Julia is started with `--compiled-modules=no` the serialized modules in the compile cache
 are ignored when loading modules and module dependencies.
-More fine-grained control is available with `--pkgimage-native-code=no`, which suppresses only
+More fine-grained control is available with `--pkgimages=no`, which suppresses only
 native-code storage during precompilation. `Base.compilecache` can still be called
 manually. The state of this command line flag is passed to `Pkg.build` to disable automatic
 precompilation triggering when installing, updating, and explicitly building packages.

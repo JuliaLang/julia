@@ -2025,7 +2025,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = JLOptions().use_pkgimage_native_code != 0
+    cache_objects = JLOptions().use_pkgimages != 0
     tmppath, tmpio = mktemp(cachepath)
 
     if cache_objects
@@ -2523,7 +2523,7 @@ end
         pkgimage = !isempty(clone_targets)
         if pkgimage
             ocachefile = ocachefile_from_cachefile(cachefile)
-            if JLOptions().use_pkgimage_native_code == 0
+            if JLOptions().use_pkgimages == 0
                 # presence of clone_targets means native code cache
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 return true

@@ -225,8 +225,8 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
-    if opts.use_pkgimage_native_code == 0
-        push!(addflags, "--pkgimage-native-code=no")
+    if opts.use_pkgimages == 0
+        push!(addflags, "--pkgimages=no")
     else
         # If pkgimage is set, malloc_log and code_coverage should not
         @assert opts.malloc_log == 0 && opts.code_coverage == 0

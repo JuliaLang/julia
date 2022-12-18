@@ -328,7 +328,7 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
-    if Base.JLOptions().use_pkgimage_native_code == 1
+    if Base.JLOptions().use_pkgimages == 1
         ocachefile = Base.ocachefile_from_cachefile(cachefile)
     else
         ocachefile = nothing
