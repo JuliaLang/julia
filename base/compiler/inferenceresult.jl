@@ -68,22 +68,14 @@ function pick_const_args!(cache_argtypes::Vector{Any}, overridden_by_const::BitV
     return cache_argtypes, overridden_by_const
 end
 
-function is_argtype_match(lattice::AbstractLattice,
+function is_argtype_match(𝕃::AbstractLattice,
                           @nospecialize(given_argtype),
                           @nospecialize(cache_argtype),
                           overridden_by_const::Bool)
-    if is_forwardable_argtype(given_argtype)
-        return is_lattice_equal(lattice, given_argtype, cache_argtype)
+    if is_forwardable_argtype(𝕃, given_argtype)
+        return is_lattice_equal(𝕃, given_argtype, cache_argtype)
     end
     return !overridden_by_const
-end
-
-# TODO MustAlias forwarding
-function is_forwardable_argtype(@nospecialize x)
-    return isa(x, Const) ||
-           isa(x, Conditional) ||
-           isa(x, PartialStruct) ||
-           isa(x, PartialOpaque)
 end
 
 va_process_argtypes(given_argtypes::Vector{Any}, linfo::MethodInstance) =
@@ -103,7 +95,7 @@ function va_process_argtypes(@nospecialize(va_handler!), given_argtypes::Vector{
             else
                 last = nargs
             end
-            isva_given_argtypes[nargs] = tuple_tfunc(given_argtypes[last:end])
+            isva_given_argtypes[nargs] = tuple_tfunc(fallback_lattice, given_argtypes[last:end])
             va_handler!(isva_given_argtypes, last)
         end
         return isva_given_argtypes
@@ -158,7 +150,7 @@ function most_general_argtypes(method::Union{Method, Nothing}, @nospecialize(spe
                         vargtype_elements[i] = Const(atyp.parameters[1])
                     end
                 end
-                vargtype = tuple_tfunc(vargtype_elements)
+                vargtype = tuple_tfunc(fallback_lattice, vargtype_elements)
             end
         end
         cache_argtypes[nargs] = vargtype

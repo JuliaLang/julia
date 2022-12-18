@@ -294,6 +294,29 @@ function isconst(@nospecialize(t::Type), s::Int)
     return unsafe_load(Ptr{UInt32}(constfields), 1 + s÷32) & (1 << (s%32)) != 0
 end
 
+"""
+    isfieldatomic(t::DataType, s::Union{Int,Symbol}) -> Bool
+
+Determine whether a field `s` is declared `@atomic` in a given type `t`.
+"""
+function isfieldatomic(@nospecialize(t::Type), s::Symbol)
+    t = unwrap_unionall(t)
+    isa(t, DataType) || return false
+    return isfieldatomic(t, fieldindex(t, s, false))
+end
+function isfieldatomic(@nospecialize(t::Type), s::Int)
+    t = unwrap_unionall(t)
+    # TODO: what to do for `Union`?
+    isa(t, DataType) || return false # uncertain
+    ismutabletype(t) || return false # immutable structs are never atomic
+    1 <= s <= length(t.name.names) || return false # OOB reads are not atomic (they always throw)
+    atomicfields = t.name.atomicfields
+    atomicfields === C_NULL && return false
+    s -= 1
+    return unsafe_load(Ptr{UInt32}(atomicfields), 1 + s÷32) & (1 << (s%32)) != 0
+end
+
+
 
 """
     @locals()
@@ -1498,13 +1521,15 @@ end
 print_statement_costs(args...; kwargs...) = print_statement_costs(stdout, args...; kwargs...)
 
 function _which(@nospecialize(tt::Type);
-    method_table::Union{Nothing,Core.MethodTable}=nothing,
+    method_table::Union{Nothing,Core.MethodTable,Core.Compiler.MethodTableView}=nothing,
     world::UInt=get_world_counter(),
     raise::Bool=true)
     if method_table === nothing
         table = Core.Compiler.InternalMethodTable(world)
-    else
+    elseif method_table isa Core.MethodTable
         table = Core.Compiler.OverlayMethodTable(world, method_table)
+    else
+        table = method_table
     end
     match, = Core.Compiler.findsup(tt, table)
     if match === nothing

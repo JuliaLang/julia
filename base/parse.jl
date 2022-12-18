@@ -89,17 +89,22 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
     return sgn, base, j
 end
 
-@inline function __convert_digit(_c::UInt32, base)
+# '0':'9' -> 0:9
+# 'A':'Z' -> 10:26
+# 'a':'z' -> 10:26 if base <= 36, 36:62 otherwise
+# input outside of that is mapped to base
+@inline function __convert_digit(_c::UInt32, base::UInt32)
     _0 = UInt32('0')
     _9 = UInt32('9')
     _A = UInt32('A')
     _a = UInt32('a')
     _Z = UInt32('Z')
     _z = UInt32('z')
-    a::UInt32 = base <= 36 ? 10 : 36
+    a = base <= 36 ? UInt32(10) : UInt32(36) # converting here instead of via a type assertion prevents typeassert related errors
     d = _0 <= _c <= _9 ? _c-_0             :
         _A <= _c <= _Z ? _c-_A+ UInt32(10) :
-        _a <= _c <= _z ? _c-_a+a           : UInt32(base)
+        _a <= _c <= _z ? _c-_a+a           :
+        base
 end
 
 
@@ -110,7 +115,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
         return nothing
     end
     if !(2 <= base <= 62)
-        raise && throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+        raise && throw(ArgumentError(LazyString("invalid base: base must be 2 ≤ base ≤ 62, got ", base)))
         return nothing
     end
     if i == 0
@@ -132,7 +137,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     while n <= m
         # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
         _c = reinterpret(UInt32, c) >> 24
-        d::T = __convert_digit(_c, base)
+        d::T = __convert_digit(_c, base % UInt32) # we know 2 <= base <= 62, so prevent an incorrect InexactError here
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -150,7 +155,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     while !isspace(c)
         # Fast path from `UInt32(::Char)`; non-ascii will be >= 0x80
         _c = reinterpret(UInt32, c) >> 24
-        d::T = __convert_digit(_c, base)
+        d::T = __convert_digit(_c, base % UInt32) # we know 2 <= base <= 62
         if d >= base
             raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return nothing
@@ -176,7 +181,7 @@ function tryparse_internal(::Type{T}, s::AbstractString, startpos::Int, endpos::
     return n
 end
 
-function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
+function tryparse_internal(::Type{Bool}, sbuff::AbstractString,
         startpos::Int, endpos::Int, base::Integer, raise::Bool)
     if isempty(sbuff)
         raise && throw(ArgumentError("input string is empty"))
@@ -202,10 +207,15 @@ function tryparse_internal(::Type{Bool}, sbuff::Union{String,SubString{String}},
     end
 
     len = endpos - startpos + 1
-    p   = pointer(sbuff) + startpos - 1
-    GC.@preserve sbuff begin
-        (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
-        (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
+    if sbuff isa Union{String, SubString{String}}
+        p = pointer(sbuff) + startpos - 1
+        GC.@preserve sbuff begin
+            (len == 4) && (0 == _memcmp(p, "true", 4)) && (return true)
+            (len == 5) && (0 == _memcmp(p, "false", 5)) && (return false)
+        end
+    else
+        (len == 4) && (SubString(sbuff, startpos:startpos+3) == "true") && (return true)
+        (len == 5) && (SubString(sbuff, startpos:startpos+4) == "false") && (return false)
     end
 
     if raise

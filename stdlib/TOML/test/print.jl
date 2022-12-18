@@ -80,6 +80,22 @@ loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
 @test roundtrip(str)
 
 
+@testset "vec with dicts and non-dicts" begin
+    # https://github.com/JuliaLang/julia/issues/45340
+    d =  Dict("b" => Any[111, Dict("a" =>  222, "d" => 333)])
+    @test toml_str(d) == "b = [111, {a = 222, d = 333}]\n"
+
+    d =  Dict("b" => Any[Dict("a" =>  222, "d" => 333), 111])
+    @test toml_str(d) == "b = [{a = 222, d = 333}, 111]\n"
+
+    d =  Dict("b" => Any[Dict("a" =>  222, "d" => 333)])
+    @test toml_str(d) == """
+    [[b]]
+    a = 222
+    d = 333
+    """
+end
+
 struct Foo
     a::Int64
     b::Float64

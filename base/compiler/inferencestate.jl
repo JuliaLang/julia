@@ -383,55 +383,50 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            fromArg = 0
-            # if this parameter came from arg::Type{T}, then `arg` is more precise than
-            # Type{T} where lb<:T<:ub
-            sig = linfo.def.sig
-            temp = sig
+            temp = linfo.def.sig
             for j = 1:i-1
                 temp = temp.body
             end
-            Pi = temp.var
+            vᵢ = (temp::UnionAll).var
             while temp isa UnionAll
                 temp = temp.body
             end
             sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
-                tj = sigtypes[j]
-                if isType(tj) && tj.parameters[1] === Pi
-                    fromArg = j
-                    break
+                sⱼ = sigtypes[j]
+                if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+                    # if this parameter came from `arg::Type{T}`,
+                    # then `arg` is more precise than `Type{T} where lb<:T<:ub`
+                    ty = fieldtype(linfo.specTypes, j)
+                    @goto ty_computed
                 end
             end
-            if fromArg > 0
-                ty = fieldtype(linfo.specTypes, fromArg)
+            ub = v.ub
+            while ub isa TypeVar
+                ub = ub.ub
+            end
+            if has_free_typevars(ub)
+                ub = Any
+            end
+            lb = v.lb
+            while lb isa TypeVar
+                lb = lb.lb
+            end
+            if has_free_typevars(lb)
+                lb = Bottom
+            end
+            if Any <: ub && lb <: Bottom
+                ty = Any
             else
-                ub = v.ub
-                while ub isa TypeVar
-                    ub = ub.ub
-                end
-                if has_free_typevars(ub)
-                    ub = Any
-                end
-                lb = v.lb
-                while lb isa TypeVar
-                    lb = lb.lb
-                end
-                if has_free_typevars(lb)
-                    lb = Bottom
-                end
-                if Any <: ub && lb <: Bottom
-                    ty = Any
-                else
-                    tv = TypeVar(v.name, lb, ub)
-                    ty = UnionAll(tv, Type{tv})
-                end
+                tv = TypeVar(v.name, lb, ub)
+                ty = UnionAll(tv, Type{tv})
             end
         elseif isvarargtype(v)
             ty = Int
         else
             ty = Const(v)
         end
+        @label ty_computed
         sp[i] = ty
     end
     return sp
