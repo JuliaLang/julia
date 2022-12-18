@@ -211,12 +211,12 @@ end
                 2 | 2  1  1  1  1  1  1  1  1  1
                 3 | 3  1  1  1  1  1  1  1  1  1
                 4 | 5  1  1  1  1  1  1  1  1  1
-    Character   5 | 8  1  1  1  1  1  1  1  1  1
+    Character   5 | 8  1  1  1  1  1  1  1  1  1     <- Next State
     Class       6 | 7  1  1  1  1  1  1  1  1  1
                 7 | 1  1  0  2  2  1  3  3  1  1
                 8 | 1  1  1  1  1  1  1  1  1  1
                 9 | 1  1  0  2  1  2  3  3  1  1
-               10 | 1  1  1  1  1  1  1  1  1  1
+               10 | 4  1  1  1  1  1  1  1  1  1
                11 | 6  1  1  1  1  1  1  1  1  1
 
     Each character class row is encoding 10 states shift in 6 bits combined into a UInt64 such that
@@ -260,7 +260,7 @@ end
                                 [ 1, 1, 0, 2, 2, 1, 3, 3, 1, 1],
                                 [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                                 [ 1, 1, 0, 2, 1, 2, 3, 3, 1, 1],
-                                [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                                [ 4, 1, 1, 1, 1, 1, 1, 1, 1, 1],
                                 [ 6, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
                 #This converts the state_arrays into the shift encoded UInt64
                 class_row = zeros(UInt64, num_classes)
