@@ -269,7 +269,7 @@ endif
 	# We have a single exception; we want 7z.dll to live in libexec, not bin, so that 7z.exe can find it.
 	-mv $(DESTDIR)$(bindir)/7z.dll $(DESTDIR)$(libexecdir)/
 	-$(INSTALL_M) $(build_bindir)/libopenlibm.dll.a $(DESTDIR)$(libdir)/
-	-$(INSTALL_M) $(build_libdir)/libssp.a $(DESTDIR)$(libdir)/ # TODO use implib
+	-$(INSTALL_M) $(build_libdir)/libssp.dll.a $(DESTDIR)$(libdir)/
 	# The rest are compiler dependencies, as an example memcpy is exported by msvcrt
 	# These are files from mingw32 and required for creating shared libraries like our caches.
 	-$(INSTALL_M) $(build_libdir)/libgcc_s.a $(DESTDIR)$(libdir)/
