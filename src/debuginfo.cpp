@@ -1124,8 +1124,6 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     *context = entry.ctx;
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
-
-
     // Assume we only need base address for sysimg for now
     if (!inimage || !image_info.fptrs.base)
         saddr = nullptr;

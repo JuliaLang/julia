@@ -110,7 +110,7 @@ static const char opts[]  =
     " --compiled-modules={yes*|no}\n"
     "                            Enable or disable incremental precompilation of modules\n"
     " --pkgimages={yes*|no}\n"
-    "                            Enable or disable usage of native code caching in the form of pkgimages\n\n"
+    "                            Enable or disable usage of native code caching in the form of pkgimages ($)\n\n"
 
     // actions
     " -e, --eval <expr>          Evaluate <expr>\n"

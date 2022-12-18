@@ -4037,7 +4037,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     if (ctx.external_linkage) {
                        if (jl_object_in_image((jl_value_t*)codeinst)) {
                            // Target is present in another pkgimage
-                           jl_printf(JL_STDERR, "\n (emit_invoke:) Want to resolve method!\n");
                            cache_valid = true;
                            external = true;
                        }
@@ -5400,7 +5399,6 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     if (params.external_linkage) {
         if (jl_object_in_image((jl_value_t*)codeinst)) {
             // Target is present in another pkgimage
-            jl_printf(JL_STDERR, "\n (emit_jlinvoke) Want to resolve method\n");
             cache_valid = true;
         }
     }

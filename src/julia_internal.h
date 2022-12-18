@@ -957,7 +957,7 @@ STATIC_INLINE size_t n_linkage_blobs(void) JL_NOTSAFEPOINT
 }
 
 // TODO: Makes this a binary search
-STATIC_INLINE size_t external_blob_index(jl_value_t* v) JL_NOTSAFEPOINT {
+STATIC_INLINE size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT {
     size_t i, nblobs = n_linkage_blobs();
     assert(jl_linkage_blobs.len == 2*nblobs);
     for (i = 0; i < nblobs; i++) {
