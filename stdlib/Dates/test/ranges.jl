@@ -596,4 +596,11 @@ a = Dates.Time(23, 1, 1)
     @test length(utm_typemin:-Millisecond(1):utm_typemin) == 1
 end
 
+# Issue #45816
+@testset "default step for date ranges" begin
+    r = Date(2000, 1, 1):Date(2000, 12, 31)
+    @test step(r) === Day(1)
+    @test length(r) == 366
+end
+
 end  # RangesTest module

@@ -1,6 +1,6 @@
 ## LIBUV ##
 ifneq ($(USE_BINARYBUILDER_LIBUV),1)
-LIBUV_GIT_URL:=git://github.com/JuliaLang/libuv.git
+LIBUV_GIT_URL:=https://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
 $(eval $(call git-external,libuv,LIBUV,configure,,$(SRCCACHE)))
 
@@ -43,7 +43,7 @@ $(eval $(call staged-install, \
 	$$(INSTALL_NAME_CMD)libuv.$$(SHLIB_EXT) $$(build_shlibdir)/libuv.$$(SHLIB_EXT)))
 
 clean-libuv:
-	-rm -rf $(LIBUV_BUILDDIR)/build-configured $(LIBUV_BUILDDIR)/build-compiled
+	rm -rf $(LIBUV_BUILDDIR)/build-configured $(LIBUV_BUILDDIR)/build-compiled
 	-$(MAKE) -C $(LIBUV_BUILDDIR) clean
 
 

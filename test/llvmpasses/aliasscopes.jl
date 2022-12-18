@@ -58,4 +58,3 @@ end
 emit(simple, Vector{Float64}, Vector{Float64})
 emit(constargs, Vector{Float64}, Const{Float64, 1})
 emit(micro_ker!, Matrix{Float64}, Vector{Float64}, Vector{Float64}, Int64, Int64, Int64)
-

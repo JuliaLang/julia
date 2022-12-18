@@ -1,0 +1,107 @@
+Modification of the following patch in the FreeBSD source tree, which
+includes LLVM libunwind in contrib/llvm-project/libunwind.
+
+From 9f287522cec9feac040d7cb845a440a8f6b7b90e Mon Sep 17 00:00:00 2001
+From: Dimitry Andric <dim@FreeBSD.org>
+Date: Sun, 2 Aug 2020 18:12:14 +0000
+Subject: [PATCH] Reapply r310365 (by emaste):
+
+libunwind: make __{de,}register_frame compatible with libgcc API
+
+The libgcc __register_frame and __deregister_frame functions take a
+pointer to a set of FDE/CIEs, terminated by an entry where length is 0.
+
+In Apple's libunwind implementation the pointer is taken to be to a
+single FDE. I suspect this was just an Apple bug, compensated by Apple-
+specific code in LLVM.
+
+See lib/ExecutionEngine/RuntimeDyld/RTDyldMemoryManager.cpp and
+http://lists.llvm.org/pipermail/llvm-dev/2013-April/061737.html
+for more detail.
+
+This change is based on the LLVM RTDyldMemoryManager.cpp. It should
+later be changed to be alignment-safe.
+
+Reported by:	dim
+Reviewed by:	dim
+Sponsored by:	The FreeBSD Foundation
+Differential Revision:	https://reviews.freebsd.org/D8869
+
+Reapply r351610:
+
+Update libunwind custom frame register and deregister functions for
+FreeBSD: use the new doubly underscored names for unw_add_dynamic_fde
+and unw_remove_dynamic_fde.
+
+NOTE: this should be upstreamed...
+---
+ .../libunwind/src/UnwindLevel1-gcc-ext.c      | 42 ++++++++++++++++++-
+ 1 file changed, 41 insertions(+), 1 deletion(-)
+
+diff --git a/libunwind/src/UnwindLevel1-gcc-ext.c b/libunwind/src/UnwindLevel1-gcc-ext.c
+index 310b836d129e5..30f9cabf241f2 100644
+--- a/libunwind/src/UnwindLevel1-gcc-ext.c
++++ b/libunwind/src/UnwindLevel1-gcc-ext.c
+@@ -234,6 +234,46 @@ _LIBUNWIND_EXPORT uintptr_t _Unwind_GetIPInfo(struct _Unwind_Context *context,
+ 
+ #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
+ 
++#if defined(__FreeBSD__)
++
++// Based on LLVM's lib/ExecutionEngine/RuntimeDyld/RTDyldMemoryManager.cpp
++// and XXX should be fixed to be alignment-safe.
++static void processFDE(const char *addr, bool isDeregister) {
++  uint64_t length;
++  while ((length = *((const uint32_t *)addr)) != 0) {
++    const char *p = addr + 4;
++    if (length == 0xffffffff) {
++      length = *((const uint64_t *)p);
++      p += 8;
++    }
++    uint32_t offset = *((const uint32_t *)p);
++    if (offset != 0) {
++      if (isDeregister)
++        __unw_remove_dynamic_fde((unw_word_t)(uintptr_t)addr);
++      else
++        __unw_add_dynamic_fde((unw_word_t)(uintptr_t)addr);
++    }
++    addr = p + length;
++  }
++}
++
++/// Called by programs with dynamic code generators that want to register
++/// dynamically generated FDEs, with a libgcc-compatible API.
++
++_LIBUNWIND_EXPORT void __register_frame(const void *addr) {
++  _LIBUNWIND_TRACE_API("__register_frame(%p)", addr);
++  processFDE(addr, false);
++}
++
++/// Called by programs with dynamic code generators that want to unregister
++/// dynamically generated FDEs, with a libgcc-compatible API.
++_LIBUNWIND_EXPORT void __deregister_frame(const void *addr) {
++  _LIBUNWIND_TRACE_API("__deregister_frame(%p)", addr);
++  processFDE(addr, true);
++}
++
++#else // defined(__FreeBSD__)
++
+ /// Called by programs with dynamic code generators that want
+ /// to register a dynamically generated FDE.
+ /// This function has existed on Mac OS X since 10.4, but
+@@ -243,7 +283,6 @@ _LIBUNWIND_EXPORT void __register_frame(const void *fde) {
+   __unw_add_dynamic_fde((unw_word_t)(uintptr_t)fde);
+ }
+ 
+-
+ /// Called by programs with dynamic code generators that want
+ /// to unregister a dynamically generated FDE.
+ /// This function has existed on Mac OS X since 10.4, but
+@@ -253,6 +292,7 @@ _LIBUNWIND_EXPORT void __deregister_frame(const void *fde) {
+   __unw_remove_dynamic_fde((unw_word_t)(uintptr_t)fde);
+ }
+ 
++#endif // defined(__FreeBSD__)
+ 
+ // The following register/deregister functions are gcc extensions.
+ // They have existed on Mac OS X, but have never worked because Mac OS X

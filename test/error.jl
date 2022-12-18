@@ -1,16 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# for curmod_str
+include("testenv.jl")
+
 @testset "ExponentialBackOff" begin
     @test length(ExponentialBackOff(n=10)) == 10
     @test collect(ExponentialBackOff(n=10, first_delay=0.01))[1] == 0.01
     @test maximum(ExponentialBackOff(n=10, max_delay=0.06)) == 0.06
     ratio(x) = x[2:end]./x[1:end-1]
     @test all(x->x ≈ 10.0, ratio(collect(ExponentialBackOff(n=10, max_delay=Inf, factor=10, jitter=0.0))))
-    Test.guardseed(12345) do
-        x = ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))
-        xm = sum(x) / length(x)
-        @test abs(xm - 1.0) < 0.01
-    end
+    Libc.srand(12345)
+    x = ratio(collect(ExponentialBackOff(n=100, max_delay=Inf, factor=1, jitter=0.1)))
+    xm = sum(x) / length(x)
+    @test abs(xm - 1.0) < 0.01
+    Libc.srand()
 end
 @testset "retrying after errors" begin
     function foo_error(c, n)
@@ -80,4 +83,43 @@ end
 
     # non-Functions
     @test retry(Float64)(1) === 1.0
+end
+
+@testset "SystemError initialization" begin
+    e = SystemError("fail")
+    @test e.extrainfo === nothing
+end
+
+@testset "MethodError for methods without line numbers" begin
+    try
+        eval(Expr(:function, :(f44319()), 0))
+        f44319(1)
+    catch e
+        s = sprint(showerror, e)
+        @test s == "MethodError: no method matching f44319(::Int$(Sys.WORD_SIZE))\n\nClosest candidates are:\n  f44319()\n   @ $curmod_str none:0\n"
+    end
+end
+
+@testset "All types ending with Exception or Error subtype Exception" begin
+    function test_exceptions(mod, visited=Set{Module}())
+        if mod ∉ visited
+            push!(visited, mod)
+            for name in names(mod, all=true)
+                isdefined(mod, name) || continue
+                value = getfield(mod, name)
+
+                if value isa Module
+                    test_exceptions(value, visited)
+                elseif value isa Type
+                    str = string(value)
+                    if endswith(str, "Exception") || endswith(str, "Error")
+                        @test value <: Exception
+                    end
+                end
+            end
+        end
+        visited
+    end
+    visited = test_exceptions(Base)
+    test_exceptions(Core, visited)
 end

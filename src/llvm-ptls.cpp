@@ -1,12 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-
-#define DEBUG_TYPE "lower_ptls"
-#undef DEBUG
-
 // LLVM pass to lower TLS access and remove references to julia intrinsics
 
 #include "llvm-version.h"
 #include "support/dtypes.h"
+#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
@@ -19,6 +16,7 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/MDBuilder.h>
+#include <llvm/IR/Verifier.h>
 
 #include <llvm/IR/InlineAsm.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
@@ -28,35 +26,29 @@
 #include "codegen_shared.h"
 #include "julia_assert.h"
 
+#define DEBUG_TYPE "lower_ptls"
+#undef DEBUG
+
 using namespace llvm;
 
 typedef Instruction TerminatorInst;
 
-std::pair<MDNode*,MDNode*> tbaa_make_child(const char *name, MDNode *parent=nullptr,
-                                           bool isConstant=false);
-
 namespace {
 
-struct LowerPTLS: public ModulePass {
-    static char ID;
-    LowerPTLS(bool imaging_mode=false)
-        : ModulePass(ID),
-          imaging_mode(imaging_mode)
+struct LowerPTLS {
+    LowerPTLS(Module &M, bool imaging_mode=false)
+        : imaging_mode(imaging_mode), M(&M)
     {}
 
+    bool run(bool *CFGModified);
 private:
     const bool imaging_mode;
     Module *M;
-    Function *pgcstack_getter;
-    LLVMContext *ctx;
-    MDNode *tbaa_const;
-    FunctionType *FT_pgcstack_getter;
-    PointerType *T_pgcstack_getter;
-    PointerType *T_ppjlvalue;
-    PointerType *T_pppjlvalue;
-    Type *T_int8;
-    Type *T_size;
-    PointerType *T_pint8;
+    MDNode *tbaa_const{nullptr};
+    MDNode *tbaa_gcframe{nullptr};
+    FunctionType *FT_pgcstack_getter{nullptr};
+    PointerType *T_pgcstack_getter{nullptr};
+    PointerType *T_pppjlvalue{nullptr};
     GlobalVariable *pgcstack_func_slot{nullptr};
     GlobalVariable *pgcstack_key_slot{nullptr};
     GlobalVariable *pgcstack_offset{nullptr};
@@ -64,14 +56,13 @@ private:
     Instruction *emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const;
     template<typename T> T *add_comdat(T *G) const;
     GlobalVariable *create_aliased_global(Type *T, StringRef name) const;
-    void fix_pgcstack_use(CallInst *pgcstack);
-    bool runOnModule(Module &M) override;
+    void fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, bool or_new, bool *CFGModified);
 };
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
-    pgcstack->addAttribute(AttributeList::FunctionIndex, Attribute::ReadNone);
-    pgcstack->addAttribute(AttributeList::FunctionIndex, Attribute::NoUnwind);
+    addFnAttr(pgcstack, Attribute::ReadNone);
+    addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
 Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefore) const
@@ -101,12 +92,12 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         if (offset) {
             std::vector<Type*> args(0);
             args.push_back(offset->getType());
-            auto tp = InlineAsm::get(FunctionType::get(T_pint8, args, false),
+            auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), args, false),
                                      dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
             tls = CallInst::Create(tp, offset, "pgcstack_i8", insertBefore);
         }
         else {
-            auto tp = InlineAsm::get(FunctionType::get(T_pint8, false),
+            auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false),
                                      const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
                                      false);
             tls = CallInst::Create(tp, "pgcstack_i8", insertBefore);
@@ -134,10 +125,10 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         assert(0 && "Cannot emit thread pointer for this architecture.");
 #endif
         if (!offset)
-            offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        auto tp = InlineAsm::get(FunctionType::get(T_pint8, false), asm_str, "=r", false);
+            offset = ConstantInt::getSigned(getSizeTy(insertBefore->getContext()), jl_tls_offset);
+        auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false), asm_str, "=r", false);
         tls = CallInst::Create(tp, "thread_ptr", insertBefore);
-        tls = GetElementPtrInst::Create(T_int8, tls, {offset}, "ppgcstack_i8", insertBefore);
+        tls = GetElementPtrInst::Create(Type::getInt8Ty(insertBefore->getContext()), tls, {offset}, "ppgcstack_i8", insertBefore);
     }
     tls = new BitCastInst(tls, T_pppjlvalue->getPointerTo(), "ppgcstack", insertBefore);
     return new LoadInst(T_pppjlvalue, tls, "pgcstack", false, insertBefore);
@@ -169,30 +160,90 @@ inline T *LowerPTLS::add_comdat(T *G) const
     return G;
 }
 
-void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
+void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, bool or_new, bool *CFGModified)
 {
     if (pgcstack->use_empty()) {
         pgcstack->eraseFromParent();
         return;
     }
+    if (or_new) {
+        // pgcstack();
+        // if (pgcstack != nullptr)
+        //     last_gc_state = emit_gc_unsafe_enter(ctx);
+        //     phi = pgcstack;        // fast
+        // else
+        //     last_gc_state = gc_safe;
+        //     phi = adopt();         // slow
+        // use phi;
+        // if (!retboxed)
+        //     foreach(retinst)
+        //         emit_gc_unsafe_leave(ctx, last_gc_state);
+        auto phi = PHINode::Create(pgcstack->getType(), 2, "");
+        phi->insertAfter(pgcstack);
+        pgcstack->replaceAllUsesWith(phi);
+        MDBuilder MDB(pgcstack->getContext());
+        SmallVector<uint32_t, 2> Weights{9, 1};
+        TerminatorInst *fastTerm;
+        TerminatorInst *slowTerm;
+        auto cmp = new ICmpInst(phi, CmpInst::ICMP_NE, pgcstack, Constant::getNullValue(pgcstack->getType()));
+        SplitBlockAndInsertIfThenElse(cmp, phi, &fastTerm, &slowTerm,
+                                      MDB.createBranchWeights(Weights));
+        if (CFGModified)
+            *CFGModified = true;
+        // emit slow branch code
+        CallInst *adopt = cast<CallInst>(pgcstack->clone());
+        Function *adoptFunc = M->getFunction(XSTR(jl_adopt_thread));
+        if (adoptFunc == NULL) {
+            adoptFunc = Function::Create(pgcstack_getter->getFunctionType(),
+                pgcstack_getter->getLinkage(), pgcstack_getter->getAddressSpace(),
+                XSTR(jl_adopt_thread), M);
+            adoptFunc->copyAttributesFrom(pgcstack_getter);
+            adoptFunc->copyMetadata(pgcstack_getter, 0);
+        }
+        adopt->setCalledFunction(adoptFunc);
+        adopt->insertBefore(slowTerm);
+        phi->addIncoming(adopt, slowTerm->getParent());
+        // emit fast branch code
+        IRBuilder<> builder(fastTerm->getParent());
+        fastTerm->removeFromParent();
+        MDNode *tbaa = tbaa_gcframe;
+        Value *prior = emit_gc_unsafe_enter(builder, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa));
+        builder.Insert(fastTerm);
+        phi->addIncoming(pgcstack, fastTerm->getParent());
+        // emit pre-return cleanup
+        if (CountTrackedPointers(pgcstack->getParent()->getParent()->getReturnType()).count == 0) {
+            auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi);
+            // if we called jl_adopt_thread, we must end this cfunction back in the safe-state
+            last_gc_state->addIncoming(ConstantInt::get(Type::getInt8Ty(M->getContext()), JL_GC_STATE_SAFE), slowTerm->getParent());
+            last_gc_state->addIncoming(prior, fastTerm->getParent());
+            for (auto &BB : *pgcstack->getParent()->getParent()) {
+                if (isa<ReturnInst>(BB.getTerminator())) {
+                    IRBuilder<> builder(BB.getTerminator());
+                    emit_gc_unsafe_leave(builder, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa), last_gc_state);
+                }
+            }
+        }
+    }
 
     if (imaging_mode) {
         if (jl_tls_elf_support) {
             // if (offset != 0)
-            //     pgcstack = tp + offset;
+            //     pgcstack = tp + offset; // fast
             // else
-            //     pgcstack = getter();
-            auto offset = new LoadInst(T_size, pgcstack_offset, "", false, pgcstack);
+            //     pgcstack = getter();    // slow
+            auto offset = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_offset, "", false, pgcstack);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
+            offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
             auto cmp = new ICmpInst(pgcstack, CmpInst::ICMP_NE, offset,
                                     Constant::getNullValue(offset->getType()));
-            MDBuilder MDB(*ctx);
+            MDBuilder MDB(pgcstack->getContext());
             SmallVector<uint32_t, 2> Weights{9, 1};
             TerminatorInst *fastTerm;
             TerminatorInst *slowTerm;
             SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
                                           MDB.createBranchWeights(Weights));
+            if (CFGModified)
+                *CFGModified = true;
 
             auto fastTLS = emit_pgcstack_tp(offset, fastTerm);
             auto phi = PHINode::Create(T_pppjlvalue, 2, "", pgcstack);
@@ -200,7 +251,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
             pgcstack->moveBefore(slowTerm);
             auto getter = new LoadInst(T_pgcstack_getter, pgcstack_func_slot, "", false, pgcstack);
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
+            getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
             pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
             set_pgcstack_attrs(pgcstack);
 
@@ -215,11 +266,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
         // since we may not know which getter function to use ahead of time.
         auto getter = new LoadInst(T_pgcstack_getter, pgcstack_func_slot, "", false, pgcstack);
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
+        getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
 #if defined(_OS_DARWIN_)
-        auto key = new LoadInst(T_size, pgcstack_key_slot, "", false, pgcstack);
+        auto key = new LoadInst(getSizeTy(pgcstack->getContext()), pgcstack_key_slot, "", false, pgcstack);
         key->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-        key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(*ctx, None));
+        key->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
         auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, getter, {key}, "", pgcstack);
         new_pgcstack->takeName(pgcstack);
         pgcstack->replaceAllUsesWith(new_pgcstack);
@@ -239,11 +290,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
         jl_get_pgcstack_func *f;
         jl_pgcstack_key_t k;
         jl_pgcstack_getkey(&f, &k);
-        Constant *val = ConstantInt::get(T_size, (uintptr_t)f);
+        Constant *val = ConstantInt::get(getSizeTy(pgcstack->getContext()), (uintptr_t)f);
         val = ConstantExpr::getIntToPtr(val, T_pgcstack_getter);
 #if defined(_OS_DARWIN_)
         assert(sizeof(k) == sizeof(uintptr_t));
-        Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
+        Constant *key = ConstantInt::get(getSizeTy(pgcstack->getContext()), (uintptr_t)k);
         auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
         new_pgcstack->takeName(pgcstack);
         pgcstack->replaceAllUsesWith(new_pgcstack);
@@ -256,55 +307,92 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack)
     }
 }
 
-bool LowerPTLS::runOnModule(Module &_M)
+bool LowerPTLS::run(bool *CFGModified)
 {
-    M = &_M;
-    pgcstack_getter = M->getFunction("julia.get_pgcstack");
-    if (!pgcstack_getter)
-        return false;
+    bool need_init = true;
+    auto runOnGetter = [&](bool or_new) {
+        Function *pgcstack_getter = M->getFunction(or_new ? "julia.get_pgcstack_or_new" : "julia.get_pgcstack");
+        if (!pgcstack_getter)
+            return false;
 
-    ctx = &M->getContext();
-    tbaa_const = tbaa_make_child("jtbaa_const", nullptr, true).first;
+        if (need_init) {
+            tbaa_const = tbaa_make_child_with_context(M->getContext(), "jtbaa_const", nullptr, true).first;
+            tbaa_gcframe = tbaa_make_child_with_context(M->getContext(), "jtbaa_gcframe").first;
 
-    T_int8 = Type::getInt8Ty(*ctx);
-    T_size = sizeof(size_t) == 8 ? Type::getInt64Ty(*ctx) : Type::getInt32Ty(*ctx);
-    T_pint8 = T_int8->getPointerTo();
-    FT_pgcstack_getter = pgcstack_getter->getFunctionType();
+            FT_pgcstack_getter = pgcstack_getter->getFunctionType();
 #if defined(_OS_DARWIN_)
-    assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
-    FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {T_size}, false);
+            assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
+            FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {getSizeTy(M->getContext())}, false);
 #endif
-    T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
-    T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
-    T_ppjlvalue = cast<PointerType>(T_pppjlvalue->getElementType());
-    if (imaging_mode) {
-        pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
-        pgcstack_key_slot = create_aliased_global(T_size, "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
-        pgcstack_offset = create_aliased_global(T_size, "jl_tls_offset");
-    }
+            T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
+            T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
+            if (imaging_mode) {
+                pgcstack_func_slot = create_aliased_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
+                pgcstack_key_slot = create_aliased_global(getSizeTy(M->getContext()), "jl_pgcstack_key_slot"); // >= sizeof(jl_pgcstack_key_t)
+                pgcstack_offset = create_aliased_global(getSizeTy(M->getContext()), "jl_tls_offset");
+            }
+            need_init = false;
+        }
 
-    for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
-        auto call = cast<CallInst>(*it);
-        ++it;
-        assert(call->getCalledOperand() == pgcstack_getter);
-        fix_pgcstack_use(call);
-    }
-    assert(pgcstack_getter->use_empty());
-    pgcstack_getter->eraseFromParent();
-    return true;
+        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
+            auto call = cast<CallInst>(*it);
+            ++it;
+            assert(call->getCalledOperand() == pgcstack_getter);
+            fix_pgcstack_use(call, pgcstack_getter, or_new, CFGModified);
+        }
+        assert(pgcstack_getter->use_empty());
+        pgcstack_getter->eraseFromParent();
+        return true;
+    };
+    return runOnGetter(false) + runOnGetter(true);
 }
 
-char LowerPTLS::ID = 0;
+struct LowerPTLSLegacy: public ModulePass {
+    static char ID;
+    LowerPTLSLegacy(bool imaging_mode=false)
+        : ModulePass(ID),
+          imaging_mode(imaging_mode)
+    {}
 
-static RegisterPass<LowerPTLS> X("LowerPTLS", "LowerPTLS Pass",
+    bool imaging_mode;
+    bool runOnModule(Module &M) override {
+        LowerPTLS lower(M, imaging_mode);
+        bool modified = lower.run(nullptr);
+#ifdef JL_VERIFY_PASSES
+        assert(!verifyModule(M, &errs()));
+#endif
+        return modified;
+    }
+};
+
+char LowerPTLSLegacy::ID = 0;
+
+static RegisterPass<LowerPTLSLegacy> X("LowerPTLS", "LowerPTLS Pass",
                                  false /* Only looks at CFG */,
                                  false /* Analysis Pass */);
 
 } // anonymous namespace
 
+PreservedAnalyses LowerPTLSPass::run(Module &M, ModuleAnalysisManager &AM) {
+    LowerPTLS lower(M, imaging_mode);
+    bool CFGModified = false;
+    bool modified = lower.run(&CFGModified);
+#ifdef JL_VERIFY_PASSES
+    assert(!verifyModule(M, &errs()));
+#endif
+    if (modified) {
+        if (CFGModified) {
+            return PreservedAnalyses::none();
+        } else {
+            return PreservedAnalyses::allInSet<CFGAnalyses>();
+        }
+    }
+    return PreservedAnalyses::all();
+}
+
 Pass *createLowerPTLSPass(bool imaging_mode)
 {
-    return new LowerPTLS(imaging_mode);
+    return new LowerPTLSLegacy(imaging_mode);
 }
 
 extern "C" JL_DLLEXPORT void LLVMExtraAddLowerPTLSPass_impl(LLVMPassManagerRef PM, LLVMBool imaging_mode)

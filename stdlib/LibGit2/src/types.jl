@@ -230,6 +230,9 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     push_update_reference::Ptr{Cvoid}  = C_NULL
     push_negotiation::Ptr{Cvoid}       = C_NULL
     transport::Ptr{Cvoid}              = C_NULL
+    @static if LibGit2.VERSION >= v"1.2.0"
+        remote_ready::Ptr{Cvoid}       = C_NULL
+    end
     payload::Any                       = nothing
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
@@ -342,6 +345,9 @@ The fields represent:
     download_tags::Cint                = Consts.REMOTE_DOWNLOAD_TAGS_AUTO
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"1.4.0"
+        follow_redirects::Cuint        = Cuint(0)
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
@@ -673,6 +679,9 @@ The fields represent:
     callbacks::RemoteCallbacks         = RemoteCallbacks()
     @static if LibGit2.VERSION >= v"0.25.0"
         proxy_opts::ProxyOptions       = ProxyOptions()
+    end
+    @static if LibGit2.VERSION >= v"1.4.0"
+        follow_redirects::Cuint        = Cuint(0)
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()

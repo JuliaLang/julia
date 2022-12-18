@@ -66,13 +66,10 @@ MinGW-w64 compilers available through Cygwin's package manager.
     6.  For 64 bit Julia, and also from the *Devel* category:
         `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
- 4. At the *'Resolving Dependencies'* step, be sure to leave *'Select required
-    packages (RECOMMENDED)'* enabled.
-
- 5. Allow Cygwin installation to finish, then start from the installed shortcut
+ 4. Allow Cygwin installation to finish, then start from the installed shortcut
     a *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
 
- 6. Build Julia and its dependencies from source:
+ 5. Build Julia and its dependencies from source:
 
     1. Get the Julia sources
        ```sh
@@ -110,7 +107,7 @@ MinGW-w64 compilers available through Cygwin's package manager.
     > make -C julia-win64  # build for Windows x86-64 in julia-win64 folder
     > ```
 
- 7. Run Julia using the Julia executables directly
+ 6. Run Julia using the Julia executables directly
     ```sh
     usr/bin/julia.exe
     usr/bin/julia-debug.exe
@@ -118,24 +115,82 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
 ### Compiling with MinGW/MSYS2
 
-Compiling Julia from source using [MSYS2](https://msys2.github.io) has worked in the past
-but is not actively supported. Pull requests to restore support would be welcome. See a
-[past version of this
-file](https://github.com/JuliaLang/julia/blob/v0.6.0/README.windows.md) for the former
-instructions for compiling using MSYS2.
+> MSYS2 provides a robust MSYS experience.
+
+Note: MSYS2 requires **64 bit** Windows 7 or newer.
+
+ 1. Install and configure [MSYS2](https://www.msys2.org/), Software Distribution
+    and Building Platform for Windows.
+
+    1. Download and run the latest installer for the
+        [64-bit](https://github.com/msys2/msys2-installer/releases/latest) distribution.
+        The installer will have a name like `msys2-x86_64-yyyymmdd.exe`.
+
+    2. Open MSYS2. Update package database and base packages:
+        ```sh
+        pacman -Syu
+        ```
+
+    3. Exit and restart MSYS2, Update the rest of the base packages:
+        ```sh
+        pacman -Syu
+        ```
+
+    3. Then install tools required to build julia:
+        ```sh
+        # tools
+        pacman -S cmake diffutils git m4 make patch tar p7zip curl python
+
+        # For 64 bit Julia, install x86_64
+        pacman -S mingw-w64-x86_64-gcc
+        # For 32 bit Julia, install i686
+        pacman -S mingw-w64-i686-gcc
+        ```
+
+    4. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
 
 
-### Cross-compiling from Unix
+ 2. Build Julia and its dependencies with pre-build dependencies.
+
+    1. Open a new [**MINGW64/MINGW32 shell**](https://www.msys2.org/docs/environments/#overview).
+        Currently we can't use both mingw32 and mingw64,
+        so if you want to build the x86_64 and i686 versions,
+        you'll need to build them in each environment separately.
+
+    2. and clone the Julia sources
+        ```sh
+        git clone https://github.com/JuliaLang/julia.git
+        cd julia
+        ```
+
+    3. Start the build
+        ```sh
+        make -j$(nproc)
+        ```
+
+    > Protip: build in dir
+    > ```sh
+    > make O=julia-mingw-w64 configure
+    > echo 'ifeq ($(BUILDROOT),$(JULIAHOME))
+    >         $(error "in-tree build disabled")
+    >       endif' >> Make.user
+    > make -C julia-mingw-w64
+    > ```
+
+
+### Cross-compiling from Unix (Linux/Mac/WSL)
 
 You can also use MinGW-w64 cross compilers to build a Windows version of Julia from
 Linux, Mac, or the Windows Subsystem for Linux (WSL).
 
 First, you will need to ensure your system has the required dependencies. We
-need wine (>=1.7.5), a system compiler, and some downloaders.
+need wine (>=1.7.5), a system compiler, and some downloaders. Note: a cygwin install might
+interfere with this method if using WSL.
 
 **On Ubuntu** (on other Linux systems the dependency names are likely to be similar):
 ```sh
 apt-get install wine-stable gcc wget p7zip-full winbind mingw-w64 gfortran-mingw-w64
+dpkg --add-architecture i386 && apt-get update && apt-get install wine32 # add sudo to each if needed
 # switch all of the following to their "-posix" variants (interactively):
 for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gcc x86_64-w64-mingw32-gfortran; do sudo update-alternatives --config $pkg; done
 ```
@@ -145,14 +200,15 @@ for pkg in i686-w64-mingw32-g++ i686-w64-mingw32-gcc i686-w64-mingw32-gfortran x
 or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`, or `brew
 install wine wget mingw-w64`, as appropriate.
 
-Then run the build:
+**Then run the build:**
 
  1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
- 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
- 3. `make`
- 4. `make win-extras` (Necessary before running `make binary-dist`)
- 5. `make binary-dist` then `make exe` to create the Windows installer.
- 6. move the `julia-*.exe` installer to the target machine
+ 2. `cd julia-win32`
+ 3. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
+ 4. `make`
+ 5. `make win-extras` (Necessary before running `make binary-dist`)
+ 6. `make binary-dist` then `make exe` to create the Windows installer.
+ 7. move the `julia-*.exe` installer to the target machine
 
 If you are building for 64-bit windows, the steps are essentially the same.
 Just replace `i686` in `XC_HOST` with `x86_64`. (note: on Mac, wine only runs

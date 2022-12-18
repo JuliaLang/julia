@@ -201,7 +201,7 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
     }
     else {
         std::string stm;
-        raw_string_ostream(stm) << "." << jl_getpid() << ".cov";
+        raw_string_ostream(stm) << "." << uv_os_getpid() << ".cov";
         write_log_data(coverageData, stm.c_str());
     }
 }
@@ -209,6 +209,6 @@ extern "C" JL_DLLEXPORT void jl_write_coverage_data(const char *output)
 extern "C" JL_DLLEXPORT void jl_write_malloc_log(void)
 {
     std::string stm;
-    raw_string_ostream(stm) << "." << jl_getpid() << ".mem";
+    raw_string_ostream(stm) << "." << uv_os_getpid() << ".mem";
     write_log_data(mallocData, stm.c_str());
 }

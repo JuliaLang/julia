@@ -190,8 +190,8 @@ end
 
 @testset "sprint with context" begin
     function f(io::IO)
-        println(io, "compact => ", get(io, :compact, false))
-        println(io, "limit   => ", get(io, :limit,   false))
+        println(io, "compact => ", get(io, :compact, false)::Bool)
+        println(io, "limit   => ", get(io, :limit,   false)::Bool)
     end
 
     str = sprint(f)

@@ -6,7 +6,6 @@
 
 #if defined(_OS_WINDOWS_)
 #include <sys/timeb.h>
-#include <windows.h>
 #else
 #include <sys/time.h>
 #include <sys/select.h>

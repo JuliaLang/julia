@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-/* Bring in definitions for `_OS_X_`, `PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
+/* Bring in definitions for `_OS_X_`, `JL_PATH_MAX` and `PATHSEPSTRING`, `jl_ptls_t`, etc... */
 #include "platform.h"
 #include "dirpath.h"
 

@@ -1,5 +1,5 @@
 ## LIBWHICH ##
-LIBWHICH_GIT_URL := git://github.com/vtjnash/libwhich.git
+LIBWHICH_GIT_URL := https://github.com/vtjnash/libwhich.git
 LIBWHICH_TAR_URL = https://api.github.com/repos/vtjnash/libwhich/tarball/$1
 $(eval $(call git-external,libwhich,LIBWHICH,,,$(BUILDDIR)))
 
@@ -25,7 +25,7 @@ $(eval $(call staged-install, \
 	LIBWHICH_INSTALL,,,))
 
 clean-libwhich:
-	-rm $(BUILDDIR)/$(LIBWHICH_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(LIBWHICH_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(LIBWHICH_SRC_DIR) clean
 
 get-libwhich: $(LIBWHICH_SRC_FILE)

@@ -1,0 +1,30 @@
+From 37ee0aa214655b63e7869d1d74ff1ec9f9818a5e Mon Sep 17 00:00:00 2001
+From: Daniel Stenberg <daniel@haxx.se>
+Date: Fri, 17 Dec 2021 17:46:29 +0100
+Subject: [PATCH] userauth: check for too large userauth_kybd_auth_name_len
+ (#650)
+
+... before using it.
+
+Reported-by: MarcoPoloPie
+Fixes #649
+---
+ src/userauth.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/userauth.c b/src/userauth.c
+index 40ef915..caa5635 100644
+--- a/src/userauth.c
++++ b/src/userauth.c
+@@ -1769,6 +1769,11 @@ userauth_keyboard_interactive(LIBSSH2_SESSION * session,
+             if(session->userauth_kybd_data_len >= 5) {
+                 /* string    name (ISO-10646 UTF-8) */
+                 session->userauth_kybd_auth_name_len = _libssh2_ntohu32(s);
++                if(session->userauth_kybd_auth_name_len >
++                   session->userauth_kybd_data_len - 5)
++                    return _libssh2_error(session,
++                                          LIBSSH2_ERROR_OUT_OF_BOUNDARY,
++                                          "Bad keyboard auth name");
+                 s += 4;
+             }
+             else {

@@ -10,7 +10,7 @@ which loads a few libraries, eventually calling [`repl_entrypoint()` in `src/jla
 
 `repl_entrypoint()` calls [`libsupport_init()`](https://github.com/JuliaLang/julia/blob/master/src/support/libsupportinit.c)
 to set the C library locale and to initialize the "ios" library (see [`ios_init_stdstreams()`](https://github.com/JuliaLang/julia/blob/master/src/support/ios.c)
-and [Legacy `ios.c` library](@ref)).
+and [Legacy `ios.c` library](@ref Legacy-ios.c-library)).
 
 Next [`jl_parse_opts()`](https://github.com/JuliaLang/julia/blob/master/src/jloptions.c) is called to process
 command line options. Note that `jl_parse_opts()` only deals with options that affect code generation
@@ -29,7 +29,7 @@ by `main()` and calls [`_julia_init()` in `init.c`](https://github.com/JuliaLang
 to zero the signal handler mask.
 
 [`jl_resolve_sysimg_location()`](https://github.com/JuliaLang/julia/blob/master/src/init.c) searches
-configured paths for the base system image. See [Building the Julia system image](@ref).
+configured paths for the base system image. See [Building the Julia system image](@ref Building-the-Julia-system-image).
 
 [`jl_gc_init()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c) sets up allocation pools
 and lists for weak refs, preserved values and finalization.
@@ -55,7 +55,7 @@ jl_int32_type = jl_new_primitivetype(jl_symbol("Int32"), core,
 object; initializes the global `jl_root_task` struct; and sets `jl_current_task` to the root task.
 
 [`jl_init_codegen()`](https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp) initializes
-the [LLVM library](http://llvm.org).
+the [LLVM library](https://llvm.org).
 
 [`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) initializes
 8-bit serialization tags for builtin `jl_value_t` values.
@@ -130,14 +130,14 @@ and `main()` calls `repl_entrypoint(argc, (char**)argv)`.
 
 !!! sidebar "sysimg"
     If there is a sysimg file, it contains a pre-cooked image of the `Core` and `Main` modules (and
-    whatever else is created by `boot.jl`). See [Building the Julia system image](@ref).
+    whatever else is created by `boot.jl`). See [Building the Julia system image](@ref Building-the-Julia-system-image).
 
     [`jl_restore_system_image()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) deserializes
     the saved sysimg into the current Julia runtime environment and initialization continues after
     `jl_init_box_caches()` below...
 
     Note: [`jl_restore_system_image()` (and `staticdata.c` in general)](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c)
-    uses the [Legacy `ios.c` library](@ref).
+    uses the [Legacy `ios.c` library](@ref Legacy-ios.c-library).
 
 ## `repl_entrypoint()`
 
@@ -174,7 +174,7 @@ and [`Base.print()`](@ref) before arriving at [`write(s::IO, a::Array{T}) where 
  which does `ccall(jl_uv_write())`.
 
 [`jl_uv_write()`](https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c) calls `uv_write()`
-to write "Hello World!" to `JL_STDOUT`. See [Libuv wrappers for stdio](@ref).:
+to write "Hello World!" to `JL_STDOUT`. See [Libuv wrappers for stdio](@ref Libuv-wrappers-for-stdio).:
 
 ```
 Hello World!
@@ -185,32 +185,32 @@ Hello World!
 | `jl_uv_write()`                | `jl_uv.c`       | called though [`ccall`](@ref)                        |
 | `julia_write_282942`           | `stream.jl`     | function `write!(s::IO, a::Array{T}) where T`        |
 | `julia_print_284639`           | `ascii.jl`      | `print(io::IO, s::String) = (write(io, s); nothing)` |
-| `jlcall_print_284639`          |                 |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jlcall_print_284639`          |                 |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.print(Base.TTY, String)`                       |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.print(Base.TTY, String, Char, Char...)`        |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_f_apply()`                 | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_f_apply()`                 | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.println(Base.TTY, String, String...)`          |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `jl_trampoline()`              | `builtins.c`    |                                                      |
-| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `jl_trampoline()`              | `builtins.c`    |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
 | `jl_apply_generic()`           | `gf.c`          | `Base.println(String,)`                              |
-| `jl_apply()`                   | `julia.h`       |                                                      |
-| `do_call()`                    | `interpreter.c` |                                                      |
-| `eval_body()`                  | `interpreter.c` |                                                      |
-| `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
-| `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
-| `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
-| `Core.eval`                    | `boot.jl`       |                                                      |
+| `jl_apply()`                   | `julia.h`       |                                                      |
+| `do_call()`                    | `interpreter.c` |                                                      |
+| `eval_body()`                  | `interpreter.c` |                                                      |
+| `jl_interpret_toplevel_thunk`  | `interpreter.c` |                                                      |
+| `jl_toplevel_eval_flex`        | `toplevel.c`    |                                                      |
+| `jl_toplevel_eval_in`          | `toplevel.c`    |                                                      |
+| `Core.eval`                    | `boot.jl`       |                                                      |
 
 Since our example has just one function call, which has done its job of printing "Hello World!",
 the stack now rapidly unwinds back to `main()`.

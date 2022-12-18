@@ -3,6 +3,7 @@
 // RUN: clang -D__clang_gcanalyzer__ --analyze -Xanalyzer -analyzer-output=text -Xclang -load -Xclang libGCCheckerPlugin%shlibext -Xclang -verify -I%julia_home/src -I%julia_home/src/support -I%julia_home/usr/include ${CLANGSA_FLAGS} ${CPPFLAGS} ${CFLAGS} -Xclang -analyzer-checker=core,julia.GCChecker --analyzer-no-default-checks -x c++ %s
 
 #include "julia.h"
+#include <string>
 
 void missingPop() {
   jl_value_t *x = NULL;
@@ -33,4 +34,23 @@ void jl_gc_run_finalizers_in_list(jl_ptls_t ptls, arraylist_t *list)
     //for (size_t i = 2;i < len;i += 2)
     //    run_finalizer(ptls, items[i], items[i + 1]);
     JL_GC_POP();
+}
+
+void safepoint(void);
+bool testfunc1() JL_NOTSAFEPOINT
+{
+    struct implied_struct1 { // expected-note{{Tried to call method defined here}}
+        std::string s;
+        struct implied_constructor { } x;
+    } x; // expected-warning{{Calling potential safepoint as CXXConstructorCall from function annotated JL_NOTSAFEPOINT}}
+         // expected-note@-1{{Calling potential safepoint as CXXConstructorCall from function annotated JL_NOTSAFEPOINT}}
+    return 1;
+}
+bool testfunc2() JL_NOTSAFEPOINT
+{
+    struct implied_struct2 { // expected-note{{Tried to call method defined here}}
+        std::string s;
+    } x{""};
+    return 1; // expected-warning{{Calling potential safepoint as CXXDestructorCall from function annotated JL_NOTSAFEPOINT}}
+              // expected-note@-1{{Calling potential safepoint as CXXDestructorCall from function annotated JL_NOTSAFEPOINT}}
 }

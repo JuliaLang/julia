@@ -1,0 +1,108 @@
+From 1f35cd8f2bdcc1876af7352cc3e87bb7277e8162 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Mos=C3=A8=20Giordano?= <mose@gnu.org>
+Date: Sat, 18 Jun 2022 10:35:36 +0100
+Subject: [PATCH 1/1] Make some structs non-empty
+
+Backport of <https://github.com/libunwind/libunwind/pull/332>.
+---
+ include/libunwind-aarch64.h | 6 ++++++
+ include/libunwind-arm.h     | 6 ++++++
+ include/libunwind-x86.h     | 6 ++++++
+ 3 files changed, 18 insertions(+)
+
+diff --git a/include/libunwind-aarch64.h b/include/libunwind-aarch64.h
+index aeaef630..b7066c51 100644
+--- a/include/libunwind-aarch64.h
++++ b/include/libunwind-aarch64.h
+@@ -35,6 +35,10 @@ extern "C" {
+ #include <stddef.h>
+ #include <ucontext.h>
+ 
++#ifndef UNW_EMPTY_STRUCT
++#  define UNW_EMPTY_STRUCT uint8_t unused;
++#endif
++
+ #define UNW_TARGET      aarch64
+ #define UNW_TARGET_AARCH64      1
+ 
+@@ -60,6 +64,7 @@ typedef long double unw_tdep_fpreg_t;
+ typedef struct
+   {
+     /* no aarch64-specific auxiliary proc-info */
++    UNW_EMPTY_STRUCT
+   }
+ unw_tdep_proc_info_t;
+ 
+@@ -169,6 +174,7 @@ aarch64_regnum_t;
+ typedef struct unw_tdep_save_loc
+   {
+     /* Additional target-dependent info on a save location.  */
++    UNW_EMPTY_STRUCT
+   }
+ unw_tdep_save_loc_t;
+ 
+diff --git a/include/libunwind-arm.h b/include/libunwind-arm.h
+index 6709b7ab..7c7005d1 100644
+--- a/include/libunwind-arm.h
++++ b/include/libunwind-arm.h
+@@ -32,6 +32,10 @@ extern "C" {
+ #include <inttypes.h>
+ #include <stddef.h>
+ 
++#ifndef UNW_EMPTY_STRUCT
++#  define UNW_EMPTY_STRUCT uint8_t unused;
++#endif
++
+ #define UNW_TARGET      arm
+ #define UNW_TARGET_ARM  1
+ 
+@@ -247,6 +251,7 @@ arm_regnum_t;
+ typedef struct unw_tdep_save_loc
+   {
+     /* Additional target-dependent info on a save location.  */
++    UNW_EMPTY_STRUCT
+   }
+ unw_tdep_save_loc_t;
+ 
+@@ -288,6 +293,7 @@ unw_tdep_context_t;
+ typedef struct
+   {
+     /* no arm-specific auxiliary proc-info */
++    UNW_EMPTY_STRUCT
+   }
+ unw_tdep_proc_info_t;
+ 
+diff --git a/include/libunwind-x86.h b/include/libunwind-x86.h
+index 40fe0464..d3b741d3 100644
+--- a/include/libunwind-x86.h
++++ b/include/libunwind-x86.h
+@@ -34,6 +34,10 @@ extern "C" {
+ #include <inttypes.h>
+ #include <ucontext.h>
+ 
++#ifndef UNW_EMPTY_STRUCT
++#  define UNW_EMPTY_STRUCT uint8_t unused;
++#endif
++
+ #define UNW_TARGET      x86
+ #define UNW_TARGET_X86  1
+ 
+@@ -158,6 +162,7 @@ x86_regnum_t;
+ typedef struct unw_tdep_save_loc
+   {
+     /* Additional target-dependent info on a save location.  */
++    UNW_EMPTY_STRUCT
+   }
+ unw_tdep_save_loc_t;
+ 
+@@ -169,6 +174,7 @@ typedef ucontext_t unw_tdep_context_t;
+ typedef struct
+   {
+     /* no x86-specific auxiliary proc-info */
++    UNW_EMPTY_STRUCT
+   }
+ unw_tdep_proc_info_t;
+ 
+-- 
+2.36.1
+

@@ -1,11 +1,11 @@
 ## UTF8PROC ##
-UTF8PROC_GIT_URL := git://github.com/JuliaLang/utf8proc.git
+UTF8PROC_GIT_URL := https://github.com/JuliaLang/utf8proc.git
 UTF8PROC_TAR_URL = https://api.github.com/repos/JuliaLang/utf8proc/tarball/$1
 $(eval $(call git-external,utf8proc,UTF8PROC,,,$(BUILDDIR)))
 
 UTF8PROC_OBJ_LIB    := $(build_libdir)/libutf8proc.a
 UTF8PROC_OBJ_HEADER := $(build_includedir)/utf8proc.h
-UTF8PROC_CFLAGS     := -O2
+UTF8PROC_CFLAGS     := -O2 $(SANITIZE_OPTS)
 UTF8PROC_MFLAGS     := CC="$(CC)" CFLAGS="$(CFLAGS) $(UTF8PROC_CFLAGS)" PICFLAG="$(fPIC)" AR="$(AR)"
 UTF8PROC_BUILDDIR   := $(BUILDDIR)/$(UTF8PROC_SRC_DIR)
 
@@ -29,7 +29,7 @@ $(eval $(call staged-install, \
 	UTF8PROC_INSTALL,,,))
 
 clean-utf8proc:
-	-rm $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
+	-rm -f $(BUILDDIR)/$(UTF8PROC_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(UTF8PROC_SRC_DIR) clean
 
 get-utf8proc: $(UTF8PROC_SRC_FILE)

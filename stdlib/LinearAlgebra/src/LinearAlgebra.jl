@@ -9,16 +9,20 @@ module LinearAlgebra
 
 import Base: \, /, *, ^, +, -, ==
 import Base: USE_BLAS64, abs, acos, acosh, acot, acoth, acsc, acsch, adjoint, asec, asech,
-    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!, cos,
-    cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
-    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!, length, log, map, ndims,
-    one, oneunit, parent, power_by_squaring, print_matrix, promote_rule, real, round, sec, sech,
-    setindex!, show, similar, sin, sincos, sinh, size, sqrt,
-    strides, stride, tan, tanh, transpose, trunc, typed_hcat, vec, zero
+    asin, asinh, atan, atanh, axes, big, broadcast, ceil, cis, conj, convert, copy, copyto!,
+    copymutable, cos, cosh, cot, coth, csc, csch, eltype, exp, fill!, floor, getindex, hcat,
+    getproperty, imag, inv, isapprox, isequal, isone, iszero, IndexStyle, kron, kron!,
+    length, log, map, ndims, one, oneunit, parent, permutedims, power_by_squaring,
+    print_matrix, promote_rule, real, round, sec, sech, setindex!, show, similar, sin,
+    sincos, sinh, size, sqrt, strides, stride, tan, tanh, transpose, trunc, typed_hcat,
+    vec, zero
 using Base: IndexLinear, promote_eltype, promote_op, promote_typeof,
-    @propagate_inbounds, @pure, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
-    splat
+    @propagate_inbounds, reduce, typed_hvcat, typed_vcat, require_one_based_indexing,
+    Splat
 using Base.Broadcast: Broadcasted, broadcasted
+using Base.PermutedDimsArrays: CommutativeOps
+using OpenBLAS_jll
+using libblastrampoline_jll
 import Libdl
 
 export
@@ -45,6 +49,7 @@ export
     LU,
     LDLt,
     NoPivot,
+    RowNonZero,
     QR,
     QRPivoted,
     LQ,
@@ -100,6 +105,7 @@ export
     istril,
     istriu,
     kron,
+    kron!,
     ldiv!,
     ldlt!,
     ldlt,
@@ -170,6 +176,7 @@ struct QRIteration <: Algorithm end
 
 abstract type PivotingStrategy end
 struct NoPivot <: PivotingStrategy end
+struct RowNonZero <: PivotingStrategy end
 struct RowMaximum <: PivotingStrategy end
 struct ColumnNorm <: PivotingStrategy end
 
@@ -276,6 +283,10 @@ The reason for this is that factorization itself is both expensive and typically
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
 
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
+
 # Examples
 ```jldoctest
 julia> A = [1 2.2 4; 3.1 0.2 3; 4 1 2];
@@ -312,6 +323,10 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `ldiv!` usually also require fine-grained
 control over the factorization of `A`.
+
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
 
 # Examples
 ```jldoctest
@@ -350,13 +365,25 @@ The reason for this is that factorization itself is both expensive and typically
 (although it can also be done in-place via, e.g., [`lu!`](@ref)),
 and performance-critical situations requiring `rdiv!` usually also require fine-grained
 control over the factorization of `B`.
+
+!!! note
+    Certain structured matrix types, such as `Diagonal` and `UpperTriangular`, are permitted, as
+    these are already in a factorized form
 """
 rdiv!(A, B)
 
-
-
 """
     copy_oftype(A, T)
+
+Creates a copy of `A` with eltype `T`. No assertions about mutability of the result are
+made. When `eltype(A) == T`, then this calls `copy(A)` which may be overloaded for custom
+array types. Otherwise, this calls `convert(AbstractArray{T}, A)`.
+"""
+copy_oftype(A::AbstractArray{T}, ::Type{T}) where {T} = copy(A)
+copy_oftype(A::AbstractArray{T,N}, ::Type{S}) where {T,N,S} = convert(AbstractArray{S,N}, A)
+
+"""
+    copymutable_oftype(A, T)
 
 Copy `A` to a mutable array with eltype `T` based on `similar(A, T)`.
 
@@ -364,46 +391,27 @@ The resulting matrix typically has similar algebraic structure as `A`. For
 example, supplying a tridiagonal matrix results in another tridiagonal matrix.
 In general, the type of the output corresponds to that of `similar(A, T)`.
 
-There are three often used methods in LinearAlgebra to create a mutable copy
-of an array with a given eltype. These copies can be passed to in-place
-algorithms (such as ldiv!, rdiv!, lu! and so on). Which one to use in practice
-depends on what is known (or assumed) about the structure of the array in that
-algorithm.
+In LinearAlgebra, mutable copies (of some desired eltype) are created to be passed
+to in-place algorithms (such as `ldiv!`, `rdiv!`, `lu!` and so on). If the specific
+algorithm is known to preserve the algebraic structure, use `copymutable_oftype`.
+If the algorithm is known to return a dense matrix (or some wrapper backed by a dense
+matrix), then use `copy_similar`.
 
-See also: `copy_similar`, `copy_to_array`.
+See also: `Base.copymutable`, `copy_similar`.
 """
-copy_oftype(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A,T), A)
+copymutable_oftype(A::AbstractArray, ::Type{S}) where {S} = copyto!(similar(A, S), A)
 
 """
     copy_similar(A, T)
 
 Copy `A` to a mutable array with eltype `T` based on `similar(A, T, size(A))`.
 
-Compared to `copy_oftype`, the result can be more flexible. For example,
-supplying a tridiagonal matrix results in a sparse array. In general, the type
-of the output corresponds to that of the three-argument method `similar(A, T, size(s))`.
+Compared to `copymutable_oftype`, the result can be more flexible. In general, the type
+of the output corresponds to that of the three-argument method `similar(A, T, size(A))`.
 
-See also: `copy_oftype`, `copy_to_array`.
+See also: `copymutable_oftype`.
 """
 copy_similar(A::AbstractArray, ::Type{T}) where {T} = copyto!(similar(A, T, size(A)), A)
-
-"""
-    copy_to_array(A, T)
-
-Copy `A` to a regular dense `Array` with element type `T`.
-
-The resulting array is mutable. It can be used, for example, to pass the data of
-`A` to an efficient in-place method for a matrix factorization such as `lu!`, in
-cases where a more specific implementation of `lu!` (or `lu`) is not available.
-
-See also: `copy_oftype`, `copy_similar`.
-"""
-copy_to_array(A::AbstractArray, ::Type{T}) where {T} = copyto!(Array{T}(undef, size(A)...), A)
-
-# The three copy functions above return mutable arrays with eltype T.
-# To only ensure a certain eltype, and if a mutable copy is not needed, it is
-# more efficient to use:
-# convert(AbstractArray{T}, A)
 
 
 include("adjtrans.jl")
@@ -453,18 +461,45 @@ _cut_B(x::AbstractVector, r::UnitRange) = length(x)  > length(r) ? x[r]   : x
 _cut_B(X::AbstractMatrix, r::UnitRange) = size(X, 1) > length(r) ? X[r,:] : X
 
 # SymTridiagonal ev can be the same length as dv, but the last element is
-# ignored. However, some methods can fail if they read the entired ev
+# ignored. However, some methods can fail if they read the entire ev
 # rather than just the meaningful elements. This is a helper function
 # for getting only the meaningful elements of ev. See #41089
-_evview(S::SymTridiagonal) = @view S.ev[begin:length(S.dv) - 1]
+_evview(S::SymTridiagonal) = @view S.ev[begin:begin + length(S.dv) - 2]
 
 ## append right hand side with zeros if necessary
 _zeros(::Type{T}, b::AbstractVector, n::Integer) where {T} = zeros(T, max(length(b), n))
 _zeros(::Type{T}, B::AbstractMatrix, n::Integer) where {T} = zeros(T, max(size(B, 1), n), size(B, 2))
 
+# convert to Vector, if necessary
+_makevector(x::Vector) = x
+_makevector(x::AbstractVector) = Vector(x)
+
+# append a zero element / drop the last element
+_pushzero(A) = (B = similar(A, length(A)+1); @inbounds B[begin:end-1] .= A; @inbounds B[end] = zero(eltype(B)); B)
+_droplast!(A) = deleteat!(A, lastindex(A))
+
+# some trait like this would be cool
+# onedefined(::Type{T}) where {T} = hasmethod(one, (T,))
+# but we are actually asking for oneunit(T), that is, however, defined for generic T as
+# `T(one(T))`, so the question is equivalent for whether one(T) is defined
+onedefined(::Type) = false
+onedefined(::Type{<:Number}) = true
+
+# initialize return array for op(A, B)
+_init_eltype(::typeof(*), ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(matprod(oneunit(TA), oneunit(TB))) :
+        promote_op(matprod, TA, TB)
+_init_eltype(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
+    (onedefined(TA) && onedefined(TB)) ?
+        typeof(op(oneunit(TA), oneunit(TB))) :
+        promote_op(op, TA, TB)
+_initarray(op, ::Type{TA}, ::Type{TB}, C) where {TA,TB} =
+    similar(C, _init_eltype(op, TA, TB), size(C))
+
 # General fallback definition for handling under- and overdetermined system as well as square problems
 # While this definition is pretty general, it does e.g. promote to common element type of lhs and rhs
-# which is required by LAPACK but not SuiteSpase which allows real-complex solves in some cases. Hence,
+# which is required by LAPACK but not SuiteSparse which allows real-complex solves in some cases. Hence,
 # we restrict this method to only the LAPACK factorizations in LinearAlgebra.
 # The definition is put here since it explicitly references all the Factorizion structs so it has
 # to be located after all the files that define the structs.
@@ -545,56 +580,72 @@ end
 
 
 function versioninfo(io::IO=stdout)
+    indent = "  "
     config = BLAS.get_config()
-    println(io, "BLAS: $(BLAS.libblastrampoline) ($(join(string.(config.build_flags), ", ")))")
+    build_flags = join(string.(config.build_flags), ", ")
+    println(io, "BLAS: ", BLAS.libblastrampoline, " (", build_flags, ")")
     for lib in config.loaded_libs
-        println(io, " --> $(lib.libname) ($(uppercase(string(lib.interface))))")
+        interface = uppercase(string(lib.interface))
+        println(io, indent, "--> ", lib.libname, " (", interface, ")")
+    end
+    println(io, "Threading:")
+    println(io, indent, "Threads.threadpoolsize() = ", Threads.threadpoolsize())
+    println(io, indent, "Threads.maxthreadid() = ", Base.Threads.maxthreadid())
+    println(io, indent, "LinearAlgebra.BLAS.get_num_threads() = ", BLAS.get_num_threads())
+    println(io, "Relevant environment variables:")
+    env_var_names = [
+        "JULIA_NUM_THREADS",
+        "MKL_DYNAMIC",
+        "MKL_NUM_THREADS",
+         # OpenBLAS has a hierarchy of environment variables for setting the
+         # number of threads, see
+         # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
+        ("OPENBLAS_NUM_THREADS", "GOTO_NUM_THREADS", "OMP_NUM_THREADS"),
+    ]
+    printed_at_least_one_env_var = false
+    print_var(io, indent, name) = println(io, indent, name, " = ", ENV[name])
+    for name in env_var_names
+        if name isa Tuple
+            # If `name` is a Tuple, then find the first environment which is
+            # defined, and disregard the following ones.
+            for nm in name
+                if haskey(ENV, nm)
+                    print_var(io, indent, nm)
+                    printed_at_least_one_env_var = true
+                    break
+                end
+            end
+        else
+            if haskey(ENV, name)
+                print_var(io, indent, name)
+                printed_at_least_one_env_var = true
+            end
+        end
+    end
+    if !printed_at_least_one_env_var
+        println(io, indent, "[none]")
     end
     return nothing
 end
 
-function find_library_path(name)
-    shlib_ext = string(".", Libdl.dlext)
-    if !endswith(name, shlib_ext)
-        name_ext = string(name, shlib_ext)
-    end
-
-    # On windows, we look in `bin` and never in `lib`
-    @static if Sys.iswindows()
-        path = joinpath(Sys.BINDIR, name_ext)
-        isfile(path) && return path
-    else
-        # On other platforms, we check `lib/julia` first, and if that doesn't exist, `lib`.
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, "julia", name_ext)
-        isfile(path) && return path
-
-        path = joinpath(Sys.BINDIR, Base.LIBDIR, name_ext)
-        isfile(path) && return path
-    end
-
-    # If we can't find it by absolute path, we'll try just passing this straight through to `dlopen()`
-    return name
-end
-
 function __init__()
     try
-        libblas_path = find_library_path(Base.libblas_name)
-        liblapack_path = find_library_path(Base.liblapack_name)
-        # We manually `dlopen()` these libraries here, so that we search with `libjulia-internal`'s
-        # `RPATH` and not `libblastrampoline's`.  Once it's been opened, when LBT tries to open it,
-        # it will find the library already loaded.
-        libblas_path = Libdl.dlpath(Libdl.dlopen(libblas_path))
-        BLAS.lbt_forward(libblas_path; clear=true)
-        if liblapack_path != libblas_path
-            liblapack_path = Libdl.dlpath(Libdl.dlopen(liblapack_path))
-            BLAS.lbt_forward(liblapack_path)
-        end
+        BLAS.lbt_forward(OpenBLAS_jll.libopenblas_path; clear=true)
         BLAS.check()
     catch ex
         Base.showerror_nostdio(ex, "WARNING: Error during initialization of module LinearAlgebra")
     end
     # register a hook to disable BLAS threading
     Base.at_disable_library_threading(() -> BLAS.set_num_threads(1))
+
+    # https://github.com/xianyi/OpenBLAS/blob/c43ec53bdd00d9423fc609d7b7ecb35e7bf41b85/README.md#setting-the-number-of-threads-using-environment-variables
+    if !haskey(ENV, "OPENBLAS_NUM_THREADS") && !haskey(ENV, "GOTO_NUM_THREADS") && !haskey(ENV, "OMP_NUM_THREADS")
+        @static if Sys.isapple() && Base.BinaryPlatforms.arch(Base.BinaryPlatforms.HostPlatform()) == "aarch64"
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS))
+        else
+            BLAS.set_num_threads(max(1, Sys.CPU_THREADS ÷ 2))
+        end
+    end
 end
 
 end # module LinearAlgebra

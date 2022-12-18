@@ -126,6 +126,7 @@ fails as `zero(::Tuple{Int})` is not defined. However,
 """
 iszerodefined(::Type) = false
 iszerodefined(::Type{<:Number}) = true
+iszerodefined(::Type{<:AbstractArray{T}}) where T = iszerodefined(T)
 
 fzeropreserving(bc) = (v = fzero(bc); !ismissing(v) && (iszerodefined(typeof(v)) ? iszero(v) : v == 0))
 # Like sparse matrices, we assume that the zero-preservation property of a broadcasted

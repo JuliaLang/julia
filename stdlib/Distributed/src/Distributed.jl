@@ -10,7 +10,7 @@ import Base: getindex, wait, put!, take!, fetch, isready, push!, length,
              hash, ==, kill, close, isopen, showerror
 
 # imports for use
-using Base: Process, Semaphore, JLOptions, buffer_writes, @sync_add,
+using Base: Process, Semaphore, JLOptions, buffer_writes, @async_unwrap,
             VERSION_STRING, binding_module, atexit, julia_exename,
             julia_cmd, AsyncGenerator, acquire, release, invokelatest,
             shell_escape_posixly, shell_escape_csh,
@@ -76,7 +76,7 @@ function _require_callback(mod::Base.PkgId)
         # broadcast top-level (e.g. from Main) import/using from node 1 (only)
         @sync for p in procs()
             p == 1 && continue
-            @sync_add remotecall(p) do
+            @async_unwrap remotecall_wait(p) do
                 Base.require(mod)
                 nothing
             end
