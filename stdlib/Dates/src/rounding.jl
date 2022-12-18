@@ -85,12 +85,16 @@ function Base.floor(dt::DateTime, p::TimePeriod)
 end
 
 """
-    floor(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> T
+    Base.floor(x::ConvertiblePeriod, precision::T) where T <: ConvertiblePeriod
 
 Round `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
-Warning: Argument order of this floor method differs from the standard rounding argument order.
+For convenience, `precision` may be a type instead of a value: `floor(x, Dates.Hour)` is a
+shortcut for `floor(x, Dates.Hour(1))`.
+
+!!! warning
+    argument order of this floor method differs from the standard rounding argument order. 
 
 ```jldoctest
 julia> floor(Week, Day(16))
@@ -158,12 +162,16 @@ function Base.ceil(p::Period, dt::TimeType)
 end
 
 """
-    ceil(precision::T, x::Period) where T <: Union{TimePeriod, Week, Day} -> T
+    Base.ceil(x::ConvertiblePeriod, precision::ConvertiblePeriod)
 
 Round `x` up to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
-Warning: Argument order of this ceil method differs from the standard rounding argument order.
+For convenience, `precision` may be a type instead of a value: `ceil(x, Dates.Hour)` is a
+shortcut for `ceil(x, Dates.Hour(1))`.
+
+!!! warning
+    argument order of this ceil method differs from the standard rounding argument order. 
 
 ```jldoctest
 julia> ceil(Week, Day(16))
@@ -235,14 +243,18 @@ function Base.round(p::Period, dt::TimeType, r::RoundingMode{:NearestTiesUp})
 end
 
 """
-    round(precision::T, , x::Period, [r::RoundingMode]) where T <: Union{TimePeriod, Week, Day} -> T
+    Base.round(x::ConvertiblePeriod, precision::ConvertiblePeriod, r::RoundingMode{:NearestTiesUp})
 
 Round `x` to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 90 minutes to the nearest hour) will be rounded
 up.
 
-Warning: Argument order of this round method differs from the standard rounding argument order.
+For convenience, `precision` may be a type instead of a value: `round(x, Dates.Hour)` is a
+shortcut for `round(x, Dates.Hour(1))`.
+
+!!! warning
+    argument order of this round method differs from the standard rounding argument order. 
 
 ```jldoctest
 julia> round(Week, Day(16))
