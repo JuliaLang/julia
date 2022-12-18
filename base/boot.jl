@@ -344,6 +344,15 @@ struct AssertionError <: Exception
 end
 AssertionError() = AssertionError("")
 
+abstract type FloatingPointException  <: Exception end
+
+struct DivideByZeroFloatingPointException <: FloatingPointException end
+struct OverflowFloatingPointException     <: FloatingPointException end
+struct UnderflowFloatingPointException    <: FloatingPointException end
+struct InexactFloatingPointException      <: FloatingPointException end
+struct InvalidFloatingPointException      <: FloatingPointException end
+
+
 abstract type WrappedException <: Exception end
 
 struct LoadError <: WrappedException
