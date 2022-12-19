@@ -241,7 +241,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
         if (jl_is_method(m)) {
             if (jl_object_in_image((jl_value_t*)m->module)) {
                 if (ptrhash_get(&external_mis, mi) == HT_NOTFOUND) {
-                    int found = has_backedge_to_worklist(mi, &visited, &stack);
+                    int found = type_in_worklist(mi->specTypes) | has_backedge_to_worklist(mi, &visited, &stack);
                     assert(found == 0 || found == 1);
                     assert(stack.len == 0);
                     if (found == 1) {
