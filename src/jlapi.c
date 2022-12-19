@@ -537,10 +537,10 @@ JL_DLLEXPORT int jl_set_fenv_except(int excepts)
     fenv_t env;
     fegetenv(&env);
 #if defined(_CPU_AARCH64_)
-    env.__fpcr = env.__fpcr | (excepts << 8);
+    env.__fpcr = (env.__fpcr & ~(FE_ALL_EXCEPT << 8)) | (excepts << 8);
 #elif defined(_CPU_X86_64_)
-    env.__control = env.__control & ~excepts;
-    env.__mxcsr = env.__mxcsr & ~(excepts << 7);
+    env.__control = (env.__control | FE_ALL_EXCEPT) & ~excepts;
+    env.__mxcsr = (env.__mxcsr | FE_ALL_EXCEPT << 7) & ~(excepts << 7);
 #else
     return 1;
 #endif
