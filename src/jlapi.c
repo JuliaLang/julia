@@ -15,6 +15,10 @@
 #include "julia_assert.h"
 #include "julia_internal.h"
 
+#ifdef _OS_WINDOWS_
+#include <float.h>
+#endif
+
 #ifdef __cplusplus
 #include <cfenv>
 extern "C" {
@@ -533,7 +537,7 @@ JL_DLLEXPORT int jl_set_fenv_except(int excepts)
     fenv_t env;
     fegetenv(&env);
 #if defined(_CPU_AARCH64_)
-    env.__fpcr = env.__fpcr | (excepts << FE_EXCEPT_SHIFT);
+    env.__fpcr = env.__fpcr | (excepts << 8);
 #elif defined(_CPU_X86_64_)
     env.__control = env.__control & ~excepts;
     env.__mxcsr = env.__mxcsr & ~(excepts << 7);
