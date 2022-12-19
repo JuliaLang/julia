@@ -90,8 +90,6 @@ end
 Round `x` down to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
 
-For convenience, `precision` may be a type instead of a value: `floor(x, Dates.Hour)` is a
-shortcut for `floor(x, Dates.Hour(1))`.
 
 !!! warning
     argument order of this floor method differs from the standard rounding argument order. 
@@ -166,9 +164,6 @@ end
 
 Round `x` up to the nearest multiple of `precision`. If `x` and `precision` are different
 subtypes of `Period`, the return value will have the same type as `precision`.
-
-For convenience, `precision` may be a type instead of a value: `ceil(x, Dates.Hour)` is a
-shortcut for `ceil(x, Dates.Hour(1))`.
 
 !!! warning
     argument order of this ceil method differs from the standard rounding argument order. 
@@ -249,9 +244,6 @@ Round `x` to the nearest multiple of `precision`. If `x` and `precision` are dif
 subtypes of `Period`, the return value will have the same type as `precision`. By default
 (`RoundNearestTiesUp`), ties (e.g., rounding 90 minutes to the nearest hour) will be rounded
 up.
-
-For convenience, `precision` may be a type instead of a value: `round(x, Dates.Hour)` is a
-shortcut for `round(x, Dates.Hour(1))`.
 
 !!! warning
     argument order of this round method differs from the standard rounding argument order. 
