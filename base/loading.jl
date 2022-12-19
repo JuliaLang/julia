@@ -1102,7 +1102,7 @@ function run_extension_callbacks(; force::Bool=false)
         for extid in EXT_DORMITORY
             extid.succeeded && continue
             !force && extid.triggered && continue
-            if all(x -> haskey(Base.loaded_modules, x), extid.triggers)
+            if all(x -> haskey(Base.loaded_modules, x) && !haskey(package_locks, x), extid.triggers)
                 ext_not_allowed_load = nothing
                 extid.triggered = true
                 # It is possible that some of the triggers were loaded in an environment
