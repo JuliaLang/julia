@@ -237,8 +237,8 @@ julia> transpose(v) * v # compute the dot product
 
 For a matrix of matrices, the individual blocks are recursively operated on:
 ```jldoctest
-julia> C = reshape(1:4, 2, 2)
-2×2 reshape(::UnitRange{Int64}, 2, 2) with eltype Int64:
+julia> C = [1 3; 2 4]
+2×2 Matrix{Int64}:
  1  3
  2  4
 
