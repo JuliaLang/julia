@@ -186,6 +186,11 @@ export
     ErrorException, BoundsError, DivideError, DomainError, Exception,
     InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
     OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    DivideByZeroFloatingPointException,
+    OverflowFloatingPointException,
+    UnderflowFloatingPointException,
+    InexactFloatingPointException,
+    InvalidFloatingPointException,
     TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
     UndefKeywordError, ConcurrencyViolationError,
     # AST representation

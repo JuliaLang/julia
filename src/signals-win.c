@@ -66,14 +66,23 @@ void __cdecl crt_sig_handler(int sig, int num)
         fpreset();
         signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler);
         switch(num) {
-        case _FPE_INVALID:
-        case _FPE_OVERFLOW:
-        case _FPE_UNDERFLOW:
         default:
             jl_errorf("Unexpected FPE Error 0x%X", num);
             break;
+        case _FPE_INVALID:
+          jl_throw(jl_invalid_fp_exception);
+            break;
+        case _FPE_OVERFLOW:
+            jl_throw(jl_overflow_fp_exception);
+            break;
+        case _FPE_UNDERFLOW:
+            jl_throw(jl_underflow_fp_exception);
+            break;
         case _FPE_ZERODIVIDE:
-            jl_throw(jl_diverror_exception);
+            jl_throw(jl_divbyzero_fp_exception);
+            break;
+        case _FPE_INEXACT:
+            jl_throw(jl_inexact_fp_exception);
             break;
         }
         break;

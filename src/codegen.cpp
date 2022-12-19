@@ -8402,6 +8402,11 @@ static void init_jit_functions(void)
     global_jlvalue_to_llvm(new JuliaVariable{"jl_emptysvec", true, get_pjlvalue}, (jl_value_t**)&jl_emptysvec);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_emptytuple", true, get_pjlvalue}, &jl_emptytuple);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, get_pjlvalue}, &jl_diverror_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_divbyzero_fp_exception", true, get_pjlvalue}, &jl_divbyzero_fp_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_overflow_fp_exception", true, get_pjlvalue}, &jl_overflow_fp_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_underflow_fp_exception", true, get_pjlvalue}, &jl_underflow_fp_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_inexact_fp_exception", true, get_pjlvalue}, &jl_inexact_fp_exception);
+    global_jlvalue_to_llvm(new JuliaVariable{"jl_invalid_fp_exception", true, get_pjlvalue}, &jl_invalid_fp_exception);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, get_pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
     add_named_global("__stack_chk_fail", &__stack_chk_fail);
