@@ -238,49 +238,10 @@ end
             Would result in the state being 2 which is a shift of 12:
                 state = 0b0000|000110|010010|010010|000110|001100|000110|001100|000000|000110|000110 >> 30
                 state = 0b0000|000000|000000|000000|000000|000000|000110|010010|010010|000110|001100|
-
-    The code below will create the _UTF8_DFA_TABLE to be pasted in source.
-    It is included here in an effort to document a contrived process.
-    Do Not Uncomment the code below in this file it should be pasted into REPL
-
-            function build_utf8_validation_statemachine_table(; num_classes=12, num_states=10, bit_per_state = 6)
-
-                # class_repeats represents the 256 byte's classes by storing the (class, #of repeats)
-                class_repeats = [ (0, 128), (1, 16), (9, 16), (7, 32), (8, 2), (2, 30), (10, 1),
-                                (3,  12), (4,  1), (3,  2), (11, 1), (6, 3), (5,  1), (8, 11)]
-
-                # See discription above
-                state_arrays = [[ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 1, 1, 0, 2, 1, 2, 1, 3, 3, 1],
-                                [ 2, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 3, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 5, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 8, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 7, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 1, 1, 0, 2, 2, 1, 3, 3, 1, 1],
-                                [ 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 1, 1, 0, 2, 1, 2, 3, 3, 1, 1],
-                                [ 4, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-                                [ 6, 1, 1, 1, 1, 1, 1, 1, 1, 1]]
-                #This converts the state_arrays into the shift encoded UInt64
-                class_row = zeros(UInt64, num_classes)
-                for i = 1:num_classes
-                    row = UInt64(0)
-                    for j in 1:num_states
-                        to_shift = UInt8((state_arrays[i][j]) * bit_per_state)
-                        row = row | (UInt64(to_shift) << ((j - 1) * bit_per_state))
-                    end
-                    class_row[i]=row
-                end
-                print("\nconst _UTF8_DFA_TABLE = [\n")
-                for (class, repeats) in class_repeats
-                    print("    fill(UInt64($(class_row[class+1])), $repeats);\n")
-                end
-                print("    ]\n")
-            end
 =#
-# This table will be filled with 256 UInt64 representing the DFA transitions for all bytes
-const _UTF8_DFA_TABLE = let
+
+# Fill the table with 256 UInt64 representing the DFA transitions for all bytes
+const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute base
     num_classes=12
     num_states=10
     bit_per_state = 6
@@ -316,22 +277,7 @@ const _UTF8_DFA_TABLE = let
     end
     mapreduce(t->fill(class_row[t[1]+1],t[2]),vcat,class_repeats)
 end
-# const _UTF8_DFA_TABLE = [
-#     fill(UInt64(109802048057794944), 128);
-#     fill(UInt64(113232530780455302), 16);
-#     fill(UInt64(109855655693648262), 16);
-#     fill(UInt64(109855649351860614), 32);
-#     fill(UInt64(109802048057794950), 2);
-#     fill(UInt64(109802048057794956), 30);
-#     fill(UInt64(109802048057794968), 1);
-#     fill(UInt64(109802048057794962), 12);
-#     fill(UInt64(109802048057794974), 1);
-#     fill(UInt64(109802048057794962), 2);
-#     fill(UInt64(109802048057794980), 1);
-#     fill(UInt64(109802048057794986), 3);
-#     fill(UInt64(109802048057794992), 1);
-#     fill(UInt64(109802048057794950), 11)
-#     ]
+
 
 const _UTF8_DFA_ACCEPT = UInt64(0) #This state represents the start and end of any valid string
 const _UTF8_DFA_INVALID = UInt64(6) # If the state machine is ever in this state just stop
