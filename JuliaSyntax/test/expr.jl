@@ -208,14 +208,22 @@
         # ref
         @test parse(Expr, "x[i=j]") ==
             Expr(:ref, :x, Expr(:kw, :i, :j))
+        @test parse(Expr, "(i=j)[x]") ==
+            Expr(:ref, Expr(:(=), :i, :j), :x)
         @test parse(Expr, "x[a, b; i=j]") ==
             Expr(:ref, :x, Expr(:parameters, Expr(:(=), :i, :j)), :a, :b)
+        # curly
+        @test parse(Expr, "(i=j){x}") ==
+            Expr(:curly, Expr(:(=), :i, :j), :x)
+        @test parse(Expr, "x{a, b; i=j}") ==
+            Expr(:curly, :x, Expr(:parameters, Expr(:(=), :i, :j)), :a, :b)
 
-        # vect/braces
+        # vect
         @test parse(Expr, "[a=1,; b=2]") ==
             Expr(:vect,
                  Expr(:parameters, Expr(:(=), :b, 2)),
                  Expr(:(=), :a, 1))
+        # braces
         @test parse(Expr, "{a=1,; b=2}") ==
             Expr(:braces,
                  Expr(:parameters, Expr(:(=), :b, 2)),
