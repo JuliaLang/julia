@@ -253,4 +253,22 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 """
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
+
+function set_exceptions(;
+                        invalid=false,
+                        inexact=false,
+                        overflow=false,
+                        underflow=false,
+                        dividebyzero=false
+                        )
+
+    excepts = (invalid * JL_FE_INVALID) |
+        (inexact * JL_FE_INEXACT) |
+        (underflow * JL_FE_UNDERFLOW) |
+        (overflow * JL_FE_OVERFLOW) |
+        (dividebyzero * JL_FE_DIVBYZERO)
+
+    ccall(:jl_set_fenv_except,Cint,(Cint,), excepts) == 0
+end
+
 end #module
