@@ -208,6 +208,8 @@
         # ref
         @test parse(Expr, "x[i=j]") ==
             Expr(:ref, :x, Expr(:kw, :i, :j))
+        @test parse(Expr, "x[a, b; i=j]") ==
+            Expr(:ref, :x, Expr(:parameters, Expr(:(=), :i, :j)), :a, :b)
 
         # vect/braces
         @test parse(Expr, "[a=1,; b=2]") ==

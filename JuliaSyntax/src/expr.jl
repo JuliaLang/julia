@@ -31,7 +31,7 @@ function reorder_parameters!(args, params_pos)
 end
 
 function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
-                  eq_to_kw=false, inside_vect_or_braces=false)
+                  eq_to_kw=false, map_kw_in_params=false)
     if !haschildren(node)
         val = node.val
         if val isa Union{Int128,UInt128,BigInt}
@@ -131,8 +131,8 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
         eq_to_kw_in_call =
             ((headsym == :call || headsym == :dotcall) && is_prefix_call(node)) ||
             headsym == :ref
-        eq_to_kw_all = headsym == :parameters && !inside_vect_or_braces
-        in_vb = headsym == :vect || headsym == :braces
+        eq_to_kw_all = headsym == :parameters && !map_kw_in_params
+        in_vbr = headsym == :vect || headsym == :braces || headsym == :ref
         if insert_linenums && isempty(node_args)
             push!(args, source_location(LineNumberNode, node.source, node.position))
         else
@@ -144,7 +144,7 @@ function _to_expr(node::SyntaxNode; iteration_spec=false, need_linenodes=true,
                 eq_to_kw = eq_to_kw_in_call && i > 1 || eq_to_kw_all
                 args[insert_linenums ? 2*i : i] =
                     _to_expr(n, eq_to_kw=eq_to_kw,
-                             inside_vect_or_braces=in_vb)
+                             map_kw_in_params=in_vbr)
             end
         end
     end
