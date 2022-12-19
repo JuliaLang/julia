@@ -4,6 +4,7 @@ use crate::julia_scanning::process_edge;
 #[cfg(feature = "scan_obj_c")]
 use crate::julia_scanning::process_offset_edge;
 use crate::object_model::BI_MARKING_METADATA_SPEC;
+use crate::FINALIZER_ROOTS;
 use crate::{ROOTS, SINGLETON, UPCALLS};
 use mmtk::memory_manager;
 use mmtk::scheduler::*;
@@ -46,10 +47,18 @@ impl Scanning<JuliaVM> for VMScanning {
 
         let mut roots_to_scan = vec![];
 
-        // roots may contain mmtk objects
         for obj in roots.drain() {
             let obj_ref = ObjectReference::from_raw_address(obj);
             roots_to_scan.push(obj_ref);
+        }
+
+        let fin_roots = FINALIZER_ROOTS.read().unwrap();
+
+        // processing finalizer roots
+        for obj in fin_roots.iter() {
+            let obj_ref = ObjectReference::from_raw_address((*obj).1);
+            roots_to_scan.push(obj_ref);
+            roots_to_scan.push((*obj).0);
         }
 
         factory.create_process_node_roots_work(roots_to_scan);

@@ -8,7 +8,7 @@ use crate::SINGLETON;
 use crate::UPCALLS;
 use crate::{
     get_mutator_ref, set_julia_obj_header_size, ARE_MUTATORS_BLOCKED, BUILDER, DISABLED_GC,
-    FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, STFF_COND, UC_COND, USER_TRIGGERED_GC,
+    FINALIZERS_RUNNING, MUTATORS, MUTATOR_TLS, UC_COND, USER_TRIGGERED_GC,
 };
 use libc::c_char;
 use log::info;
@@ -25,7 +25,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLockWriteGuard;
 
 #[no_mangle]
-pub extern "C" fn gc_init(min_heap_size: usize, max_heap_size: usize, calls: *const Julia_Upcalls, header_size: usize) {
+pub extern "C" fn gc_init(
+    min_heap_size: usize,
+    max_heap_size: usize,
+    calls: *const Julia_Upcalls,
+    header_size: usize,
+) {
     unsafe {
         UPCALLS = calls;
         set_julia_obj_header_size(header_size);
@@ -54,9 +59,15 @@ pub extern "C" fn gc_init(min_heap_size: usize, max_heap_size: usize, calls: *co
         if let Some(plan) = force_plan {
             builder.options.plan.set(plan);
         }
-        let success = builder.options.gc_trigger.set(mmtk::util::options::GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size));
+        let success = builder.options.gc_trigger.set(
+            mmtk::util::options::GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size),
+        );
         // let success = builder.options.heap_size.set(heap_size);
-        assert!(success, "Failed to set heap size to {}-{}", min_heap_size, max_heap_size);
+        assert!(
+            success,
+            "Failed to set heap size to {}-{}",
+            min_heap_size, max_heap_size
+        );
         let success = builder.options.no_reference_types.set(false);
         assert!(success, "Failed to set no_reference_types to false");
     }
@@ -299,9 +310,6 @@ pub extern "C" fn run_finalizers_for_obj(obj: ObjectReference) {
     if !finalizers_running {
         AtomicBool::store(&FINALIZERS_RUNNING, false, Ordering::SeqCst);
     }
-
-    let &(_, ref cvar) = &*STFF_COND.clone();
-    cvar.notify_all();
 }
 
 #[no_mangle]

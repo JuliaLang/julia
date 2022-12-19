@@ -14,6 +14,7 @@ use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
 use mmtk::Mutator;
 use mmtk::MMTK;
+use reference_glue::JuliaFinalizableObject;
 
 use std::collections::{HashMap, HashSet};
 use std::ptr::null_mut;
@@ -96,20 +97,12 @@ lazy_static! {
         Arc::new((Mutex::new(0), Condvar::new()));
     pub static ref UC_COND: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
-
     pub static ref STOP_MUTATORS: Arc<(Mutex<usize>, Condvar)> =
         Arc::new((Mutex::new(0), Condvar::new()));
-    pub static ref ROOTS: Mutex<HashSet<Address>> = {
-        Mutex::new(HashSet::new())
-    };
-    pub static ref MUTATOR_TLS: RwLock<HashSet<String>> =
-        RwLock::new(HashSet::new());
-    pub static ref MUTATORS: RwLock<Vec<ObjectReference>> =
-        RwLock::new(vec![]);
-
-    // finalizer variables
-    pub static ref STFF_COND: Arc<(Mutex<usize>, Condvar)> =
-        Arc::new((Mutex::new(0), Condvar::new()));
+    pub static ref ROOTS: Mutex<HashSet<Address>> = { Mutex::new(HashSet::new()) };
+    pub static ref FINALIZER_ROOTS: RwLock<Vec<JuliaFinalizableObject>> = { RwLock::new(vec![]) };
+    pub static ref MUTATOR_TLS: RwLock<HashSet<String>> = RwLock::new(HashSet::new());
+    pub static ref MUTATORS: RwLock<Vec<ObjectReference>> = RwLock::new(vec![]);
 }
 
 #[link(name = "runtime_gc_c")]

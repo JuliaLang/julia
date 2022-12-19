@@ -1,8 +1,8 @@
 use crate::object_model::BI_MARKING_METADATA_SPEC;
 use crate::JuliaVM;
 use crate::{
-    spawn_collector_thread, BI_METADATA_END_ALIGNED_UP, BI_METADATA_START_ALIGNED_DOWN, SINGLETON,
-    UPCALLS,
+    spawn_collector_thread, BI_METADATA_END_ALIGNED_UP, BI_METADATA_START_ALIGNED_DOWN,
+    FINALIZER_ROOTS, SINGLETON, UPCALLS,
 };
 use log::{info, trace};
 use mmtk::memory_manager;
@@ -14,7 +14,7 @@ use mmtk::Mutator;
 use mmtk::MutatorContext;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::{BLOCK_FOR_GC, FINALIZERS_RUNNING, STFF_COND, STW_COND, WORLD_HAS_STOPPED};
+use crate::{BLOCK_FOR_GC, FINALIZERS_RUNNING, STW_COND, WORLD_HAS_STOPPED};
 
 const GC_THREAD_KIND_CONTROLLER: libc::c_int = 0;
 const GC_THREAD_KIND_WORKER: libc::c_int = 1;
@@ -31,14 +31,6 @@ impl Collection<JuliaVM> for VMCollection {
             while !AtomicBool::load(&WORLD_HAS_STOPPED, Ordering::SeqCst) {
                 // Stay here while the world has not stopped
                 // FIXME add wait var
-            }
-
-            let &(ref lock, ref cvar) = &*STFF_COND.clone();
-            let mut count = lock.lock().unwrap();
-            *count += 1;
-
-            while AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst) {
-                count = cvar.wait(count).unwrap();
             }
         }
         trace!("Stopped the world!")
@@ -68,18 +60,10 @@ impl Collection<JuliaVM> for VMCollection {
     }
 
     fn block_for_gc(tls: VMMutatorThread) {
-        trace!("Triggered GC!");
+        info!("Triggered GC!");
 
         unsafe {
             AtomicBool::store(&BLOCK_FOR_GC, true, Ordering::SeqCst);
-
-            let &(ref lock, ref cvar) = &*STFF_COND.clone();
-            let mut count = lock.lock().unwrap();
-            *count += 1;
-
-            while AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst) {
-                count = cvar.wait(count).unwrap();
-            }
         }
 
         let tls_ptr = match tls {
@@ -123,8 +107,10 @@ impl Collection<JuliaVM> for VMCollection {
 
         unsafe { ((*UPCALLS).set_gc_final_state)(old_state) };
 
-        info!("Finalizing objects!");
-        unsafe { ((*UPCALLS).mmtk_jl_run_finalizers)(tls_ptr) };
+        if !AtomicBool::load(&FINALIZERS_RUNNING, Ordering::SeqCst) {
+            info!("Finalizing objects!");
+            unsafe { ((*UPCALLS).mmtk_jl_run_finalizers)(tls_ptr) };
+        }
 
         unsafe { ((*UPCALLS).set_jl_last_err)(last_err) };
         info!("Finished blocking mutator for GC!");
@@ -167,11 +153,27 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
 
     if at_exit {
         let mut all_finalizable = memory_manager::get_all_finalizers(&SINGLETON);
+
+        {
+            let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
+
+            for obj in all_finalizable.iter() {
+                fin_roots.push(*obj);
+            }
+        }
+
         loop {
             let to_be_finalized = all_finalizable.pop();
 
             match to_be_finalized {
-                Some(obj) => unsafe { ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2) },
+                Some(obj) => unsafe {
+                    ((*UPCALLS).run_finalizer_function)(obj.0, obj.1, obj.2);
+                    {
+                        let mut fin_roots = FINALIZER_ROOTS.write().unwrap();
+                        let fin_root = fin_roots.pop();
+                        assert_eq!(to_be_finalized, fin_root);
+                    }
+                },
                 None => break,
             }
         }
@@ -187,6 +189,4 @@ pub extern "C" fn mmtk_run_finalizers(at_exit: bool) {
     }
 
     AtomicBool::store(&FINALIZERS_RUNNING, false, Ordering::SeqCst);
-    let &(_, ref cvar) = &*STFF_COND.clone();
-    cvar.notify_all();
 }
