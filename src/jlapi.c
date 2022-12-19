@@ -532,20 +532,9 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 
 JL_DLLEXPORT int jl_set_fenv_except(int excepts)
 {
-#ifdef _OS_DARWIN_
-    // https://stackoverflow.com/questions/71821666/trapping-floating-point-exceptions-and-signal-handling-on-apple-silicon
-    fenv_t env;
-    fegetenv(&env);
-#if defined(_CPU_AARCH64_)
-    env.__fpcr = (env.__fpcr & ~(FE_ALL_EXCEPT << 8)) | (excepts << 8);
-#elif defined(_CPU_X86_64_)
-    env.__control = (env.__control | FE_ALL_EXCEPT) & ~excepts;
-    env.__mxcsr = (env.__mxcsr | FE_ALL_EXCEPT << 7) & ~(excepts << 7);
-#else
-    return 1;
-#endif
-    fesetenv(&env);
-    return 0;
+#if defined(__GLIBC__)
+    int prev_excepts = feenableexcept(excepts);
+    return prev_excepts >= 0;
 #elif defined(_OS_WINDOWS_)
     unsigned int flags = 0;
     if (excepts & FE_INEXACT)
@@ -560,9 +549,22 @@ JL_DLLEXPORT int jl_set_fenv_except(int excepts)
       flags |= _EM_INVALID;
     _controlfp(flags, _MCW_EM);
     return 0;
+#elif defined(_OS_DARWIN_)
+    // https://stackoverflow.com/questions/71821666/trapping-floating-point-exceptions-and-signal-handling-on-apple-silicon
+    fenv_t env;
+    fegetenv(&env);
+#if defined(_CPU_AARCH64_)
+    env.__fpcr = (env.__fpcr & ~(FE_ALL_EXCEPT << 8)) | (excepts << 8);
+#elif defined(_CPU_X86_64_)
+    env.__control = (env.__control | FE_ALL_EXCEPT) & ~excepts;
+    env.__mxcsr = (env.__mxcsr | FE_ALL_EXCEPT << 7) & ~(excepts << 7);
 #else
-    int prev_excepts = feenableexcept(excepts);
-    return prev_excepts >= 0;
+    return 1;
+#endif
+    fesetenv(&env);
+    return 0;
+#else
+    return 1;
 #endif
 }
 
