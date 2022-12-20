@@ -255,7 +255,7 @@ get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
 
 function _get_exceptions()
-    excepts = ccall(:jl_set_fenv_except,Cint,())
+    excepts = ccall(:jl_get_fenv_except,Cint,())
     if excepts < 0
         error("Floating point exceptions not supported on this platform")
     end
