@@ -79,9 +79,8 @@ end
 end
 
 @testset "stability" begin
-    for Alg in [InsertionSort, MergeSort, QuickSort, Base.DEFAULT_STABLE,
-            PartialQuickSort(missing, 1729, Base.Sort.SMALL_ALGORITHM),
-            PartialQuickSort(1729, missing, Base.Sort.SMALL_ALGORITHM)]
+    for Alg in [InsertionSort, MergeSort, Base.Sort.QuickerSort(), Base.DEFAULT_STABLE,
+            Base.Sort.QuickerSort(missing, 1729), Base.Sort.QuickerSort(1729, missing)]
         @test issorted(sort(1:2000, alg=Alg, by=x->0))
         @test issorted(sort(1:2000, alg=Alg, by=x->x÷100))
     end
@@ -334,7 +333,7 @@ end
             @test c == v
 
             # stable algorithms
-            for alg in [MergeSort, QuickSort, PartialQuickSort(1:n), Base.DEFAULT_STABLE]
+            for alg in [MergeSort, Base.Sort.QuickerSort(), Base.Sort.QuickerSort(1:n), Base.DEFAULT_STABLE]
                 p = sortperm(v, alg=alg, rev=rev)
                 p2 = sortperm(float(v), alg=alg, rev=rev)
                 @test p == p2
@@ -382,7 +381,7 @@ end
         end
 
         v = randn_with_nans(n,0.1)
-        for alg in [InsertionSort, MergeSort, QuickSort, PartialQuickSort(n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
+        for alg in [InsertionSort, MergeSort, Base.Sort.QuickerSort(), Base.Sort.QuickerSort(1, n), Base.DEFAULT_UNSTABLE, Base.DEFAULT_STABLE],
             rev in [false,true]
             alg === InsertionSort && n >= 3000 && continue
             # test float sorting with NaNs
@@ -589,7 +588,7 @@ end
 
     @testset "fallback" begin
         @test adaptive_sort_test(rand(1:typemax(Int32), len), by=x->x^2)# fallback
-        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=QuickSort)
+        @test adaptive_sort_test(rand(Int, len), by=x->0, trusted=Base.Sort.QuickerSort())
     end
 
     @test adaptive_sort_test(rand(Int, 20)) # InsertionSort
@@ -691,15 +690,16 @@ end
 @testset "invalid lt (#11429)" begin
     # lt must be a total linear order (e.g. < not <=) so this usage is
     # not allowed. Consequently, none of the behavior tested in this
-    # testset is gaurunteed to work in future minor versions of Julia.
+    # testset is guaranteed to work in future minor versions of Julia.
+
+    safe_algs = [InsertionSort, MergeSort, Base.Sort.QuickerSort(), Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
 
     n = 1000
     v = rand(1:5, n);
     s = sort(v);
 
     # Nevertheless, it still works...
-    for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    for alg in safe_algs
         @test sort(v, alg=alg, lt = <=) == s
     end
     @test partialsort(v, 172, lt = <=) == s[172]
@@ -709,16 +709,14 @@ end
     # where i < j if and only if lt(o, v[j], v[i]). This invariant holds even for
     # this invalid lt order.
     perm = reverse(sortperm(v, rev=true))
-    for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    for alg in safe_algs
         @test sort(1:n, alg=alg, lt = (i,j) -> v[i]<=v[j]) == perm
     end
     @test partialsort(1:n, 172, lt = (i,j) -> v[i]<=v[j]) == perm[172]
     @test partialsort(1:n, 315:415, lt = (i,j) -> v[i]<=v[j]) == perm[315:415]
 
     # lt can be very poorly behaved and sort will still permute its input in some way.
-    for alg in [InsertionSort, MergeSort, QuickSort,
-            Base.DEFAULT_STABLE, Base.DEFAULT_UNSTABLE]
+    for alg in safe_algs
         @test sort!(sort(v, alg=alg, lt = (x,y) -> rand([false, true]))) == s
     end
     @test partialsort(v, 172, lt = (x,y) -> rand([false, true])) ∈ 1:5
@@ -899,6 +897,25 @@ end
     @test issorted(sort(rand(typemin(Int):typemin(Int)+100, 1000)))
     @test issorted(sort(rand(typemax(Int)-100:typemax(Int), 1000)))
     @test issorted(sort(rand(Int8, 600)))
+end
+
+@testset "QuickerSort API" begin
+    bsqs = Base.Sort.QuickerSort
+    @test bsqs(1, 2, MergeSort)             === bsqs(1, 2, MergeSort)
+    @test bsqs(missing, 2, MergeSort)       === bsqs(missing, 2, MergeSort)
+    @test bsqs(1, missing, MergeSort)       === bsqs(1, missing, MergeSort)
+    @test bsqs(missing, missing, MergeSort) === bsqs(missing, missing, MergeSort)
+    @test bsqs(1, MergeSort)                === bsqs(1, 1, MergeSort)
+    @test bsqs(missing, MergeSort)          === bsqs(missing, missing, MergeSort)
+    @test bsqs(MergeSort)                   === bsqs(missing, missing, MergeSort)
+
+    @test bsqs(1, 2)                        === bsqs(1, 2, InsertionSort)
+    @test bsqs(missing, 2)                  === bsqs(missing, 2, InsertionSort)
+    @test bsqs(1, missing)                  === bsqs(1, missing, InsertionSort)
+    @test bsqs(missing, missing)            === bsqs(missing, missing, InsertionSort)
+    @test bsqs(1)                           === bsqs(1, 1, InsertionSort)
+    @test bsqs(missing)                     === bsqs(missing, missing, InsertionSort)
+    @test bsqs()                            === bsqs(missing, missing, InsertionSort)
 end
 
 # This testset is at the end of the file because it is slow.
