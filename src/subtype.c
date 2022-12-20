@@ -3227,7 +3227,7 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
         jl_svecset(*root, n+1, simple_join(b1, b2));
         b1 = jl_svecref(*root, n+2);
         b2 = (jl_value_t*)v->innervars;
-        if (b2) {
+        if (b2 && b1 != b2) {
             if (b1)
                 jl_array_ptr_1d_append((jl_array_t*)b2, (jl_array_t*)b1);
             else
