@@ -171,16 +171,24 @@ static _Atomic(int) support_conservative_marking = 0;
 
 jl_gc_num_t gc_num = {0};
 static size_t last_long_collect_interval;
+int gc_n_threads;
+jl_ptls_t* gc_all_tls_states;
+const uint64_t _jl_buff_tag[3] = {0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull, 0x4eadc0004eadc000ull}; // aka 0xHEADER00
+JL_DLLEXPORT uintptr_t jl_get_buff_tag(void)
+{
+    return jl_buff_tag;
+}
 
 pagetable_t memory_map;
 
 // List of marked big objects.  Not per-thread.  Accessed only by master thread.
 bigval_t *big_objects_marked = NULL;
 
-// finalization
+// -- Finalization --
 // `ptls->finalizers` and `finalizer_list_marked` might have tagged pointers.
-// If an object pointer has the lowest bit set, the next pointer is an unboxed
-// c function pointer.
+// If an object pointer has the lowest bit set, the next pointer is an unboxed c function pointer.
+// If an object pointer has the second lowest bit set, the current pointer is a c object pointer.
+//   It must be aligned at least 4, and it finalized immediately (at "quiescence").
 // `to_finalize` should not have tagged pointers.
 arraylist_t finalizer_list_marked;
 arraylist_t to_finalize;
@@ -193,12 +201,15 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 #define should_timeout() 0
 
-static void jl_gc_wait_for_the_world(void)
+void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
-    if (jl_n_threads > 1)
+    assert(gc_n_threads);
+    if (gc_n_threads > 1)
         jl_wake_libuv();
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
         // This acquire load pairs with the release stores
         // in the signal handler of safepoint so we are sure that
         // all the stores on those threads are visible.
@@ -209,6 +220,9 @@ static void jl_gc_wait_for_the_world(void)
             jl_cpu_pause(); // yield?
     }
 }
+
+
+void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads);
 
 // malloc wrappers, aligned allocation
 
@@ -270,17 +284,18 @@ static void schedule_finalization(void *o, void *f) JL_NOTSAFEPOINT
     jl_atomic_store_relaxed(&jl_gc_have_pending_finalizers, 1);
 }
 
-static void run_finalizer(jl_task_t *ct, jl_value_t *o, jl_value_t *ff)
+static void run_finalizer(jl_task_t *ct, void *o, void *ff)
 {
-    if (gc_ptr_tag(o, 1)) {
-        ((void (*)(void*))ff)(gc_ptr_clear_tag(o, 1));
+    int ptr_finalizer = gc_ptr_tag(o, 1);
+    o = gc_ptr_clear_tag(o, 3);
+    if (ptr_finalizer) {
+        ((void (*)(void*))ff)((void*)o);
         return;
     }
-    jl_value_t *args[2] = {ff,o};
     JL_TRY {
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_apply(args, 2);
+        jl_apply_generic((jl_value_t*)ff, (jl_value_t**)&o, 1);
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -365,7 +380,7 @@ static void jl_gc_run_finalizers_in_list(jl_task_t *ct, arraylist_t *list)
     arraylist_push(list, list->items[0]);
     arraylist_push(list, list->items[1]);
     jl_gc_push_arraylist(ct, list);
-    jl_value_t **items = (jl_value_t**)list->items;
+    void **items = list->items;
     size_t len = list->len;
     JL_UNLOCK_NOGC(&finalizers_lock);
     // run finalizers in reverse order they were added, so lower-level finalizers run last
@@ -414,7 +429,10 @@ static void run_finalizers(jl_task_t *ct)
     jl_rng_split(ct->rngState, finalizer_rngState);
 
     // This releases the finalizers lock.
+    int8_t was_in_finalizer = ct->ptls->in_finalizer;
+    ct->ptls->in_finalizer = 1;
     jl_gc_run_finalizers_in_list(ct, &copied_list);
+    ct->ptls->in_finalizer = was_in_finalizer;
     arraylist_free(&copied_list);
 
     memcpy(&ct->rngState[0], &save_rngState[0], sizeof(save_rngState));
@@ -426,9 +444,7 @@ JL_DLLEXPORT void jl_gc_run_pending_finalizers(jl_task_t *ct)
         ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
     if (!ptls->in_finalizer && ptls->locks.len == 0 && ptls->finalizers_inhibited == 0) {
-        ptls->in_finalizer = 1;
         run_finalizers(ct);
-        ptls->in_finalizer = 0;
     }
 }
 
@@ -499,13 +515,18 @@ static void schedule_all_finalizers(arraylist_t *flist) JL_NOTSAFEPOINT
 
 void jl_gc_run_all_finalizers(jl_task_t *ct)
 {
+    int gc_n_threads;
+    jl_ptls_t* gc_all_tls_states;
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
     schedule_all_finalizers(&finalizer_list_marked);
-    // This could be run before we had a chance to setup all threads
-    for (int i = 0;i < jl_n_threads;i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2)
             schedule_all_finalizers(&ptls2->finalizers);
     }
+    gc_n_threads = 0;
+    gc_all_tls_states = NULL;
     run_finalizers(ct);
 }
 
@@ -542,6 +563,13 @@ JL_DLLEXPORT void jl_gc_add_ptr_finalizer(jl_ptls_t ptls, jl_value_t *v, void *f
     jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 1), f);
 }
 
+// schedule f(v) to call at the next quiescent interval (aka after the next safepoint/region on all threads)
+JL_DLLEXPORT void jl_gc_add_quiescent(jl_ptls_t ptls, void **v, void *f) JL_NOTSAFEPOINT
+{
+    assert(!gc_ptr_tag(v, 3));
+    jl_gc_add_finalizer_(ptls, (void*)(((uintptr_t)v) | 3), f);
+}
+
 JL_DLLEXPORT void jl_gc_add_finalizer_th(jl_ptls_t ptls, jl_value_t *v, jl_function_t *f) JL_NOTSAFEPOINT
 {
     if (__unlikely(jl_typeis(f, jl_voidpointer_type))) {
@@ -562,11 +590,18 @@ JL_DLLEXPORT void jl_finalize_th(jl_task_t *ct, jl_value_t *o)
     arraylist_new(&copied_list, 0);
     // No need to check the to_finalize list since the user is apparently
     // still holding a reference to the object
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        finalize_object(&ptls2->finalizers, o, &copied_list, jl_atomic_load_relaxed(&ct->tid) != i);
+    int gc_n_threads;
+    jl_ptls_t* gc_all_tls_states;
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2)
+            finalize_object(&ptls2->finalizers, o, &copied_list, jl_atomic_load_relaxed(&ct->tid) != i);
     }
     finalize_object(&finalizer_list_marked, o, &copied_list, 0);
+    gc_n_threads = 0;
+    gc_all_tls_states = NULL;
     if (copied_list.len > 0) {
         // This releases the finalizers lock.
         jl_gc_run_finalizers_in_list(ct, &copied_list);
@@ -598,9 +633,11 @@ static void gc_sweep_foreign_objs_in_list(arraylist_t *objs)
 
 static void gc_sweep_foreign_objs(void)
 {
-    for (int i = 0;i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
-        gc_sweep_foreign_objs_in_list(&ptls2->sweep_objs);
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2)
+            gc_sweep_foreign_objs_in_list(&ptls2->sweep_objs);
     }
 }
 
@@ -611,18 +648,19 @@ static int64_t last_gc_total_bytes = 0;
 // under this limit, but we will go above it rather than halting.
 #ifdef _P64
 typedef uint64_t memsize_t;
-#define default_collect_interval (5600*1024*sizeof(void*))
-static size_t max_collect_interval = 1250000000UL;
-// Eventually we can expose this to the user/ci.
-memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
+static const size_t default_collect_interval = 5600 * 1024 * sizeof(void*);
+static const size_t max_collect_interval = 1250000000UL;
+static size_t total_mem;
+// We expose this to the user/ci as jl_gc_set_max_memory
+static memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024 * 1024 * 1024;
 #else
 typedef uint32_t memsize_t;
-#define default_collect_interval (3200*1024*sizeof(void*))
-static size_t max_collect_interval =  500000000UL;
+static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
+static const size_t max_collect_interval =  500000000UL;
 // Work really hard to stay within 2GB
 // Alternative is to risk running out of address space
 // on 32 bit architectures.
-memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
+static memsize_t max_total_memory = (memsize_t) 2 * 1024 * 1024 * 1024;
 #endif
 
 // global variables for GC stats
@@ -728,9 +766,11 @@ static void gc_sync_cache(jl_ptls_t ptls) JL_NOTSAFEPOINT
 // No other threads can be running marking at the same time
 static void gc_sync_all_caches_nolock(jl_ptls_t ptls)
 {
-    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
-        gc_sync_cache_nolock(ptls, &ptls2->gc_cache);
+    assert(gc_n_threads);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2)
+            gc_sync_cache_nolock(ptls, &ptls2->gc_cache);
     }
 }
 
@@ -937,8 +977,11 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls,
 
 static void clear_weak_refs(void)
 {
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
         size_t n, l = ptls2->heap.weak_refs.len;
         void **lst = ptls2->heap.weak_refs.items;
         for (n = 0; n < l; n++) {
@@ -951,8 +994,11 @@ static void clear_weak_refs(void)
 
 static void sweep_weak_refs(void)
 {
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
         size_t n = 0;
         size_t ndel = 0;
         size_t l = ptls2->heap.weak_refs.len;
@@ -1069,11 +1115,16 @@ static bigval_t **sweep_big_list(int sweep_full, bigval_t **pv) JL_NOTSAFEPOINT
 static void sweep_big(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 {
     gc_time_big_start();
-    for (int i = 0;i < jl_n_threads;i++)
-        sweep_big_list(sweep_full, &jl_all_tls_states[i]->heap.big_objects);
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
+        sweep_big_list(sweep_full, &ptls2->heap.big_objects);
+    }
     if (sweep_full) {
         bigval_t **last_next = sweep_big_list(sweep_full, &big_objects_marked);
-        // Move all survivors from big_objects_marked list to big_objects list.
+        // Move all survivors from big_objects_marked list to the big_objects list of this thread.
         if (ptls->heap.big_objects)
             ptls->heap.big_objects->prev = last_next;
         *last_next = ptls->heap.big_objects;
@@ -1112,8 +1163,12 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
 
 static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
 {
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls = jl_all_tls_states[i];
+    int gc_n_threads;
+    jl_ptls_t* gc_all_tls_states;
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls) {
             dest->allocd += (jl_atomic_load_relaxed(&ptls->gc_num.allocd) + gc_num.interval);
             dest->freed += jl_atomic_load_relaxed(&ptls->gc_num.freed);
@@ -1128,8 +1183,12 @@ static void combine_thread_gc_counts(jl_gc_num_t *dest) JL_NOTSAFEPOINT
 
 static void reset_thread_gc_counts(void) JL_NOTSAFEPOINT
 {
-    for (int i = 0; i < jl_n_threads; i++) {
-        jl_ptls_t ptls = jl_all_tls_states[i];
+    int gc_n_threads;
+    jl_ptls_t* gc_all_tls_states;
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls = gc_all_tls_states[i];
         if (ptls) {
             memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
             jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
@@ -1176,8 +1235,11 @@ static void jl_gc_free_array(jl_array_t *a) JL_NOTSAFEPOINT
 static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
 {
     gc_time_mallocd_array_start();
-    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+    assert(gc_n_threads);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
         mallocarray_t *ma = ptls2->heap.mallocarrays;
         mallocarray_t **pma = &ptls2->heap.mallocarrays;
         while (ma != NULL) {
@@ -1201,11 +1263,10 @@ static void sweep_malloced_arrays(void) JL_NOTSAFEPOINT
 }
 
 // pool allocation
-static inline jl_taggedvalue_t *reset_page(const jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t *fl) JL_NOTSAFEPOINT
+static inline jl_taggedvalue_t *reset_page(jl_ptls_t ptls2, const jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_taggedvalue_t *fl) JL_NOTSAFEPOINT
 {
     assert(GC_PAGE_OFFSET >= sizeof(void*));
     pg->nfree = (GC_PAGE_SZ - GC_PAGE_OFFSET) / p->osize;
-    jl_ptls_t ptls2 = jl_all_tls_states[pg->thread_n];
     pg->pool_n = p - ptls2->heap.norm_pools;
     memset(pg->ages, 0, GC_PAGE_SZ / 8 / p->osize + 1);
     jl_taggedvalue_t *beg = (jl_taggedvalue_t*)(pg->data + GC_PAGE_OFFSET);
@@ -1243,7 +1304,7 @@ static NOINLINE jl_taggedvalue_t *add_page(jl_gc_pool_t *p) JL_NOTSAFEPOINT
     pg->osize = p->osize;
     pg->ages = (uint8_t*)malloc_s(GC_PAGE_SZ / 8 / p->osize + 1);
     pg->thread_n = ptls->tid;
-    jl_taggedvalue_t *fl = reset_page(p, pg, NULL);
+    jl_taggedvalue_t *fl = reset_page(ptls, p, pg, NULL);
     p->newpages = fl;
     return fl;
 }
@@ -1357,7 +1418,8 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
         // FIXME - need to do accounting on a per-thread basis
         // on quick sweeps, keep a few pages empty but allocated for performance
         if (!sweep_full && lazy_freed_pages <= default_collect_interval / GC_PAGE_SZ) {
-            jl_taggedvalue_t *begin = reset_page(p, pg, p->newpages);
+            jl_ptls_t ptls2 = gc_all_tls_states[pg->thread_n];
+            jl_taggedvalue_t *begin = reset_page(ptls2, p, pg, p->newpages);
             p->newpages = begin;
             begin->next = (jl_taggedvalue_t*)0;
             lazy_freed_pages++;
@@ -1405,7 +1467,9 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             else { // marked young or old
                 if (*ages & msk || bits == GC_OLD_MARKED) { // old enough
                     // `!age && bits == GC_OLD_MARKED` is possible for
-                    // non-first-class objects like `jl_binding_t`
+                    // non-first-class objects like array buffers
+                    // (they may get promoted by jl_gc_wb_buf for example,
+                    // or explicitly by jl_gc_force_mark_old)
                     if (sweep_full || bits == GC_MARKED) {
                         bits = v->bits.gc = GC_OLD; // promote
                     }
@@ -1459,7 +1523,7 @@ static inline void sweep_pool_page(jl_taggedvalue_t ***pfl, jl_gc_pagemeta_t *pg
 {
     int p_n = pg->pool_n;
     int t_n = pg->thread_n;
-    jl_ptls_t ptls2 = jl_all_tls_states[t_n];
+    jl_ptls_t ptls2 = gc_all_tls_states[t_n];
     jl_gc_pool_t *p = &ptls2->heap.norm_pools[p_n];
     int osize = pg->osize;
     pfl[t_n * JL_GC_N_POOLS + p_n] = sweep_page(p, pg, pfl[t_n * JL_GC_N_POOLS + p_n], sweep_full, osize);
@@ -1571,9 +1635,9 @@ static void gc_sweep_pool(int sweep_full)
     gc_time_pool_start();
     lazy_freed_pages = 0;
 
-    // For the benfit of the analyzer, which doesn't know that jl_n_threads
+    // For the benefit of the analyzer, which doesn't know that gc_n_threads
     // doesn't change over the course of this function
-    size_t n_threads = jl_n_threads;
+    size_t n_threads = gc_n_threads;
 
     // allocate enough space to hold the end of the free list chain
     // for every thread and pool size
@@ -1582,7 +1646,13 @@ static void gc_sweep_pool(int sweep_full)
     // update metadata of pages that were pointed to by freelist or newpages from a pool
     // i.e. pages being the current allocation target
     for (int t_i = 0; t_i < n_threads; t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL) {
+            for (int i = 0; i < JL_GC_N_POOLS; i++) {
+                pfl[t_i * JL_GC_N_POOLS + i] = NULL;
+            }
+            continue;
+        }
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             jl_gc_pool_t *p = &ptls2->heap.norm_pools[i];
             jl_taggedvalue_t *last = p->freelist;
@@ -1611,6 +1681,9 @@ static void gc_sweep_pool(int sweep_full)
 
     // null out terminal pointers of free lists
     for (int t_i = 0; t_i < n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
         for (int i = 0; i < JL_GC_N_POOLS; i++) {
             *pfl[t_i * JL_GC_N_POOLS + i] = NULL;
         }
@@ -1680,26 +1753,10 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_N
     }
 }
 
-JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
-    buf->bits.gc = GC_MARKED;
-    arraylist_push(&ptls->heap.rem_bindings, bnd);
-}
-
 
 #ifdef JL_DEBUG_BUILD
 static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
 #endif
-
-static void *sysimg_base;
-static void *sysimg_end;
-void jl_gc_set_permalloc_region(void *start, void *end)
-{
-    sysimg_base = start;
-    sysimg_end = end;
-}
 
 
 // Handle the case where the stack is only partially copied.
@@ -2222,7 +2279,7 @@ STATIC_INLINE int gc_mark_scan_obj32(jl_ptls_t ptls, jl_gc_mark_sp_t *sp, gc_mar
 // This way the scan "loop" gets exactly what it expects after a stack pop.
 // Additional optimizations are done for some of the common cases by skipping
 // the unnecessary data stack pointer increment and the load from the stack
-// (i.e. store to load forwaring). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
+// (i.e. store to load forwarding). See `objary_loaded`, `obj8_loaded` and `obj16_loaded`.
 JL_EXTENSION NOINLINE void gc_mark_loop(jl_ptls_t ptls, jl_gc_mark_sp_t sp)
 {
     if (__unlikely(ptls == NULL)) {
@@ -2381,8 +2438,11 @@ stack: {
                     if (gc_ptr_tag(new_obj, 1)) {
                         // handle tagged pointers in finalizer list
                         new_obj = gc_ptr_clear_tag(new_obj, 1);
+                        // skip over the finalizer fptr
                         i++;
                     }
+                    if (gc_ptr_tag(new_obj, 2))
+                        continue;
                 }
                 if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
                     continue;
@@ -2477,61 +2537,18 @@ module_binding: {
         gc_mark_binding_t *binding = gc_pop_markdata(&sp, gc_mark_binding_t);
         jl_binding_t **begin = binding->begin;
         jl_binding_t **end = binding->end;
-        uint8_t mbits = binding->bits;
         for (; begin < end; begin += 2) {
             jl_binding_t *b = *begin;
             if (b == (jl_binding_t*)HT_NOTFOUND)
                 continue;
-            if ((void*)b >= sysimg_base && (void*)b < sysimg_end) {
-                jl_taggedvalue_t *buf = jl_astaggedvalue(b);
-                uintptr_t tag = buf->header;
-                uint8_t bits;
-                if (!gc_marked(tag))
-                    gc_setmark_tag(buf, GC_OLD_MARKED, tag, &bits);
-            }
-            else {
-                gc_setmark_buf_(ptls, b, mbits, sizeof(jl_binding_t));
-            }
-            void *vb = jl_astaggedvalue(b);
-            verify_parent1("module", binding->parent, &vb, "binding_buff");
+            verify_parent1("module", binding->parent, begin, "binding_buff");
             // Record the size used for the box for non-const bindings
             gc_heap_snapshot_record_module_to_binding(binding->parent, b);
-            (void)vb;
-            jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
-            if (ty && ty != (jl_value_t*)jl_any_type) {
-                verify_parent2("module", binding->parent,
-                               &b->ty, "binding(%s)", jl_symbol_name(b->name));
-                if (gc_try_setmark(ty, &binding->nptr, &tag, &bits)) {
-                    new_obj = ty;
-                    gc_repush_markdata(&sp, gc_mark_binding_t);
-                    goto mark;
-                }
-            }
-            jl_value_t *value = jl_atomic_load_relaxed(&b->value);
-            jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
-            if (value) {
-                verify_parent2("module", binding->parent,
-                               &b->value, "binding(%s)", jl_symbol_name(b->name));
-                if (gc_try_setmark(value, &binding->nptr, &tag, &bits)) {
-                    new_obj = value;
-                    begin += 2;
-                    binding->begin = begin;
-                    gc_repush_markdata(&sp, gc_mark_binding_t);
-                    uintptr_t gr_tag;
-                    uint8_t gr_bits;
-                    if (gc_try_setmark(globalref, &binding->nptr, &gr_tag, &gr_bits)) {
-                        gc_mark_marked_obj_t data = {globalref, gr_tag, gr_bits};
-                        gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(marked_obj),
-                                           &data, sizeof(data), 1);
-                    }
-                    goto mark;
-                }
-            }
-            if (gc_try_setmark(globalref, &binding->nptr, &tag, &bits)) {
+            if (gc_try_setmark((jl_value_t*)b, &binding->nptr, &tag, &bits)) {
                 begin += 2;
                 binding->begin = begin;
                 gc_repush_markdata(&sp, gc_mark_binding_t);
-                new_obj = globalref;
+                new_obj = (jl_value_t*)b;
                 goto mark;
             }
         }
@@ -2548,6 +2565,7 @@ module_binding: {
             gc_mark_objarray_t data = {(jl_value_t*)m, objary_begin, objary_end, 1, binding->nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(objarray),
                                &data, sizeof(data), 0);
+            // gc_mark_scan_objarray will eventually handle the remset for m
             if (!scanparent) {
                 objary = (gc_mark_objarray_t*)sp.data;
                 goto objarray_loaded;
@@ -2556,6 +2574,7 @@ module_binding: {
             sp.pc++;
         }
         else {
+            // done with m
             gc_mark_push_remset(ptls, (jl_value_t*)m, binding->nptr);
         }
         if (scanparent) {
@@ -2579,6 +2598,8 @@ finlist: {
                 begin++;
                 assert(begin < end);
             }
+            if (gc_ptr_tag(new_obj, 2))
+                continue;
             uintptr_t nptr = 0;
             if (!gc_try_setmark(new_obj, &nptr, &tag, &bits))
                 continue;
@@ -2605,7 +2626,7 @@ mark: {
         jl_datatype_t *vt = (jl_datatype_t*)tag;
         int foreign_alloc = 0;
         int update_meta = __likely(!meta_updated && !gc_verifying);
-        if (update_meta && (void*)o >= sysimg_base && (void*)o < sysimg_end) {
+        if (update_meta && jl_object_in_image(new_obj)) {
             foreign_alloc = 1;
             update_meta = 0;
         }
@@ -2640,10 +2661,14 @@ mark: {
             }
             else if (foreign_alloc)
                 objprofile_count(vt, bits == GC_OLD_MARKED, sizeof(jl_array_t));
+            if (flags.how ==0){
+                void *data_ptr = (char*)a + sizeof(jl_array_t) +jl_array_ndimwords(a->flags.ndims) * sizeof(size_t);
+                gc_heap_snapshot_record_hidden_edge(new_obj, data_ptr, jl_array_nbytes(a), 2);
+            }
             if (flags.how == 1) {
                 void *val_buf = jl_astaggedvalue((char*)a->data - a->offset * a->elsize);
                 verify_parent1("array", new_obj, &val_buf, "buffer ('loc' addr is meaningless)");
-                gc_heap_snapshot_record_hidden_edge(new_obj, jl_valueof(val_buf), jl_array_nbytes(a));
+                gc_heap_snapshot_record_hidden_edge(new_obj, jl_valueof(val_buf), jl_array_nbytes(a), flags.pooled);
                 (void)val_buf;
                 gc_setmark_buf_(ptls, (char*)a->data - a->offset * a->elsize,
                                 bits, jl_array_nbytes(a));
@@ -2652,7 +2677,7 @@ mark: {
                 if (update_meta || foreign_alloc) {
                     objprofile_count(jl_malloc_tag, bits == GC_OLD_MARKED,
                                      jl_array_nbytes(a));
-                    gc_heap_snapshot_record_hidden_edge(new_obj, a->data, jl_array_nbytes(a));
+                    gc_heap_snapshot_record_hidden_edge(new_obj, a->data, jl_array_nbytes(a), flags.pooled);
                     if (bits == GC_OLD_MARKED) {
                         ptls->gc_cache.perm_scanned_bytes += jl_array_nbytes(a);
                     }
@@ -2738,7 +2763,7 @@ mark: {
             jl_binding_t **table = (jl_binding_t**)m->bindings.table;
             size_t bsize = m->bindings.size;
             uintptr_t nptr = ((bsize + m->usings.len + 1) << 2) | (bits & GC_OLD);
-            gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr, bits};
+            gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(module_binding),
                                &markdata, sizeof(markdata), 0);
             sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
@@ -2756,7 +2781,7 @@ mark: {
                 int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                 gc_invoke_callbacks(jl_gc_cb_task_scanner_t,
                     gc_cblist_task_scanner,
-                    (ta, tid != -1 && ta == jl_all_tls_states[tid]->root_task));
+                    (ta, tid != -1 && ta == gc_all_tls_states[tid]->root_task));
                 import_gc_state(ptls, &sp);
             }
 #ifdef COPY_STACKS
@@ -2778,7 +2803,7 @@ mark: {
             if (stkbuf && ta->copy_stack && ta->ptls == NULL) {
                 int16_t tid = jl_atomic_load_relaxed(&ta->tid);
                 assert(tid >= 0);
-                jl_ptls_t ptls2 = jl_all_tls_states[tid];
+                jl_ptls_t ptls2 = gc_all_tls_states[tid];
                 ub = (uintptr_t)ptls2->stackbase;
                 lb = ub - ta->copy_stack;
                 offset = (uintptr_t)stkbuf - lb;
@@ -2891,19 +2916,26 @@ mark: {
 static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
                                      jl_ptls_t ptls2)
 {
-    jl_value_t *current_task = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
-    gc_mark_queue_obj(gc_cache, sp, current_task);
-    gc_heap_snapshot_record_root(current_task, "current task");
-    gc_mark_queue_obj(gc_cache, sp, ptls2->root_task);
-
-    gc_heap_snapshot_record_root((jl_value_t*)ptls2->root_task, "root task");
-    if (ptls2->next_task) {
-        gc_mark_queue_obj(gc_cache, sp, ptls2->next_task);
-        gc_heap_snapshot_record_root((jl_value_t*)ptls2->next_task, "next task");
+    jl_task_t *task;
+    task = ptls2->root_task;
+    if (task) {
+        gc_mark_queue_obj(gc_cache, sp, task);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "root task");
     }
-    if (ptls2->previous_task) { // shouldn't be necessary, but no reason not to
-        gc_mark_queue_obj(gc_cache, sp, ptls2->previous_task);
-        gc_heap_snapshot_record_root((jl_value_t*)ptls2->previous_task, "previous task");
+    task = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (task) {
+        gc_mark_queue_obj(gc_cache, sp, task);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "current task");
+    }
+    task = ptls2->next_task;
+    if (task) {
+        gc_mark_queue_obj(gc_cache, sp, task);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
+    }
+    task = ptls2->previous_task;
+    if (task) { // shouldn't be necessary, but no reason not to
+        gc_mark_queue_obj(gc_cache, sp, task);
+        gc_heap_snapshot_record_root((jl_value_t*)task, "previous task");
     }
     if (ptls2->previous_exception) {
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
@@ -2943,6 +2975,8 @@ static void mark_roots(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp)
     }
     if (_jl_debug_method_invalidation != NULL)
         gc_mark_queue_obj(gc_cache, sp, _jl_debug_method_invalidation);
+    if (jl_build_ids != NULL)
+        gc_mark_queue_obj(gc_cache, sp, jl_build_ids);
 
     // constants
     gc_mark_queue_obj(gc_cache, sp, jl_emptytuple_type);
@@ -2960,17 +2994,25 @@ static void sweep_finalizer_list(arraylist_t *list)
     size_t j = 0;
     for (size_t i=0; i < len; i+=2) {
         void *v0 = items[i];
-        void *v = gc_ptr_clear_tag(v0, 1);
+        void *v = gc_ptr_clear_tag(v0, 3);
         if (__unlikely(!v0)) {
             // remove from this list
             continue;
         }
 
         void *fin = items[i+1];
-        int isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
-        int isold = (list != &finalizer_list_marked &&
+        int isfreed;
+        int isold;
+        if (gc_ptr_tag(v0, 2)) {
+            isfreed = 1;
+            isold = 0;
+        }
+        else {
+            isfreed = !gc_marked(jl_astaggedvalue(v)->bits.gc);
+            isold = (list != &finalizer_list_marked &&
                      jl_astaggedvalue(v)->bits.gc == GC_OLD_MARKED &&
                      jl_astaggedvalue(fin)->bits.gc == GC_OLD_MARKED);
+        }
         if (isfreed || isold) {
             // remove from this list
         }
@@ -3092,12 +3134,6 @@ static void jl_gc_premark(jl_ptls_t ptls2)
         objprofile_count(jl_typeof(item), 2, 0);
         jl_astaggedvalue(item)->bits.gc = GC_OLD_MARKED;
     }
-    len = ptls2->heap.rem_bindings.len;
-    items = ptls2->heap.rem_bindings.items;
-    for (size_t i = 0; i < len; i++) {
-        void *ptr = items[i];
-        jl_astaggedvalue(ptr)->bits.gc = GC_OLD_MARKED;
-    }
 }
 
 static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_ptls_t ptls2)
@@ -3106,20 +3142,6 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
     void **items = ptls2->heap.last_remset->items;
     for (size_t i = 0; i < len; i++)
         gc_mark_queue_scan_obj(gc_cache, sp, (jl_value_t*)items[i]);
-    int n_bnd_refyoung = 0;
-    len = ptls2->heap.rem_bindings.len;
-    items = ptls2->heap.rem_bindings.items;
-    for (size_t i = 0; i < len; i++) {
-        jl_binding_t *ptr = (jl_binding_t*)items[i];
-        // A null pointer can happen here when the binding is cleaned up
-        // as an exception is thrown after it was already queued (#10221)
-        jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
-        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v)) {
-            items[n_bnd_refyoung] = ptr;
-            n_bnd_refyoung++;
-        }
-    }
-    ptls2->heap.rem_bindings.len = n_bnd_refyoung;
 }
 
 static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_ptls_t ptls2)
@@ -3153,12 +3175,19 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t start_mark_time = jl_hrtime();
 
     // 1. fix GC bits of objects in the remset.
-    for (int t_i = 0; t_i < jl_n_threads; t_i++)
-        jl_gc_premark(jl_all_tls_states[t_i]);
+    assert(gc_n_threads);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 != NULL)
+            jl_gc_premark(ptls2);
+    }
 
-    for (int t_i = 0; t_i < jl_n_threads; t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
-        // 2.1. mark every object in the `last_remsets` and `rem_binding`
+    assert(gc_n_threads);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        // 2.1. mark every object in the `last_remsets`
         jl_gc_queue_remset(gc_cache, &sp, ptls2);
         // 2.2. mark every thread local root
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
@@ -3194,16 +3223,22 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // mark the object moved to the marked list from the
     // `finalizer_list` by `sweep_finalizer_list`
     size_t orig_marked_len = finalizer_list_marked.len;
-    for (int i = 0;i < jl_n_threads;i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
         sweep_finalizer_list(&ptls2->finalizers);
     }
     if (prev_sweep_full) {
         sweep_finalizer_list(&finalizer_list_marked);
         orig_marked_len = 0;
     }
-    for (int i = 0;i < jl_n_threads;i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[i];
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
         gc_mark_queue_finlist(gc_cache, &sp, &ptls2->finalizers, 0);
     }
     gc_mark_queue_finlist(gc_cache, &sp, &finalizer_list_marked, orig_marked_len);
@@ -3242,8 +3277,13 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // 5. next collection decision
     int not_freed_enough = (collection == JL_GC_AUTO) && estimate_freed < (7*(actual_allocd/10));
     int nptr = 0;
-    for (int i = 0;i < jl_n_threads;i++)
-        nptr += jl_all_tls_states[i]->heap.remset_nptr;
+    assert(gc_n_threads);
+    for (int i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2 == NULL)
+            continue;
+        nptr += ptls2->heap.remset_nptr;
+    }
 
     // many pointers in the intergen frontier => "quick" mark is not quick
     int large_frontier = nptr*sizeof(void*) >= default_collect_interval;
@@ -3258,9 +3298,16 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         if (large_frontier) {
             sweep_full = 1;
         }
-        if (gc_num.interval > max_collect_interval) {
+        size_t maxmem = 0;
+#ifdef _P64
+        // on a big memory machine, increase max_collect_interval to totalmem / nthreads / 2
+        maxmem = total_mem / gc_n_threads / 2;
+#endif
+        if (maxmem < max_collect_interval)
+            maxmem = max_collect_interval;
+        if (gc_num.interval > maxmem) {
             sweep_full = 1;
-            gc_num.interval = max_collect_interval;
+            gc_num.interval = maxmem;
         }
     }
 
@@ -3308,20 +3355,19 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     // sweeping is over
     // 6. if it is a quick sweep, put back the remembered objects in queued state
     // so that we don't trigger the barrier again on them.
-    for (int t_i = 0;t_i < jl_n_threads;t_i++) {
-        jl_ptls_t ptls2 = jl_all_tls_states[t_i];
+    assert(gc_n_threads);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
         if (!sweep_full) {
             for (int i = 0; i < ptls2->heap.remset->len; i++) {
-                jl_astaggedvalue(ptls2->heap.remset->items[i])->bits.gc = GC_MARKED;
-            }
-            for (int i = 0; i < ptls2->heap.rem_bindings.len; i++) {
-                void *ptr = ptls2->heap.rem_bindings.items[i];
+                void *ptr = ptls2->heap.remset->items[i];
                 jl_astaggedvalue(ptr)->bits.gc = GC_MARKED;
             }
         }
         else {
             ptls2->heap.remset->len = 0;
-            ptls2->heap.rem_bindings.len = 0;
         }
     }
 
@@ -3421,9 +3467,17 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 #endif
     // Now we are ready to wait for other threads to hit the safepoint,
     // we can do a few things that doesn't require synchronization.
-    // TODO (concurrently queue objects)
-    // no-op for non-threading
-    jl_gc_wait_for_the_world();
+    //
+    // We must sync here with the tls_lock operations, so that we have a
+    // seq-cst order between these events now we know that either the new
+    // thread must run into our safepoint flag or we must observe the
+    // existence of the thread in the jl_n_threads count.
+    //
+    // TODO: concurrently queue objects
+    jl_fence();
+    gc_n_threads = jl_atomic_load_acquire(&jl_n_threads);
+    gc_all_tls_states = jl_atomic_load_relaxed(&jl_all_tls_states);
+    jl_gc_wait_for_the_world(gc_all_tls_states, gc_n_threads);
     JL_PROBE_GC_STOP_THE_WORLD();
 
     uint64_t t1 = jl_hrtime();
@@ -3446,7 +3500,8 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
         JL_UNLOCK_NOGC(&finalizers_lock);
     }
 
-    // no-op for non-threading
+    gc_n_threads = 0;
+    gc_all_tls_states = NULL;
     jl_safepoint_end_gc();
     jl_gc_state_set(ptls, old_state, JL_GC_STATE_WAITING);
     JL_PROBE_GC_END();
@@ -3455,10 +3510,7 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
     // Doing this on all threads is racy (it's impossible to check
     // or wait for finalizers on other threads without dead lock).
     if (!ptls->finalizers_inhibited && ptls->locks.len == 0) {
-        int8_t was_in_finalizer = ptls->in_finalizer;
-        ptls->in_finalizer = 1;
         run_finalizers(ct);
-        ptls->in_finalizer = was_in_finalizer;
     }
     JL_PROBE_GC_FINALIZER();
 
@@ -3473,8 +3525,12 @@ JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection)
 void gc_mark_queue_all_roots(jl_ptls_t ptls, jl_gc_mark_sp_t *sp)
 {
     jl_gc_mark_cache_t *gc_cache = &ptls->gc_cache;
-    for (size_t i = 0; i < jl_n_threads; i++)
-        jl_gc_queue_thread_local(gc_cache, sp, jl_all_tls_states[i]);
+    assert(gc_n_threads);
+    for (size_t i = 0; i < gc_n_threads; i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[i];
+        if (ptls2)
+            jl_gc_queue_thread_local(gc_cache, sp, ptls2);
+    }
     mark_roots(gc_cache, sp);
 }
 
@@ -3488,8 +3544,6 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
 // Per-thread initialization
 void jl_init_thread_heap(jl_ptls_t ptls)
 {
-    if (ptls->tid == 0)
-        ptls->disable_gc = 1;
     jl_thread_heap_t *heap = &ptls->heap;
     jl_gc_pool_t *p = heap->norm_pools;
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
@@ -3502,7 +3556,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     heap->mallocarrays = NULL;
     heap->mafreelist = NULL;
     heap->big_objects = NULL;
-    arraylist_new(&heap->rem_bindings, 0);
     heap->remset = &heap->_remset[0];
     heap->last_remset = &heap->_remset[1];
     arraylist_new(heap->remset, 0);
@@ -3520,13 +3573,15 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     gc_cache->data_stack = (jl_gc_mark_data_t *)malloc_s(init_size * sizeof(jl_gc_mark_data_t));
 
     memset(&ptls->gc_num, 0, sizeof(ptls->gc_num));
-    assert(gc_num.interval == default_collect_interval);
     jl_atomic_store_relaxed(&ptls->gc_num.allocd, -(int64_t)gc_num.interval);
 }
 
 // System-wide initializations
 void jl_gc_init(void)
 {
+    if (jl_options.heap_size_hint)
+        jl_gc_set_max_memory(jl_options.heap_size_hint);
+
     JL_MUTEX_INIT(&heapsnapshot_lock);
     JL_MUTEX_INIT(&finalizers_lock);
     uv_mutex_init(&gc_cache_lock);
@@ -3545,14 +3600,10 @@ void jl_gc_init(void)
     gc_num.max_memory = 0;
 
 #ifdef _P64
-    // on a big memory machine, set max_collect_interval to totalmem / nthreads / 2
-    uint64_t total_mem = uv_get_total_memory();
+    total_mem = uv_get_total_memory();
     uint64_t constrained_mem = uv_get_constrained_memory();
-    if (constrained_mem != 0)
+    if (constrained_mem > 0 && constrained_mem < total_mem)
         total_mem = constrained_mem;
-    size_t maxmem = total_mem / jl_n_threads / 2;
-    if (maxmem > max_collect_interval)
-        max_collect_interval = maxmem;
 #endif
 
     // We allocate with abandon until we get close to the free memory on the machine.
@@ -3567,7 +3618,8 @@ void jl_gc_init(void)
     t_start = jl_hrtime();
 }
 
-void jl_gc_set_max_memory(uint64_t max_mem) {
+JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem)
+{
     if (max_mem > 0
         && max_mem < (uint64_t)1 << (sizeof(memsize_t) * 8 - 1)) {
         max_total_memory = max_mem;
@@ -3955,8 +4007,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_alloc_3w(void)
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
 {
-    static_assert(jl_buff_tag % GC_PAGE_SZ == 0,
-        "jl_buff_tag must be a multiple of GC_PAGE_SZ");
     if (jl_is_initialized()) {
         int result = jl_atomic_fetch_or(&support_conservative_marking, 1);
         if (!result) {
@@ -4007,7 +4057,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
             goto valid_object;
         }
         jl_gc_pool_t *pool =
-            jl_all_tls_states[meta->thread_n]->heap.norm_pools +
+            gc_all_tls_states[meta->thread_n]->heap.norm_pools +
             meta->pool_n;
         if (meta->fl_begin_offset == (uint16_t) -1) {
             // case 2: this is a page on the newpages list
@@ -4063,8 +4113,8 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
     valid_object:
         // We have to treat objects with type `jl_buff_tag` differently,
         // as they must not be passed to the usual marking functions.
-        // Note that jl_buff_tag is a multiple of GC_PAGE_SZ, thus it
-        // cannot be a type reference.
+        // Note that jl_buff_tag is real pointer into libjulia,
+        // thus it cannot be a type reference.
         if ((cell->header & ~(uintptr_t) 3) == jl_buff_tag)
             return NULL;
         return jl_valueof(cell);

@@ -224,7 +224,7 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
 end
 
 function julia_exename()
-    if ccall(:jl_is_debugbuild, Cint, ()) == 0
+    if !Base.isdebugbuild()
         return @static Sys.iswindows() ? "julia.exe" : "julia"
     else
         return @static Sys.iswindows() ? "julia-debug.exe" : "julia-debug"
@@ -469,7 +469,9 @@ _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
 _crc32c(a::Union{Array{UInt8},FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N}, crc::UInt32=0x00000000) =
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 
-_crc32c(s::String, crc::UInt32=0x00000000) = unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+function _crc32c(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
+    unsafe_crc32c(s, sizeof(s) % Csize_t, crc)
+end
 
 function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0, got $nb"))
@@ -529,8 +531,7 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
-    expr = expr::Expr
+    isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -544,29 +545,33 @@ macro kwdef(expr)
     # overflow on construction
     if !isempty(params_ex.args)
         if T isa Symbol
-            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
-        elseif T isa Expr && T.head === :curly
-            T = T::Expr
+            sig = :(($(esc(T)))($params_ex))
+            call = :(($(esc(T)))($(call_args...)))
+            body = Expr(:block, __source__, call)
+            kwdefs = Expr(:function, sig, body)
+        elseif isexpr(T, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            kwdefs = quote
-                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
-                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
-                    ($(esc(SQ)))($(call_args...))
-            end
+            body1 = Expr(:block, __source__, :(($(esc(S)))($(call_args...))))
+            sig1 = :(($(esc(S)))($params_ex))
+            def1 = Expr(:function, sig1, body1)
+            body2 = Expr(:block, __source__, :(($(esc(SQ)))($(call_args...))))
+            sig2 = :(($(esc(SQ)))($params_ex) where {$(esc.(P)...)})
+            def2 = Expr(:function, sig2, body2)
+            kwdefs = Expr(:block, def1, def2)
         else
             error("Invalid usage of @kwdef")
         end
     else
         kwdefs = nothing
     end
-    quote
-        Base.@__doc__($(esc(expr)))
+    return quote
+        Base.@__doc__ $(esc(expr))
         $kwdefs
     end
 end
@@ -665,4 +670,13 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
         error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
               "including error messages above and the output of versioninfo():\n$(read(buf, String))")
     end
+end
+
+"""
+    isdebugbuild()
+
+Return `true` if julia is a debug version.
+"""
+function isdebugbuild()
+    return ccall(:jl_is_debugbuild, Cint, ()) != 0
 end

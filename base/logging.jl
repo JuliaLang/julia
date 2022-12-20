@@ -42,7 +42,7 @@ function handle_message end
 """
     shouldlog(logger, level, _module, group, id)
 
-Return true when `logger` accepts a message at `level`, generated for
+Return `true` when `logger` accepts a message at `level`, generated for
 `_module`, `group` and with unique log identifier `id`.
 """
 function shouldlog end
@@ -58,7 +58,7 @@ function min_enabled_level end
 """
     catch_exceptions(logger)
 
-Return true if the logger should catch exceptions which happen during log
+Return `true` if the logger should catch exceptions which happen during log
 record construction.  By default, messages are caught
 
 By default all exceptions are caught to prevent log message generation from
@@ -378,14 +378,14 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     id = $(log_data._id)
                     # Second chance at an early bail-out (before computing the message),
                     # based on arbitrary logger-specific logic.
-                    if _invoked_shouldlog(logger, level, _module, group, id)
+                    if invokelatest(shouldlog, logger, level, _module, group, id)
                         file = $(log_data._file)
                         if file isa String
                             file = Base.fixup_stdlib_path(file)
                         end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && handle_message(
+                        $(logrecord) && invokelatest(handle_message,
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
                     end

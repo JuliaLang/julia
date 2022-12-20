@@ -228,12 +228,6 @@ end
 is_effect_overridden(method::Method, effect::Symbol) = is_effect_overridden(decode_effects_override(method.purity), effect)
 is_effect_overridden(override::EffectsOverride, effect::Symbol) = getfield(override, effect)
 
-function InferenceResult(
-    linfo::MethodInstance,
-    arginfo::Union{Nothing,Tuple{ArgInfo,InferenceState}} = nothing)
-    return _InferenceResult(linfo, arginfo)
-end
-
 add_remark!(::AbstractInterpreter, sv::Union{InferenceState, IRCode}, remark) = return
 
 function bail_out_toplevel_call(::AbstractInterpreter, @nospecialize(callsig), sv::Union{InferenceState, IRCode})
@@ -389,55 +383,50 @@ function sptypes_from_meth_instance(linfo::MethodInstance)
     for i = 1:length(sp)
         v = sp[i]
         if v isa TypeVar
-            fromArg = 0
-            # if this parameter came from arg::Type{T}, then `arg` is more precise than
-            # Type{T} where lb<:T<:ub
-            sig = linfo.def.sig
-            temp = sig
+            temp = linfo.def.sig
             for j = 1:i-1
                 temp = temp.body
             end
-            Pi = temp.var
+            vᵢ = (temp::UnionAll).var
             while temp isa UnionAll
                 temp = temp.body
             end
             sigtypes = (temp::DataType).parameters
             for j = 1:length(sigtypes)
-                tj = sigtypes[j]
-                if isType(tj) && tj.parameters[1] === Pi
-                    fromArg = j
-                    break
+                sⱼ = sigtypes[j]
+                if isType(sⱼ) && sⱼ.parameters[1] === vᵢ
+                    # if this parameter came from `arg::Type{T}`,
+                    # then `arg` is more precise than `Type{T} where lb<:T<:ub`
+                    ty = fieldtype(linfo.specTypes, j)
+                    @goto ty_computed
                 end
             end
-            if fromArg > 0
-                ty = fieldtype(linfo.specTypes, fromArg)
+            ub = v.ub
+            while ub isa TypeVar
+                ub = ub.ub
+            end
+            if has_free_typevars(ub)
+                ub = Any
+            end
+            lb = v.lb
+            while lb isa TypeVar
+                lb = lb.lb
+            end
+            if has_free_typevars(lb)
+                lb = Bottom
+            end
+            if Any <: ub && lb <: Bottom
+                ty = Any
             else
-                ub = v.ub
-                while ub isa TypeVar
-                    ub = ub.ub
-                end
-                if has_free_typevars(ub)
-                    ub = Any
-                end
-                lb = v.lb
-                while lb isa TypeVar
-                    lb = lb.lb
-                end
-                if has_free_typevars(lb)
-                    lb = Bottom
-                end
-                if Any <: ub && lb <: Bottom
-                    ty = Any
-                else
-                    tv = TypeVar(v.name, lb, ub)
-                    ty = UnionAll(tv, Type{tv})
-                end
+                tv = TypeVar(v.name, lb, ub)
+                ty = UnionAll(tv, Type{tv})
             end
         elseif isvarargtype(v)
             ty = Int
         else
             ty = Const(v)
         end
+        @label ty_computed
         sp[i] = ty
     end
     return sp
@@ -454,14 +443,14 @@ end
 
 update_valid_age!(edge::InferenceState, sv::InferenceState) = update_valid_age!(sv, edge.valid_worlds)
 
-function record_ssa_assign!(ssa_id::Int, @nospecialize(new), frame::InferenceState)
+function record_ssa_assign!(𝕃ᵢ::AbstractLattice, ssa_id::Int, @nospecialize(new), frame::InferenceState)
     ssavaluetypes = frame.ssavaluetypes
     old = ssavaluetypes[ssa_id]
-    if old === NOT_FOUND || !(new ⊑ old)
+    if old === NOT_FOUND || !⊑(𝕃ᵢ, new, old)
         # typically, we expect that old ⊑ new (that output information only
         # gets less precise with worse input information), but to actually
         # guarantee convergence we need to use tmerge here to ensure that is true
-        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(old, new)
+        ssavaluetypes[ssa_id] = old === NOT_FOUND ? new : tmerge(𝕃ᵢ, old, new)
         W = frame.ip
         for r in frame.ssavalue_uses[ssa_id]
             if was_reached(frame, r)

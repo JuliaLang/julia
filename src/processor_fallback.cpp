@@ -51,6 +51,22 @@ static uint32_t sysimg_init_cb(const void *id)
     return best_idx;
 }
 
+static uint32_t pkgimg_init_cb(const void *id)
+{
+    TargetData<1> target = jit_targets.front();
+    // Find the last name match or use the default one.
+    uint32_t best_idx = 0;
+    auto pkgimg = deserialize_target_data<1>((const uint8_t*)id);
+    for (uint32_t i = 0; i < pkgimg.size(); i++) {
+        auto &imgt = pkgimg[i];
+        if (imgt.name == target.name) {
+            best_idx = i;
+        }
+    }
+
+    return best_idx;
+}
+
 static void ensure_jit_target(bool imaging)
 {
     auto &cmdline = get_cmdline_targets();
@@ -101,6 +117,15 @@ jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

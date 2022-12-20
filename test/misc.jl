@@ -149,7 +149,7 @@ for l in (Threads.SpinLock(), ReentrantLock())
     @test get_finalizers_inhibited() == 1
     GC.enable_finalizers(true)
     @test get_finalizers_inhibited() == 0
-    if ccall(:jl_is_debugbuild, Cint, ()) != 0
+    if Base.isdebugbuild()
         # Note this warning only exists in debug builds
         @test_warn "WARNING: GC finalizers already enabled on this thread." GC.enable_finalizers(true)
     end
@@ -353,6 +353,10 @@ end
 
 after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
 @test after_comp >= before_comp;
+
+# should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
+# failing this probably means an uninitialized variable somewhere
+@test after_comp - before_comp < 6_000_000_000;
 
 end # redirect_stdout
 
@@ -902,38 +906,87 @@ end
 module atinvokelatest
 f(x) = 1
 g(x, y; z=0) = x * y + z
+mutable struct X; x; end
+Base.getproperty(::X, ::Any) = error("overload me")
+Base.setproperty!(::X, ::Any, ::Any) = error("overload me")
+struct Xs
+    xs::Vector{Any}
+end
+Base.getindex(::Xs, ::Any) = error("overload me")
+Base.setindex!(::Xs, ::Any, ::Any) = error("overload me")
 end
 
-let foo() = begin
+let call_test() = begin
         @eval atinvokelatest.f(x::Int) = 3
-        return Base.@invokelatest atinvokelatest.f(0)
+        return @invokelatest atinvokelatest.f(0)
     end
-    @test foo() == 3
-end
+    @test call_test() == 3
 
-let foo() = begin
-        @eval atinvokelatest.f(x::Int) = 3
-        return Base.@invokelatest atinvokelatest.f(0)
-    end
-    @test foo() == 3
-
-    bar() = begin
+    call_with_kws_test() = begin
         @eval atinvokelatest.g(x::Int, y::Int; z=3) = z
-        return Base.@invokelatest atinvokelatest.g(2, 3; z=1)
+        return @invokelatest atinvokelatest.g(2, 3; z=1)
     end
-    @test bar() == 1
+    @test call_with_kws_test() == 1
+
+    getproperty_test() = begin
+        @eval Base.getproperty(x::atinvokelatest.X, f::Symbol) = getfield(x, f)
+        x = atinvokelatest.X(nothing)
+        return @invokelatest x.x
+    end
+    @test isnothing(getproperty_test())
+
+    setproperty!_test() = begin
+        @eval Base.setproperty!(x::atinvokelatest.X, f::Symbol, @nospecialize(v)) = setfield!(x, f, v)
+        x = atinvokelatest.X(nothing)
+        @invokelatest x.x = 1
+        return x
+    end
+    x = setproperty!_test()
+    @test getfield(x, :x) == 1
+
+    getindex_test() = begin
+        @eval Base.getindex(xs::atinvokelatest.Xs, idx::Int) = xs.xs[idx]
+        xs = atinvokelatest.Xs(Any[nothing])
+        return @invokelatest xs[1]
+    end
+    @test isnothing(getindex_test())
+
+    setindex!_test() = begin
+        @eval function Base.setindex!(xs::atinvokelatest.Xs, @nospecialize(v), idx::Int)
+            xs.xs[idx] = v
+        end
+        xs = atinvokelatest.Xs(Any[nothing])
+        @invokelatest xs[1] = 1
+        return xs
+    end
+    xs = setindex!_test()
+    @test xs.xs[1] == 1
 end
+
+abstract type InvokeX end
+Base.getproperty(::InvokeX, ::Symbol) = error("overload InvokeX")
+Base.setproperty!(::InvokeX, ::Symbol, @nospecialize(v::Any)) = error("overload InvokeX")
+mutable struct InvokeX2 <: InvokeX; x; end
+Base.getproperty(x::InvokeX2, f::Symbol) = getfield(x, f)
+Base.setproperty!(x::InvokeX2, f::Symbol, @nospecialize(v::Any)) = setfield!(x, f, v)
+
+abstract type InvokeXs end
+Base.getindex(::InvokeXs, ::Int) = error("overload InvokeXs")
+Base.setindex!(::InvokeXs, @nospecialize(v::Any), ::Int) = error("overload InvokeXs")
+struct InvokeXs2 <: InvokeXs
+    xs::Vector{Any}
+end
+Base.getindex(xs::InvokeXs2, idx::Int) = xs.xs[idx]
+Base.setindex!(xs::InvokeXs2, @nospecialize(v::Any), idx::Int) = xs.xs[idx] = v
 
 @testset "@invoke macro" begin
     # test against `invoke` doc example
-    let
-        f(x::Real) = x^2
+    let f(x::Real) = x^2
         f(x::Integer) = 1 + @invoke f(x::Real)
         @test f(2) == 5
     end
 
-    let
-        f1(::Integer) = Integer
+    let f1(::Integer) = Integer
         f1(::Real) = Real;
         f2(x::Real) = _f2(x)
         _f2(::Integer) = Integer
@@ -945,8 +998,7 @@ end
     end
 
     # when argment's type annotation is omitted, it should be specified as `Core.Typeof(x)`
-    let
-        f(_) = Any
+    let f(_) = Any
         f(x::Integer) = Integer
         @test f(1) === Integer
         @test @invoke(f(1::Any)) === Any
@@ -959,12 +1011,27 @@ end
     end
 
     # handle keyword arguments correctly
-    let
-        f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
+    let f(a; kw1 = nothing, kw2 = nothing) = a + max(kw1, kw2)
         f(::Integer; kwargs...) = error("don't call me")
 
         @test_throws Exception f(1; kw1 = 1, kw2 = 2)
         @test 3 == @invoke f(1::Any; kw1 = 1, kw2 = 2)
+    end
+
+    # additional syntax test
+    let x = InvokeX2(nothing)
+        @test_throws "overload InvokeX" @invoke (x::InvokeX).x
+        @test isnothing(@invoke x.x)
+        @test_throws "overload InvokeX" @invoke (x::InvokeX).x = 42
+        @invoke x.x = 42
+        @test 42 == x.x
+
+        xs = InvokeXs2(Any[nothing])
+        @test_throws "overload InvokeXs" @invoke (xs::InvokeXs)[1]
+        @test isnothing(@invoke xs[1])
+        @test_throws "overload InvokeXs" @invoke (xs::InvokeXs)[1] = 42
+        @invoke xs[1] = 42
+        @test 42 == xs.xs[1]
     end
 end
 
@@ -1137,6 +1204,25 @@ end
     end
 end
 
+@kwdef struct Test_kwdef_lineinfo
+    a::String
+end
+@testset "@kwdef constructor line info" begin
+    for method in methods(Test_kwdef_lineinfo)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+@kwdef struct Test_kwdef_lineinfo_sparam{S<:AbstractString}
+    a::S
+end
+@testset "@kwdef constructor line info with static parameter" begin
+    for method in methods(Test_kwdef_lineinfo_sparam)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
@@ -1234,4 +1320,8 @@ end
 
 @testset "Base/timing.jl" begin
     @test Base.jit_total_bytes() >= 0
+
+    # sanity check `@allocations` returns what we expect in some very simple cases
+    @test (@allocations "a") == 0
+    @test (@allocations "a" * "b") == 1
 end

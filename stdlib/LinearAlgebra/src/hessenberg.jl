@@ -164,28 +164,24 @@ end
 
 function *(H::UpperHessenberg, B::Bidiagonal)
     TS = promote_op(matprod, eltype(H), eltype(B))
-    A = A_mul_B_td!(zeros(TS, size(H)), H, B)
+    A = mul!(similar(H, TS, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 function *(B::Bidiagonal, H::UpperHessenberg)
     TS = promote_op(matprod, eltype(B), eltype(H))
-    A = A_mul_B_td!(zeros(TS, size(H)), B, H)
+    A = mul!(similar(H, TS, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-/(H::UpperHessenberg, B::Bidiagonal) = _rdiv(H, B)
-/(H::UpperHessenberg{<:Number}, B::Bidiagonal{<:Number}) = _rdiv(H, B)
-function _rdiv(H::UpperHessenberg, B::Bidiagonal)
+function /(H::UpperHessenberg, B::Bidiagonal)
     T = typeof(oneunit(eltype(H))/oneunit(eltype(B)))
-    A = _rdiv!(zeros(T, size(H)), H, B)
+    A = _rdiv!(similar(H, T, size(H)), H, B)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
-\(B::Bidiagonal{<:Number}, H::UpperHessenberg{<:Number}) = _ldiv(B, H)
-\(B::Bidiagonal, H::UpperHessenberg) = _ldiv(B, H)
-function _ldiv(B::Bidiagonal, H::UpperHessenberg)
+function \(B::Bidiagonal, H::UpperHessenberg)
     T = typeof(oneunit(eltype(B))\oneunit(eltype(H)))
-    A = ldiv!(zeros(T, size(H)), B, H)
+    A = ldiv!(similar(H, T, size(H)), B, H)
     return B.uplo == 'U' ? UpperHessenberg(A) : A
 end
 
@@ -434,7 +430,7 @@ Base.iterate(S::Hessenberg, ::Val{:done}) = nothing
 
 hessenberg!(A::StridedMatrix{<:BlasFloat}) = Hessenberg(LAPACK.gehrd!(A)...)
 
-function hessenberg!(A::Union{Symmetric{<:BlasReal},Hermitian{<:BlasFloat}})
+function hessenberg!(A::Union{Symmetric{<:BlasReal,<:StridedMatrix},Hermitian{<:BlasFloat,<:StridedMatrix}})
     factors, τ, d, e = LAPACK.hetrd!(A.uplo, A.data)
     return Hessenberg(factors, τ, SymTridiagonal(d, e), A.uplo)
 end

@@ -300,7 +300,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             argv[i] = eval_value(args[i], s);
         JL_NARGSV(new_opaque_closure, 4);
         jl_value_t *ret = (jl_value_t*)jl_new_opaque_closure((jl_tupletype_t*)argv[0], argv[1], argv[2],
-            argv[3], argv+4, nargs-4);
+            argv[3], argv+4, nargs-4, 1);
         JL_GC_POP();
         return ret;
     }
@@ -632,7 +632,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
 
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
 {
-    jl_code_info_t *src = (jl_code_info_t*)mi->uninferred;
+    jl_code_info_t *src = (jl_code_info_t*)jl_atomic_load_relaxed(&mi->uninferred);
     if (jl_is_method(mi->def.value)) {
         if (!src || (jl_value_t*)src == jl_nothing) {
             if (mi->def.method->source) {
@@ -646,7 +646,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi)
         if (src && (jl_value_t*)src != jl_nothing) {
             JL_GC_PUSH1(&src);
             src = jl_uncompress_ir(mi->def.method, NULL, (jl_array_t*)src);
-            mi->uninferred = (jl_value_t*)src;
+            jl_atomic_store_release(&mi->uninferred, (jl_value_t*)src);
             jl_gc_wb(mi, src);
             JL_GC_POP();
         }

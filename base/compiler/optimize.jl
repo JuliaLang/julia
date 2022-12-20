@@ -73,13 +73,6 @@ function add_invoke_backedge!(et::EdgeTracker, @nospecialize(invokesig), mi::Met
     return nothing
 end
 
-struct InliningState{S <: Union{EdgeTracker, Nothing}, MICache, I<:AbstractInterpreter}
-    params::OptimizationParams
-    et::S
-    mi_cache::MICache # TODO move this to `OptimizationState` (as used by EscapeAnalysis as well)
-    interp::I
-end
-
 is_source_inferred(@nospecialize(src::Union{CodeInfo, Vector{UInt8}})) =
     ccall(:jl_ir_flag_inferred, Bool, (Any,), src)
 
@@ -104,64 +97,77 @@ function inlining_policy(interp::AbstractInterpreter,
         else
             return nothing
         end
+    elseif isa(src, IRCode)
+        return src
+    elseif isa(src, SemiConcreteResult)
+        # For NativeInterpreter, SemiConcreteResult are only produced if they're supposed
+        # to be inlined.
+        return src
     end
     return nothing
 end
 
+struct InliningState{Interp<:AbstractInterpreter}
+    params::OptimizationParams
+    et::Union{EdgeTracker,Nothing}
+    world::UInt
+    interp::Interp
+end
+function InliningState(frame::InferenceState, params::OptimizationParams, interp::AbstractInterpreter)
+    et = EdgeTracker(frame.stmt_edges[1]::Vector{Any}, frame.valid_worlds)
+    return InliningState(params, et, frame.world, interp)
+end
+function InliningState(params::OptimizationParams, interp::AbstractInterpreter)
+    return InliningState(params, nothing, get_world_counter(interp), interp)
+end
+
+# get `code_cache(::AbstractInterpreter)` from `state::InliningState`
+code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
+
 include("compiler/ssair/driver.jl")
 
-mutable struct OptimizationState
+mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
     ir::Union{Nothing, IRCode}
     stmt_info::Vector{CallInfo}
     mod::Module
-    sptypes::Vector{Any} # static parameters
+    sptypes::Vector{Any}
     slottypes::Vector{Any}
-    inlining::InliningState
+    inlining::InliningState{Interp}
     cfg::Union{Nothing,CFG}
-    function OptimizationState(frame::InferenceState, params::OptimizationParams,
-                               interp::AbstractInterpreter, recompute_cfg::Bool=true)
-        s_edges = frame.stmt_edges[1]::Vector{Any}
-        inlining = InliningState(params,
-            EdgeTracker(s_edges, frame.valid_worlds),
-            WorldView(code_cache(interp), frame.world),
-            interp)
-        cfg = recompute_cfg ? nothing : frame.cfg
-        return new(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
-                   frame.sptypes, frame.slottypes, inlining, cfg)
-    end
-    function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
-                               interp::AbstractInterpreter)
-        # prepare src for running optimization passes
-        # if it isn't already
-        nssavalues = src.ssavaluetypes
-        if nssavalues isa Int
-            src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
-        else
-            nssavalues = length(src.ssavaluetypes::Vector{Any})
-        end
-        sptypes = sptypes_from_meth_instance(linfo)
-        nslots = length(src.slotflags)
-        slottypes = src.slottypes
-        if slottypes === nothing
-            slottypes = Any[ Any for i = 1:nslots ]
-        end
-        stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
-        # cache some useful state computations
-        def = linfo.def
-        mod = isa(def, Method) ? def.module : def
-        # Allow using the global MI cache, but don't track edges.
-        # This method is mostly used for unit testing the optimizer
-        inlining = InliningState(params,
-            nothing,
-            WorldView(code_cache(interp), get_world_counter(interp)),
-            interp)
-        return new(linfo, src, nothing, stmt_info, mod,
-                   sptypes, slottypes, inlining, nothing)
-    end
 end
-
+function OptimizationState(frame::InferenceState, params::OptimizationParams,
+                           interp::AbstractInterpreter, recompute_cfg::Bool=true)
+    inlining = InliningState(frame, params, interp)
+    cfg = recompute_cfg ? nothing : frame.cfg
+    return OptimizationState(frame.linfo, frame.src, nothing, frame.stmt_info, frame.mod,
+               frame.sptypes, frame.slottypes, inlining, cfg)
+end
+function OptimizationState(linfo::MethodInstance, src::CodeInfo, params::OptimizationParams,
+                           interp::AbstractInterpreter)
+    # prepare src for running optimization passes if it isn't already
+    nssavalues = src.ssavaluetypes
+    if nssavalues isa Int
+        src.ssavaluetypes = Any[ Any for i = 1:nssavalues ]
+    else
+        nssavalues = length(src.ssavaluetypes::Vector{Any})
+    end
+    sptypes = sptypes_from_meth_instance(linfo)
+    nslots = length(src.slotflags)
+    slottypes = src.slottypes
+    if slottypes === nothing
+        slottypes = Any[ Any for i = 1:nslots ]
+    end
+    stmt_info = CallInfo[ NoCallInfo() for i = 1:nssavalues ]
+    # cache some useful state computations
+    def = linfo.def
+    mod = isa(def, Method) ? def.module : def
+    # Allow using the global MI cache, but don't track edges.
+    # This method is mostly used for unit testing the optimizer
+    inlining = InliningState(params, interp)
+    return OptimizationState(linfo, src, nothing, stmt_info, mod, sptypes, slottypes, inlining, nothing)
+end
 function OptimizationState(linfo::MethodInstance, params::OptimizationParams, interp::AbstractInterpreter)
     src = retrieve_code_info(linfo)
     src === nothing && return nothing
@@ -177,6 +183,25 @@ function ir_to_codeinf!(opt::OptimizationState)
     src.inferred = true
     # finish updating the result struct
     validate_code_in_debug_mode(linfo, src, "optimized")
+    return src
+end
+
+# widen all Const elements in type annotations
+function widen_all_consts!(src::CodeInfo)
+    ssavaluetypes = src.ssavaluetypes::Vector{Any}
+    for i = 1:length(ssavaluetypes)
+        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
+    end
+
+    for i = 1:length(src.code)
+        x = src.code[i]
+        if isa(x, PiNode)
+            src.code[i] = PiNode(x.val, widenconst(x.typ))
+        end
+    end
+
+    src.rettype = widenconst(src.rettype)
+
     return src
 end
 
@@ -393,7 +418,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     # compute inlining and other related optimizations
     result = caller.result
     @assert !(result isa LimitedAccuracy)
-    result = isa(result, InterConditional) ? widenconditional(result) : result
+    result = widenslotwrapper(result)
     if (isa(result, Const) || isconstType(result))
         proven_pure = false
         # must be proven pure to use constant calling convention;
@@ -712,7 +737,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             end
             return T_IFUNC_COST[iidx]
         end
-        if isa(f, Builtin)
+        if isa(f, Builtin) && f !== invoke
             # The efficiency of operations like a[i] and s.b
             # depend strongly on whether the result can be
             # inferred, so check the type of ex

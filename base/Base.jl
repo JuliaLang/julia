@@ -53,11 +53,11 @@ setproperty!(x::Tuple, f::Int, v, order::Symbol) = setfield!(x, f, v, order) # t
 getproperty(x, f::Symbol, order::Symbol) = (@inline; getfield(x, f, order))
 setproperty!(x, f::Symbol, v, order::Symbol) = (@inline; setfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
 
-swapproperty!(x, f::Symbol, v, order::Symbol=:notatomic) =
+swapproperty!(x, f::Symbol, v, order::Symbol=:not_atomic) =
     (@inline; Core.swapfield!(x, f, convert(fieldtype(typeof(x), f), v), order))
-modifyproperty!(x, f::Symbol, op, v, order::Symbol=:notatomic) =
+modifyproperty!(x, f::Symbol, op, v, order::Symbol=:not_atomic) =
     (@inline; Core.modifyfield!(x, f, op, v, order))
-replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:notatomic, fail_order::Symbol=success_order) =
+replaceproperty!(x, f::Symbol, expected, desired, success_order::Symbol=:not_atomic, fail_order::Symbol=success_order) =
     (@inline; Core.replacefield!(x, f, expected, convert(fieldtype(typeof(x), f), desired), success_order, fail_order))
 
 convert(::Type{Any}, Core.@nospecialize x) = x
@@ -102,6 +102,17 @@ include("gcutils.jl")
 include("generator.jl")
 include("reflection.jl")
 include("options.jl")
+
+# define invoke(f, T, args...; kwargs...), without kwargs wrapping
+# to forward to invoke
+function Core.kwcall(kwargs, ::typeof(invoke), f, T, args...)
+    @inline
+    # prepend kwargs and f to the invoked from the user
+    T = rewrap_unionall(Tuple{Any, Core.Typeof(f), (unwrap_unionall(T)::DataType).parameters...}, T)
+    return invoke(Core.kwcall, T, kwargs, f, args...)
+end
+# invoke does not have its own call cache, but kwcall for invoke does
+setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
 
 # core operations & types
 include("promotion.jl")
@@ -157,6 +168,7 @@ include("idset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
+using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 
 include("namedtuple.jl")
 

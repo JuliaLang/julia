@@ -467,13 +467,14 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     emit_memcpy(ctx, dest, tbaa_dest, src, x.tbaa, jl_datatype_size(x.typ), alignment, isVolatile);
 }
 
-static jl_value_t *staticeval_bitstype(const jl_cgval_t &targ)
+static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
 {
     // evaluate an argument at compile time to determine what type it is
-    if (jl_is_type_type(targ.typ)) {
-        jl_value_t *bt = jl_tparam0(targ.typ);
+    jl_value_t *unw = jl_unwrap_unionall(targ.typ);
+    if (jl_is_type_type(unw)) {
+        jl_value_t *bt = jl_tparam0(unw);
         if (jl_is_primitivetype(bt))
-            return bt;
+            return (jl_datatype_t*)bt;
     }
     return NULL;
 }
@@ -495,14 +496,14 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     // Give the arguments names //
     const jl_cgval_t &bt_value = argv[0];
     const jl_cgval_t &v = argv[1];
-    jl_value_t *bt = staticeval_bitstype(bt_value);
+    jl_datatype_t *bt = staticeval_bitstype(bt_value);
 
     // it's easier to throw a good error from C than llvm
     if (!bt)
         return emit_runtime_call(ctx, bitcast, argv, 2);
 
-    Type *llvmt = bitstype_to_llvm(bt, ctx.builder.getContext(), true);
-    int nb = jl_datatype_size(bt);
+    Type *llvmt = bitstype_to_llvm((jl_value_t*)bt, ctx.builder.getContext(), true);
+    uint32_t nb = jl_datatype_size(bt);
 
     // Examine the second argument //
     bool isboxed;
@@ -511,26 +512,24 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
     if (!jl_is_primitivetype(v.typ) || jl_datatype_size(v.typ) != nb) {
         Value *typ = emit_typeof_boxed(ctx, v);
         if (!jl_is_primitivetype(v.typ)) {
-            if (isboxed) {
-                Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
-                error_unless(ctx, isprimitive, "bitcast: expected primitive type value for second argument");
-            }
-            else {
+            if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
                 emit_error(ctx, "bitcast: expected primitive type value for second argument");
                 return jl_cgval_t();
             }
-        }
-        if (!jl_is_datatype(v.typ) || jl_datatype_size(v.typ) != nb) {
-            if (isboxed) {
-                Value *size = emit_datatype_size(ctx, typ);
-                error_unless(ctx,
-                        ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nb)),
-                        "bitcast: argument size does not match size of target type");
-            }
             else {
-                emit_error(ctx, "bitcast: argument size does not match size of target type");
-                return jl_cgval_t();
+                Value *isprimitive = emit_datatype_isprimitivetype(ctx, typ);
+                error_unless(ctx, isprimitive, "bitcast: expected primitive type value for second argument");
             }
+        }
+        if (jl_is_datatype(v.typ) && !jl_is_abstracttype(v.typ)) {
+            emit_error(ctx, "bitcast: argument size does not match size of target type");
+            return jl_cgval_t();
+        }
+        else {
+            Value *size = emit_datatype_size(ctx, typ);
+            error_unless(ctx,
+                    ctx.builder.CreateICmpEQ(size, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), nb)),
+                    "bitcast: argument size does not match size of target type");
         }
     }
 
@@ -567,13 +566,13 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, const jl_cgval_t *argv)
             vx = emit_bitcast(ctx, vx, llvmt);
     }
 
-    if (jl_is_concrete_type(bt)) {
+    if (jl_is_concrete_type((jl_value_t*)bt)) {
         return mark_julia_type(ctx, vx, false, bt);
     }
     else {
         Value *box = emit_allocobj(ctx, nb, boxed(ctx, bt_value));
         init_bits_value(ctx, box, vx, ctx.tbaa().tbaa_immut);
-        return mark_julia_type(ctx, box, true, bt);
+        return mark_julia_type(ctx, box, true, bt->name->wrapper);
     }
 }
 
@@ -584,10 +583,11 @@ static jl_cgval_t generic_cast(
 {
     const jl_cgval_t &targ = argv[0];
     const jl_cgval_t &v = argv[1];
-    jl_value_t *jlto = staticeval_bitstype(targ);
+    jl_datatype_t *jlto = staticeval_bitstype(targ);
     if (!jlto || !jl_is_primitivetype(v.typ))
         return emit_runtime_call(ctx, f, argv, 2);
-    Type *to = bitstype_to_llvm(jlto, ctx.builder.getContext(), true);
+    uint32_t nb = jl_datatype_size(jlto);
+    Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
     if (toint)
         to = INTT(to);
@@ -618,7 +618,14 @@ static jl_cgval_t generic_cast(
     Value *ans = ctx.builder.CreateCast(Op, from, to);
     if (f == fptosi || f == fptoui)
         ans = ctx.builder.CreateFreeze(ans);
-    return mark_julia_type(ctx, ans, false, jlto);
+    if (jl_is_concrete_type((jl_value_t*)jlto)) {
+        return mark_julia_type(ctx, ans, false, jlto);
+    }
+    else {
+        Value *box = emit_allocobj(ctx, nb, boxed(ctx, targ));
+        init_bits_value(ctx, box, ans, ctx.tbaa().tbaa_immut);
+        return mark_julia_type(ctx, box, true, jlto->name->wrapper);
+    }
 }
 
 static jl_cgval_t emit_runtime_pointerref(jl_codectx_t &ctx, jl_cgval_t *argv)
@@ -1127,7 +1134,12 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
 
     jl_cgval_t *argv = (jl_cgval_t*)alloca(sizeof(jl_cgval_t) * nargs);
     for (size_t i = 0; i < nargs; ++i) {
-        argv[i] = emit_expr(ctx, args[i + 1]);
+        jl_cgval_t arg = emit_expr(ctx, args[i + 1]);
+        if (arg.typ == jl_bottom_type) {
+            // intrinsics generally don't handle buttom values, so bail out early
+            return jl_cgval_t();
+        }
+        argv[i] = arg;
     }
 
     // this forces everything to use runtime-intrinsics (e.g. for testing)

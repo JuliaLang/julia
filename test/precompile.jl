@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 original_depot_path = copy(Base.DEPOT_PATH)
+original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
 
@@ -37,7 +38,7 @@ end
 
 # method root provenance
 
-rootid(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), Base.parentmodule(m))
+rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
 rootid(m::Method) = rootid(m.module)
 
 function root_provenance(m::Method, i::Int)
@@ -159,10 +160,9 @@ precompile_test_harness(false) do dir
               # issue 16529 (adding a method to a type with no instances)
               (::Task)(::UInt8, ::UInt16, ::UInt32) = 2
 
-              # issue 16471 (capturing references to a kwfunc)
-              Test.@test !isdefined(typeof(sin).name.mt, :kwsorter)
+              # issue 16471
               Base.sin(::UInt8, ::UInt16, ::UInt32; x = 52) = x
-              const sinkw = Core.kwfunc(Base.sin)
+              const sinkw = Core.kwcall
 
               # issue 16908 (some complicated types and external method definitions)
               abstract type CategoricalPool{T, R <: Integer, V} end
@@ -253,9 +253,6 @@ precompile_test_harness(false) do dir
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
           end
           """)
-    # make sure `sin` didn't have a kwfunc (which would invalidate the attempted test)
-    @test !isdefined(typeof(sin).name.mt, :kwsorter)
-
     # Issue #12623
     @test __precompile__(false) === nothing
 
@@ -348,7 +345,7 @@ precompile_test_harness(false) do dir
 
         modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
-        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
+        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
@@ -387,7 +384,7 @@ precompile_test_harness(false) do dir
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
         @test sin(0x01, 0x4000, 0x30031234) == 52
         @test sin(0x01, 0x4000, 0x30031234; x = 9142) == 9142
-        @test Foo.sinkw === Core.kwfunc(Base.sin)
+        @test Foo.sinkw === Core.kwcall
 
         @test Foo.NominalValue() == 1
         @test Foo.OrdinalValue() == 1
@@ -1496,8 +1493,8 @@ end
         f(x, y) = x + y
         f(x::Int, y) = 2x + y
     end
-    precompile(M.f, (Int, Any))
-    precompile(M.f, (AbstractFloat, Any))
+    @test precompile(M.f, (Int, Any))
+    @test precompile(M.f, (AbstractFloat, Any))
     mis = map(methods(M.f)) do m
         m.specializations[1]
     end
@@ -1558,5 +1555,49 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
+precompile_test_harness("Recursive types") do load_path
+    write(joinpath(load_path, "RecursiveTypeDef.jl"),
+        """
+        module RecursiveTypeDef
+
+        struct C{T,O} end
+        struct A{T,N,O} <: AbstractArray{C{T,A{T,N,O}},N}
+            sz::NTuple{N,Int}
+        end
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("RecursiveTypeDef"))
+    (@eval (using RecursiveTypeDef))
+    a = Base.invokelatest(RecursiveTypeDef.A{Float64,2,String}, (3, 3))
+    @test isa(a, AbstractArray)
+end
+
+@testset "issue 46778" begin
+    f46778(::Any, ::Type{Int}) = 1
+    f46778(::Any, ::DataType) = 2
+    @test precompile(Tuple{typeof(f46778), Int, DataType})
+    @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
+end
+
+
+precompile_test_harness("Module tparams") do load_path
+    write(joinpath(load_path, "ModuleTparams.jl"),
+        """
+        module ModuleTparams
+            module TheTParam
+            end
+
+            struct ParamStruct{T}; end
+            const the_struct = ParamStruct{TheTParam}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleTparams"))
+    (@eval (using ModuleTparams))
+    @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+end
+
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)
+empty!(Base.LOAD_PATH)
+append!(Base.LOAD_PATH, original_load_path)

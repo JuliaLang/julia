@@ -29,6 +29,34 @@ typedef struct {
     uint8_t relocatability;
 } jl_ircode_state;
 
+// type => tag hash for a few core types (e.g., Expr, PhiNode, etc)
+static htable_t ser_tag;
+// tag => type mapping, the reverse of ser_tag
+static jl_value_t *deser_tag[256];
+// hash of some common symbols, encoded as CommonSym_tag plus 1 byte
+static htable_t common_symbol_tag;
+static jl_value_t *deser_symbols[256];
+
+void *jl_lookup_ser_tag(jl_value_t *v)
+{
+    return ptrhash_get(&ser_tag, v);
+}
+
+void *jl_lookup_common_symbol(jl_value_t *v)
+{
+    return ptrhash_get(&common_symbol_tag, v);
+}
+
+jl_value_t *jl_deser_tag(uint8_t tag)
+{
+    return deser_tag[tag];
+}
+
+jl_value_t *jl_deser_symbol(uint8_t tag)
+{
+    return deser_symbols[tag];
+}
+
 // --- encoding ---
 
 #define jl_encode_value(s, v) jl_encode_value_((s), (jl_value_t*)(v), 0)
@@ -360,13 +388,14 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal) 
              jl_is_upsilonnode(v) || jl_is_pinode(v) || jl_is_slot(v) || jl_is_ssavalue(v) ||
              (jl_isbits(jl_typeof(v)) && jl_datatype_size(jl_typeof(v)) <= 64)) {
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
-        if (t->size <= 255) {
+        size_t tsz = jl_datatype_size(t);
+        if (tsz <= 255) {
             write_uint8(s->s, TAG_SHORT_GENERAL);
-            write_uint8(s->s, t->size);
+            write_uint8(s->s, tsz);
         }
         else {
             write_uint8(s->s, TAG_GENERAL);
-            write_int32(s->s, t->size);
+            write_int32(s->s, tsz);
         }
         jl_encode_value(s, t);
 
@@ -1017,6 +1046,110 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i)
         remaining -= namelen + 1;
     }
     return jl_nothing;
+}
+
+void jl_init_serializer(void)
+{
+    jl_task_t *ct = jl_current_task;
+    htable_new(&ser_tag, 0);
+    htable_new(&common_symbol_tag, 0);
+
+    void *vals[] = { jl_emptysvec, jl_emptytuple, jl_false, jl_true, jl_nothing, jl_any_type,
+                     jl_call_sym, jl_invoke_sym, jl_invoke_modify_sym, jl_goto_ifnot_sym, jl_return_sym, jl_symbol("tuple"),
+                     jl_an_empty_string, jl_an_empty_vec_any,
+
+                     // empirical list of very common symbols
+                     #include "common_symbols1.inc"
+
+                     jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
+                     jl_box_int32(3), jl_box_int32(4), jl_box_int32(5),
+                     jl_box_int32(6), jl_box_int32(7), jl_box_int32(8),
+                     jl_box_int32(9), jl_box_int32(10), jl_box_int32(11),
+                     jl_box_int32(12), jl_box_int32(13), jl_box_int32(14),
+                     jl_box_int32(15), jl_box_int32(16), jl_box_int32(17),
+                     jl_box_int32(18), jl_box_int32(19), jl_box_int32(20),
+
+                     jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
+                     jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
+                     jl_box_int64(6), jl_box_int64(7), jl_box_int64(8),
+                     jl_box_int64(9), jl_box_int64(10), jl_box_int64(11),
+                     jl_box_int64(12), jl_box_int64(13), jl_box_int64(14),
+                     jl_box_int64(15), jl_box_int64(16), jl_box_int64(17),
+                     jl_box_int64(18), jl_box_int64(19), jl_box_int64(20),
+
+                     jl_bool_type, jl_linenumbernode_type, jl_pinode_type,
+                     jl_upsilonnode_type, jl_type_type, jl_bottom_type, jl_ref_type,
+                     jl_pointer_type, jl_abstractarray_type, jl_nothing_type,
+                     jl_vararg_type,
+                     jl_densearray_type, jl_function_type, jl_typename_type,
+                     jl_builtin_type, jl_task_type, jl_uniontype_type,
+                     jl_array_any_type, jl_intrinsic_type,
+                     jl_abstractslot_type, jl_methtable_type, jl_typemap_level_type,
+                     jl_voidpointer_type, jl_newvarnode_type, jl_abstractstring_type,
+                     jl_array_symbol_type, jl_anytuple_type, jl_tparam0(jl_anytuple_type),
+                     jl_emptytuple_type, jl_array_uint8_type, jl_code_info_type,
+                     jl_typeofbottom_type, jl_typeofbottom_type->super,
+                     jl_namedtuple_type, jl_array_int32_type,
+                     jl_typedslot_type, jl_uint32_type, jl_uint64_type,
+                     jl_type_type_mt, jl_nonfunction_mt,
+                     jl_opaque_closure_type,
+
+                     ct->ptls->root_task,
+
+                     NULL };
+
+    // more common symbols, less common than those above. will get 2-byte encodings.
+    void *common_symbols[] = {
+        #include "common_symbols2.inc"
+        NULL
+    };
+
+    deser_tag[TAG_SYMBOL] = (jl_value_t*)jl_symbol_type;
+    deser_tag[TAG_SSAVALUE] = (jl_value_t*)jl_ssavalue_type;
+    deser_tag[TAG_DATATYPE] = (jl_value_t*)jl_datatype_type;
+    deser_tag[TAG_SLOTNUMBER] = (jl_value_t*)jl_slotnumber_type;
+    deser_tag[TAG_SVEC] = (jl_value_t*)jl_simplevector_type;
+    deser_tag[TAG_ARRAY] = (jl_value_t*)jl_array_type;
+    deser_tag[TAG_EXPR] = (jl_value_t*)jl_expr_type;
+    deser_tag[TAG_PHINODE] = (jl_value_t*)jl_phinode_type;
+    deser_tag[TAG_PHICNODE] = (jl_value_t*)jl_phicnode_type;
+    deser_tag[TAG_STRING] = (jl_value_t*)jl_string_type;
+    deser_tag[TAG_MODULE] = (jl_value_t*)jl_module_type;
+    deser_tag[TAG_TVAR] = (jl_value_t*)jl_tvar_type;
+    deser_tag[TAG_METHOD_INSTANCE] = (jl_value_t*)jl_method_instance_type;
+    deser_tag[TAG_METHOD] = (jl_value_t*)jl_method_type;
+    deser_tag[TAG_CODE_INSTANCE] = (jl_value_t*)jl_code_instance_type;
+    deser_tag[TAG_GLOBALREF] = (jl_value_t*)jl_globalref_type;
+    deser_tag[TAG_INT32] = (jl_value_t*)jl_int32_type;
+    deser_tag[TAG_INT64] = (jl_value_t*)jl_int64_type;
+    deser_tag[TAG_UINT8] = (jl_value_t*)jl_uint8_type;
+    deser_tag[TAG_LINEINFO] = (jl_value_t*)jl_lineinfonode_type;
+    deser_tag[TAG_UNIONALL] = (jl_value_t*)jl_unionall_type;
+    deser_tag[TAG_GOTONODE] = (jl_value_t*)jl_gotonode_type;
+    deser_tag[TAG_QUOTENODE] = (jl_value_t*)jl_quotenode_type;
+    deser_tag[TAG_GOTOIFNOT] = (jl_value_t*)jl_gotoifnot_type;
+    deser_tag[TAG_RETURNNODE] = (jl_value_t*)jl_returnnode_type;
+    deser_tag[TAG_ARGUMENT] = (jl_value_t*)jl_argument_type;
+
+    intptr_t i = 0;
+    while (vals[i] != NULL) {
+        deser_tag[LAST_TAG+1+i] = (jl_value_t*)vals[i];
+        i += 1;
+    }
+    assert(LAST_TAG+1+i < 256);
+
+    for (i = 2; i < 256; i++) {
+        if (deser_tag[i])
+            ptrhash_put(&ser_tag, deser_tag[i], (void*)i);
+    }
+
+    i = 2;
+    while (common_symbols[i-2] != NULL) {
+        ptrhash_put(&common_symbol_tag, common_symbols[i-2], (void*)i);
+        deser_symbols[i] = (jl_value_t*)common_symbols[i-2];
+        i += 1;
+    }
+    assert(i <= 256);
 }
 
 #ifdef __cplusplus

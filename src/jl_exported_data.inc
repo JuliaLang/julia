@@ -44,6 +44,7 @@
     XX(jl_float64_type) \
     XX(jl_floatingpoint_type) \
     XX(jl_function_type) \
+    XX(jl_binding_type) \
     XX(jl_globalref_type) \
     XX(jl_gotoifnot_type) \
     XX(jl_gotonode_type) \
@@ -55,6 +56,7 @@
     XX(jl_interconditional_type) \
     XX(jl_interrupt_exception) \
     XX(jl_intrinsic_type) \
+    XX(jl_kwcall_func) \
     XX(jl_lineinfonode_type) \
     XX(jl_linenumbernode_type) \
     XX(jl_llvmpointer_type) \
@@ -130,7 +132,7 @@
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \
     XX(jl_n_threadpools, int) \
-    XX(jl_n_threads, int) \
+    XX(jl_n_threads, _Atomic(int)) \
     XX(jl_options, jl_options_t) \
 
 // end of file

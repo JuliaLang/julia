@@ -101,6 +101,8 @@ exponent_one(::Type{Float16}) =     0x3c00
 exponent_half(::Type{Float16}) =    0x3800
 significand_mask(::Type{Float16}) = 0x03ff
 
+mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
+
 for T in (Float16, Float32, Float64)
     @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
     @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
@@ -414,9 +416,109 @@ muladd(x::T, y::T, z::T) where {T<:IEEEFloat} = muladd_float(x, y, z)
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::T, y::T) where {T<:IEEEFloat} = rem_float(x, y)
+function unbiased_exponent(x::T) where {T<:IEEEFloat}
+    return (reinterpret(Unsigned, x) & exponent_mask(T)) >> significand_bits(T)
+end
 
-function mod(x::T, y::T) where T<:AbstractFloat
+function explicit_mantissa_noinfnan(x::T) where {T<:IEEEFloat}
+    m = mantissa(x)
+    issubnormal(x) || (m |= significand_mask(T) + uinttype(T)(1))
+    return m
+end
+
+function _to_float(number::U, ep) where {U<:Unsigned}
+    F = floattype(U)
+    S = signed(U)
+    epint = unsafe_trunc(S,ep)
+    lz::signed(U) = unsafe_trunc(S, Core.Intrinsics.ctlz_int(number) - U(exponent_bits(F)))
+    number <<= lz
+    epint -= lz
+    bits = U(0)
+    if epint >= 0
+        bits = number & significand_mask(F)
+        bits |= ((epint + S(1)) << significand_bits(F)) & exponent_mask(F)
+    else
+        bits = (number >> -epint) & significand_mask(F)
+    end
+    return reinterpret(F, bits)
+end
+
+@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y::T) where {T<:IEEEFloat}
+    xuint = reinterpret(Unsigned, x)
+    yuint = reinterpret(Unsigned, y)
+    if xuint <= yuint
+        if xuint < yuint
+            return x
+        end
+        return zero(T)
+    end
+
+    e_x = unbiased_exponent(x)
+    e_y = unbiased_exponent(y)
+    # Most common case where |y| is "very normal" and |x/y| < 2^EXPONENT_WIDTH
+    if e_y > (significand_bits(T)) && (e_x - e_y) <= (exponent_bits(T))
+        m_x = explicit_mantissa_noinfnan(x)
+        m_y = explicit_mantissa_noinfnan(y)
+        d = urem_int((m_x << (e_x - e_y)),  m_y)
+        iszero(d) && return zero(T)
+        return _to_float(d, e_y - uinttype(T)(1))
+    end
+    # Both are subnormals
+    if e_x == 0 && e_y == 0
+        return reinterpret(T, urem_int(xuint, yuint) & significand_mask(T))
+    end
+
+    m_x = explicit_mantissa_noinfnan(x)
+    e_x -= uinttype(T)(1)
+    m_y = explicit_mantissa_noinfnan(y)
+    lz_m_y = uinttype(T)(exponent_bits(T))
+    if e_y > 0
+        e_y -= uinttype(T)(1)
+    else
+        m_y = mantissa(y)
+        lz_m_y = Core.Intrinsics.ctlz_int(m_y)
+    end
+
+    tz_m_y = Core.Intrinsics.cttz_int(m_y)
+    sides_zeroes_cnt = lz_m_y + tz_m_y
+
+    # n>0
+    exp_diff = e_x - e_y
+    # Shift hy right until the end or n = 0
+    right_shift = min(exp_diff, tz_m_y)
+    m_y >>= right_shift
+    exp_diff -= right_shift
+    e_y += right_shift
+    # Shift hx left until the end or n = 0
+    left_shift = min(exp_diff, uinttype(T)(exponent_bits(T)))
+    m_x <<= left_shift
+    exp_diff -= left_shift
+
+    m_x = urem_int(m_x, m_y)
+    iszero(m_x) && return zero(T)
+    iszero(exp_diff) && return _to_float(m_x, e_y)
+
+    while exp_diff > sides_zeroes_cnt
+        exp_diff -= sides_zeroes_cnt
+        m_x <<= sides_zeroes_cnt
+        m_x = urem_int(m_x, m_y)
+    end
+    m_x <<= exp_diff
+    m_x = urem_int(m_x, m_y)
+    return _to_float(m_x, e_y)
+end
+
+function rem(x::T, y::T) where {T<:IEEEFloat}
+    if isfinite(x) && !iszero(x) && isfinite(y) && !iszero(y)
+        return copysign(rem_internal(abs(x), abs(y)), x)
+    elseif isinf(x) || isnan(y) || iszero(y)  # y can still be Inf
+        return T(NaN)
+    else
+        return x
+    end
+end
+
+function mod(x::T, y::T) where {T<:AbstractFloat}
     r = rem(x,y)
     if r == 0
         copysign(r,y)
@@ -806,8 +908,10 @@ end
 """
     issubnormal(f) -> Bool
 
-Test whether a floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number). A floating point number is recognized as
-subnormal whenever its exponent is the least value possible and its significand is zero.
+Test whether a floating point number is subnormal.
+
+An IEEE floating point number is [subnormal](https://en.wikipedia.org/wiki/Subnormal_number)
+when its exponent bits are zero and its significand is not zero.
 
 # Examples
 ```jldoctest

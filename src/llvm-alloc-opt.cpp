@@ -58,6 +58,7 @@ static void removeGCPreserve(CallInst *call, Instruction *val)
     ++RemovedGCPreserve;
     auto replace = Constant::getNullValue(val->getType());
     call->replaceUsesOfWith(val, replace);
+    call->setAttributes(AttributeList());
     for (auto &arg: call->args()) {
         if (!isa<Constant>(arg.get())) {
             return;
@@ -231,8 +232,8 @@ void Optimizer::optimizeAll()
             removeAlloc(orig);
             continue;
         }
-        bool has_ref = false;
-        bool has_refaggr = false;
+        bool has_ref = use_info.has_unknown_objref;
+        bool has_refaggr = use_info.has_unknown_objrefaggr;
         for (auto memop: use_info.memops) {
             auto &field = memop.second;
             if (field.hasobjref) {
@@ -576,7 +577,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
         // treat this as a non-mem2reg'd alloca
         // The ccall root and GC preserve handling below makes sure that
         // the alloca isn't optimized out.
-        buff = prolog_builder.CreateAlloca(pass.T_prjlvalue);
+        const DataLayout &DL = F.getParent()->getDataLayout();
+        auto asize = ConstantInt::get(Type::getInt64Ty(prolog_builder.getContext()), sz / DL.getTypeAllocSize(pass.T_prjlvalue));
+        buff = prolog_builder.CreateAlloca(pass.T_prjlvalue, asize);
         buff->setAlignment(Align(align));
         ptr = cast<Instruction>(prolog_builder.CreateBitCast(buff, Type::getInt8PtrTy(prolog_builder.getContext())));
     }
@@ -659,8 +662,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref)
                 }
                 return;
             }
-            if (pass.write_barrier_func == callee ||
-                pass.write_barrier_binding_func == callee) {
+            if (pass.write_barrier_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -768,8 +770,7 @@ void Optimizer::removeAlloc(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee ||
-                pass.write_barrier_binding_func == callee) {
+            if (pass.write_barrier_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1067,8 +1068,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 call->eraseFromParent();
                 return;
             }
-            if (pass.write_barrier_func == callee ||
-                pass.write_barrier_binding_func == callee) {
+            if (pass.write_barrier_func == callee) {
                 ++RemovedWriteBarriers;
                 call->eraseFromParent();
                 return;
@@ -1091,7 +1091,6 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 }
                 auto new_call = builder.CreateCall(pass.gc_preserve_begin_func, operands);
                 new_call->takeName(call);
-                new_call->setAttributes(call->getAttributes());
                 call->replaceAllUsesWith(new_call);
                 call->eraseFromParent();
                 return;
@@ -1182,7 +1181,9 @@ bool AllocOpt::runOnFunction(Function &F, function_ref<DominatorTree&()> GetDT)
     optimizer.initialize();
     optimizer.optimizeAll();
     bool modified = optimizer.finalize();
+#ifdef JL_VERIFY_PASSES
     assert(!verifyFunction(F, &errs()));
+#endif
     return modified;
 }
 

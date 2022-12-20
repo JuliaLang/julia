@@ -297,7 +297,7 @@ end
     @test_throws UndefKeywordError f34516()
     @test_throws UndefKeywordError f34516(1)
     g34516(@nospecialize(x); k=0) = 0
-    @test first(methods(Core.kwfunc(g34516))).nospecialize != 0
+    @test only(methods(Core.kwcall, (Any, typeof(g34516), Vararg))).nospecialize != 0
 end
 @testset "issue #21518" begin
     a = 0

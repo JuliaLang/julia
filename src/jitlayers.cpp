@@ -14,6 +14,7 @@
 #if JL_LLVM_VERSION >= 130000
 #include <llvm/ExecutionEngine/Orc/ExecutorProcessControl.h>
 #endif
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
@@ -135,7 +136,11 @@ void jl_dump_llvm_opt_impl(void *s)
     **jl_ExecutionEngine->get_dump_llvm_opt_stream() = (JL_STREAM*)s;
 }
 
-static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports);
+static int jl_add_to_ee(
+        orc::ThreadSafeModule &M,
+        const StringMap<orc::ThreadSafeModule*> &NewExports,
+        DenseMap<orc::ThreadSafeModule*, int> &Queued,
+        std::vector<orc::ThreadSafeModule*> &Stack);
 static void jl_decorate_module(Module &M);
 static uint64_t getAddressForFunction(StringRef fname);
 
@@ -227,10 +232,13 @@ static jl_callptr_t _jl_compile_codeinst(
                 }
             }
         }
+        DenseMap<orc::ThreadSafeModule*, int> Queued;
+        std::vector<orc::ThreadSafeModule*> Stack;
         for (auto &def : emitted) {
             // Add the results to the execution engine now
             orc::ThreadSafeModule &M = std::get<0>(def.second);
-            jl_add_to_ee(M, NewExports);
+            jl_add_to_ee(M, NewExports, Queued, Stack);
+            assert(Queued.empty() && Stack.empty() && !M);
         }
         ++CompiledCodeinsts;
         MaxWorkqueueSize.updateMax(emitted.size());
@@ -266,7 +274,7 @@ static jl_callptr_t _jl_compile_codeinst(
             // hack to export this pointer value to jl_dump_method_disasm
             jl_atomic_store_release(&this_code->specptr.fptr, (void*)getAddressForFunction(decls.specFunctionObject));
         }
-        if (this_code== codeinst)
+        if (this_code == codeinst)
             fptr = addr;
     }
 
@@ -294,7 +302,8 @@ const char *jl_generate_ccallable(LLVMOrcThreadSafeModuleRef llvmmod, void *sysi
 extern "C" JL_DLLEXPORT
 int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
-    JL_LOCK(&jl_codegen_lock);
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -310,6 +319,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         backing = jl_create_llvm_module("cextern", pparams ? pparams->tsctx : ctx, pparams ? pparams->imaging : imaging_default());
         into = &backing;
     }
+    JL_LOCK(&jl_codegen_lock);
     jl_codegen_params_t params(into->getContext());
     if (pparams == NULL)
         pparams = &params;
@@ -329,12 +339,12 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         if (success && llvmmod == NULL)
             jl_ExecutionEngine->addModule(std::move(*into));
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
+    JL_UNLOCK(&jl_codegen_lock);
+    if (!--ct->reentrant_codegen && measure_compile_time_enabled)
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
-    JL_UNLOCK(&jl_codegen_lock);
     return success;
 }
 
@@ -385,7 +395,8 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
 extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
-    JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
@@ -394,6 +405,7 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     // if we don't have any decls already, try to generate it now
     jl_code_info_t *src = NULL;
     JL_GC_PUSH1(&src);
+    JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
     jl_value_t *ci = jl_rettype_inferred(mi, world, world);
     jl_code_instance_t *codeinst = (ci == jl_nothing ? NULL : (jl_code_instance_t*)ci);
     if (codeinst) {
@@ -436,13 +448,13 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
     else {
         codeinst = NULL;
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled) {
+    JL_UNLOCK(&jl_codegen_lock);
+    if (!--ct->reentrant_codegen && measure_compile_time_enabled) {
         uint64_t t_comp = jl_hrtime() - compiler_start_time;
         if (is_recompile)
             jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
     }
-    JL_UNLOCK(&jl_codegen_lock);
     JL_GC_POP();
     return codeinst;
 }
@@ -453,11 +465,13 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
     if (jl_atomic_load_relaxed(&unspec->invoke) != NULL) {
         return;
     }
-    JL_LOCK(&jl_codegen_lock);
+    auto ct = jl_current_task;
+    ct->reentrant_codegen++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
         compiler_start_time = jl_hrtime();
+    JL_LOCK(&jl_codegen_lock);
     if (jl_atomic_load_relaxed(&unspec->invoke) == NULL) {
         jl_code_info_t *src = NULL;
         JL_GC_PUSH1(&src);
@@ -474,7 +488,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
                 src = jl_uncompress_ir(def, NULL, (jl_array_t*)src);
         }
         else {
-            src = (jl_code_info_t*)unspec->def->uninferred;
+            src = (jl_code_info_t*)jl_atomic_load_relaxed(&unspec->def->uninferred);
         }
         assert(src && jl_is_code_info(src));
         ++UnspecFPtrCount;
@@ -485,9 +499,9 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         }
         JL_GC_POP();
     }
-    if (jl_codegen_lock.count == 1 && measure_compile_time_enabled)
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
     JL_UNLOCK(&jl_codegen_lock); // Might GC
+    if (!--ct->reentrant_codegen && measure_compile_time_enabled)
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
 }
 
 
@@ -507,11 +521,13 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // normally we prevent native code from being generated for these functions,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
-            JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
+            auto ct = jl_current_task;
+            ct->reentrant_codegen++;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
                 compiler_start_time = jl_hrtime();
+            JL_LOCK(&jl_codegen_lock); // also disables finalizers, to prevent any unexpected recursion
             specfptr = (uintptr_t)jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (specfptr == 0) {
                 jl_code_info_t *src = jl_type_infer(mi, world, 0);
@@ -535,9 +551,9 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 }
                 JL_GC_POP();
             }
-            if (measure_compile_time_enabled)
-                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
             JL_UNLOCK(&jl_codegen_lock);
+            if (!--ct->reentrant_codegen && measure_compile_time_enabled)
+                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
         }
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
@@ -1106,7 +1122,9 @@ namespace {
                 JL_TIMING(LLVM_OPT);
 
                 //Run the optimization
+                assert(!verifyModule(M, &errs()));
                 (***PMs).run(M);
+                assert(!verifyModule(M, &errs()));
 
                 uint64_t end_time = 0;
                 {
@@ -1207,11 +1225,12 @@ JuliaOJIT::JuliaOJIT()
             }
         ),
 #endif
+    LockLayer(ObjectLayer),
     Pipelines{
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 0),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 1),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 2),
-        std::make_unique<PipelineT>(ObjectLayer, *TM, 3),
+        std::make_unique<PipelineT>(LockLayer, *TM, 0),
+        std::make_unique<PipelineT>(LockLayer, *TM, 1),
+        std::make_unique<PipelineT>(LockLayer, *TM, 2),
+        std::make_unique<PipelineT>(LockLayer, *TM, 3),
     },
     OptSelLayer(Pipelines)
 {
@@ -1321,13 +1340,14 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
 {
     JL_TIMING(LLVM_MODULE_FINISH);
     ++ModulesAdded;
-    std::vector<std::string> NewExports;
+    orc::SymbolLookupSet NewExports;
     TSM.withModuleDo([&](Module &M) {
         jl_decorate_module(M);
         shareStrings(M);
         for (auto &F : M.global_values()) {
             if (!F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
-                NewExports.push_back(getMangledName(F.getName()));
+                auto Name = ES.intern(getMangledName(F.getName()));
+                NewExports.add(std::move(Name));
             }
         }
 #if !defined(JL_NDEBUG) && !defined(JL_USE_JITLINK)
@@ -1351,13 +1371,15 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
         }
 #endif
     });
+
     // TODO: what is the performance characteristics of this?
     cantFail(OptSelLayer.add(JD, std::move(TSM)));
     // force eager compilation (for now), due to memory management specifics
     // (can't handle compilation recursion)
-    for (auto Name : NewExports)
-        cantFail(ES.lookup({&JD}, Name));
-
+    for (auto &sym : cantFail(ES.lookup({{&JD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}}, NewExports))) {
+        assert(sym.second);
+        (void) sym;
+    }
 }
 
 JL_JITSymbol JuliaOJIT::findSymbol(StringRef Name, bool ExportedSymbolsOnly)
@@ -1689,75 +1711,71 @@ static void jl_decorate_module(Module &M) {
 #endif
 }
 
+// Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 static int jl_add_to_ee(
         orc::ThreadSafeModule &M,
-        StringMap<orc::ThreadSafeModule*> &NewExports,
+        const StringMap<orc::ThreadSafeModule*> &NewExports,
         DenseMap<orc::ThreadSafeModule*, int> &Queued,
-        std::vector<std::vector<orc::ThreadSafeModule*>> &ToMerge,
-        int depth)
+        std::vector<orc::ThreadSafeModule*> &Stack)
 {
-    // DAG-sort (post-dominator) the compile to compute the minimum
-    // merge-module sets for linkage
+    // First check if the TSM is empty (already compiled)
     if (!M)
         return 0;
-    // First check and record if it's on the stack somewhere
+    // Next check and record if it is on the stack somewhere
     {
-        auto &Cycle = Queued[&M];
-        if (Cycle)
-            return Cycle;
-        ToMerge.push_back({});
-        Cycle = depth;
+        auto &Id = Queued[&M];
+        if (Id)
+            return Id;
+        Stack.push_back(&M);
+        Id = Stack.size();
     }
+    // Finally work out the SCC
+    int depth = Stack.size();
     int MergeUp = depth;
-    // Compute the cycle-id
+    std::vector<orc::ThreadSafeModule*> Children;
     M.withModuleDo([&](Module &m) {
         for (auto &F : m.global_objects()) {
             if (F.isDeclaration() && F.getLinkage() == GlobalValue::ExternalLinkage) {
                 auto Callee = NewExports.find(F.getName());
                 if (Callee != NewExports.end()) {
-                    auto &CM = Callee->second;
-                    int Down = jl_add_to_ee(*CM, NewExports, Queued, ToMerge, depth + 1);
-                    assert(Down <= depth);
-                    if (Down && Down < MergeUp)
-                        MergeUp = Down;
+                    auto *CM = Callee->second;
+                    if (*CM && CM != &M) {
+                        auto Down = Queued.find(CM);
+                        if (Down != Queued.end())
+                            MergeUp = std::min(MergeUp, Down->second);
+                        else
+                            Children.push_back(CM);
+                    }
                 }
             }
         }
     });
-    if (MergeUp == depth) {
+    assert(MergeUp > 0);
+    for (auto *CM : Children) {
+        int Down = jl_add_to_ee(*CM, NewExports, Queued, Stack);
+        assert(Down <= (int)Stack.size());
+        if (Down)
+            MergeUp = std::min(MergeUp, Down);
+    }
+    if (MergeUp < depth)
+        return MergeUp;
+    while (1) {
         // Not in a cycle (or at the top of it)
-        Queued.erase(&M);
-        for (auto &CM : ToMerge.at(depth - 1)) {
-            assert(Queued.find(CM)->second == depth);
-            Queued.erase(CM);
-            jl_merge_module(M, std::move(*CM));
+        // remove SCC state and merge every CM from the cycle into M
+        orc::ThreadSafeModule *CM = Stack.back();
+        auto it = Queued.find(CM);
+        assert(it->second == (int)Stack.size());
+        Queued.erase(it);
+        Stack.pop_back();
+        if ((int)Stack.size() < depth) {
+            assert(&M == CM);
+            break;
         }
-        jl_ExecutionEngine->addModule(std::move(M));
-        MergeUp = 0;
+        jl_merge_module(M, std::move(*CM));
     }
-    else {
-        // Add our frame(s) to the top of the cycle
-        Queued[&M] = MergeUp;
-        auto &Top = ToMerge.at(MergeUp - 1);
-        Top.push_back(&M);
-        for (auto &CM : ToMerge.at(depth - 1)) {
-            assert(Queued.find(CM)->second == depth);
-            Queued[CM] = MergeUp;
-            Top.push_back(CM);
-        }
-    }
-    ToMerge.pop_back();
-    return MergeUp;
+    jl_ExecutionEngine->addModule(std::move(M));
+    return 0;
 }
-
-static void jl_add_to_ee(orc::ThreadSafeModule &M, StringMap<orc::ThreadSafeModule*> &NewExports)
-{
-    DenseMap<orc::ThreadSafeModule*, int> Queued;
-    std::vector<std::vector<orc::ThreadSafeModule*>> ToMerge;
-    jl_add_to_ee(M, NewExports, Queued, ToMerge, 1);
-    assert(!M);
-}
-
 
 static uint64_t getAddressForFunction(StringRef fname)
 {

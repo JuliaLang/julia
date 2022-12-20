@@ -1181,11 +1181,25 @@ ftwoparams(::TwoParams{<:Real,<:Real}) = 3
 # a bunch of cases found by fuzzing
 let a = Tuple{Float64,T7} where T7,
     b = Tuple{S5,Tuple{S5}} where S5
-    @test typeintersect(a, b) <: b
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Tuple{T1,T1} where T1,
     b = Tuple{Val{S2},S6} where S2 where S6
-    @test typeintersect(a, b) == typeintersect(b, a)
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Val{Tuple{T1,T1}} where T1,
     b = Val{Tuple{Val{S2},S6}} where S2 where S6
@@ -1193,15 +1207,36 @@ let a = Val{Tuple{T1,T1}} where T1,
 end
 let a = Tuple{Float64,T3,T4} where T4 where T3,
     b = Tuple{S2,Tuple{S3},S3} where S2 where S3
-    @test typeintersect(a, b) == typeintersect(b, a)
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test_broken I1 <: b
+    @test_broken I2 <: b
 end
 let a = Tuple{T1,Tuple{T1}} where T1,
     b = Tuple{Float64,S3} where S3
-    @test typeintersect(a, b) <: a
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Tuple{5,T4,T5} where T4 where T5,
     b = Tuple{S2,S3,Tuple{S3}} where S2 where S3
-    @test typeintersect(a, b) == typeintersect(b, a)
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test_broken I1 <: b
+    @test_broken I2 <: b
 end
 let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
     b = Tuple{Float64,Tuple{Tuple{S3},S3}} where S3
@@ -1209,23 +1244,58 @@ let a = Tuple{T2,Tuple{T4,T2}} where T4 where T2,
 end
 let a = Tuple{Tuple{T2,4},T6} where T2 where T6,
     b = Tuple{Tuple{S2,S3},Tuple{S2}} where S2 where S3
-    @test typeintersect(a, b) == typeintersect(b, a)
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test_broken I1 <: b
+    @test_broken I2 <: b
 end
 let a = Tuple{T3,Int64,Tuple{T3}} where T3,
     b = Tuple{S3,S3,S4} where S4 where S3
-    @test_broken typeintersect(a, b) <: a
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test_broken I1 <: a
+    @test I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Tuple{T1,Val{T2},T2} where T2 where T1,
     b = Tuple{Float64,S1,S2} where S2 where S1
-    @test typeintersect(a, b) == typeintersect(b, a)
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test_broken I1 <: a
+    @test_broken I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Tuple{T1,Val{T2},T2} where T2 where T1,
     b = Tuple{Float64,S1,S2} where S2 where S1
-    @test_broken typeintersect(a, b) <: a
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test_broken I1 <: a
+    @test_broken I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Tuple{Float64,T1} where T1,
     b = Tuple{S1,Tuple{S1}} where S1
-    @test typeintersect(a, b) <: b
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test I1 <: b
+    @test I2 <: b
 end
 let a = Tuple{Val{T1},T2,T2} where T2 where T1,
     b = Tuple{Val{Tuple{S2}},S3,Float64} where S2 where S3
@@ -1234,12 +1304,20 @@ end
 let a = Tuple{T1,T2,T2} where T1 where T2,
     b = Tuple{Val{S2},S2,Float64} where S2,
     x = Tuple{Val{Float64},Float64,Float64}
-    @test x <: typeintersect(a, b)
+    I1 = typeintersect(a, b)
+    I2 = typeintersect(b, a)
+    @test x <: I1
+    @test x <: I2
+    @test I1 <: I2
+    @test I2 <: I1
+    @test I1 <: a
+    @test I2 <: a
+    @test_broken I1 <: b
+    @test_broken I2 <: b
 end
-let a = Val{Tuple{T1,Val{T2},Val{Int64},Tuple{Tuple{T3,5,Float64},T4,T2,T5}}} where T1 where T5 where T4 where T3 where T2,
-    b = Val{Tuple{Tuple{S1,5,Float64},Val{S2},S3,Tuple{Tuple{Val{Float64},5,Float64},2,Float64,S4}}} where S2 where S3 where S1 where S4
-    @test_skip typeintersect(b, a)
-end
+@testintersect(Val{Tuple{T1,Val{T2},Val{Int64},Tuple{Tuple{T3,5,Float64},T4,T2,T5}}} where T1 where T5 where T4 where T3 where T2,
+               Val{Tuple{Tuple{S1,5,Float64},Val{S2},S3,Tuple{Tuple{Val{Float64},5,Float64},2,Float64,S4}}} where S2 where S3 where S1 where S4,
+               Val{Tuple{Tuple{S1, 5, Float64}, Val{Float64}, Val{Int64}, Tuple{Tuple{Val{Float64}, 5, Float64}, 2, Float64, T5}}} where {T5, S1})
 
 # issue #20992
 abstract type A20992{T,D,d} end
@@ -2188,7 +2266,16 @@ for T in (B46871{Int, N} where {N}, B46871{Int}) # intentional duplication
 end
 abstract type C38497{e,g<:Tuple,i} end
 struct Q38497{o,e<:NTuple{o},g} <: C38497{e,g,Array{o}} end
-@testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{1, Tuple{Int}, <:Tuple})
+@testintersect(Q38497{<:Any, Tuple{Int}}, C38497, Q38497{<:Any, Tuple{Int}, <:Tuple})
+# n.b. the only concrete instance of this type is Q38497{1, Tuple{Int}, <:Tuple} (since NTuple{o} also adds an ::Int constraint)
+# but this abstract type is also part of the intersection abstractly
+
+abstract type X38497{T<:Number} end
+abstract type Y38497{T>:Integer} <: X38497{T} end
+struct Z38497{T>:Int} <: Y38497{T} end
+@testintersect(Z38497, X38497, Z38497{T} where Int<:T<:Number)
+@testintersect(Z38497, Y38497, Z38497{T} where T>:Integer)
+@testintersect(X38497, Y38497, Y38497{T} where Integer<:T<:Number)
 
 #issue #33138
 @test Vector{Vector{Tuple{T,T}} where Int<:T<:Int} <: Vector{Vector{Tuple{S1,S1} where S<:S1<:S}} where S
@@ -2201,11 +2288,12 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
 
 @testset "known subtype/intersect issue" begin
     #issue 45874
-    let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
-        T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
-        @test_broken S <: T
-        @test_broken typeintersect(S,T) === S
-    end
+    # Causes a hang due to jl_critical_error calling back into malloc...
+    # let S = Pair{Val{P}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where P,
+    #     T = Pair{Val{R}, AbstractVector{<:Union{P,<:AbstractMatrix{P}}}} where {P,R}
+    #     @test_broken S <: T
+    #     @test_broken typeintersect(S,T) === S
+    # end
 
     #issue 44395
     @test_broken typeintersect(
@@ -2249,3 +2337,5 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
     # issue 21153
     @test_broken (Tuple{T1,T1} where T1<:(Val{T2} where T2)) <: (Tuple{Val{S},Val{S}} where S)
 end
+
+@test !(Tuple{Any, Any, Any} <: Tuple{Any, Vararg{T}} where T)

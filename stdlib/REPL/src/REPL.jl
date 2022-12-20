@@ -1248,7 +1248,7 @@ function setup_interface(
                 @goto writeback
             end
             try
-                InteractiveUtils.edit(linfos[n][1], linfos[n][2])
+                InteractiveUtils.edit(Base.fixup_stdlib_path(linfos[n][1]), linfos[n][2])
             catch ex
                 ex isa ProcessFailedException || ex isa Base.IOError || ex isa SystemError || rethrow()
                 @info "edit failed" _exception=ex
@@ -1399,22 +1399,28 @@ using ..REPL
 __current_ast_transforms() = isdefined(Base, :active_repl_backend) ? Base.active_repl_backend.ast_transforms : REPL.repl_ast_transforms
 
 function repl_eval_counter(hp)
-    length(hp.history)-hp.start_idx
+    return length(hp.history) - hp.start_idx
 end
 
-function out_transform(x, repl::LineEditREPL, n::Ref{Int})
+function out_transform(@nospecialize(x), n::Ref{Int})
     return quote
-        julia_prompt = $repl.interface.modes[1]
-        mod = $REPL.active_module()
-        if !isdefined(mod, :Out)
-            setglobal!(mod, :Out, Dict{Int, Any}())
+        let __temp_val_a72df459 = $x
+            $capture_result($n, __temp_val_a72df459)
+            __temp_val_a72df459
         end
-        local __temp_val = $x # workaround https://github.com/JuliaLang/julia/issues/46451
-        if __temp_val !== getglobal(mod, :Out) && __temp_val !== nothing # remove this?
-            getglobal(mod, :Out)[$(n[])] = __temp_val
-        end
-        __temp_val
     end
+end
+
+function capture_result(n::Ref{Int}, @nospecialize(x))
+    n = n[]
+    mod = REPL.active_module()
+    if !isdefined(mod, :Out)
+        setglobal!(mod, :Out, Dict{Int, Any}())
+    end
+    if x !== getglobal(mod, :Out) && x !== nothing # remove this?
+        getglobal(mod, :Out)[n] = x
+    end
+    nothing
 end
 
 function set_prompt(repl::LineEditREPL, n::Ref{Int})
@@ -1423,6 +1429,7 @@ function set_prompt(repl::LineEditREPL, n::Ref{Int})
         n[] = repl_eval_counter(julia_prompt.hist)+1
         string("In [", n[], "]: ")
     end
+    nothing
 end
 
 function set_output_prefix(repl::LineEditREPL, n::Ref{Int})
@@ -1431,6 +1438,7 @@ function set_output_prefix(repl::LineEditREPL, n::Ref{Int})
         julia_prompt.output_prefix_prefix = Base.text_colors[:red]
     end
     julia_prompt.output_prefix = () -> string("Out[", n[], "]: ")
+    nothing
 end
 
 function __current_ast_transforms(backend)
@@ -1446,7 +1454,7 @@ function ipython_mode!(repl::LineEditREPL=Base.active_repl, backend=nothing)
     n = Ref{Int}(0)
     set_prompt(repl, n)
     set_output_prefix(repl, n)
-    push!(__current_ast_transforms(backend), ast -> out_transform(ast, repl, n))
+    push!(__current_ast_transforms(backend), @nospecialize(ast) -> out_transform(ast, n))
     return
 end
 end
