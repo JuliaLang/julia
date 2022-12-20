@@ -159,6 +159,35 @@ reinterpret(::typeof(reshape), T::Type, a::AbstractArray)
 reinterpret(::Type{T}, a::NonReshapedReinterpretArray) where {T} = reinterpret(T, a.parent)
 reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray) where {T} = reinterpret(reshape, T, a.parent)
 
+abstract type TypecastStyle end
+struct TypecastToLarger <: TypecastStyle end
+struct TypecastToSmaller<: TypecastStyle end
+struct TypecastToLargerInexact <: TypecastStyle end
+struct TypecastToSmallerInexact <: TypecastStyle end
+struct TypecastToSimilar <: TypecastStyle end
+struct TypecastNone <: TypecastStyle end
+
+
+function TypecastStyle(T::Type, S::Type)
+    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+        return TypecastToSimilar()
+    elseif  sizeof(T) % sizeof(S) == 0
+        return TypecastToLarger()
+    elseif sizeof(S) % sizeof(T) == 0
+        return TypecastToSmaller()
+    elseif  sizeof(T) > sizeof(S) == 0
+        return TypecastToLargerInexact()
+    elseif sizeof(S) > sizeof(T) == 0
+        return TypecastToSmallerInexact()
+    elseif T == S
+        return TypecastNone()
+    else
+        throw(ArgumentError("Can't convert source type to target"))
+    end
+end
+
+   
+
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
 StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray},IsReshaped} = ReinterpretArray{T,N,S,A,IsReshaped} where S
