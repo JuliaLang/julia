@@ -33,8 +33,12 @@ using .Main.OffsetArrays
 
 @test Base.mapfoldr(abs2, -, 2:5) == -14
 @test Base.mapfoldr(abs2, -, 2:5; init=10) == -4
-@test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), (1, 2.0, '3');
-                         init = ())) == (2, 3.0, '4')
+for t in Any[(1, 2.0, '3'), (;a = 1, b = 2.0, c = '3')]
+    @test @inferred(mapfoldr(x -> x + 1, (x, y) -> (x, y...), t;
+                            init = ())) == (2, 3.0, '4')
+    @test @inferred(mapfoldl(x -> x + 1, (x, y) -> (x..., y), t;
+                            init = ())) == (2, 3.0, '4')
+end
 
 @test foldr((x, y) -> ('⟨' * x * '|' * y * '⟩'), "λ 🐨.α") == "⟨λ|⟨ |⟨🐨|⟨.|α⟩⟩⟩⟩" # issue #31780
 let x = rand(10)
@@ -160,12 +164,14 @@ plus(x,y) = x + y
 sum3(A) = reduce(plus, A)
 sum4(itr) = invoke(reduce, Tuple{Function, Any}, plus, itr)
 sum5(A) = reduce(plus, A; init=0)
-sum6(itr) = invoke(Core.kwfunc(reduce), Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum6(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,), Tuple{Int}}, typeof(reduce), Function, Any}, (init=0,), reduce, plus, itr)
+sum61(itr) = invoke(reduce, Tuple{Function, Any}, init=0, plus, itr)
 sum7(A) = mapreduce(x->x, plus, A)
 sum8(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, x->x, plus, itr)
 sum9(A) = mapreduce(x->x, plus, A; init=0)
-sum10(itr) = invoke(Core.kwfunc(mapreduce), Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
-for f in (sum2, sum5, sum6, sum9, sum10)
+sum10(itr) = invoke(Core.kwcall, Tuple{NamedTuple{(:init,),Tuple{Int}}, typeof(mapreduce), Function, Function, Any}, (init=0,), mapreduce, x->x, plus, itr)
+sum11(itr) = invoke(mapreduce, Tuple{Function, Function, Any}, init=0, x->x, plus, itr)
+for f in (sum2, sum5, sum6, sum61, sum9, sum10, sum11)
     @test sum(z) == f(z)
     @test sum(Int[]) == f(Int[]) == 0
     @test sum(Int[7]) == f(Int[7]) == 7
@@ -688,4 +694,14 @@ end
     @test @inferred(maximum(c)) == maximum(collect(c))
     @test @inferred(prod(b)) == prod(collect(b))
     @test @inferred(minimum(a)) == minimum(collect(a))
+end
+
+function fold_alloc(a)
+    sum(a)
+    foldr(+, a)
+    max(@allocated(sum(a)), @allocated(foldr(+, a)))
+end
+let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
+    b = (a...,)
+    @test fold_alloc(a) == fold_alloc(b) == 0
 end

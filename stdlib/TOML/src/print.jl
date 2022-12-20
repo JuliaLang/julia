@@ -33,6 +33,14 @@ function print_toml_escaped(io::IO, s::AbstractString)
     end
 end
 
+const MbyFunc = Union{Function, Nothing}
+const TOMLValue = Union{AbstractVector, AbstractDict, Dates.DateTime, Dates.Time, Dates.Date, Bool, Integer, AbstractFloat, AbstractString}
+
+
+########
+# Keys #
+########
+
 function printkey(io::IO, keys::Vector{String})
     for (i, k) in enumerate(keys)
         i != 1 && Base.print(io, ".")
@@ -50,48 +58,77 @@ function printkey(io::IO, keys::Vector{String})
     end
 end
 
-const MbyFunc = Union{Function, Nothing}
-const TOMLValue = Union{AbstractVector, AbstractDict, Dates.DateTime, Dates.Time, Dates.Date, Bool, Integer, AbstractFloat, AbstractString}
-function printvalue(f::MbyFunc, io::IO, value::AbstractVector; sorted=false, by=identity)
+function to_toml_value(f::MbyFunc, value)
+    if f === nothing
+        error("type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
+    end
+    toml_value = f(value)
+    if !(toml_value isa TOMLValue)
+        error("TOML syntax function for type `$(typeof(value))` did not return a valid TOML type but a `$(typeof(toml_value))`")
+    end
+    return toml_value
+end
+
+##########
+# Values #
+##########
+
+# Fallback
+function printvalue(f::MbyFunc, io::IO, value)
+    toml_value = to_toml_value(f, value)
+    @invokelatest printvalue(f, io, toml_value)
+end
+
+function printvalue(f::MbyFunc, io::IO, value::AbstractVector)
     Base.print(io, "[")
     for (i, x) in enumerate(value)
         i != 1 && Base.print(io, ", ")
-        if isa(x, AbstractDict)
-            _print(f, io, x; sorted, by)
-        else
-            printvalue(f, io, x; sorted, by)
-        end
+        printvalue(f, io, x)
     end
     Base.print(io, "]")
 end
-printvalue(f::MbyFunc, io::IO, value::AbstractDict; sorted=false, by=identity) =
-    _print(f, io, value; sorted, by)
-printvalue(f::MbyFunc, io::IO, value::Dates.DateTime; _...) =
-    Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z"))
-printvalue(f::MbyFunc, io::IO, value::Dates.Time; _...) =
-    Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss"))
-printvalue(f::MbyFunc, io::IO, value::Dates.Date; _...) =
-    Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd"))
-printvalue(f::MbyFunc, io::IO, value::Bool; _...) =
-    Base.print(io, value ? "true" : "false")
-printvalue(f::MbyFunc, io::IO, value::Integer; _...) =
-    Base.print(io, Int64(value))  # TOML specifies 64-bit signed long range for integer
-printvalue(f::MbyFunc, io::IO, value::AbstractFloat; _...) =
-    Base.print(io, isnan(value) ? "nan" :
-                   !(isfinite(value)::Bool) ? string(value > 0 ? "+" : "-", "inf") :
-                   Float64(value))  # TOML specifies IEEE 754 binary64 for float
-function printvalue(f::MbyFunc, io::IO, value::AbstractString; _...)
-    Base.print(io, "\"")
-    print_toml_escaped(io, value)
-    Base.print(io, "\"")
+
+function printvalue(f::MbyFunc, io::IO, value::TOMLValue)
+    value isa Dates.DateTime ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd\THH:MM:SS.sss\Z")) :
+    value isa Dates.Time     ? Base.print(io, Dates.format(value, Dates.dateformat"HH:MM:SS.sss")) :
+    value isa Dates.Date     ? Base.print(io, Dates.format(value, Dates.dateformat"YYYY-mm-dd")) :
+    value isa Bool           ? Base.print(io, value ? "true" : "false") :
+    value isa Integer        ? Base.print(io, Int64(value)) :  # TOML specifies 64-bit signed long range for integer
+    value isa AbstractFloat  ? Base.print(io, isnan(value) ? "nan" :
+                                              isinf(value) ? string(value > 0 ? "+" : "-", "inf") :
+                                              Float64(value)) :  # TOML specifies IEEE 754 binary64 for float
+    value isa AbstractString ? (Base.print(io, "\"");
+                                print_toml_escaped(io, value);
+                                Base.print(io, "\"")) :
+    value isa AbstractDict ? print_inline_table(f, io, value) :
+    error("internal error in TOML printing, unhandled value")
 end
+
+function print_inline_table(f::MbyFunc, io::IO, value::AbstractDict)
+    Base.print(io, "{")
+    for (i, (k,v)) in enumerate(value)
+        i != 1 && Base.print(io, ", ")
+        printkey(io, [String(k)])
+        Base.print(io, " = ")
+        printvalue(f, io, v)
+    end
+    Base.print(io, "}")
+end
+
+
+##########
+# Tables #
+##########
 
 is_table(value)           = isa(value, AbstractDict)
 is_array_of_tables(value) = isa(value, AbstractArray) &&
-                            length(value) > 0 && isa(value[1], AbstractDict)
+                            length(value) > 0 && (
+                                isa(value, AbstractArray{<:AbstractDict}) ||
+                                all(v -> isa(v, AbstractDict), value)
+                            )
 is_tabular(value)         = is_table(value) || is_array_of_tables(value)
 
-function _print(f::MbyFunc, io::IO, a::AbstractDict,
+function print_table(f::MbyFunc, io::IO, a::AbstractDict,
     ks::Vector{String} = String[];
     indent::Int = 0,
     first_block::Bool = true,
@@ -100,37 +137,30 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
 )
     akeys = keys(a)
     if sorted
-        akeys = sort!(collect(akeys); by)
+        akeys = sort!(collect(akeys); by=by)
     end
 
     # First print non-tabular entries
     for key in akeys
         value = a[key]
-        is_tabular(value) && continue
         if !isa(value, TOMLValue)
-            if f === nothing
-                error("type `$(typeof(value))` is not a valid TOML type, pass a conversion function to `TOML.print`")
-            end
-            toml_value = f(value)
-            if !(toml_value isa TOMLValue)
-                error("TOML syntax function for type `$(typeof(value))` did not return a valid TOML type but a `$(typeof(toml_value))`")
-            end
-            value = toml_value
+            value = to_toml_value(f, value)
         end
-        if is_tabular(value)
-            _print(f, io, Dict(key => value); indent, first_block, sorted, by)
-        else
-            Base.print(io, ' '^4max(0,indent-1))
-            printkey(io, [String(key)])
-            Base.print(io, " = ") # print separator
-            printvalue(f, io, value; sorted, by)
-            Base.print(io, "\n")  # new line?
-        end
+        is_tabular(value) && continue
+
+        Base.print(io, ' '^4max(0,indent-1))
+        printkey(io, [String(key)])
+        Base.print(io, " = ") # print separator
+        printvalue(f, io, value)
+        Base.print(io, "\n")  # new line?
         first_block = false
     end
 
     for key in akeys
         value = a[key]
+        if !isa(value, TOMLValue)
+            value = to_toml_value(f, value)
+        end
         if is_table(value)
             push!(ks, String(key))
             header = isempty(value) || !all(is_tabular(v) for v in values(value))::Bool
@@ -144,7 +174,7 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
                 Base.print(io,"]\n")
             end
             # Use runtime dispatch here since the type of value seems not to be enforced other than as AbstractDict
-            @invokelatest _print(f, io, value, ks; indent = indent + header, first_block = header, sorted, by)
+            @invokelatest print_table(f, io, value, ks; indent = indent + header, first_block = header, sorted=sorted, by=by)
             pop!(ks)
         elseif is_array_of_tables(value)
             # print array of tables
@@ -158,14 +188,19 @@ function _print(f::MbyFunc, io::IO, a::AbstractDict,
                 Base.print(io,"]]\n")
                 # TODO, nicer error here
                 !isa(v, AbstractDict) && error("array should contain only tables")
-                @invokelatest _print(f, io, v, ks; indent = indent + 1, sorted, by)
+                @invokelatest print_table(f, io, v, ks; indent = indent + 1, sorted=sorted, by=by)
             end
             pop!(ks)
         end
     end
 end
 
-print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = _print(f, io, a; sorted, by)
-print(f::MbyFunc, a::AbstractDict; sorted::Bool=false, by=identity) = print(f, stdout, a; sorted, by)
-print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = _print(nothing, io, a; sorted, by)
-print(a::AbstractDict; sorted::Bool=false, by=identity) = print(nothing, stdout, a; sorted, by)
+
+#######
+# API #
+#######
+
+print(f::MbyFunc, io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = print_table(f, io, a; sorted=sorted, by=by)
+print(f::MbyFunc, a::AbstractDict; sorted::Bool=false, by=identity) = print(f, stdout, a; sorted=sorted, by=by)
+print(io::IO, a::AbstractDict; sorted::Bool=false, by=identity) = print_table(nothing, io, a; sorted=sorted, by=by)
+print(a::AbstractDict; sorted::Bool=false, by=identity) = print(nothing, stdout, a; sorted=sorted, by=by)

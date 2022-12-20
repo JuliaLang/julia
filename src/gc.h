@@ -191,7 +191,6 @@ typedef struct {
     jl_binding_t **begin; // The first slot to be scanned.
     jl_binding_t **end; // The end address (after the last slot to be scanned)
     uintptr_t nptr; // See notes about `nptr` above.
-    uint8_t bits; // GC bits of the module (the bits to mark the binding buffer with)
 } gc_mark_binding_t;
 
 // Finalizer (or object) list
@@ -394,6 +393,8 @@ extern bigval_t *big_objects_marked;
 extern arraylist_t finalizer_list_marked;
 extern arraylist_t to_finalize;
 extern int64_t lazy_freed_pages;
+extern int gc_n_threads;
+extern jl_ptls_t* gc_all_tls_states;
 
 STATIC_INLINE bigval_t *bigval_header(jl_taggedvalue_t *o) JL_NOTSAFEPOINT
 {

@@ -50,6 +50,7 @@ struct JuliaPassContext {
 
     // Intrinsics.
     llvm::Function *pgcstack_getter;
+    llvm::Function *adoptthread_func;
     llvm::Function *gc_flush_func;
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
@@ -57,7 +58,6 @@ struct JuliaPassContext {
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
-    llvm::Function *write_barrier_binding_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
 
@@ -125,9 +125,6 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
-
-    // `julia.queue_gc_binding`: an intrinsic that queues a binding for GC.
-    extern const IntrinsicDescription queueGCBinding;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
@@ -148,9 +145,6 @@ namespace jl_well_known {
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
-
-    // `jl_gc_queue_binding`: queues a binding for GC.
-    extern const WellKnownFunctionDescription GCQueueBinding;
 }
 
 #endif

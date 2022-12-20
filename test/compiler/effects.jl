@@ -63,6 +63,14 @@ Base.@assume_effects :foldable concrete_eval(
     concrete_eval(getindex, ___CONST_DICT___, :a)
 end
 
+# :removable override
+Base.@assume_effects :removable removable_call(
+    f, args...; kwargs...) = f(args...; kwargs...)
+@test fully_eliminated() do
+    @noinline removable_call(getindex, ___CONST_DICT___, :a)
+    nothing
+end
+
 # terminates_globally override
 # https://github.com/JuliaLang/julia/issues/41694
 Base.@assume_effects :terminates_globally function issue41694(x)

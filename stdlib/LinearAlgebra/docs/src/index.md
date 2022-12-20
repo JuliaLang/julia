@@ -556,8 +556,8 @@ LinearAlgebra.BLAS.rot!
 LinearAlgebra.BLAS.scal!
 LinearAlgebra.BLAS.scal
 LinearAlgebra.BLAS.blascopy!
-LinearAlgebra.BLAS.axpy!
-LinearAlgebra.BLAS.axpby!
+# xAXPY!
+# xAXPBY!
 LinearAlgebra.BLAS.dot
 LinearAlgebra.BLAS.dotu
 LinearAlgebra.BLAS.dotc
@@ -745,6 +745,7 @@ LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!
 LinearAlgebra.LAPACK.trsyl!
+LinearAlgebra.LAPACK.hseqr!
 ```
 
 ```@meta

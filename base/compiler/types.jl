@@ -31,135 +31,264 @@ struct StmtInfo
     used::Bool
 end
 
+abstract type ForwardableArgtypes end
+
 """
-    InferenceResult
+    InferenceResult(linfo::MethodInstance)
+    InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
 
 A type that represents the result of running type inference on a chunk of code.
+
+See also [`matching_cache_argtypes`](@ref).
 """
 mutable struct InferenceResult
     linfo::MethodInstance
     argtypes::Vector{Any}
     overridden_by_const::BitVector
     result                   # ::Type, or InferenceState if WIP
-    src                      # ::Union{CodeInfo, OptimizationState} if inferred copy is available, nothing otherwise
+    src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
     valid_worlds::WorldRange # if inference and optimization is finished
     ipo_effects::Effects     # if inference is finished
     effects::Effects         # if optimization is finished
     argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
-    # NOTE the main constructor is defined within inferencestate.jl
-    global function _InferenceResult(
-        linfo::MethodInstance,
-        arginfo#=::Union{Nothing,Tuple{ArgInfo,InferenceState}}=#)
-        argtypes, overridden_by_const = matching_cache_argtypes(linfo, arginfo)
-        return new(linfo, argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing)
+    must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
+    function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
+        return new(linfo, cache_argtypes, overridden_by_const, Any, nothing,
+            WorldRange(), Effects(), Effects(), nothing, true)
     end
+end
+function InferenceResult(linfo::MethodInstance)
+    return InferenceResult(linfo, matching_cache_argtypes(linfo)...)
+end
+function InferenceResult(linfo::MethodInstance, argtypes::ForwardableArgtypes)
+    return InferenceResult(linfo, matching_cache_argtypes(linfo, argtypes)...)
 end
 
 """
-    OptimizationParams
+    inf_params::InferenceParams
+
+Parameters that control abstract interpretation-based type inference operation.
+
+---
+- `inf_params.max_methods::Int = 3`\\
+  Type inference gives up analysis on a call when there are more than `max_methods` matching
+  methods. This trades off between compiler latency and generated code performance.
+  Typically, considering many methods means spending _lots_ of time obtaining poor type
+  information, so this option should be kept low. [`Base.Experimental.@max_methods`](@ref)
+  can have a more fine-grained control on this configuration with per-module or per-method
+  annotation basis.
+---
+- `inf_params.max_union_splitting::Int = 4`\\
+  Specifies the maximum number of union-tuples to swap or expand before computing the set of
+  matching methods or conditional types.
+---
+- `inf_params.max_apply_union_enum::Int = 8`\\
+  Specifies the maximum number of union-tuples to swap or expand when inferring a call to
+  `Core._apply_iterate`.
+---
+- `inf_params.max_tuple_splat::Int = 32`\\
+  When attempting to infer a call to `Core._apply_iterate`, abort the analysis if the tuple
+  contains more than this many elements.
+---
+- `inf_params.tuple_complexity_limit_depth::Int = 3`\\
+  Specifies the maximum depth of large tuple type that can appear as specialized method
+  signature when inferring a recursive call graph.
+---
+- `inf_params.ipo_constant_propagation::Bool = true`\\
+  If `false`, disables analysis with extended lattice information, i.e. disables any of
+  the concrete evaluation, semi-concrete interpretation and constant propagation entirely.
+  [`Base.@constprop :none`](@ref Base.@constprop) can have a more fine-grained control on
+  this configuration with per-method annotation basis.
+---
+- `inf_params.aggressive_constant_propagation::Bool = false`\\
+  If `true`, forces constant propagation on any methods when any extended lattice
+  information available. [`Base.@constprop :aggressive`](@ref Base.@constprop) can have a
+  more fine-grained control on this configuration with per-method annotation basis.
+---
+- `inf_params.unoptimize_throw_blocks::Bool = true`\\
+  If `true`, skips inferring calls that are in a block that is known to `throw`.
+  It may improve the compiler latency without sacrificing the runtime performance
+  in common situations.
+---
+- `inf_params.assume_bindings_static::Bool = false`\\
+  If `true`, assumes that no new bindings will be added, i.e. a non-existing binding at
+  inference time can be assumed to always not exist at runtime (and thus e.g. any access to
+  it will `throw`). Defaults to `false` since this assumption does not hold in Julia's
+  semantics for native code execution.
+---
+"""
+struct InferenceParams
+    max_methods::Int
+    max_union_splitting::Int
+    max_apply_union_enum::Int
+    max_tuple_splat::Int
+    tuple_complexity_limit_depth::Int
+    ipo_constant_propagation::Bool
+    aggressive_constant_propagation::Bool
+    unoptimize_throw_blocks::Bool
+    assume_bindings_static::Bool
+
+    function InferenceParams(
+        max_methods::Int,
+        max_union_splitting::Int,
+        max_apply_union_enum::Int,
+        max_tuple_splat::Int,
+        tuple_complexity_limit_depth::Int,
+        ipo_constant_propagation::Bool,
+        aggressive_constant_propagation::Bool,
+        unoptimize_throw_blocks::Bool,
+        assume_bindings_static::Bool)
+        return new(
+            max_methods,
+            max_union_splitting,
+            max_apply_union_enum,
+            max_tuple_splat,
+            tuple_complexity_limit_depth,
+            ipo_constant_propagation,
+            aggressive_constant_propagation,
+            unoptimize_throw_blocks,
+            assume_bindings_static)
+    end
+end
+function InferenceParams(
+    params::InferenceParams = InferenceParams( # default constructor
+        #=max_methods::Int=# 3,
+        #=max_union_splitting::Int=# 4,
+        #=max_apply_union_enum::Int=# 8,
+        #=max_tuple_splat::Int=# 32,
+        #=tuple_complexity_limit_depth::Int=# 3,
+        #=ipo_constant_propagation::Bool=# true,
+        #=aggressive_constant_propagation::Bool=# false,
+        #=unoptimize_throw_blocks::Bool=# true,
+        #=assume_bindings_static::Bool=# false);
+    max_methods::Int = params.max_methods,
+    max_union_splitting::Int = params.max_union_splitting,
+    max_apply_union_enum::Int = params.max_apply_union_enum,
+    max_tuple_splat::Int = params.max_tuple_splat,
+    tuple_complexity_limit_depth::Int = params.tuple_complexity_limit_depth,
+    ipo_constant_propagation::Bool = params.ipo_constant_propagation,
+    aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
+    unoptimize_throw_blocks::Bool = params.unoptimize_throw_blocks,
+    assume_bindings_static::Bool = params.assume_bindings_static)
+    return InferenceParams(
+        max_methods,
+        max_union_splitting,
+        max_apply_union_enum,
+        max_tuple_splat,
+        tuple_complexity_limit_depth,
+        ipo_constant_propagation,
+        aggressive_constant_propagation,
+        unoptimize_throw_blocks,
+        assume_bindings_static)
+end
+
+"""
+    opt_params::OptimizationParams
 
 Parameters that control optimizer operation.
+
+---
+- `opt_params.inlining::Bool = inlining_enabled()`\\
+  Controls whether or not inlining is enabled.
+---
+- `opt_params.inline_cost_threshold::Int = 100`\\
+  Specifies the number of CPU cycles beyond which it's not worth inlining.
+---
+- `opt_params.inline_nonleaf_penalty::Int = 1000`\\
+  Specifies the penalty cost for a dynamic dispatch.
+---
+- `opt_params.inline_tupleret_bonus::Int = 250`\\
+  Specifies the extra inlining willingness for a method specialization with non-concrete
+  tuple return types (in hopes of splitting it up). `opt_params.inline_tupleret_bonus` will
+  be added to `opt_params.inline_cost_threshold` when making inlining decision.
+---
+- `opt_params.inline_error_path_cost::Int = 20`\\
+  Specifies the penalty cost for an un-optimized dynamic call in a block that is known to
+  `throw`. See also [`(inf_params::InferenceParams).unoptimize_throw_blocks`](@ref InferenceParams).
+---
+- `opt_params.max_tuple_splat::Int = 32`\\
+  When attempting to inline `Core._apply_iterate`, abort the optimization if the tuple
+  contains more than this many elements.
+---
+- `opt_params.compilesig_invokes::Bool = true`\\
+  If `true`, gives the inliner license to change which `MethodInstance` to invoke when
+  generating `:invoke` expression based on the [`@nospecialize`](@ref) annotation,
+  in order to avoid over-specialization.
+---
+- `opt_params.trust_inference::Bool = false`\\
+  If `false`, the inliner will unconditionally generate a fallback block when union-splitting
+  a callsite, in case of existing subtyping bugs. This option may be removed in the future.
+---
+- `opt_params.assume_fatal_throw::Bool = false`\\
+  If `true`, gives the optimizer license to assume that any `throw` is fatal and thus the
+  state after a `throw` is not externally observable. In particular, this gives the
+  optimizer license to move side effects (that are proven not observed within a particular
+  code path) across a throwing call. Defaults to `false`.
+---
 """
 struct OptimizationParams
-    inlining::Bool              # whether inlining is enabled
-    inline_cost_threshold::Int  # number of CPU cycles beyond which it's not worth inlining
-    inline_nonleaf_penalty::Int # penalty for dynamic dispatch
-    inline_tupleret_bonus::Int  # extra inlining willingness for non-concrete tuple return types (in hopes of splitting it up)
-    inline_error_path_cost::Int # cost of (un-optimized) calls in blocks that throw
-
+    inlining::Bool
+    inline_cost_threshold::Int
+    inline_nonleaf_penalty::Int
+    inline_tupleret_bonus::Int
+    inline_error_path_cost::Int
+    max_tuple_splat::Int
     compilesig_invokes::Bool
     trust_inference::Bool
-
-    """
-        assume_fatal_throw::Bool
-
-    If `true`, gives the optimizer license to assume that any `throw` is fatal
-    and thus the state after a `throw` is not externally observable. In particular,
-    this gives the optimizer license to move side effects (that are proven not observed
-    within a particular code path) across a throwing call. Defaults to `false`.
-    """
     assume_fatal_throw::Bool
 
-    MAX_TUPLE_SPLAT::Int
-
-    function OptimizationParams(;
-            inlining::Bool = inlining_enabled(),
-            inline_cost_threshold::Int = 100,
-            inline_nonleaf_penalty::Int = 1000,
-            inline_tupleret_bonus::Int = 250,
-            inline_error_path_cost::Int = 20,
-            tuple_splat::Int = 32,
-            compilesig_invokes::Bool = true,
-            trust_inference::Bool = false,
-            assume_fatal_throw::Bool = false
-        )
+    function OptimizationParams(
+        inlining::Bool,
+        inline_cost_threshold::Int,
+        inline_nonleaf_penalty::Int,
+        inline_tupleret_bonus::Int,
+        inline_error_path_cost::Int,
+        max_tuple_splat::Int,
+        compilesig_invokes::Bool,
+        trust_inference::Bool,
+        assume_fatal_throw::Bool)
         return new(
             inlining,
             inline_cost_threshold,
             inline_nonleaf_penalty,
             inline_tupleret_bonus,
             inline_error_path_cost,
+            max_tuple_splat,
             compilesig_invokes,
             trust_inference,
-            assume_fatal_throw,
-            tuple_splat,
-        )
+            assume_fatal_throw)
     end
 end
-
-"""
-    InferenceParams
-
-Parameters that control type inference operation.
-"""
-struct InferenceParams
-    ipo_constant_propagation::Bool
-    aggressive_constant_propagation::Bool
-    unoptimize_throw_blocks::Bool
-
-    # don't consider more than N methods. this trades off between
-    # compiler performance and generated code performance.
-    # typically, considering many methods means spending lots of time
-    # obtaining poor type information.
-    # It is important for N to be >= the number of methods in the error()
-    # function, so we can still know that error() is always Bottom.
-    MAX_METHODS::Int
-    # the maximum number of union-tuples to swap / expand
-    # before computing the set of matching methods
-    MAX_UNION_SPLITTING::Int
-    # the maximum number of union-tuples to swap / expand
-    # when inferring a call to _apply_iterate
-    MAX_APPLY_UNION_ENUM::Int
-
-    # parameters limiting large (tuple) types
-    TUPLE_COMPLEXITY_LIMIT_DEPTH::Int
-
-    # when attempting to inline _apply_iterate, abort the optimization if the
-    # tuple contains more than this many elements
-    MAX_TUPLE_SPLAT::Int
-
-    function InferenceParams(;
-            ipo_constant_propagation::Bool = true,
-            aggressive_constant_propagation::Bool = false,
-            unoptimize_throw_blocks::Bool = true,
-            max_methods::Int = 3,
-            union_splitting::Int = 4,
-            apply_union_enum::Int = 8,
-            tupletype_depth::Int = 3,
-            tuple_splat::Int = 32,
-        )
-        return new(
-            ipo_constant_propagation,
-            aggressive_constant_propagation,
-            unoptimize_throw_blocks,
-            max_methods,
-            union_splitting,
-            apply_union_enum,
-            tupletype_depth,
-            tuple_splat,
-        )
-    end
+function OptimizationParams(
+    params::OptimizationParams = OptimizationParams(
+        #=inlining::Bool=# inlining_enabled(),
+        #=inline_cost_threshold::Int=# 100,
+        #=inline_nonleaf_penalty::Int=# 1000,
+        #=inline_tupleret_bonus::Int=# 250,
+        #=inline_error_path_cost::Int=# 20,
+        #=max_tuple_splat::Int=# 32,
+        #=compilesig_invokes::Bool=# true,
+        #=trust_inference::Bool=# false,
+        #=assume_fatal_throw::Bool=# false);
+    inlining::Bool = params.inlining,
+    inline_cost_threshold::Int = params.inline_cost_threshold,
+    inline_nonleaf_penalty::Int = params.inline_nonleaf_penalty,
+    inline_tupleret_bonus::Int = params.inline_tupleret_bonus,
+    inline_error_path_cost::Int = params.inline_error_path_cost,
+    max_tuple_splat::Int = params.max_tuple_splat,
+    compilesig_invokes::Bool = params.compilesig_invokes,
+    trust_inference::Bool = params.trust_inference,
+    assume_fatal_throw::Bool = params.assume_fatal_throw)
+    return OptimizationParams(
+        inlining,
+        inline_cost_threshold,
+        inline_nonleaf_penalty,
+        inline_tupleret_bonus,
+        inline_error_path_cost,
+        max_tuple_splat,
+        compilesig_invokes,
+        trust_inference,
+        assume_fatal_throw)
 end
 
 """
@@ -291,7 +420,7 @@ infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
-optimizer_lattice(::AbstractInterpreter) = OptimizerLattice()
+optimizer_lattice(::AbstractInterpreter) = OptimizerLattice(SimpleInferenceLattice.instance)
 
 abstract type CallInfo end
 

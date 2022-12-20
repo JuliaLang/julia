@@ -24,12 +24,12 @@ function hasuniquerep(@nospecialize t)
 end
 
 """
-    isTypeDataType(@nospecialize t)
+    isTypeDataType(@nospecialize t) -> Bool
 
 For a type `t` test whether ∀S s.t. `isa(S, rewrap_unionall(Type{t}, ...))`,
 we have `isa(S, DataType)`. In particular, if a statement is typed as `Type{t}`
-(potentially wrapped in some UnionAll), then we are guaranteed that this statement
-will be a DataType at runtime (and not e.g. a Union or UnionAll typeequal to it).
+(potentially wrapped in some `UnionAll`), then we are guaranteed that this statement
+will be a `DataType` at runtime (and not e.g. a `Union` or `UnionAll` typeequal to it).
 """
 function isTypeDataType(@nospecialize t)
     isa(t, DataType) || return false
@@ -41,26 +41,12 @@ function isTypeDataType(@nospecialize t)
         # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
         # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
         # is not.
-        return _all(isTypeDataType, t.parameters)
+        return all(isTypeDataType, t.parameters)
     end
     return true
 end
 
-function has_nontrivial_const_info(lattice::PartialsLattice, @nospecialize t)
-    isa(t, PartialStruct) && return true
-    isa(t, PartialOpaque) && return true
-    return has_nontrivial_const_info(widenlattice(lattice), t)
-end
-function has_nontrivial_const_info(lattice::ConstsLattice, @nospecialize t)
-    isa(t, PartialTypeVar) && return true
-    if isa(t, Const)
-        val = t.val
-        return !isdefined(typeof(val), :instance) && !(isa(val, Type) && hasuniquerep(val))
-    end
-    return has_nontrivial_const_info(widenlattice(lattice), t)
-end
-
-has_const_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
+has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
 
 # Subtyping currently intentionally answers certain queries incorrectly for kind types. For
 # some of these queries, this check can be used to somewhat protect against making incorrect
@@ -132,12 +118,12 @@ function valid_as_lattice(@nospecialize(x))
 end
 
 function valid_typeof_tparam(@nospecialize(t))
-    if t === Symbol || isbitstype(t)
+    if t === Symbol || t === Module || isbitstype(t)
         return true
     end
     isconcretetype(t) || return false
     if t <: NamedTuple
-        t = t.parameters[2]
+        t = t.parameters[2]::DataType
     end
     if t <: Tuple
         for p in t.parameters
@@ -164,14 +150,14 @@ end
 
 # return an upper-bound on type `a` with type `b` removed
 # such that `return <: a` && `Union{return, b} == Union{a, b}`
-function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::Int)
+function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::Int)
     if a <: b && isnotbrokensubtype(a, b)
         return Bottom
     end
     ua = unwrap_unionall(a)
     if isa(ua, Union)
-        uua = typesubtract(rewrap_unionall(ua.a, a), b, MAX_UNION_SPLITTING)
-        uub = typesubtract(rewrap_unionall(ua.b, a), b, MAX_UNION_SPLITTING)
+        uua = typesubtract(rewrap_unionall(ua.a, a), b, max_union_splitting)
+        uub = typesubtract(rewrap_unionall(ua.b, a), b, max_union_splitting)
         return Union{valid_as_lattice(uua) ? uua : Union{},
                      valid_as_lattice(uub) ? uub : Union{}}
     elseif a isa DataType
@@ -179,7 +165,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
         if ub isa DataType
             if a.name === ub.name === Tuple.name &&
                     length(a.parameters) == length(ub.parameters)
-                if 1 < unionsplitcost(a.parameters) <= MAX_UNION_SPLITTING
+                if 1 < unionsplitcost(a.parameters) <= max_union_splitting
                     ta = switchtupleunion(a)
                     return typesubtract(Union{ta...}, b, 0)
                 elseif b isa DataType
@@ -200,7 +186,7 @@ function typesubtract(@nospecialize(a), @nospecialize(b), MAX_UNION_SPLITTING::I
                             ap = a.parameters[i]
                             bp = b.parameters[i]
                             (isvarargtype(ap) || isvarargtype(bp)) && return a
-                            ta[i] = typesubtract(ap, bp, min(2, MAX_UNION_SPLITTING))
+                            ta[i] = typesubtract(ap, bp, min(2, max_union_splitting))
                             return Tuple{ta...}
                         end
                     end
@@ -245,6 +231,10 @@ function unionsplitcost(argtypes::Union{SimpleVector,Vector{Any}})
     nu = 1
     max = 2
     for ti in argtypes
+        # TODO remove this to implement callsite refinement of MustAlias
+        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
+            ti = widenconst(ti)
+        end
         if isa(ti, Union)
             nti = unionlen(ti)
             if nti > max
@@ -276,13 +266,17 @@ function _switchtupleunion(t::Vector{Any}, i::Int, tunion::Vector{Any}, @nospeci
             push!(tunion, tpl)
         end
     else
-        ti = t[i]
+        origti = ti = t[i]
+        # TODO remove this to implement callsite refinement of MustAlias
+        if isa(ti, MustAlias) && isa(widenconst(ti), Union)
+            ti = widenconst(ti)
+        end
         if isa(ti, Union)
             for ty in uniontypes(ti::Union)
                 t[i] = ty
                 _switchtupleunion(t, i - 1, tunion, origt)
             end
-            t[i] = ti
+            t[i] = origti
         else
             _switchtupleunion(t, i - 1, tunion, origt)
         end
@@ -369,7 +363,7 @@ function _is_mutation_free_type(@nospecialize ty)
     if isType(ty) || ty === DataType || ty === String || ty === Symbol || ty === SimpleVector
         return true
     end
-    # this is okay as access and modifcation on global state are tracked separately
+    # this is okay as access and modification on global state are tracked separately
     ty === Module && return true
     # TODO improve this analysis, e.g. allow `Some{Symbol}`
     return isbitstype(ty)

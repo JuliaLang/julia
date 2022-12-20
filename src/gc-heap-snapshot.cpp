@@ -24,26 +24,26 @@ using llvm::StringRef;
 // https://stackoverflow.com/a/33799784/751061
 void print_str_escape_json(ios_t *stream, StringRef s)
 {
-    ios_printf(stream, "\"");
+    ios_putc('"', stream);
     for (auto c = s.begin(); c != s.end(); c++) {
         switch (*c) {
-        case '"': ios_printf(stream, "\\\""); break;
-        case '\\': ios_printf(stream, "\\\\"); break;
-        case '\b': ios_printf(stream, "\\b"); break;
-        case '\f': ios_printf(stream, "\\f"); break;
-        case '\n': ios_printf(stream, "\\n"); break;
-        case '\r': ios_printf(stream, "\\r"); break;
-        case '\t': ios_printf(stream, "\\t"); break;
+        case '"':  ios_write(stream, "\\\"", 2); break;
+        case '\\': ios_write(stream, "\\\\", 2); break;
+        case '\b': ios_write(stream, "\\b",  2); break;
+        case '\f': ios_write(stream, "\\f",  2); break;
+        case '\n': ios_write(stream, "\\n",  2); break;
+        case '\r': ios_write(stream, "\\r",  2); break;
+        case '\t': ios_write(stream, "\\t",  2); break;
         default:
-            if ('\x00' <= *c && *c <= '\x1f') {
+            if (('\x00' <= *c) & (*c <= '\x1f')) {
                 ios_printf(stream, "\\u%04x", (int)*c);
             }
             else {
-                ios_printf(stream, "%c", *c);
+                ios_putc(*c, stream);
             }
         }
     }
-    ios_printf(stream, "\"");
+    ios_putc('"', stream);
 }
 
 
@@ -124,7 +124,7 @@ HeapSnapshot *g_snapshot = nullptr;
 extern jl_mutex_t heapsnapshot_lock;
 
 void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one);
-static inline void _record_gc_edge(const char *node_type, const char *edge_type,
+static inline void _record_gc_edge(const char *edge_type,
                                    jl_value_t *a, jl_value_t *b, size_t name_or_index) JL_NOTSAFEPOINT;
 void _record_gc_just_edge(const char *edge_type, Node &from_node, size_t to_idx, size_t name_or_idx) JL_NOTSAFEPOINT;
 void _add_internal_root(HeapSnapshot *snapshot);
@@ -191,33 +191,50 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
     jl_datatype_t *type = (jl_datatype_t*)jl_typeof(a);
 
     if (jl_is_string(a)) {
-        node_type = "string";
+        node_type = "String";
         name = jl_string_data(a);
         self_size = jl_string_len(a);
     }
     else if (jl_is_symbol(a)) {
-        node_type = "symbol";
+        node_type = "jl_sym_t";
         name = jl_symbol_name((jl_sym_t*)a);
         self_size = name.size();
     }
     else if (jl_is_simplevector(a)) {
-        node_type = "array";
+        node_type = "jl_svec_t";
         name = "SimpleVector";
         self_size = sizeof(jl_svec_t) + sizeof(void*) * jl_svec_len(a);
     }
     else if (jl_is_module(a)) {
-        name = "Module";
+        node_type = "jl_module_t";
+        name = jl_symbol_name_(((_jl_module_t*)a)->name);
         self_size = sizeof(jl_module_t);
     }
     else if (jl_is_task(a)) {
+        node_type = "jl_task_t";
         name = "Task";
         self_size = sizeof(jl_task_t);
     }
+    else if (jl_is_datatype(a)) {
+        ios_need_close = 1;
+        ios_mem(&str_, 0);
+        JL_STREAM* str = (JL_STREAM*)&str_;
+        jl_static_show(str, a);
+        name = StringRef((const char*)str_.buf, str_.size);
+        node_type = "jl_datatype_t";
+        self_size = sizeof(jl_datatype_t);
+    }
+    else if (jl_is_array(a)){
+        ios_need_close = 1;
+        ios_mem(&str_, 0);
+        JL_STREAM* str = (JL_STREAM*)&str_;
+        jl_static_show(str, (jl_value_t*)type);
+        name = StringRef((const char*)str_.buf, str_.size);
+        node_type = "jl_array_t";
+        self_size = sizeof(jl_array_t);
+    }
     else {
-        self_size = jl_is_array_type(type)
-            ? sizeof(jl_array_t)
-            : (size_t)jl_datatype_size(type);
-
+        self_size = (size_t)jl_datatype_size(type);
         // print full type into ios buffer and get StringRef to it.
         // The ios is cleaned up below.
         ios_need_close = 1;
@@ -365,13 +382,13 @@ void _gc_heap_snapshot_record_frame_to_frame_edge(jl_gcframe_t *from, jl_gcframe
 
 void _gc_heap_snapshot_record_array_edge(jl_value_t *from, jl_value_t *to, size_t index) JL_NOTSAFEPOINT
 {
-    _record_gc_edge("array", "element", from, to, index);
+    _record_gc_edge("element", from, to, index);
 }
 
 void _gc_heap_snapshot_record_object_edge(jl_value_t *from, jl_value_t *to, void *slot) JL_NOTSAFEPOINT
 {
     string path = _fieldpath_for_slot(from, slot);
-    _record_gc_edge("object", "property", from, to,
+    _record_gc_edge("property", from, to,
                     g_snapshot->names.find_or_create_string_id(path));
 }
 
@@ -389,7 +406,6 @@ void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
     auto &to_node = g_snapshot->nodes[to_node_idx];
-    from_node.type = g_snapshot->node_types.find_or_create_string_id("object");
 
     _record_gc_just_edge("property", from_node, to_node_idx, g_snapshot->names.find_or_create_string_id("<native>"));
     if (value_idx)     _record_gc_just_edge("internal", to_node, value_idx, g_snapshot->names.find_or_create_string_id("value"));
@@ -399,31 +415,44 @@ void _gc_heap_snapshot_record_module_to_binding(jl_module_t* module, jl_binding_
 
 void _gc_heap_snapshot_record_internal_array_edge(jl_value_t *from, jl_value_t *to) JL_NOTSAFEPOINT
 {
-    _record_gc_edge("object", "internal", from, to,
+    _record_gc_edge("internal", from, to,
                     g_snapshot->names.find_or_create_string_id("<internal>"));
 }
 
-void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes) JL_NOTSAFEPOINT
+void _gc_heap_snapshot_record_hidden_edge(jl_value_t *from, void* to, size_t bytes, uint16_t alloc_type) JL_NOTSAFEPOINT
 {
     size_t name_or_idx = g_snapshot->names.find_or_create_string_id("<native>");
 
     auto from_node_idx = record_node_to_gc_snapshot(from);
-    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, "<malloc>");
-
+    const char *alloc_kind;
+    switch (alloc_type)
+    {
+    case 0:
+        alloc_kind = "<malloc>";
+        break;
+    case 1:
+        alloc_kind = "<pooled>";
+        break;
+    case 2:
+        alloc_kind = "<inline>";
+        break;
+    default:
+        alloc_kind = "<undef>";
+        break;
+    }
+    auto to_node_idx = record_pointer_to_gc_snapshot(to, bytes, alloc_kind);
     auto &from_node = g_snapshot->nodes[from_node_idx];
-    from_node.type = g_snapshot->node_types.find_or_create_string_id("native");
 
     _record_gc_just_edge("hidden", from_node, to_node_idx, name_or_idx);
 }
 
-static inline void _record_gc_edge(const char *node_type, const char *edge_type,
-                                   jl_value_t *a, jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
+static inline void _record_gc_edge(const char *edge_type, jl_value_t *a,
+                                  jl_value_t *b, size_t name_or_idx) JL_NOTSAFEPOINT
 {
     auto from_node_idx = record_node_to_gc_snapshot(a);
     auto to_node_idx = record_node_to_gc_snapshot(b);
 
     auto &from_node = g_snapshot->nodes[from_node_idx];
-    from_node.type = g_snapshot->node_types.find_or_create_string_id(node_type);
 
     _record_gc_just_edge(edge_type, from_node, to_node_idx, name_or_idx);
 }
@@ -469,14 +498,14 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
             ios_printf(stream, ",");
         }
         // ["type","name","id","self_size","edge_count","trace_node_id","detachedness"]
-        ios_printf(stream, "%zu", from_node.type);
-        ios_printf(stream, ",%zu", from_node.name);
-        ios_printf(stream, ",%zu", from_node.id);
-        ios_printf(stream, ",%zu", all_one ? (size_t)1 : from_node.self_size);
-        ios_printf(stream, ",%zu", from_node.edges.size());
-        ios_printf(stream, ",%zu", from_node.trace_node_id);
-        ios_printf(stream, ",%d", from_node.detachedness);
-        ios_printf(stream, "\n");
+        ios_printf(stream, "%zu,%zu,%zu,%zu,%zu,%zu,%d\n",
+                            from_node.type,
+                            from_node.name,
+                            from_node.id,
+                            all_one ? (size_t)1 : from_node.self_size,
+                            from_node.edges.size(),
+                            from_node.trace_node_id,
+                            from_node.detachedness);
     }
     ios_printf(stream, "],\n");
 
@@ -490,10 +519,10 @@ void serialize_heap_snapshot(ios_t *stream, HeapSnapshot &snapshot, char all_one
             else {
                 ios_printf(stream, ",");
             }
-            ios_printf(stream, "%zu", edge.type);
-            ios_printf(stream, ",%zu", edge.name_or_index);
-            ios_printf(stream, ",%zu", edge.to_node * k_node_number_of_fields);
-            ios_printf(stream, "\n");
+            ios_printf(stream, "%zu,%zu,%zu\n",
+                                edge.type,
+                                edge.name_or_index,
+                                edge.to_node * k_node_number_of_fields);
         }
     }
     ios_printf(stream, "],\n"); // end "edges"

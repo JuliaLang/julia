@@ -45,6 +45,8 @@ using namespace llvm;
 
 extern Optional<bool> always_have_fma(Function&);
 
+extern Optional<bool> always_have_fp16();
+
 namespace {
 constexpr uint32_t clone_mask =
     JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
@@ -281,7 +283,7 @@ private:
     function_ref<LoopInfo&(Function&)> GetLI;
     function_ref<CallGraph&()> GetCG;
 
-    // Map from original functiton to one based index in `fvars`
+    // Map from original function to one based index in `fvars`
     std::map<const Function*,uint32_t> func_ids{};
     std::vector<Function*> orig_funcs{};
     std::vector<uint32_t> func_infos{};
@@ -304,23 +306,31 @@ static inline std::vector<T*> consume_gv(Module &M, const char *name, bool allow
     // Strip them from the Module so that it's easier to handle the uses.
     GlobalVariable *gv = M.getGlobalVariable(name);
     assert(gv && gv->hasInitializer());
-    auto *ary = cast<ConstantArray>(gv->getInitializer());
-    unsigned nele = ary->getNumOperands();
+    ArrayType *Ty = cast<ArrayType>(gv->getInitializer()->getType());
+    unsigned nele = Ty->getArrayNumElements();
     std::vector<T*> res(nele);
-    unsigned i = 0;
-    while (i < nele) {
-        llvm::Value *val = ary->getOperand(i)->stripPointerCasts();
-        if (allow_bad_fvars && (!isa<T>(val) || (isa<Function>(val) && cast<Function>(val)->isDeclaration()))) {
-            // Shouldn't happen in regular use, but can happen in bugpoint.
-            nele--;
-            continue;
-        }
-        res[i++] = cast<T>(val);
+    ConstantArray *ary = nullptr;
+    if (gv->getInitializer()->isNullValue()) {
+        for (unsigned i = 0; i < nele; ++i)
+            res[i] = cast<T>(Constant::getNullValue(Ty->getArrayElementType()));
     }
-    res.resize(nele);
+    else {
+        ary = cast<ConstantArray>(gv->getInitializer());
+        unsigned i = 0;
+        while (i < nele) {
+            llvm::Value *val = ary->getOperand(i)->stripPointerCasts();
+            if (allow_bad_fvars && (!isa<T>(val) || (isa<Function>(val) && cast<Function>(val)->isDeclaration()))) {
+                // Shouldn't happen in regular use, but can happen in bugpoint.
+                nele--;
+                continue;
+            }
+            res[i++] = cast<T>(val);
+        }
+        res.resize(nele);
+    }
     assert(gv->use_empty());
     gv->eraseFromParent();
-    if (ary->use_empty())
+    if (ary && ary->use_empty())
         ary->destroyConstant();
     return res;
 }
@@ -478,6 +488,14 @@ uint32_t CloneCtx::collect_func_info(Function &F)
             if (auto mathOp = dyn_cast<FPMathOperator>(&I)) {
                 if (mathOp->getFastMathFlags().any()) {
                     flag |= JL_TARGET_CLONE_MATH;
+                }
+            }
+            if(!always_have_fp16().hasValue()){
+                for (size_t i = 0; i < I.getNumOperands(); i++) {
+                    if(I.getOperand(i)->getType()->isHalfTy()){
+                        flag |= JL_TARGET_CLONE_FLOAT16;
+                    }
+                    // Check for BFloat16 when they are added to julia can be done here
                 }
             }
             if (has_veccall && (flag & JL_TARGET_CLONE_SIMD) && (flag & JL_TARGET_CLONE_MATH)) {
@@ -925,17 +943,24 @@ Constant *CloneCtx::emit_offset_table(const std::vector<T*> &vars, StringRef nam
 {
     auto T_int32 = Type::getInt32Ty(M.getContext());
     auto T_size = getSizeTy(M.getContext());
-    assert(!vars.empty());
-    add_comdat(GlobalAlias::create(T_size, 0, GlobalVariable::ExternalLinkage,
-                                   name + "_base",
-                                   ConstantExpr::getBitCast(vars[0], T_size->getPointerTo()), &M));
-    auto vbase = ConstantExpr::getPtrToInt(vars[0], T_size);
     uint32_t nvars = vars.size();
+    Constant *base = nullptr;
+    if (nvars > 0) {
+        base = ConstantExpr::getBitCast(vars[0], T_size->getPointerTo());
+        add_comdat(GlobalAlias::create(T_size, 0, GlobalVariable::ExternalLinkage,
+                                       name + "_base",
+                                       base, &M));
+    } else {
+        base = ConstantExpr::getNullValue(T_size->getPointerTo());
+    }
+    auto vbase = ConstantExpr::getPtrToInt(base, T_size);
     std::vector<Constant*> offsets(nvars + 1);
     offsets[0] = ConstantInt::get(T_int32, nvars);
-    offsets[1] = ConstantInt::get(T_int32, 0);
-    for (uint32_t i = 1; i < nvars; i++)
-        offsets[i + 1] = get_ptrdiff32(vars[i], vbase);
+    if (nvars > 0) {
+        offsets[1] = ConstantInt::get(T_int32, 0);
+        for (uint32_t i = 1; i < nvars; i++)
+            offsets[i + 1] = get_ptrdiff32(vars[i], vbase);
+    }
     ArrayType *vars_type = ArrayType::get(T_int32, nvars + 1);
     add_comdat(new GlobalVariable(M, vars_type, true,
                                   GlobalVariable::ExternalLinkage,
@@ -1134,8 +1159,9 @@ static bool runMultiVersioning(Module &M, function_ref<LoopInfo&(Function&)> Get
     // At this point, we should have fixed up all the uses of the cloned functions
     // and collected all the shared/target-specific relocations.
     clone.emit_metadata();
-
+#ifdef JL_VERIFY_PASSES
     assert(!verifyModule(M, &errs()));
+#endif
 
     return true;
 }

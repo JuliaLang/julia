@@ -177,7 +177,7 @@ julia> gcdx(240, 46)
     Bézout coefficients that are computed by the extended Euclidean algorithm.
     (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.)
     For signed integers, these coefficients `u` and `v` are minimal in
-    the sense that ``|u| < |y/d|`` and ``|v| < |x/d|``. Furthermore,
+    the sense that ``|u| < |b/d|`` and ``|v| < |a/d|``. Furthermore,
     the signs of `u` and `v` are chosen so that `d` is positive.
     For unsigned integers, the coefficients `u` and `v` might be near
     their `typemax`, and the identity then holds only via the unsigned
@@ -188,7 +188,7 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
     # a0, b0 = a, b
     s0, s1 = oneunit(T), zero(T)
     t0, t1 = s1, s0
-    # The loop invariant is: s0*a0 + t0*b0 == a
+    # The loop invariant is: s0*a0 + t0*b0 == a && s1*a0 + t1*b0 == b
     x = a % T
     y = b % T
     while y != 0
@@ -904,7 +904,7 @@ end
 """
     hastypemax(T::Type) -> Bool
 
-Return true if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
+Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
 hastypemax(::Base.BitIntegerType) = true
 hastypemax(::Type{Bool}) = true

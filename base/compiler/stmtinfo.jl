@@ -74,7 +74,7 @@ struct SemiConcreteResult
     effects::Effects
 end
 
-const ConstResult = Union{ConstPropResult,ConcreteResult, SemiConcreteResult}
+const ConstResult = Union{ConstPropResult, ConcreteResult, SemiConcreteResult}
 
 """
     info::ConstCallInfo <: CallInfo
@@ -114,6 +114,7 @@ Each (abstract) call to `iterate`, corresponds to one entry in `ainfo.each::Vect
 """
 struct AbstractIterationInfo
     each::Vector{CallMeta}
+    complete::Bool
 end
 
 const MaybeAbstractIterationInfo = Union{Nothing, AbstractIterationInfo}

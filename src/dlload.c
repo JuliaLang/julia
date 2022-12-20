@@ -73,7 +73,7 @@ const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
 #ifdef _OS_WINDOWS_
-static void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
+void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 {
     DWORD res;
     LPWSTR errmsg;
@@ -351,6 +351,10 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 #ifdef _OS_WINDOWS_
         err = GetLastError();
         break; // LoadLibrary already tested the rest
+#else
+        // bail out and show the error if file actually exists
+        if (jl_stat(path, (char*)&stbuf) == 0)
+            break;
 #endif
     }
 

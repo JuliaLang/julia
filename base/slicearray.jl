@@ -85,6 +85,8 @@ the ordering of the dimensions will match those in `dims`. If `drop = false`, th
 `Slices` will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
+See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
+
 See also [`eachrow`](@ref), [`eachcol`](@ref), [`mapslices`](@ref) and [`selectdim`](@ref).
 
 !!! compat "Julia 1.1"
@@ -131,6 +133,8 @@ end
 Create a [`RowSlices`](@ref) object that is a vector of rows of matrix or vector `A`.
 Row slices are returned as `AbstractVector` views of `A`.
 
+For the inverse, see [`stack`](@ref)`(rows; dims=1)`.
+
 See also [`eachcol`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 
 !!! compat "Julia 1.1"
@@ -166,6 +170,8 @@ eachrow(A::AbstractVector) = eachrow(reshape(A, size(A,1), 1))
 
 Create a [`ColumnSlices`](@ref) object that is a vector of columns of matrix or vector `A`.
 Column slices are returned as `AbstractVector` views of `A`.
+
+For the inverse, see [`stack`](@ref)`(cols)` or `reduce(`[`hcat`](@ref)`, cols)`.
 
 See also [`eachrow`](@ref), [`eachslice`](@ref) and [`mapslices`](@ref).
 
@@ -226,9 +232,13 @@ size(s::Slices) = map(length, s.axes)
     return map(l -> l === (:) ? (:) : c[l], s.slicemap)
 end
 
-Base.@propagate_inbounds getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
-    view(s.parent, _slice_index(s, I...)...)
-Base.@propagate_inbounds setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N} =
-    s.parent[_slice_index(s, I...)...] = val
+@inline function getindex(s::Slices{P,SM,AX,S,N}, I::Vararg{Int,N}) where {P,SM,AX,S,N}
+    @boundscheck checkbounds(s, I...)
+    @inbounds view(s.parent, _slice_index(s, I...)...)
+end
+@inline function setindex!(s::Slices{P,SM,AX,S,N}, val, I::Vararg{Int,N}) where {P,SM,AX,S,N}
+    @boundscheck checkbounds(s, I...)
+    @inbounds s.parent[_slice_index(s, I...)...] = val
+end
 
 parent(s::Slices) = s.parent

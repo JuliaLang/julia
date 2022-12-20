@@ -8,6 +8,7 @@ get_code(args...; kwargs...) = code_typed1(args...; kwargs...).code
 
 # check if `x` is a statement with a given `head`
 isnew(@nospecialize x) = isexpr(x, :new)
+issplatnew(@nospecialize x) = isexpr(x, :splatnew)
 isreturn(@nospecialize x) = isa(x, ReturnNode)
 
 # check if `x` is a dynamic call of a given function

@@ -116,7 +116,7 @@ static int NOINLINE compare_fields(const jl_value_t *a, const jl_value_t *b, jl_
                 }
             }
             if (!ft->layout->haspadding) {
-                if (!bits_equal(ao, bo, ft->size))
+                if (!bits_equal(ao, bo, ft->layout->size))
                     return 0;
             }
             else {
@@ -198,7 +198,7 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
             return egal_types(vma->N, vmb->N, env, tvar_names);
         return !vma->N && !vmb->N;
     }
-    if (dt == jl_symbol_type)
+    if (dt == jl_symbol_type || dt == jl_module_type)
         return 0;
     assert(!dt->name->mutabl);
     return jl_egal__bits(a, b, dt);
@@ -413,6 +413,10 @@ static uintptr_t NOINLINE jl_object_id__cold(jl_datatype_t *dt, jl_value_t *v) J
 #else
         return memhash32_seed(jl_string_data(v), jl_string_len(v), 0xedc3b677);
 #endif
+    }
+    if (dt == jl_module_type) {
+        jl_module_t *m = (jl_module_t*)v;
+        return m->hash;
     }
     if (dt->name->mutabl)
         return inthash((uintptr_t)v);
@@ -1201,7 +1205,7 @@ JL_CALLABLE(jl_f_getglobal)
 
 JL_CALLABLE(jl_f_setglobal)
 {
-    enum jl_memory_order order = jl_memory_order_monotonic;
+    enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(setglobal!, 3, 4);
     if (nargs == 4) {
         JL_TYPECHK(setglobal!, symbol, args[3]);
@@ -1224,7 +1228,7 @@ JL_CALLABLE(jl_f_get_binding_type)
     JL_TYPECHK(get_binding_type, symbol, args[1]);
     jl_module_t *mod = (jl_module_t*)args[0];
     jl_sym_t *sym = (jl_sym_t*)args[1];
-    jl_value_t *ty = jl_binding_type(mod, sym);
+    jl_value_t *ty = jl_get_binding_type(mod, sym);
     if (ty == (jl_value_t*)jl_nothing) {
         jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
         if (b && b->owner == mod) {
@@ -1252,6 +1256,7 @@ JL_CALLABLE(jl_f_set_binding_type)
         jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
                   jl_symbol_name(b->name));
     }
+    jl_gc_wb_binding(b, ty);
     return jl_nothing;
 }
 
@@ -1268,7 +1273,8 @@ static int is_nestable_type_param(jl_value_t *t)
         size_t i, l = jl_nparams(t);
         for (i = 0; i < l; i++) {
             jl_value_t *pi = jl_tparam(t, i);
-            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi)))
+            if (!(pi == (jl_value_t*)jl_symbol_type || jl_isbits(pi) || is_nestable_type_param(pi) ||
+        jl_is_module(pi)))
                 return 0;
         }
         return 1;
@@ -1283,7 +1289,8 @@ int jl_valid_type_param(jl_value_t *v)
     if (jl_is_vararg(v))
         return 0;
     // TODO: maybe more things
-    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+    return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v)) ||
+        jl_is_module(v);
 }
 
 JL_CALLABLE(jl_f_apply_type)
@@ -1355,50 +1362,6 @@ JL_CALLABLE(jl_f_invoke)
     if (!jl_tuple_isa(&args[2], nargs - 2, (jl_datatype_t*)argtypes))
         jl_error("invoke: argument type error");
     jl_value_t *res = jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
-    JL_GC_POP();
-    return res;
-}
-
-JL_CALLABLE(jl_f_invoke_kwsorter)
-{
-    JL_NARGSV(invoke, 3);
-    jl_value_t *kwargs = args[0];
-    // args[1] is `invoke` itself
-    jl_value_t *func = args[2];
-    jl_value_t *argtypes = args[3];
-    jl_value_t *kws = jl_get_keyword_sorter(func);
-    JL_GC_PUSH1(&argtypes);
-    if (jl_is_tuple_type(argtypes)) {
-        // construct a tuple type for invoking a keyword sorter by putting the kw container type
-        // and the type of the function at the front.
-        size_t i, nt = jl_nparams(argtypes) + 2;
-        if (nt < jl_page_size/sizeof(jl_value_t*)) {
-            jl_value_t **types = (jl_value_t**)alloca(nt*sizeof(jl_value_t*));
-            types[0] = (jl_value_t*)jl_namedtuple_type;
-            types[1] = jl_is_type(func) ? (jl_value_t*)jl_wrap_Type(func) : jl_typeof(func);
-            for (i = 2; i < nt; i++)
-                types[i] = jl_tparam(argtypes, i - 2);
-            argtypes = (jl_value_t*)jl_apply_tuple_type_v(types, nt);
-        }
-        else {
-            jl_svec_t *types = jl_alloc_svec_uninit(nt);
-            JL_GC_PUSH1(&types);
-            jl_svecset(types, 0, jl_namedtuple_type);
-            jl_svecset(types, 1, jl_is_type(func) ? (jl_value_t*)jl_wrap_Type(func) : jl_typeof(func));
-            for (i = 2; i < nt; i++)
-                jl_svecset(types, i, jl_tparam(argtypes, i - 2));
-            argtypes = (jl_value_t*)jl_apply_tuple_type(types);
-            JL_GC_POP();
-        }
-    }
-    else {
-        // invoke will throw an error
-    }
-    args[0] = kws;
-    args[1] = argtypes;
-    args[2] = kwargs;
-    args[3] = func;
-    jl_value_t *res = jl_f_invoke(NULL, args, nargs);
     JL_GC_POP();
     return res;
 }
@@ -1795,7 +1758,8 @@ static int equiv_type(jl_value_t *ta, jl_value_t *tb)
           dta->name->abstract == dtb->name->abstract &&
           dta->name->mutabl == dtb->name->mutabl &&
           dta->name->n_uninitialized == dtb->name->n_uninitialized &&
-          (jl_svec_len(jl_field_names(dta)) != 0 || dta->size == dtb->size) &&
+          dta->isprimitivetype == dtb->isprimitivetype &&
+          (!dta->isprimitivetype || dta->layout->size == dtb->layout->size) &&
           (dta->name->atomicfields == NULL
            ? dtb->name->atomicfields == NULL
            : (dtb->name->atomicfields != NULL &&
@@ -1938,7 +1902,7 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 
 void jl_init_intrinsic_functions(void) JL_GC_DISABLED
 {
-    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
+    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"), NULL);
     inm->parent = jl_core_module;
     jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);
@@ -2011,11 +1975,6 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // method table utils
     jl_builtin_applicable = add_builtin_func("applicable", jl_f_applicable);
     jl_builtin_invoke = add_builtin_func("invoke", jl_f_invoke);
-    jl_typename_t *itn = ((jl_datatype_t*)jl_typeof(jl_builtin_invoke))->name;
-    jl_value_t *ikws = jl_new_generic_function_with_supertype(itn->name, jl_core_module, jl_builtin_type);
-    itn->mt->kwsorter = ikws;
-    jl_gc_wb(itn->mt, ikws);
-    jl_mk_builtin_func((jl_datatype_t*)jl_typeof(ikws), jl_symbol_name(jl_gf_name(ikws)), jl_f_invoke_kwsorter);
 
     // internal functions
     jl_builtin_apply_type = add_builtin_func("apply_type", jl_f_apply_type);
@@ -2098,6 +2057,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
+    add_builtin("Binding", (jl_value_t*)jl_binding_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 
