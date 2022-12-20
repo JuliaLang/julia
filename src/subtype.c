@@ -3217,7 +3217,7 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
     int n = 0;
     jl_varbinding_t *v = e->vars;
     jl_value_t *b1 = NULL, *b2 = NULL;
-    JL_GC_PUSH2(&b1, &b2);
+    JL_GC_PUSH2(&b1, &b2); // clang-sagc does not understand that *root is rooted already
     while (v != NULL) {
         b1 = jl_svecref(*root, n);
         b2 = v->lb;
@@ -3225,6 +3225,14 @@ static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int co
         b1 = jl_svecref(*root, n+1);
         b2 = v->ub;
         jl_svecset(*root, n+1, simple_join(b1, b2));
+        b1 = jl_svecref(*root, n+2);
+        b2 = (jl_value_t*)v->innervars;
+        if (b2) {
+            if (b1)
+                jl_array_ptr_1d_append((jl_array_t*)b2, (jl_array_t*)b1);
+            else
+                jl_svecset(*root, n+2, b2);
+        }
         n = n + 3;
         v = v->prev;
     }
