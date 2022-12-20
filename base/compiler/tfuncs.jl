@@ -407,19 +407,11 @@ add_tfunc(Core.sizeof, 1, 1, sizeof_tfunc, 1)
 function nfields_tfunc(@nospecialize(x))
     isa(x, Const) && return Const(nfields(x.val))
     isa(x, Conditional) && return Const(0)
-    xt = widenconst(x)
-    x = unwrap_unionall(xt)
+    x = unwrap_unionall(widenconst(x))
     isconstType(x) && return Const(nfields(x.parameters[1]))
     if isa(x, DataType) && !isabstracttype(x)
-        if x.name === Tuple.name
-            isvatuple(x) && return Int
-            return Const(length(x.types))
-        elseif x.name === _NAMEDTUPLE_NAME
-            length(x.parameters) == 2 || return Int
-            names = x.parameters[1]
-            isa(names, Tuple{Vararg{Symbol}}) || return nfields_tfunc(rewrap_unionall(x.parameters[2], xt))
-            return Const(length(names))
-        else
+        if !(x.name === Tuple.name && isvatuple(x)) &&
+           !(x.name === _NAMEDTUPLE_NAME && !isconcretetype(x))
             return Const(isdefined(x, :types) ? length(x.types) : length(x.name.names))
         end
     end
@@ -1660,12 +1652,6 @@ function apply_type_tfunc(@nospecialize(headtypetype), @nospecialize args...)
     end
     if istuple
         return Type{<:appl}
-    elseif isa(appl, DataType) && appl.name === _NAMEDTUPLE_NAME && length(appl.parameters) == 2 &&
-           (appl.parameters[1] === () || appl.parameters[2] === Tuple{})
-        # if the first/second parameter of `NamedTuple` is known to be empty,
-        # the second/first argument should also be empty tuple type,
-        # so refine it here
-        return Const(NamedTuple{(),Tuple{}})
     end
     ans = Type{appl}
     for i = length(outervars):-1:1

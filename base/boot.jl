@@ -620,8 +620,7 @@ end
 
 NamedTuple() = NamedTuple{(),Tuple{}}(())
 
-eval(Core, :(NamedTuple{names}(args::Tuple) where {names} =
-             $(Expr(:splatnew, :(NamedTuple{names,typeof(args)}), :args))))
+NamedTuple{names}(args::Tuple) where {names} = NamedTuple{names,typeof(args)}(args)
 
 using .Intrinsics: sle_int, add_int
 
