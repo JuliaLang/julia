@@ -68,6 +68,79 @@ function parse_diff(text, showfunc=dump)
     show_expr_text_diff(stdout, showfunc, ex, fl_ex)
 end
 
+function kw_to_eq(ex)
+    return Meta.isexpr(:kw, ex) ? Expr(:(=), ex.args...) : ex
+end
+
+function triple_string_roughly_equal(str, fl_str)
+    # Allow some leeway for a bug in the reference parser with
+    # triple quoted strings
+    lines = split(str, '\n')
+    fl_lines = split(fl_str, '\n')
+    if length(lines) != length(fl_lines)
+        return false
+    end
+    for (line1, line2) in zip(lines, fl_lines)
+        if !all(c in " \t" for c in line2) && !endswith(line1, line2)
+            return false
+        end
+    end
+    return true
+end
+
+# Compare Expr from reference parser expression to JuliaSyntax parser, ignoring
+# differences due to bugs in the reference parser.
+function exprs_roughly_equal(fl_ex, ex)
+    if fl_ex isa Float64 && Meta.isexpr(ex, :call, 3) &&
+                            ex.args[1] == :* &&
+                            ex.args[2] == fl_ex &&
+                            (ex.args[3] == :f || ex.args[3] == :f0)
+        # 0x1p0f
+        return true
+    elseif !(fl_ex isa Expr) || !(ex isa Expr)
+        if fl_ex isa String && ex isa String
+            if fl_ex == ex
+                return true
+            else
+                return triple_string_roughly_equal(ex, fl_ex)
+            end
+        else
+            return fl_ex == ex
+        end
+    end
+    if fl_ex.head != ex.head
+        return false
+    end
+    h = ex.head
+    fl_args = fl_ex.args
+    args = ex.args
+    if ex.head in (:block, :quote, :toplevel)
+        fl_args = filter(x->!(x isa LineNumberNode), fl_args)
+        args    = filter(x->!(x isa LineNumberNode), args)
+    end
+    if (h == :global || h == :local) && length(args) == 1 && Meta.isexpr(args[1], :tuple)
+        # Allow invalid syntax like `global (x, y)`
+        args = args[1].args
+    end
+    if length(fl_args) != length(args)
+        return false
+    end
+    if h == :do && length(args) >= 1 && Meta.isexpr(fl_args[1], :macrocall)
+        # Macrocalls with do, as in `@f(a=1) do\nend` use :kw in the
+        # reference parser for the `a=1`, but we regard this as a bug.
+        fl_args = copy(fl_args)
+        fl_args[1] = Expr(:macrocall, map(kw_to_eq, args[1].args)...)
+    end
+    for i = 1:length(args)
+        flarg = fl_args[i]
+        arg = args[i]
+        if !exprs_roughly_equal(flarg, arg)
+            return false
+        end
+    end
+    return true
+end
+
 function parsers_agree_on_file(filename; show_diff=false)
     text = try
         read(filename, String)
@@ -93,6 +166,8 @@ function parsers_agree_on_file(filename; show_diff=false)
         return !JuliaSyntax.any_error(stream) &&
             JuliaSyntax.remove_linenums!(ex) ==
             JuliaSyntax.remove_linenums!(fl_ex)
+        # Could alternatively use
+        # exprs_roughly_equal(fl_ex, ex)
     catch exc
         @error "Parsing failed" filename exception=current_exceptions()
         return false
@@ -308,3 +383,18 @@ function parse_sexpr(code)
     st
 end
 
+
+@testset "Test tools" begin
+    @test exprs_roughly_equal(Expr(:global, :x, :y),
+                              Expr(:global, Expr(:tuple, :x, :y)))
+    @test exprs_roughly_equal(Expr(:local, :x, :y),
+                              Expr(:local, Expr(:tuple, :x, :y)))
+    @test exprs_roughly_equal(1.5,
+                              Expr(:call, :*, 1.5, :f))
+    @test exprs_roughly_equal(1.5,
+                              Expr(:call, :*, 1.5, :f0))
+    @test exprs_roughly_equal(Expr(:do, Expr(:macrocall, Symbol("@f"), LineNumberNode(1), Expr(:kw, :a, 1)),
+                                   Expr(:->, Expr(:tuple), Expr(:block, LineNumberNode(1)))),
+                              Expr(:do, Expr(:macrocall, Symbol("@f"), LineNumberNode(1), Expr(:(=), :a, 1)),
+                                   Expr(:->, Expr(:tuple), Expr(:block, LineNumberNode(1)))))
+end

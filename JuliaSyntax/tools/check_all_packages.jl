@@ -31,7 +31,7 @@ Logging.with_logger(logger) do
                 @assert Meta.isexpr(e2, :toplevel)
                 try
                     e1 = JuliaSyntax.parseall(Expr, code, filename=fpath)
-                    if JuliaSyntax.remove_linenums!(e1) != JuliaSyntax.remove_linenums!(e2)
+                    if !exprs_roughly_equal(e2, e1)
                         mismatch_count += 1
                         @error("Parsers succeed but disagree",
                                fpath,
