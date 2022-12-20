@@ -5,6 +5,7 @@ using Base.MathConstants
 
 using Test
 
+
 @testset "Float64 checks" begin
     # a + b returns a number exactly between prevfloat(1.) and 1., so its
     # final result depends strongly on the utilized rounding direction.
@@ -349,5 +350,43 @@ end
         @test rounding(T) == RoundToZero
         @test round(T(2.7)) == T(2.0)
         Base.Rounding.setrounding_raw(T, Base.Rounding.to_fenv(old))
+    end
+end
+
+
+try
+    Base.Rounding.get_exceptions()
+    fp_exceptions = true
+catch e
+    fp_exceptions = false
+end
+
+if fp_exceptions
+
+    @testset "floating point exceptions" begin
+        @test Base.Rounding.get_exceptions() == (invalid = false, inexact = false, underflow = false, overflow = false, dividebyzero = false)
+
+        @test isnan(0/0)
+        @test 1/0 == Inf
+
+        Base.Rounding.set_exceptions(invalid=true)
+        @test Base.Rounding.get_exceptions() == (invalid = true, inexact = false, underflow = false, overflow = false, dividebyzero = false)
+
+        @test_throws InvalidFloatingPointException 0/0
+        @test 1/0 == Inf
+
+        Base.Rounding.set_exceptions(dividebyzero=true)
+        @test Base.Rounding.get_exceptions() == (invalid = true, inexact = false, underflow = false, overflow = false, dividebyzero = true)
+
+        @test_throws InvalidFloatingPointException 0/0
+        @test_throws DivideByZeroFloatingPointException 1/0
+
+        Base.Rounding.set_exceptions(invalid=false, dividebyzero=false)
+
+        @test Base.Rounding.get_exceptions() == (invalid = false, inexact = false, underflow = false, overflow = false, dividebyzero = false)
+
+        @test isnan(0/0)
+        @test 1/0 == Inf
+
     end
 end

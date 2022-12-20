@@ -553,9 +553,9 @@ JL_DLLEXPORT int jl_get_fenv_except(void)
     fenv_t env;
     fegetenv(&env);
 #if defined(_CPU_AARCH64_)
-    return (env.__fpcr & FE_ALL_EXCEPT << 8);
+    return (env.__fpcr >> 8 & FE_ALL_EXCEPT);
 #elif defined(_CPU_X86_64_)
-    return (~env.__mxcsr & FE_ALL_EXCEPT << 7);
+    return (~env.__mxcsr >> 7 & FE_ALL_EXCEPT);
 #else
     return -1;
 #endif
