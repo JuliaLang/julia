@@ -1061,7 +1061,7 @@ end
 
         @testset "issue #34408" begin
             r = 1f8-10:1f8
-            # collect(r) = Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
+            @test collect(r) == Float32[9.999999e7, 9.999999e7, 9.999999e7, 9.999999e7, 1.0e8, 1.0e8, 1.0e8, 1.0e8, 1.0e8]
             for i in r
                 @test_broken searchsorted(collect(r), i) == searchsorted(r, i)
             end
