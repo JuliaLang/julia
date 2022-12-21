@@ -8,14 +8,3 @@ using Test, Libdl, PCRE2_jll
     vn = VersionNumber(split(unsafe_string(pointer(vstr)), " ")[1])
     @test vn == v"10.42.0"
 end
-
-@testset "#47936" begin
-    tests = (r"a+[bc]+c",
-             r"a+[bc]{1,2}c",
-             r"(a)+[bc]+c",
-             r"a{1,2}[bc]+c",
-             r"(a+)[bc]+c")
-    for re in tests
-        @test !isnothing(match(re, "ababc"))
-    end
-end
