@@ -5917,7 +5917,7 @@ static Function* gen_cfun_wrapper(
 
     Value *world_v = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
         prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
-    cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Acquire);
+    cast<LoadInst>(world_v)->setOrdering(AtomicOrdering::Monotonic);
 
     Value *age_ok = NULL;
     if (calltype) {
