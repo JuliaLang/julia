@@ -566,8 +566,8 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm{DirectOrdering} && nonmissingtype(eltype(o.data)) != eltype(o.data)
-        lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o)
+    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && nonmissingtype(eltype(o.data)) != eltype(o.data)
+        lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o.order; lo, hi)
         _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
         _sort!(v, a.next, o, kw)
