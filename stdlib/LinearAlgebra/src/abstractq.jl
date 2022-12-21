@@ -8,6 +8,7 @@ end
 
 parent(adjQ::AdjointQ) = adjQ.Q
 eltype(::Type{<:AbstractQ{T}}) where {T} = T
+ndims(::AbstractQ) = 2
 
 # inversion/adjoint/transpose
 inv(Q::AbstractQ) = Q'
@@ -15,6 +16,10 @@ adjoint(Q::AbstractQ) = AdjointQ(Q)
 transpose(Q::AbstractQ{<:Real}) = AdjointQ(Q)
 transpose(Q::AbstractQ) = error("transpose not implemented for $(typeof(Q)). Consider using adjoint instead of transpose.")
 adjoint(adjQ::AdjointQ) = adjQ.Q
+
+# promotion with AbstractMatrix, at least for equal eltypes
+promote_rule(::Type{<:AbstractMatrix{T}}, ::Type{<:AbstractQ{T}}) where {T} =
+    (@inline; Union{AbstractMatrix{T},AbstractQ{T}})
 
 # conversion
 AbstractQ{S}(Q::AbstractQ{S}) where {S} = Q
@@ -48,7 +53,7 @@ end
 size(adjQ::AdjointQ) = reverse(size(adjQ.Q))
 
 # pseudo-array behaviour, required for indexing with `begin` or `end`
-axes(Q::AbstractQ) = map(Base.OneTo, size(Q))
+axes(Q::AbstractQ) = map(Base.oneto, size(Q))
 axes(Q::AbstractQ, d::Integer) = d in (1, 2) ? axes(Q)[d] : Base.OneTo(1)
 
 copymutable(Q::AbstractQ{T}) where {T} = lmul!(Q, Matrix{T}(I, size(Q)))
