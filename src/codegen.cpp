@@ -7739,8 +7739,15 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
+    // step 11a. For top-level code, load the world age
+    if (toplevel && !ctx.is_opaque_closure) {
+        LoadInst *load_world = ctx.builder.CreateAlignedLoad(getSizeTy(ctx.builder.getContext()),
+            prepare_global_in(jl_Module, jlgetworld_global), Align(sizeof(size_t)));
+        load_world->setOrdering(AtomicOrdering::Monotonic);
+        ctx.builder.CreateAlignedStore(load_world, world_age_field, Align(sizeof(size_t)));
+    }
 
-    // step 11. Do codegen in control flow order
+    // step 11b. Do codegen in control flow order
     std::vector<int> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
