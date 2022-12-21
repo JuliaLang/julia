@@ -566,8 +566,30 @@ function _sort!(v::AbstractVector, a::MissingOptimization, o::Ordering, kw)
     if nonmissingtype(eltype(v)) != eltype(v) && o isa DirectOrdering
         lo, hi = send_to_end!(ismissing, v, o; lo, hi)
         _sort!(WithoutMissingVector(v, unsafe=true), a.next, o, (;kw..., lo, hi))
-    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering && nonmissingtype(eltype(o.data)) != eltype(o.data)
-        lo, hi = send_to_end!(i -> ismissing(@inbounds o.data[i]), v, o.order; lo, hi)
+    elseif eltype(v) <: Integer && o isa Perm && o.order isa DirectOrdering &&
+                nonmissingtype(eltype(o.data)) != eltype(o.data) &&
+                all(i === j for (i,j) in zip(v, eachindex(o.data)))
+        # TODO make this branch known at compile time
+        # This uses a custom function because we need to ensure stability of both sides and
+        # we can assume v is equal to eachindex(o.data) which allows a copying partition
+        # without allocations.
+        lo_i, hi_i = lo, hi
+        for (i,x) in zip(eachindex(o.data), o.data)
+            if ismissing(x) == (o.order == Reverse) # should i go at the beginning?
+                v[lo_i] = i
+                lo_i += 1
+            else
+                v[hi_i] = i
+                hi_i -= 1
+            end
+        end
+        reverse!(v, lo_i, hi)
+        if o.order == Reverse
+            lo = lo_i
+        else
+            hi = hi_i
+        end
+
         _sort!(v, a.next, Perm(o.order, WithoutMissingVector(o.data, unsafe=true)), (;kw..., lo, hi))
     else
         _sort!(v, a.next, o, kw)
