@@ -809,7 +809,8 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
         end
     end
     # Extensions
-    for (name, entries::Vector{Any}) in d
+    for (name, entries) in d
+        entries = entries::Vector{Any}
         for entry in entries
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
             extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
@@ -1101,7 +1102,7 @@ function run_extension_callbacks(; force::Bool=false)
         for extid in EXT_DORMITORY
             extid.succeeded && continue
             !force && extid.triggered && continue
-            if all(x -> haskey(Base.loaded_modules, x), extid.triggers)
+            if all(x -> haskey(Base.loaded_modules, x) && !haskey(package_locks, x), extid.triggers)
                 ext_not_allowed_load = nothing
                 extid.triggered = true
                 # It is possible that some of the triggers were loaded in an environment

@@ -729,7 +729,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
         def = argexprs[i]
         def_type = argtypes[i]
         thisarginfo = arginfos[i-arg_start]
-        if thisarginfo === nothing
+        if thisarginfo === nothing || !thisarginfo.complete
             if def_type isa PartialStruct
                 # def_type.typ <: Tuple is assumed
                 def_argtypes = def_type.fields
@@ -778,7 +778,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                 # See if we can inline this call to `iterate`
                 handle_call!(todo, ir, state1.id, new_stmt, new_info, flag, new_sig, istate)
                 if i != length(thisarginfo.each)
-                    valT = getfield_tfunc(call.rt, Const(1))
+                    valT = getfield_tfunc(OptimizerLattice(), call.rt, Const(1))
                     val_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 1),
                         valT))
@@ -786,7 +786,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                     push!(new_argtypes, valT)
                     state_extracted = insert_node!(ir, idx, NewInstruction(
                         Expr(:call, GlobalRef(Core, :getfield), state1, 2),
-                        getfield_tfunc(call.rt, Const(2))))
+                        getfield_tfunc(OptimizerLattice(), call.rt, Const(2))))
                     state = Core.svec(state_extracted)
                 end
             end
@@ -1039,19 +1039,20 @@ function is_valid_type_for_apply_rewrite(@nospecialize(typ), params::Optimizatio
 end
 
 function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt))
-    nf = nfields_tfunc(rt)
+    𝕃ₒ = OptimizerLattice()
+    nf = nfields_tfunc(𝕃ₒ, rt)
     if nf isa Const
         eargs = stmt.args
         tup = eargs[2]
         tt = argextype(tup, ir)
-        tnf = nfields_tfunc(tt)
+        tnf = nfields_tfunc(𝕃ₒ, tt)
         # TODO: hoisting this tnf.val === nf.val check into codegen
         # would enable us to almost always do this transform
         if tnf isa Const && tnf.val === nf.val
             n = tnf.val::Int
             new_argexprs = Any[eargs[1]]
             for j = 1:n
-                atype = getfield_tfunc(tt, Const(j))
+                atype = getfield_tfunc(𝕃ₒ, tt, Const(j))
                 new_call = Expr(:call, Core.getfield, tup, j)
                 new_argexpr = insert_node!(ir, idx, NewInstruction(new_call, atype))
                 push!(new_argexprs, new_argexpr)
@@ -1060,7 +1061,7 @@ function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt))
             stmt.args = new_argexprs
         end
     end
-    nothing
+    return nothing
 end
 
 function call_sig(ir::IRCode, stmt::Expr)
@@ -1134,9 +1135,9 @@ function inline_apply!(todo::Vector{Pair{Int,Any}},
         for i = (arg_start + 1):length(argtypes)
             thisarginfo = nothing
             if !is_valid_type_for_apply_rewrite(argtypes[i], state.params)
-                if isa(info, ApplyCallInfo) && info.arginfo[i-arg_start] !== nothing
-                    thisarginfo = info.arginfo[i-arg_start]
-                else
+                isa(info, ApplyCallInfo) || return nothing
+                thisarginfo = info.arginfo[i-arg_start]
+                if thisarginfo === nothing || !thisarginfo.complete
                     return nothing
                 end
             end

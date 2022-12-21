@@ -1228,7 +1228,7 @@ JL_CALLABLE(jl_f_get_binding_type)
     JL_TYPECHK(get_binding_type, symbol, args[1]);
     jl_module_t *mod = (jl_module_t*)args[0];
     jl_sym_t *sym = (jl_sym_t*)args[1];
-    jl_value_t *ty = jl_binding_type(mod, sym);
+    jl_value_t *ty = jl_get_binding_type(mod, sym);
     if (ty == (jl_value_t*)jl_nothing) {
         jl_binding_t *b = jl_get_binding_wr(mod, sym, 0);
         if (b && b->owner == mod) {
@@ -2057,6 +2057,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("UpsilonNode", (jl_value_t*)jl_upsilonnode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
+    add_builtin("Binding", (jl_value_t*)jl_binding_type);
     add_builtin("GlobalRef", (jl_value_t*)jl_globalref_type);
     add_builtin("NamedTuple", (jl_value_t*)jl_namedtuple_type);
 

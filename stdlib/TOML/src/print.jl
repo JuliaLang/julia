@@ -122,7 +122,10 @@ end
 
 is_table(value)           = isa(value, AbstractDict)
 is_array_of_tables(value) = isa(value, AbstractArray) &&
-                            length(value) > 0 && isa(value[1], AbstractDict)
+                            length(value) > 0 && (
+                                isa(value, AbstractArray{<:AbstractDict}) ||
+                                all(v -> isa(v, AbstractDict), value)
+                            )
 is_tabular(value)         = is_table(value) || is_array_of_tables(value)
 
 function print_table(f::MbyFunc, io::IO, a::AbstractDict,
