@@ -1058,7 +1058,7 @@ LLVM_CONFIG_PATH_FIX := PATH="$(build_bindir):$(PATH)"
 endif
 
 ifeq ($(BUILD_OS),$(OS))
-LLVM_CONFIG_HOST := $(LLVM_CONFIG)
+LLVM_CONFIG_HOST := $(LLVM_CONFIG_PATH_FIX) $(LLVM_CONFIG)
 else
 LLVM_CONFIG_HOST := $(basename $(LLVM_CONFIG))-host$(BUILD_EXE)
 ifeq (exists, $(shell [ -f '$(LLVM_CONFIG_HOST)' ] && echo exists ))
