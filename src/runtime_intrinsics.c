@@ -169,9 +169,9 @@ static inline unsigned select_by_size(unsigned sz) JL_NOTSAFEPOINT
     }
 
 #define fp_select(a, func) \
-    sizeof(a) == sizeof(float) ? func##f((float)a) : func(a)
+    sizeof(a) <= sizeof(float) ? func##f((float)a) : func(a)
 #define fp_select2(a, b, func) \
-    sizeof(a) == sizeof(float) ? func##f(a, b) : func(a, b)
+    sizeof(a) <= sizeof(float) ? func##f(a, b) : func(a, b)
 
 // fast-function generators //
 
@@ -215,11 +215,11 @@ static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 static inline void name(unsigned osize, void *pa, void *pr) JL_NOTSAFEPOINT \
 { \
     uint16_t a = *(uint16_t*)pa; \
-    float A = __gnu_h2f_ieee(a); \
+    float A = julia__gnu_h2f_ieee(a); \
     if (osize == 16) { \
         float R; \
         OP(&R, A); \
-        *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+        *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
     } else { \
         OP((uint16_t*)pr, A); \
     } \
@@ -243,11 +243,11 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     float R = OP(A, B); \
-    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
 }
 
 // float or integer inputs, bool output
@@ -268,8 +268,8 @@ static int jl_##name##16(unsigned runtime_nbits, void *pa, void *pb) JL_NOTSAFEP
 { \
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
     runtime_nbits = 16; \
     return OP(A, B); \
 }
@@ -309,12 +309,12 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     uint16_t a = *(uint16_t*)pa; \
     uint16_t b = *(uint16_t*)pb; \
     uint16_t c = *(uint16_t*)pc; \
-    float A = __gnu_h2f_ieee(a); \
-    float B = __gnu_h2f_ieee(b); \
-    float C = __gnu_h2f_ieee(c); \
+    float A = julia__gnu_h2f_ieee(a); \
+    float B = julia__gnu_h2f_ieee(b); \
+    float C = julia__gnu_h2f_ieee(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = __gnu_f2h_ieee(R); \
+    *(uint16_t*)pr = julia__gnu_f2h_ieee(R); \
 }
 
 
@@ -832,7 +832,7 @@ static inline int fpiseq##nbits(c_type a, c_type b) JL_NOTSAFEPOINT { \
 fpiseq_n(float, 32)
 fpiseq_n(double, 64)
 #define fpiseq(a,b) \
-    sizeof(a) == sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
+    sizeof(a) <= sizeof(float) ? fpiseq32(a, b) : fpiseq64(a, b)
 
 #define fpislt_n(c_type, nbits)                                         \
     static inline int fpislt##nbits(c_type a, c_type b) JL_NOTSAFEPOINT \
@@ -903,7 +903,7 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
         if (!(osize < 8 * sizeof(a))) \
             jl_error("fptrunc: output bitsize must be < input bitsize"); \
         else if (osize == 16) \
-            *(uint16_t*)pr = __gnu_f2h_ieee(a); \
+            *(uint16_t*)pr = julia__gnu_f2h_ieee(a); \
         else if (osize == 32) \
             *(float*)pr = a; \
         else if (osize == 64) \

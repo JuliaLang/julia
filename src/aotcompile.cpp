@@ -51,6 +51,7 @@
 #include <llvm/Support/CodeGen.h>
 #endif
 
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
@@ -274,6 +275,24 @@ static void jl_ci_cache_lookup(const jl_cgparams_t &cgparams, jl_method_instance
         }
     }
     *ci_out = codeinst;
+}
+
+static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionType *FT)
+{
+    Function *target = M.getFunction(alias);
+    if (!target) {
+        target = Function::Create(FT, Function::ExternalLinkage, alias, M);
+    }
+    // Weak so that this does not get discarded
+    // maybe use llvm.compiler.used instead?
+    Function *interposer = Function::Create(FT, Function::WeakAnyLinkage, name, M);
+
+    llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
+    SmallVector<Value *, 4> CallArgs;
+    for (auto &arg : interposer->args())
+        CallArgs.push_back(&arg);
+    auto val = builder.CreateCall(target, CallArgs);
+    builder.CreateRet(val);
 }
 
 // takes the running content that has collected in the shadow module and dump it to disk
@@ -553,6 +572,20 @@ void jl_dump_native(void *native_code,
                                      jlRTLD_DEFAULT_var,
                                      "jl_RTLD_DEFAULT_handle_pointer"));
     }
+
+    // We would like to emit an alias or an weakref alias to redirect these symbols
+    // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+    // So for now we inject a definition of these functions that calls our runtime functions.
+    injectCRTAlias(*data->M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+            FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+    injectCRTAlias(*data->M, "__extendhfsf2", "julia__gnu_h2f_ieee",
+            FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+    injectCRTAlias(*data->M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+            FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+    injectCRTAlias(*data->M, "__truncsfhf2", "julia__gnu_f2h_ieee",
+            FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+    injectCRTAlias(*data->M, "__truncdfhf2", "julia__truncdfhf2",
+            FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
 
     // do the actual work
     auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {

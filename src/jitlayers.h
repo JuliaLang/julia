@@ -185,6 +185,7 @@ public:
                          const object::ObjectFile &Obj,
                          const RuntimeDyld::LoadedObjectInfo &LoadedObjectInfo);
 #endif
+    orc::SymbolStringPtr mangle(StringRef Name);
     void addGlobalMapping(StringRef Name, uint64_t Addr);
     void addModule(std::unique_ptr<Module> M);
 #if JL_LLVM_VERSION < 120000

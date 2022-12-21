@@ -1476,22 +1476,17 @@ static inline uint16_t float_to_half(float param)
 
 #if !defined(_OS_DARWIN_)   // xcode already links compiler-rt
 
-extern "C" JL_DLLEXPORT float __gnu_h2f_ieee(uint16_t param)
+extern "C" JL_DLLEXPORT float julia__gnu_h2f_ieee(uint16_t param)
 {
     return half_to_float(param);
 }
 
-extern "C" JL_DLLEXPORT float __extendhfsf2(uint16_t param)
-{
-    return half_to_float(param);
-}
-
-extern "C" JL_DLLEXPORT uint16_t __gnu_f2h_ieee(float param)
+extern "C" JL_DLLEXPORT uint16_t julia__gnu_f2h_ieee(float param)
 {
     return float_to_half(param);
 }
 
-extern "C" JL_DLLEXPORT uint16_t __truncdfhf2(double param)
+extern "C" JL_DLLEXPORT uint16_t julia__truncdfhf2(double param)
 {
     return float_to_half((float)param);
 }
