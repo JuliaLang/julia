@@ -2728,15 +2728,6 @@ end |> only === Int
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
 
-# `apply_type_tfunc` should always return accurate result for empty NamedTuple case
-import Core: Const
-let apply_type_tfunc(@nospecialize xs...) =
-        Core.Compiler.apply_type_tfunc(Core.Compiler.fallback_lattice, xs...)
-    @test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple{}) === Const(typeof((;)))
-    @test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple) === Const(typeof((;)))
-    @test apply_type_tfunc(Const(NamedTuple), Tuple{Vararg{Symbol}}, Type{Tuple{}}) === Const(typeof((;)))
-end
-
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Type
