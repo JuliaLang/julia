@@ -97,9 +97,9 @@ julia> floor(Week, Day(16))
 2 weeks
 
 !!! warning
-Argument order of this floor method differs from the standard rounding argument order. 
-julia> floor(Minute(44), Minute(15))
-30 minutes
+    Argument order of this floor method differs from the standard rounding argument order. 
+    julia> floor(Minute(44), Minute(15))
+    30 minutes
 
 julia> floor(Day, Hour(36))
 1 day
@@ -173,9 +173,9 @@ julia> ceil(Week, Day(16))
 3 weeks
 
 !!! warning
-argument order of this ceil method differs from the standard rounding argument order. 
-julia> ceil(Minute(44), Minute(15))
-45 minutes
+    argument order of this ceil method differs from the standard rounding argument order. 
+    julia> ceil(Minute(44), Minute(15))
+    45 minutes
 
 julia> ceil(Day, Hour(36))
 2 days
@@ -255,9 +255,9 @@ julia> round(Week, Day(16))
 2 weeks
 
 !!! warning
-argument order of this round method differs from the standard rounding argument order. 
-julia> round(Minute(44), Minute(15))
-45 minutes
+    argument order of this round method differs from the standard rounding argument order. 
+    julia> round(Minute(44), Minute(15))
+    45 minutes
 
 julia> round(Day, Hour(36))
 2 days
