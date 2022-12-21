@@ -6,7 +6,6 @@ const DATETIMEEPOCH = value(DateTime(0))
 
 # According to ISO 8601, the first day of the first week of year 0000 is 0000-01-03
 const WEEKEPOCH = value(Date(0, 1, 3))
-
 const ConvertiblePeriod = Union{TimePeriod, Week, Day}
 const TimeTypeOrPeriod = Union{TimeType, ConvertiblePeriod}
 
@@ -288,7 +287,6 @@ Base.round(p::Period, ::TimeTypeOrPeriod, ::RoundingMode) = throw(DomainError(p)
 Base.round(p::Period, x::TimeTypeOrPeriod) = Base.round(p, x, RoundNearestTiesUp)
 
 # Make rounding functions callable using Period types in addition to values.
-
 Base.floor(::Type{P}, x::TimeTypeOrPeriod) where P <: Period = Base.floor(oneunit(P), x)
 Base.ceil(::Type{P}, x::TimeTypeOrPeriod)  where P <: Period = Base.ceil(oneunit(P), x)
 Base.floor(x::TimeTypeOrPeriod, ::Type{Date}, ::Type{P}) where P <: Period = Base.floor(oneunit(P), Date(x))
