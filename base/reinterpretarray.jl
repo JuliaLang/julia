@@ -186,7 +186,6 @@ function TypecastStyle(T::Type, S::Type)
     end
 end
 
-   
 
 # Definition of StridedArray
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
@@ -393,18 +392,18 @@ end
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
     check_readable(a)
-    _getindex_ra(a, inds[1], tail(inds))
+    _getindex_ra(TypecastStyle(T,S),a, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
     check_readable(a)
     if isa(IndexStyle(a), IndexLinear)
-        return _getindex_ra(a, i, ())
+        return _getindex_ra(TypecastStyle(T,S),a, i, ())
     end
     # Convert to full indices here, to avoid needing multiple conversions in
     # the loop in _getindex_ra
     inds = _to_subscript_indices(a, i)
-    isempty(inds) ? _getindex_ra(a, 1, ()) : _getindex_ra(a, inds[1], tail(inds))
+    isempty(inds) ? _getindex_ra(TypecastStyle(T,S),a, 1, ()) : _getindex_ra(TypecastStyle(T,S),a, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
@@ -418,63 +417,75 @@ end
 
 @inline _memcpy!(dst, src, n) = ccall(:memcpy, Cvoid, (Ptr{UInt8}, Ptr{UInt8}, Csize_t), dst, src, n)
 
-@inline @propagate_inbounds function _getindex_ra(a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
-    # Make sure to match the scalar reinterpret if that is applicable
-    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSimilar,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+    if issingletontype(T) # singleton types
+        @boundscheck checkbounds(a, i1, tailinds...)
+        return T.instance
+    end
+    return reinterpret(T, a.parent[i1, tailinds...])
+end
+
+@inline @propagate_inbounds function _getindex_ra(::TypecastToLarger,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+    @boundscheck checkbounds(a, i1, tailinds...)
+    ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
+    # T is bigger than S and contains an integer number of them
+    n = sizeof(T) ÷ sizeof(S)
+    t = Ref{T}()
+    GC.@preserve t begin
+        sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
+        for i = 1:n
+                s = a.parent[ind_start + i, tailinds...]
+                unsafe_store!(sptr, s, i)
+        end
+    end
+    return t[]
+end
+
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSmaller,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+    @boundscheck checkbounds(a, i1, tailinds...)
+    ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
+    s = Ref{S}(a.parent[ind_start + 1, tailinds...])
+    GC.@preserve s begin
+        tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
+        return unsafe_load(tptr + sidx)
+    end
+end
+
+@inline @propagate_inbounds function _getindex_ra(::TC,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {TC<:TypecastStyle,T,N,S,TT}
+# Make sure to match the scalar reinterpret if that is applicable
+    @boundscheck checkbounds(a, i1, tailinds...)
+    ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
+    i = 1
+    nbytes_copied = 0
+    # This is a bit complicated to deal with partial elements
+    # at both the start and the end. LLVM will fold as appropriate,
+    # once it knows the data layout
+    s = Ref{S}()
+    t = Ref{T}()
+    GC.@preserve s t begin
+        sptr = Ptr{S}(unsafe_convert(Ref{S}, s))
+        tptr = Ptr{T}(unsafe_convert(Ref{T}, t))
+        while nbytes_copied < sizeof(T)
+            s[] = a.parent[ind_start + i, tailinds...]
+            nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
+            _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
+            nbytes_copied += nb
+            sidx = 0
+            i += 1
+        end
+    end
+    return t[]
+end
+
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSimilar,a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
         if issingletontype(T) # singleton types
             @boundscheck checkbounds(a, i1, tailinds...)
             return T.instance
         end
         return reinterpret(T, a.parent[i1, tailinds...])
-    else
-        @boundscheck checkbounds(a, i1, tailinds...)
-        ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
-        # Optimizations that avoid branches
-        if sizeof(T) % sizeof(S) == 0
-            # T is bigger than S and contains an integer number of them
-            n = sizeof(T) ÷ sizeof(S)
-            t = Ref{T}()
-            GC.@preserve t begin
-                sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
-                for i = 1:n
-                     s = a.parent[ind_start + i, tailinds...]
-                     unsafe_store!(sptr, s, i)
-                end
-            end
-            return t[]
-        elseif sizeof(S) % sizeof(T) == 0
-            # S is bigger than T and contains an integer number of them
-            s = Ref{S}(a.parent[ind_start + 1, tailinds...])
-            GC.@preserve s begin
-                tptr = Ptr{T}(unsafe_convert(Ref{S}, s))
-                return unsafe_load(tptr + sidx)
-            end
-        else
-            i = 1
-            nbytes_copied = 0
-            # This is a bit complicated to deal with partial elements
-            # at both the start and the end. LLVM will fold as appropriate,
-            # once it knows the data layout
-            s = Ref{S}()
-            t = Ref{T}()
-            GC.@preserve s t begin
-                sptr = Ptr{S}(unsafe_convert(Ref{S}, s))
-                tptr = Ptr{T}(unsafe_convert(Ref{T}, t))
-                while nbytes_copied < sizeof(T)
-                    s[] = a.parent[ind_start + i, tailinds...]
-                    nb = min(sizeof(S) - sidx, sizeof(T)-nbytes_copied)
-                    _memcpy!(tptr + nbytes_copied, sptr + sidx, nb)
-                    nbytes_copied += nb
-                    sidx = 0
-                    i += 1
-                end
-            end
-            return t[]
-        end
-    end
 end
 
-@inline @propagate_inbounds function _getindex_ra(a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+@inline @propagate_inbounds function _getindex_ra(::TC,a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {TC<:TypecastStyle,T,N,S,TT}
     # Make sure to match the scalar reinterpret if that is applicable
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         if issingletontype(T) # singleton types
