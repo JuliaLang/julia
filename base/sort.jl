@@ -86,7 +86,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
-    _sort!(v, QuickerSort(k), o, (;))
+    _sort!(v, InitialOptimizations(QuickerSort(k)), o, (;))
     maybeview(v, k)
 end
 
@@ -1160,7 +1160,9 @@ end
 """
     InitialOptimizations(next) <: Algorithm
 
-Attempt to apply a suite of low-cost optimizations to the input vector before sorting.
+Attempt to apply a suite of low-cost optimizations to the input vector before sorting. These
+optimizations may be automatically applied by the `sort!` family of functions when
+`alg=InsertionSort`, `alg=MergeSort`, or `alg=QuickSort` is passed as an argument.
 
 `InitialOptimizations` is an implementation detail and subject to change or removal in
 future versions of Julia.
@@ -1347,7 +1349,7 @@ function sort!(v::AbstractVector{T};
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward,
                scratch::Union{Vector{T}, Nothing}=nothing) where T
-    _sort!(v, alg, ord(lt,by,rev,order), (;scratch))
+    _sort!(v, maybe_apply_initial_optimizations(alg), ord(lt,by,rev,order), (;scratch))
     v
 end
 
@@ -1474,7 +1476,7 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
     end
 
     # do partial quicksort
-    _sort!(ix, QuickerSort(k), Perm(ord(lt, by, rev, order), v), (;))
+    _sort!(ix, InitialOptimizations(QuickerSort(k)), Perm(ord(lt, by, rev, order), v), (;))
 
     maybeview(ix, k)
 end
@@ -1679,11 +1681,11 @@ function sort(A::AbstractArray{T};
         pdims = (dim, setdiff(1:ndims(A), dim)...)  # put the selected dimension first
         Ap = permutedims(A, pdims)
         Av = vec(Ap)
-        sort_chunks!(Av, n, alg, order, scratch)
+        sort_chunks!(Av, n, maybe_apply_initial_optimizations(alg), order, scratch)
         permutedims(Ap, invperm(pdims))
     else
         Av = A[:]
-        sort_chunks!(Av, n, alg, order, scratch)
+        sort_chunks!(Av, n, maybe_apply_initial_optimizations(alg), order, scratch)
         reshape(Av, axes(A))
     end
 end
@@ -1746,7 +1748,7 @@ function sort!(A::AbstractArray{T};
                rev::Union{Bool,Nothing}=nothing,
                order::Ordering=Forward, # TODO stop eagerly over-allocating.
                scratch::Union{Vector{T}, Nothing}=similar(A, size(A, dims))) where T
-    __sort!(A, Val(dims), alg, ord(lt, by, rev, order), scratch)
+    __sort!(A, Val(dims), maybe_apply_initial_optimizations(alg), ord(lt, by, rev, order), scratch)
 end
 function __sort!(A::AbstractArray{T}, ::Val{K},
                 alg::Algorithm,
@@ -1910,6 +1912,11 @@ Characteristics:
   * *divide-and-conquer* sort strategy.
 """
 const MergeSort     = MergeSortAlg()
+
+maybe_apply_initial_optimizations(alg::Algorithm) = alg
+maybe_apply_initial_optimizations(alg::QuickSortAlg) = InitialOptimizations(alg)
+maybe_apply_initial_optimizations(alg::MergeSortAlg) = InitialOptimizations(alg)
+maybe_apply_initial_optimizations(alg::InsertionSortAlg) = InitialOptimizations(alg)
 
 # selectpivot!
 #
