@@ -167,7 +167,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod)) {
+    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
         return 1;
     }
     if (!mi->backedges) {

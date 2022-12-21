@@ -1412,7 +1412,7 @@ JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
-JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t);
+JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz);
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
