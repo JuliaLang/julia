@@ -814,15 +814,15 @@ Dates.periods
 with `floor`, `ceil`, or `round`.
 
 ```@docs
-Base.floor(::Dates.TimeType, ::Dates.Period)
-Base.ceil(::Dates.TimeType, ::Dates.Period)
-Base.round(::Dates.TimeType, ::Dates.Period, ::RoundingMode{:NearestTiesUp})
+Base.floor(::Dates.Period, ::Dates.TimeType)
+Base.ceil(::Dates.Period, ::Dates.TimeType)
+Base.round(::Dates.Period, ::Dates.TimeType, ::RoundingMode{:NearestTiesUp})
 ```
 
 Most `Period` values can also be rounded to a specified resolution:
 
 ```@docs
-Base.floor(::Dates.ConvertiblePeriod, ::T) where T <: Dates.ConvertiblePeriod
+Base.floor(::T, ::Dates.ConvertiblePeriod) where T <: Dates.ConvertiblePeriod
 Base.ceil(::Dates.ConvertiblePeriod, ::Dates.ConvertiblePeriod)
 Base.round(::Dates.ConvertiblePeriod, ::Dates.ConvertiblePeriod, ::RoundingMode{:NearestTiesUp})
 ```
