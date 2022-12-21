@@ -349,7 +349,7 @@ The subscripted `rootsᵢ`, `graphᵢ` and `pathsᵢ` variables correspond to th
 
 Since the primary environment is typically the environment of a project you're working on, while environments later in the stack contain additional tools, this is the right trade-off: it's better to break your development tools but keep the project working. When such incompatibilities occur, you'll typically want to upgrade your dev tools to versions that are compatible with the main project.
 
-### Package Extensions
+### [Package Extensions](@id man-extensions)
 
 A package "extension" is a module that is automatically loaded when a specified set of other packages (its "extension dependencies") are loaded in the current Julia session. The extension dependencies of an extension are a subset of those packages listed under the `[weakdeps]` section of a Project file. Extensions are defined under the `[extensions]` section in the project file:
 
