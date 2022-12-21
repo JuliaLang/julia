@@ -413,6 +413,9 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
     JL_GC_PROMISE_ROOTED(ct);
+    for (size_t i = 0; i < 4 ; i++) {
+        ct->rngState[i] = jl_rand();
+    }
 
     return &ct->gcstack;
 }
