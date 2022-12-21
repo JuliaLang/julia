@@ -91,7 +91,7 @@ P7ZIP_VER := 17.04
 P7ZIP_JLL_NAME := p7zip
 
 # PCRE
-PCRE_VER := 10.40
+PCRE_VER := 10.42
 PCRE_JLL_NAME := PCRE2
 
 # SuiteSparse
