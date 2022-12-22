@@ -303,13 +303,14 @@ end
 CC.nsplit_impl(info::NoinlineCallInfo) = CC.nsplit(info.info)
 CC.getsplit_impl(info::NoinlineCallInfo, idx::Int) = CC.getsplit(info.info, idx)
 CC.getresult_impl(info::NoinlineCallInfo, idx::Int) = CC.getresult(info.info, idx)
+CC.call_effects_impl(info::NoinlineCallInfo) = CC.call_effects(info.info)
 
 function CC.abstract_call(interp::NoinlineInterpreter,
     arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
     ret = @invoke CC.abstract_call(interp::CC.AbstractInterpreter,
         arginfo::CC.ArgInfo, si::CC.StmtInfo, sv::CC.InferenceState, max_methods::Union{Int,Nothing})
     if sv.mod in interp.noinline_modules
-        return CC.CallMeta(ret.rt, ret.effects, NoinlineCallInfo(ret.info))
+        return CC.CallMeta(ret.rt, NoinlineCallInfo(ret.info))
     end
     return ret
 end
