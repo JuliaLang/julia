@@ -1,6 +1,6 @@
 # Integers and Floating-Point Numbers
 
-Integers and floating-point values are the basic building blocks of arithmetic and computation.
+Integers and floating-point values are the basic building blocks of arithmetic computation.
 Built-in representations of such values are called numeric primitives, while representations of
 integers and floating-point numbers as immediate values in code are known as numeric literals.
 For example, `1` is an integer literal, while `1.0` is a floating-point literal; their binary
