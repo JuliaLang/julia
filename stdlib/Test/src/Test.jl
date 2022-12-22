@@ -1327,12 +1327,12 @@ also be used for any nested `@testset` invocations. The given options are only
 applied to the test set where they are given. The default test set type
 accepts three boolean options:
 - `verbose`: if `true`, the result summary of the nested testsets is shown even
-when they all pass (the default is `false`).
+  when they all pass (the default is `false`).
 - `showtiming`: if `true`, the duration of each displayed testset is shown
-(the default is `true`).
+  (the default is `true`).
 - `failfast`: if `true`, any test failure or error will cause the testset and any
-child testsets to return immediately (the default is `false`). This can also be set
-globally via the env var `JULIA_TEST_FAILFAST`.
+  child testsets to return immediately (the default is `false`).
+  This can also be set globally via the env var `JULIA_TEST_FAILFAST`.
 
 !!! compat "Julia 1.8"
     `@testset foo()` requires at least Julia 1.8.
@@ -1342,7 +1342,8 @@ globally via the env var `JULIA_TEST_FAILFAST`.
 
 The description string accepts interpolation from the loop indices.
 If no description is provided, one is constructed based on the variables.
-If a function call is provided, its name will be used. Explicit description strings override this behavior.
+If a function call is provided, its name will be used.
+Explicit description strings override this behavior.
 
 By default the `@testset` macro will return the testset object itself, though
 this behavior can be customized in other testset types. If a `for` loop is used

@@ -79,8 +79,9 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
-function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=false,
-                   lattice = OptimizerLattice())
+function verify_ir(ir::IRCode, print::Bool=true,
+                   allow_frontend_forms::Bool=false,
+                   𝕃ₒ::AbstractLattice = OptimizerLattice())
     # For now require compact IR
     # @assert isempty(ir.new_nodes)
     # Verify CFG
@@ -207,7 +208,7 @@ function verify_ir(ir::IRCode, print::Bool=true, allow_frontend_forms::Bool=fals
                 val = stmt.values[i]
                 phiT = ir.stmts[idx][:type]
                 if isa(val, SSAValue)
-                    if !⊑(lattice, types(ir)[val], phiT)
+                    if !⊑(𝕃ₒ, types(ir)[val], phiT)
                         #@verify_error """
                         #    PhiNode $idx, has operand $(val.id), whose type is not a sub lattice element.
                         #    PhiNode type was $phiT

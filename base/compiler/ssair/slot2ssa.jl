@@ -564,7 +564,8 @@ function compute_live_ins(cfg::CFG, defs::Vector{Int}, uses::Vector{Int})
     BlockLiveness(bb_defs, bb_uses)
 end
 
-function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode, sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int)
+function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode,
+    sptypes::Vector{Any}, slottypes::Vector{Any}, nstmts::Int, 𝕃ₒ::AbstractLattice)
     new_typ = Union{}
     for i = 1:length(node.values)
         if isa(node, PhiNode) && !isassigned(node.values, i)
@@ -583,7 +584,7 @@ function recompute_type(node::Union{PhiNode, PhiCNode}, ci::CodeInfo, ir::IRCode
         while isa(typ, DelayedTyp)
             typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
         end
-        new_typ = tmerge(OptimizerLattice(), new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
+        new_typ = tmerge(𝕃ₒ, new_typ, was_maybe_undef ? MaybeUndef(typ) : typ)
     end
     return new_typ
 end
@@ -603,12 +604,11 @@ struct NewPhiCNode
 end
 
 function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
-                        defuses::Vector{SlotInfo}, slottypes::Vector{Any})
+                        defuses::Vector{SlotInfo}, slottypes::Vector{Any},
+                        𝕃ₒ::AbstractLattice)
     code = ir.stmts.inst
     cfg = ir.cfg
     catch_entry_blocks = TryCatchRegion[]
-    lattice = OptimizerLattice()
-    ⊑ₒ = ⊑(lattice)
     for idx in 1:length(code)
         stmt = code[idx]
         if isexpr(stmt, :enter)
@@ -745,7 +745,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
             if isa(typ, DelayedTyp)
                 push!(type_refine_phi, ssaval.id)
             end
-            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(lattice, old_entry[:type], typ)
+            new_typ = isa(typ, DelayedTyp) ? Union{} : tmerge(𝕃ₒ, old_entry[:type], typ)
             old_entry[:type] = new_typ
             old_entry[:inst] = node
             incoming_vals[slot] = ssaval
@@ -882,7 +882,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
                 while isa(typ, DelayedTyp)
                     typ = types(ir)[new_to_regular(typ.phi::NewSSAValue, nstmts)]
                 end
-                new_typ = tmerge(lattice, new_typ, typ)
+                new_typ = tmerge(𝕃ₒ, new_typ, typ)
             end
             node[:type] = new_typ
         end
@@ -895,8 +895,8 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, domtree::DomTree,
         changed = false
         for new_idx in type_refine_phi
             node = new_nodes.stmts[new_idx]
-            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts)
-            if !(node[:type] ⊑ₒ new_typ) || !(new_typ ⊑ₒ node[:type])
+            new_typ = recompute_type(node[:inst]::Union{PhiNode,PhiCNode}, ci, ir, ir.sptypes, slottypes, nstmts, 𝕃ₒ)
+            if !⊑(𝕃ₒ, node[:type], new_typ) || !⊑(𝕃ₒ, new_typ, node[:type])
                 node[:type] = new_typ
                 changed = true
             end

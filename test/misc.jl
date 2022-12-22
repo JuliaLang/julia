@@ -1204,6 +1204,25 @@ end
     end
 end
 
+@kwdef struct Test_kwdef_lineinfo
+    a::String
+end
+@testset "@kwdef constructor line info" begin
+    for method in methods(Test_kwdef_lineinfo)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+@kwdef struct Test_kwdef_lineinfo_sparam{S<:AbstractString}
+    a::S
+end
+@testset "@kwdef constructor line info with static parameter" begin
+    for method in methods(Test_kwdef_lineinfo_sparam)
+        @test method.file === Symbol(@__FILE__)
+        @test ((@__LINE__)-6) ≤ method.line ≤ ((@__LINE__)-5)
+    end
+end
+
 @testset "exports of modules" begin
     for (_, mod) in Base.loaded_modules
         mod === Main && continue # Main exports everything
