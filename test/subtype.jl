@@ -2318,7 +2318,7 @@ T46784{B<:Val, M<:AbstractMatrix} = Tuple{<:Union{B, <:Val{<:B}}, M, Union{Abstr
                                (Tuple{Type{T},Array{Union{T,Nothing},N}} where {T,N})) <: Any
 
     #issue 35698
-    @test_broken typeintersect(Type{Tuple{Array{T,1} where T}}, UnionAll)
+    @test_broken typeintersect(Type{Tuple{Array{T,1} where T}}, UnionAll) != Union{}
 
     #issue 33137
     @test_broken (Tuple{Q,Int} where Q<:Int) <: Tuple{T,T} where T
