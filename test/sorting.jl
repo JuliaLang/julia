@@ -931,6 +931,7 @@ function test_allocs()
     @test 1 == @allocations sortperm(v)
     @test 1 == @allocations sortperm(i, by=sqrt)
     @test 0 == @allocations sort!(v, lt=(a, b) -> hash(a) < hash(b))
+    sort!(Int[], rev=false) # compile
     @test 0 == @allocations sort!(i, rev=false)
     rand!(i)
     @test 0 == @allocations sort!(i, order=Base.Reverse)
