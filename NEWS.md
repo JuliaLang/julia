@@ -148,6 +148,8 @@ Standard library changes
   Set either via the `@testset` kwarg `failfast=true` or by setting env var `JULIA_TEST_FAILFAST`
   to `"true"` i.e. in CI runs to request the job failure be posted eagerly when issues occur ([#45317])
 
+* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a non-boolean value, in the same way as a non-broken test. ([#47804])
+
 #### Dates
 
 #### Downloads
