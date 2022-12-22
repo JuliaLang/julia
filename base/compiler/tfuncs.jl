@@ -1766,12 +1766,6 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     end
     if istuple
         return Type{<:appl}
-    elseif isa(appl, DataType) && appl.name === _NAMEDTUPLE_NAME && length(appl.parameters) == 2 &&
-           (appl.parameters[1] === () || appl.parameters[2] === Tuple{})
-        # if the first/second parameter of `NamedTuple` is known to be empty,
-        # the second/first argument should also be empty tuple type,
-        # so refine it here
-        return Const(NamedTuple{(),Tuple{}})
     end
     ans = Type{appl}
     for i = length(outervars):-1:1
