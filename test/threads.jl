@@ -14,8 +14,31 @@ running_under_rr() = 0 == ccall(:syscall, Int,
     (Int, Int, Int, Int, Int, Int, Int),
     SYS_rrcall_check_presence, 0, 0, 0, 0, 0, 0)
 
+const uv_thread_t = UInt # TODO: this is usually correct (or tolerated by the API), but not guaranteed
+
+function uv_thread_getaffinity()
+    masksize = ccall(:uv_cpumask_size, Cint, ())
+    self = ccall(:uv_thread_self, uv_thread_t, ())
+    ref = Ref(self)
+    cpumask = zeros(Bool, masksize)
+    err = ccall(
+        :uv_thread_getaffinity,
+        Cint,
+        (Ref{uv_thread_t}, Ptr{Bool}, Cssize_t),
+        ref,
+        cpumask,
+        masksize,
+    )
+    Base.uv_error("getaffinity", err)
+    n = something(findlast(cpumask)) # we must have at least one active core
+    resize!(cpumask, n)
+    return cpumask
+end
+
 if Sys.islinux()
-    if Sys.CPU_THREADS > 1 && Sys.which("taskset") !== nothing && !running_under_rr()
+    # Only run this test if we can run on CPUs 0 and 1
+    allowed_cpus = findall(uv_thread_getaffinity())
+    if all(x ∈ allowed_cpus for x in (1,2)) && Sys.which("taskset") !== nothing && !running_under_rr()
         run_with_affinity(spec) = readchomp(`taskset -c $spec $(Base.julia_cmd()) -e "run(\`taskset -p \$(getpid())\`)"`)
         @test endswith(run_with_affinity("1"), "2")
         @test endswith(run_with_affinity("0,1"), "3")
