@@ -54,6 +54,7 @@ extern bool is_mapped_object(void* ref);
 extern bool is_mapped_address(void* addr);
 extern void modify_check(void* ref);
 extern int object_is_managed_by_mmtk(void* addr);
+extern void runtime_panic();
 
 
 

@@ -423,3 +423,9 @@ pub extern "C" fn mmtk_free_aligned(addr: Address) {
 pub extern "C" fn mmtk_gc_poll(tls: VMMutatorThread) {
     memory_manager::gc_poll(&SINGLETON, tls);
 }
+
+#[no_mangle]
+
+pub extern "C" fn runtime_panic() {
+    panic!("Panicking at runtime!")
+}
