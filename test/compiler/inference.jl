@@ -2728,6 +2728,10 @@ end |> only === Int
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
 
+# https://github.com/JuliaLang/julia/pull/47947
+# correct `apply_type` inference of `NamedTuple{(), <:Any}`
+@test (() -> NamedTuple{(), <:Any})() isa UnionAll
+
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union},Any})) == Type
