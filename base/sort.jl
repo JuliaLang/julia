@@ -998,7 +998,8 @@ select_pivot(lo::Integer, hi::Integer) = typeof(hi-lo)(hash(lo) % (hi-lo+1)) + l
 #
 # returns (pivot, pivot_index) where pivot_index is the location the pivot
 # should end up, but does not set t[pivot_index] = pivot
-function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering, v::AbstractVector, rev::Bool)
+function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer, o::Ordering,
+        v::AbstractVector, rev::Bool, pivot_dest::AbstractVector, pivot_index_offset::Integer)
     pivot_index = select_pivot(lo, hi)
     @inbounds begin
         pivot = v[pivot_index]
@@ -1016,14 +1017,16 @@ function partition!(t::AbstractVector, lo::Integer, hi::Integer, offset::Integer
             offset += fx
             lo += 1
         end
+        pivot_index = lo-offset + pivot_index_offset
+        pivot_dest[pivot_index] = pivot
     end
 
-    # pivot_index = lo-offset
-    # t[pivot_index] is whatever it was before
-    # t[<pivot_index] <* pivot, stable
-    # t[>pivot_index] >* pivot, reverse stable
+    # t_pivot_index = lo-offset (i.e. without pivot_index_offset)
+    # t[t_pivot_index] is whatever it was before unless t is the pivot_dest
+    # t[<t_pivot_index] <* pivot, stable
+    # t[>t_pivot_index] >* pivot, reverse stable
 
-    pivot, lo-offset
+    pivot_index
 end
 
 function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
@@ -1037,9 +1040,11 @@ function _sort!(v::AbstractVector, a::QuickerSort, o::Ordering, kw;
     end
 
     while lo < hi && hi - lo > SMALL_THRESHOLD
-        pivot, j = swap ? partition!(v, lo+offset, hi+offset, offset, o, t, rev) : partition!(t, lo, hi, -offset, o, v, rev)
-        j -= !swap*offset
-        @inbounds v[j] = pivot
+        j = if swap
+            partition!(v, lo+offset, hi+offset, offset, o, t, rev, v, 0)
+        else
+            partition!(t, lo, hi, -offset, o, v, rev, v, -offset)
+        end
         swap = !swap
 
         # For QuickerSort(), a.lo === a.hi === missing, so the first two branches get skipped
