@@ -90,6 +90,7 @@ External links:
 #include "julia_assert.h"
 
 #include "staticdata_utils.c"
+#include "precompile_utils.c"
 
 #ifdef __cplusplus
 extern "C" {
@@ -2577,7 +2578,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_mod_list(f, *mod_array);
 }
 
-JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklist, bool_t emit_split,
+JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
 {
     jl_gc_collect(JL_GC_FULL);
@@ -2617,6 +2618,13 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
         jl_gc_enable_finalizers(ct, 0); // make sure we don't run any Julia code concurrently after this point
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist), &extext_methods, &new_specializations, &method_roots_list, &ext_targets, &edges);
 
+        // Generate _native_data`
+        if (jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm) {
+            jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
+            *_native_data = jl_precompile_worklist(worklist, extext_methods, new_specializations);
+            jl_precompile_toplevel_module = NULL;
+        }
+
         if (!emit_split) {
             write_int32(f, 0); // No clone_targets
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
@@ -2624,8 +2632,10 @@ JL_DLLEXPORT void jl_create_system_image(void *_native_data, jl_array_t *worklis
             write_padding(ff, LLT_ALIGN(ios_pos(ff), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(ff));
         }
         datastartpos = ios_pos(ff);
+    } else {
+        *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
     }
-    native_functions = _native_data;
+    native_functions = *_native_data;
     jl_save_system_image_to_stream(ff, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
     native_functions = NULL;
     if (worklist) {
