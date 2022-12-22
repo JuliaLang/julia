@@ -224,3 +224,14 @@
     # hash
     @test hash(r"123"i, zero(UInt)) == hash(Regex("123", "i"), zero(UInt))
 end
+
+@testset "#47936" begin
+    tests = (r"a+[bc]+c",
+             r"a+[bc]{1,2}c",
+             r"(a)+[bc]+c",
+             r"a{1,2}[bc]+c",
+             r"(a+)[bc]+c")
+    for re in tests
+        @test match(re, "ababc").match === SubString("ababc", 3:5)
+    end
+end
