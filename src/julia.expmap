@@ -10,6 +10,8 @@
     jl_*;
     ijl_*;
     _jl_mutex_*;
+    fl_*;
+    ifl_*;
     rec_backtrace;
     julia_*;
     libsupport_init;

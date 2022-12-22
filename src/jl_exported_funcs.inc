@@ -301,6 +301,9 @@
     XX(jl_is_unary_operator) \
     XX(jl_lazy_load_and_lookup) \
     XX(jl_lisp_prompt) \
+    XX(fl_profile) \
+    XX(fl_show_profile) \
+    XX(fl_clear_profile) \
     XX(jl_load) \
     XX(jl_load_) \
     XX(jl_load_and_lookup) \
