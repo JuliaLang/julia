@@ -70,17 +70,10 @@ end
 @deprecate argerror() nothing false
 
 @deprecate round(dt::TimeType,  p::Period, r::RoundingMode{:NearestTiesUp}) round(p, dt, r)
-
 @deprecate round(x::TimeType, p::Period) round(p, x)
-
 @deprecate floor(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period floor(p, x)
-
 @deprecate ceil(x::TimeTypeOrPeriod, p::Type{P}) where P <: Period ceil(p, x)
-
 @deprecate floor(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period floor(oneunit(P), Date(x))
-
 @deprecate ceil(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}) where P <: Period ceil(oneunit(P), Date(x))
-
 @deprecate round(x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period round(oneunit(P), x, r)
-
 @deprecate round(::Type{Date}, x::TimeTypeOrPeriod, ::Type{P}, r::RoundingMode=RoundNearestTiesUp) where P <: Period round(oneunit(P), Date(x), r)
