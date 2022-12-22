@@ -349,11 +349,6 @@ reduce_empty(op::MappingRF, ::Type{T}) where {T} = mapreduce_empty(op.f, op.rf, 
 reduce_empty(op::FilteringRF, ::Type{T}) where {T} = reduce_empty(op.rf, T)
 reduce_empty(op::FlipArgs, ::Type{T}) where {T} = reduce_empty(op.f, T)
 
-# return a function to transform a value of type `T` to be fast when the operation `op` is applied
-_makefast_preproc(op, T) = identity
-# reverse the transform used by makefast_preproc, restoring `x` to a value of type `T`
-_makefast_postproc(op, T, x) = x
-
 """
     Base.mapreduce_empty(f, op, T)
 
@@ -416,11 +411,8 @@ The default is `reduce_first(op, f(x))`.
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
 function _mapreduce(f, op, A::AbstractArrayOrBroadcasted)
-    fT = _return_type(f, Tuple{eltype(A)}) # determine type of f(A[i])
-    preproc = _makefast_preproc(op, fT) # fetch an accelerator, if available
-    ffast = preproc === identity ? f : preproc ∘ f # apply accelerator, if available
-    rfast = _mapreduce(ffast, op, IndexStyle(A), A)
-    return _makefast_postproc(op, fT, rfast)
+    pre_f, op_fast, post = _makefast_mapreduction(f, op, A) # find an accelerator, if available
+    return post(_mapreduce(pre_f, op_fast, IndexStyle(A), A))
 end
 
 function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
@@ -614,34 +606,6 @@ julia> prod(1:5; init = 1.0)
 ```
 """
 prod(a; kw...) = mapreduce(identity, mul_prod, a; kw...)
-
-# The idea behind the following functions is to transform `IEEEFloat` values to native `Signed` values that obey the same `min`/`max` behavior.
-# Namely, the float values must match the semantics of `<` except that `-0.0 < +0.0` and `NaN` is preferred over any other value.
-# In the case that both arguments are `NaN`, either value may be returned.
-# If we reinterpret(Signed,::IEEEFloat), the signed-integer ordering is:
-#   -0.0, ... negative values in ascending magnitude ..., -Inf, -NaN, 0.0, ... positive values in ascending magnitude ..., +Inf, +NaN
-# The desired ordering for min is:
-#   NaN (unspecified sign), -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf
-# The desired ordering for max is:
-#   -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf, NaN (unspecified sign)
-# Achieving this ordering requires two steps:
-#   1) flip the ordering of all values with a negative sign
-#   2) circularly-shift the values so that NaNs are together at the correct end of the spectrum
-# The following functions perform this transformation and reverse it.
-# Under this scheme, we place a total order on every value (including NaNs), although the ordering of NaNs is an implementation detail.
-for (T,S) in ((Float16, Int16), (Float32, Int32), (Float64, Int64))
-    topval = flipifneg(reinterpret(S, typemax(T)))
-    botval = flipifneg(reinterpret(S, typemin(T)))
-    offset_min = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
-    offset_max = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
-
-    @eval _makefast_preproc(op::typeof(min), ::Type{$T}) = (floatorder_min(x::$T) = flipifneg(reinterpret($S, x)) + $offset_min)
-    @eval _makefast_preproc(op::typeof(max), ::Type{$T}) = (floatorder_max(x::$T) = flipifneg(reinterpret($S, x)) + $offset_max)
-    @eval _makefast_preproc(op::typeof(_extrema_rf), ::Type{NTuple{2,$T}}) = (floatorder_extrema((x,y)::NTuple{2,$T}) = (flipifneg(reinterpret($S, x))+$offset_min, flipifneg(reinterpret($S, y))+$offset_max))
-    @eval _makefast_postproc(op::typeof(min), ::Type{$T}, x::$S) = reinterpret($T, flipifneg(x - $offset_min))
-    @eval _makefast_postproc(op::typeof(max), ::Type{$T}, x::$S) = reinterpret($T, flipifneg(x - $offset_max))
-    @eval _makefast_postproc(op::typeof(_extrema_rf), ::Type{NTuple{2,$T}}, (x,y)::NTuple{2,$S}) = (reinterpret($T, flipifneg(x - $offset_min)), reinterpret($T, flipifneg(x - $offset_max)))
-end
 
 """
     maximum(f, itr; [init])
@@ -1336,4 +1300,90 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
         n = (n + x[i]) % T
     end
     return n
+end
+
+"""
+    Base._FastMapReduce(transform, mapfun)
+
+Essentially a [`ComposedFunction`](@ref) but with limited functionality and
+a few specialized methods so that it can initialize collections properly.
+
+Used with `mapreduce` in some situations.
+"""
+struct _FastMapReduce{A,B}
+    trans::A
+    f::B
+end
+# (c::_FastMapReduce)(x...; kw...) = c.trans(c.f(x...; kw...)) # behave like trans ∘ f
+(c::_FastMapReduce)(x) = c.trans(c.f(x)) # behave like trans ∘ f
+mapreduce_empty(c::_FastMapReduce, op, T) = c.trans(mapreduce_empty(c.f, op, T))
+mapreduce_first(c::_FastMapReduce, op, x) = c.trans(mapreduce_first(c.f, op, x))
+
+"""
+    Base._makefast_mapreduction(f, op, A) -> (pre_f, op_fast, post)
+
+Wrapper to call `Base._makefast_reduction(op, T)`, where `T` is the return type of
+`f(::eltype(A))`, and compose the resulting `pre`-function with `f` to make `pre_f`.
+"""
+function _makefast_mapreduction(f, op, A)
+    elT = eltype(A) # try this
+    if elT == Any
+        elT = @default_eltype(A) # try again
+    end
+    fT = _return_type(f, Tuple{elT}) # determine type of f(A[i]), if possible
+    pre, op_fast, post = _makefast_reduction(op, fT) # find an accelerator, if available
+    return _FastMapReduce(pre, f), op_fast, post
+end
+
+"""
+    Base._makefast_reduction(op, T) -> (pre, op_fast, post)
+
+Define a series of functions that can be used accelerate the computation of `op(x, y)`.
+Incorrect results may be produced if it does not hold that `op(x::T, y::T)` and
+`post(op_fast(pre(x::T), pre(y::T)))` produce equivalent results (and further, that this
+holds for arbitrary-length reductions). This can be useful if `op_fast` is much faster
+than `op` after the preprocessing provided by `pre`.
+
+The fallback return value for this method is `(identity, op, identity)`, corresponding
+to no change to the processing.
+"""
+_makefast_reduction(op, T) = (identity, op, identity)
+
+# The idea behind the following functions is to transform `IEEEFloat` values to native `Signed` values that obey the same `min`/`max` behavior.
+# Namely, the float values must match the semantics of `<` except that `-0.0 < +0.0` and `NaN` is preferred over any other value.
+# In the case that both arguments are `NaN`, either value may be returned.
+# If we reinterpret(Signed,::IEEEFloat), the signed-integer ordering is:
+#   -0.0, ... negative values in ascending magnitude ..., -Inf, -NaN, 0.0, ... positive values in ascending magnitude ..., +Inf, +NaN
+# The desired ordering for min is:
+#   NaN (unspecified sign), -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf
+# The desired ordering for max is:
+#   -Inf, ... negative values in descending magnitude ..., -0.0, +0.0, ... positive values in ascending magnitude ..., +Inf, NaN (unspecified sign)
+# Achieving this ordering requires two steps:
+#   1) flip the ordering of all values with a negative sign
+#   2) circularly shift the values so that NaNs are together at the correct end of the spectrum
+# The following functions perform this transformation and reverse it.
+# Under this scheme, we place a total order on every value (including NaNs), although the ordering of NaNs is an implementation detail.
+for (T, S) in ((Float16, Int16), (Float32, Int32), (Float64, Int64))
+    topval = flipifneg(reinterpret(S, typemax(T)))
+    botval = flipifneg(reinterpret(S, typemin(T)))
+    offset_min = typemax(topval) - topval # adding this to a int-interpreted float will place typemax(T) at the top
+    offset_max = typemin(botval) - botval # adding this to a int-interpreted float will place typemin(T) at the bottom
+
+    for (op, offset) in ((min, offset_min), (max, offset_max))
+        @eval function _makefast_reduction(::typeof($op), ::Type{$T})
+            preprocess(x::$T) = reinterpret($T, flipifneg(reinterpret($S, x)) + $offset)
+            reduction(x::$T, y::$T) = reinterpret($T, $op(reinterpret($S, x), reinterpret($S, y)))
+            postprocess(x::$T) = reinterpret($T, flipifneg(reinterpret($S, x) - $offset))
+            return preprocess, reduction, postprocess
+        end
+    end
+
+    @eval function _makefast_reduction(::typeof(_extrema_rf), ::Type{NTuple{2,$T}}) # used for extrema
+        premin, reducemin, postmin = _makefast_reduction(min, $T)
+        premax, reducemax, postmax = _makefast_reduction(max, $T)
+        preprocess((x, y)::NTuple{2,$T}) = (premin(x), premax(y))
+        reduction((x1, y1)::NTuple{2,$T}, (x2, y2)::NTuple{2,$T}) = (reducemin(x1, x2), reducemax(y1, y2))
+        postprocess((x, y)::NTuple{2,$T}) = (postmin(x), postmax(y))
+        return preprocess, reduction, postprocess
+    end
 end
