@@ -4669,3 +4669,15 @@ bar47688() = foo47688()
 @test it_count47688 == 7
 @test isa(foo47688(), NTuple{6, Int})
 @test it_count47688 == 14
+
+# refine instantiation of partially-known NamedTuple that is known to be empty
+@test Base.return_types((Any,)) do Tpl
+    T = NamedTuple{(),Tpl}
+    nt = T(())
+    values(nt)
+end |> only === Tuple{}
+@test Base.return_types((Any,)) do tpl
+    T = NamedTuple{tpl,Tuple{}}
+    nt = T(())
+    keys(nt)
+end |> only === Tuple{}

@@ -2309,6 +2309,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         else
             consistent = ALWAYS_FALSE
             nothrow = false
+            t = refine_partial_type(t)
         end
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
         merge_effects!(interp, sv, effects)
@@ -2327,6 +2328,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 nothrow = isexact
                 t = PartialStruct(t, at.fields::Vector{Any})
             end
+        else
+            t = refine_partial_type(t)
         end
         consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
@@ -2419,6 +2422,19 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t = abstract_eval_value_expr(interp, e, sv)
     end
     return RTEffects(t, effects)
+end
+
+# refine the result of instantiation of partially-known type `t` if some invariant can be assumed
+function refine_partial_type(@nospecialize t)
+    t′ = unwrap_unionall(t)
+    if isa(t′, DataType) && t′.name === _NAMEDTUPLE_NAME && length(t′.parameters) == 2 &&
+        (t′.parameters[1] === () || t′.parameters[2] === Tuple{})
+        # if the first/second parameter of `NamedTuple` is known to be empty,
+        # the second/first argument should also be empty tuple type,
+        # so refine it here
+        return Const(NamedTuple(()))
+    end
+    return t
 end
 
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode}, mi::Union{MethodInstance, Nothing}=nothing)
