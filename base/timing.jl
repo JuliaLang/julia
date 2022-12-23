@@ -216,7 +216,8 @@ Optionally provide a description string to print before the time report.
 
 In some cases the system will look inside the `@time` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
-compilation time will not be counted. To include this time you can run `@time @eval ...`.
+compilation time will not be counted in the total, but it would still be counted in the
+reported percentage. To report this time fully, you can run `@time @eval ...`.
 
 See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
 [`@allocated`](@ref), and [`@allocations`](@ref).
