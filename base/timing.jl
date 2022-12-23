@@ -216,8 +216,9 @@ Optionally provide a description string to print before the time report.
 
 In some cases the system will look inside the `@time` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
-compilation time will not be counted in the total, but it would still be counted in the
-reported percentage. To report this time fully, you can run `@time @eval ...`.
+compilation time will not be counted in the total, but may still be counted in the
+reported percentage, potentially even resulting in compilation times >100%. To report
+this time more accurately, you can run `@time @eval ...`.
 
 See also [`@showtime`](@ref), [`@timev`](@ref), [`@timed`](@ref), [`@elapsed`](@ref),
 [`@allocated`](@ref), and [`@allocations`](@ref).
@@ -377,8 +378,9 @@ number of seconds it took to execute as a floating-point number.
 
 In some cases the system will look inside the `@elapsed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
-compilation time will not be counted in the total, but it would still be counted in the
-reported percentage. To report this time fully, you can run `@elapsed @eval ...`.
+compilation time will not be counted in the total, but may still be counted in the
+reported percentage, potentially even resulting in compilation times >100%. To report
+this time more accurately, you can run `@elapsed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@timed`](@ref),
 [`@allocated`](@ref), and [`@allocations`](@ref).
@@ -468,8 +470,9 @@ counters.
 
 In some cases the system will look inside the `@timed` expression and compile some of the
 called code before execution of the top-level expression begins. When that happens, some
-compilation time will not be counted in the total, but it would still be counted in the
-reported percentage. To report this time fully, you can run `@timed @eval ...`.
+compilation time will not be counted in the total, but may still be counted in the
+reported percentage, potentially even resulting in compilation times >100%. To report
+this time more accurately, you can run `@timed @eval ...`.
 
 See also [`@time`](@ref), [`@timev`](@ref), [`@elapsed`](@ref),
 [`@allocated`](@ref), and [`@allocations`](@ref).
