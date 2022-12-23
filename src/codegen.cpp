@@ -156,7 +156,7 @@ typedef Instruction TerminatorInst;
 #endif
 
 #include "jitlayers.h"
-#include "codegen_shared.h"
+#include "llvm-codegen-shared.h"
 #include "processor.h"
 #include "julia_assert.h"
 
@@ -188,7 +188,7 @@ STATISTIC(EmittedFunctions, "Number of functions emitted");
 extern "C" JL_DLLEXPORT
 void jl_dump_emitted_mi_name_impl(void *s)
 {
-    **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (JL_STREAM*)s;
+    **jl_ExecutionEngine->get_dump_emitted_mi_name_stream() = (ios_t*)s;
 }
 
 extern "C" {
