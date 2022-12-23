@@ -560,14 +560,11 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;
 void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) JL_NOTSAFEPOINT // val isa jl_value_t*
 {
-    if (__unlikely(jl_astaggedvalue(bnd)->bits.gc == 3 &&
-                   (jl_astaggedvalue(val)->bits.gc & 1) == 0))
-        jl_gc_queue_binding(bnd);
+    jl_gc_wb(bnd, val);
 }
 
 STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
@@ -698,6 +695,7 @@ JL_DLLEXPORT jl_value_t *jl_instantiate_type_in_env(jl_value_t *ty, jl_unionall_
 jl_value_t *jl_substitute_var(jl_value_t *t, jl_tvar_t *var, jl_value_t *val);
 JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u);
+JL_DLLEXPORT jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u);
 int jl_count_union_components(jl_value_t *v);
 JL_DLLEXPORT jl_value_t *jl_nth_union_component(jl_value_t *v JL_PROPAGATES_ROOT, int i) JL_NOTSAFEPOINT;
 int jl_find_union_component(jl_value_t *haystack, jl_value_t *needle, unsigned *nth) JL_NOTSAFEPOINT;
@@ -1542,6 +1540,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_return_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lineinfo_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lambda_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_assign_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_binding_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_globalref_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_do_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_method_sym;

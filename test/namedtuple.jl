@@ -26,6 +26,7 @@
 @test (x=4, y=5, z=6)[[:x, :y]] == (x=4, y=5)
 @test (x=4, y=5, z=6)[[:x]] == (x=4,)
 @test (x=4, y=5, z=6)[()] == NamedTuple()
+@test (x=4, y=5, z=6)[:] == (x=4, y=5, z=6)
 @test NamedTuple()[()] == NamedTuple()
 @test_throws ErrorException (x=4, y=5, z=6).a
 @test_throws BoundsError (a=2,)[0]

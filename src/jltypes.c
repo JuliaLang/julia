@@ -1093,12 +1093,36 @@ jl_value_t *jl_unwrap_unionall(jl_value_t *v)
 }
 
 // wrap `t` in the same unionalls that surround `u`
+// where `t` is derived from `u`, so the error checks in jl_type_unionall are unnecessary
 jl_value_t *jl_rewrap_unionall(jl_value_t *t, jl_value_t *u)
 {
     if (!jl_is_unionall(u))
         return t;
-    JL_GC_PUSH1(&t);
     t = jl_rewrap_unionall(t, ((jl_unionall_t*)u)->body);
+    jl_tvar_t *v = ((jl_unionall_t*)u)->var;
+    // normalize `T where T<:S` => S
+    if (t == (jl_value_t*)v)
+        return v->ub;
+    // where var doesn't occur in body just return body
+    if (!jl_has_typevar(t, v))
+        return t;
+    JL_GC_PUSH1(&t);
+    //if (v->lb == v->ub)  // TODO maybe
+    //    t = jl_substitute_var(body, v, v->ub);
+    //else
+    t = jl_new_struct(jl_unionall_type, v, t);
+    JL_GC_POP();
+    return t;
+}
+
+// wrap `t` in the same unionalls that surround `u`
+// where `t` is extended from `u`, so the checks in jl_rewrap_unionall are unnecessary
+jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
+{
+    if (!jl_is_unionall(u))
+        return t;
+    t = jl_rewrap_unionall_(t, ((jl_unionall_t*)u)->body);
+    JL_GC_PUSH1(&t);
     t = jl_new_struct(jl_unionall_type, ((jl_unionall_t*)u)->var, t);
     JL_GC_POP();
     return t;
@@ -1886,7 +1910,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
-        if (jl_is_typevar(n)) {
+        if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
             // TODO: this is disabled due to #39698; it is also inconsistent
             // with other similar checks, where we usually only check substituted
             // values and not the bounds of variables.
@@ -2703,6 +2727,16 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
+    jl_binding_type =
+        jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(6, "name", "value", "globalref", "owner", "ty", "flags"),
+                        jl_svec(6, jl_symbol_type, jl_any_type, jl_any_type/*jl_globalref_type*/, jl_module_type, jl_any_type, jl_uint8_type),
+                        jl_emptysvec, 0, 1, 1);
+    const static uint32_t binding_constfields[1]  = { 0x0001 }; // Set fields 1 as const
+    const static uint32_t binding_atomicfields[1] = { 0x0016 }; // Set fields 2, 3, 5 as atomic
+    jl_binding_type->name->constfields = binding_constfields;
+    jl_binding_type->name->atomicfields = binding_atomicfields;
+
     jl_globalref_type =
         jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(3, "mod", "name", "binding"),
@@ -2748,6 +2782,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 13, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 14, jl_voidpointer_type);
+    jl_svecset(jl_binding_type->types, 2, jl_globalref_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
