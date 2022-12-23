@@ -245,15 +245,16 @@ function generate_precompile_statements()
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Extract the precompile statements from the precompile file
-    statements = Set{String}()
+    statements_step1 = Channel{String}(Inf)
+    statements_step2 = Channel{String}(Inf)
 
     # From hardcoded statements
     for statement in split(hardcoded_precompile_statements::String, '\n')
-        push!(statements, statement)
+        push!(statements_step1, statement)
     end
 
     # Collect statements from running the script
-    mktempdir() do prec_path
+    @async mktempdir() do prec_path
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
@@ -275,12 +276,13 @@ function generate_precompile_statements()
         for f in (tmp_prec, tmp_proc)
             for statement in split(read(f, String), '\n')
                 occursin("Main.", statement) && continue
-                push!(statements, statement)
+                push!(statements_step1, statement)
             end
         end
+        close(statements_step1)
     end
 
-    mktemp() do precompile_file, precompile_file_h
+    @async mktemp() do precompile_file, precompile_file_h
         # Collect statements from running a REPL process and replaying our REPL script
         pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
@@ -359,8 +361,9 @@ function generate_precompile_statements()
         for statement in split(read(precompile_file, String), '\n')
             # Main should be completely clean
             occursin("Main.", statement) && continue
-            push!(statements, statement)
+            push!(statements_step2, statement)
         end
+        close(statements_step2)
     end
 
     # Create a staging area where all the loaded packages are available
@@ -371,9 +374,12 @@ function generate_precompile_statements()
         end
     end
 
+    # Make statements unique
+    statements = Set{String}()
     # Execute the precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in statements
+    include_time = @elapsed for sts in [statements_step1, statements_step2], statement in sts
+        Base.in!(statement, statements) && continue
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
         occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
