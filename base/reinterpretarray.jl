@@ -165,23 +165,27 @@ struct TypecastToSmaller<: TypecastStyle end
 struct TypecastToLargerInexact <: TypecastStyle end
 struct TypecastToSmallerInexact <: TypecastStyle end
 struct TypecastToSimilar <: TypecastStyle end
+struct TypecastToSimilarWithFields <: TypecastStyle end
 struct TypecastNone <: TypecastStyle end
 
 
 function TypecastStyle(T::Type, S::Type)
     if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
         return TypecastToSimilar()
-    elseif  sizeof(T) % sizeof(S) == 0
+    elseif sizeof(T) == sizeof(S) 
+        return TypecastToSimilarWithFields()
+    elseif  (sizeof(T) % sizeof(S)) == 0
         return TypecastToLarger()
-    elseif sizeof(S) % sizeof(T) == 0
+    elseif (sizeof(S) % sizeof(T)) == 0
         return TypecastToSmaller()
-    elseif  sizeof(T) > sizeof(S) == 0
+    elseif  sizeof(T) > sizeof(S)
         return TypecastToLargerInexact()
-    elseif sizeof(S) > sizeof(T) == 0
+    elseif sizeof(S) > sizeof(T)
         return TypecastToSmallerInexact()
     elseif T == S
         return TypecastNone()
     else
+        #This should not be reachable
         throw(ArgumentError("Can't convert source type to target"))
     end
 end
@@ -197,6 +201,8 @@ StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshaped
 StridedVector{T} = StridedArray{T,1}
 StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
+
+StridedNonReshapeReinterpretArray{T,N,S,A<:Union{DenseArray,StridedFastContiguousSubArray}} = ReinterpretArray{T,N,S,A,false}
 
 strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
 stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
@@ -425,7 +431,7 @@ end
     return reinterpret(T, a.parent[i1, tailinds...])
 end
 
-@inline @propagate_inbounds function _getindex_ra(::TypecastToLarger,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+@inline @propagate_inbounds function _getindex_ra(::TypecastToLarger, a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
     @boundscheck checkbounds(a, i1, tailinds...)
     ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
     # T is bigger than S and contains an integer number of them
@@ -441,7 +447,20 @@ end
     return t[]
 end
 
-@inline @propagate_inbounds function _getindex_ra(::TypecastToSmaller,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
+
+@inline @propagate_inbounds function _getindex_ra(::TypecastToLarger, a::StridedNonReshapeReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {T,N,S,TT}
+    @boundscheck checkbounds(a, i1, tailinds...)
+    ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
+    # T is bigger than S and contains an integer number of them
+    n = sizeof(T) ÷ sizeof(S)
+    t = Ref{T}()
+    p = unsafe_convert(Ptr{T}, pointer(a.parent,LinearIndices(a.parent)[ind_start + 1, tailinds...]))
+    return unsafe_load(p)
+end
+
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSmaller, a::NonReshapedReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {T,N,S,TT}
     @boundscheck checkbounds(a, i1, tailinds...)
     ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
     s = Ref{S}(a.parent[ind_start + 1, tailinds...])
@@ -451,7 +470,8 @@ end
     end
 end
 
-@inline @propagate_inbounds function _getindex_ra(::TC,a::NonReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {TC<:TypecastStyle,T,N,S,TT}
+@inline @propagate_inbounds function _getindex_ra(::TS,a::NonReshapedReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {TS<:TypecastStyle,T,N,S,TT}
 # Make sure to match the scalar reinterpret if that is applicable
     @boundscheck checkbounds(a, i1, tailinds...)
     ind_start, sidx = divrem((i1-1)*sizeof(T), sizeof(S))
@@ -477,51 +497,52 @@ end
     return t[]
 end
 
-@inline @propagate_inbounds function _getindex_ra(::TypecastToSimilar,a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {T,N,S,TT}
-        if issingletontype(T) # singleton types
-            @boundscheck checkbounds(a, i1, tailinds...)
-            return T.instance
-        end
-        return reinterpret(T, a.parent[i1, tailinds...])
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSimilar, a::ReshapedReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {T,N,S,TT}
+    if issingletontype(T) # singleton types
+        @boundscheck checkbounds(a, i1, tailinds...)
+        return T.instance
+    end
+    return reinterpret(T, a.parent[i1, tailinds...])
 end
 
-@inline @propagate_inbounds function _getindex_ra(::TC,a::ReshapedReinterpretArray{T,N,S}, i1::Int, tailinds::TT) where {TC<:TypecastStyle,T,N,S,TT}
-    # Make sure to match the scalar reinterpret if that is applicable
-    if sizeof(T) == sizeof(S) && (fieldcount(T) + fieldcount(S)) == 0
-        if issingletontype(T) # singleton types
-            @boundscheck checkbounds(a, i1, tailinds...)
-            return T.instance
-        end
-        return reinterpret(T, a.parent[i1, tailinds...])
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSimilarWithFields, a::ReshapedReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {T,N,S,TT}
+    t = Ref{T}()
+    GC.@preserve t begin
+    sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
+    # No extra dimension
+    s = a.parent[i1, tailinds...]
+    unsafe_store!(sptr, s)
     end
-    @boundscheck checkbounds(a, i1, tailinds...)
-    if sizeof(T) >= sizeof(S)
-        t = Ref{T}()
-        GC.@preserve t begin
-            sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
-            if sizeof(T) > sizeof(S)
-                # Extra dimension in the parent array
-                n = sizeof(T) ÷ sizeof(S)
-                if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
-                    offset = n * (i1 - firstindex(a))
-                    for i = 1:n
-                        s = a.parent[i + offset]
-                        unsafe_store!(sptr, s, i)
-                    end
-                else
-                    for i = 1:n
-                        s = a.parent[i, i1, tailinds...]
-                        unsafe_store!(sptr, s, i)
-                    end
-                end
-            else
-                # No extra dimension
-                s = a.parent[i1, tailinds...]
-                unsafe_store!(sptr, s)
+    return t[]
+end
+
+@inline @propagate_inbounds function _getindex_ra(::Union{TypecastToLarger, TypecastToLargerInexact}, a::ReshapedReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {T,N,S,TT}
+    t = Ref{T}()
+    GC.@preserve t begin
+        sptr = Ptr{S}(unsafe_convert(Ref{T}, t))
+        # Extra dimension in the parent array
+        n = sizeof(T) ÷ sizeof(S)
+        if isempty(tailinds) && IndexStyle(a.parent) === IndexLinear()
+            offset = n * (i1 - firstindex(a))
+            for i = 1:n
+                s = a.parent[i + offset]
+                unsafe_store!(sptr, s, i)
+            end
+        else
+            for i = 1:n
+                s = a.parent[i, i1, tailinds...]
+                unsafe_store!(sptr, s, i)
             end
         end
-        return t[]
     end
+    return t[]
+end
+
+@inline @propagate_inbounds function _getindex_ra(::TypecastToSmaller,a::ReshapedReinterpretArray{T,N,S},
+        i1::Int, tailinds::TT) where {T,N,S,TT}
     # S is bigger than T and contains an integer number of them
     # n = sizeof(S) ÷ sizeof(T)
     s = Ref{S}()
@@ -532,19 +553,20 @@ end
     end
 end
 
+
 @inline @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
     if isprimitivetype(S) && isprimitivetype(T)
         a.parent[] = reinterpret(S, v)
         return a
     end
-    setindex!(a, v, firstindex(a))
+    @inline setindex!(a, v, firstindex(a))
 end
 
 @inline @propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    @inline _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
@@ -553,7 +575,7 @@ end
         return _setindex_ra!(a, v, i, ())
     end
     inds = _to_subscript_indices(a, i)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    @inline _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @inline @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}
