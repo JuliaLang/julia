@@ -152,8 +152,10 @@ release-candidate: release testall
 	@echo 10. Follow packaging instructions in doc/build/distributing.md to create binary packages for all platforms
 	@echo 11. Upload to AWS, update https://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 12. Update checksums on AWS for tarball and packaged binaries
-	@echo 13. Announce on mailing lists
-	@echo 14. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
+	@echo 13. Update versions.json
+	@echo 14. Push to Juliaup (https://github.com/JuliaLang/juliaup/wiki/Adding-a-Julia-version)
+	@echo 15. Announce on mailing lists
+	@echo 16. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
 
 $(build_man1dir)/julia.1: $(JULIAHOME)/doc/man/julia.1 | $(build_man1dir)
