@@ -275,7 +275,6 @@ function generate_precompile_statements()
         run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
         for f in (tmp_prec, tmp_proc)
             for statement in split(read(f, String), '\n')
-                occursin("Main.", statement) && continue
                 push!(statements_step1, statement)
             end
         end
@@ -359,8 +358,6 @@ function generate_precompile_statements()
         write(debug_output, "\n#### FINISHED ####\n")
 
         for statement in split(read(precompile_file, String), '\n')
-            # Main should be completely clean
-            occursin("Main.", statement) && continue
             push!(statements_step2, statement)
         end
         close(statements_step2)
@@ -378,7 +375,9 @@ function generate_precompile_statements()
     statements = Set{String}()
     # Execute the precompile statements
     n_succeeded = 0
-    include_time = @elapsed for sts in [statements_step1, statements_step2], statement in sts
+    for sts in [statements_step1, statements_step2], statement in sts
+        # Main should be completely clean
+        occursin("Main.", statement) && continue
         Base.in!(statement, statements) && continue
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
@@ -422,13 +421,8 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
-    include_time *= 1e9
-    gen_time = (time_ns() - start_time) - include_time
     tot_time = time_ns() - start_time
-
     println("Precompilation complete. Summary:")
-    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100);     println("%")
-    print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
     print("Total ─────── "); Base.time_print(tot_time);     println()
 
     return
