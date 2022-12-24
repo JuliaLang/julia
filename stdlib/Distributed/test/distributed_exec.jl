@@ -1082,7 +1082,6 @@ function test_add_procs_threaded_blas()
         @warn "Skipping blas num threads tests due to unsupported blas version"
         return
     end
-    @test master_blas_thread_count <= 8 # check that Base set the environment variable in __init__ before LinearAlgebra dlopen'd it
 
     # Test with default enable_threaded_blas false
     processes_added = addprocs_with_testenv(2)
