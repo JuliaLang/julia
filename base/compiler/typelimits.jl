@@ -429,8 +429,8 @@ function tmerge(lattice::ConditionalsLattice, @nospecialize(typea), @nospecializ
     end
     if isa(typea, Conditional) && isa(typeb, Conditional)
         if is_same_conditionals(typea, typeb)
-            thentype = tmerge(typea.thentype, typeb.thentype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
+            elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
                 return Conditional(typea.slot, thentype, elsetype)
             end
@@ -464,8 +464,8 @@ function tmerge(lattice::InterConditionalsLattice, @nospecialize(typea), @nospec
     end
     if isa(typea, InterConditional) && isa(typeb, InterConditional)
         if is_same_conditionals(typea, typeb)
-            thentype = tmerge(typea.thentype, typeb.thentype)
-            elsetype = tmerge(typea.elsetype, typeb.elsetype)
+            thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
+            elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
             if thentype !== elsetype
                 return InterConditional(typea.slot, thentype, elsetype)
             end
@@ -506,6 +506,9 @@ function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @
         for i = 1:type_nfields
             ai = getfield_tfunc(lattice, typea, Const(i))
             bi = getfield_tfunc(lattice, typeb, Const(i))
+            # N.B.: We're assuming here that !isType(aty), because that case
+            # only arises when typea === typeb, which should have been caught
+            # before calling this.
             ft = fieldtype(aty, i)
             if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
                 # Since ai===bi, the given type has no restrictions on complexity.
@@ -551,6 +554,7 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
     acp = aps || isa(typea, Const)
     bcp = bps || isa(typeb, Const)
     if acp && bcp
+        typea === typeb && return typea
         psrt = tmerge_partial_struct(lattice, typea, typeb)
         psrt !== nothing && return psrt
     end
@@ -586,21 +590,36 @@ function tmerge(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(ty
     return tmerge(wl, typea, typeb)
 end
 
+
 function tmerge(lattice::ConstsLattice, @nospecialize(typea), @nospecialize(typeb))
-    # the equality of the constants can be checked here, but the equivalent check is usually
-    # done by `tmerge_fast_path` at earlier lattice stage
+    acp = isa(typea, Const) || isa(typea, PartialTypeVar)
+    bcp = isa(typeb, Const) || isa(typeb, PartialTypeVar)
+    if acp && bcp
+        typea === typeb && return typea
+    end
     wl = widenlattice(lattice)
-    (isa(typea, Const) || isa(typea, PartialTypeVar)) && (typea = widenlattice(wl, typea))
-    (isa(typeb, Const) || isa(typeb, PartialTypeVar)) && (typeb = widenlattice(wl, typeb))
+    acp && (typea = widenlattice(wl, typea))
+    bcp && (typeb = widenlattice(wl, typeb))
     return tmerge(wl, typea, typeb)
 end
 
 function tmerge(::JLTypeLattice, @nospecialize(typea::Type), @nospecialize(typeb::Type))
-    typea == typeb && return typea
     # it's always ok to form a Union of two concrete types
-    if (isconcretetype(typea) || isType(typea)) && (isconcretetype(typeb) || isType(typeb))
+    act = isconcretetype(typea)
+    bct = isconcretetype(typeb)
+    if act && bct
+        # Extra fast path for pointer-egal concrete types
+        (pointer_from_objref(typea) === pointer_from_objref(typeb)) && return typea
+    end
+    if (act || isType(typea)) && (bct || isType(typeb))
         return Union{typea, typeb}
     end
+    typea <: typeb && return typeb
+    typeb <: typea && return typea
+    return tmerge_types_slow(typea, typeb)
+end
+
+@noinline function tmerge_types_slow(@nospecialize(typea::Type), @nospecialize(typeb::Type))
     # collect the list of types from past tmerge calls returning Union
     # and then reduce over that list
     types = Any[]
