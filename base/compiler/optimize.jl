@@ -179,28 +179,18 @@ function ir_to_codeinf!(opt::OptimizationState)
     optdef = linfo.def
     replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
     opt.ir = nothing
-    overrides = widen_all_consts!(src)
+    widen_all_consts!(src)
     src.inferred = true
     # finish updating the result struct
     validate_code_in_debug_mode(linfo, src, "optimized")
-    return src, overrides
+    return src
 end
 
 # widen all Const elements in type annotations
 function widen_all_consts!(src::CodeInfo)
-    local overrides = nothing
-
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     for i = 1:length(ssavaluetypes)
-        extended = ssavaluetypes[i]
-        widened = widenconst(extended)
-        if widened !== extended
-            ssavaluetypes[i] = widened
-            if overrides === nothing
-                overrides = SSAValueTypeOverride[]
-            end
-            push!(overrides, SSAValueTypeOverride(i, extended))
-        end
+        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
@@ -212,7 +202,7 @@ function widen_all_consts!(src::CodeInfo)
 
     src.rettype = widenconst(src.rettype)
 
-    return overrides
+    return src
 end
 
 #########

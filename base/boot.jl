@@ -425,14 +425,13 @@ eval(Core, quote
     function CodeInstance(
         mi::MethodInstance, @nospecialize(rettype), @nospecialize(inferred_const),
         @nospecialize(inferred), const_flags::Int32, min_world::UInt, max_world::UInt,
-        ipo_effects::UInt32, effects::UInt32,
-        @nospecialize(overrides#=::Union{Nothing,Vector{SSAValueTypeOverride}}=#),
-        @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
+        ipo_effects::UInt32, effects::UInt32, @nospecialize(argescapes#=::Union{Nothing,Vector{ArgEscapeInfo}}=#),
         relocatability::UInt8)
         return ccall(:jl_new_codeinst, Ref{CodeInstance},
-            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, Any, UInt8),
+            (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, UInt32, Any, UInt8),
             mi, rettype, inferred_const, inferred, const_flags, min_world, max_world,
-            ipo_effects, effects, overrides, argescapes, relocatability)
+            ipo_effects, effects, argescapes,
+            relocatability)
     end
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
     # NOTE the main constructor is defined within `Core.Compiler`

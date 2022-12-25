@@ -126,13 +126,6 @@ function codeinst_to_ir(interp::AbstractInterpreter, code::CodeInstance)
     else
         isa(src, CodeInfo) || return nothing
     end
-    # override `ssavaluetypes` with extended lattice information
-    overrides = code.overrides
-    if isa(overrides, SSAValueTypeOverrides)
-        for (; idx, typ) = overrides
-            src.ssavaluetypes[idx] = typ
-        end
-    end
     return inflate_ir(src, mi)
 end
 

@@ -419,7 +419,6 @@ typedef struct _jl_code_instance_t {
     //     uint8_t nonoverlayed        : 1;
     //     uint8_t notaskstate         : 2;
     //     uint8_t inaccessiblememonly : 2;
-    jl_value_t *overrides;  // override information of `inferred`'s ssavaluetypes
     jl_value_t *argescapes; // escape information of call arguments
 
     // compilation state cache
@@ -1475,12 +1474,6 @@ JL_DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, 
 JL_DLLEXPORT jl_value_t *jl_new_structt(jl_datatype_t *type, jl_value_t *tup);
 JL_DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
-JL_DLLEXPORT jl_code_instance_t* jl_new_codeinst(
-        jl_method_instance_t *mi, jl_value_t *rettype,
-        jl_value_t *inferred_const, jl_value_t *inferred,
-        int32_t const_flags, size_t min_world, size_t max_world,
-        uint32_t ipo_effects, uint32_t effects,
-        jl_value_t *overrrides, jl_value_t *argescapes, uint8_t relocatability);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...) JL_MAYBE_UNROOTED;
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);

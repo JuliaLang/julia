@@ -223,7 +223,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceResult)
     if opt isa OptimizationState{typeof(interp)} # implies `may_optimize(interp) === true`
         if opt.ir !== nothing
             if caller.must_be_codeinf
-                caller.src, caller.overrides = ir_to_codeinf!(opt)
+                caller.src = ir_to_codeinf!(opt)
             elseif is_inlineable(opt.src)
                 # TODO: If the CFG is too big, inlining becomes more expensive and if we're going to
                 # use this IR over and over, it's worth simplifying it. Round trips through
@@ -274,7 +274,7 @@ function _typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 # we're doing it is so that code_llvm can return the code
                 # for the `return ...::Const` (which never runs anyway). We should do this
                 # as a post processing step instead.
-                _, caller.overrides = ir_to_codeinf!(opt)
+                ir_to_codeinf!(opt)
                 caller.src = analyzed
             end
             caller.valid_worlds = (opt.inlining.et::EdgeTracker).valid_worlds[]
@@ -336,8 +336,8 @@ function CodeInstance(
         widenconst(result_type), rettype_const, inferred_result,
         const_flags, first(valid_worlds), last(valid_worlds),
         # TODO: Actually do something with non-IPO effects
-	    encode_effects(result.ipo_effects), encode_effects(result.ipo_effects),
-        result.overrides, result.argescapes, relocatability)
+	    encode_effects(result.ipo_effects), encode_effects(result.ipo_effects), result.argescapes,
+        relocatability)
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInstance, ci::CodeInfo)
@@ -368,8 +368,10 @@ end
 function transform_result_for_cache(interp::AbstractInterpreter,
     linfo::MethodInstance, valid_worlds::WorldRange, result::InferenceResult)
     inferred_result = result.src
+    # If we decided not to optimize, drop the OptimizationState now.
+    # External interpreters can override as necessary to cache additional information
     if inferred_result isa OptimizationState{typeof(interp)}
-        inferred_result, result.overrides = ir_to_codeinf!(inferred_result)
+        inferred_result = ir_to_codeinf!(inferred_result)
     end
     if inferred_result isa CodeInfo
         inferred_result.min_world = first(valid_worlds)
