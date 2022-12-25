@@ -31,6 +31,15 @@ struct StmtInfo
     used::Bool
 end
 
+struct SSAValueTypeOverride
+    idx::Int
+    typ
+    SSAValueTypeOverride(idx::Int, @nospecialize(typ)) = new(idx, typ)
+end
+
+const SSAValueTypeOverrides = Vector{SSAValueTypeOverride}
+const MaybeOverrides = Union{Nothing,SSAValueTypeOverrides}
+
 abstract type ForwardableArgtypes end
 
 """
@@ -42,19 +51,20 @@ A type that represents the result of running type inference on a chunk of code.
 See also [`matching_cache_argtypes`](@ref).
 """
 mutable struct InferenceResult
-    linfo::MethodInstance
-    argtypes::Vector{Any}
-    overridden_by_const::BitVector
-    result                   # ::Type, or InferenceState if WIP
-    src                      # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
-    valid_worlds::WorldRange # if inference and optimization is finished
-    ipo_effects::Effects     # if inference is finished
-    effects::Effects         # if optimization is finished
-    argescapes               # ::ArgEscapeCache if optimized, nothing otherwise
-    must_be_codeinf::Bool    # if this must come out as CodeInfo or leaving it as IRCode is ok
+    const linfo::MethodInstance
+    const argtypes::Vector{Any}
+    const overridden_by_const::BitVector
+    result                    # ::Type, or InferenceState if WIP
+    src                       # ::Union{CodeInfo, IRCode, OptimizationState} if inferred copy is available, nothing otherwise
+    valid_worlds::WorldRange  # if inference and optimization is finished
+    ipo_effects::Effects      # if inference is finished
+    effects::Effects          # if optimization is finished
+    overrides::MaybeOverrides # ::Vector{SSAValueTypeOverride} if optimized, nothing otherwise
+    argescapes                # ::ArgEscapeCache if optimized, nothing otherwise
+    must_be_codeinf::Bool     # if this must come out as CodeInfo or leaving it as IRCode is ok
     function InferenceResult(linfo::MethodInstance, cache_argtypes::Vector{Any}, overridden_by_const::BitVector)
         return new(linfo, cache_argtypes, overridden_by_const, Any, nothing,
-            WorldRange(), Effects(), Effects(), nothing, true)
+            WorldRange(), Effects(), Effects(), nothing, nothing, true)
     end
 end
 function InferenceResult(linfo::MethodInstance)
