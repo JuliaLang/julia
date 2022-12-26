@@ -35,6 +35,7 @@ New library features
 Standard library changes
 ------------------------
 
+* `startswith` now supports seekable `IO` streams ([#43055])
 
 #### Package Manager
 
