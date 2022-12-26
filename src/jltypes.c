@@ -2015,6 +2015,28 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     }
 }
 
+// Widens "core" extended lattice element `t` to the native `Type` representation.
+// The implementation of this function should sync with those of the corresponding `widenconst`s.
+JL_DLLEXPORT jl_value_t *jl_widen_core_extended_info(jl_value_t *t)
+{
+    jl_value_t* tt = jl_typeof(t);
+    if (tt == (jl_value_t*)jl_const_type) {
+        jl_value_t* val = jl_fieldref_noalloc(t, 0);
+        if (jl_isa(val, (jl_value_t*)jl_type_type))
+            return (jl_value_t*)jl_wrap_Type(val);
+        else
+            return jl_typeof(val);
+    }
+    else if (tt == (jl_value_t*)jl_partial_struct_type)
+        return (jl_value_t*)jl_fieldref_noalloc(t, 0);
+    else if (tt == (jl_value_t*)jl_interconditional_type)
+        return (jl_value_t*)jl_bool_type;
+    else if (tt == (jl_value_t*)jl_partial_opaque_type)
+        return (jl_value_t*)jl_fieldref_noalloc(t, 0);
+    else
+        return t;
+}
+
 // initialization -------------------------------------------------------------
 
 static jl_tvar_t *tvar(const char *name)

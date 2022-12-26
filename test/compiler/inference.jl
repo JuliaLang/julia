@@ -4689,3 +4689,15 @@ end
 @test Base.return_types(empty_nt_keys, (Any,)) |> only === Tuple{}
 g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
 @test g() == () # Make sure to actually run this to test this in the inference world age
+
+let # jl_widen_core_extended_info
+    for (extended, widened) = [(Core.Const(42), Int),
+                               (Core.Const(Int), Type{Int}),
+                               (Core.Const(Vector), Type{Vector}),
+                               (Core.PartialStruct(Some{Any}, Any["julia"]), Some{Any}),
+                               (Core.InterConditional(2, Int, Nothing), Bool)]
+        @test @ccall(jl_widen_core_extended_info(extended::Any)::Any) ===
+              Core.Compiler.widenconst(extended) ===
+              widened
+    end
+end
