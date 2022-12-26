@@ -1674,68 +1674,20 @@ end
 
 precompile_test_harness("DynamicExpressions") do load_path
     # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
-    write(joinpath(load_path, "DynamicExpressions.jl"),
+    write(joinpath(load_path, "Float16MWE.jl"),
     """
-    module DynamicExpressions
-    export Node
-
-    mutable struct Node{T}
-        degree::Int  # 0 for constant/variable, 1 for cos/sin, 2 for +/* etc.
-        val::Union{T,Nothing}  # If is a constant, this stores the actual value
-        # ------------------- (possibly undefined below)
-        l::Node{T}  # Left child node. Only defined for degree=1 or degree=2.
-        r::Node{T}  # Right child node. Only defined for degree=2.
-
-        #################
-        ## Constructors:
-        #################
-        Node{T}(d, v) where T = new{T}(d, v)
-        Node{T}(d, v, l) where T = new{T}(d, v, l)
-        Node{T}(d, v, l, r) where T = new{T}(d, v, l, r)
+    module Float16MWE
+    struct Node{T}
+        val::T
     end
-
-    Node(d, v::T) where {T} = Node{T}(d, v)
-    Node(d, v, l::Node{T}) where T = Node{T}(d, v, l)
-    Node(d, v, l::Node{T}, r::Node{T}) where T = Node{T}(d, v, l, r)
-
-    function Base.convert(
-        ::Type{Node{T1}},
-        tree::Node{T2},
-        id_map::IdDict{Node{T2},Node{T1}}=IdDict{Node{T2},Node{T1}}(),
-    ) where {T1,T2}
-        if T1 == T2
-            return tree
-        end
-        get!(id_map, tree) do
-            if tree.degree == 0
-                val = tree.val::T2
-                if !(T2 <: T1)
-                    # e.g., we don't want to convert Float32 to Union{Float32,Vector{Float32}}!
-                    val = convert(T1, val)
-                end
-                Node{T1}(0, val)
-            elseif tree.degree == 1
-                l = convert(Node{T1}, tree.l, id_map)
-                Node(1, nothing, l)
-            else
-                l = convert(Node{T1}, tree.l, id_map)
-                r = convert(Node{T1}, tree.r, id_map)
-                Node(2, nothing, l, r)
-            end
-        end
-    end
-
-    let
-        Base.Experimental.@force_compile
-        convert(Node{Float16}, Node(0, -1.2))
-    end
-
-    end
+    doconvert(::Type{<:Node}, val) = convert(Float16, val)
+    precompile(Tuple{typeof(doconvert), Type{Node{Float16}}, Float64})
+    end # module Float16MWE
     """)
-    Base.compilecache(Base.PkgId("DynamicExpressions"))
-    (@eval (using DynamicExpressions))
+    Base.compilecache(Base.PkgId("Float16MWE"))
+    (@eval (using Float16MWE))
     Base.invokelatest() do
-        @test convert(Node{Float16}, Node(0, -1.2)).val === Float16(-1.2)
+        @test Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2) === Float16(-1.2)
     end
 end
 
