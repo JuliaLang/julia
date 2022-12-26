@@ -542,6 +542,9 @@ success(cmd::AbstractCmd) = success(_spawn(cmd))
 Indicates problematic exit status of a process.
 When running commands or pipelines, this is thrown to indicate
 a nonzero exit code was returned (i.e. that the invoked process failed).
+
+!!! compat "Julia 1.2"
+    This function requires at least Julia 1.2.
 """
 struct ProcessFailedException <: Exception
     procs::Vector{Process}
