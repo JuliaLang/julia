@@ -516,14 +516,15 @@ precompile_test_harness(false) do dir
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tuple{<:Vector, String}
+    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String} : Tuple{<:Vector, Nothing}
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String} : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tuple{<:Vector, String}
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
     @eval using FooBar
     fb_uuid = Base.module_build_id(FooBar)
@@ -535,7 +536,7 @@ precompile_test_harness(false) do dir
     @test !isfile(joinpath(cachedir, "FooBar1.ji"))
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tuple{<:Vector, String}
+    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
     @test fb_uuid != fb_uuid1
@@ -1668,6 +1669,73 @@ precompile_test_harness("PkgCacheInspector") do load_path
     @test any(new_specializations) do ci
         mi = ci.def
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+    end
+end
+
+precompile_test_harness("DynamicExpressions") do load_path
+    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+    write(joinpath(load_path, "DynamicExpressions.jl"),
+    """
+    module DynamicExpressions
+    export Node
+
+    mutable struct Node{T}
+        degree::Int  # 0 for constant/variable, 1 for cos/sin, 2 for +/* etc.
+        val::Union{T,Nothing}  # If is a constant, this stores the actual value
+        # ------------------- (possibly undefined below)
+        l::Node{T}  # Left child node. Only defined for degree=1 or degree=2.
+        r::Node{T}  # Right child node. Only defined for degree=2.
+
+        #################
+        ## Constructors:
+        #################
+        Node{T}(d, v) where T = new{T}(d, v)
+        Node{T}(d, v, l) where T = new{T}(d, v, l)
+        Node{T}(d, v, l, r) where T = new{T}(d, v, l, r)
+    end
+
+    Node(d, v::T) where {T} = Node{T}(d, v)
+    Node(d, v, l::Node{T}) where T = Node{T}(d, v, l)
+    Node(d, v, l::Node{T}, r::Node{T}) where T = Node{T}(d, v, l, r)
+
+    function Base.convert(
+        ::Type{Node{T1}},
+        tree::Node{T2},
+        id_map::IdDict{Node{T2},Node{T1}}=IdDict{Node{T2},Node{T1}}(),
+    ) where {T1,T2}
+        if T1 == T2
+            return tree
+        end
+        get!(id_map, tree) do
+            if tree.degree == 0
+                val = tree.val::T2
+                if !(T2 <: T1)
+                    # e.g., we don't want to convert Float32 to Union{Float32,Vector{Float32}}!
+                    val = convert(T1, val)
+                end
+                Node{T1}(0, val)
+            elseif tree.degree == 1
+                l = convert(Node{T1}, tree.l, id_map)
+                Node(1, nothing, l)
+            else
+                l = convert(Node{T1}, tree.l, id_map)
+                r = convert(Node{T1}, tree.r, id_map)
+                Node(2, nothing, l, r)
+            end
+        end
+    end
+
+    let
+        Base.Experimental.@force_compile
+        convert(Node{Float16}, Node(0, -1.2))
+    end
+
+    end
+    """)
+    Base.compilecache(Base.PkgId("DynamicExpressions"))
+    (@eval (using DynamicExpressions))
+    Base.invokelatest() do
+        @test convert(Node{Float16}, Node(0, -1.2)).val === Float16(-1.2)
     end
 end
 
