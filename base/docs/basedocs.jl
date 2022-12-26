@@ -2180,7 +2180,7 @@ the function `op`.
     return y => z
 
 If supported by the hardware (for example, atomic increment), this may be
-optimized to the appropriate hardware instruction, otherwise it'll use a loop.
+optimized to the appropriate hardware instruction, otherwise it'll use a lock.
 """
 modifyfield!
 
@@ -2201,7 +2201,7 @@ a given value.
     return (; old = y, success = ok)
 
 If supported by the hardware, this may be optimized to the appropriate hardware
-instruction, otherwise it'll use a loop.
+instruction, otherwise it'll use a lock.
 """
 replacefield!
 
