@@ -979,6 +979,12 @@ function _include_from_serialized(pkg::PkgId, path::String, depmods::Vector{Any}
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
+                for extid in EXT_DORMITORY
+                    if extid.id == pkg
+                        print(extid.parentid.name, " → ")
+                        break
+                    end
+                end
                 print(pkg.name)
                 if comp_time > 0
                     printstyled(" ", Ryu.writefixed(Float64(100 * comp_time / (elapsed * 1e6)), 2), "% compilation time", color = Base.info_color())
@@ -1102,7 +1108,7 @@ function run_extension_callbacks(; force::Bool=false)
         for extid in EXT_DORMITORY
             extid.succeeded && continue
             !force && extid.triggered && continue
-            if all(x -> haskey(Base.loaded_modules, x), extid.triggers)
+            if all(x -> haskey(Base.loaded_modules, x) && !haskey(package_locks, x), extid.triggers)
                 ext_not_allowed_load = nothing
                 extid.triggered = true
                 # It is possible that some of the triggers were loaded in an environment

@@ -227,6 +227,8 @@ else
 $(eval $(call symlink_system_library,CSL,libgcc_s,1))
 endif
 endif
+else
+$(eval $(call symlink_system_library,CSL,libgcc_s,1))
 endif
 ifneq (,$(LIBGFORTRAN_VERSION))
 $(eval $(call symlink_system_library,CSL,libgfortran,$(LIBGFORTRAN_VERSION)))

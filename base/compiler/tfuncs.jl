@@ -295,18 +295,19 @@ end
     end
     return egal_tfunc(widenlattice(𝕃), x, y)
 end
-@nospecs function egal_tfunc(::ConstsLattice, x, y)
+@nospecs function egal_tfunc(𝕃::ConstsLattice, x, y)
     if isa(x, Const) && isa(y, Const)
         return Const(x.val === y.val)
-    elseif !hasintersect(widenconst(x), widenconst(y))
-        return Const(false)
     elseif (isa(x, Const) && y === typeof(x.val) && issingletontype(x)) ||
            (isa(y, Const) && x === typeof(y.val) && issingletontype(y))
         return Const(true)
     end
+    return egal_tfunc(widenlattice(𝕃), x, y)
+end
+@nospecs function egal_tfunc(::JLTypeLattice, x, y)
+    hasintersect(widenconst(x), widenconst(y)) || return Const(false)
     return Bool
 end
-@nospecs egal_tfunc(::JLTypeLattice, x, y) = Bool
 add_tfunc(===, 2, 2, egal_tfunc, 1)
 
 @nospecs function isdefined_nothrow(𝕃::AbstractLattice, x, name)
@@ -1766,12 +1767,6 @@ const _tvarnames = Symbol[:_A, :_B, :_C, :_D, :_E, :_F, :_G, :_H, :_I, :_J, :_K,
     end
     if istuple
         return Type{<:appl}
-    elseif isa(appl, DataType) && appl.name === _NAMEDTUPLE_NAME && length(appl.parameters) == 2 &&
-           (appl.parameters[1] === () || appl.parameters[2] === Tuple{})
-        # if the first/second parameter of `NamedTuple` is known to be empty,
-        # the second/first argument should also be empty tuple type,
-        # so refine it here
-        return Const(NamedTuple{(),Tuple{}})
     end
     ans = Type{appl}
     for i = length(outervars):-1:1
