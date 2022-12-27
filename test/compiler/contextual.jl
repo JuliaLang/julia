@@ -209,7 +209,11 @@ try
      @test length(Bar.mt) == 1
 finally
     rm(load_path, recursive=true, force=true)
-    rm(depot_path, recursive=true, force=true)
+    try
+        rm(depot_path, force=true, recursive=true)
+    catch err
+        @show err
+    end
     filter!((≠)(load_path), LOAD_PATH)
     filter!((≠)(depot_path), DEPOT_PATH)
 end
