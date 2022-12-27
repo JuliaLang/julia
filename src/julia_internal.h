@@ -722,6 +722,7 @@ void jl_init_main_module(void);
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
+JL_DLLEXPORT jl_value_t *jl_widen_core_extended_info(jl_value_t *t);
 
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);

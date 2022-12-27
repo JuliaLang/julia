@@ -4501,7 +4501,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
     jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
     jl_value_t *phiType = NULL;
     if (jl_is_array(ssavalue_types)) {
-        phiType = jl_array_ptr_ref(ssavalue_types, idx);
+        phiType = jl_widen_core_extended_info(jl_array_ptr_ref(ssavalue_types, idx));
     } else {
         phiType = (jl_value_t*)jl_any_type;
     }
@@ -4610,7 +4610,7 @@ static void emit_ssaval_assign(jl_codectx_t &ctx, ssize_t ssaidx_0based, jl_valu
         // e.g. sometimes the information is inconsistent after inlining getfield on a Tuple
         jl_value_t *ssavalue_types = (jl_value_t*)ctx.source->ssavaluetypes;
         if (jl_is_array(ssavalue_types)) {
-            jl_value_t *declType = jl_array_ptr_ref(ssavalue_types, ssaidx_0based);
+            jl_value_t *declType = jl_widen_core_extended_info(jl_array_ptr_ref(ssavalue_types, ssaidx_0based));
             if (declType != slot.typ) {
                 slot = update_julia_type(ctx, slot, declType);
             }
@@ -4949,7 +4949,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     }
     if (jl_is_pinode(expr)) {
         Value *skip = NULL;
-        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_fieldref_noalloc(expr, 1), &skip);
+        return convert_julia_type(ctx, emit_expr(ctx, jl_fieldref_noalloc(expr, 0)), jl_widen_core_extended_info(jl_fieldref_noalloc(expr, 1)), &skip);
     }
     if (!jl_is_expr(expr)) {
         jl_value_t *val = expr;
@@ -4987,13 +4987,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
     else if (head == jl_invoke_sym) {
         assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
+            jl_widen_core_extended_info(jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based));
         return emit_invoke(ctx, ex, expr_t);
     }
     else if (head == jl_invoke_modify_sym) {
         assert(ssaidx_0based >= 0);
         jl_value_t *expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
-            jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
+            jl_widen_core_extended_info(jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based));
         return emit_invoke_modify(ctx, ex, expr_t);
     }
     else if (head == jl_call_sym) {
@@ -5003,7 +5003,8 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             // TODO: this case is needed for the call to emit_expr in emit_llvmcall
             expr_t = (jl_value_t*)jl_any_type;
         else {
-            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type : jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based);
+            expr_t = jl_is_long(ctx.source->ssavaluetypes) ? (jl_value_t*)jl_any_type :
+                jl_widen_core_extended_info(jl_array_ptr_ref(ctx.source->ssavaluetypes, ssaidx_0based));
             is_promotable = ctx.ssavalue_usecount.at(ssaidx_0based) == 1;
         }
         jl_cgval_t res = emit_call(ctx, ex, expr_t, is_promotable);
@@ -7114,7 +7115,7 @@ static jl_llvm_functions_t
                 }
                 jl_varinfo_t &vi = (ctx.phic_slots.emplace(i, jl_varinfo_t(ctx.builder.getContext())).first->second =
                                     jl_varinfo_t(ctx.builder.getContext()));
-                jl_value_t *typ = jl_array_ptr_ref(src->ssavaluetypes, i);
+                jl_value_t *typ = jl_widen_core_extended_info(jl_array_ptr_ref(src->ssavaluetypes, i));
                 vi.used = true;
                 vi.isVolatile = true;
                 vi.value = mark_julia_type(ctx, (Value*)NULL, false, typ);
