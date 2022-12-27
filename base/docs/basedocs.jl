@@ -2850,8 +2850,8 @@ the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
-julia> struct MyType
-           x
+julia> struct MyType{T <: Number}
+           x::T
        end
 
 julia> function Base.getproperty(obj::MyType, sym::Symbol)
