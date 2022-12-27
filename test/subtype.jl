@@ -2314,6 +2314,14 @@ let S1 = Tuple{Int, Any, Union{Val{C1}, C1}} where {R1<:Real, C1<:Union{Complex{
     end
 end
 
+#issue 41561
+@testintersect(Tuple{Val{VT}, Val{VT}} where {N1, VT<:AbstractVector{N1}},
+            Tuple{Val{VN} where {N, VN<:AbstractVector{N}}, Val{Vector{Float64}}},
+            Tuple{Val{Vector{Float64}}, Val{Vector{Float64}}})
+@testintersect(Tuple{Val{VT}, Val{VT}} where {N1, VT<:AbstractVector{N1}},
+            Tuple{Val{Vector{Float64}}, Val{VN} where {N, VN<:AbstractVector{N}}},
+            Tuple{Val{Vector{Float64}}, Val{Vector{Float64}}})
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
@@ -2329,9 +2337,6 @@ end
         Tuple{Type{Vector{Union{T, R}}}, Matrix{Union{T, R}}} where {R<:Real, T<:Real},
     ) === Union{}
 
-    #issue 41561
-    @test_broken typeintersect(Tuple{Vector{VT}, Vector{VT}} where {N1, VT<:AbstractVector{N1}},
-                Tuple{Vector{VN} where {N, VN<:AbstractVector{N}}, Vector{Vector{Float64}}}) !== Union{}
     #issue 40865
     @test_broken Tuple{Set{Ref{Int}}, Set{Ref{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Ref{K}}}
     @test_broken Tuple{Set{Val{Int}}, Set{Val{Int}}} <: Tuple{Set{KV}, Set{K}} where {K,KV<:Union{K,Val{K}}}

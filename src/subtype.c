@@ -65,6 +65,7 @@ typedef struct jl_varbinding_t {
     jl_value_t *lb;
     jl_value_t *ub;
     int8_t right;       // whether this variable came from the right side of `A <: B`
+    int8_t flipped;    // whether this variable has been "flipped" for a fresh subtype check.
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
@@ -771,7 +772,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
@@ -2706,7 +2707,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res=NULL, *save=NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
@@ -3011,6 +3012,56 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOT
     return compareto_var(x, (jl_tvar_t*)y, e, -1) || compareto_var(y, (jl_tvar_t*)x, e, 1);
 }
 
+// flip the env to the correct side (hopefully) to make sure the subtype check make sense.
+static void flip_to_side(jl_value_t *x, jl_stenv_t *e, int R)
+{
+    jl_varbinding_t *temp = NULL;
+    if (jl_has_free_typevars(x)) {
+        temp = e->vars;
+        while (temp != NULL) {
+            if (jl_has_typevar(x, temp->var)) {
+                jl_varbinding_t *btemp = NULL;
+                if (temp->lb == temp->ub && jl_is_typevar(temp->ub))
+                     btemp = lookup(e, (jl_tvar_t*)(temp->lb));
+                if (btemp) {
+                    // if we have fixed `temp` to `btemp`
+                    // then flip `btemp` to the target side (R)
+                    // and flip `temp` to the derived side (R2)
+                    btemp->flipped = R^(btemp->right^btemp->flipped);
+                    btemp->right = R;
+                    int bright = btemp->right^btemp->flipped;
+                    int right = temp->right^temp->flipped;
+                    int R2 = R^(bright^right);
+                    temp->flipped = R2^(temp->right^temp->flipped);
+                    temp->right = R2;
+                }
+                else {
+                    // otherwise just flip `temp` to the target side (R)
+                    temp->flipped = R^(temp->right^temp->flipped);
+                    temp->right = R;
+                }
+            }
+            temp = temp->prev;
+        }
+    }
+}
+
+static int fresh_subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
+{
+    flip_to_side(x, e, 0);
+    flip_to_side(y, e, 1);
+    int sub = subtype_in_env(x, y, e);
+    jl_varbinding_t *temp = e->vars;
+    while (temp != NULL) {
+        if (temp->flipped) {
+            temp->right = !temp->right;
+            temp->flipped = 0;
+        }
+        temp = temp->prev;
+    }
+    return sub;
+}
+
 // `param` means we are currently looking at a parameter of a type constructor
 // (as opposed to being outside any type constructor, or comparing variable bounds).
 // this is used to record the positions where type variables occur for the
@@ -3078,9 +3129,7 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
                     ccheck = 1;
                 }
                 else {
-                    if (R) flip_vars(e);
-                    ccheck = subtype_in_env(xlb, yub, e) && subtype_in_env(ylb, xub, e);
-                    if (R) flip_vars(e);
+                    ccheck = fresh_subtype_in_env(xlb, yub, e) && fresh_subtype_in_env(ylb, xub, e);
                 }
                 if (!ccheck)
                     return jl_bottom_type;
