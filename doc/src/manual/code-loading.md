@@ -389,17 +389,18 @@ When a package with extensions is added to an environment, the `weakdeps` and `e
 are stored in the manifest file in the section for that package. The dependency lookup rules for
 a package are the same as for its "parent" except that the listed extension dependencies are also considered as
 dependencies.
-### Package/Environment Preferences
+
+### [Package/Environment Preferences](@id preferences)
 
 Preferences are dictionaries of metadata that influence package behavior within an environment.
-The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that a particular `.ji` file was built with the same preferences as the current environment before loading it.
+The preferences system supports reading preferences at compile-time, which means that at code-loading time, we must ensure that the precompilation files selected by Julia were built with the same preferences as the current environment before loading them.
 The public API for modifying Preferences is contained within the [Preferences.jl](https://github.com/JuliaPackaging/Preferences.jl) package.
 Preferences are stored as TOML dictionaries within a `(Julia)LocalPreferences.toml` file next to the currently-active project.
 If a preference is "exported", it is instead stored within the `(Julia)Project.toml` instead.
 The intention is to allow shared projects to contain shared preferences, while allowing for users themselves to override those preferences with their own settings in the LocalPreferences.toml file, which should be .gitignored as the name implies.
 
-Preferences that are accessed during compilation are automatically marked as compile-time preferences, and any change recorded to these preferences will cause the Julia compiler to recompile any cached precompilation `.ji` files for that module.
-This is done by serializing the hash of all compile-time preferences during compilation, then checking that hash against the current environment when searching for the proper `.ji` file to load.
+Preferences that are accessed during compilation are automatically marked as compile-time preferences, and any change recorded to these preferences will cause the Julia compiler to recompile any cached precompilation file(s) (`.ji` and corresponding `.so`, `.dll`, or `.dylib` files) for that module.
+This is done by serializing the hash of all compile-time preferences during compilation, then checking that hash against the current environment when searching for the proper file(s) to load.
 
 Preferences can be set with depot-wide defaults; if package Foo is installed within your global environment and it has preferences set, these preferences will apply as long as your global environment is part of your `LOAD_PATH`.
 Preferences in environments higher up in the environment stack get overridden by the more proximal entries in the load path, ending with the currently active project.

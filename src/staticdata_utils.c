@@ -611,11 +611,46 @@ static void write_mod_list(ios_t *s, jl_array_t *a)
     write_int32(s, 0);
 }
 
+JL_DLLEXPORT uint8_t jl_cache_flags(void)
+{
+    // ??OOCDDP
+    uint8_t flags = 0;
+    flags |= (jl_options.use_pkgimages & 1);
+    flags |= (jl_options.debug_level & 3) << 1;
+    flags |= (jl_options.check_bounds & 1) << 2;
+    flags |= (jl_options.opt_level & 3) << 4;
+    // NOTES:
+    // In contrast to check-bounds, inline has no "observable effect"
+    return flags;
+}
+
+JL_DLLEXPORT uint8_t jl_match_cache_flags(uint8_t flags)
+{
+    // 1. Check which flags are relevant
+    uint8_t current_flags = jl_cache_flags();
+    uint8_t supports_pkgimage = (current_flags & 1);
+    uint8_t is_pkgimage = (flags & 1);
+
+    // For .ji packages ignore other flags
+    if (!supports_pkgimage && !is_pkgimage) {
+        return 1;
+    }
+
+    // 2. Check all flags that must be exact
+    uint8_t mask = (1 << 4)-1;
+    if ((flags & mask) != (current_flags & mask))
+        return 0;
+    // 3. allow for higher optimization flags in cache
+    flags >>= 4;
+    current_flags >>= 4;
+    return flags >= current_flags;
+}
+
 // "magic" string and version header of .ji file
 static const int JI_FORMAT_VERSION = 12;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
-static void write_header(ios_t *s)
+static int64_t write_header(ios_t *s, uint8_t pkgimage)
 {
     ios_write(s, JI_MAGIC, strlen(JI_MAGIC));
     write_uint16(s, JI_FORMAT_VERSION);
@@ -627,7 +662,12 @@ static void write_header(ios_t *s)
     const char *branch = jl_git_branch(), *commit = jl_git_commit();
     ios_write(s, branch, strlen(branch)+1);
     ios_write(s, commit, strlen(commit)+1);
+    write_uint8(s, pkgimage);
+    int64_t checksumpos = ios_pos(s);
     write_uint64(s, 0); // eventually will hold checksum for the content portion of this (build_id.hi)
+    write_uint64(s, 0); // eventually will hold dataendpos
+    write_uint64(s, 0); // eventually will hold datastartpos
+    return checksumpos;
 }
 
 // serialize information about the result of deserializing this file
@@ -1206,9 +1246,10 @@ static int readstr_verify(ios_t *s, const char *str, int include_null)
     return 1;
 }
 
-JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s)
+JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s, uint8_t *pkgimage, int64_t *dataendpos, int64_t *datastartpos)
 {
     uint16_t bom;
+    uint64_t checksum = 0;
     if (readstr_verify(s, JI_MAGIC, 0) &&
         read_uint16(s) == JI_FORMAT_VERSION &&
         ios_read(s, (char *) &bom, 2) == 2 && bom == BOM &&
@@ -1218,6 +1259,11 @@ JL_DLLEXPORT uint64_t jl_read_verify_header(ios_t *s)
         readstr_verify(s, JULIA_VERSION_STRING, 1) &&
         readstr_verify(s, jl_git_branch(), 1) &&
         readstr_verify(s, jl_git_commit(), 1))
-        return read_uint64(s);
-    return 0;
+    {
+        *pkgimage = read_uint8(s);
+        checksum = read_uint64(s);
+        *datastartpos = (int64_t)read_uint64(s);
+        *dataendpos = (int64_t)read_uint64(s);
+    }
+    return checksum;
 }
