@@ -68,7 +68,7 @@ function Core.OpaqueClosure(ir::IRCode, env...;
     src.slotnames = fill(:none, nargs+1)
     src.slottypes = copy(ir.argtypes)
     Core.Compiler.replace_code_newstyle!(src, ir, nargs+1)
-    Core.Compiler.widen_all_consts!(src)
+    Core.Compiler.widencompileronly!(src)
     src.inferred = true
     # NOTE: we need ir.argtypes[1] == typeof(env)
 

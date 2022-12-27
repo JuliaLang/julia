@@ -81,6 +81,8 @@ const AnyConditional = Union{Conditional,InterConditional}
 Conditional(cnd::InterConditional) = Conditional(cnd.slot, cnd.thentype, cnd.elsetype)
 InterConditional(cnd::Conditional) = InterConditional(cnd.slot, cnd.thentype, cnd.elsetype)
 
+# TODO make `MustAlias` and `InterMustAlias` recognizable by the codegen system
+
 """
     alias::MustAlias
 
@@ -666,6 +668,33 @@ function tmeet(lattice::OptimizerLattice, @nospecialize(v), @nospecialize(t::Typ
     # TODO: This can probably happen and should be handled
     @assert !isa(v, MaybeUndef)
     tmeet(widenlattice(lattice), v, t)
+end
+
+"""
+    is_core_extended_info(t) -> Bool
+
+Check if extended lattice element `t` is recognizable by the runtime/codegen system.
+
+See also the implementation of `jl_widen_core_extended_info` in jltypes.c.
+"""
+function is_core_extended_info(@nospecialize t)
+    isa(t, Type) && return true
+    isa(t, Const) && return true
+    isa(t, PartialStruct) && return true
+    isa(t, InterConditional) && return true
+    # TODO isa(t, InterMustAlias) && return true
+    isa(t, PartialOpaque) && return true
+    return false
+end
+
+"""
+    widencompileronly(t) -> wt::Any
+
+Widen the extended lattice element `x` so that `wt` is recognizable by the runtime/codegen system.
+"""
+function widencompileronly(@nospecialize t)
+    is_core_extended_info(t) && return t
+    return widenconst(t)
 end
 
 """
