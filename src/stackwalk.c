@@ -1123,7 +1123,10 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
     jlbacktrace();
 }
 
-void _jl_print_task_backtraces(int skip_done) JL_NOTSAFEPOINT
+// Print backtraces for all live tasks, for all threads.
+// WARNING: this is dangerous and can crash if used outside of gdb, if
+// all of Julia's threads are not stopped!
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -1144,7 +1147,7 @@ void _jl_print_task_backtraces(int skip_done) JL_NOTSAFEPOINT
         for (size_t j = 0; j < live_tasks->len; j++) {
             jl_task_t *t = (jl_task_t *)lst[j];
             int t_state = jl_atomic_load_relaxed(&t->_state);
-            if (skip_done && t_state == JL_TASK_STATE_DONE) {
+            if (!show_done && t_state == JL_TASK_STATE_DONE) {
                 continue;
             }
             jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
@@ -1160,17 +1163,6 @@ void _jl_print_task_backtraces(int skip_done) JL_NOTSAFEPOINT
         jl_safe_printf("==== End thread %d\n", ptls2->tid + 1);
     }
     jl_safe_printf("==== Done\n");
-}
-// Print backtraces for all live tasks, for all threads.
-// WARNING: this is dangerous and can crash if used outside of gdb, if
-// all of Julia's threads are not stopped!
-JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
-{
-    _jl_print_task_backtraces(0);
-}
-JL_DLLEXPORT void jl_print_task_backtraces_skip_done(void) JL_NOTSAFEPOINT
-{
-    _jl_print_task_backtraces(1);
 }
 
 #ifdef __cplusplus
