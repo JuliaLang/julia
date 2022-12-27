@@ -152,6 +152,36 @@ function reshape(parent::AbstractArray, ndims::Val{N}) where N
     reshape(parent, rdims(Val(N), axes(parent)))
 end
 
+"""
+    reshape(size...) -> Function
+
+Create a function that reshapes its argument using the given size,
+equivalent to `x -> reshape(x, size...)`. At most one argument may
+be a colon, and `reshape(:)` is equivalent to [`vec`](@ref).
+The returned function is of type `Base.Fix2{typeof(reshape)}`.
+
+# Examples
+
+```jldoctest
+julia> 'a':'z' |> reshape(2, :)
+2×13 reshape(::StepRange{Char, Int64}, 2, 13) with eltype Char:
+ 'a'  'c'  'e'  'g'  'i'  'k'  'm'  'o'  'q'  's'  'u'  'w'  'y'
+ 'b'  'd'  'f'  'h'  'j'  'l'  'n'  'p'  'r'  't'  'v'  'x'  'z'
+
+julia> stack(reshape(2,3), eachrow(rand(7,6))) |> size
+(2, 3, 7)
+```
+
+!!! compat "Julia 1.10"
+    This functionality requires at least Julia 1.10.
+"""
+reshape(size::Integer...) = Base.Fix2(reshape, size)
+function reshape(dims::Union{Integer,Colon}...)
+    count(s -> s isa Colon, dims) > 1 && throw(DimensionMismatch(string("new dimensions ",
+        dims, " may have at most one omitted dimension specified by `Colon()`")))
+    Base.Fix2(reshape, dims)
+end
+
 # Move elements from inds to out until out reaches the desired
 # dimensionality N, either filling with OneTo(1) or collapsing the
 # product of trailing dims into the last element
