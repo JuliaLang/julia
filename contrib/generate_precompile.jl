@@ -242,21 +242,9 @@ const HELP_PROMPT = "help?> "
 # You can disable parallel precompiles generation by setting `false`
 const PARALLEL_PRECOMPILATION = true
 
-function generate_precompile_statements()
-    start_time = time_ns()
-    debug_output = devnull # or stdout
-    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
-
-    # Extract the precompile statements from the precompile file
-    statements_step1 = Channel{String}(Inf)
-    statements_step2 = Channel{String}(Inf)
-
-    # From hardcoded statements
-    for statement in split(hardcoded_precompile_statements::String, '\n')
-        push!(statements_step1, statement)
-    end
-
-    # Printing the current state
+# Printing the current state
+let
+    global print_state
     print_lk = ReentrantLock()
     status = Dict{String, String}(
         "step1" => "W",
@@ -271,6 +259,22 @@ function generate_precompile_statements()
             print("\rCollect (normal($t1), REPL $t2 ($t3)) => Execute $t4")
         end
     end
+end
+
+function generate_precompile_statements()
+    start_time = time_ns()
+    debug_output = devnull # or stdout
+    sysimg = Base.unsafe_string(Base.JLOptions().image_file)
+
+    # Extract the precompile statements from the precompile file
+    statements_step1 = Channel{String}(Inf)
+    statements_step2 = Channel{String}(Inf)
+
+    # From hardcoded statements
+    for statement in split(hardcoded_precompile_statements::String, '\n')
+        push!(statements_step1, statement)
+    end
+
     println("Precompile statements (Waiting, Running, Finished)")
     print_state()
 
