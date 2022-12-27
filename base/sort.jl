@@ -1578,7 +1578,7 @@ function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
             end
         end
     end
-    ix = unsafe_copymutable_LinearIndices(A)
+    ix = copymutable(LinearIndices(A))
     sort!(ix; alg, order = Perm(order, vec(A)), scratch, dims...)
 end
 
@@ -1631,10 +1631,10 @@ julia> sortperm!(p, A; dims=2); p
                    scratch::Union{Vector{T}, Nothing}=nothing,
                    dims...) where T <: Integer #to optionally specify dims argument
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
-    axes(ix) == axes(A) || @noinline throw_sortperm_axis_mismatch_error(ix, A)
+    axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
 
     if !initialized
-        very_unsafe_copyto!(ix, LinearIndices(A))
+        @noinline copyto!(ix, LinearIndices(A))
     end
 
     if rev === true
@@ -1643,13 +1643,6 @@ julia> sortperm!(p, A; dims=2); p
         sort!(ix; alg, order=Perm(ord(lt, by, nothing, order), vec(A)), scratch, dims...)
     end
 end
-
-# TODO stop using these three hacks
-# but check performance, especially unexpected allocations, when removing
-Base.@assume_effects :nothrow very_unsafe_copyto!(a, b) = a .= b
-Base.@assume_effects :nothrow unsafe_copymutable_LinearIndices(A) = copymutable(LinearIndices(A))
-throw_sortperm_axis_mismatch_error(ix, A) =
-    throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
 
 # sortperm for vectors of few unique integers
 function sortperm_int_range(x::Vector{<:Integer}, rangelen, minval)
