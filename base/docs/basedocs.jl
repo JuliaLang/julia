@@ -2871,10 +2871,10 @@ julia> obj.x
 1
 ```
 
-One should overload `getproperty` only when necessary,
-as it can be confusing if the behavior of `obj.f` changes.
-Using methods is often preferable; see
-https://docs.julialang.org/en/v1/manual/style-guide/#Prefer-exported-methods-over-direct-field-access
+One should overload `getproperty` only when necessary, as it can be confusing if 
+the behavior of the syntax `obj.f` is unusual.
+Also note that using methods is often preferable. See also this style guide documentation 
+for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
 [`propertynames`](@ref Base.propertynames) and
