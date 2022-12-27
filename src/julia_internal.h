@@ -992,11 +992,12 @@ JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 
-void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode);
+void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len);
+        const char *sysimg_data, size_t sysimg_len, ios_t *s);
 void jl_get_llvm_gvs(void *native_code, arraylist_t *gvs);
+void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
 JL_DLLEXPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 
@@ -1619,9 +1620,9 @@ extern JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing);
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing);
 
-struct _jl_sysimg_fptrs_t;
+struct _jl_image_fptrs_t;
 
-void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
+void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
 void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
