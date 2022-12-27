@@ -1621,7 +1621,7 @@ julia> sortperm!(p, A; dims=2); p
  2  4
 ```
 """
-@inline function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
+function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
@@ -1634,7 +1634,7 @@ julia> sortperm!(p, A; dims=2); p
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
 
     if !initialized
-        @noinline copyto!(ix, LinearIndices(A))
+        ix .= LinearIndexes(A)
     end
 
     if rev === true
