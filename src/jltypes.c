@@ -1910,7 +1910,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
-        if (jl_is_typevar(n)) {
+        if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
             // TODO: this is disabled due to #39698; it is also inconsistent
             // with other similar checks, where we usually only check substituted
             // values and not the bounds of variables.
@@ -2013,6 +2013,28 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     else {
         assert(jl_field_names(t) == jl_emptysvec);
     }
+}
+
+// Widens "core" extended lattice element `t` to the native `Type` representation.
+// The implementation of this function should sync with those of the corresponding `widenconst`s.
+JL_DLLEXPORT jl_value_t *jl_widen_core_extended_info(jl_value_t *t)
+{
+    jl_value_t* tt = jl_typeof(t);
+    if (tt == (jl_value_t*)jl_const_type) {
+        jl_value_t* val = jl_fieldref_noalloc(t, 0);
+        if (jl_isa(val, (jl_value_t*)jl_type_type))
+            return (jl_value_t*)jl_wrap_Type(val);
+        else
+            return jl_typeof(val);
+    }
+    else if (tt == (jl_value_t*)jl_partial_struct_type)
+        return (jl_value_t*)jl_fieldref_noalloc(t, 0);
+    else if (tt == (jl_value_t*)jl_interconditional_type)
+        return (jl_value_t*)jl_bool_type;
+    else if (tt == (jl_value_t*)jl_partial_opaque_type)
+        return (jl_value_t*)jl_fieldref_noalloc(t, 0);
+    else
+        return t;
 }
 
 // initialization -------------------------------------------------------------

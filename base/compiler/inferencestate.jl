@@ -532,6 +532,8 @@ function print_callstack(sv::InferenceState)
 end
 
 get_curr_ssaflag(sv::InferenceState) = sv.src.ssaflags[sv.currpc]
+add_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] |= flag
+sub_curr_ssaflag!(sv::InferenceState, flag::UInt8) = sv.src.ssaflags[sv.currpc] &= ~flag
 
 function narguments(sv::InferenceState)
     def = sv.linfo.def
