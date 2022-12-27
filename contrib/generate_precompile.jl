@@ -309,7 +309,7 @@ function generate_precompile_statements()
         close(statements_step1)
         print_state("step1" => "F,$n_step1")
     end
-    errormonitor(step1)
+    #errormonitor(step1)
     !PARALLEL_PRECOMPILATION && wait(step1)
 
     step2 = @async mktemp() do precompile_file, precompile_file_h
@@ -396,7 +396,7 @@ function generate_precompile_statements()
         close(statements_step2)
         print_state("step2" => "F,$n_step2")
     end
-    errormonitor(step2)
+    #errormonitor(step2)
     !PARALLEL_PRECOMPILATION && wait(step2)
 
     # Create a staging area where all the loaded packages are available
