@@ -457,6 +457,9 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
+    PARALLEL_PRECOMPILATION && wait(step1)
+    PARALLEL_PRECOMPILATION && wait(step2)
+
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")
     print("Total ─────── "); Base.time_print(tot_time);     println()
