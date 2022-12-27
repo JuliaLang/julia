@@ -250,37 +250,33 @@ function generate_precompile_statements()
     # Extract the precompile statements from the precompile file
     statements_step1 = Channel{String}(Inf)
     statements_step2 = Channel{String}(Inf)
-    # Make statements unique
-    statements = Set{String}()
-    # Variables for statistics
-    n_step0 = n_step1 = n_step2 = 0
-    n_succeeded = 0
-    step1 = step2 = nothing
-    repl_state_global = nothing
 
     # From hardcoded statements
     for statement in split(hardcoded_precompile_statements::String, '\n')
         push!(statements_step1, statement)
-        n_step0 += 1
     end
 
     # Printing the current state
-    function print_state(;repl_state = nothing)
-        if !isnothing(repl_state)
-            repl_state_global = repl_state
+    print_lk = ReentrantLock()
+    status = Dict{String, String}(
+        "step1" => "W",
+        "step2" => "W",
+        "repl" => "0/0",
+        "execute" => "0/0",
+    )
+    function print_state(args::Pair{String,String}...)
+        lock(print_lk) do
+            isempty(args) || push!(status, args...)
+            t1, t2, t3, t4 = (get(status, x, "") for x in ["step1", "repl", "step2", "execute"])
+            print("\rCollect (normal($t1), REPL $t2 ($t3)) => Execute $t4")
         end
-        step0_status = "F,$n_step0"
-        step1_status = (isnothing(step1) ? "W" : isopen(statements_step1) ? "R" : "F") * ",$n_step1"
-        step2_status = (isnothing(step2) ? "W" : isopen(statements_step2) ? "R" : "F") * ",$n_step2"
-        repl_status = isnothing(repl_state_global) ? "" : repl_state_global
-        ex_status = "$n_succeeded/$(length(statements))"
-        print("\rCollect(manual($step0_status), normal($step1_status), REPL $repl_status($step2_status)) => Execute $ex_status")
     end
     println("Precompile statements (Waiting, Running, Finished)")
     print_state()
 
     # Collect statements from running the script
     step1 = @async mktempdir() do prec_path
+        print_state("step1" => "R")
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
@@ -299,6 +295,7 @@ function generate_precompile_statements()
             $precompile_script
             """
         run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        n_step1 = 0
         for f in (tmp_prec, tmp_proc)
             for statement in split(read(f, String), '\n')
                 push!(statements_step1, statement)
@@ -306,12 +303,13 @@ function generate_precompile_statements()
             end
         end
         close(statements_step1)
-        print_state()
+        print_state("step1" => "F,$n_step1")
     end
     errormonitor(step1)
     !PARALLEL_PRECOMPILATION && wait(step1)
 
     step2 = @async mktemp() do precompile_file, precompile_file_h
+        print_state("step2" => "R")
         # Collect statements from running a REPL process and replaying our REPL script
         pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
@@ -360,7 +358,7 @@ function generate_precompile_statements()
             for l in precompile_lines
                 sleep(0.1)
                 curr += 1
-                print_state(repl_state = "$curr/$(length(precompile_lines))")
+                print_state("repl" => "$curr/$(length(precompile_lines))")
                 # consume any other output
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
@@ -386,12 +384,13 @@ function generate_precompile_statements()
         close(ptm)
         write(debug_output, "\n#### FINISHED ####\n")
 
+        n_step2 = 0
         for statement in split(read(precompile_file, String), '\n')
             push!(statements_step2, statement)
             n_step2 += 1
         end
         close(statements_step2)
-        print_state()
+        print_state("step2" => "F,$n_step2")
     end
     errormonitor(step2)
     !PARALLEL_PRECOMPILATION && wait(step2)
@@ -404,6 +403,9 @@ function generate_precompile_statements()
         end
     end
 
+    n_succeeded = 0
+    # Make statements unique
+    statements = Set{String}()
     # Execute the precompile statements
     for sts in [statements_step1, statements_step2], statement in sts
         # Main should be completely clean
@@ -438,7 +440,7 @@ function generate_precompile_statements()
             ps = Core.eval(PrecompileStagingArea, ps)
             precompile(ps...)
             n_succeeded += 1
-            print_state()
+            print_state("execute" => "$n_succeeded/$(length(statements))")
         catch ex
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
