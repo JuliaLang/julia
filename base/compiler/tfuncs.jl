@@ -141,25 +141,35 @@ function instanceof_tfunc(@nospecialize(t))
     end
     return Any, false, false, false
 end
-@nospecs bitcast_tfunc(𝕃::AbstractLattice, t, x) = instanceof_tfunc(t)[1]
-@nospecs math_tfunc(𝕃::AbstractLattice, x) = widenconst(x)
-@nospecs math_tfunc(𝕃::AbstractLattice, x, y) = widenconst(x)
-@nospecs math_tfunc(𝕃::AbstractLattice, x, y, z) = widenconst(x)
-@nospecs fptoui_tfunc(𝕃::AbstractLattice, t, x) = bitcast_tfunc(𝕃, t, x)
-@nospecs fptosi_tfunc(𝕃::AbstractLattice, t, x) = bitcast_tfunc(𝕃, t, x)
 
-    ## conversion ##
+# IntrinsicFunction
+# =================
+
+# conversion
+# ----------
+
+@nospecs bitcast_tfunc(𝕃::AbstractLattice, t, x) = bitcast_tfunc(widenlattice(𝕃), t, x)
+@nospecs bitcast_tfunc(::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
+@nospecs conversion_tfunc(𝕃::AbstractLattice, t, x) = conversion_tfunc(widenlattice(𝕃), t, x)
+@nospecs conversion_tfunc(::JLTypeLattice, t, x) = instanceof_tfunc(t)[1]
+
 add_tfunc(bitcast, 2, 2, bitcast_tfunc, 1)
-add_tfunc(sext_int, 2, 2, bitcast_tfunc, 1)
-add_tfunc(zext_int, 2, 2, bitcast_tfunc, 1)
-add_tfunc(trunc_int, 2, 2, bitcast_tfunc, 1)
-add_tfunc(fptoui, 2, 2, fptoui_tfunc, 1)
-add_tfunc(fptosi, 2, 2, fptosi_tfunc, 1)
-add_tfunc(uitofp, 2, 2, bitcast_tfunc, 1)
-add_tfunc(sitofp, 2, 2, bitcast_tfunc, 1)
-add_tfunc(fptrunc, 2, 2, bitcast_tfunc, 1)
-add_tfunc(fpext, 2, 2, bitcast_tfunc, 1)
-    ## arithmetic ##
+add_tfunc(sext_int, 2, 2, conversion_tfunc, 1)
+add_tfunc(zext_int, 2, 2, conversion_tfunc, 1)
+add_tfunc(trunc_int, 2, 2, conversion_tfunc, 1)
+add_tfunc(fptoui, 2, 2, conversion_tfunc, 1)
+add_tfunc(fptosi, 2, 2, conversion_tfunc, 1)
+add_tfunc(uitofp, 2, 2, conversion_tfunc, 1)
+add_tfunc(sitofp, 2, 2, conversion_tfunc, 1)
+add_tfunc(fptrunc, 2, 2, conversion_tfunc, 1)
+add_tfunc(fpext, 2, 2, conversion_tfunc, 1)
+
+# arithmetic
+# ----------
+
+@nospecs math_tfunc(𝕃::AbstractLattice, args...) = math_tfunc(widenlattice(𝕃), args...)
+@nospecs math_tfunc(::JLTypeLattice, x, xs...) = widenconst(x)
+
 add_tfunc(neg_int, 1, 1, math_tfunc, 1)
 add_tfunc(add_int, 2, 2, math_tfunc, 1)
 add_tfunc(sub_int, 2, 2, math_tfunc, 1)
@@ -178,21 +188,28 @@ add_tfunc(div_float, 2, 2, math_tfunc, 20)
 add_tfunc(rem_float, 2, 2, math_tfunc, 20)
 add_tfunc(fma_float, 3, 3, math_tfunc, 5)
 add_tfunc(muladd_float, 3, 3, math_tfunc, 5)
-    ## fast arithmetic ##
+
+# fast arithmetic
 add_tfunc(neg_float_fast, 1, 1, math_tfunc, 1)
 add_tfunc(add_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(sub_float_fast, 2, 2, math_tfunc, 1)
 add_tfunc(mul_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
 add_tfunc(rem_float_fast, 2, 2, math_tfunc, 10)
-    ## bitwise operators ##
+
+# bitwise operators
+# -----------------
+
+@nospecs shift_tfunc(𝕃::AbstractLattice, x, y) = shift_tfunc(widenlattice(𝕃), x, y)
+@nospecs shift_tfunc(::JLTypeLattice, x, y) = widenconst(x)
+
 add_tfunc(and_int, 2, 2, math_tfunc, 1)
 add_tfunc(or_int, 2, 2, math_tfunc, 1)
 add_tfunc(xor_int, 2, 2, math_tfunc, 1)
 add_tfunc(not_int, 1, 1, math_tfunc, 0) # usually used as not_int(::Bool) to negate a condition
-add_tfunc(shl_int, 2, 2, math_tfunc, 1)
-add_tfunc(lshr_int, 2, 2, math_tfunc, 1)
-add_tfunc(ashr_int, 2, 2, math_tfunc, 1)
+add_tfunc(shl_int, 2, 2, shift_tfunc, 1)
+add_tfunc(lshr_int, 2, 2, shift_tfunc, 1)
+add_tfunc(ashr_int, 2, 2, shift_tfunc, 1)
 add_tfunc(bswap_int, 1, 1, math_tfunc, 1)
 add_tfunc(ctpop_int, 1, 1, math_tfunc, 1)
 add_tfunc(ctlz_int, 1, 1, math_tfunc, 1)
@@ -201,7 +218,10 @@ add_tfunc(checked_sdiv_int, 2, 2, math_tfunc, 40)
 add_tfunc(checked_udiv_int, 2, 2, math_tfunc, 40)
 add_tfunc(checked_srem_int, 2, 2, math_tfunc, 40)
 add_tfunc(checked_urem_int, 2, 2, math_tfunc, 40)
-    ## functions ##
+
+# functions
+# ---------
+
 add_tfunc(abs_float, 1, 1, math_tfunc, 2)
 add_tfunc(copysign_float, 2, 2, math_tfunc, 2)
 add_tfunc(flipsign_int, 2, 2, math_tfunc, 1)
@@ -211,8 +231,13 @@ add_tfunc(trunc_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(rint_llvm, 1, 1, math_tfunc, 10)
 add_tfunc(sqrt_llvm, 1, 1, math_tfunc, 20)
 add_tfunc(sqrt_llvm_fast, 1, 1, math_tfunc, 20)
-    ## same-type comparisons ##
-@nospecs cmp_tfunc(𝕃::AbstractLattice, x, y) = Bool
+
+# comparisons
+# -----------
+
+@nospecs cmp_tfunc(𝕃::AbstractLattice, a, b) = cmp_tfunc(widenlattice(𝕃), a, b)
+@nospecs cmp_tfunc(::JLTypeLattice, a, b) = Bool
+
 add_tfunc(eq_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(ne_int, 2, 2, cmp_tfunc, 1)
 add_tfunc(slt_int, 2, 2, cmp_tfunc, 1)
@@ -229,27 +254,39 @@ add_tfunc(ne_float_fast, 2, 2, cmp_tfunc, 1)
 add_tfunc(lt_float_fast, 2, 2, cmp_tfunc, 1)
 add_tfunc(le_float_fast, 2, 2, cmp_tfunc, 1)
 
-    ## checked arithmetic ##
-@nospecs chk_tfunc(𝕃::AbstractLattice, x, y) = Tuple{widenconst(x), Bool}
+# checked arithmetic
+# ------------------
+
+@nospecs chk_tfunc(𝕃::AbstractLattice, x, y) = chk_tfunc(widenlattice(𝕃), x, y)
+@nospecs chk_tfunc(::JLTypeLattice, x, y) = Tuple{widenconst(x), Bool}
+
 add_tfunc(checked_sadd_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_uadd_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_ssub_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_usub_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_smul_int, 2, 2, chk_tfunc, 10)
 add_tfunc(checked_umul_int, 2, 2, chk_tfunc, 10)
-    ## other, misc intrinsics ##
+
+# other, misc
+# -----------
+
 @nospecs function llvmcall_tfunc(𝕃::AbstractLattice, fptr, rt, at, a...)
     return instanceof_tfunc(rt)[1]
 end
 add_tfunc(Core.Intrinsics.llvmcall, 3, INT_INF, llvmcall_tfunc, 10)
+
 @nospecs cglobal_tfunc(𝕃::AbstractLattice, fptr) = Ptr{Cvoid}
 @nospecs function cglobal_tfunc(𝕃::AbstractLattice, fptr, t)
     isa(t, Const) && return isa(t.val, Type) ? Ptr{t.val} : Ptr
     return isType(t) ? Ptr{t.parameters[1]} : Ptr
 end
 add_tfunc(Core.Intrinsics.cglobal, 1, 2, cglobal_tfunc, 5)
+
 add_tfunc(Core.Intrinsics.have_fma, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Bool), 1)
 add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->Int), 4)
+
+# builtin functions
+# =================
 
 @nospecs function ifelse_tfunc(𝕃::AbstractLattice, cnd, x, y)
     cnd = widenslotwrapper(cnd)
@@ -2306,16 +2343,17 @@ function intrinsic_nothrow(f::IntrinsicFunction, argtypes::Vector{Any})
     f === Intrinsics.llvmcall && return false
     if f === Intrinsics.checked_udiv_int || f === Intrinsics.checked_urem_int || f === Intrinsics.checked_srem_int || f === Intrinsics.checked_sdiv_int
         # Nothrow as long as the second argument is guaranteed not to be zero
-        isa(argtypes[2], Const) || return false
-        if !isprimitivetype(widenconst(argtypes[1])) ||
-           (widenconst(argtypes[1]) !== widenconst(argtypes[2]))
-            return false
-        end
-        den_val = argtypes[2].val
+        arg2 = argtypes[2]
+        isa(arg2, Const) || return false
+        arg1 = argtypes[1]
+        warg1 = widenconst(arg1)
+        warg2 = widenconst(arg2)
+        (warg1 === warg2 && isprimitivetype(warg1)) || return false
+        den_val = arg2.val
         _iszero(den_val) && return false
         f !== Intrinsics.checked_sdiv_int && return true
         # Nothrow as long as we additionally don't do typemin(T)/-1
-        return !_isneg1(den_val) || (isa(argtypes[1], Const) && !_istypemin(argtypes[1].val))
+        return !_isneg1(den_val) || (isa(arg1, Const) && !_istypemin(arg1.val))
     end
     if f === Intrinsics.pointerref
         # Nothrow as long as the types are ok. N.B.: dereferencability is not
