@@ -44,6 +44,11 @@ end
 widenlattice(𝕃::ConditionalsLattice) = 𝕃.parent
 is_valid_lattice_norec(::ConditionalsLattice, @nospecialize(elem)) = isa(elem, Conditional)
 
+"""
+    struct InterConditionalsLattice{𝕃<:AbstractLattice} <: AbstractLattice
+
+A lattice extending a base lattice `𝕃` and adjoining `InterConditional`.
+"""
 struct InterConditionalsLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
 end
@@ -51,29 +56,29 @@ widenlattice(𝕃::InterConditionalsLattice) = 𝕃.parent
 is_valid_lattice_norec(::InterConditionalsLattice, @nospecialize(elem)) = isa(elem, InterConditional)
 
 """
-    struct MustAliasesLattice{𝕃}
+    struct MustAliasesLattice{𝕃<:AbstractLattice}
 
 A lattice extending lattice `𝕃` and adjoining `MustAlias`.
 """
-struct MustAliasesLattice{𝕃 <: AbstractLattice} <: AbstractLattice
+struct MustAliasesLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
 end
 widenlattice(𝕃::MustAliasesLattice) = 𝕃.parent
-is_valid_lattice_norec(𝕃::MustAliasesLattice, @nospecialize(elem)) = isa(elem, MustAlias)
+is_valid_lattice_norec(::MustAliasesLattice, @nospecialize(elem)) = isa(elem, MustAlias)
 
 """
-    struct InterMustAliasesLattice{𝕃}
+    struct InterMustAliasesLattice{𝕃<:AbstractLattice}
 
 A lattice extending lattice `𝕃` and adjoining `InterMustAlias`.
 """
-struct InterMustAliasesLattice{𝕃 <: AbstractLattice} <: AbstractLattice
+struct InterMustAliasesLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
 end
 widenlattice(𝕃::InterMustAliasesLattice) = 𝕃.parent
-is_valid_lattice_norec(𝕃::InterMustAliasesLattice, @nospecialize(elem)) = isa(elem, InterMustAlias)
+is_valid_lattice_norec(::InterMustAliasesLattice, @nospecialize(elem)) = isa(elem, InterMustAlias)
 
-const AnyConditionalsLattice{𝕃} = Union{ConditionalsLattice{𝕃}, InterConditionalsLattice{𝕃}}
-const AnyMustAliasesLattice{𝕃} = Union{MustAliasesLattice{𝕃}, InterMustAliasesLattice{𝕃}}
+const AnyConditionalsLattice{𝕃<:AbstractLattice} = Union{ConditionalsLattice{𝕃}, InterConditionalsLattice{𝕃}}
+const AnyMustAliasesLattice{𝕃<:AbstractLattice} = Union{MustAliasesLattice{𝕃}, InterMustAliasesLattice{𝕃}}
 
 const SimpleInferenceLattice = typeof(PartialsLattice(ConstsLattice()))
 const BaseInferenceLattice = typeof(ConditionalsLattice(SimpleInferenceLattice.instance))
@@ -83,7 +88,7 @@ const IPOResultLattice = typeof(InterConditionalsLattice(SimpleInferenceLattice.
     struct InferenceLattice{𝕃<:AbstractLattice} <: AbstractLattice
 
 The full lattice used for abstract interpretation during inference.
-Takes a base lattice `𝕃` and adjoins `LimitedAccuracy`.
+Extends a base lattice `𝕃` and adjoins `LimitedAccuracy`.
 """
 struct InferenceLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
@@ -94,8 +99,8 @@ is_valid_lattice_norec(::InferenceLattice, @nospecialize(elem)) = isa(elem, Limi
 """
     struct OptimizerLattice{𝕃<:AbstractLattice} <: AbstractLattice
 
-The lattice used by the optimizer. Extends
-`BaseInferenceLattice` with `MaybeUndef`.
+The lattice used by the optimizer.
+Extends a base lattice `𝕃` and adjoins `MaybeUndef`.
 """
 struct OptimizerLattice{𝕃<:AbstractLattice} <: AbstractLattice
     parent::𝕃
