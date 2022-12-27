@@ -7873,3 +7873,28 @@ let # https://github.com/JuliaLang/julia/issues/46918
     @test isempty(String(take!(stderr))) # make sure no error has happened
     @test String(take!(stdout)) == "nothing IO IO"
 end
+
+# issue #47476
+f47476(::Union{Int, NTuple{N,Int}}...) where {N} = N
+# force it to populate the MethodInstance specializations cache
+# with the correct sparams
+code_typed(f47476, (Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Vararg{Union{Int, NTuple{2,Int}}},));
+code_typed(f47476, (Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+code_typed(f47476, (Int, Int, Int, Int, Vararg{Union{Int, NTuple{2,Int}}},))
+@test f47476(1, 2, 3, 4, 5, 6, (7, 8)) === 2
+@test_throws UndefVarError(:N) f47476(1, 2, 3, 4, 5, 6, 7)
+
+vect47476(::Type{T}) where {T} = T
+@test vect47476(Type{Type{Type{Int32}}}) === Type{Type{Type{Int32}}}
+@test vect47476(Type{Type{Type{Int64}}}) === Type{Type{Type{Int64}}}
+
+g47476(::Union{Nothing,Int,Val{T}}...) where {T} = T
+@test_throws UndefVarError(:T) g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5)
+@test g47476(nothing, 1, nothing, 2, nothing, 3, nothing, 4, nothing, 5, Val(6)) === 6
+let spec = only(methods(g47476)).specializations
+    @test !isempty(spec)
+    @test any(mi -> mi !== nothing && Base.isvatuple(mi.specTypes), spec)
+    @test all(mi -> mi === nothing || !Base.has_free_typevars(mi.specTypes), spec)
+end

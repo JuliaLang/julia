@@ -525,7 +525,7 @@ at the time `k` is compiled.
 
 ### Be aware of when Julia avoids specializing
 
-As a heuristic, Julia avoids automatically specializing on argument type parameters in three
+As a heuristic, Julia avoids automatically [specializing](@ref man-method-specializations) on argument type parameters in three
 specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
 used within the method, but not if the argument is just passed through to another function. This
 usually has no performance impact at runtime and

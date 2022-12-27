@@ -878,6 +878,19 @@ static uint32_t sysimg_init_cb(const void *id)
     return match.best_idx;
 }
 
+static uint32_t pkgimg_init_cb(const void *id)
+{
+    TargetData<feature_sz> target = jit_targets.front();
+    auto pkgimg = deserialize_target_data<feature_sz>((const uint8_t*)id);
+    for (auto &t: pkgimg) {
+        if (auto nname = normalize_cpu_name(t.name)) {
+            t.name = nname;
+        }
+    }
+    auto match = match_sysimg_targets(pkgimg, target, max_vector_size);
+    return match.best_idx;
+}
+
 static void ensure_jit_target(bool imaging)
 {
     auto &cmdline = get_cmdline_targets();
@@ -1006,16 +1019,30 @@ JL_DLLEXPORT void jl_dump_host_cpu(void)
                   cpus, ncpu_names);
 }
 
+JL_DLLEXPORT void jl_check_pkgimage_clones(char *data)
+{
+    pkgimg_init_cb(data);
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void)
 {
     return jl_cstr_to_string(host_cpu_name().c_str());
 }
 
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl)
+jl_image_fptrs_t jl_init_processor_sysimg(void *hdl)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
     return parse_sysimg(hdl, sysimg_init_cb);
+}
+
+jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl)
+{
+    if (jit_targets.empty())
+        jl_error("JIT targets not initialized");
+    if (jit_targets.size() > 1)
+        jl_error("Expected only one JIT target");
+    return parse_sysimg(hdl, pkgimg_init_cb);
 }
 
 extern "C" JL_DLLEXPORT std::pair<std::string,std::vector<std::string>> jl_get_llvm_target(bool imaging, uint32_t &flags)

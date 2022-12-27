@@ -118,6 +118,7 @@
     XX(jl_dlopen) \
     XX(jl_dlsym) \
     XX(jl_dump_host_cpu) \
+    XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
@@ -342,6 +343,7 @@
     XX(jl_new_code_info_uninit) \
     XX(jl_new_datatype) \
     XX(jl_new_foreign_type) \
+    XX(jl_reinit_foreign_type) \
     XX(jl_new_method_instance_uninit) \
     XX(jl_new_method_table) \
     XX(jl_new_method_uninit) \
@@ -392,6 +394,8 @@
     XX(jl_queue_work) \
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
+    XX(jl_cache_flags) \
+    XX(jl_match_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
@@ -399,7 +403,7 @@
     XX(jl_resolve_globals_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
-    XX(jl_restore_incremental_from_buf) \
+    XX(jl_restore_package_image_from_file) \
     XX(jl_restore_system_image) \
     XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
@@ -407,8 +411,6 @@
     XX(jl_rettype_inferred) \
     XX(jl_running_on_valgrind) \
     XX(jl_safe_printf) \
-    XX(jl_save_incremental) \
-    XX(jl_save_system_image) \
     XX(jl_SC_CLK_TCK) \
     XX(jl_set_ARGS) \
     XX(jl_set_const) \
@@ -519,6 +521,7 @@
     XX(jl_vexceptionf) \
     XX(jl_vprintf) \
     XX(jl_wakeup_thread) \
+    XX(jl_write_compiler_output) \
     XX(jl_yield) \
 
 #define JL_RUNTIME_EXPORTED_FUNCS_WIN(XX) \
@@ -534,7 +537,8 @@
     YY(jl_get_llvm_module) \
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
-    YY(jl_get_llvm_gv) \
+    YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_external_fns) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

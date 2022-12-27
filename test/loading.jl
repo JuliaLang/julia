@@ -746,7 +746,11 @@ for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
 for depot in depots
-    rm(depot, force=true, recursive=true)
+    try
+        rm(depot, force=true, recursive=true)
+    catch err
+        @show err
+    end
 end
 
 append!(empty!(LOAD_PATH), saved_load_path)
@@ -990,6 +994,37 @@ end
         end
     end
 end
+
+@testset "Extensions" begin
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        tmp = mktempdir()
+        push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+
+        proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
+            cmd = `$(Base.julia_cmd()) $compile --project=$proj --startup-file=no -e '
+                begin
+                using HasExtensions
+                # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")
+                HasExtensions.ext_loaded && error("ext_loaded set")
+                using HasDepWithExtensions
+                # Base.get_extension(HasExtensions, :Extension).extvar == 1 || error("extvar in Extension not set")
+                HasExtensions.ext_loaded || error("ext_loaded not set")
+                HasExtensions.ext_folder_loaded && error("ext_folder_loaded set")
+                HasDepWithExtensions.do_something() || error("do_something errored")
+                using ExtDep2
+                HasExtensions.ext_folder_loaded || error("ext_folder_loaded not set")
+
+                end
+            '`
+            @test success(cmd)
+        end
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
 
 empty!(Base.DEPOT_PATH)
 append!(Base.DEPOT_PATH, original_depot_path)

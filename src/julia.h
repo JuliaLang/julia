@@ -4,7 +4,9 @@
 #define JULIA_H
 
 #ifdef LIBRARY_EXPORTS
-#include "jl_internal_funcs.inc"
+// Generated file, needs to be searched in include paths so that the builddir
+// retains priority
+#include <jl_internal_funcs.inc>
 #undef jl_setjmp
 #undef jl_longjmp
 #undef jl_egal
@@ -315,7 +317,7 @@ typedef struct _jl_method_t {
     jl_array_t *roots;  // pointers in generated code (shared to reduce memory), or null
     // Identify roots by module-of-origin. We only track the module for roots added during incremental compilation.
     // May be NULL if no external roots have been added, otherwise it's a Vector{UInt64}
-    jl_array_t *root_blocks;   // RLE (build_id, offset) pairs (even/odd indexing)
+    jl_array_t *root_blocks;   // RLE (build_id.lo, offset) pairs (even/odd indexing)
     int32_t nroots_sysimg;     // # of roots stored in the system image
     jl_svec_t *ccallable; // svec(rettype, sig) if a ccallable entry point is requested for this
 
@@ -591,7 +593,7 @@ typedef struct _jl_module_t {
     // hidden fields:
     htable_t bindings;
     arraylist_t usings;  // modules with all bindings potentially imported
-    uint64_t build_id;
+    jl_uuid_t build_id;
     jl_uuid_t uuid;
     size_t primary_world;
     _Atomic(uint32_t) counter;
@@ -840,6 +842,7 @@ extern void JL_GC_PUSH3(void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH4(void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH5(void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void JL_GC_PUSH7(void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
+extern void JL_GC_PUSH8(void *, void *, void *, void *, void *, void *, void *, void *)  JL_NOTSAFEPOINT;
 extern void _JL_GC_PUSHARGS(jl_value_t **, size_t) JL_NOTSAFEPOINT;
 // This is necessary, because otherwise the analyzer considers this undefined
 // behavior and terminates the exploration
@@ -878,6 +881,9 @@ extern void JL_GC_POP() JL_NOTSAFEPOINT;
 
 #define JL_GC_PUSH7(arg1, arg2, arg3, arg4, arg5, arg6, arg7)                                           \
   void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(7), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7}; \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+#define JL_GC_PUSH8(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8)                                     \
+  void *__gc_stkf[] = {(void*)JL_GC_ENCODE_PUSH(8), jl_pgcstack, arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8}; \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 
@@ -1433,7 +1439,7 @@ STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
     return jl_is_datatype(v) && ((jl_datatype_t*)v)->isconcretetype;
 }
 
-JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_method_t *definition);
+JL_DLLEXPORT int jl_isa_compileable_sig(jl_tupletype_t *type, jl_svec_t *sparams, jl_method_t *definition);
 
 // type constructors
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *inmodule, int abstract, int mutabl);
@@ -1760,14 +1766,14 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
-JL_DLLEXPORT ios_t *jl_create_system_image(void *);
-JL_DLLEXPORT void jl_save_system_image(const char *fname);
+JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
+JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete);
+
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t *newly_inferred);
-JL_DLLEXPORT int jl_save_incremental(const char *fname, jl_array_t *worklist);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods);
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(const char *buf, size_t sz, jl_array_t *depmods);
+JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t *ci);
+JL_DLLEXPORT void jl_write_compiler_output(void);
 
 // parsing
 JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
@@ -1935,6 +1941,9 @@ typedef struct _jl_task_t {
     jl_ucontext_t ctx;
     void *stkbuf; // malloc'd memory (either copybuf or stack)
     size_t bufsz; // actual sizeof stkbuf
+    uint64_t inference_start_time; // time when inference started
+    uint16_t reentrant_inference; // How many times we've reentered inference
+    uint16_t reentrant_codegen; // How many times we've reentered codegen
     unsigned int copy_stack:31; // sizeof stack for copybuf
     unsigned int started:1;
 } jl_task_t;
@@ -2178,8 +2187,11 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 #define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
 
+#define JL_OPTIONS_USE_PKGIMAGES_YES 1
+#define JL_OPTIONS_USE_PKGIMAGES_NO 0
+
 // Version information
-#include "julia_version.h"
+#include <julia_version.h> // Generated file
 
 JL_DLLEXPORT extern int jl_ver_major(void);
 JL_DLLEXPORT extern int jl_ver_minor(void);
@@ -2220,10 +2232,8 @@ typedef struct {
 
     // controls the emission of debug-info. mirrors the clang options
     int gnu_pubnames;       // can we emit the gnu pubnames debuginfo
-    int debug_info_kind;    // Enum for line-table-only, line-directives-only,
+    int debug_info_kind; // Enum for line-table-only, line-directives-only,
                             // limited, standalone
-
-    int safepoint_on_entry; // Emit a safepoint on entry to each function
 
     // Cache access. Default: jl_rettype_inferred.
     jl_codeinstance_lookup_t lookup;

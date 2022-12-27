@@ -98,6 +98,10 @@ Standard library changes
 
 #### Package Manager
 
+- "Package Extensions": support for loading a piece of code based on other
+  packages being loaded in the Julia session.
+  This has similar applications as the Requires.jl package but also
+  supports precompilation and setting compatibility.
 #### LinearAlgebra
 
 * The methods `a / b` and `b \ a` with `a` a scalar and `b` a vector, which were equivalent to `a * pinv(b)`,

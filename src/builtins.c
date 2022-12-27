@@ -1201,7 +1201,7 @@ JL_CALLABLE(jl_f_getglobal)
 
 JL_CALLABLE(jl_f_setglobal)
 {
-    enum jl_memory_order order = jl_memory_order_monotonic;
+    enum jl_memory_order order = jl_memory_order_release;
     JL_NARGS(setglobal!, 3, 4);
     if (nargs == 4) {
         JL_TYPECHK(setglobal!, symbol, args[3]);
@@ -1252,6 +1252,7 @@ JL_CALLABLE(jl_f_set_binding_type)
         jl_errorf("cannot set type for global %s. It already has a value or is already set to a different type.",
                   jl_symbol_name(b->name));
     }
+    jl_gc_wb_binding(b, ty);
     return jl_nothing;
 }
 

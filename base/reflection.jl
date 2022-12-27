@@ -1092,7 +1092,6 @@ struct CodegenParams
     prefer_specsig::Cint
     gnu_pubnames::Cint
     debug_info_kind::Cint
-    safepoint_on_entry::Cint
 
     lookup::Ptr{Cvoid}
 
@@ -1101,14 +1100,12 @@ struct CodegenParams
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames=true, debug_info_kind::Cint = default_debug_info_kind(),
-                   safepoint_on_entry::Bool=true,
                    lookup::Ptr{Cvoid}=cglobal(:jl_rettype_inferred),
                    generic_context = nothing)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
-            Cint(safepoint_on_entry),
             lookup, generic_context)
     end
 end
@@ -1164,10 +1161,22 @@ function may_invoke_generator(method::Method, @nospecialize(atype), sparams::Sim
             end
         end
     end
-    for i = 1:length(at.parameters)
+    non_va_args = method.isva ? method.nargs - 1 : method.nargs
+    for i = 1:non_va_args
         if !isdispatchelem(at.parameters[i])
             if (ast_slotflag(code, 1 + i + nsparams) & SLOT_USED) != 0
                 return false
+            end
+        end
+    end
+    if method.isva
+        # If the va argument is used, we need to ensure that all arguments that
+        # contribute to the va tuple are dispatchelemes
+        if (ast_slotflag(code, 1 + method.nargs + nsparams) & SLOT_USED) != 0
+            for i = (non_va_args+1):length(at.parameters)
+                if !isdispatchelem(at.parameters[i])
+                    return false
+                end
             end
         end
     end

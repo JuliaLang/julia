@@ -1209,7 +1209,6 @@ extern "C" {
         1,
 #endif
         (int) DICompileUnit::DebugEmissionKind::FullDebug,
-        1,
         jl_rettype_inferred, NULL };
 }
 
@@ -1419,6 +1418,7 @@ public:
     jl_codegen_params_t &emission_context;
     llvm::MapVector<jl_code_instance_t*, jl_codegen_call_target_t> call_targets;
     std::map<void*, GlobalVariable*> &global_targets;
+    std::map<std::tuple<jl_code_instance_t*, bool>, Function*> &external_calls;
     Function *f = NULL;
     // local var info. globals are not in here.
     std::vector<jl_varinfo_t> slots;
@@ -1455,6 +1455,7 @@ public:
 
     bool debug_enabled = false;
     bool use_cache = false;
+    bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
 
     std::vector<orc::ThreadSafeModule> llvmcall_modules;
@@ -1464,8 +1465,10 @@ public:
         emission_context(params),
         call_targets(),
         global_targets(params.globals),
+        external_calls(params.external_fns),
         world(params.world),
         use_cache(params.cache),
+        external_linkage(params.external_linkage),
         params(params.params) { }
 
     jl_typecache_t &types() {
@@ -2222,7 +2225,8 @@ static void visitLine(jl_codectx_t &ctx, uint64_t *ptr, Value *addend, const cha
 
 static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 {
-    assert(!ctx.emission_context.imaging);
+    if (ctx.emission_context.imaging)
+        return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     visitLine(ctx, jl_coverage_data_pointer(filename, line), ConstantInt::get(getInt64Ty(ctx.builder.getContext()), 1), "lcnt");
@@ -2232,7 +2236,8 @@ static void coverageVisitLine(jl_codectx_t &ctx, StringRef filename, int line)
 
 static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Value *sync)
 {
-    assert(!ctx.emission_context.imaging);
+    if (ctx.emission_context.imaging)
+        return; // TODO
     if (filename == "" || filename == "none" || filename == "no file" || filename == "<missing>" || line < 0)
         return;
     Value *addend = sync
@@ -2879,6 +2884,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     const jl_cgval_t &sym = argv[2];
     const jl_cgval_t &val = argv[3];
     enum jl_memory_order order = jl_memory_order_unspecified;
+    assert(f == jl_builtin_setglobal && modifyop == nullptr && "unimplemented");
 
     if (nargs == 4) {
         const jl_cgval_t &arg4 = argv[4];
@@ -2888,7 +2894,7 @@ static bool emit_f_opglobal(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
             return false;
     }
     else
-        order = jl_memory_order_monotonic;
+        order = jl_memory_order_release;
 
     if (order == jl_memory_order_invalid || order == jl_memory_order_notatomic) {
         emit_atomic_error(ctx, order == jl_memory_order_invalid ? "invalid atomic ordering" : "setglobal!: module binding cannot be written non-atomically");
@@ -4020,7 +4026,17 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                     std::string name;
                     StringRef protoname;
                     bool need_to_emit = true;
-                    if (ctx.use_cache) {
+                    bool cache_valid = ctx.use_cache;
+                    bool external = false;
+                    if (ctx.external_linkage) {
+                       if (jl_object_in_image((jl_value_t*)codeinst)) {
+                           // Target is present in another pkgimage
+                           cache_valid = true;
+                           external = true;
+                       }
+                    }
+
+                    if (cache_valid) {
                         // optimization: emit the correct name immediately, if we know it
                         // TODO: use `emitted` map here too to try to consolidate names?
                         auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
@@ -4047,6 +4063,13 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         result = emit_call_specfun_other(ctx, mi, codeinst->rettype, protoname, argv, nargs, &cc, &return_roots, rt);
                     else
                         result = emit_call_specfun_boxed(ctx, codeinst->rettype, protoname, argv, nargs, rt);
+                    if (external) {
+                        assert(!need_to_emit);
+                        auto calledF = jl_Module->getFunction(protoname);
+                        assert(calledF);
+                        // TODO: Check if already present?
+                        ctx.external_calls[std::make_tuple(codeinst, specsig)] = calledF;
+                    }
                     handled = true;
                     if (need_to_emit) {
                         Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
@@ -4686,7 +4709,7 @@ static void emit_assignment(jl_codectx_t &ctx, jl_value_t *l, jl_value_t *r, ssi
         bp = global_binding_pointer(ctx, jl_globalref_mod(l), jl_globalref_name(l), &bnd, true);
     }
     if (bp != NULL) {
-        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Unordered);
+        emit_globalset(ctx, bnd, bp, rval_info, AtomicOrdering::Release);
         // Global variable. Does not need debug info because the debugger knows about
         // its memory location.
     }
@@ -5366,7 +5389,16 @@ static Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Module *M, jl_cod
     Function *theFunc;
     Value *theFarg;
     auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-    if (params.cache && invoke != NULL) {
+
+    bool cache_valid = params.cache;
+    if (params.external_linkage) {
+        if (jl_object_in_image((jl_value_t*)codeinst)) {
+            // Target is present in another pkgimage
+            cache_valid = true;
+        }
+    }
+
+    if (cache_valid && invoke != NULL) {
         StringRef theFptrName = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)invoke, codeinst);
         theFunc = cast<Function>(
             M->getOrInsertFunction(theFptrName, jlinvoke_func->_type(ctx.builder.getContext())).getCallee());
@@ -6785,7 +6817,7 @@ static jl_llvm_functions_t
         }();
 
         std::string wrapName;
-        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_" << globalUniqueGeneratedNames++;
+        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_"  << globalUniqueGeneratedNames++;
         declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
@@ -7459,11 +7491,8 @@ static jl_llvm_functions_t
 
     Instruction &prologue_end = ctx.builder.GetInsertBlock()->back();
 
-    // step 11a. Emit the entry safepoint
-    if (JL_FEAT_TEST(ctx, safepoint_on_entry))
-        emit_gc_safepoint(ctx.builder, get_current_ptls(ctx), ctx.tbaa().tbaa_const);
 
-    // step 11b. Do codegen in control flow order
+    // step 11. Do codegen in control flow order
     std::vector<int> workstack;
     std::map<int, BasicBlock*> BB;
     std::map<size_t, BasicBlock*> come_from_bb;
@@ -8260,7 +8289,12 @@ void jl_compile_workqueue(
         StringRef preal_decl = "";
         bool preal_specsig = false;
         auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
-        if (params.cache && invoke != NULL) {
+        bool cache_valid = params.cache;
+        if (params.external_linkage) {
+            cache_valid = jl_object_in_image((jl_value_t*)codeinst);
+        }
+        // WARNING: isspecsig is protected by the codegen-lock. If that lock is removed, then the isspecsig load needs to be properly atomically sequenced with this.
+        if (cache_valid && invoke != NULL) {
             auto fptr = jl_atomic_load_relaxed(&codeinst->specptr.fptr);
             if (invoke == jl_fptr_args_addr) {
                 preal_decl = jl_ExecutionEngine->getFunctionAtAddress((uintptr_t)fptr, codeinst);

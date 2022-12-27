@@ -15,12 +15,9 @@ function libjulia_codegen_name()
     is_debug_build ? "libjulia-codegen-debug" : "libjulia-codegen"
 end
 
-# The tests below assume a certain format and safepoint_on_entry=true breaks that.
-function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
-    params = Base.CodegenParams(safepoint_on_entry=false)
-    d = InteractiveUtils._dump_function(f, t, false, false, !raw, dump_module, :att, optimize, :none, false, params)
-    sprint(print, d)
-end
+# `_dump_function` might be more efficient but it doesn't really matter here...
+get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true) =
+    sprint(code_llvm, f, t, raw, dump_module, optimize)
 
 if !is_debug_build && opt_level > 0
     # Make sure getptls call is removed at IR level with optimization on
@@ -785,3 +782,8 @@ f_isa_type(@nospecialize(x)) = isa(x, Type)
 # Issue #47247
 f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
+
+@testset "regression in generic_bitcast: should support Union{} values" begin
+    f(x) = Core.bitcast(UInt64, x)
+    @test occursin("llvm.trap", get_llvm(f, Tuple{Union{}}))
+end
