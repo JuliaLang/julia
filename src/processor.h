@@ -135,7 +135,7 @@ JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
 
-typedef struct _jl_sysimg_fptrs_t {
+typedef struct _jl_image_fptrs_t {
     // base function pointer
     const char *base;
     // number of functions
@@ -153,7 +153,7 @@ typedef struct _jl_sysimg_fptrs_t {
     const int32_t *clone_offsets;
     // sorted indices of the cloned functions (including the tag bit)
     const uint32_t *clone_idxs;
-} jl_sysimg_fptrs_t;
+} jl_image_fptrs_t;
 
 /**
  * Initialize the processor dispatch system with sysimg `hdl` (also initialize the sysimg itself).
@@ -165,14 +165,15 @@ typedef struct _jl_sysimg_fptrs_t {
  *
  * Return the data about the function pointers selected.
  */
-jl_sysimg_fptrs_t jl_init_processor_sysimg(void *hdl);
-jl_sysimg_fptrs_t jl_init_processor_pkgimg(void *hdl);
+jl_image_fptrs_t jl_init_processor_sysimg(void *hdl);
+jl_image_fptrs_t jl_init_processor_pkgimg(void *hdl);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
 // Dump the name and feature set of the host CPU
 // For debugging only
 JL_DLLEXPORT void jl_dump_host_cpu(void);
+JL_DLLEXPORT void jl_check_pkgimage_clones(char* data);
 
 JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);

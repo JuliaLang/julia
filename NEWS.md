@@ -66,6 +66,9 @@ Standard library changes
 #### Test
 
 
+* The `@test_broken` macro (or `@test` with `broken=true`) now complains if the test expression returns a
+  non-boolean value in the same way as a non-broken test. ([#47804])
+
 #### Dates
 
 
