@@ -412,7 +412,7 @@ end
         end
     elseif isa(a1, Union)
         # Results can only be `Const` or `Bool`
-        return tmerge(fallback_lattice,
+        return tmerge(𝕃,
                       isdefined_tfunc(𝕃, rewrap_unionall(a1.a, arg1t), sym),
                       isdefined_tfunc(𝕃, rewrap_unionall(a1.b, arg1t), sym))
     end
@@ -1087,8 +1087,7 @@ end
 end
 
 @nospecs function _getfield_tfunc(𝕃::AnyMustAliasesLattice, s00, name, setfield::Bool)
-    s00 = widenmustalias(s00)
-    return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
+    return _getfield_tfunc(widenlattice(𝕃), widenmustalias(s00), name, setfield)
 end
 
 @nospecs function _getfield_tfunc(𝕃::PartialsLattice, s00, name, setfield::Bool)
@@ -1284,7 +1283,7 @@ end
 end
 @nospecs function setfield!_tfunc(𝕃::AbstractLattice, o, f, v)
     mutability_errorcheck(o) || return Bottom
-    ft = _getfield_tfunc(fallback_lattice, o, f, true)
+    ft = _getfield_tfunc(𝕃, o, f, true)
     ft === Bottom && return Bottom
     hasintersect(widenconst(v), widenconst(ft)) || return Bottom
     return v

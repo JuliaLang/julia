@@ -7,4 +7,7 @@ using Test, CompilerSupportLibraries_jll
     @test isfile(CompilerSupportLibraries_jll.libgfortran_path)
     @test isfile(CompilerSupportLibraries_jll.libstdcxx_path)
     @test isfile(CompilerSupportLibraries_jll.libgomp_path)
+    if Sys.iswindows()
+        @test isfile(CompilerSupportLibraries_jll.libssp_path)
+    end
 end

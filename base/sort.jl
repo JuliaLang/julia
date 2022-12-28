@@ -1565,8 +1565,14 @@ function sortperm(A::AbstractArray;
                   order::Ordering=Forward,
                   scratch::Union{Vector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
-    ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
+    if rev === true
+        _sortperm(A; alg, order=ord(lt, by, true, order), scratch, dims...)
+    else
+        _sortperm(A; alg, order=ord(lt, by, nothing, order), scratch, dims...)
+    end
+end
+function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
+    if order === Forward && isa(A,Vector) && eltype(A)<:Integer
         n = length(A)
         if n > 1
             min, max = extrema(A)
@@ -1578,7 +1584,7 @@ function sortperm(A::AbstractArray;
         end
     end
     ix = copymutable(LinearIndices(A))
-    sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
+    sort!(ix; alg, order = Perm(order, vec(A)), scratch, dims...)
 end
 
 
@@ -1620,7 +1626,7 @@ julia> sortperm!(p, A; dims=2); p
  2  4
 ```
 """
-function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
+@inline function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
@@ -1635,7 +1641,12 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     if !initialized
         ix .= LinearIndices(A)
     end
-    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
+
+    if rev === true
+        sort!(ix; alg, order=Perm(ord(lt, by, true, order), vec(A)), scratch, dims...)
+    else
+        sort!(ix; alg, order=Perm(ord(lt, by, nothing, order), vec(A)), scratch, dims...)
+    end
 end
 
 # sortperm for vectors of few unique integers
