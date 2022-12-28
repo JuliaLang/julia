@@ -899,76 +899,28 @@ function parse_float(l::Parser, contains_underscore)::Err{Float64}
     return v
 end
 
-function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitSigned, BigInt}}
-    s = take_string_or_substring(l, contains_underscore)
-    len = length(s)
-    v = try
-        if len ≤ 17
-            Base.parse(Int64, s; base=base)
-        elseif 17 < len ≤ 33
-            Base.parse(Int128, s; base=base)
-        else
-            Base.parse(BigInt, s; base=base)
+for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
+                               ("hex", UInt64, UInt128, 18,  34),
+                               ("oct", UInt64, UInt128, 24,  45),
+                               ("bin", UInt64, UInt128, 66, 130),
+                               )
+    @eval function $(Symbol("parse_", name))(l::Parser, contains_underscore, base=nothing)::Err{Union{$(T1), $(T2), BigInt}}
+        s = take_string_or_substring(l, contains_underscore)
+        len = length(s)
+        v = try
+            if len ≤ $(n1)
+                Base.parse($(T1), s; base)
+            elseif $(n1) < len ≤ $(n2)
+                Base.parse($(T2), s; base)
+            else
+                Base.parse(BigInt, s; base)
+            end
+        catch e
+            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
+            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
         end
-    catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+        return v
     end
-    return v
-end
-
-function parse_hex(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitUnsigned, BigInt}}
-    s = take_string_or_substring(l, contains_underscore)
-    len = length(s)
-    v = try
-        if len ≤ 18
-            Base.parse(UInt64, s; base)
-        elseif 18 < len ≤ 34
-            Base.parse(UInt128, s; base)
-        else
-            Base.parse(BigInt, s; base)
-        end
-    catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
-    end
-    return v
-end
-
-function parse_oct(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitUnsigned, BigInt}}
-    s = take_string_or_substring(l, contains_underscore)
-    len = length(s)
-    v = try
-        if len ≤ 24
-            Base.parse(UInt64, s; base)
-        elseif 24 < len ≤ 45
-            Base.parse(UInt128, s; base)
-        else
-            Base.parse(BigInt, s; base)
-        end
-    catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
-    end
-    return v
-end
-
-function parse_bin(l::Parser, contains_underscore, base=nothing)::Err{Union{Base.BitUnsigned, BigInt}}
-    s = take_string_or_substring(l, contains_underscore)
-    l = length(s)
-    v = try
-        if l ≤ 66
-            Base.parse(UInt64, s; base)
-        elseif 66 < l ≤ 130
-            Base.parse(UInt128, s; base)
-        else
-            Base.parse(BigInt, s; base)
-        end
-    catch e
-        e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-        error("internal parser error: did not correctly discredit $(repr(s)) as an int")
-    end
-    return v
 end
 
 
