@@ -366,16 +366,16 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 # =============
 
 function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
-    if isa(b, LimitedAccuracy)
-        if !isa(a, LimitedAccuracy)
+    if isa(a, LimitedAccuracy)
+        if !isa(b, LimitedAccuracy)
             return false
         end
         if b.causes ⊈ a.causes
             return false
         end
-        b = b.typ
+        a = a.typ
     end
-    isa(a, LimitedAccuracy) && (a = a.typ)
+    isa(b, LimitedAccuracy) && (b = b.typ)
     return ⊑(widenlattice(lattice), a, b)
 end
 
