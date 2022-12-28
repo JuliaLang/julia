@@ -90,8 +90,8 @@ function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos:
 end
 
 # '0':'9' -> 0:9
-# 'A':'Z' -> 10:26
-# 'a':'z' -> 10:26 if base <= 36, 36:62 otherwise
+# 'A':'Z' -> 10:35
+# 'a':'z' -> 10:35 if base <= 36, 36:61 otherwise
 # input outside of that is mapped to base
 @inline function __convert_digit(_c::UInt32, base::UInt32)
     _0 = UInt32('0')
