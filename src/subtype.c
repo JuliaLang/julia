@@ -2361,8 +2361,12 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_PUSH2(&ub, &root);
         if (!jl_has_free_typevars(a)) {
             save_env(e, &root, &se);
-            int issub = subtype_in_env_existential(bb->lb, a, e, 0, d) && subtype_in_env_existential(a, bb->ub, e, 1, d);
+            int issub = subtype_in_env_existential(bb->lb, a, e, 0, d);
             restore_env(e, root, &se);
+            if (issub) {
+                issub = subtype_in_env_existential(a, bb->ub, e, 1, d);
+                restore_env(e, root, &se);
+            }
             free_env(&se);
             if (!issub) {
                 JL_GC_POP();
@@ -2938,8 +2942,11 @@ static jl_value_t *intersect_invariant(jl_value_t *x, jl_value_t *y, jl_stenv_t 
     save_env(e, &root, &se);
     if (!subtype_in_env_existential(x, y, e, 0, e->invdepth))
         ii = NULL;
-    else if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
-        ii = NULL;
+    else {
+        restore_env(e, root, &se);
+        if (!subtype_in_env_existential(y, x, e, 0, e->invdepth))
+            ii = NULL;
+    }
     restore_env(e, root, &se);
     free_env(&se);
     JL_GC_POP();
