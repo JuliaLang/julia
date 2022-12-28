@@ -2084,7 +2084,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 # Ensure that the user can execute the `.so` we're generating
                 # Note that on windows, `filemode(path)` typically returns `0o666`, so this
                 # addition of the execute bit for the user is doubly needed.
-                chmod(tmppath_so, filemode(path) & 0o777 | 0o755)
+                chmod(tmppath_so, filemode(path) & 0o777 | 0o333)
             end
 
             # prune the directory with cache files
