@@ -560,7 +560,7 @@ typedef struct {
 } jl_weakref_t;
 
 typedef struct {
-    // not first-class
+    JL_DATA_TYPE
     jl_sym_t *name;
     _Atomic(jl_value_t*) value;
     _Atomic(jl_value_t*) globalref;  // cached GlobalRef for this binding
@@ -779,6 +779,7 @@ extern JL_DLLIMPORT jl_value_t *jl_array_symbol_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_int32_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_array_uint64_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_expr_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_binding_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_globalref_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
@@ -1235,6 +1236,7 @@ static inline int jl_is_layout_opaque(const jl_datatype_layout_t *l) JL_NOTSAFEP
 #define jl_is_ssavalue(v)    jl_typeis(v,jl_ssavalue_type)
 #define jl_is_slot(v)        (jl_typeis(v,jl_slotnumber_type) || jl_typeis(v,jl_typedslot_type))
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
+#define jl_is_binding(v)     jl_typeis(v,jl_binding_type)
 #define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_gotoifnot(v)   jl_typeis(v,jl_gotoifnot_type)
@@ -1410,7 +1412,7 @@ JL_DLLEXPORT int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL
 JL_DLLEXPORT int jl_has_free_typevars(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar(jl_value_t *t, jl_tvar_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_has_typevar_from_unionall(jl_value_t *t, jl_unionall_t *ua);
-JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t);
+JL_DLLEXPORT int jl_subtype_env_size(jl_value_t *t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_subtype_env(jl_value_t *x, jl_value_t *y, jl_value_t **env, int envsz);
 JL_DLLEXPORT int jl_isa(jl_value_t *a, jl_value_t *t);
 JL_DLLEXPORT int jl_types_equal(jl_value_t *a, jl_value_t *b);
@@ -1623,7 +1625,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_if_bound(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT jl_value_t *jl_binding_type(jl_module_t *m, jl_sym_t *var);
+JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr_or_error(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
@@ -1760,7 +1762,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
 JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
-JL_DLLEXPORT ios_t *jl_create_system_image(void *, jl_array_t *worklist);
+JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos);
 JL_DLLEXPORT void jl_restore_system_image(const char *fname);
 JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete);
@@ -1839,7 +1841,6 @@ JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_array_t *data, size_t i) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_argnames(jl_array_t *syms);
 JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
-
 
 JL_DLLEXPORT int jl_is_operator(char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(char *sym);
@@ -2180,6 +2181,9 @@ JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
 #define JL_OPTIONS_USE_COMPILED_MODULES_YES 1
 #define JL_OPTIONS_USE_COMPILED_MODULES_NO 0
+
+#define JL_OPTIONS_USE_PKGIMAGES_YES 1
+#define JL_OPTIONS_USE_PKGIMAGES_NO 0
 
 // Version information
 #include <julia_version.h> // Generated file

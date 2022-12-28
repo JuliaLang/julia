@@ -47,6 +47,8 @@ extern Optional<bool> always_have_fma(Function&);
 
 extern Optional<bool> always_have_fp16();
 
+void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const);
+
 namespace {
 constexpr uint32_t clone_mask =
     JL_TARGET_CLONE_LOOP | JL_TARGET_CLONE_SIMD | JL_TARGET_CLONE_MATH | JL_TARGET_CLONE_CPU;
@@ -266,8 +268,6 @@ private:
     uint32_t get_func_id(Function *F);
     template<typename Stack>
     Constant *rewrite_gv_init(const Stack& stack);
-    template<typename Stack>
-    Value *rewrite_inst_use(const Stack& stack, Value *replace, Instruction *insert_before);
     std::pair<uint32_t,GlobalVariable*> get_reloc_slot(Function *F);
     Constant *get_ptrdiff32(Constant *ptr, Constant *base) const;
     template<typename T>
@@ -820,7 +820,7 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F)
 }
 
 template<typename Stack>
-Value *CloneCtx::rewrite_inst_use(const Stack& stack, Value *replace, Instruction *insert_before)
+static Value *rewrite_inst_use(const Stack& stack, Value *replace, Instruction *insert_before)
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -879,40 +879,24 @@ void CloneCtx::fix_inst_uses()
                 continue;
             auto orig_f = orig_funcs[i];
             auto F = grp.base_func(orig_f);
-            bool changed;
-            do {
-                changed = false;
-                for (auto uses = ConstantUses<Instruction>(F, M); !uses.done(); uses.next()) {
-                    auto info = uses.get_info();
-                    auto use_i = info.val;
-                    auto use_f = use_i->getFunction();
-                    if (!use_f->getName().endswith(suffix))
+            replaceUsesWithLoad(*F, [&](Instruction &I) -> GlobalVariable * {
+                uint32_t id;
+                GlobalVariable *slot;
+                auto use_f = I.getFunction();
+                if (!use_f->getName().endswith(suffix))
+                    return nullptr;
+                std::tie(id, slot) = get_reloc_slot(orig_f);
+
+                grp.relocs.insert(id);
+                for (auto &tgt: grp.clones) {
+                    // The enclosing function of the use is cloned,
+                    // no need to deal with this use on this target.
+                    if (map_get(*tgt.vmap, use_f))
                         continue;
-                    Instruction *insert_before = use_i;
-                    if (auto phi = dyn_cast<PHINode>(use_i))
-                        insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
-                    uint32_t id;
-                    GlobalVariable *slot;
-                    std::tie(id, slot) = get_reloc_slot(orig_f);
-                    Instruction *ptr = new LoadInst(orig_f->getType(), slot, "", false, insert_before);
-                    ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
-                    ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
-                    use_i->setOperand(info.use->getOperandNo(),
-                                      rewrite_inst_use(uses.get_stack(), ptr,
-                                                       insert_before));
-
-                    grp.relocs.insert(id);
-                    for (auto &tgt: grp.clones) {
-                        // The enclosing function of the use is cloned,
-                        // no need to deal with this use on this target.
-                        if (map_get(*tgt.vmap, use_f))
-                            continue;
-                        tgt.relocs.insert(id);
-                    }
-
-                    changed = true;
+                    tgt.relocs.insert(id);
                 }
-            } while (changed);
+                return slot;
+            }, tbaa_const);
         }
     }
 }
@@ -1201,6 +1185,30 @@ static RegisterPass<MultiVersioningLegacy> X("JuliaMultiVersioning", "JuliaMulti
                                        false /* Analysis Pass */);
 
 } // anonymous namespace
+
+void replaceUsesWithLoad(Function &F, function_ref<GlobalVariable *(Instruction &I)> should_replace, MDNode *tbaa_const) {
+    bool changed;
+    do {
+        changed = false;
+        for (auto uses = ConstantUses<Instruction>(&F, *F.getParent()); !uses.done(); uses.next()) {
+            auto info = uses.get_info();
+            auto use_i = info.val;
+            GlobalVariable *slot = should_replace(*use_i);
+            if (!slot)
+                continue;
+            Instruction *insert_before = use_i;
+            if (auto phi = dyn_cast<PHINode>(use_i))
+                insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
+            Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
+            ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
+            ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));
+            use_i->setOperand(info.use->getOperandNo(),
+                                rewrite_inst_use(uses.get_stack(), ptr,
+                                                insert_before));
+            changed = true;
+        }
+    } while (changed);
+}
 
 PreservedAnalyses MultiVersioning::run(Module &M, ModuleAnalysisManager &AM)
 {

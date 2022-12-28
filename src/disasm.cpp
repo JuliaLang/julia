@@ -592,7 +592,7 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char raw_mc, const char* asm_va
     llvm::DIContext *context = NULL;
     if (!jl_DI_for_fptr(fptr, &symsize, &slide, &Section, &context)) {
         if (!jl_dylib_DI_for_fptr(fptr, &Section, &slide, &context,
-                    false, NULL, NULL, NULL, NULL)) {
+                    false, NULL, NULL, NULL, NULL, NULL)) {
             jl_printf(JL_STDERR, "WARNING: Unable to find function pointer\n");
             return jl_pchar_to_string("", 0);
         }

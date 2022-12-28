@@ -118,6 +118,7 @@
     XX(jl_dlopen) \
     XX(jl_dlsym) \
     XX(jl_dump_host_cpu) \
+    XX(jl_check_pkgimage_clones) \
     XX(jl_egal) \
     XX(jl_egal__bits) \
     XX(jl_egal__special) \
@@ -394,6 +395,8 @@
     XX(jl_queue_work) \
     XX(jl_raise_debugger) \
     XX(jl_readuntil) \
+    XX(jl_cache_flags) \
+    XX(jl_match_cache_flags) \
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
@@ -536,6 +539,7 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_external_fns) \
     YY(jl_dump_function_asm) \
     YY(jl_LLVMCreateDisasm) \
     YY(jl_LLVMDisasmInstruction) \

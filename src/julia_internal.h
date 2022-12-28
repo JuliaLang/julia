@@ -560,14 +560,11 @@ void jl_gc_run_all_finalizers(jl_task_t *ct);
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task);
 void jl_gc_add_finalizer_(jl_ptls_t ptls, void *v, void *f) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd) JL_NOTSAFEPOINT;
 void gc_setmark_buf(jl_ptls_t ptls, void *buf, uint8_t, size_t) JL_NOTSAFEPOINT;
 
 STATIC_INLINE void jl_gc_wb_binding(jl_binding_t *bnd, void *val) JL_NOTSAFEPOINT // val isa jl_value_t*
 {
-    if (__unlikely(jl_astaggedvalue(bnd)->bits.gc == 3 &&
-                   (jl_astaggedvalue(val)->bits.gc & 1) == 0))
-        jl_gc_queue_binding(bnd);
+    jl_gc_wb(bnd, val);
 }
 
 STATIC_INLINE void jl_gc_wb_buf(void *parent, void *bufptr, size_t minsz) JL_NOTSAFEPOINT // parent isa jl_value_t*
@@ -725,6 +722,7 @@ void jl_init_main_module(void);
 JL_DLLEXPORT int jl_is_submodule(jl_module_t *child, jl_module_t *parent) JL_NOTSAFEPOINT;
 jl_array_t *jl_get_loaded_modules(void);
 JL_DLLEXPORT int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree);
+JL_DLLEXPORT jl_value_t *jl_widen_core_extended_info(jl_value_t *t);
 
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
 jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded);
@@ -994,11 +992,12 @@ JL_DLLEXPORT jl_value_t *jl_dump_fptr_asm(uint64_t fptr, char raw_mc, const char
 JL_DLLEXPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_ir_metadata, char dump_module, const char *debuginfo);
 JL_DLLEXPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char raw_mc, const char* asm_variant, const char *debuginfo, char binary);
 
-void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode);
+void *jl_create_native(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int policy, int imaging_mode, int cache);
 void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
-        const char *sysimg_data, size_t sysimg_len);
+        const char *sysimg_data, size_t sysimg_len, ios_t *s);
 void jl_get_llvm_gvs(void *native_code, arraylist_t *gvs);
+void jl_get_llvm_external_fns(void *native_code, arraylist_t *gvs);
 JL_DLLEXPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
 
@@ -1543,6 +1542,7 @@ extern JL_DLLEXPORT jl_sym_t *jl_return_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lineinfo_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_lambda_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_assign_sym;
+extern JL_DLLEXPORT jl_sym_t *jl_binding_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_globalref_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_do_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_method_sym;
@@ -1620,9 +1620,9 @@ extern JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order(jl_sym_t *order, char loading, char storing);
 JL_DLLEXPORT enum jl_memory_order jl_get_atomic_order_checked(jl_sym_t *order, char loading, char storing);
 
-struct _jl_sysimg_fptrs_t;
+struct _jl_image_fptrs_t;
 
-void jl_register_fptrs(uint64_t sysimage_base, const struct _jl_sysimg_fptrs_t *fptrs,
+void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                        jl_method_instance_t **linfos, size_t n);
 void jl_write_coverage_data(const char*);
 void jl_write_malloc_log(void);
