@@ -2871,9 +2871,9 @@ julia> obj.x
 1
 ```
 
-One should overload `getproperty` only when necessary, as it can be confusing if 
+One should overload `getproperty` only when necessary, as it can be confusing if
 the behavior of the syntax `obj.f` is unusual.
-Also note that using methods is often preferable. See also this style guide documentation 
+Also note that using methods is often preferable. See also this style guide documentation
 for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
