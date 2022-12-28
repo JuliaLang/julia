@@ -308,8 +308,8 @@ function generate_precompile_statements()
         end
         close(statements_step1)
         print_state("step1" => "F,$n_step1")
+        return :ok
     end
-    #errormonitor(step1)
     !PARALLEL_PRECOMPILATION && wait(step1)
 
     step2 = @async mktemp() do precompile_file, precompile_file_h
@@ -395,6 +395,7 @@ function generate_precompile_statements()
         end
         close(statements_step2)
         print_state("step2" => "F,$n_step2")
+        return :ok
     end
     !PARALLEL_PRECOMPILATION && wait(step2)
 
@@ -456,10 +457,8 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
-    wait(step1)
-    istaskfailed(step1) && throw("Step 1 of collecting precompiles failed.")
-    wait(step2)
-    istaskfailed(step2) && throw("Step 2 of collecting precompiles failed.")
+    fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
+    fetch(step2) == :ok || throw("Step 2 of collecting precompiles failed.")
 
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")
