@@ -368,14 +368,14 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 JL_UV_LOCK(); // jl_mutex_lock(&jl_uv_mutex);
             }
             if (uvlock) {
-                int active = 1;
-                // otherwise, we block until someone asks us for the lock
-                uv_loop_t *loop = jl_global_event_loop();
-                while (active && may_sleep(ptls)) {
-                    if (jl_atomic_load_relaxed(&jl_uv_n_waiters) != 0)
-                        // but if we won the race against someone who actually needs
-                        // the lock to do real work, we need to let them have it instead
-                        break;
+                int enter_eventloop = may_sleep(ptls);
+                int active = 0;
+                if (jl_atomic_load_relaxed(&jl_uv_n_waiters) != 0)
+                    // if we won the race against someone who actually needs
+                    // the lock to do real work, we need to let them have it instead
+                    enter_eventloop = 0;
+                if (enter_eventloop) {
+                    uv_loop_t *loop = jl_global_event_loop();
                     loop->stop_flag = 0;
                     JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_enter = cycleclock() );
                     active = uv_run(loop, UV_RUN_ONCE);
@@ -388,11 +388,11 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 // that just wanted to steal libuv from us. We will just go
                 // right back to sleep on the individual wake signal to let
                 // them take it from us without conflict.
-                if (!may_sleep(ptls)) {
+                if (active || !may_sleep(ptls)) {
                     start_cycles = 0;
                     continue;
                 }
-                if (!jl_atomic_load_relaxed(&_threadedregion) && active && ptls->tid == 0) {
+                if (!enter_eventloop && !jl_atomic_load_relaxed(&_threadedregion) && ptls->tid == 0) {
                     // thread 0 is the only thread permitted to run the event loop
                     // so it needs to stay alive, just spin-looping if necessary
                     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {

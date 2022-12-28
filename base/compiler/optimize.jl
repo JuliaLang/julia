@@ -179,28 +179,27 @@ function ir_to_codeinf!(opt::OptimizationState)
     optdef = linfo.def
     replace_code_newstyle!(src, opt.ir::IRCode, isa(optdef, Method) ? Int(optdef.nargs) : 0)
     opt.ir = nothing
-    widen_all_consts!(src)
+    widencompileronly!(src)
+    src.rettype = widenconst(src.rettype)
     src.inferred = true
     # finish updating the result struct
     validate_code_in_debug_mode(linfo, src, "optimized")
     return src
 end
 
-# widen all Const elements in type annotations
-function widen_all_consts!(src::CodeInfo)
+# widen extended lattice elements in type annotations so that they are recognizable by the codegen system.
+function widencompileronly!(src::CodeInfo)
     ssavaluetypes = src.ssavaluetypes::Vector{Any}
     for i = 1:length(ssavaluetypes)
-        ssavaluetypes[i] = widenconst(ssavaluetypes[i])
+        ssavaluetypes[i] = widencompileronly(ssavaluetypes[i])
     end
 
     for i = 1:length(src.code)
         x = src.code[i]
         if isa(x, PiNode)
-            src.code[i] = PiNode(x.val, widenconst(x.typ))
+            src.code[i] = PiNode(x.val, widencompileronly(x.typ))
         end
     end
-
-    src.rettype = widenconst(src.rettype)
 
     return src
 end
@@ -238,13 +237,13 @@ end
 
 Returns a tuple of `(:consistent, :effect_free_and_nothrow, :nothrow)` flags for a given statement.
 """
-function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
+function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospecialize(rt), src::Union{IRCode,IncrementalCompact})
     # TODO: We're duplicating analysis from inference here.
     isa(stmt, PiNode) && return (true, true, true)
     isa(stmt, PhiNode) && return (true, true, true)
     isa(stmt, ReturnNode) && return (true, false, true)
     isa(stmt, GotoNode) && return (true, false, true)
-    isa(stmt, GotoIfNot) && return (true, false, argextype(stmt.cond, src) ⊑ₒ Bool)
+    isa(stmt, GotoIfNot) && return (true, false, ⊑(𝕃ₒ, argextype(stmt.cond, src), Bool))
     isa(stmt, Slot) && return (true, false, false) # Slots shouldn't occur in the IR at this point, but let's be defensive here
     if isa(stmt, GlobalRef)
         nothrow = isdefined(stmt.mod, stmt.name)
@@ -266,7 +265,7 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             if f === UnionAll
                 # TODO: This is a weird special case - should be determined in inference
                 argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-                nothrow = _builtin_nothrow(lattice, f, argtypes, rt)
+                nothrow = _builtin_nothrow(𝕃ₒ, f, argtypes, rt)
                 return (true, nothrow, nothrow)
             end
             if f === Intrinsics.cglobal
@@ -277,7 +276,7 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             # Needs to be handled in inlining to look at the callee effects
             f === Core._apply_iterate && return (false, false, false)
             argtypes = Any[argextype(args[arg], src) for arg in 2:length(args)]
-            effects = builtin_effects(lattice, f, argtypes, rt)
+            effects = builtin_effects(𝕃ₒ, f, argtypes, rt)
             consistent = is_consistent(effects)
             effect_free = is_effect_free(effects)
             nothrow = is_nothrow(effects)
@@ -308,7 +307,7 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
                 if !isexact && has_free_typevars(fT)
                     return (false, false, false)
                 end
-                eT ⊑ₒ fT || return (false, false, false)
+                ⊑(𝕃ₒ, eT, fT) || return (false, false, false)
             end
             return (false, true, true)
         elseif head === :foreigncall
@@ -324,11 +323,11 @@ function stmt_effect_flags(lattice::AbstractLattice, @nospecialize(stmt), @nospe
             typ = argextype(args[1], src)
             typ, isexact = instanceof_tfunc(typ)
             isexact || return (false, false, false)
-            typ ⊑ₒ Tuple || return (false, false, false)
+            ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)
             rt_ub = argextype(args[3], src)
             source = argextype(args[4], src)
-            if !(rt_lb ⊑ₒ Type && rt_ub ⊑ₒ Type && source ⊑ₒ Method)
+            if !(⊑(𝕃ₒ, rt_lb, Type) && ⊑(𝕃ₒ, rt_ub, Type) && ⊑(𝕃ₒ, source, Method))
                 return (false, false, false)
             end
             return (false, true, true)
@@ -580,7 +579,7 @@ function run_passes(
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      ir = adce_pass!(ir)
+    @pass "ADCE"      ir = adce_pass!(ir, sv.inlining)
     @pass "type lift" ir = type_lift_pass!(ir)
     @pass "compact 3" ir = compact!(ir)
     if JLOptions().debug_level == 2
@@ -700,7 +699,8 @@ function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     nargs = isa(svdef, Method) ? Int(svdef.nargs) : 0
     @timeit "domtree 1" domtree = construct_domtree(ir.cfg.blocks)
     defuse_insts = scan_slot_def_use(nargs, ci, ir.stmts.inst)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes) # consumes `ir`
+    𝕃ₒ = optimizer_lattice(sv.inlining.interp)
+    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, domtree, defuse_insts, sv.slottypes, 𝕃ₒ) # consumes `ir`
     return ir
 end
 

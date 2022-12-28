@@ -1077,8 +1077,7 @@ Base.setindex!(s::SafeRef, x) = setfield!(s, 1, x)
     noninlined_dce_new(s)
     nothing
 end
-# should be resolved once we merge https://github.com/JuliaLang/julia/pull/43923
-@test_broken fully_eliminated((Union{Symbol,String},)) do s
+@test fully_eliminated((Union{Symbol,String},)) do s
     noninlined_dce_new(s)
     nothing
 end
@@ -1819,6 +1818,26 @@ let ir = Base.code_ircode(big_tuple_test1, Tuple{})[1][1]
     ir = Core.Compiler.compact!(ir, true)
     @test length(ir.stmts) == 1
 end
+
+# inlineable but removable call should be eligible for DCE
+Base.@assume_effects :removable @inline function inlineable_effect_free(a::Float64)
+    a == Inf && return zero(a)
+    return sin(a) + cos(a)
+end
+@test fully_eliminated((Float64,)) do a
+    b = inlineable_effect_free(a)
+    c = inlineable_effect_free(b)
+    nothing
+end
+
+# https://github.com/JuliaLang/julia/issues/47374
+function f47374(x)
+    [f47374(i, x) for i in 1:1]
+end
+function f47374(i::Int, x)
+    return 1.0
+end
+@test f47374(rand(1)) == Float64[1.0]
 
 # compiler should recognize effectful :static_parameter
 # https://github.com/JuliaLang/julia/issues/45490
