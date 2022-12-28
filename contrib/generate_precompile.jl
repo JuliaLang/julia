@@ -256,7 +256,7 @@ let
         lock(print_lk) do
             isempty(args) || push!(status, args...)
             t1, t2, t3, t4 = (get(status, x, "") for x in ["step1", "repl", "step2", "execute"])
-            print("\rCollect (normal($t1), REPL $t2 ($t3)) => Execute $t4")
+            print("\rCollect (normal ($t1), REPL $t2 ($t3)) => Execute $t4")
         end
     end
 end
@@ -396,7 +396,6 @@ function generate_precompile_statements()
         close(statements_step2)
         print_state("step2" => "F,$n_step2")
     end
-    #errormonitor(step2)
     !PARALLEL_PRECOMPILATION && wait(step2)
 
     # Create a staging area where all the loaded packages are available
@@ -457,8 +456,10 @@ function generate_precompile_statements()
         n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
     end
 
-    PARALLEL_PRECOMPILATION && wait(step1)
-    PARALLEL_PRECOMPILATION && wait(step2)
+    wait(step1)
+    istaskfailed(step1) && throw("Step 1 of collecting precompiles failed.")
+    wait(step2)
+    istaskfailed(step2) && throw("Step 2 of collecting precompiles failed.")
 
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")
