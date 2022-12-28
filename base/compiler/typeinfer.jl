@@ -914,6 +914,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+        add_remark!(interp, caller, "Skipping inference, because it is disabled for the target module")
         return EdgeCallResult(Any, nothing, Effects())
     end
     if !caller.cached && caller.parent === nothing
@@ -929,6 +930,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         result = InferenceResult(mi)
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
+            add_remark!(interp, caller, "Failed to retrieve source")
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
             return EdgeCallResult(Any, nothing, Effects())
