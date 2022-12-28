@@ -4701,3 +4701,11 @@ let # jl_widen_core_extended_info
               widened
     end
 end
+
+# This is somewhat sensitive to the exact recursion level that inference is willing to do, but the intention
+# is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
+# to terminate the call.
+@Base.constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
+@Base.constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
+type_level_recurse_entry() = Val{type_level_recurse1(1)}()
+@test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}
