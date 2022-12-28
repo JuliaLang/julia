@@ -918,6 +918,28 @@ end
     @test bsqs()                            === bsqs(missing, missing, InsertionSort)
 end
 
+function test_allocs()
+    v = rand(10)
+    i = randperm(length(v))
+    @test 1 == @allocations sort(v)
+    @test 0 == @allocations sortperm!(i, v)
+    @test 0 == @allocations sort!(i)
+    @test 0 == @allocations sortperm!(i, v, rev=true)
+    @test 1 == @allocations sortperm(v, rev=true)
+    @test 1 == @allocations sortperm(v, rev=false)
+    @test 0 == @allocations sortperm!(i, v, order=Base.Reverse)
+    @test 1 == @allocations sortperm(v)
+    @test 1 == @allocations sortperm(i, by=sqrt)
+    @test 0 == @allocations sort!(v, lt=(a, b) -> hash(a) < hash(b))
+    sort!(Int[], rev=false) # compile
+    @test 0 == @allocations sort!(i, rev=false)
+    rand!(i)
+    @test 0 == @allocations sort!(i, order=Base.Reverse)
+end
+@testset "Small calls do not unnecessarily allocate" begin
+    test_allocs()
+end
+
 # This testset is at the end of the file because it is slow.
 @testset "searchsorted" begin
     numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
