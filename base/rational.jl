@@ -130,6 +130,20 @@ function (::Type{T})(x::Rational{S}) where T<:AbstractFloat where S
     convert(T, convert(P,x.num)/convert(P,x.den))::T
 end
 
+"""
+    Rational(x::AbstractFloat)
+
+Returns the exact conversion of `x` to a `Rational` number that is representable in `typeof(x)`.
+
+# Examples
+```jldoctest
+julia> Rational(5.6f0)
+11744051//2097152
+
+julia> Rational(5.6)
+3152519739159347//562949953421312
+```
+"""
 function Rational{T}(x::AbstractFloat) where T<:Integer
     r = rationalize(T, x, tol=0)
     x == convert(typeof(x), r) || throw(InexactError(:Rational, Rational{T}, x))
@@ -155,6 +169,10 @@ widen(::Type{Rational{T}}) where {T} = Rational{widen(T)}
 
 Approximate floating point number `x` as a [`Rational`](@ref) number with components
 of the given integer type. The result will differ from `x` by no more than `tol`.
+
+!!! note
+    `rationalize` may perform inexact conversion, even when `tol = 0`;
+    for exact conversion use the [`Rational`](@ref) constructor.
 
 # Examples
 ```jldoctest
