@@ -237,7 +237,9 @@ function reprocess_instruction!(interp::AbstractInterpreter,
         # Handled at the very end
         return false
     elseif isa(inst, PiNode)
-        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), inst.typ)
+        rt = tmeet(typeinf_lattice(interp), argextype(inst.val, ir), widenconst(inst.typ))
+    elseif inst === nothing
+        return false
     else
         ccall(:jl_, Cvoid, (Any,), inst)
         error()
