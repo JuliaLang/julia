@@ -914,7 +914,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
-        add_remark!(interp, caller, "Skipping inference, because it is disabled for the target module")
+        add_remark!(interp, caller, "Inference is disabled for the target module")
         return EdgeCallResult(Any, nothing, Effects())
     end
     if !caller.cached && caller.parent === nothing
