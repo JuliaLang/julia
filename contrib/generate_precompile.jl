@@ -242,8 +242,8 @@ const HELP_PROMPT = "help?> "
 # You can disable parallel precompiles generation by setting `false`
 const PARALLEL_PRECOMPILATION = true
 
-# TODO use can_fancyprint(io) from Pkg
-const fancyprint = true
+# You can disable fancy printing
+const fancyprint = (io isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
 
 # Printing the current state
 let
