@@ -271,7 +271,7 @@ let
     function print_state(args::Pair{String,String}...)
         lock(print_lk) do
             isempty(args) || push!(status, args...)
-            print("\rCollect (Basic: ")
+            print("\r└ Collect (Basic: ")
             print_status("step1")
             print(", REPL ", status["repl"], ": ")
             print_status("step2")
@@ -295,7 +295,7 @@ function generate_precompile_statements()
         push!(statements_step1, statement)
     end
 
-    println("Collect and execute precompile statements")
+    println("Collecting and executing precompile statements")
     print_state()
     clock = @async begin
         t = Timer(0; interval=1/10)
