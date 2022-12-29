@@ -465,7 +465,12 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
         occursin(", Core.Compiler.AbstractInterpreter, ", statement) && continue
         try
             ps = Meta.parse(statement)
-            isexpr(ps, :call) || continue
+            if !isexpr(ps, :call)
+                # these are typically comments
+                @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
+                continue
+            end
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             l = ps.args[end]
@@ -483,7 +488,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             n_succeeded += 1
             failed = length(statements) - n_succeeded
             yield() # Make clock spinning
-            print_state("step3" => "R$n_succeeded ($failed failed)")
+            print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
@@ -491,7 +496,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     end
     wait(clock) # Stop asynchronous printing
     failed = length(statements) - n_succeeded
-    print_state("step3" => "F$n_succeeded ($failed failed)")
+    print_state("step3" => string("F$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
     println()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
