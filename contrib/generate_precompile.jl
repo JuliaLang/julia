@@ -259,11 +259,11 @@ let
     function print_status(key::String)
         txt = status[key]
         if startswith(txt, "W") # Waiting
-            printstyled("?", color=Base.warn_color()); print(txt[2:end])
+            printstyled("? ", color=Base.warn_color()); print(txt[2:end])
         elseif startswith(txt, "R") # Running
-            printstyled(status["clock"], color=:magenta); print(txt[2:end])
+            printstyled(status["clock"], " ", color=:magenta); print(txt[2:end])
         elseif startswith(txt, "F") # Finished
-            printstyled("✓", color=:green); print(txt[2:end])
+            printstyled("✓ ", color=:green); print(txt[2:end])
         else
             print(txt)
         end
