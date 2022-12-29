@@ -353,12 +353,48 @@ end
 
 after_comp, after_recomp = Base.cumulative_compile_time_ns() # no need to turn timing off, @time will do that
 @test after_comp >= before_comp;
+@test after_recomp >= before_recomp;
+@test after_recomp - before_recomp <= after_comp - before_comp;
 
 # should be approximately 60,000,000 ns, we definitely shouldn't exceed 100x that value
 # failing this probably means an uninitialized variable somewhere
 @test after_comp - before_comp < 6_000_000_000;
 
 end # redirect_stdout
+
+# issue #48024, avoid overcounting timers
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    Base.Experimental.@force_compile;
+    local elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    local compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble([1.0]);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+
+    elapsed = Base.time_ns();
+    Base.cumulative_compile_timing(true);
+    compiles = Base.cumulative_compile_time_ns();
+    @eval calldouble(1.0);
+    Base.cumulative_compile_timing(false);
+    compiles = Base.cumulative_compile_time_ns() .- compiles;
+    elapsed = Base.time_ns() - elapsed;
+
+    # compile time should be at most total time
+    @test compiles[1] <= elapsed
+    # recompile time should be at most compile time
+    @test compiles[2] <= compiles[1]
+end
 
 macro capture_stdout(ex)
     quote
@@ -370,6 +406,27 @@ macro capture_stdout(ex)
             read(f, String)
         end
     end
+end
+
+# issue #48024, but with the time macro itself
+begin
+    double(x::Real) = 2x;
+    calldouble(container) = double(container[1]);
+    calldouble2(container) = calldouble(container);
+
+    local first = @capture_stdout @time @eval calldouble([1.0])
+    local second = @capture_stdout @time @eval calldouble2(1.0)
+
+    # these functions were not recompiled
+    local matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", first))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
+
+    matches = collect(eachmatch(r"(\d+(?:\.\d+)?)%", second))
+    @test length(matches) == 1
+    @test parse(Float64, matches[1][1]) > 0.0
+    @test parse(Float64, matches[1][1]) <= 100.0
 end
 
 # compilation reports in @time, @timev

@@ -303,7 +303,7 @@ extern "C" JL_DLLEXPORT
 int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
     auto ct = jl_current_task;
-    ct->reentrant_codegen++;
+    ct->reentrant_timing++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -340,8 +340,10 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             jl_ExecutionEngine->addModule(std::move(*into));
     }
     JL_UNLOCK(&jl_codegen_lock);
-    if (!--ct->reentrant_codegen && measure_compile_time_enabled)
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (!--ct->reentrant_timing && measure_compile_time_enabled) {
+        auto end = jl_hrtime();
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+    }
     if (ctx.getContext()) {
         jl_ExecutionEngine->releaseContext(std::move(ctx));
     }
@@ -396,7 +398,7 @@ extern "C" JL_DLLEXPORT
 jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world)
 {
     auto ct = jl_current_task;
-    ct->reentrant_codegen++;
+    ct->reentrant_timing++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     bool is_recompile = false;
@@ -449,10 +451,11 @@ jl_code_instance_t *jl_generate_fptr_impl(jl_method_instance_t *mi JL_PROPAGATES
         codeinst = NULL;
     }
     JL_UNLOCK(&jl_codegen_lock);
-    if (!--ct->reentrant_codegen && measure_compile_time_enabled) {
+    if (!--ct->reentrant_timing && measure_compile_time_enabled) {
         uint64_t t_comp = jl_hrtime() - compiler_start_time;
-        if (is_recompile)
+        if (is_recompile) {
             jl_atomic_fetch_add_relaxed(&jl_cumulative_recompile_time, t_comp);
+        }
         jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, t_comp);
     }
     JL_GC_POP();
@@ -466,7 +469,7 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         return;
     }
     auto ct = jl_current_task;
-    ct->reentrant_codegen++;
+    ct->reentrant_timing++;
     uint64_t compiler_start_time = 0;
     uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
     if (measure_compile_time_enabled)
@@ -500,8 +503,10 @@ void jl_generate_fptr_for_unspecialized_impl(jl_code_instance_t *unspec)
         JL_GC_POP();
     }
     JL_UNLOCK(&jl_codegen_lock); // Might GC
-    if (!--ct->reentrant_codegen && measure_compile_time_enabled)
-        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+    if (!--ct->reentrant_timing && measure_compile_time_enabled) {
+        auto end = jl_hrtime();
+        jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+    }
 }
 
 
@@ -522,7 +527,7 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
             // (using sentinel value `1` instead)
             // so create an exception here so we can print pretty our lies
             auto ct = jl_current_task;
-            ct->reentrant_codegen++;
+            ct->reentrant_timing++;
             uint64_t compiler_start_time = 0;
             uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
             if (measure_compile_time_enabled)
@@ -552,8 +557,10 @@ jl_value_t *jl_dump_method_asm_impl(jl_method_instance_t *mi, size_t world,
                 JL_GC_POP();
             }
             JL_UNLOCK(&jl_codegen_lock);
-            if (!--ct->reentrant_codegen && measure_compile_time_enabled)
-                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, (jl_hrtime() - compiler_start_time));
+            if (!--ct->reentrant_timing && measure_compile_time_enabled) {
+                auto end = jl_hrtime();
+                jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
+            }
         }
         if (specfptr != 0)
             return jl_dump_fptr_asm(specfptr, raw_mc, asm_variant, debuginfo, binary);
