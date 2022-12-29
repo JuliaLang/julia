@@ -21,6 +21,8 @@ libstdcxx_handle = C_NULL
 libstdcxx_path = ""
 libgomp_handle = C_NULL
 libgomp_path = ""
+libssp_handle = C_NULL
+libssp_path = ""
 
 if Sys.iswindows()
     if arch(HostPlatform()) == "x86_64"
@@ -31,6 +33,7 @@ if Sys.iswindows()
     const libgfortran = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
     const libstdcxx = "libstdc++-6.dll"
     const libgomp = "libgomp-1.dll"
+    const libssp = "libssp-0.dll"
 elseif Sys.isapple()
     if arch(HostPlatform()) == "aarch64" || libgfortran_version(HostPlatform()) == v"5"
         const libgcc_s = "@rpath/libgcc_s.1.1.dylib"
@@ -56,6 +59,10 @@ function __init__()
     global libstdcxx_path = dlpath(libstdcxx_handle)
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
+    if Sys.iswindows()
+        global libssp_handle = dlopen(libssp)
+        global libssp_path = dlpath(libssp_handle)
+    end
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)
     push!(LIBPATH_list, LIBPATH[])

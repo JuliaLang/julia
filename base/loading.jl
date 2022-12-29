@@ -964,6 +964,12 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
                 elapsed = round((time_ns() - t_before) / 1e6, digits = 1)
                 comp_time, recomp_time = cumulative_compile_time_ns() .- t_comp_before
                 print(lpad(elapsed, 9), " ms  ")
+                for extid in EXT_DORMITORY
+                    if extid.id == pkg
+                        print(extid.parentid.name, " → ")
+                        break
+                    end
+                end
                 print(pkg.name)
                 if comp_time > 0
                     printstyled(" ", Ryu.writefixed(Float64(100 * comp_time / (elapsed * 1e6)), 2), "% compilation time", color = Base.info_color())
@@ -2078,7 +2084,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
                 # Ensure that the user can execute the `.so` we're generating
                 # Note that on windows, `filemode(path)` typically returns `0o666`, so this
                 # addition of the execute bit for the user is doubly needed.
-                chmod(tmppath_so, filemode(path) & 0o777 | 0o300)
+                chmod(tmppath_so, filemode(path) & 0o777 | 0o333)
             end
 
             # prune the directory with cache files
