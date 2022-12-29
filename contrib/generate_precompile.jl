@@ -505,8 +505,6 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     tot_time = time_ns() - start_time
     println("Precompilation complete. Summary:")
     print("Total ─────── "); Base.time_print(tot_time);     println()
-catch e
-    rethrow()
 finally
     fancyprint && print(ansi_enablecursor)
     return
