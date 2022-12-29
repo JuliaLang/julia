@@ -2938,22 +2938,77 @@ static void jl_gc_queue_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp
     }
     task = jl_atomic_load_relaxed(&ptls2->current_task);
     if (task) {
-        gc_mark_queue_obj(gc_cache, sp, task);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "current task");
+        if (jl_atomic_load_relaxed(&task->_state)== JL_TASK_STATE_RUNNABLE) {
+            gc_mark_queue_obj(gc_cache, sp, task);
+            gc_heap_snapshot_record_root((jl_value_t*)task, "current task");
+        }
     }
     task = ptls2->next_task;
     if (task) {
-        gc_mark_queue_obj(gc_cache, sp, task);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
+        if (jl_atomic_load_relaxed(&task->_state)== JL_TASK_STATE_RUNNABLE) {
+            gc_mark_queue_obj(gc_cache, sp, task);
+            gc_heap_snapshot_record_root((jl_value_t*)task, "next task");
+        }
     }
     task = ptls2->previous_task;
     if (task) { // shouldn't be necessary, but no reason not to
-        gc_mark_queue_obj(gc_cache, sp, task);
-        gc_heap_snapshot_record_root((jl_value_t*)task, "previous task");
+        if (jl_atomic_load_relaxed(&task->_state)== JL_TASK_STATE_RUNNABLE) {
+            gc_mark_queue_obj(gc_cache, sp, task);
+            gc_heap_snapshot_record_root((jl_value_t*)task, "previous task");
+        }
     }
     if (ptls2->previous_exception) {
         gc_mark_queue_obj(gc_cache, sp, ptls2->previous_exception);
         gc_heap_snapshot_record_root((jl_value_t*)ptls2->previous_exception, "previous exception");
+    }
+}
+
+// Treat fields of task as weakrefs, mark the task itself and discard
+// some of it's fields.
+STATIC_INLINE int gc_queue_task_weakly(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_task_t *task) JL_NOTSAFEPOINT
+{
+    jl_value_t *obj = (jl_value_t*)jl_assume(task);
+    uintptr_t nptr = 0;
+    uintptr_t tag = 0;
+    uint8_t bits = 0;
+    if (!gc_try_setmark(obj, &nptr, &tag, &bits))
+        return (int)nptr;
+
+    task->result = jl_nothing;
+    task->start = jl_nothing;
+    task->tls = jl_nothing;
+    // TODO: Are there other fields we need to want to zero?
+    gc_mark_marked_obj_t data = {obj, tag, bits};
+    gc_mark_stack_push(gc_cache, sp, gc_mark_label_addrs[GC_MARK_L_marked_obj],
+                       &data, sizeof(data), 1);
+    return (int)nptr;
+}
+
+static void jl_gc_queue_delayed_thread_local(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp,
+                                     jl_ptls_t ptls2)
+{
+    jl_task_t *task;
+    task = jl_atomic_load_relaxed(&ptls2->current_task);
+    if (task) {
+        if (jl_atomic_load_relaxed(&task->_state)!= JL_TASK_STATE_RUNNABLE) {
+            gc_queue_task_weakly(gc_cache, sp, task);
+            gc_heap_snapshot_record_root((jl_value_t*)task, "current task (weak)");
+        }
+    }
+    task = ptls2->next_task;
+    if (task) {
+        if (jl_atomic_load_relaxed(&task->_state)!= JL_TASK_STATE_RUNNABLE) {
+            gc_queue_task_weakly(gc_cache, sp, task);
+            gc_heap_snapshot_record_root((jl_value_t*)task, "next task (weak)");
+
+        }
+    }
+    task = ptls2->previous_task;
+    if (task) { // shouldn't be necessary, but no reason not to
+        if (jl_atomic_load_relaxed(&task->_state)!= JL_TASK_STATE_RUNNABLE) {
+            gc_queue_task_weakly(gc_cache, sp, task);
+            gc_heap_snapshot_record_root((jl_value_t*)task, "previous task (weak)");
+        }
     }
 }
 
@@ -3222,6 +3277,19 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         import_gc_state(ptls, &sp);
     }
     gc_mark_loop(ptls, sp);
+
+    // Tasks hold on to state quite a bit even after they are finished
+    // So we process the thread_local state of finished tasks delayed.
+    assert(gc_n_threads);
+    gc_mark_sp_init(gc_cache, &sp);
+    for (int t_i = 0; t_i < gc_n_threads; t_i++) {
+        jl_ptls_t ptls2 = gc_all_tls_states[t_i];
+        if (ptls2 == NULL)
+            continue;
+        jl_gc_queue_delayed_thread_local(gc_cache, &sp, ptls2);
+    }
+    gc_mark_loop(ptls, sp);
+
     gc_mark_sp_init(gc_cache, &sp);
     gc_num.since_sweep += gc_num.allocd;
     JL_PROBE_GC_MARK_END(scanned_bytes, perm_scanned_bytes);
