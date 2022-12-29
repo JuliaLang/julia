@@ -478,6 +478,7 @@ function generate_precompile_statements()
             precompile(ps...)
             n_succeeded += 1
             failed = length(statements) - n_succeeded
+            yield() # Make clock spinning
             print_state("step3" => "R$n_succeeded ($failed failed)")
         catch ex
             # See #28808
