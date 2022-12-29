@@ -261,7 +261,7 @@ let
         if startswith(txt, "W") # Waiting
             printstyled("? ", color=Base.warn_color()); print(txt[2:end])
         elseif startswith(txt, "R") # Running
-            printstyled(status["clock"], " ", color=:magenta); print(txt[2:end])
+            print(status["clock"], " ", txt[2:end])
         elseif startswith(txt, "F") # Finished
             printstyled("✓ ", color=:green); print(txt[2:end])
         else
@@ -296,6 +296,11 @@ function generate_precompile_statements()
     end
 
     println("Collecting and executing precompile statements")
+
+    ansi_enablecursor = "\e[?25h"
+    ansi_disablecursor = "\e[?25l"
+
+    fancyprint && print(ansi_disablecursor)
     print_state()
     clock = @async begin
         t = Timer(0; interval=1/10)
@@ -488,6 +493,7 @@ function generate_precompile_statements()
     wait(clock) # Stop asynchronous printing
     failed = length(statements) - n_succeeded
     print_state("step3" => "F$n_succeeded ($failed failed)")
+    fancyprint && print(ansi_enablecursor)
     println()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
