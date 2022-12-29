@@ -1,8 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-==(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
-==(w::WeakRef, v) = isequal(w.value, v)
-==(w, v::WeakRef) = isequal(w, v.value)
+unwrap_isequal(w::WeakRef) = w.value
 
 # Used by `Base.finalizer` to validate mutability of an object being finalized.
 function _check_mutable(@nospecialize(o)) @noinline

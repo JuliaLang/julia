@@ -124,7 +124,13 @@ include("range.jl")
 include("error.jl")
 
 # core numeric operations & types
-==(x, y) = x === y
+unwrap_isequal(x) = x
+function ==(x, y)
+    ux = unwrap_isequal(x)
+    uy = unwrap_isequal(y)
+    ux === x && uy === y && return x === y
+    return ux == uy
+end
 include("bool.jl")
 include("number.jl")
 include("int.jl")
