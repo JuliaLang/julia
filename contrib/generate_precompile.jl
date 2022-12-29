@@ -243,7 +243,7 @@ const HELP_PROMPT = "help?> "
 const PARALLEL_PRECOMPILATION = true
 
 # You can disable fancy printing
-const fancyprint = (io isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
+const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
 
 # Printing the current state
 let
