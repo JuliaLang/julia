@@ -242,6 +242,9 @@ const HELP_PROMPT = "help?> "
 # You can disable parallel precompiles generation by setting `false`
 const PARALLEL_PRECOMPILATION = true
 
+# TODO use can_fancyprint(io) from Pkg
+const fancyprint = true
+
 # Printing the current state
 let
     global print_state
@@ -250,13 +253,30 @@ let
         "step1" => "W",
         "step2" => "W",
         "repl" => "0/0",
-        "execute" => "0/0",
+        "step3" => "W",
+        "clock" => "◐",
     )
+    function print_status(key::String)
+        txt = status[key]
+        if startswith(txt, "W") # Waiting
+            printstyled("?", color=Base.warn_color()); print(txt[2:end])
+        elseif startswith(txt, "R") # Running
+            printstyled(status["clock"], color=:magenta); print(txt[2:end])
+        elseif startswith(txt, "F") # Finished
+            printstyled("✓", color=:green); print(txt[2:end])
+        else
+            print(txt)
+        end
+    end
     function print_state(args::Pair{String,String}...)
         lock(print_lk) do
             isempty(args) || push!(status, args...)
-            t1, t2, t3, t4 = (get(status, x, "") for x in ["step1", "repl", "step2", "execute"])
-            print("\rCollect (normal ($t1), REPL $t2 ($t3)) => Execute $t4")
+            print("\rCollect (Basic: ")
+            print_status("step1")
+            print(", REPL ", status["repl"], ": ")
+            print_status("step2")
+            print(") => Execute ")
+            print_status("step3")
         end
     end
 end
@@ -275,8 +295,20 @@ function generate_precompile_statements()
         push!(statements_step1, statement)
     end
 
-    println("Precompile statements (Waiting, Running, Finished)")
+    println("Collect and execute precompile statements")
     print_state()
+    clock = @async begin
+        t = Timer(0; interval=1/10)
+        anim_chars = ["◐","◓","◑","◒"]
+        current = 1
+        if fancyprint
+            while isopen(statements_step2) || !isempty(statements_step2)
+                print_state("clock" => anim_chars[current])
+                wait(t)
+                current = current == 4 ? 1 : current + 1
+            end
+        end
+    end
 
     # Collect statements from running the script
     step1 = @async mktempdir() do prec_path
@@ -301,13 +333,14 @@ function generate_precompile_statements()
         run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
         n_step1 = 0
         for f in (tmp_prec, tmp_proc)
+            isfile(f) || continue
             for statement in split(read(f, String), '\n')
                 push!(statements_step1, statement)
                 n_step1 += 1
             end
         end
         close(statements_step1)
-        print_state("step1" => "F,$n_step1")
+        print_state("step1" => "F$n_step1")
         return :ok
     end
     !PARALLEL_PRECOMPILATION && wait(step1)
@@ -394,7 +427,7 @@ function generate_precompile_statements()
             n_step2 += 1
         end
         close(statements_step2)
-        print_state("step2" => "F,$n_step2")
+        print_state("step2" => "F$n_step2")
         return :ok
     end
     !PARALLEL_PRECOMPILATION && wait(step2)
@@ -444,17 +477,21 @@ function generate_precompile_statements()
             ps = Core.eval(PrecompileStagingArea, ps)
             precompile(ps...)
             n_succeeded += 1
-            print_state("execute" => "$n_succeeded/$(length(statements))")
+            failed = length(statements) - n_succeeded
+            print_state("step3" => "R$n_succeeded ($failed failed)")
         catch ex
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end
     end
+    wait(clock) # Stop asynchronous printing
+    failed = length(statements) - n_succeeded
+    print_state("step3" => "F$n_succeeded ($failed failed)")
     println()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
         # comment out if debugging script
-        n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
+        n_succeeded > 1500 || @warn "Only $n_succeeded precompile statements"
     end
 
     fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
