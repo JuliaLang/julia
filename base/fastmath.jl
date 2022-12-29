@@ -41,6 +41,8 @@ const fast_op =
          :!= => :ne_fast,
          :< => :lt_fast,
          :<= => :le_fast,
+         :> => :gt_fast,
+         :>= => :ge_fast,
          :abs => :abs_fast,
          :abs2 => :abs2_fast,
          :cmp => :cmp_fast,
@@ -182,6 +184,8 @@ eq_fast(x::T, y::T) where {T<:FloatTypes} = eq_float_fast(x, y)
 ne_fast(x::T, y::T) where {T<:FloatTypes} = ne_float_fast(x, y)
 lt_fast(x::T, y::T) where {T<:FloatTypes} = lt_float_fast(x, y)
 le_fast(x::T, y::T) where {T<:FloatTypes} = le_float_fast(x, y)
+gt_fast(x, y) = lt_fast(y, x)
+ge_fast(x, y) = le_fast(y, x)
 
 isinf_fast(x) = false
 isfinite_fast(x) = true

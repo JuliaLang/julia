@@ -621,16 +621,20 @@ static inline std::vector<TargetData<n>> &get_cmdline_targets(F &&feature_cb)
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_fptrs_t parse_sysimg(void *hdl, F &&callback)
 {
-    jl_sysimg_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
+    jl_image_fptrs_t res = {nullptr, 0, nullptr, 0, nullptr, nullptr};
 
     // .data base
     char *data_base;
-    jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 1);
+    if (!jl_dlsym(hdl, "jl_sysimg_gvars_base", (void**)&data_base, 0)) {
+        data_base = NULL;
+    }
     // .text base
     char *text_base;
-    jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 1);
+    if (!jl_dlsym(hdl, "jl_sysimg_fvars_base", (void**)&text_base, 0)) {
+        text_base = NULL;
+    }
     res.base = text_base;
 
     int32_t *offsets;
@@ -713,6 +717,7 @@ static inline jl_sysimg_fptrs_t parse_sysimg(void *hdl, F &&callback)
             if (reloc_idx == idx) {
                 found = true;
                 auto slot = (const void**)(data_base + reloc_slots[reloc_i * 2 + 1]);
+                assert(slot);
                 *slot = offset + res.base;
             }
             else if (reloc_idx > idx) {

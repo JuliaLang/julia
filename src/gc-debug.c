@@ -1385,8 +1385,8 @@ NOINLINE void gc_mark_loop_unwind(jl_ptls_t ptls, jl_gc_mark_sp_t sp, int pc_off
                 jl_safe_printf("Mark stack unwind overflow -- ABORTING !!!\n");
                 break;
             }
-            jl_safe_printf("%p:  %s Module (bindings) %p (bits %d) -- [%p, %p)\n",
-                           (void*)data, prefix, (void*)data->parent, (int)data->bits,
+            jl_safe_printf("%p:  %s Module (bindings) %p -- [%p, %p)\n",
+                           (void*)data, prefix, (void*)data->parent,
                            (void*)data->begin, (void*)data->end);
         }
         else {

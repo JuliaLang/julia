@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 original_depot_path = copy(Base.DEPOT_PATH)
+original_load_path = copy(Base.LOAD_PATH)
 
 using Test, Distributed, Random
 
@@ -27,8 +28,18 @@ function precompile_test_harness(@nospecialize(f), separate::Bool)
         pushfirst!(DEPOT_PATH, load_cache_path)
         f(load_path)
     finally
-        rm(load_path, recursive=true, force=true)
-        separate && rm(load_cache_path, recursive=true, force=true)
+        try
+            rm(load_path, force=true, recursive=true)
+        catch err
+            @show err
+        end
+        if separate
+            try
+                rm(load_cache_path, force=true, recursive=true)
+            catch err
+                @show err
+            end
+        end
         filter!((≠)(load_path), LOAD_PATH)
         separate && filter!((≠)(load_cache_path), DEPOT_PATH)
     end
@@ -37,7 +48,7 @@ end
 
 # method root provenance
 
-rootid(m::Module) = ccall(:jl_module_build_id, UInt64, (Any,), Base.parentmodule(m))
+rootid(m::Module) = Base.module_build_id(Base.parentmodule(m)) % UInt64
 rootid(m::Method) = rootid(m.module)
 
 function root_provenance(m::Method, i::Int)
@@ -317,11 +328,16 @@ precompile_test_harness(false) do dir
     cachedir = joinpath(dir, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachedir2 = joinpath(dir2, "compiled", "v$(VERSION.major).$(VERSION.minor)")
     cachefile = joinpath(cachedir, "$Foo_module.ji")
+    if Base.JLOptions().use_pkgimages == 1
+        ocachefile = Base.ocachefile_from_cachefile(cachefile)
+    else
+        ocachefile = nothing
+    end
     # use _require_from_serialized to ensure that the test fails if
     # the module doesn't reload from the image:
     @test_warn "@ccallable was already defined for this method name" begin
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
-            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile)
+            m = Base._require_from_serialized(Base.PkgId(Foo), cachefile, ocachefile)
             @test isa(m, Module)
         end
     end
@@ -342,9 +358,9 @@ precompile_test_harness(false) do dir
         @test string(Base.Docs.doc(Foo.Bar.bar)) == "bar function\n"
         @test string(Base.Docs.doc(Foo.Bar)) == "Bar module\n"
 
-        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+        modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
         discard_module = mod_fl_mt -> (mod_fl_mt.filename, mod_fl_mt.mtime)
-        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) ]
+        @test modules == [ Base.PkgId(Foo) => Base.module_build_id(Foo) % UInt64 ]
         @test map(x -> x.filename, deps) == [ Foo_file, joinpath(dir, "foo.jl"), joinpath(dir, "bar.jl") ]
         @test requires == [ Base.PkgId(Foo) => Base.PkgId(string(FooBase_module)),
                             Base.PkgId(Foo) => Base.PkgId(Foo2),
@@ -377,7 +393,7 @@ precompile_test_harness(false) do dir
             ),
         )
         @test discard_module.(deps) == deps1
-        modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile; srcfiles_only=true)
+        modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile; srcfiles_only=true)
         @test map(x -> x.filename, deps) == [Foo_file]
 
         @test current_task()(0x01, 0x4000, 0x30031234) == 2
@@ -440,7 +456,7 @@ precompile_test_harness(false) do dir
         """)
     Nest = Base.require(Main, Nest_module)
     cachefile = joinpath(cachedir, "$Nest_module.ji")
-    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
     @test last(deps).modpath == ["NestInner"]
 
     UsesB_module = :UsesB4b3a94a1a081a8cb
@@ -462,7 +478,7 @@ precompile_test_harness(false) do dir
         """)
     UsesB = Base.require(Main, UsesB_module)
     cachefile = joinpath(cachedir, "$UsesB_module.ji")
-    modules, (deps, requires), required_modules = Base.parse_cache_header(cachefile)
+    modules, (deps, requires), required_modules, _... = Base.parse_cache_header(cachefile)
     id1, id2 = only(requires)
     @test Base.pkgorigins[id1].cachepath == cachefile
     @test Base.pkgorigins[id2].cachepath == joinpath(cachedir, "$B_module.ji")
@@ -496,18 +512,19 @@ precompile_test_harness(false) do dir
           end
           """)
 
-    cachefile = Base.compilecache(Base.PkgId("FooBar"))
+    cachefile, _ = Base.compilecache(Base.PkgId("FooBar"))
     empty_prefs_hash = Base.get_preferences_hash(nothing, String[])
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), empty_prefs_hash)
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
+    Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String} : Tuple{<:Vector, Nothing}
+    @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
     @test !isdefined(Main, :FooBar1)
 
     relFooBar_file = joinpath(dir, "subfolder", "..", "FooBar.jl")
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Vector : Bool) # `..` is not a symlink on Windows
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa (Sys.iswindows() ? Tuple{<:Vector, String} : Bool) # `..` is not a symlink on Windows
     mkdir(joinpath(dir, "subfolder"))
-    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Vector
+    @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
     @eval using FooBar
     fb_uuid = Base.module_build_id(FooBar)
@@ -519,7 +536,7 @@ precompile_test_harness(false) do dir
     @test !isfile(joinpath(cachedir, "FooBar1.ji"))
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) === true
-    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Vector
+    @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
     @test fb_uuid == Base.module_build_id(FooBar)
     fb_uuid1 = Base.module_build_id(FooBar1)
     @test fb_uuid != fb_uuid1
@@ -1259,7 +1276,11 @@ end
         end
     finally
         cd(save_cwd)
-        rm(temp_path, recursive=true)
+        try
+            rm(temp_path, recursive=true)
+        catch err
+            @show err
+        end
         pop!(test_workers) # remove myid
         rmprocs(test_workers)
     end
@@ -1399,13 +1420,13 @@ precompile_test_harness("Issue #25971") do load_path
     sourcefile = joinpath(load_path, "Foo25971.jl")
     write(sourcefile, "module Foo25971 end")
     chmod(sourcefile, 0o666)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
     chmod(sourcefile, 0o600)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     @test filemode(sourcefile) == filemode(cachefile)
     chmod(sourcefile, 0o444)
-    cachefile = Base.compilecache(Base.PkgId("Foo25971"))
+    cachefile, _ = Base.compilecache(Base.PkgId("Foo25971"))
     # Check writable
     @test touch(cachefile) == cachefile
 end
@@ -1492,8 +1513,8 @@ end
         f(x, y) = x + y
         f(x::Int, y) = 2x + y
     end
-    precompile(M.f, (Int, Any))
-    precompile(M.f, (AbstractFloat, Any))
+    @test precompile(M.f, (Int, Any))
+    @test precompile(M.f, (AbstractFloat, Any))
     mis = map(methods(M.f)) do m
         m.specializations[1]
     end
@@ -1554,8 +1575,23 @@ precompile_test_harness("issue #46296") do load_path
     (@eval (using CodeInstancePrecompile))
 end
 
-empty!(Base.DEPOT_PATH)
-append!(Base.DEPOT_PATH, original_depot_path)
+precompile_test_harness("Recursive types") do load_path
+    write(joinpath(load_path, "RecursiveTypeDef.jl"),
+        """
+        module RecursiveTypeDef
+
+        struct C{T,O} end
+        struct A{T,N,O} <: AbstractArray{C{T,A{T,N,O}},N}
+            sz::NTuple{N,Int}
+        end
+
+        end
+        """)
+    Base.compilecache(Base.PkgId("RecursiveTypeDef"))
+    (@eval (using RecursiveTypeDef))
+    a = Base.invokelatest(RecursiveTypeDef.A{Float64,2,String}, (3, 3))
+    @test isa(a, AbstractArray)
+end
 
 @testset "issue 46778" begin
     f46778(::Any, ::Type{Int}) = 1
@@ -1563,3 +1599,99 @@ append!(Base.DEPOT_PATH, original_depot_path)
     @test precompile(Tuple{typeof(f46778), Int, DataType})
     @test which(f46778, Tuple{Any,DataType}).specializations[1].cache.invoke != C_NULL
 end
+
+
+precompile_test_harness("Module tparams") do load_path
+    write(joinpath(load_path, "ModuleTparams.jl"),
+        """
+        module ModuleTparams
+            module TheTParam
+            end
+
+            struct ParamStruct{T}; end
+            const the_struct = ParamStruct{TheTParam}()
+        end
+        """)
+    Base.compilecache(Base.PkgId("ModuleTparams"))
+    (@eval (using ModuleTparams))
+    @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+end
+
+precompile_test_harness("PkgCacheInspector") do load_path
+    # Test functionality needed by PkgCacheInspector.jl
+    write(joinpath(load_path, "PCI.jl"),
+        """
+        module PCI
+        Base.repl_cmd() = 55            # external method
+        f() = Base.repl_cmd(7, "hello")   # external specialization (should never exist otherwise)
+        try
+            f()
+        catch
+        end
+        end
+        """)
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("PCI"))
+
+    # Get the depmods
+    local depmods
+    @lock Base.require_lock begin
+        local depmodnames
+        io = open(cachefile, "r")
+        try
+            # isvalid_cache_header returns checksum id or zero
+            Base.isvalid_cache_header(io) == 0 && throw(ArgumentError("Invalid header in cache file $cachefile."))
+            depmodnames = Base.parse_cache_header(io)[3]
+            Base.isvalid_file_crc(io) || throw(ArgumentError("Invalid checksum in cache file $cachefile."))
+        finally
+            close(io)
+        end
+        ndeps = length(depmodnames)
+        depmods = Vector{Any}(undef, ndeps)
+        for i in 1:ndeps
+            modkey, build_id = depmodnames[i]
+            dep = Base._tryrequire_from_serialized(modkey, build_id)
+            if !isa(dep, Module)
+                return dep
+            end
+            depmods[i] = dep
+        end
+    end
+
+    if ocachefile !== nothing
+        sv = ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint), ocachefile, depmods, true)
+    else
+        sv = ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint), cachefile, depmods, true)
+    end
+
+    modules, init_order, external_methods, new_specializations, new_method_roots, external_targets, edges = sv
+    m = only(external_methods)
+    @test m.name == :repl_cmd && m.nargs < 2
+    @test any(new_specializations) do ci
+        mi = ci.def
+        mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
+    end
+end
+
+precompile_test_harness("DynamicExpressions") do load_path
+    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+    write(joinpath(load_path, "Float16MWE.jl"),
+    """
+    module Float16MWE
+    struct Node{T}
+        val::T
+    end
+    doconvert(::Type{<:Node}, val) = convert(Float16, val)
+    precompile(Tuple{typeof(doconvert), Type{Node{Float16}}, Float64})
+    end # module Float16MWE
+    """)
+    Base.compilecache(Base.PkgId("Float16MWE"))
+    (@eval (using Float16MWE))
+    Base.invokelatest() do
+        @test Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2) === Float16(-1.2)
+    end
+end
+
+empty!(Base.DEPOT_PATH)
+append!(Base.DEPOT_PATH, original_depot_path)
+empty!(Base.LOAD_PATH)
+append!(Base.LOAD_PATH, original_load_path)

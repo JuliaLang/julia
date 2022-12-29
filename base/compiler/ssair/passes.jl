@@ -179,11 +179,11 @@ function find_def_for_use(
     return def, useblock, curblock
 end
 
-function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint))
+function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice)
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
-    return walk_to_defs(compact, val, typeconstraint)
+    return walk_to_defs(compact, val, typeconstraint, 𝕃ₒ)
 end
 
 function simple_walk(compact::IncrementalCompact, @nospecialize(defssa#=::AnySSAValue=#),
@@ -243,7 +243,7 @@ end
 Starting at `val` walk use-def chains to get all the leaves feeding into this `val`
 (pruning those leaves rules out by path conditions).
 """
-function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint))
+function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice)
     visited_phinodes = AnySSAValue[]
     isa(defssa, AnySSAValue) || return Any[defssa], visited_phinodes
     def = compact[defssa][:inst]
@@ -289,7 +289,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
                             # path, with a different type constraint. We may have
                             # to redo some work here with the wider typeconstraint
                             push!(worklist_defs, new_def)
-                            push!(worklist_constraints, tmerge(OptimizerLattice(), new_constraint, visited_constraints[new_def]))
+                            push!(worklist_constraints, tmerge(𝕃ₒ, new_constraint, visited_constraints[new_def]))
                         end
                         continue
                     end
@@ -340,7 +340,7 @@ function is_pending(compact::IncrementalCompact, old::OldSSAValue)
     return old.id > length(compact.ir.stmts) + length(compact.ir.new_nodes)
 end
 
-function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
+function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact, 𝕃ₒ::AbstractLattice)
     isa(def, Expr) || return false
     length(def.args) >= 3 || return false
     is_known_call(def, getfield, compact) || return false
@@ -348,7 +348,7 @@ function is_getfield_captures(@nospecialize(def), compact::IncrementalCompact)
     isa(which, Const) || return false
     which.val === :captures || return false
     oc = argextype(def.args[2], compact)
-    return oc ⊑ₒ Core.OpaqueClosure
+    return ⊑(𝕃ₒ, oc, Core.OpaqueClosure)
 end
 
 struct LiftedValue
@@ -359,8 +359,8 @@ const LiftedLeaves = IdDict{Any, Union{Nothing,LiftedValue}}
 
 # try to compute lifted values that can replace `getfield(x, field)` call
 # where `x` is an immutable struct that are defined at any of `leaves`
-function lift_leaves(compact::IncrementalCompact,
-                     @nospecialize(result_t), field::Int, leaves::Vector{Any})
+function lift_leaves(compact::IncrementalCompact, @nospecialize(result_t), field::Int,
+                     leaves::Vector{Any}, 𝕃ₒ::AbstractLattice)
     # For every leaf, the lifted value
     lifted_leaves = LiftedLeaves()
     maybe_undef = false
@@ -411,7 +411,7 @@ function lift_leaves(compact::IncrementalCompact,
             #         continue
             #     end
             #     return nothing
-            elseif is_getfield_captures(def, compact)
+            elseif is_getfield_captures(def, compact, 𝕃ₒ)
                 # Walk to new_opaque_closure
                 ocleaf = def.args[2]
                 if isa(ocleaf, AnySSAValue)
@@ -504,7 +504,7 @@ end
 make_MaybeUndef(@nospecialize(typ)) = isa(typ, MaybeUndef) ? typ : MaybeUndef(typ)
 
 """
-    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr)
+    lift_comparison!(cmp, compact::IncrementalCompact, idx::Int, stmt::Expr, 𝕃ₒ::AbstractLattice)
 
 Replaces `cmp(φ(x, y)::Union{X,Y}, constant)` by `φ(cmp(x, constant), cmp(y, constant))`,
 where `cmp(x, constant)` and `cmp(y, constant)` can be replaced with constant `Bool`eans.
@@ -520,7 +520,7 @@ function lift_comparison! end
 
 function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     lhs, rhs = args[2], args[3]
@@ -536,48 +536,47 @@ function lift_comparison!(::typeof(===), compact::IncrementalCompact,
     else
         return
     end
-    egal_tfunc_opt(@nospecialize(x), @nospecialize(y)) = egal_tfunc(𝕃ₒ, x, y)
-    lift_comparison_leaves!(egal_tfunc_opt, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(egal_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isa), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     val = args[2]
-    isa_tfunc_opt(@nospecialize(v), @nospecialize(typ)) = isa_tfunc(𝕃ₒ, v, typ)
-    lift_comparison_leaves!(isa_tfunc_opt, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(isa_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
 function lift_comparison!(::typeof(isdefined), compact::IncrementalCompact,
     idx::Int, stmt::Expr, lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue},
-    𝕃ₒ::AbstractLattice = OptimizerLattice())
+    𝕃ₒ::AbstractLattice)
     args = stmt.args
     length(args) == 3 || return
     cmp = argextype(args[3], compact)
     isa(cmp, Const) || return # `isdefined_tfunc` won't return Const
     val = args[2]
-    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx)
+    lift_comparison_leaves!(isdefined_tfunc, compact, val, cmp, lifting_cache, idx, 𝕃ₒ)
 end
 
 function lift_comparison_leaves!(@specialize(tfunc),
     compact::IncrementalCompact, @nospecialize(val), @nospecialize(cmp),
-    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int)
+    lifting_cache::IdDict{Pair{AnySSAValue, Any}, AnySSAValue}, idx::Int,
+    𝕃ₒ::AbstractLattice)
     typeconstraint = widenconst(argextype(val, compact))
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
     isa(typeconstraint, Union) || return # bail out if there won't be a good chance for lifting
-    leaves, visited_phinodes = collect_leaves(compact, val, typeconstraint)
+    leaves, visited_phinodes = collect_leaves(compact, val, typeconstraint, 𝕃ₒ)
     length(leaves) ≤ 1 && return # bail out if we don't have multiple leaves
 
     # check if we can evaluate the comparison for each one of the leaves
     lifted_leaves = nothing
     for i = 1:length(leaves)
         leaf = leaves[i]
-        result = tfunc(argextype(leaf, compact), cmp)
+        result = tfunc(𝕃ₒ, argextype(leaf, compact), cmp)
         if isa(result, Const)
             if lifted_leaves === nothing
                 lifted_leaves = LiftedLeaves()
@@ -852,7 +851,7 @@ its argument).
 In a case when all usages are fully eliminated, `struct` allocation may also be erased as
 a result of succeeding dead code elimination.
 """
-function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothing)
+function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
     𝕃ₒ = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
     compact = IncrementalCompact(ir)
     defuses = nothing # will be initialized once we encounter mutability in order to reduce dynamic allocations
@@ -1018,11 +1017,11 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
         field = try_compute_fieldidx(struct_typ, field)
         field === nothing && continue
 
-        leaves, visited_phinodes = collect_leaves(compact, val, struct_typ)
+        leaves, visited_phinodes = collect_leaves(compact, val, struct_typ, 𝕃ₒ)
         isempty(leaves) && continue
 
         result_t = argextype(SSAValue(idx), compact)
-        lifted_result = lift_leaves(compact, result_t, field, leaves)
+        lifted_result = lift_leaves(compact, result_t, field, leaves, 𝕃ₒ)
         lifted_result === nothing && continue
         lifted_leaves, any_undef = lifted_result
 
@@ -1053,7 +1052,9 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing, InliningState} = nothin
         # but before the DCE) for our predicate within `sroa_mutables!`, but we also
         # try an extra effort using a callback so that reference counts are updated
         used_ssas = copy(compact.used_ssas)
-        simple_dce!(compact, (x::SSAValue) -> used_ssas[x.id] -= 1)
+        simple_dce!(compact) do x::SSAValue
+            used_ssas[x.id] -= 1
+        end
         ir = complete(compact)
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
@@ -1485,9 +1486,11 @@ end
 function adce_erase!(phi_uses::Vector{Int}, extra_worklist::Vector{Int}, compact::IncrementalCompact, idx::Int, in_worklist::Bool)
     # return whether this made a change
     if isa(compact.result[idx][:inst], PhiNode)
-        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist, val::SSAValue -> phi_uses[val.id] -= 1)
+        return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist) do val::SSAValue
+            phi_uses[val.id] -= 1
+        end
     else
-        return maybe_erase_unused!(extra_worklist, compact, idx, in_worklist)
+        return maybe_erase_unused!(compact, idx, in_worklist, extra_worklist)
     end
 end
 
@@ -1561,7 +1564,8 @@ Also note that currently this pass _needs_ to run after `sroa_pass!`, because
 the `typeassert` elimination depends on the transformation by `canonicalize_typeassert!` done
 within `sroa_pass!` which redirects references of `typeassert`ed value to the corresponding `PiNode`.
 """
-function adce_pass!(ir::IRCode)
+function adce_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
+    𝕃ₒ = inlining === nothing ? OptimizerLattice() : optimizer_lattice(inlining.interp)
     phi_uses = fill(0, length(ir.stmts) + length(ir.new_nodes))
     all_phis = Int[]
     unionphis = Pair{Int,Any}[] # sorted
@@ -1578,7 +1582,7 @@ function adce_pass!(ir::IRCode)
                 r = searchsorted(unionphis, val.id; by = first)
                 if !isempty(r)
                     unionphi = unionphis[first(r)]
-                    t = tmerge(OptimizerLattice(), unionphi[2], stmt.typ)
+                    t = tmerge(𝕃ₒ, unionphi[2], stmt.typ)
                     unionphis[first(r)] = Pair{Int,Any}(unionphi[1], t)
                 end
             end
@@ -1586,7 +1590,7 @@ function adce_pass!(ir::IRCode)
             if is_known_call(stmt, typeassert, compact) && length(stmt.args) == 3
                 # nullify safe `typeassert` calls
                 ty, isexact = instanceof_tfunc(argextype(stmt.args[3], compact))
-                if isexact && argextype(stmt.args[2], compact) ⊑ₒ ty
+                if isexact && ⊑(𝕃ₒ, argextype(stmt.args[2], compact), ty)
                     compact[idx] = nothing
                     continue
                 end
@@ -1615,7 +1619,7 @@ function adce_pass!(ir::IRCode)
                     if !isempty(r)
                         unionphi = unionphis[first(r)]
                         unionphis[first(r)] = Pair{Int,Any}(unionphi[1],
-                            tmerge(OptimizerLattice(), unionphi[2], inst[:type]))
+                            tmerge(𝕃ₒ, unionphi[2], inst[:type]))
                     end
                 end
             end
@@ -1632,7 +1636,7 @@ function adce_pass!(ir::IRCode)
             continue
         elseif t === Any
             continue
-        elseif compact.result[phi][:type] ⊑ₒ t
+        elseif ⊑(𝕃ₒ, compact.result[phi][:type], t)
             continue
         end
         to_drop = Int[]

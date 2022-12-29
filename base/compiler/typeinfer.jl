@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Tracking of newly-inferred MethodInstances during precompilation
+# Tracking of newly-inferred CodeInstances during precompilation
 const track_newly_inferred = RefValue{Bool}(false)
-const newly_inferred = MethodInstance[]
+const newly_inferred = CodeInstance[]
 
 # build (and start inferring) the inference frame for the top-level MethodInstance
 function typeinf(interp::AbstractInterpreter, result::InferenceResult, cache::Symbol)
@@ -347,7 +347,7 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, linfo::MethodInsta
         return ci
     end
     if may_discard_trees(interp)
-        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, def))
+        cache_the_tree = ci.inferred && (is_inlineable(ci) || isa_compileable_sig(linfo.specTypes, linfo.sparam_vals, def))
     else
         cache_the_tree = true
     end
@@ -403,13 +403,11 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
     # TODO: also don't store inferred code if we've previously decided to interpret this function
     if !already_inferred
         inferred_result = transform_result_for_cache(interp, linfo, valid_worlds, result)
-        code_cache(interp)[linfo] = CodeInstance(result, inferred_result, valid_worlds)
+        code_cache(interp)[linfo] = ci = CodeInstance(result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
             if isa(m, Method) && m.module != Core
-                ccall(:jl_typeinf_lock_begin, Cvoid, ())
-                push!(newly_inferred, linfo)
-                ccall(:jl_typeinf_lock_end, Cvoid, ())
+                ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
             end
         end
     end
@@ -916,6 +914,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         cache = :global # cache edge targets by default
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0 && !generating_sysimg()
+        add_remark!(interp, caller, "Inference is disabled for the target module")
         return EdgeCallResult(Any, nothing, Effects())
     end
     if !caller.cached && caller.parent === nothing
@@ -931,6 +930,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
         result = InferenceResult(mi)
         frame = InferenceState(result, cache, interp) # always use the cache for edge targets
         if frame === nothing
+            add_remark!(interp, caller, "Failed to retrieve source")
             # can't get the source for this, so we know nothing
             unlock_mi_inference(interp, mi)
             return EdgeCallResult(Any, nothing, Effects())

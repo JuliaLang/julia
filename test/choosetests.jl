@@ -31,6 +31,19 @@ const TESTNAMES = [
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
 ]
 
+const INTERNET_REQUIRED_LIST = [
+    "Artifacts",
+    "Downloads",
+    "LazyArtifacts",
+    "LibCURL",
+    "LibGit2",
+    "Pkg",
+    "TOML",
+    "download",
+]
+
+const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
+
 """
 `(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
 run. `choices` should be a vector of test names; if empty or set to
@@ -149,6 +162,7 @@ function choosetests(choices = [])
     filtertests!(tests, "compiler/EscapeAnalysis", [
         "compiler/EscapeAnalysis/local", "compiler/EscapeAnalysis/interprocedural"])
     filtertests!(tests, "stdlib", STDLIBS)
+    filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
     filtertests!(tests, "ambiguous")
 
@@ -164,16 +178,7 @@ function choosetests(choices = [])
         filter!(x -> x != "rounding", tests)
     end
 
-    net_required_for = filter!(in(tests), [
-        "Artifacts",
-        "Downloads",
-        "LazyArtifacts",
-        "LibCURL",
-        "LibGit2",
-        "Sockets",
-        "download",
-        "TOML",
-    ])
+    net_required_for = filter!(in(tests), NETWORK_REQUIRED_LIST)
     net_on = true
     JULIA_TEST_NETWORKING_AVAILABLE = get(ENV, "JULIA_TEST_NETWORKING_AVAILABLE", "") |>
                                       strip |>

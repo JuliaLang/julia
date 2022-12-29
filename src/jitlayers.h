@@ -73,7 +73,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M);
 DataLayout jl_create_datalayout(TargetMachine &TM);
 
 static inline bool imaging_default() {
-    return jl_options.image_codegen || (jl_generating_output() && !jl_options.incremental);
+    return jl_options.image_codegen || jl_generating_output();
 }
 
 struct OptimizationOptions {
@@ -173,6 +173,7 @@ typedef struct _jl_codegen_params_t {
     // outputs
     std::vector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>> workqueue;
     std::map<void*, GlobalVariable*> globals;
+    std::map<std::tuple<jl_code_instance_t*,bool>, Function*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
@@ -200,6 +201,7 @@ typedef struct _jl_codegen_params_t {
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
     bool cache = false;
+    bool external_linkage = false;
     bool imaging;
     _jl_codegen_params_t(orc::ThreadSafeContext ctx) : tsctx(std::move(ctx)), tsctx_lock(tsctx.getLock()), imaging(imaging_default()) {}
 } jl_codegen_params_t;
@@ -220,7 +222,6 @@ jl_llvm_functions_t jl_emit_codeinst(
 enum CompilationPolicy {
     Default = 0,
     Extern = 1,
-    ImagingMode = 2
 };
 
 typedef std::map<jl_code_instance_t*, std::pair<orc::ThreadSafeModule, jl_llvm_functions_t>> jl_workqueue_t;
@@ -269,6 +270,21 @@ public:
 #else
     typedef orc::RTDyldObjectLinkingLayer ObjLayerT;
 #endif
+    struct LockLayerT : public orc::ObjectLayer {
+
+        LockLayerT(orc::ObjectLayer &BaseLayer) : orc::ObjectLayer(BaseLayer.getExecutionSession()), BaseLayer(BaseLayer) {}
+
+        void emit(std::unique_ptr<orc::MaterializationResponsibility> R,
+                            std::unique_ptr<MemoryBuffer> O) override {
+#ifndef JL_USE_JITLINK
+            std::lock_guard<std::mutex> lock(EmissionMutex);
+#endif
+            BaseLayer.emit(std::move(R), std::move(O));
+        }
+    private:
+        orc::ObjectLayer &BaseLayer;
+        std::mutex EmissionMutex;
+    };
     typedef orc::IRCompileLayer CompileLayerT;
     typedef orc::IRTransformLayer OptimizeLayerT;
     typedef object::OwningBinary<object::ObjectFile> OwningObj;
@@ -493,6 +509,7 @@ private:
     const std::unique_ptr<jitlink::JITLinkMemoryManager> MemMgr;
 #endif
     ObjLayerT ObjectLayer;
+    LockLayerT LockLayer;
     const std::array<std::unique_ptr<PipelineT>, 4> Pipelines;
     OptSelLayerT OptSelLayer;
 };
