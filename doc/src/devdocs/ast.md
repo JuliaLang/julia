@@ -425,7 +425,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `splatnew`
 
     Similar to `new`, except field values are passed as a single tuple. Works similarly to
-    `Base.Splat(new)` if `new` were a first-class function, hence the name.
+    `splat(new)` if `new` were a first-class function, hence the name.
 
   * `isdefined`
 
