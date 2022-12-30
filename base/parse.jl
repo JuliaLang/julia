@@ -67,7 +67,6 @@ function tryparse(::Type{T}, c::AbstractChar; base::Integer = 10) where T<:Integ
     convert(T, d)
 end
 
-
 function parseint_iterate(s::AbstractString, startpos::Int, endpos::Int)
     (0 < startpos <= endpos) || (return Char(0), 0, 0)
     j = startpos
