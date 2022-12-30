@@ -1467,7 +1467,9 @@ static jl_taggedvalue_t **sweep_page(jl_gc_pool_t *p, jl_gc_pagemeta_t *pg, jl_t
             else { // marked young or old
                 if (*ages & msk || bits == GC_OLD_MARKED) { // old enough
                     // `!age && bits == GC_OLD_MARKED` is possible for
-                    // non-first-class objects like `jl_binding_t`
+                    // non-first-class objects like array buffers
+                    // (they may get promoted by jl_gc_wb_buf for example,
+                    // or explicitly by jl_gc_force_mark_old)
                     if (sweep_full || bits == GC_MARKED) {
                         bits = v->bits.gc = GC_OLD; // promote
                     }
@@ -1749,14 +1751,6 @@ void jl_gc_queue_multiroot(const jl_value_t *parent, const jl_value_t *ptr) JL_N
             return;
         }
     }
-}
-
-JL_DLLEXPORT void jl_gc_queue_binding(jl_binding_t *bnd)
-{
-    jl_ptls_t ptls = jl_current_task->ptls;
-    jl_taggedvalue_t *buf = jl_astaggedvalue(bnd);
-    buf->bits.gc = GC_MARKED;
-    arraylist_push(&ptls->heap.rem_bindings, bnd);
 }
 
 
@@ -2543,61 +2537,18 @@ module_binding: {
         gc_mark_binding_t *binding = gc_pop_markdata(&sp, gc_mark_binding_t);
         jl_binding_t **begin = binding->begin;
         jl_binding_t **end = binding->end;
-        uint8_t mbits = binding->bits;
         for (; begin < end; begin += 2) {
             jl_binding_t *b = *begin;
             if (b == (jl_binding_t*)HT_NOTFOUND)
                 continue;
-            if (jl_object_in_image((jl_value_t*)b)) {
-                jl_taggedvalue_t *buf = jl_astaggedvalue(b);
-                uintptr_t tag = buf->header;
-                uint8_t bits;
-                if (!gc_marked(tag))
-                    gc_setmark_tag(buf, GC_OLD_MARKED, tag, &bits);
-            }
-            else {
-                gc_setmark_buf_(ptls, b, mbits, sizeof(jl_binding_t));
-            }
-            void *vb = jl_astaggedvalue(b);
-            verify_parent1("module", binding->parent, &vb, "binding_buff");
+            verify_parent1("module", binding->parent, begin, "binding_buff");
             // Record the size used for the box for non-const bindings
             gc_heap_snapshot_record_module_to_binding(binding->parent, b);
-            (void)vb;
-            jl_value_t *ty = jl_atomic_load_relaxed(&b->ty);
-            if (ty && ty != (jl_value_t*)jl_any_type) {
-                verify_parent2("module", binding->parent,
-                               &b->ty, "binding(%s)", jl_symbol_name(b->name));
-                if (gc_try_setmark(ty, &binding->nptr, &tag, &bits)) {
-                    new_obj = ty;
-                    gc_repush_markdata(&sp, gc_mark_binding_t);
-                    goto mark;
-                }
-            }
-            jl_value_t *value = jl_atomic_load_relaxed(&b->value);
-            jl_value_t *globalref = jl_atomic_load_relaxed(&b->globalref);
-            if (value) {
-                verify_parent2("module", binding->parent,
-                               &b->value, "binding(%s)", jl_symbol_name(b->name));
-                if (gc_try_setmark(value, &binding->nptr, &tag, &bits)) {
-                    new_obj = value;
-                    begin += 2;
-                    binding->begin = begin;
-                    gc_repush_markdata(&sp, gc_mark_binding_t);
-                    uintptr_t gr_tag;
-                    uint8_t gr_bits;
-                    if (gc_try_setmark(globalref, &binding->nptr, &gr_tag, &gr_bits)) {
-                        gc_mark_marked_obj_t data = {globalref, gr_tag, gr_bits};
-                        gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(marked_obj),
-                                           &data, sizeof(data), 1);
-                    }
-                    goto mark;
-                }
-            }
-            if (gc_try_setmark(globalref, &binding->nptr, &tag, &bits)) {
+            if (gc_try_setmark((jl_value_t*)b, &binding->nptr, &tag, &bits)) {
                 begin += 2;
                 binding->begin = begin;
                 gc_repush_markdata(&sp, gc_mark_binding_t);
-                new_obj = globalref;
+                new_obj = (jl_value_t*)b;
                 goto mark;
             }
         }
@@ -2614,6 +2565,7 @@ module_binding: {
             gc_mark_objarray_t data = {(jl_value_t*)m, objary_begin, objary_end, 1, binding->nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(objarray),
                                &data, sizeof(data), 0);
+            // gc_mark_scan_objarray will eventually handle the remset for m
             if (!scanparent) {
                 objary = (gc_mark_objarray_t*)sp.data;
                 goto objarray_loaded;
@@ -2622,6 +2574,7 @@ module_binding: {
             sp.pc++;
         }
         else {
+            // done with m
             gc_mark_push_remset(ptls, (jl_value_t*)m, binding->nptr);
         }
         if (scanparent) {
@@ -2810,7 +2763,7 @@ mark: {
             jl_binding_t **table = (jl_binding_t**)m->bindings.table;
             size_t bsize = m->bindings.size;
             uintptr_t nptr = ((bsize + m->usings.len + 1) << 2) | (bits & GC_OLD);
-            gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr, bits};
+            gc_mark_binding_t markdata = {m, table + 1, table + bsize, nptr};
             gc_mark_stack_push(&ptls->gc_cache, &sp, gc_mark_laddr(module_binding),
                                &markdata, sizeof(markdata), 0);
             sp.data = (jl_gc_mark_data_t *)(((char*)sp.data) + sizeof(markdata));
@@ -3181,12 +3134,6 @@ static void jl_gc_premark(jl_ptls_t ptls2)
         objprofile_count(jl_typeof(item), 2, 0);
         jl_astaggedvalue(item)->bits.gc = GC_OLD_MARKED;
     }
-    len = ptls2->heap.rem_bindings.len;
-    items = ptls2->heap.rem_bindings.items;
-    for (size_t i = 0; i < len; i++) {
-        void *ptr = items[i];
-        jl_astaggedvalue(ptr)->bits.gc = GC_OLD_MARKED;
-    }
 }
 
 static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_ptls_t ptls2)
@@ -3195,29 +3142,6 @@ static void jl_gc_queue_remset(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp
     void **items = ptls2->heap.last_remset->items;
     for (size_t i = 0; i < len; i++)
         gc_mark_queue_scan_obj(gc_cache, sp, (jl_value_t*)items[i]);
-    int n_bnd_refyoung = 0;
-    len = ptls2->heap.rem_bindings.len;
-    items = ptls2->heap.rem_bindings.items;
-    for (size_t i = 0; i < len; i++) {
-        jl_binding_t *ptr = (jl_binding_t*)items[i];
-        // A null pointer can happen here when the binding is cleaned up
-        // as an exception is thrown after it was already queued (#10221)
-        int bnd_refyoung = 0;
-        jl_value_t *v = jl_atomic_load_relaxed(&ptr->value);
-        if (v != NULL && gc_mark_queue_obj(gc_cache, sp, v))
-            bnd_refyoung = 1;
-        jl_value_t *ty = jl_atomic_load_relaxed(&ptr->ty);
-        if (ty != NULL && gc_mark_queue_obj(gc_cache, sp, ty))
-            bnd_refyoung = 1;
-        jl_value_t *globalref = jl_atomic_load_relaxed(&ptr->globalref);
-        if (globalref != NULL && gc_mark_queue_obj(gc_cache, sp, globalref))
-            bnd_refyoung = 1;
-        if (bnd_refyoung) {
-            items[n_bnd_refyoung] = ptr;
-            n_bnd_refyoung++;
-        }
-    }
-    ptls2->heap.rem_bindings.len = n_bnd_refyoung;
 }
 
 static void jl_gc_queue_bt_buf(jl_gc_mark_cache_t *gc_cache, jl_gc_mark_sp_t *sp, jl_ptls_t ptls2)
@@ -3263,7 +3187,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 == NULL)
             continue;
-        // 2.1. mark every object in the `last_remsets` and `rem_binding`
+        // 2.1. mark every object in the `last_remsets`
         jl_gc_queue_remset(gc_cache, &sp, ptls2);
         // 2.2. mark every thread local root
         jl_gc_queue_thread_local(gc_cache, &sp, ptls2);
@@ -3438,16 +3362,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
             continue;
         if (!sweep_full) {
             for (int i = 0; i < ptls2->heap.remset->len; i++) {
-                jl_astaggedvalue(ptls2->heap.remset->items[i])->bits.gc = GC_MARKED;
-            }
-            for (int i = 0; i < ptls2->heap.rem_bindings.len; i++) {
-                void *ptr = ptls2->heap.rem_bindings.items[i];
+                void *ptr = ptls2->heap.remset->items[i];
                 jl_astaggedvalue(ptr)->bits.gc = GC_MARKED;
             }
         }
         else {
             ptls2->heap.remset->len = 0;
-            ptls2->heap.rem_bindings.len = 0;
         }
     }
 
@@ -3636,7 +3556,6 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     heap->mallocarrays = NULL;
     heap->mafreelist = NULL;
     heap->big_objects = NULL;
-    arraylist_new(&heap->rem_bindings, 0);
     heap->remset = &heap->_remset[0];
     heap->last_remset = &heap->_remset[1];
     arraylist_new(heap->remset, 0);

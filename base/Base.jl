@@ -168,6 +168,7 @@ include("idset.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
+using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 
 include("namedtuple.jl")
 
@@ -417,6 +418,7 @@ include("threadcall.jl")
 include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
+include("linking.jl")
 include("loading.jl")
 
 # misc useful functions & macros

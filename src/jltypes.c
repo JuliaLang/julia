@@ -1910,7 +1910,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t)
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
     if (n) {
-        if (jl_is_typevar(n)) {
+        if (jl_is_typevar(n) || jl_is_uniontype(jl_unwrap_unionall(n))) {
             // TODO: this is disabled due to #39698; it is also inconsistent
             // with other similar checks, where we usually only check substituted
             // values and not the bounds of variables.
@@ -2013,6 +2013,28 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
     else {
         assert(jl_field_names(t) == jl_emptysvec);
     }
+}
+
+// Widens "core" extended lattice element `t` to the native `Type` representation.
+// The implementation of this function should sync with those of the corresponding `widenconst`s.
+JL_DLLEXPORT jl_value_t *jl_widen_core_extended_info(jl_value_t *t)
+{
+    jl_value_t* tt = jl_typeof(t);
+    if (tt == (jl_value_t*)jl_const_type) {
+        jl_value_t* val = jl_fieldref_noalloc(t, 0);
+        if (jl_isa(val, (jl_value_t*)jl_type_type))
+            return (jl_value_t*)jl_wrap_Type(val);
+        else
+            return jl_typeof(val);
+    }
+    else if (tt == (jl_value_t*)jl_partial_struct_type)
+        return (jl_value_t*)jl_fieldref_noalloc(t, 0);
+    else if (tt == (jl_value_t*)jl_interconditional_type)
+        return (jl_value_t*)jl_bool_type;
+    else if (tt == (jl_value_t*)jl_partial_opaque_type)
+        return (jl_value_t*)jl_fieldref_noalloc(t, 0);
+    else
+        return t;
 }
 
 // initialization -------------------------------------------------------------
@@ -2727,6 +2749,16 @@ void jl_init_types(void) JL_GC_DISABLED
 
     jl_value_t *pointer_void = jl_apply_type1((jl_value_t*)jl_pointer_type, (jl_value_t*)jl_nothing_type);
 
+    jl_binding_type =
+        jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(6, "name", "value", "globalref", "owner", "ty", "flags"),
+                        jl_svec(6, jl_symbol_type, jl_any_type, jl_any_type/*jl_globalref_type*/, jl_module_type, jl_any_type, jl_uint8_type),
+                        jl_emptysvec, 0, 1, 1);
+    const static uint32_t binding_constfields[1]  = { 0x0001 }; // Set fields 1 as const
+    const static uint32_t binding_atomicfields[1] = { 0x0016 }; // Set fields 2, 3, 5 as atomic
+    jl_binding_type->name->constfields = binding_constfields;
+    jl_binding_type->name->atomicfields = binding_atomicfields;
+
     jl_globalref_type =
         jl_new_datatype(jl_symbol("GlobalRef"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(3, "mod", "name", "binding"),
@@ -2772,6 +2804,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_instance_type->types, 6, jl_code_instance_type);
     jl_svecset(jl_code_instance_type->types, 13, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 14, jl_voidpointer_type);
+    jl_svecset(jl_binding_type->types, 2, jl_globalref_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

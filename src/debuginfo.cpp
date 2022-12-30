@@ -109,13 +109,19 @@ JITDebugInfoRegistry::getObjectMap() JL_NOTSAFEPOINT
     return objectmap;
 }
 
-void JITDebugInfoRegistry::set_sysimg_info(sysimg_info_t info) JL_NOTSAFEPOINT {
-    (**this->sysimg_info) = info;
+void JITDebugInfoRegistry::add_image_info(image_info_t info) JL_NOTSAFEPOINT {
+    (**this->image_info)[info.base] = info;
 }
 
-JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::sysimg_info_t>::ConstLockT
-JITDebugInfoRegistry::get_sysimg_info() const JL_NOTSAFEPOINT {
-    return *this->sysimg_info;
+
+bool JITDebugInfoRegistry::get_image_info(uint64_t base, JITDebugInfoRegistry::image_info_t *info) const JL_NOTSAFEPOINT {
+    auto infos = *this->image_info;
+    auto it = infos->find(base);
+    if (it != infos->end()) {
+        *info = it->second;
+        return true;
+    }
+    return false;
 }
 
 JITDebugInfoRegistry::Locked<JITDebugInfoRegistry::objfilemap_t>::LockT
@@ -680,10 +686,10 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info)
             std::move(SplitFile.get()));
 }
 extern "C" JL_DLLEXPORT
-void jl_register_fptrs_impl(uint64_t sysimage_base, const jl_sysimg_fptrs_t *fptrs,
+void jl_register_fptrs_impl(uint64_t image_base, const jl_image_fptrs_t *fptrs,
     jl_method_instance_t **linfos, size_t n)
 {
-    getJITDebugRegistry().set_sysimg_info({(uintptr_t) sysimage_base, *fptrs, linfos, n});
+    getJITDebugRegistry().add_image_info({(uintptr_t) image_base, *fptrs, linfos, n});
 }
 
 template<typename T>
@@ -694,12 +700,9 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #endif
 }
 
-static void get_function_name_and_base(llvm::object::SectionRef Section, size_t pointer, int64_t slide, bool insysimage,
+static void get_function_name_and_base(llvm::object::SectionRef Section, size_t pointer, int64_t slide, bool inimage,
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
-    // Assume we only need base address for sysimg for now
-    if (!insysimage || !getJITDebugRegistry().get_sysimg_info()->sysimg_fptrs.base)
-        saddr = nullptr;
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
     bool needs_name = name && (!*name || untrusted_dladdr);
     // Try platform specific methods first since they are usually faster
@@ -780,7 +783,7 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
     }
 #ifdef _OS_WINDOWS_
     // For ntdll and msvcrt since we are currently only parsing DWARF debug info through LLVM
-    if (!insysimage && needs_name) {
+    if (!inimage && needs_name) {
         static char frame_info_func[
             sizeof(SYMBOL_INFO) +
             MAX_SYM_NAME * sizeof(TCHAR)];
@@ -1012,7 +1015,7 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 
 
 bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *slide, llvm::DIContext **context,
-    bool onlySysImg, bool *isSysImg, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
+    bool onlyImage, bool *isImage, uint64_t *_fbase, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {
     *Section = object::SectionRef();
     *context = NULL;
@@ -1046,10 +1049,11 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (fname.empty()) // empirically, LoadedImageName might be missing
         fname = ModuleInfo.ImageName;
     DWORD64 fbase = ModuleInfo.BaseOfImage;
-    bool insysimage = (fbase == getJITDebugRegistry().get_sysimg_info()->jl_sysimage_base);
-    if (isSysImg)
-        *isSysImg = insysimage;
-    if (onlySysImg && !insysimage)
+    JITDebugInfoRegistry::image_info_t image_info;
+    bool inimage = getJITDebugRegistry().get_image_info(fbase, &image_info);
+    if (isImage)
+        *isImage = inimage;
+    if (onlyImage && !inimage)
         return false;
     // If we didn't find the filename before in the debug
     // info, use the dll name
@@ -1057,6 +1061,8 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
         jl_copy_str(filename, fname.data());
     if (saddr)
         *saddr = NULL;
+    if (_fbase)
+        *_fbase = fbase;
 
 #else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
@@ -1095,16 +1101,19 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     fbase = (uintptr_t)dlinfo.dli_fbase;
 #endif
     StringRef fname;
-    bool insysimage = (fbase == getJITDebugRegistry().get_sysimg_info()->jl_sysimage_base);
-    if (saddr && !(insysimage && untrusted_dladdr))
+    JITDebugInfoRegistry::image_info_t image_info;
+    bool inimage = getJITDebugRegistry().get_image_info(fbase, &image_info);
+    if (saddr && !(inimage && untrusted_dladdr))
         *saddr = dlinfo.dli_saddr;
-    if (isSysImg)
-        *isSysImg = insysimage;
-    if (onlySysImg && !insysimage)
+    if (isImage)
+        *isImage = inimage;
+    if (onlyImage && !inimage)
         return false;
+    if (_fbase)
+        *_fbase = fbase;
     // In case we fail with the debug info lookup, we at least still
     // have the function name, even if we don't have line numbers
-    if (name && !(insysimage && untrusted_dladdr))
+    if (name && !(inimage && untrusted_dladdr))
         jl_copy_str(name, dlinfo.dli_sname);
     if (filename)
         jl_copy_str(filename, dlinfo.dli_fname);
@@ -1115,7 +1124,10 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     *context = entry.ctx;
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
-    get_function_name_and_base(*Section, pointer, entry.slide, insysimage, saddr, name, untrusted_dladdr);
+    // Assume we only need base address for sysimg for now
+    if (!inimage || !image_info.fptrs.base)
+        saddr = nullptr;
+    get_function_name_and_base(*Section, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
     return true;
 }
 
@@ -1144,34 +1156,36 @@ static int jl_getDylibFunctionInfo(jl_frame_t **frames, size_t pointer, int skip
     object::SectionRef Section;
     llvm::DIContext *context = NULL;
     int64_t slide;
-    bool isSysImg;
+    bool isImage;
     void *saddr;
-    if (!jl_dylib_DI_for_fptr(pointer, &Section, &slide, &context, skipC, &isSysImg, &saddr, &frame0->func_name, &frame0->file_name)) {
+    uint64_t fbase;
+    if (!jl_dylib_DI_for_fptr(pointer, &Section, &slide, &context, skipC, &isImage, &fbase, &saddr, &frame0->func_name, &frame0->file_name)) {
         frame0->fromC = 1;
         return 1;
     }
-    frame0->fromC = !isSysImg;
+    frame0->fromC = !isImage;
     {
-        auto sysimg_locked = getJITDebugRegistry().get_sysimg_info();
-        if (isSysImg && sysimg_locked->sysimg_fptrs.base && saddr) {
-            intptr_t diff = (uintptr_t)saddr - (uintptr_t)sysimg_locked->sysimg_fptrs.base;
-            for (size_t i = 0; i < sysimg_locked->sysimg_fptrs.nclones; i++) {
-                if (diff == sysimg_locked->sysimg_fptrs.clone_offsets[i]) {
-                    uint32_t idx = sysimg_locked->sysimg_fptrs.clone_idxs[i] & jl_sysimg_val_mask;
-                    if (idx < sysimg_locked->sysimg_fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
-                        frame0->linfo = sysimg_locked->sysimg_fvars_linfo[idx];
+        JITDebugInfoRegistry::image_info_t image;
+        bool inimage = getJITDebugRegistry().get_image_info(fbase, &image);
+        if (isImage && saddr && inimage) {
+            intptr_t diff = (uintptr_t)saddr - (uintptr_t)image.fptrs.base;
+            for (size_t i = 0; i < image.fptrs.nclones; i++) {
+                if (diff == image.fptrs.clone_offsets[i]) {
+                    uint32_t idx = image.fptrs.clone_idxs[i] & jl_sysimg_val_mask;
+                    if (idx < image.fvars_n) // items after this were cloned but not referenced directly by a method (such as our ccall PLT thunks)
+                        frame0->linfo = image.fvars_linfo[idx];
                     break;
                 }
             }
-            for (size_t i = 0; i < sysimg_locked->sysimg_fvars_n; i++) {
-                if (diff == sysimg_locked->sysimg_fptrs.offsets[i]) {
-                    frame0->linfo = sysimg_locked->sysimg_fvars_linfo[i];
+            for (size_t i = 0; i < image.fvars_n; i++) {
+                if (diff == image.fptrs.offsets[i]) {
+                    frame0->linfo = image.fvars_linfo[i];
                     break;
                 }
             }
         }
     }
-    return lookup_pointer(Section, context, frames, pointer, slide, isSysImg, noInline);
+    return lookup_pointer(Section, context, frames, pointer, slide, isImage, noInline);
 }
 
 int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
