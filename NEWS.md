@@ -31,7 +31,7 @@ New library functions
 New library features
 --------------------
 Tthe `initialized=true` keyword assignment for `sortperm!` and `partialsortperm!` 
-is now a no-op ([#43305]). It previously exposed unsafe behavior ([#47977]).
+is now a no-op ([#47979]). It previously exposed unsafe behavior ([#47977]).
 
 Standard library changes
 ------------------------
