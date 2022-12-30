@@ -7,6 +7,7 @@
 #include "julia_internal.h"
 
 #include <unistd.h>
+#include <ctype.h>
 #include <getopt.h>
 #include "julia_assert.h"
 
@@ -182,8 +183,8 @@ static const char opts[]  =
     "                            fallbacks to the latest compatible BugReporting.jl if not. For more information, see\n"
     "                            --bug-report=help.\n\n"
 
-    " --heap-size-hint=<size>    Forces garbage collection if memory usage is higher than that value.\n"
-    "                            The memory hint might be specified in megabytes(500M) or gigabytes(1G)\n\n"
+    " --heap-size-hint=<size>    Forces garbage collection if memory usage is greater than the given number of bytes.\n"
+    "                            The size may be specified with units like 500M (megabytes) or 2.5GB (gigabytes)\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -781,33 +782,34 @@ restart_switch:
             break;
         case opt_heap_size_hint:
             if (optarg != NULL) {
-                size_t endof = strlen(optarg);
                 long double value = 0.0;
-                if (sscanf(optarg, "%Lf", &value) == 1 && value > 1e-7) {
-                    char unit = optarg[endof - 1];
-                    uint64_t multiplier = 1ull;
-                    switch (unit) {
-                        case 'k':
-                        case 'K':
-                            multiplier <<= 10;
-                            break;
-                        case 'm':
-                        case 'M':
-                            multiplier <<= 20;
-                            break;
-                        case 'g':
-                        case 'G':
-                            multiplier <<= 30;
-                            break;
-                        case 't':
-                        case 'T':
-                            multiplier <<= 40;
-                            break;
-                        default:
-                            break;
-                    }
-                    jl_options.heap_size_hint = (uint64_t)(value * multiplier);
+                char unit[4] = {0};
+                int nparsed = sscanf(optarg, "%Lf%3s", &value, unit);
+                if (nparsed == 0 || strlen(unit) > 2 || (strlen(unit) == 2 && tolower(unit[1]) != 'b')) {
+                    jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
                 }
+                uint64_t multiplier = 1ull;
+                switch (tolower(unit[0])) {
+                    case '\0':
+                    case 'b':
+                        break;
+                    case 'k':
+                        multiplier <<= 10;
+                        break;
+                    case 'm':
+                        multiplier <<= 20;
+                        break;
+                    case 'g':
+                        multiplier <<= 30;
+                        break;
+                    case 't':
+                        multiplier <<= 40;
+                        break;
+                    default:
+                        jl_errorf("julia: invalid argument to --heap-size-hint (%s)", optarg);
+                        break;
+                }
+                jl_options.heap_size_hint = (uint64_t)(value * multiplier);
             }
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid argument to --heap-size-hint without memory size specified");
