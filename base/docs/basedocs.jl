@@ -487,7 +487,7 @@ Additionally, the syntax has a special meaning for comma-separated assignments
 and variable names that may optionally appear on the same line as the `let`:
 
 ```julia
-let var1 = value1, var2, var3 = value3
+let var1 = value1, var2 = value2, var3 = value3
     code
 end
 ```
