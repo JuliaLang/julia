@@ -239,21 +239,84 @@ const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
 
-function generate_precompile_statements()
+# You can disable parallel precompiles generation by setting `false`
+const PARALLEL_PRECOMPILATION = true
+
+# You can disable fancy printing
+const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
+
+# Printing the current state
+let
+    global print_state
+    print_lk = ReentrantLock()
+    status = Dict{String, String}(
+        "step1" => "W",
+        "step2" => "W",
+        "repl" => "0/0",
+        "step3" => "W",
+        "clock" => "◐",
+    )
+    function print_status(key::String)
+        txt = status[key]
+        if startswith(txt, "W") # Waiting
+            printstyled("? ", color=Base.warn_color()); print(txt[2:end])
+        elseif startswith(txt, "R") # Running
+            print(status["clock"], " ", txt[2:end])
+        elseif startswith(txt, "F") # Finished
+            printstyled("✓ ", color=:green); print(txt[2:end])
+        else
+            print(txt)
+        end
+    end
+    function print_state(args::Pair{String,String}...)
+        lock(print_lk) do
+            isempty(args) || push!(status, args...)
+            print("\r└ Collect (Basic: ")
+            print_status("step1")
+            print(", REPL ", status["repl"], ": ")
+            print_status("step2")
+            print(") => Execute ")
+            print_status("step3")
+        end
+    end
+end
+
+ansi_enablecursor = "\e[?25h"
+ansi_disablecursor = "\e[?25l"
+
+generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()
     debug_output = devnull # or stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Extract the precompile statements from the precompile file
-    statements = Set{String}()
+    statements_step1 = Channel{String}(Inf)
+    statements_step2 = Channel{String}(Inf)
 
     # From hardcoded statements
     for statement in split(hardcoded_precompile_statements::String, '\n')
-        push!(statements, statement)
+        push!(statements_step1, statement)
+    end
+
+    println("Collecting and executing precompile statements")
+    fancyprint && print(ansi_disablecursor)
+    print_state()
+    clock = @async begin
+        t = Timer(0; interval=1/10)
+        anim_chars = ["◐","◓","◑","◒"]
+        current = 1
+        if fancyprint
+            while isopen(statements_step2) || !isempty(statements_step2)
+                print_state("clock" => anim_chars[current])
+                wait(t)
+                current = current == 4 ? 1 : current + 1
+            end
+        end
     end
 
     # Collect statements from running the script
-    mktempdir() do prec_path
+    step1 = @async mktempdir() do prec_path
+        print_state("step1" => "R")
         # Also precompile a package here
         pkgname = "__PackagePrecompilationStatementModule"
         mkpath(joinpath(prec_path, pkgname, "src"))
@@ -272,15 +335,22 @@ function generate_precompile_statements()
             $precompile_script
             """
         run(`$(julia_exepath()) -O0 --sysimage $sysimg --trace-compile=$tmp_proc --startup-file=no -Cnative -e $s`)
+        n_step1 = 0
         for f in (tmp_prec, tmp_proc)
+            isfile(f) || continue
             for statement in split(read(f, String), '\n')
-                occursin("Main.", statement) && continue
-                push!(statements, statement)
+                push!(statements_step1, statement)
+                n_step1 += 1
             end
         end
+        close(statements_step1)
+        print_state("step1" => "F$n_step1")
+        return :ok
     end
+    !PARALLEL_PRECOMPILATION && wait(step1)
 
-    mktemp() do precompile_file, precompile_file_h
+    step2 = @async mktemp() do precompile_file, precompile_file_h
+        print_state("step2" => "R")
         # Collect statements from running a REPL process and replaying our REPL script
         pts, ptm = open_fake_pty()
         blackhole = Sys.isunix() ? "/dev/null" : "nul"
@@ -329,7 +399,7 @@ function generate_precompile_statements()
             for l in precompile_lines
                 sleep(0.1)
                 curr += 1
-                print("\rGenerating REPL precompile statements... $curr/$(length(precompile_lines))")
+                print_state("repl" => "$curr/$(length(precompile_lines))")
                 # consume any other output
                 bytesavailable(output_copy) > 0 && readavailable(output_copy)
                 # push our input
@@ -348,7 +418,6 @@ function generate_precompile_statements()
                     sleep(0.1)
                 end
             end
-            println()
         end
         write(ptm, "exit()\n")
         wait(tee)
@@ -356,12 +425,16 @@ function generate_precompile_statements()
         close(ptm)
         write(debug_output, "\n#### FINISHED ####\n")
 
+        n_step2 = 0
         for statement in split(read(precompile_file, String), '\n')
-            # Main should be completely clean
-            occursin("Main.", statement) && continue
-            push!(statements, statement)
+            push!(statements_step2, statement)
+            n_step2 += 1
         end
+        close(statements_step2)
+        print_state("step2" => "F$n_step2")
+        return :ok
     end
+    !PARALLEL_PRECOMPILATION && wait(step2)
 
     # Create a staging area where all the loaded packages are available
     PrecompileStagingArea = Module()
@@ -371,9 +444,14 @@ function generate_precompile_statements()
         end
     end
 
-    # Execute the precompile statements
     n_succeeded = 0
-    include_time = @elapsed for statement in statements
+    # Make statements unique
+    statements = Set{String}()
+    # Execute the precompile statements
+    for sts in [statements_step1, statements_step2], statement in sts
+        # Main should be completely clean
+        occursin("Main.", statement) && continue
+        Base.in!(statement, statements) && continue
         # println(statement)
         # XXX: skip some that are broken. these are caused by issue #39902
         occursin("Tuple{Artifacts.var\"#@artifact_str\", LineNumberNode, Module, Any, Any}", statement) && continue
@@ -387,7 +465,12 @@ function generate_precompile_statements()
         occursin(", Core.Compiler.AbstractInterpreter, ", statement) && continue
         try
             ps = Meta.parse(statement)
-            isexpr(ps, :call) || continue
+            if !isexpr(ps, :call)
+                # these are typically comments
+                @debug "skipping statement because it does not parse as an expression" statement
+                delete!(statements, statement)
+                continue
+            end
             popfirst!(ps.args) # precompile(...)
             ps.head = :tuple
             l = ps.args[end]
@@ -403,28 +486,32 @@ function generate_precompile_statements()
             ps = Core.eval(PrecompileStagingArea, ps)
             precompile(ps...)
             n_succeeded += 1
-            print("\rExecuting precompile statements... $n_succeeded/$(length(statements))")
+            failed = length(statements) - n_succeeded
+            yield() # Make clock spinning
+            print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
             # See #28808
             @warn "Failed to precompile expression" form=statement exception=ex _module=nothing _file=nothing _line=0
         end
     end
+    wait(clock) # Stop asynchronous printing
+    failed = length(statements) - n_succeeded
+    print_state("step3" => string("F$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
     println()
     if have_repl
         # Seems like a reasonable number right now, adjust as needed
         # comment out if debugging script
-        n_succeeded > 1200 || @warn "Only $n_succeeded precompile statements"
+        n_succeeded > 1500 || @warn "Only $n_succeeded precompile statements"
     end
 
-    include_time *= 1e9
-    gen_time = (time_ns() - start_time) - include_time
+    fetch(step1) == :ok || throw("Step 1 of collecting precompiles failed.")
+    fetch(step2) == :ok || throw("Step 2 of collecting precompiles failed.")
+
     tot_time = time_ns() - start_time
-
     println("Precompilation complete. Summary:")
-    print("Generation ── "); Base.time_print(gen_time);     print(" "); show(IOContext(stdout, :compact=>true), gen_time / tot_time * 100);     println("%")
-    print("Execution ─── "); Base.time_print(include_time); print(" "); show(IOContext(stdout, :compact=>true), include_time / tot_time * 100); println("%")
     print("Total ─────── "); Base.time_print(tot_time);     println()
-
+finally
+    fancyprint && print(ansi_enablecursor)
     return
 end
 
