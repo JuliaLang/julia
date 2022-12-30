@@ -23,7 +23,7 @@ being used for this purpose alone.
 module Timings
 
 using Core.Compiler: -, +, :, >, Vector, length, first, empty!, push!, pop!, @inline,
-    @inbounds, copy, backtrace
+    @inbounds, copy, backtrace, IdDict, Task, Ref, get!
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
@@ -94,14 +94,30 @@ end
 # thread safe.
 const _finished_timings = Timing[]
 
-# We keep a stack of the Timings for each of the MethodInstances currently being timed.
+# We store a profiling stack for *each Task* as a task-local-storage variable, _timings.
+# This is a stack of the Timings for each of the MethodInstances currently being timed.
 # Since type inference currently operates via a depth-first search (during abstract
 # evaluation), this vector operates like a call stack. The last node in _timings is the
 # node currently being inferred, and its parent is directly before it, etc.
 # Each Timing also contains its own vector for all of its children, so that the tree
 # call structure through type inference is recorded. (It's recorded as a tree, not a graph,
 # because we create a new node for duplicates.)
-const _timings = Timing[]
+# You will see this accessed below as `task_local_storage(:_timings)`
+
+# ------- Task Local Storage -------
+# Reimplementation of Task Local Storage, since these functions aren't available yet
+# at this stage of bootstrapping.
+current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
+task_local_storage() = get_task_tls(current_task())
+function get_task_tls(t::Task)
+    if t.storage === nothing
+        t.storage = IdDict()
+    end
+    return (t.storage)::IdDict{Any,Any}
+end
+# -------
+
+tls_timings() = get!(task_local_storage(), :_timings, Vector{Timing}())
 
 # ROOT() is an empty function used as the top-level Timing node to measure all time spent
 # *not* in type inference during a given recording trace. It is used as a "dummy" node.
@@ -145,6 +161,8 @@ end
 end
 
 @inline function enter_new_timer(frame)
+    _timings = tls_timings()
+
     # Very first thing, stop the active timer: get the current time and add in the
     # time since it was last started to its aggregate exclusive time.
     if length(_timings) > 0
@@ -154,8 +172,7 @@ end
     # Start the new timer right before returning
     mi_info = _typeinf_identifier(frame)
     push!(_timings, Timing(mi_info, UInt64(0)))
-    len = length(_timings)
-    new_timer = @inbounds _timings[len]
+    new_timer = @inbounds _timings[end]
 
     # Set the current time _after_ appending the node, to try to exclude the
     # overhead from measurement.
@@ -170,6 +187,8 @@ end
 # assert that indeed we are always returning to a parent after finishing all of its
 # children (that is, asserting that inference proceeds via depth-first-search).
 @inline function exit_current_timer(_expected_frame_)
+    _timings = tls_timings()
+
     # Finish the new timer
     stop_time = _time_ns()
 
