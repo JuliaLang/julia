@@ -485,10 +485,10 @@ function (*)(A::AbstractMatrix, adjQ::AdjointQ{<:Any,<:Union{QRPackedQ,QRCompact
     Q = adjQ.Q
     T = promote_type(eltype(A), eltype(adjQ))
     adjQQ = convert(AbstractQ{T}, adjQ)
-    if size(A,2) == size(Q.factors, 1)
+    if size(A, 2) == size(Q.factors, 1)
         AA = copy_similar(A, T)
         return rmul!(AA, adjQQ)
-    elseif size(A,2) == size(Q.factors,2)
+    elseif size(A, 2) == size(Q.factors, 2)
         return rmul!([A zeros(T, size(A, 1), size(Q.factors, 1) - size(Q.factors, 2))], adjQQ)
     else
         throw(DimensionMismatch("matrix A has dimensions $(size(A)) but Q-matrix B has dimensions $(size(adjQ))"))
