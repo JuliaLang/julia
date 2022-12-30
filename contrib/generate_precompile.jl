@@ -15,6 +15,17 @@ Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "
 import .FakePTYs: open_fake_pty
 using Base.Meta
 
+## Debugging options
+# Disable parallel precompiles generation by setting `false`
+const PARALLEL_PRECOMPILATION = true
+
+# View the code sent to the repl by setting this to `stdout`
+const debug_output = devnull # or stdout
+
+# Disable fancy printing
+const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
+##
+
 CTRL_C = '\x03'
 UP_ARROW = "\e[A"
 DOWN_ARROW = "\e[B"
@@ -239,12 +250,6 @@ const PKG_PROMPT = "pkg> "
 const SHELL_PROMPT = "shell> "
 const HELP_PROMPT = "help?> "
 
-# You can disable parallel precompiles generation by setting `false`
-const PARALLEL_PRECOMPILATION = true
-
-# You can disable fancy printing
-const fancyprint = (stdout isa Base.TTY) && (get(ENV, "CI", nothing) != "true")
-
 # Printing the current state
 let
     global print_state
@@ -286,7 +291,6 @@ ansi_disablecursor = "\e[?25l"
 
 generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printed
     start_time = time_ns()
-    debug_output = devnull # or stdout
     sysimg = Base.unsafe_string(Base.JLOptions().image_file)
 
     # Extract the precompile statements from the precompile file
