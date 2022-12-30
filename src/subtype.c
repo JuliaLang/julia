@@ -605,6 +605,8 @@ static int var_outside(jl_stenv_t *e, jl_tvar_t *x, jl_tvar_t *y)
 
 static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int R, int d);
 
+static int reachable_var(jl_value_t *x, jl_tvar_t *y, jl_stenv_t *e);
+
 // check that type var `b` is <: `a`, and update b's upper bound.
 static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
 {
@@ -622,8 +624,10 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     // since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
     if (e->intersection) {
         jl_value_t *ub = intersect_aside(bb->ub, a, e, 0, bb->depth0);
-        if (ub != (jl_value_t*)b)
+        JL_GC_PUSH1(&ub);
+        if (ub != (jl_value_t*)b && (!jl_is_typevar(ub) || !reachable_var(ub, b, e)))
             bb->ub = ub;
+        JL_GC_POP();
     }
     else {
         bb->ub = simple_meet(bb->ub, a);
@@ -639,8 +643,6 @@ static int var_lt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     }
     return 1;
 }
-
-static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOTSAFEPOINT;
 
 // check that type var `b` is >: `a`, and update b's lower bound.
 static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
@@ -660,8 +662,10 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int param)
     if (!((bb->ub == (jl_value_t*)jl_any_type && !jl_is_type(a) && !jl_is_typevar(a)) || subtype_ccheck(a, bb->ub, e)))
         return 0;
     jl_value_t *lb = simple_join(bb->lb, a);
-    if (!e->intersection || !subtype_by_bounds(lb, (jl_value_t*)b, e))
+    JL_GC_PUSH1(&lb);
+    if (!e->intersection || !jl_is_typevar(lb) || !reachable_var(lb, b, e))
         bb->lb = lb;
+    JL_GC_POP();
     // this bound should not be directly circular
     assert(bb->lb != (jl_value_t*)b);
     if (jl_is_typevar(a)) {

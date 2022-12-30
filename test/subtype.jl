@@ -2304,6 +2304,16 @@ let S = Tuple{Val{T}, T} where {S1,T<:Val{Union{Nothing,S1}}},
     @test_broken testintersect(S, T) == Tuple{Val{Val{Union{Nothing, S1}}}, Val{Union{Nothing, S1}}} where S1<:(Union{Nothing, S2} where S2)
 end
 
+#issue #47874:case1
+let S1 = Tuple{Int, Any, Union{Val{C1}, C1}} where {R1<:Real, C1<:Union{Complex{R1}, R1}},
+    S2 = Tuple{Int, Any, Union{Val{C1}, C1} where {R1<:Real, C1<:Union{Complex{R1}, R1}}},
+    T1 = Tuple{Any, Int, Union{Val{C2}, C2}} where {R2<:Real, C2<:Union{Complex{R2}, R2}},
+    T2 = Tuple{Any, Int, V} where {R2<:Real, C2<:Union{Complex{R2}, R2}, V<:Union{Val{C2}, C2}}
+    for S in (S1, S2), T in (T1, T2)
+        @testintersect(S, T, !Union{})
+    end
+end
+
 @testset "known subtype/intersect issue" begin
     #issue 45874
     # Causes a hang due to jl_critical_error calling back into malloc...
