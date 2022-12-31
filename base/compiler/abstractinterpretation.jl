@@ -1834,35 +1834,38 @@ end
 function abstract_call_unionall(argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
+        a2 = argtypes[2]
         a3 = argtypes[3]
+        nothrow = a2 ⊑ TypeVar && (
+                a3 ⊑ Type ||
+                a3 ⊑ TypeVar)
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
             body = a3.parameters[1]
             canconst = false
         else
-            return Any
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
         end
         if !isa(body, Type) && !isa(body, TypeVar)
-            return Any
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow=false), NoCallInfo())
         end
         if has_free_typevars(body)
-            a2 = argtypes[2]
             if isa(a2, Const)
                 tv = a2.val
             elseif isa(a2, PartialTypeVar)
                 tv = a2.tv
                 canconst = false
             else
-                return Any
+                return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow=false), NoCallInfo())
             end
-            !isa(tv, TypeVar) && return Any
+            !isa(tv, TypeVar) && return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow=false), NoCallInfo())
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
-        return ret
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
     end
-    return Any
+    return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
 end
 
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo, sv::InferenceState)
@@ -1974,9 +1977,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var), EFFECTS_UNKNOWN, NoCallInfo())
+        pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+        return CallMeta(pT,
+            builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT), NoCallInfo())
     elseif f === UnionAll
-        return CallMeta(abstract_call_unionall(argtypes), EFFECTS_UNKNOWN, NoCallInfo())
+        return abstract_call_unionall(argtypes)
     elseif f === Tuple && la == 2
         aty = argtypes[2]
         ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)

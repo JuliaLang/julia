@@ -2117,6 +2117,7 @@ const _INACCESSIBLEMEM_BUILTINS = Any[
     typeassert,
     typeof,
     compilerbarrier,
+    Core._typevar
 ]
 
 const _ARGMEM_BUILTINS = Any[
