@@ -30,6 +30,7 @@ New library features
 --------------------
 * `replace(string, pattern...)` now supports an optional `IO` argument to
   write the output to a stream rather than returning a string ([#48625]).
+* New methods `allequal(f, itr)` and `allunique(f, itr)` taking a predicate function ([#47679]).
 
 Standard library changes
 ------------------------
