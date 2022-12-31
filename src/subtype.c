@@ -2354,6 +2354,8 @@ static int has_free_vararg_length(jl_value_t *a, jl_stenv_t *e) {
     return 0;
 }
 
+static int fresh_subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
+
 static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int8_t R, int param)
 {
     jl_varbinding_t *bb = lookup(e, b);
@@ -2373,11 +2375,17 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
         JL_GC_PUSH2(&ub, &root);
         if (!jl_has_free_typevars(a)) {
             save_env(e, &root, &se);
-            int issub = subtype_in_env_existential(bb->lb, a, e, 0, d);
-            restore_env(e, root, &se);
-            if (issub) {
-                issub = subtype_in_env_existential(a, bb->ub, e, 1, d);
+            // first try normal subtype to get more accurate result.
+            int issub = fresh_subtype_in_env(bb->lb, a, e) && fresh_subtype_in_env(a, bb->ub, e);
+            if (!issub) {
+                // If failed, then try to avoid possible false `Union{}`.
                 restore_env(e, root, &se);
+                issub = subtype_in_env_existential(bb->lb, a, e, 0, d);
+                restore_env(e, root, &se);
+                if (issub) {
+                    issub = subtype_in_env_existential(a, bb->ub, e, 1, d);
+                    restore_env(e, root, &se);
+                }
             }
             free_env(&se);
             if (!issub) {
