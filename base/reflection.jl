@@ -786,6 +786,7 @@ julia> Base.fieldindex(Foo, :z, false)
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     @_foldable_meta
+    @noinline
     return Int(ccall(:jl_field_index, Cint, (Any, Any, Cint), T, name, err)+1)
 end
 
@@ -800,6 +801,7 @@ end
 
 function argument_datatype(@nospecialize t)
     @_total_meta
+    @noinline
     return ccall(:jl_argument_datatype, Any, (Any,), t)::Union{Nothing,DataType}
 end
 

@@ -836,9 +836,7 @@ function concrete_eval_eligible(interp::AbstractInterpreter,
         if is_all_const_arg(arginfo, #=start=#2)
             return true
         else
-            # TODO: `is_nothrow` is not an actual requirement here, this is just a hack
-            # to avoid entering semi concrete eval while it doesn't properly override effects
-            return is_nothrow(result.effects) ? false : nothing
+            return false
         end
     end
     return nothing
@@ -1010,10 +1008,11 @@ function abstract_call_method_with_const_args(interp::AbstractInterpreter,
             ir = codeinst_to_ir(interp, code)
             if isa(ir, IRCode)
                 irsv = IRInterpretationState(interp, ir, mi, sv.world, arginfo.argtypes)
-                rt = ir_abstract_constant_propagation(interp, irsv)
+                rt, nothrow = ir_abstract_constant_propagation(interp, irsv)
                 @assert !(rt isa Conditional || rt isa MustAlias) "invalid lattice element returned from IR interpretation"
                 if !isa(rt, Type) || typeintersect(rt, Bool) === Union{}
-                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, result.effects), result.effects, mi)
+                    new_effects = Effects(result.effects; nothrow=nothrow)
+                    return ConstCallResults(rt, SemiConcreteResult(mi, ir, new_effects), new_effects, mi)
                 end
             end
         end

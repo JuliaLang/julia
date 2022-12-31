@@ -649,7 +649,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
                 insert!(codelocs, idx + 1, codelocs[idx])
                 insert!(ssavaluetypes, idx + 1, Union{})
                 insert!(stmtinfo, idx + 1, NoCallInfo())
-                insert!(ssaflags, idx + 1, ssaflags[idx])
+                insert!(ssaflags, idx + 1, IR_FLAG_NOTHROW)
                 if ssachangemap === nothing
                     ssachangemap = fill(0, nstmts)
                 end
