@@ -301,7 +301,7 @@ add_tfunc(Core.Intrinsics.arraylen, 1, 1, @nospecs((𝕃::AbstractLattice, x)->I
     elseif !hasintersect(widenconst(cnd), Bool)
         return Bottom
     end
-    return tmerge(x, y)
+    return tmerge(𝕃, x, y)
 end
 add_tfunc(Core.ifelse, 3, 3, ifelse_tfunc, 1)
 
