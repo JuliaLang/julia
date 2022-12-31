@@ -165,21 +165,28 @@ typedef struct {
     int8_t _space[16];
 } jl_savedenv_t;
 
-static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
+static int current_env_length(jl_stenv_t *e)
 {
     jl_varbinding_t *v = e->vars;
-    int len=0;
-    while (v != NULL) {
+    int len = 0;
+    while (v) {
         len++;
         v = v->prev;
     }
+    return len;
+}
+
+static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
+{
+    int len = current_env_length(e);
     if (root)
         *root = (jl_value_t*)jl_alloc_svec(len * 3);
     se->buf = (int8_t*)(len > 8 ? malloc_s(len * 2) : &se->_space);
 #ifdef __clang_gcanalyzer__
     memset(se->buf, 0, len * 2);
 #endif
-    int i=0, j=0; v = e->vars;
+    int i=0, j=0;
+    jl_varbinding_t *v = e->vars;
     while (v != NULL) {
         if (root) {
             jl_svecset(*root, i++, v->lb);
@@ -216,6 +223,7 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_N
     if (e->envout && e->envidx < e->envsz)
         memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
 }
+
 
 // type utilities
 
@@ -2274,16 +2282,12 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
 // subtype, treating all vars as existential
 static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int R, int d)
 {
-    jl_varbinding_t *v = e->vars;
-    int len = 0;
     if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type)
         return 1;
-    while (v != NULL) {
-        len++;
-        v = v->prev;
-    }
+    int len = current_env_length(e);
     int8_t *rs = (int8_t*)malloc_s(len);
     int n = 0;
+    jl_varbinding_t *v = e->vars;
     v = e->vars;
     while (n < len) {
         assert(v != NULL);
@@ -3015,9 +3019,8 @@ static int subtype_by_bounds(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_NOT
 // flip the env to the correct side (hopefully) to make sure the subtype check make sense.
 static void flip_to_side(jl_value_t *x, jl_stenv_t *e, int R)
 {
-    jl_varbinding_t *temp = NULL;
     if (jl_has_free_typevars(x)) {
-        temp = e->vars;
+        jl_varbinding_t *temp = e->vars;
         while (temp != NULL) {
             if (jl_has_typevar(x, temp->var)) {
                 jl_varbinding_t *btemp = NULL;
@@ -3048,17 +3051,27 @@ static void flip_to_side(jl_value_t *x, jl_stenv_t *e, int R)
 
 static int fresh_subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
+    if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type)
+        return 1;
+    int len = current_env_length(e);
+    int8_t *rs = (int8_t*)malloc_s(len);
+    int n = 0;
+    jl_varbinding_t *v = e->vars;
+    while (n < len) {
+        assert(v != NULL);
+        rs[n++] = v->right;
+        v = v->prev;
+    }
     flip_to_side(x, e, 0);
     flip_to_side(y, e, 1);
     int sub = subtype_in_env(x, y, e);
-    jl_varbinding_t *temp = e->vars;
-    while (temp != NULL) {
-        if (temp->flipped) {
-            temp->right = !temp->right;
-            temp->flipped = 0;
-        }
-        temp = temp->prev;
+    n = 0; v = e->vars;
+    while (n < len) {
+        assert(v != NULL);
+        v->right = rs[n++];
+        v = v->prev;
     }
+    free(rs);
     return sub;
 }
 
