@@ -480,6 +480,8 @@ function try_get_type(sym::Expr, fn::Module)
         return try_get_type(sym.args[end], fn)
     elseif sym.head === :escape || sym.head === :var"hygienic-scope"
         return try_get_type(sym.args[1], fn)
+    elseif sym.head === :...
+        return (Vararg{Any}, true)
     end
     return (Any, false)
 end
@@ -631,7 +633,7 @@ function detect_args_kwargs(funargs::Vector{Any}, context_module::Module, defaul
             if broadcasting
                 # handle broadcasting, but only handle number of arguments instead of
                 # argument types
-                push!(args_ex, Any)
+                push!(args_ex, isexpr(ex, :...) ? Vararg{Any} : Any)
             else
                 push!(args_ex, get_type(get_type(ex, context_module)..., default_any))
             end
@@ -658,8 +660,19 @@ end
 
 function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_ex::Vector{Any}, kwargs_ex::Set{Symbol}, max_method_completions::Int, kwargs_flag::Int)
     # Input types and number of arguments
-    kwargs_flag != -1 && push!(args_ex, Vararg{Any}) # allow more arguments unless in .?( syntax
-    t_in = Tuple{funct, args_ex...}
+    varargs_position = findall(Base.isvarargtype, args_ex)
+    num_splat = length(varargs_position) # number of splat arguments in args_ex
+    args_ex_onevararg = args_ex # args_ex_onevararg contains at most one Vararg, put in final position
+    if num_splat != 0 || kwargs_flag != -1
+        args_ex_onevararg = copy(args_ex)
+        if num_splat != 0 # at least one argument is splat
+            args_ex_onevararg[first(varargs_position)] = Vararg{Any}
+            resize!(args_ex_onevararg, first(varargs_position))
+        elseif kwargs_flag != -1 # allow more arguments unless in .?( syntax
+            push!(args_ex_onevararg, Vararg{Any})
+        end
+    end
+    t_in = Tuple{funct, args_ex_onevararg...}
     m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
         #=ambig=# true, Ref(typemin(UInt)), Ref(typemax(UInt)), Ptr{Int32}(C_NULL))
     if !isa(m, Vector)
@@ -676,10 +689,35 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
     ml = Base.MethodList([(match::Core.MethodMatch).method for match in m], Base.get_methodtable(first_m))
     fml = Base.FactoredMethodList(ml, iskwsortermethod(funct, args_ex))
     for (fm, pos) in zip(fml.list, fml.positions)
-        # TODO: if kwargs_ex, filter out methods without kwargs?
+        if kwargs_flag == 1
+            # If there is a semicolon, the number of non-keyword arguments in the
+            # call cannot grow. It must thus match that of the method.
+            min_meth_nargs = first(fm.m).nargs - 1 # remove the function itself
+            max_meth_nargs = last(fm.m).nargs - 1
+            isva = last(fm.m).isva
+            exn_args = length(args_ex)
+            if exn_args < min_meth_nargs - (isva & (length(fm.m) == 1))
+                num_splat == 0 && continue
+            elseif exn_args - num_splat > max_meth_nargs && !isva
+                continue
+            end
+        end
+
+        if !isempty(kwargs_ex)
+            # Only suggest a method if it can accept all the kwargs already present in
+            # the call, or if it slurps keyword arguments
+            slurp = false
+            for _kw in fm.kwargs
+                if endswith(String(_kw), "...")
+                    slurp = true
+                    break
+                end
+            end
+            slurp || kwargs_ex ⊆ fm.kwargs || continue
+        end
+
         push!(out, MethodCompletion(Any[(m[p]::Core.MethodMatch).spec_types for p in pos], fm))
     end
-    # TODO: filter out methods with wrong number of arguments if `exact_nargs` is set
 end
 
 include("latex_symbols.jl")

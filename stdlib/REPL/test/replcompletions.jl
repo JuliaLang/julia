@@ -113,6 +113,7 @@ let ex = quote
         kwtest4(a::SubString; x23, _something) = pass
         kwtest5(a::Int, b, x...; somekwarg, somekotherkwarg) = pass
         kwtest5(a::Char, b; xyz) = pass
+        kwtest6(a::Unsigned, bar=12, qux=""; kwarg) = pass
 
         const named = (; len2=3)
 
@@ -608,15 +609,15 @@ end
 let s = "CompletionFoo.kwtest4(x23=18, x; "
     c, r, res = test_complete(s)
     @test !res
-    @test length(c) == 3 # TODO: remove "kwtest4(a::String; _a1b, xαβγ)"
+    @test length(c) == 2
     @test any(str->occursin("kwtest4(a::SubString", str), c)
     @test any(str->occursin("kwtest4(a::AbstractString", str), c)
     @test (c, r, res) == test_complete("CompletionFoo.kwtest4(x23=18, x, ")
     @test (c, r, res) == test_complete("CompletionFoo.kwtest4(x23=18, ")
 end
 
-# TODO: @test_nocompletion("CompletionFoo.kwtest4(x23=17; ")
-# TODO: @test_nocompletion("CompletionFoo.kwtest4.(x23=17; ")
+@test_nocompletion("CompletionFoo.kwtest4(x23=17; ")
+@test_nocompletion("CompletionFoo.kwtest4.(x23=17; ")
 
 let s = "CompletionFoo.kwtest5(3, somekwarg=6,"
     c, r, res = test_complete(s)
@@ -626,9 +627,9 @@ let s = "CompletionFoo.kwtest5(3, somekwarg=6,"
     @test (c, r, res) == test_complete("CompletionFoo.kwtest5(3, somekwarg=6, anything, ")
 end
 
-# TODO: @test_nocompletion("CompletionFoo.kwtest5(3; somekwarg=6,")
-# TODO: @test_nocompletion("CompletionFoo.kwtest5(3;")
-# TODO: @test_nocompletion("CompletionFoo.kwtest5(3; somekwarg=6, anything, ")
+@test_nocompletion("CompletionFoo.kwtest5(3; somekwarg=6,")
+@test_nocompletion("CompletionFoo.kwtest5(3;")
+@test_nocompletion("CompletionFoo.kwtest5(3; somekwarg=6, anything, ")
 
 #################################################################
 
@@ -705,7 +706,7 @@ let s = "CompletionFoo.?()"
     @test occursin("test10(s::String...)", c[1])
 end
 
-#= TODO: restrict the number of completions when a semicolon is present in ".?(" syntax
+# restrict the number of completions when a semicolon is present in ".?(" syntax
 let s = "CompletionFoo.?(; y=2, "
     c, r, res = test_complete(s)
     @test !res
@@ -723,17 +724,16 @@ let s = "CompletionFoo.?(3; len2=5, "
     @test occursin("kwtest3(a::Integer; namedarg, foobar, slurp...)", c[1])
     # the other two kwtest3 methods should not appear because of specificity
 end
-=#
 
 # For the ".?(" syntax, do not constrain the number of arguments even with a semicolon.
 @test test_complete("CompletionFoo.?(; ") ==
       test_complete("CompletionFoo.?(")
 
-#TODO: @test test_complete("CompletionFoo.?(Any[]...; ") == test_complete("CompletionFoo.?(Cmd[]..., ") == test_complete("CompletionFoo.?(")
+@test test_complete("CompletionFoo.?(Any[]...; ") == test_complete("CompletionFoo.?(Cmd[]..., ") == test_complete("CompletionFoo.?(")
 
 @test test_complete("CompletionFoo.?()") == test_complete("CompletionFoo.?(;)")
 
-#TODO: @test_nocompletion("CompletionFoo.?(3; len2=5; ")
+@test_nocompletion("CompletionFoo.?(3; len2=5; ")
 
 #################################################################
 
@@ -850,7 +850,7 @@ let s = "CompletionFoo.test!12("
     @test occursin("test!12()", only(c))
 end
 
-#= TODO: Test method completion depending on the number of arguments with splatting
+# Test method completion depending on the number of arguments with splatting
 
 @test_nocompletion("CompletionFoo.test3(unknown; ")
 @test_nocompletion("CompletionFoo.test3.(unknown; ")
@@ -879,7 +879,6 @@ let s = "CompletionFoo.test(3, 5, args...,;"
     @test any(str->occursin("test(x::T, y::T) where T<:Real", str), c)
     @test any(str->occursin("test(args...)", str), c)
 end
-=#
 
 # Test that method calls with ill-formed kwarg syntax are not completed
 
@@ -1475,16 +1474,16 @@ end
     @test "_something=" ∈ c
     c, r = test_complete("CompletionFoo.kwtest4(a; xαβγ=1, _")
     @test "_a1b=" ∈ c
-    # TODO: @test "_something=" ∉ c # no such keyword for the method with keyword `xαβγ`
+    @test "_something=" ∉ c # no such keyword for the method with keyword `xαβγ`
     c, r = test_complete("CompletionFoo.kwtest4.(a; xαβγ=1, _")
     @test "_a1b=" ∈ c
-    # TODO: @test "_something=" ∉ c # broadcasting does not affect the existence of kwargs
+    @test "_something=" ∉ c # broadcasting does not affect the existence of kwargs
     c, r = test_complete("CompletionFoo.kwtest4(a; x23=0, x")
     @test "x23=" ∉ c
-    # TODO: @test "xαβγ=" ∉ c
+    @test "xαβγ=" ∉ c
     c, r = test_complete("CompletionFoo.kwtest4.(a; x23=0, x")
     @test "x23=" ∉ c
-    # TODO: @test "xαβγ=" ∉ c
+    @test "xαβγ=" ∉ c
     c, r = test_complete("CompletionFoo.kwtest4(a; _a1b=1, x")
     @test "x23=" ∈ c
     @test "xαβγ=" ∈ c
@@ -1510,6 +1509,10 @@ end
     c, r = test_complete("CompletionFoo.kwtest5('a', 3, String[]...; xy")
     @test c == ["xyz="]
 
+    # Test kwarg completion even in presence of optional arguments
+    c, r = test_complete("CompletionFoo.kwtest6(0x3; kwa")
+    @test c == ["kwarg="]
+
     # return true if no completion suggests a keyword argument
     function hasnokwsuggestions(str)
         c, _ = test_complete(str)
@@ -1530,14 +1533,13 @@ end
     @test hasnokwsuggestions("CompletionFoo.kwtest3(a; length, ")
     @test hasnokwsuggestions("CompletionFoo.kwtest3(a; kwargs..., ")
 
-    #= TODO: Test the absence of kwarg completion the call is incompatible with the method bearing the kwarg.
-    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; unknown=4, another!kw") # only methods 1 and 3 could slurp `unknown`
+    # Test the absence of kwarg completion the call is incompatible with the method bearing the kwarg.
     @test hasnokwsuggestions("CompletionFoo.kwtest3(1+3im; nameda")
     @test hasnokwsuggestions("CompletionFoo.kwtest3(12//7; foob") # because of specificity
+    @test hasnokwsuggestions("CompletionFoo.kwtest3(a; unknown=4, another!kw") # only methods 1 and 3 could slurp `unknown`
     @test hasnokwsuggestions("CompletionFoo.kwtest3(a, len2=b, length, foob") # length is not length=length
     @test hasnokwsuggestions("CompletionFoo.kwtest5('a', 3, 5, unknownsplat...; xy")
     @test hasnokwsuggestions("CompletionFoo.kwtest5(3; somek")
-    =#
 end
 
 # Test completion in context
@@ -1654,8 +1656,8 @@ let s = "test.(1,1, "
     @test length(c) == 4
     @test r == 1:4
     @test s[r] == "test"
-    # TODO: @test (c, r, res) == test_complete_foo("test.(1, 1, String[]..., ")
-    # TODO: @test (c, r, res) == test_complete_foo("test.(1, Any[]..., 2, ")
+    @test (c, r, res) == test_complete_foo("test.(1, 1, String[]..., ")
+    @test (c, r, res) == test_complete_foo("test.(1, Any[]..., 2, ")
 end
 
 let s = "prevind(\"θ\",1,"
