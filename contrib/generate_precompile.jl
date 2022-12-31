@@ -174,7 +174,7 @@ Pkg = get(Base.loaded_modules,
 
 if Pkg !== nothing
     # TODO: Split Pkg precompile script into REPL and script part
-    repl_script *= Pkg.precompile_script
+    repl_script = Pkg.precompile_script * repl_script # do larger workloads first for better parallelization
 end
 
 FileWatching = get(Base.loaded_modules,
@@ -235,7 +235,7 @@ Profile = get(Base.loaded_modules,
           Base.PkgId(Base.UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile"),
           nothing)
 if Profile !== nothing
-    repl_script *= Profile.precompile_script
+    repl_script = Profile.precompile_script * repl_script # do larger workloads first for better parallelization
     hardcoded_precompile_statements *= """
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UInt})
     precompile(Tuple{typeof(Profile.tree!), Profile.StackFrameTree{UInt64}, Vector{UInt64}, Dict{UInt64, Vector{Base.StackTraces.StackFrame}}, Bool, Symbol, Int, UnitRange{UInt}})
