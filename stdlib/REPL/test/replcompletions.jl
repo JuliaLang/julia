@@ -507,6 +507,13 @@ let s = "CompletionFoo.test4(\"e\",r\" \","
     @test s[r] == "CompletionFoo.test4"
 end
 
+# Test builtins method completion
+let s = "typeof("
+    c, r = test_complete(s)
+    @test length(c) == 1
+    @test c[1] == "typeof(...) @ Core none:0"
+end
+
 # (As discussed in #19829, the Base.REPLCompletions.get_type function isn't
 #  powerful enough to analyze anonymous functions.)
 let s = "CompletionFoo.test5(broadcast((x,y)->x==y, push!(Base.split(\"\",' '),\"\",\"\"), \"\"),"

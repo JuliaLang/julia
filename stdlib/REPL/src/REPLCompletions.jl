@@ -41,9 +41,8 @@ struct FieldCompletion <: Completion
 end
 
 struct MethodCompletion <: Completion
-    tt # may be used by an external consumer to infer return type, etc.
-    method::Method
-    MethodCompletion(@nospecialize(tt), method::Method) = new(tt, method)
+    tt::Vector{Any} # may be used by an external consumer to infer return type, etc.
+    method::Base.FactoredMethod
 end
 
 struct BslashCompletion <: Completion
@@ -82,7 +81,7 @@ function Base.getproperty(c::Completion, name::Symbol)
     elseif name === :field
         return getfield(c, :field)::Symbol
     elseif name === :method
-        return getfield(c, :method)::Method
+        return getfield(c, :method)::Base.FactoredMethod
     elseif name === :bslash
         return getfield(c, :bslash)::String
     elseif name === :text
@@ -592,7 +591,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
         filter!(out) do c
             isa(c, TextCompletion) && return false
             isa(c, MethodCompletion) || return true
-            sig = Base.unwrap_unionall(c.method.sig)::DataType
+            sig = Base.unwrap_unionall(last(c.method.m).sig)::DataType
             return !all(T -> T === Any || T === Vararg{Any}, sig.parameters[2:end])
         end
     end
@@ -650,9 +649,16 @@ function complete_methods_args(ex::Expr, context_module::Module, default_any::Bo
     return detect_args_kwargs(ex.args, context_module, default_any, false)
 end
 
+function iskwsortermethod(@nospecialize(funct), args_ex::Vector{Any})
+    length(args_ex) < 2 && return false
+    args_ex[1] === Any || return false
+    funct == try; Core.kwftype(args_ex[2]); catch ex; ex isa ErrorException || rethrow(); return false; end || return false
+    true
+end
+
 function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_ex::Vector{Any}, kwargs_ex::Set{Symbol}, max_method_completions::Int, kwargs_flag::Int)
     # Input types and number of arguments
-    kwargs_flag == 0 && push!(args_ex, Vararg{Any}) # allow more arguments if there is no semicolon
+    kwargs_flag != -1 && push!(args_ex, Vararg{Any}) # allow more arguments unless in .?( syntax
     t_in = Tuple{funct, args_ex...}
     m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
         #=ambig=# true, Ref(typemin(UInt)), Ref(typemax(UInt)), Ptr{Int32}(C_NULL))
@@ -660,9 +666,18 @@ function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_e
         push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods, use SHIFT-TAB to show )"))
         return
     end
-    for match in m
+    m isa Vector || return
+    isempty(m) && return
+    first_m = (m[1]::Core.MethodMatch).method
+    if first_m.sig === Tuple # Builtin
+        push!(out, MethodCompletion(Any[t_in], Base.FactoredMethod(first_m, false)))
+        return
+    end
+    ml = Base.MethodList([(match::Core.MethodMatch).method for match in m], Base.get_methodtable(first_m))
+    fml = Base.FactoredMethodList(ml, iskwsortermethod(funct, args_ex))
+    for (fm, pos) in zip(fml.list, fml.positions)
         # TODO: if kwargs_ex, filter out methods without kwargs?
-        push!(out, MethodCompletion(match.spec_types, match.method))
+        push!(out, MethodCompletion(Any[(m[p]::Core.MethodMatch).spec_types for p in pos], fm))
     end
     # TODO: filter out methods with wrong number of arguments if `exact_nargs` is set
 end
@@ -821,10 +836,10 @@ function complete_keyword_argument(partial, last_idx, context_module)
     complete_methods!(_completions, kwt, Any[Any, funct, args_ex...], kwargs_ex, MAX_METHOD_COMPLETIONS, kwargs_flag)
     isempty(_completions) && return fail
 
-    ml = if first(_completions) isa TextCompletion
-        Base.MethodList(kwt.name.mt).ms
+    factoredmethods = if first(_completions) isa TextCompletion
+        Base.FactoredMethodList(Base.MethodList(kwt.name.mt), true).list
     else
-        Method[(m::MethodCompletion).method for m in _completions]
+        Base.FactoredMethod[(m::MethodCompletion).method for m in _completions]
     end
 
     # For each method corresponding to the function call, provide completion suggestions
@@ -834,11 +849,10 @@ function complete_keyword_argument(partial, last_idx, context_module)
     # since the syntax "foo(; kwname)" is equivalent to "foo(; kwname=kwname)".
     last_word = partial[wordrange] # the word to complete
     kwargs = Set{String}()
-    for m in ml
-        slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), m.slot_syms)
+    for m in factoredmethods
+        m::Base.FactoredMethod
         current_kwarg_candidates = String[]
-        for i in (m.nargs+1):length(slotnames)
-            _kw = slotnames[i]
+        for _kw in m.kwargs
             kw = String(_kw)
             if !endswith(kw, "...") && startswith(kw, last_word) && _kw ∉ kwargs_ex
                 push!(current_kwarg_candidates, kw)

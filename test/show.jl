@@ -2595,3 +2595,26 @@ end
     ir = Core.Compiler.complete(compact)
     verify_display(ir)
 end
+
+@testset "Method table for functions with optional arguments" begin
+    f44434_1(a::T, b::T=3, c=4, d...) where {T} = pass
+    let repr = sprint(show, "text/plain", methods(f44434_1))
+        @test occursin("(a::T, [b::T, c], d...)", repr)
+    end
+    f44434_2(a, b=5) = 1
+    f44434_2(x, y::Integer) = 2
+    let repr = sprint(show, "text/plain", methods(f44434_2))
+        @test occursin("(a, [b])", repr)
+        @test occursin("(x, y::Integer)", repr)
+    end
+    f44434_3(a, b::Integer=5) = pass
+    let repr = sprint(show, "text/plain", methods(f44434_3))
+        @test occursin("(a, [b::Integer])", repr)
+    end
+    f44434_3(x, y::Integer) = pass
+    let repr = sprint(show, "text/plain", methods(f44434_3))
+        @test !occursin("(a, [b::Integer])", repr)
+        @test occursin("(a)", repr)
+        @test occursin("(x, y::Integer)", repr)
+    end
+end

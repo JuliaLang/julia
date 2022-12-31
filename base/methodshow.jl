@@ -201,13 +201,85 @@ function sym_to_string(sym)
     end
 end
 
+
+function kwsortermethod_kwargs(m::Method)
+    kwargs = Symbol[]
+    for x in Iterators.drop(eachsplit(m.slot_syms, '\0'), m.nargs)
+        if !isempty(x) && !occursin('#', x)
+            push!(kwargs, Symbol(x))
+        end
+    end
+    return kwargs
+    println('\n', m, '\n', collect(Iterators.drop(eachsplit(m.slot_syms, '\0'), m.nargs)), '\n')
+end
+
+# type for pretty-printing methods corresponding to the same definition site with different
+# optional arguments
+struct FactoredMethod
+    m::Vector{Method} # the different methods, by order of increasing nargs
+    kwargs::Vector{Symbol}
+end
+function FactoredMethod(m::Method, kwsortermethod)
+    FactoredMethod([m], kwsortermethod ? kwsortermethod_kwargs(m) : kwarg_decl(m))
+end
+
+struct FactoredMethodList
+    list::Vector{FactoredMethod}
+    positions::Vector{Vector{Int}}
+    ms::MethodList
+end
+
+function FactoredMethodList(ms::MethodList, kwsortermethod=false)
+    isempty(ms) && return FactoredMethodList(FactoredMethod[], Vector{Int}[], ms)
+    I = sortperm(ms.ms; by=m->(m.line, m.file, m.nargs))
+    list = FactoredMethod[FactoredMethod(ms[I[1]], kwsortermethod)]
+    positions = Vector{Int}[[I[1]]]
+    for _i in 2:length(ms)
+        i = I[_i]
+        last_m = last(last(list).m)
+        m = ms[i]
+        newmethod = true
+        # Check whether m and last_m could refer to the same method except for the
+        # addition of a new optional argument
+        if !last_m.isva && # the vararg variant is always last
+                isempty(last(list).kwargs) && # the kwargs variant is always last
+                m.file == last_m.file && m.line == last_m.line && # same location
+                startswith(m.slot_syms, last_m.slot_syms) && # same argument names so far
+                (m.nargs == last_m.nargs + 1 || (m.isva && m.nargs == last_m.nargs + 2))
+                # number of arguments consistent with one new optional argument (+ slurp)
+            unwrapped = Base.unwrap_unionall(m.sig).types
+            truncated = Tuple{unwrapped[1:last_m.nargs]...}
+            rewrapped = Base.rewrap_unionall(truncated, m.sig)
+            if rewrapped == last_m.sig # same argument types so far
+                # At this point, we have determined that method m has a signature identical
+                # to that of last_m, except for one additional argument (+ slurp)
+                newmethod = false
+                push!(last(list).m, m)
+                 # we assert that only one of the methods has kwargs, if any
+                append!(last(list).kwargs, kwsortermethod ? kwsortermethod_kwargs(m) : kwarg_decl(m))
+                push!(last(positions), i)
+            end
+        end
+        if newmethod
+            push!(list, FactoredMethod(m, kwsortermethod))
+            push!(positions, [i])
+        end
+    end
+    J = sortperm(positions)
+    return FactoredMethodList(list[J], positions[J], ms)
+end
+
+
 # default compact view
-show(io::IO, m::Method; kwargs...) = show_method(IOContext(io, :compact=>true), m; kwargs...)
+show(io::IO, m::Union{Method,FactoredMethod}; kwargs...) = show_method(IOContext(io, :compact=>true), m; kwargs...)
 
-show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwargs...)
+show(io::IO, ::MIME"text/plain", m::Union{Method,FactoredMethod}; kwargs...) = show_method(io, m; kwargs...)
 
-function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 1)
-    tv, decls, file, line = arg_decl_parts(m)
+show(io::IO, ::MIME"text/html", m::Union{Method,FactoredMethod}; kwargs...) = show_method(io, m; html=true, kwargs...)
+
+function show_method(io::IO, f::Union{Method,FactoredMethod}; modulecolor=:light_black, digit_align_width=1, html::Bool=false)
+    m = f isa FactoredMethod ? last(f.m) : f
+    tv, decls, file, line = arg_decl_parts(m, html)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
@@ -216,30 +288,33 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         line = 0
     else
         print(io, decls[1][2], "(")
-
-        # arguments
-        for (i,d) in enumerate(decls[2:end])
+        supmandatory = 1 + (f isa FactoredMethod ? first(f.m).nargs : m.nargs)
+        last_optional = m.nargs >= supmandatory ? m.nargs - m.isva : 0
+        for i in 2:m.nargs
+            i == supmandatory && print(io, '[')
+            d = decls[i]
             printstyled(io, d[1], color=:light_black)
             if !isempty(d[2])
                 print(io, "::")
+                html && print(io, "<b>")
                 print_type_bicolor(io, d[2], color=:bold, inner_color=:normal)
+                html && print(io, "</b>")
             end
-            i < length(decls)-1 && print(io, ", ")
+            i == last_optional && print(io, ']')
+            i == m.nargs || print(io, ", ")
         end
-
-        kwargs = kwarg_decl(m)
+        kwargs = f isa FactoredMethod ? f.kwargs : kwarg_decl(m)
         if !isempty(kwargs)
-            print(io, "; ")
-            for kw in kwargs
-                skw = sym_to_string(kw)
-                print(io, skw)
-                if kw != last(kwargs)
-                    print(io, ", ")
-                end
-            end
+            print(io, html ? "; <i>" : "; ")
+            join(io, map(sym_to_string, kwargs), ", ", ", ")
+            html && print(io, "</i>")
         end
         print(io, ")")
-        show_method_params(io, tv)
+        if !isempty(tv)
+            html && print(io,"<i>")
+            show_method_params(io, tv)
+            html && print(io,"</i>")
+        end
     end
 
     if !(get(io, :compact, false)::Bool) # single-line mode
@@ -247,7 +322,7 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         digit_align_width += 4
     end
     # module & file, re-using function from errorshow.jl
-    print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
+    print_module_path_file(io, m.module, string(file), line; modulecolor, digit_align_width, htmlurl=(html ? url(m) : ""))
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
@@ -282,7 +357,25 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     !iszero(n) && print(io, ":")
 end
 
-function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
+# cluster into consecutive numbers, e.g. [4, 11, 7, 9, 12, 2, 1, 8] into [1:2, 4, 7:9, 11:12]
+function _cluster_consecutive(list)
+    l = sort(list)
+    result = Union{Int,UnitRange{Int}}[]
+    ref = last = popfirst!(l)
+    for x in l
+        if x == last + 1
+            last = x
+        else
+            ref == last ? push!(result, ref) : push!(result, ref:last)
+            ref = last = x
+        end
+    end
+    ref == last ? push!(result, ref) : push!(result, ref:last)
+    return result
+end
+
+function show_method_table(io::IO, ml::Union{MethodList,FactoredMethodList}, max::Int=-1, header::Bool=true)
+    ms = ml isa FactoredMethodList ? ml.ms : ml
     mt = ms.mt
     name = mt.name
     hasname = isdefined(mt.module, name) &&
@@ -290,8 +383,8 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     if header
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
-    n = rest = 0
-    local last
+    rest = 0
+    local last_meth
 
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
@@ -302,30 +395,36 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
             mt.module
         end
 
-    digit_align_width = length(string(max > 0 ? max : length(ms)))
+    if ml isa FactoredMethodList
+        positions = Vector{Union{Int,UnitRange{Int}}}[_cluster_consecutive(x) for x in ml.positions]
+        digit_align_width = 2 + maximum(x -> length(x) - 1 + sum(y -> y isa Int ? ndigits(y) : ndigits(first(y)) + ndigits(last(y)), x), positions; init=0)
+        methods = ml.list
+    else
+        positions = eachindex(ml.ms)
+        digit_align_width = isempty(ms) ? 0 : (2 + ndigits(length(ms)))
+        methods = ml.ms
+    end
 
-    for meth in ms
-        if max == -1 || n < max
-            n += 1
+    for (n, meth) in zip(positions, methods)
+        if max == -1 || first(n) < max
             println(io)
-
-            print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
-
-            modulecolor = if parentmodule(meth) == modul
+            print(io, ' ', lpad('['*join(n, ',')*']', digit_align_width), ' ')
+            meth_module = ml isa FactoredMethodList ? first(meth.m).module : meth.module
+            modulecolor = if meth_module == modul
                 nothing
             else
-                m = parentmodule_before_main(meth)
+                m = parentmodule_before_main(meth_module)
                 get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             end
             show_method(io, meth; modulecolor)
 
-            file, line = updated_methodloc(meth)
+            file, line = updated_methodloc(ml isa FactoredMethodList ? last(meth.m) : meth)
             if last_shown_line_infos !== nothing
                 push!(last_shown_line_infos, (string(file), line))
             end
         else
             rest += 1
-            last = meth
+            last_meth = meth
         end
     end
     if rest > 0
@@ -342,8 +441,10 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     nothing
 end
 
-show(io::IO, ms::MethodList) = show_method_table(io, ms)
-show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
+show(io::IO, ml::FactoredMethodList) = show_method_table(io, ml)
+show(io::IO, ms::MethodList) = show_method_table(io, FactoredMethodList(ms))
+show(io::IO, ::MIME"text/plain", ml::FactoredMethodList) = show_method_table(io, ml)
+show(io::IO, ::MIME"text/plain", ml::MethodList) = show_method_table(io, FactoredMethodList(ml))
 show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
 
 function inbase(m::Module)
@@ -438,11 +539,12 @@ function show(io::IO, ::MIME"text/html", m::Method)
     end
 end
 
-function show(io::IO, mime::MIME"text/html", ms::MethodList)
+function show(io::IO, mime::MIME"text/html", ml::Union{MethodList,FactoredMethodList})
+    ms = ml isa FactoredMethodList ? ml.ms : ml
     mt = ms.mt
     show_method_list_header(io, ms, str -> "<b>"*str*"</b>")
     print(io, "<ul>")
-    for meth in ms
+    for meth in (ml isa FactoredMethodList ? ml.list : ms)
         print(io, "<li> ")
         show(io, mime, meth)
         print(io, "</li> ")

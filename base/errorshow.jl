@@ -736,7 +736,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     printstyled(io, inlined ? " [inlined]" : "", color = :light_black)
 end
 
-function print_module_path_file(io, modul, file, line; modulecolor = :light_black, digit_align_width = 0)
+function print_module_path_file(io, modul, file, line; modulecolor=:light_black, digit_align_width=0, htmlurl="")
     printstyled(io, " " ^ digit_align_width * "@", color = :light_black)
 
     # module
@@ -753,7 +753,9 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     !isempty(dir) && printstyled(io, dir, Filesystem.path_separator, color = :light_black)
 
     # filename, separator, line
+    isempty(htmlurl) || print(io, """<a href="$htmlurl" target="_blank">""")
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
+    isempty(htmlurl) || print(io, "</a>")
 end
 
 function show_backtrace(io::IO, t::Vector)
