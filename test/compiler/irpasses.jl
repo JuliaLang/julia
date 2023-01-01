@@ -387,6 +387,22 @@ let # should work with constant globals
     @test count(isnew, src.code) == 0
 end
 
+# don't SROA statement that may throw
+# https://github.com/JuliaLang/julia/issues/48067
+function issue48067(a::Int, b)
+   r = Ref(a)
+   try
+       setfield!(r, :x, b)
+       nothing
+   catch err
+       getfield(r, :x)
+   end
+end
+let src = code_typed1(issue48067, (Int,String))
+    @test any(iscall((src, setfield!)), src.code)
+end
+@test issue48067(42, "julia") == 42
+
 # should work nicely with inlining to optimize away a complicated case
 # adapted from http://wiki.luajit.org/Allocation-Sinking-Optimization#implementation%5B
 struct Point
