@@ -1848,7 +1848,7 @@ function abstract_call_unionall(argtypes::Vector{Any})
             return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
         end
         if !isa(body, Type) && !isa(body, TypeVar)
-            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow=false), NoCallInfo())
+            return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
         end
         if has_free_typevars(body)
             if isa(a2, Const)
@@ -1857,9 +1857,9 @@ function abstract_call_unionall(argtypes::Vector{Any})
                 tv = a2.tv
                 canconst = false
             else
-                return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow=false), NoCallInfo())
+                return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             end
-            !isa(tv, TypeVar) && return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow=false), NoCallInfo())
+            !isa(tv, TypeVar) && return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
