@@ -2131,7 +2131,6 @@ const _ARGMEM_BUILTINS = Any[
 const _INCONSISTENT_INTRINSICS = Any[
     Intrinsics.pointerref,      # this one is volatile
     Intrinsics.arraylen,        # this one is volatile
-    Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
     # ... and list fastmath intrinsics:
