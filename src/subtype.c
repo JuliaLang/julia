@@ -66,6 +66,7 @@ typedef struct jl_varbinding_t {
     jl_value_t *ub;
     int8_t right;       // whether this variable came from the right side of `A <: B`
     int8_t flipped;    // whether this variable has been "flipped" for a fresh subtype check.
+    int8_t occurs;      // occurs in any position
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
     int8_t concrete;    // 1 if another variable has a constraint forcing this one to be concrete
@@ -162,7 +163,7 @@ static void statestack_set(jl_unionstate_t *st, int i, int val) JL_NOTSAFEPOINT
 typedef struct {
     int8_t *buf;
     int rdepth;
-    int8_t _space[16];
+    int8_t _space[24];
 } jl_savedenv_t;
 
 static int current_env_length(jl_stenv_t *e)
@@ -181,9 +182,9 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
     int len = current_env_length(e);
     if (root)
         *root = (jl_value_t*)jl_alloc_svec(len * 3);
-    se->buf = (int8_t*)(len > 8 ? malloc_s(len * 2) : &se->_space);
+    se->buf = (int8_t*)(len > 8 ? malloc_s(len * 3) : &se->_space);
 #ifdef __clang_gcanalyzer__
-    memset(se->buf, 0, len * 2);
+    memset(se->buf, 0, len * 3);
 #endif
     int i=0, j=0;
     jl_varbinding_t *v = e->vars;
@@ -193,6 +194,7 @@ static void save_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se)
             jl_svecset(*root, i++, v->ub);
             jl_svecset(*root, i++, (jl_value_t*)v->innervars);
         }
+        se->buf[j++] = v->occurs;
         se->buf[j++] = v->occurs_inv;
         se->buf[j++] = v->occurs_cov;
         v = v->prev;
@@ -215,6 +217,7 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_N
         if (root) v->lb = jl_svecref(root, i++);
         if (root) v->ub = jl_svecref(root, i++);
         if (root) v->innervars = (jl_array_t*)jl_svecref(root, i++);
+        v->occurs = se->buf[j++];
         v->occurs_inv = se->buf[j++];
         v->occurs_cov = se->buf[j++];
         v = v->prev;
@@ -224,6 +227,14 @@ static void restore_env(jl_stenv_t *e, jl_value_t *root, jl_savedenv_t *se) JL_N
         memset(&e->envout[e->envidx], 0, (e->envsz - e->envidx)*sizeof(void*));
 }
 
+static void clean_occurs(jl_stenv_t *e)
+{
+    jl_varbinding_t *v = e->vars;
+    while (v) {
+        v->occurs = 0;
+        v = v->prev;
+    }
+}
 
 // type utilities
 
@@ -588,6 +599,8 @@ static int subtype_left_var(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int par
 // of determining whether the variable is concrete.
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, int param) JL_NOTSAFEPOINT
 {
+    if (vb != NULL)
+        vb->occurs = 1;
     if (vb != NULL && param) {
         // saturate counters at 2; we don't need values bigger than that
         if (param == 2 && (vb->right ? e->Rinvdepth : e->invdepth) > vb->depth0) {
@@ -780,7 +793,7 @@ static jl_unionall_t *unalias_unionall(jl_unionall_t *u, jl_stenv_t *e)
 static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8_t R, int param)
 {
     u = unalias_unionall(u, e);
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH4(&u, &vb.lb, &vb.ub, &vb.innervars);
     e->vars = &vb;
@@ -2719,7 +2732,7 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
 {
     jl_value_t *res=NULL, *save=NULL;
     jl_savedenv_t se;
-    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0,
+    jl_varbinding_t vb = { u->var, u->var->lb, u->var->ub, R, 0, 0, 0, 0, 0, 0, 0, 0,
                            R ? e->Rinvdepth : e->invdepth, 0, NULL, e->vars };
     JL_GC_PUSH5(&res, &vb.lb, &vb.ub, &save, &vb.innervars);
     save_env(e, &save, &se);
@@ -2732,13 +2745,13 @@ static jl_value_t *intersect_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_
     else if (res != jl_bottom_type) {
         if (vb.concrete || vb.occurs_inv>1 || vb.intvalued > 1 || u->var->lb != jl_bottom_type || (vb.occurs_inv && vb.occurs_cov)) {
             restore_env(e, NULL, &se);
-            vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             vb.constraintkind = vb.concrete ? 1 : 2;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
         else if (vb.occurs_cov && !var_occurs_invariant(u->body, u->var, 0)) {
             restore_env(e, save, &se);
-            vb.occurs_cov = vb.occurs_inv = 0;
+            vb.occurs = vb.occurs_cov = vb.occurs_inv = 0;
             vb.constraintkind = 1;
             res = intersect_unionall_(t, u, e, R, param, &vb);
         }
@@ -3306,34 +3319,162 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
 
 static int merge_env(jl_stenv_t *e, jl_value_t **root, jl_savedenv_t *se, int count)
 {
-    if (!count) {
-        save_env(e, root, se);
-        return 1;
+    if (count == 0) {
+        int len = current_env_length(e);
+        *root = (jl_value_t*)jl_alloc_svec(len * 3);
+        se->buf = (int8_t*)(len > 8 ? malloc_s(len * 3) : &se->_space);
+        memset(se->buf, 0, len * 3);
     }
     int n = 0;
     jl_varbinding_t *v = e->vars;
     jl_value_t *b1 = NULL, *b2 = NULL;
     JL_GC_PUSH2(&b1, &b2); // clang-sagc does not understand that *root is rooted already
+    v = e->vars;
     while (v != NULL) {
-        b1 = jl_svecref(*root, n);
-        b2 = v->lb;
-        jl_svecset(*root, n, simple_meet(b1, b2));
-        b1 = jl_svecref(*root, n+1);
-        b2 = v->ub;
-        jl_svecset(*root, n+1, simple_join(b1, b2));
-        b1 = jl_svecref(*root, n+2);
-        b2 = (jl_value_t*)v->innervars;
-        if (b2 && b1 != b2) {
-            if (b1)
-                jl_array_ptr_1d_append((jl_array_t*)b2, (jl_array_t*)b1);
-            else
-                jl_svecset(*root, n+2, b2);
+        if (v->occurs) {
+            // only merge lb/ub/innervars if this var occurs.
+            b1 = jl_svecref(*root, n);
+            b2 = v->lb;
+            jl_svecset(*root, n, b1 ? simple_meet(b1, b2) : b2);
+            b1 = jl_svecref(*root, n+1);
+            b2 = v->ub;
+            jl_svecset(*root, n+1, b1 ? simple_join(b1, b2) : b2);
+            b1 = jl_svecref(*root, n+2);
+            b2 = (jl_value_t*)v->innervars;
+            if (b2 && b1 != b2) {
+                if (b1)
+                    jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
+                else
+                    jl_svecset(*root, n+2, b2);
+            }
+            // record the meeted vars.
+            se->buf[n] = 1;
         }
+        // always merge occurs_inv/cov by max (never decrease)
+        if (v->occurs_inv > se->buf[n+1])
+            se->buf[n+1] = v->occurs_inv;
+        if (v->occurs_cov > se->buf[n+2])
+            se->buf[n+2] = v->occurs_cov;
         n = n + 3;
         v = v->prev;
     }
     JL_GC_POP();
     return count + 1;
+}
+
+// merge untouched vars' info.
+static void final_merge_env(jl_value_t **merged, jl_savedenv_t *me, jl_value_t **saved, jl_savedenv_t *se)
+{
+    int l = jl_svec_len(*merged);
+    assert(l == jl_svec_len(*saved) && l%3 == 0);
+    jl_value_t *b1 = NULL, *b2 = NULL;
+    JL_GC_PUSH2(&b1, &b2);
+    for (int n = 0; n < l; n = n + 3) {
+        if (jl_svecref(*merged, n) == NULL)
+            jl_svecset(*merged, n, jl_svecref(*saved, n));
+        if (jl_svecref(*merged, n+1) == NULL)
+            jl_svecset(*merged, n+1, jl_svecref(*saved, n+1));
+        b1 = jl_svecref(*merged, n+2);
+        b2 = jl_svecref(*saved , n+2);
+        if (b1 == NULL)
+            jl_svecset(*merged, n+2, b2);
+        else if (b2 && b1 != b2)
+            jl_array_ptr_1d_append((jl_array_t*)b1, (jl_array_t*)b2);
+        me->buf[n] |= se->buf[n];
+    }
+    JL_GC_POP();
+}
+
+// circulation check.
+static int is_equal_typevar(jl_varbinding_t *src, jl_tvar_t *dest, jl_stenv_t *e) {
+    if (src == NULL || src->lb != src->ub || !jl_is_typevar(src->lb))
+        return 0;
+    if (dest == (jl_tvar_t *)src->lb)
+        return 1;
+    return is_equal_typevar(lookup(e, (jl_tvar_t *)src->lb), dest, e);
+}
+
+static int check_circulation(jl_stenv_t *e, jl_value_t* res)
+{
+    jl_varbinding_t *v = e->vars;
+    // Here we pull in some typevar missed in fastpath.
+    while (v != NULL) {
+        v->occurs = v->occurs || jl_has_typevar(res, v->var);
+        assert(v->occurs == 0 || v->occurs == 1);
+        v = v->prev;
+    }
+    v = e->vars;
+    while (v != NULL) {
+        if (v->occurs == 1) {
+            jl_varbinding_t *v2 = e->vars;
+            while (v2 != NULL) {
+                if (v2 != v && v2->occurs == 0)
+                    v2->occurs = -(jl_has_typevar(v->lb, v2->var) || jl_has_typevar(v->ub, v2->var));
+                v2 = v2->prev;
+            }
+        }
+        v = v->prev;
+    }
+    v = e->vars;
+    while (v != NULL) {
+        if (v->occurs) {
+            // 1. direct self circulation check. (S<:Val{S})
+            if (jl_has_typevar(v->lb, v->var) || jl_has_typevar(v->ub, v->var))
+                return 0;
+            if (v->lb != v->ub || !jl_is_typevar(v->lb)) {
+                jl_varbinding_t *v2 = e->vars;
+                while (v2 != v) {
+                    // 2. indirect self circulation check. (S1<:S2<:S1, S1<:Val{S2})
+                    if (v2->occurs && is_equal_typevar(v2, v->var, e) &&
+                        (jl_has_typevar(v->lb, v2->var) || jl_has_typevar(v->ub, v2->var)))
+                        return 0;
+                    v2 = v2->prev;
+                }
+            }
+        }
+        v = v->prev;
+    }
+    // 3. upbound circulation check. (S1<:Val{S2}, S2<:Val{S1})
+    v = e->vars;
+    while (v != NULL) {
+        if (v->occurs) {
+            jl_varbinding_t *v2 = e->vars;
+            while (v2 != NULL) {
+                assert(v2->offset == 0);
+                v2 = v2->prev;
+            }
+            v2 = e->vars;
+            int has_circ = 0;
+            while (v2 != NULL) {
+                if (!has_circ && !v2->offset && jl_has_typevar(v->ub, v2->var)) {
+                    jl_varbinding_t *v3 = v2;
+                    while (v3) {
+                        if (v3->offset) break;
+                        v3->offset = 1;
+                        int next = v3->lb==v3->ub && jl_is_typevar(v3->lb);
+                        v3 = next ? lookup(e, (jl_tvar_t *)v3->lb) : NULL;
+                    }
+                }
+                if (!has_circ && v2->offset) {
+                    v2->offset = 0;
+                    if (v2->occurs && jl_has_typevar(v2->ub, v->var)) {
+                        has_circ = 1;
+                    }
+                }
+                if (has_circ)
+                    v2->offset = 0;
+                v2 = v2->prev;
+            }
+            while (v2 != NULL) {
+                assert(v2->offset == 0);
+                v2 = v2->prev;
+            }
+            if (has_circ)
+                return 0;
+        }
+        v = v->prev;
+    }
+    return 1;
 }
 
 static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
@@ -3348,9 +3489,12 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
     jl_savedenv_t se, me;
     save_env(e, saved, &se);
     int lastset = 0, niter = 0, total_iter = 0;
+    clean_occurs(e);
     jl_value_t *ii = intersect(x, y, e, 0);
     is[0] = ii;  // root
-    if (is[0] != jl_bottom_type)
+    if (!check_circulation(e, is[0]))
+        is[0] = jl_bottom_type;
+    else if (is[0] != jl_bottom_type)
         niter = merge_env(e, merged, &me, niter);
     restore_env(e, *saved, &se);
     while (e->Runions.more) {
@@ -3365,8 +3509,11 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
         lastset = set;
 
         is[0] = ii;
+        clean_occurs(e);
         is[1] = intersect(x, y, e, 0);
-        if (is[1] != jl_bottom_type)
+        if (!check_circulation(e, is[1]))
+            is[1] = jl_bottom_type;
+        else if (is[1] != jl_bottom_type)
             niter = merge_env(e, merged, &me, niter);
         restore_env(e, *saved, &se);
         if (is[0] == jl_bottom_type)
@@ -3383,7 +3530,8 @@ static jl_value_t *intersect_all(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
             break;
         }
     }
-    if (niter){
+    if (niter) {
+        final_merge_env(merged, &me, saved, &se);
         restore_env(e, *merged, &me);
         free_env(&me);
     }
