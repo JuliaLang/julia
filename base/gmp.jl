@@ -682,8 +682,16 @@ end
 
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
+function binomial(n::BigInt, k::Integer)
+    n < 0 && return (-1)^k * binomial(k - n - 1, k)
+    k < 0 && return BigInt(0)
+    k <= typemax(UInt) && return binomial(n, UInt(k))
+    κ = n - k
+    κ < 0 && return BigInt(0)
+    κ <= typemax(UInt) && return binomial(n, UInt(κ))
+    throw(OverflowError("Computation will exceed memory"))
+end
 binomial(n::BigInt, k::UInt) = MPZ.bin_ui(n, k)
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(min(k, n-k)))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
