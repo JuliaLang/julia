@@ -683,9 +683,9 @@ end
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
 function binomial(n::BigInt, k::Integer)
-    n < 0 && return (-1)^k * binomial(k - n - 1, k)
     k < 0 && return BigInt(0)
     k <= typemax(UInt) && return binomial(n, UInt(k))
+    n < 0 && return (isodd(k) ? -one(n) : one(n)) * binomial(k - n - 1, k)
     κ = n - k
     κ < 0 && return BigInt(0)
     κ <= typemax(UInt) && return binomial(n, UInt(κ))

@@ -25,6 +25,7 @@ using Random: randcycle
     @test binomial(-big(2), ∐ - 3) == 1000000000000066599999999999999
     @test_throws OverflowError binomial(big(2)^65, big(2)^64)
     @test_throws OverflowError binomial(-big(2)^65, big(2)^64)
+    @test binomial(∐, 2 * ∐) == BigInt(0)
 end
 
 @testset "permutations" begin
