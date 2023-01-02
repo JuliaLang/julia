@@ -135,6 +135,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
                         (; effects, const_result, edge) = const_call_result
+                    else
+                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
@@ -169,6 +171,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
                     (; effects, const_result, edge) = const_call_result
+                else
+                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                 end
             end
             all_effects = merge_effects(all_effects, effects)
@@ -535,6 +539,7 @@ end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
+const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Call was widened to force convergence."
 
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, si::StmtInfo, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
@@ -573,6 +578,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             end
         end
     end
+    washardlimit = hardlimit
 
     if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
@@ -611,7 +617,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return MethodCallResult(Any, true, true, nothing, Effects())
             end
-            add_remark!(interp, sv, RECURSION_MSG)
+            add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)

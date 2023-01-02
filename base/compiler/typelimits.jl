@@ -304,8 +304,6 @@ end
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
 function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
-    typea = ignorelimited(typea)
-    typeb = ignorelimited(typeb)
     typea isa MaybeUndef && (typea = typea.typ) # n.b. does not appear in inference
     typeb isa MaybeUndef && (typeb = typeb.typ) # n.b. does not appear in inference
     typea === typeb && return true
@@ -385,29 +383,87 @@ function tmerge(lattice::OptimizerLattice, @nospecialize(typea), @nospecialize(t
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
-function tmerge(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
-    r = tmerge_fast_path(lattice, typea, typeb)
-    r !== nothing && return r
+function union_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})
+    if causesa ⊆ causesb
+        return causesb
+    elseif causesb ⊆ causesa
+        return causesa
+    else
+        return union!(copy(causesa), causesb)
+    end
+end
 
-    # type-lattice for LimitedAccuracy wrapper
-    # the merge create a slightly narrower type than needed, but we can't
-    # represent the precise intersection of causes and don't attempt to
-    # enumerate some of these cases where we could
+function merge_causes(causesa::IdSet{InferenceState}, causesb::IdSet{InferenceState})
+    # TODO: When lattice elements are equal, we're allowed to discard one or the
+    # other set, but we'll need to come up with a consistent rule. For now, we
+    # just check the length, but other heuristics may be applicable.
+    if length(causesa) < length(causesb)
+        return causesa
+    elseif length(causesb) < length(causesa)
+        return causesb
+    else
+        return union!(copy(causesa), causesb)
+    end
+end
+
+@noinline function tmerge_limited(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
+    typea === Union{} && return typeb
+    typeb === Union{} && return typea
+
+    # Like tmerge_fast_path, but tracking which causes need to be preserved at
+    # the same time.
     if isa(typea, LimitedAccuracy) && isa(typeb, LimitedAccuracy)
-        if typea.causes ⊆ typeb.causes
-            causes = typeb.causes
-        elseif typeb.causes ⊆ typea.causes
-            causes = typea.causes
+        causesa = typea.causes
+        causesb = typeb.causes
+        typea = typea.typ
+        typeb = typeb.typ
+        suba = ⊑(lattice, typea, typeb)
+        subb = ⊑(lattice, typeb, typea)
+
+        # Approximated types are lattice equal. Merge causes.
+        if suba && subb
+            causes = merge_causes(causesa, causesb)
+            issimplertype(lattice, typeb, typea) && return LimitedAccuracy(typeb, causesb)
+        elseif suba
+            issimplertype(lattice, typeb, typea) && return LimitedAccuracy(typeb, causesb)
+            causes = causesb
+            # `a`'s causes may be discarded
+        elseif subb
+            causes = causesa
         else
-            causes = union!(copy(typea.causes), typeb.causes)
+            causes = union_causes(causesa, causesb)
         end
-        return LimitedAccuracy(tmerge(widenlattice(lattice), typea.typ, typeb.typ), causes)
-    elseif isa(typea, LimitedAccuracy)
-        return LimitedAccuracy(tmerge(widenlattice(lattice), typea.typ, typeb), typea.causes)
-    elseif isa(typeb, LimitedAccuracy)
-        return LimitedAccuracy(tmerge(widenlattice(lattice), typea, typeb.typ), typeb.causes)
+    else
+        if isa(typeb, LimitedAccuracy)
+            (typea, typeb) = (typeb, typea)
+        end
+        typea = typea::LimitedAccuracy
+
+        causes = typea.causes
+        typea = typea.typ
+
+        suba = ⊑(lattice, typea, typeb)
+        if suba
+            issimplertype(lattice, typeb, typea) && return typeb
+            # `typea` was narrower than `typeb`. Whatever tmerge produces,
+            # we know it must be wider than `typeb`, so we may drop the
+            # causes.
+            causes = nothing
+        end
+        subb = ⊑(lattice, typeb, typea)
     end
 
+    subb && issimplertype(lattice, typea, typeb) && return LimitedAccuracy(typea, causes)
+    return LimitedAccuracy(tmerge(widenlattice(lattice), typea, typeb), causes)
+end
+
+function tmerge(lattice::InferenceLattice, @nospecialize(typea), @nospecialize(typeb))
+    if isa(typea, LimitedAccuracy) || isa(typeb, LimitedAccuracy)
+        return tmerge_limited(lattice, typea, typeb)
+    end
+
+    r = tmerge_fast_path(widenlattice(lattice), typea, typeb)
+    r !== nothing && return r
     return tmerge(widenlattice(lattice), typea, typeb)
 end
 
