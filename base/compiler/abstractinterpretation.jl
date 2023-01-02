@@ -617,11 +617,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return MethodCallResult(Any, true, true, nothing, Effects())
             end
-            if washardlimit
-                add_remark!(interp, sv, RECURSION_MSG_HARDLIMIT)
-            else
-                add_remark!(interp, sv, RECURSION_MSG)
-            end
+            add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)

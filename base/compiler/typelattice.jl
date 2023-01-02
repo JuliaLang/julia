@@ -203,7 +203,7 @@ corresponding lattice element `T`, but in particular, all lattice elements that
 are `⊑ T` (but not equal `T`) are also `⊑ LimitedAccuracy(T)`.
 
 The `causes` list is used to determine whether a particular cause of limitation is
-enevitable and if so, widening `LimitedAccuracy(T)` back to `T`. For example,
+inevitable and if so, widening `LimitedAccuracy(T)` back to `T`. For example,
 in the call stacks above, if any call to `A` always leads back to `A`, then
 it does not matter whether we start at `A` or reach it via `B`: Any inference
 that reaches `A` will always hit the same limitation and the result may thus

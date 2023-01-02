@@ -445,8 +445,8 @@ end
         suba = ⊑(lattice, typea, typeb)
         if suba
             issimplertype(lattice, typeb, typea) && return typeb
-            # `typea` was a subtype of `b`. Whatever tmerge produces,
-            # we know it must be a supertype of `typeb`, so we may drop the
+            # `typea` was narrower than `typeb`. Whatever tmerge produces,
+            # we know it must be wider than `typeb`, so we may drop the
             # causes.
             causes = nothing
         end
