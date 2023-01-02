@@ -661,7 +661,7 @@ void jl_print_bt_entry_codeloc(jl_bt_element_t *bt_entry) JL_NOTSAFEPOINT
         jl_value_t *code = jl_bt_entry_jlvalue(bt_entry, 0);
         if (jl_is_method_instance(code)) {
             // When interpreting a method instance, need to unwrap to find the code info
-            code = ((jl_method_instance_t*)code)->uninferred;
+            code = jl_atomic_load_relaxed(&((jl_method_instance_t*)code)->uninferred);
         }
         if (jl_is_code_info(code)) {
             jl_code_info_t *src = (jl_code_info_t*)code;
@@ -1126,7 +1126,7 @@ JL_DLLEXPORT void jl_print_backtrace(void) JL_NOTSAFEPOINT
 // Print backtraces for all live tasks, for all threads.
 // WARNING: this is dangerous and can crash if used outside of gdb, if
 // all of Julia's threads are not stopped!
-JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
+JL_DLLEXPORT void jl_print_task_backtraces(int show_done) JL_NOTSAFEPOINT
 {
     size_t nthreads = jl_atomic_load_acquire(&jl_n_threads);
     jl_ptls_t *allstates = jl_atomic_load_relaxed(&jl_all_tls_states);
@@ -1146,9 +1146,13 @@ JL_DLLEXPORT void jl_print_task_backtraces(void) JL_NOTSAFEPOINT
         void **lst = live_tasks->items;
         for (size_t j = 0; j < live_tasks->len; j++) {
             jl_task_t *t = (jl_task_t *)lst[j];
+            int t_state = jl_atomic_load_relaxed(&t->_state);
+            if (!show_done && t_state == JL_TASK_STATE_DONE) {
+                continue;
+            }
             jl_safe_printf("     ---- Task %zu (%p)\n", j + 1, t);
             jl_safe_printf("          (sticky: %d, started: %d, state: %d, tid: %d)\n",
-                    t->sticky, t->started, jl_atomic_load_relaxed(&t->_state),
+                    t->sticky, t->started, t_state,
                     jl_atomic_load_relaxed(&t->tid) + 1);
             if (t->stkbuf != NULL)
                 jlbacktracet(t);

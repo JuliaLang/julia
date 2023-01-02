@@ -33,6 +33,7 @@ The following are definitely leaf locks (level 1), and must not try to acquire a
 >   * jl_locked_stream::mutex
 >   * debuginfo_asyncsafe
 >   * inference_timing_mutex
+>   * ExecutionEngine::SessionLock
 >
 >     > flisp itself is already threadsafe, this lock only protects the `jl_ast_context_list_t` pool
 >     > likewise, the ResourcePool<?>::mutexes just protect the associated resource pool
@@ -61,6 +62,10 @@ hierarchy. Acquiring a TSCtx should only be done from the JIT's pool of TSCtx's,
 that TSCtx should be released prior to returning it to the pool. If multiple TSCtx locks must be
 acquired at the same time (due to recursive compilation), then locks should be acquired in the order
 that the TSCtxs were borrowed from the pool.
+
+The following is a level 5 lock
+
+>   * JuliaOJIT::EmissionMutex
 
 The following are a level 6 lock, which can only recurse to acquire locks at lower levels:
 

@@ -133,7 +133,7 @@ See also [`print`](@ref), [`println`](@ref), [`show`](@ref).
     printstyled(stdout, msg...; bold=bold, underline=underline, blink=blink, reverse=reverse, hidden=hidden, color=color)
 
 """
-    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()))
+    Base.julia_cmd(juliapath=joinpath(Sys.BINDIR, julia_exename()); cpu_target)
 
 Return a julia command similar to the one of the running process.
 Propagates any of the `--cpu-target`, `--sysimage`, `--compile`, `--sysimage-native-code`,
@@ -148,10 +148,15 @@ Among others, `--math-mode`, `--warn-overwrite`, and `--trace-compile` are notab
 
 !!! compat "Julia 1.5"
     The flags `--color` and `--startup-file` were added in Julia 1.5.
+
+!!! compat "Julia 1.9"
+    The keyword argument `cpu_target` was added.
 """
-function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
+function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Union{Nothing,String} = nothing)
     opts = JLOptions()
-    cpu_target = unsafe_string(opts.cpu_target)
+    if cpu_target === nothing
+        cpu_target = unsafe_string(opts.cpu_target)
+    end
     image_file = unsafe_string(opts.image_file)
     addflags = String[]
     let compile = if opts.compile_enabled == 0
@@ -219,6 +224,12 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()))
     end
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
+    end
+    if opts.use_pkgimages == 0
+        push!(addflags, "--pkgimages=no")
+    else
+        # If pkgimage is set, malloc_log and code_coverage should not
+        @assert opts.malloc_log == 0 && opts.code_coverage == 0
     end
     return `$julia -C$cpu_target -J$image_file $addflags`
 end
@@ -487,10 +498,17 @@ function _crc32c(io::IO, nb::Integer, crc::UInt32=0x00000000)
 end
 _crc32c(io::IO, crc::UInt32=0x00000000) = _crc32c(io, typemax(Int64), crc)
 _crc32c(io::IOStream, crc::UInt32=0x00000000) = _crc32c(io, filesize(io)-position(io), crc)
-_crc32c(uuid::UUID, crc::UInt32=0x00000000) =
-    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, uuid.value, 16)
+_crc32c(uuid::UUID, crc::UInt32=0x00000000) = _crc32c(uuid.value, crc)
+_crc32c(x::UInt128, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt128}, Csize_t), crc, x, 16)
 _crc32c(x::UInt64, crc::UInt32=0x00000000) =
     ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt64}, Csize_t), crc, x, 8)
+_crc32c(x::UInt32, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt32}, Csize_t), crc, x, 4)
+_crc32c(x::UInt16, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt16}, Csize_t), crc, x, 2)
+_crc32c(x::UInt8, crc::UInt32=0x00000000) =
+    ccall(:jl_crc32c, UInt32, (UInt32, Ref{UInt8}, Csize_t), crc, x, 1)
 
 """
     @kwdef typedef
@@ -531,8 +549,7 @@ Stacktrace:
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
-    expr isa Expr && expr.head === :struct || error("Invalid usage of @kwdef")
-    expr = expr::Expr
+    isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     T = expr.args[2]
     if T isa Expr && T.head === :<:
         T = T.args[1]
@@ -546,29 +563,33 @@ macro kwdef(expr)
     # overflow on construction
     if !isempty(params_ex.args)
         if T isa Symbol
-            kwdefs = :(($(esc(T)))($params_ex) = ($(esc(T)))($(call_args...)))
-        elseif T isa Expr && T.head === :curly
-            T = T::Expr
+            sig = :(($(esc(T)))($params_ex))
+            call = :(($(esc(T)))($(call_args...)))
+            body = Expr(:block, __source__, call)
+            kwdefs = Expr(:function, sig, body)
+        elseif isexpr(T, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
             #   S{A,B}(...) where {A<:AA,B<:BB} = ...
             S = T.args[1]
             P = T.args[2:end]
-            Q = Any[U isa Expr && U.head === :<: ? U.args[1] : U for U in P]
+            Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            kwdefs = quote
-                ($(esc(S)))($params_ex) =($(esc(S)))($(call_args...))
-                ($(esc(SQ)))($params_ex) where {$(esc.(P)...)} =
-                    ($(esc(SQ)))($(call_args...))
-            end
+            body1 = Expr(:block, __source__, :(($(esc(S)))($(call_args...))))
+            sig1 = :(($(esc(S)))($params_ex))
+            def1 = Expr(:function, sig1, body1)
+            body2 = Expr(:block, __source__, :(($(esc(SQ)))($(call_args...))))
+            sig2 = :(($(esc(SQ)))($params_ex) where {$(esc.(P)...)})
+            def2 = Expr(:function, sig2, body2)
+            kwdefs = Expr(:block, def1, def2)
         else
             error("Invalid usage of @kwdef")
         end
     else
         kwdefs = nothing
     end
-    quote
-        Base.@__doc__($(esc(expr)))
+    return quote
+        Base.@__doc__ $(esc(expr))
         $kwdefs
     end
 end
@@ -652,7 +673,8 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     seed !== nothing && push!(tests, "--seed=0x$(string(seed % UInt128, base=16))") # cast to UInt128 to avoid a minus sign
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_THREADS"] = "$ncores"
-    ENV2["JULIA_DEPOT_PATH"] = mktempdir(; cleanup = true)
+    pathsep = Sys.iswindows() ? ";" : ":"
+    ENV2["JULIA_DEPOT_PATH"] = string(mktempdir(; cleanup = true), pathsep) # make sure the default depots can be loaded
     delete!(ENV2, "JULIA_LOAD_PATH")
     delete!(ENV2, "JULIA_PROJECT")
     try

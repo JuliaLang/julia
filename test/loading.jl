@@ -746,7 +746,11 @@ for env in keys(envs)
     rm(env, force=true, recursive=true)
 end
 for depot in depots
-    rm(depot, force=true, recursive=true)
+    try
+        rm(depot, force=true, recursive=true)
+    catch err
+        @show err
+    end
 end
 
 append!(empty!(LOAD_PATH), saved_load_path)
@@ -998,8 +1002,8 @@ end
         push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
 
         proj = joinpath(@__DIR__, "project", "Extensions", "HasDepWithExtensions.jl")
-        for i in 1:2 # Once when requiring precomilation, once where it is already precompiled
-            cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+        for compile in (`--compiled-modules=no`, ``, ``) # Once when requiring precomilation, once where it is already precompiled
+            cmd = `$(Base.julia_cmd()) $compile --project=$proj --startup-file=no -e '
                 begin
                 using HasExtensions
                 # Base.get_extension(HasExtensions, :Extension) === nothing || error("unexpectedly got an extension")

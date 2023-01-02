@@ -42,6 +42,7 @@ typedef struct {
     int8_t handle_signals;
     int8_t use_sysimage_native_code;
     int8_t use_compiled_modules;
+    int8_t use_pkgimages;
     const char *bindto;
     const char *outputbc;
     const char *outputunoptbc;

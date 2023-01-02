@@ -2850,8 +2850,8 @@ the syntax `@atomic a.b` calls `getproperty(a, :b, :sequentially_consistent)`.
 
 # Examples
 ```jldoctest
-julia> struct MyType
-           x
+julia> struct MyType{T <: Number}
+           x::T
        end
 
 julia> function Base.getproperty(obj::MyType, sym::Symbol)
@@ -2870,6 +2870,11 @@ julia> obj.special
 julia> obj.x
 1
 ```
+
+One should overload `getproperty` only when necessary, as it can be confusing if
+the behavior of the syntax `obj.f` is unusual.
+Also note that using methods is often preferable. See also this style guide documentation
+for more information: [Prefer exported methods over direct field access](@ref).
 
 See also [`getfield`](@ref Core.getfield),
 [`propertynames`](@ref Base.propertynames) and
