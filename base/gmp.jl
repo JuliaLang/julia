@@ -683,7 +683,7 @@ end
 factorial(x::BigInt) = isneg(x) ? BigInt(0) : MPZ.fac_ui(x)
 
 binomial(n::BigInt, k::UInt) = MPZ.bin_ui(n, k)
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
+binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(min(k, n-k)))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
