@@ -2278,14 +2278,36 @@ static int try_subtype_in_env(jl_value_t *a, jl_value_t *b, jl_stenv_t *e, int R
     return ret;
 }
 
+static jl_value_t *omit_bad_union(jl_value_t *val, jl_tvar_t *v) JL_NOTSAFEPOINT
+{
+    if (jl_is_uniontype(val)) {
+        jl_value_t *a = omit_bad_union(((jl_uniontype_t*)val)->a, v);
+        jl_value_t *b = omit_bad_union(((jl_uniontype_t*)val)->b, v);
+        if (a == NULL) return b;
+        if (b == NULL) return a;
+        ((jl_uniontype_t*)val)->a = a;
+        ((jl_uniontype_t*)val)->b = b;
+    }
+    else if (jl_has_typevar(val, v))
+        return NULL;
+    return val;
+}
+
 static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_stenv_t *e) JL_NOTSAFEPOINT
 {
-    if (in_union(val, (jl_value_t*)v))
-        return;
     jl_varbinding_t *btemp = e->vars;
     while (btemp != NULL) {
-        if ((btemp->lb == (jl_value_t*)v || btemp->ub == (jl_value_t*)v) &&
-            in_union(val, (jl_value_t*)btemp->var))
+        int eqlb = btemp->var == v || btemp->lb == (jl_value_t*)v;
+        int equb = btemp->var == v || btemp->ub == (jl_value_t*)v;
+        if (eqlb && equb) {
+            // Since we don't pass the typevar to `intersect_aside`.
+            // the `bound` might contains circulation thus we'd better
+            // omit the invalid part in Union bound.
+            val = omit_bad_union(val, btemp->var);
+            if (val == NULL)
+                return; //TODO: return Bottom in `intersect_var` when we hit this?
+        }
+        else if ((eqlb || equb) && in_union(val, (jl_value_t*)btemp->var))
             return;
         btemp = btemp->prev;
     }

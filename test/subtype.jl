@@ -1890,13 +1890,16 @@ end
 
 let
     # issue #22787
-    # for now check that these don't stack overflow
-    t = typeintersect(Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
-                      Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S)
-    @test_broken t != Union{}
-    t = typeintersect(Tuple{Type{T}, T, Ref{T}} where T,
-                      Tuple{Type{S}, Ref{S}, S} where S)
-    @test_broken t != Union{}
+    let S = Tuple{Type{Q}, Q, Ref{Q}} where Q<:Ref,
+        T = Tuple{Type{S}, Union{Ref{S}, Ref{R}}, R} where R where S
+        @testintersect(S, T, !Union{})
+    end
+
+    let S = Tuple{Type{T}, T, Ref{T}} where T,
+        T = Tuple{Type{S}, Ref{S}, S} where S
+        # TODO: should return Tuple{Type{T}, T, T} where T<:Ref ?
+        @testintersect(S, T, Tuple{Type{T}, T, T} where T)
+    end
 
     # issue #38279
     t = typeintersect(Tuple{<:Array{T, N}, Val{T}} where {T<:Real, N},
@@ -2017,7 +2020,7 @@ let A = Tuple{Ref{T}, Vararg{T}} where T,
     J = typeintersect(A, C)
     @test J != Union{}
     @test J <: A
-    @test_broken J <: C
+    @test J <: C
     for T in Ts
         if T <: A && T <: C
             @test T <: J
