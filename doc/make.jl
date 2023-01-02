@@ -8,6 +8,7 @@ using Pkg
 Pkg.instantiate()
 
 using Documenter
+import LibGit2
 
 baremodule GenStdLib end
 
@@ -41,6 +42,42 @@ cd(joinpath(@__DIR__, "src")) do
         end
     end
 end
+
+function parse_stdlib_version_file(path)
+    values = Dict{String,String}()
+    for line in readlines(path)
+        m = match(r"^([A-Z0-9_]+)\s+:?=\s+(\S+)\s?$", line)
+        if isnothing(m)
+            @warn "Unable to parse line in $(path)" line
+        else
+            values[m[1]] = m[2]
+        end
+    end
+    return values
+end
+documenter_stdlib_remotes = let stdlib_dir = realpath(joinpath(@__DIR__, "..", "stdlib"))
+    version_files = filter(readdir(stdlib_dir)) do fname
+        endswith(fname, ".version") && isfile(joinpath(stdlib_dir, fname))
+    end
+    map(version_files) do version_fname
+        package = match(r"(.+)\.version", version_fname)[1]
+        versionfile = parse_stdlib_version_file(joinpath(stdlib_dir, version_fname))
+        remote = let git_url_key = "$(uppercase(package))_GIT_URL"
+            haskey(versionfile, git_url_key) || error("Missing $(git_url_key) in $version_fname")
+            m = match(LibGit2.GITHUB_REGEX, versionfile[git_url_key])
+            isnothing(m) && error("Unable to parse $(git_url_key)='$(versionfile[git_url_key])' in $version_fname")
+            Documenter.Remotes.GitHub(m[2], m[3])
+        end
+        package_sha = let sha_key = "$(uppercase(package))_SHA1"
+            haskey(versionfile, sha_key) || error("Missing $(sha_key) in $version_fname")
+            versionfile[sha_key]
+        end
+        package_root_dir = joinpath(stdlib_dir, "$(package)-$(package_sha)")
+        isdir(package_root_dir) || error("Missing stdlib: $(package_root_dir)")
+        package_root_dir => (remote, package_sha)
+    end
+end
+@show documenter_stdlib_remotes
 
 # Check if we are building a PDF
 const render_pdf = "pdf" in ARGS
@@ -308,6 +345,7 @@ makedocs(
     sitename  = "The Julia Language",
     authors   = "The Julia Project",
     pages     = PAGES,
+    remotes   = documenter_stdlib_remotes,
 )
 
 # Update URLs to external stdlibs (JuliaLang/julia#43199)
