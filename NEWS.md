@@ -82,6 +82,10 @@ Standard library changes
 #### DelimitedFiles
 
 
+#### InteractiveUtils
+
+ * `code_native` and `@code_native` now default to intel syntax instead of AT&T.
+
 Deprecated or removed
 ---------------------
 
