@@ -8,6 +8,18 @@ function isnan_type(::Type{T}, x) where T
     isa(x, T) && isnan(x)
 end
 
+# has_fma has no runtime support.
+# So we need function wrappers to make this work.
+has_fma_Int() = Core.Compiler.have_fma(Int)
+has_fma_Float32() = Core.Compiler.have_fma(Float32)
+has_fma_Float64() = Core.Compiler.have_fma(Float64)
+
+has_fma = Dict(
+    Int => has_fma_Int(),
+    Float32 => has_fma_Float32(),
+    Float64 => has_fma_Float64(),
+)
+
 @testset "clamp" begin
     @test clamp(0, 1, 3) == 1
     @test clamp(1, 1, 3) == 1
@@ -484,7 +496,13 @@ end
         @testset "Check exact values" begin
             # If the machine supports fused multiply add (fma), we require exact equality.
             # Otherwise, we only require approximate equality.
-            my_eq = Core.Compiler.have_fma(T) ? (==) : isapprox
+            if has_fma[T]
+                @info "On this machine, FMA is supported for $(T), so we will test for exact equality"
+                my_eq = (==)
+            else
+                @info "On this machine, FMA is not supported for $(T), so we will test for approximate equality"
+                my_eq = isapprox
+            end
             @test sind(convert(T,30)) == 0.5
             @test cosd(convert(T,60)) == 0.5
             @test sind(convert(T,150)) == 0.5
@@ -549,7 +567,7 @@ end
     @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
     @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
     @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
-    if Core.Compiler.have_fma(Float64)
+    if has_fma[Float64]
         @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
     else
         @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-14
