@@ -482,17 +482,24 @@ end
             @test_throws DomainError cospi(convert(T,Inf))
         end
         @testset "Check exact values" begin
+            # If the machine supports fused multiply add (fma), we require exact equality.
+            # Otherwise, we only require approximate equality.
+            if Core.Compiler.have_fma(T)
+                my_eq = (x, y) -> x == y
+            else
+                my_eq = (x, y) -> x ≈ y
+            end
             @test sind(convert(T,30)) == 0.5
             @test cosd(convert(T,60)) == 0.5
             @test sind(convert(T,150)) == 0.5
-            @test sinpi(one(T)/convert(T,6)) == 0.5
-            @test sincospi(one(T)/convert(T,6))[1] == 0.5
+            @test my_eq(sinpi(one(T)/convert(T,6)), 0.5)
+            @test my_eq(sincospi(one(T)/convert(T,6))[1], 0.5)
             @test_throws DomainError sind(convert(T,Inf))
             @test_throws DomainError cosd(convert(T,Inf))
-            T != Float32 && @test cospi(one(T)/convert(T,3)) == 0.5
-            T != Float32 && @test sincospi(one(T)/convert(T,3))[2] == 0.5
-            T == Rational{Int} && @test sinpi(5//6) == 0.5
-            T == Rational{Int} && @test sincospi(5//6)[1] == 0.5
+            T != Float32 && @test my_eq(cospi(one(T)/convert(T,3)), 0.5)
+            T != Float32 && @test my_eq(sincospi(one(T)/convert(T,3))[2], 0.5)
+            T == Rational{Int} && @test my_eq(sinpi(5//6), 0.5)
+            T == Rational{Int} && @test my_eq(sincospi(5//6)[1], 0.5)
         end
     end
     scdm = sincosd(missing)
@@ -546,7 +553,11 @@ end
     @test sinc(0.00099) ≈ 0.9999983878009009 rtol=1e-15
     @test sinc(0.05f0) ≈ 0.9958927352435614 rtol=1e-7
     @test sinc(0.0499f0) ≈ 0.9959091277049384 rtol=1e-7
-    @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    if Core.Compiler.have_fma(Float64)
+        @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-15
+    else
+        @test cosc(0.14) ≈ -0.4517331883801308 rtol=1e-14
+    end
     @test cosc(0.1399) ≈ -0.45142306168781854 rtol=1e-14
     @test cosc(0.26f0) ≈ -0.7996401373462212 rtol=5e-7
     @test cosc(0.2599f0) ≈ -0.7993744054401625 rtol=5e-7
