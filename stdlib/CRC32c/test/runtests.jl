@@ -49,7 +49,7 @@ function test_crc32c(crc32c)
 end
 unsafe_crc32c_sw(a, n, crc) =
     ccall(:jl_crc32c_sw, UInt32, (UInt32, Ptr{UInt8}, Csize_t), crc, a, n)
-crc32c_sw(a::Union{Array{UInt8},Base.FastContiguousSubArray{UInt8,N,<:Array{UInt8}} where N},
+crc32c_sw(a::CRC32c.ByteArray,
           crc::UInt32=0x00000000) = unsafe_crc32c_sw(a, length(a), crc)
 
 function crc32c_sw(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
