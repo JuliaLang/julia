@@ -289,7 +289,6 @@ private:
     // Mapping from function id (i.e. 0-based index in `fvars`) to GVs to be initialized.
     std::map<uint32_t,GlobalVariable*> const_relocs;
     bool has_veccall{false};
-    bool has_cloneall{false};
     bool allow_bad_fvars{false};
 };
 
@@ -345,7 +344,6 @@ CloneCtx::CloneCtx(Module &M, function_ref<LoopInfo&(Function&)> GetLI, function
     for (uint32_t i = 1; i < ntargets; i++) {
         auto &spec = specs[i];
         if (spec.flags & JL_TARGET_CLONE_ALL) {
-            has_cloneall = true;
             groups.emplace_back(i, spec);
         }
         else {
@@ -404,7 +402,7 @@ void CloneCtx::clone_function(Function *F, Function *new_f, ValueToValueMapTy &v
 // Clone all clone_all targets. Makes sure that the base targets are all available.
 void CloneCtx::clone_bases()
 {
-    if (!has_cloneall)
+    if (groups.size() == 1)
         return;
     uint32_t ngrps = groups.size();
     for (uint32_t gid = 1; gid < ngrps; gid++) {
@@ -553,7 +551,7 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
                                            F->getName() + suffix, &M);
         new_f->copyAttributesFrom(F);
         vmap[F] = new_f;
-        if (!has_cloneall)
+        if (groups.size() == 1)
             cloned.insert(orig_f);
         grp.clone_fs.insert(i);
         all_origs.insert(orig_f);
@@ -607,7 +605,7 @@ void CloneCtx::check_partial(Group &grp, Target &tgt)
             continue;
         auto orig_f = orig_funcs[i];
         if (all_origs.count(orig_f)) {
-            if (!has_cloneall)
+            if (groups.size() == 1)
                 cloned.insert(orig_f);
             grp.clone_fs.insert(i);
         }
@@ -787,7 +785,7 @@ void CloneCtx::fix_gv_uses()
         return changed;
     };
     for (auto orig_f: orig_funcs) {
-        if (!has_cloneall && !cloned.count(orig_f))
+        if (groups.size() == 1 && !cloned.count(orig_f))
             continue;
         while (single_pass(orig_f)) {
         }
@@ -952,25 +950,8 @@ void CloneCtx::emit_metadata()
         }
     }
 
-    // Generate `jl_dispatch_target_ids`
-    {
-        const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
-        std::vector<uint8_t> data;
-        auto push_i32 = [&] (uint32_t v) {
-            uint8_t buff[4];
-            memcpy(buff, &v, 4);
-            data.insert(data.end(), buff, buff + 4);
-        };
-        push_i32(ntargets);
-        for (uint32_t i = 0; i < ntargets; i++) {
-            push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
-            auto &specdata = specs[i].data;
-            data.insert(data.end(), specdata.begin(), specdata.end());
-        }
-        auto value = ConstantDataArray::get(M.getContext(), data);
-        add_comdat(new GlobalVariable(M, value->getType(), true,
-                                      GlobalVariable::ExternalLinkage,
-                                      value, "jl_dispatch_target_ids"));
+    if (has_veccall) {
+        M.addModuleFlag(Module::Max, "julia.mv.veccall", 1);
     }
 
     // Generate `jl_dispatch_reloc_slots`

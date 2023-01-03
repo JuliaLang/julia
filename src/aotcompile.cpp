@@ -496,7 +496,8 @@ static void injectCRTAlias(Module &M, StringRef name, StringRef alias, FunctionT
     if (!target) {
         target = Function::Create(FT, Function::ExternalLinkage, alias, M);
     }
-    Function *interposer = Function::Create(FT, Function::InternalLinkage, name, M);
+    Function *interposer = Function::Create(FT, Function::ExternalLinkage, name, M);
+    interposer->setVisibility(GlobalValue::HiddenVisibility);
     appendToCompilerUsed(M, {interposer});
 
     llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", interposer));
@@ -532,7 +533,7 @@ void jl_dump_native_impl(void *native_code,
     TheTriple.setObjectFormat(Triple::MachO);
     TheTriple.setOS(llvm::Triple::MacOSX);
 #endif
-    std::unique_ptr<TargetMachine> TM(
+    std::unique_ptr<TargetMachine> SourceTM(
         jl_ExecutionEngine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
             jl_ExecutionEngine->getTargetCPU(),
@@ -554,53 +555,16 @@ void jl_dump_native_impl(void *native_code,
             ));
 
 
-    // set up optimization passes
-    SmallVector<char, 0> bc_Buffer;
-    SmallVector<char, 0> obj_Buffer;
-    SmallVector<char, 0> asm_Buffer;
-    SmallVector<char, 0> unopt_bc_Buffer;
-    raw_svector_ostream bc_OS(bc_Buffer);
-    raw_svector_ostream obj_OS(obj_Buffer);
-    raw_svector_ostream asm_OS(asm_Buffer);
-    raw_svector_ostream unopt_bc_OS(unopt_bc_Buffer);
     std::vector<NewArchiveMember> bc_Archive;
     std::vector<NewArchiveMember> obj_Archive;
     std::vector<NewArchiveMember> asm_Archive;
     std::vector<NewArchiveMember> unopt_bc_Archive;
     std::vector<std::string> outputs;
 
-    PassBuilder emptyPB;
-    AnalysisManagers empty(emptyPB);
-    ModulePassManager preopt, postopt;
-    legacy::PassManager emitter; // MC emission is only supported on legacy PM
-
-    if (unopt_bc_fname)
-        preopt.addPass(BitcodeWriterPass(unopt_bc_OS));
-
-    if (bc_fname)
-        postopt.addPass(BitcodeWriterPass(bc_OS));
-    //Is this necessary for TM?
-    addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-    if (obj_fname)
-        if (TM->addPassesToEmitFile(emitter, obj_OS, nullptr, CGFT_ObjectFile, false))
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
-    if (asm_fname)
-        if (TM->addPassesToEmitFile(emitter, asm_OS, nullptr, CGFT_AssemblyFile, false))
-            jl_safe_printf("ERROR: target does not support generation of object files\n");
-
     // Reset the target triple to make sure it matches the new target machine
     auto dataM = data->M.getModuleUnlocked();
-    dataM->setTargetTriple(TM->getTargetTriple().str());
-    dataM->setDataLayout(jl_create_datalayout(*TM));
-
-#ifndef JL_USE_NEW_PM
-    legacy::PassManager optimizer;
-    addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
-    addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
-    addMachinePasses(&optimizer, jl_options.opt_level);
-#else
-    NewPM optimizer{std::move(TM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
-#endif
+    dataM->setTargetTriple(SourceTM->getTargetTriple().str());
+    dataM->setDataLayout(jl_create_datalayout(*SourceTM));
 
     Type *T_size;
     if (sizeof(size_t) == 8)
@@ -609,8 +573,10 @@ void jl_dump_native_impl(void *native_code,
         T_size = Type::getInt32Ty(Context);
     Type *T_psize = T_size->getPointerTo();
 
+    bool imaging_mode = imaging_default() || jl_options.outputo;
+
     // add metadata information
-    if (imaging_default() || jl_options.outputo) {
+    if (imaging_mode) {
         emit_offset_table(*dataM, data->jl_sysimg_gvars, "jl_sysimg_gvars", T_psize);
         emit_offset_table(*dataM, data->jl_sysimg_fvars, "jl_sysimg_fvars", T_psize);
 
@@ -626,70 +592,87 @@ void jl_dump_native_impl(void *native_code,
     }
 
     // do the actual work
-    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name, bool inject_crt) {
-        preopt.run(M, empty.MAM);
-        if (bc_fname || obj_fname || asm_fname) {
-            assert(!verifyModule(M, &errs()));
-            optimizer.run(M);
-            assert(!verifyModule(M, &errs()));
+    auto add_output = [&] (Module &M, StringRef unopt_bc_Name, StringRef bc_Name, StringRef obj_Name, StringRef asm_Name) {
+
+        auto TM = std::unique_ptr<TargetMachine>(
+            SourceTM->getTarget().createTargetMachine(
+                SourceTM->getTargetTriple().str(),
+                SourceTM->getTargetCPU(),
+                SourceTM->getTargetFeatureString(),
+                SourceTM->Options,
+                SourceTM->getRelocationModel(),
+                SourceTM->getCodeModel(),
+                SourceTM->getOptLevel()));
+
+        if (unopt_bc_fname) {
+            SmallVector<char, 0> Buffer;
+            raw_svector_ostream OS(Buffer);
+            PassBuilder PB;
+            AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
+            ModulePassManager MPM;
+            MPM.addPass(BitcodeWriterPass(OS));
+            emit_result(unopt_bc_Archive, Buffer, unopt_bc_Name, outputs);
         }
+        if (!bc_fname && !obj_fname && !asm_fname) {
+            return;
+        }
+        assert(!verifyModule(M, &errs()));
 
-        if (inject_crt) {
-            // We would like to emit an alias or an weakref alias to redirect these symbols
-            // but LLVM doesn't let us emit a GlobalAlias to a declaration...
-            // So for now we inject a definition of these functions that calls our runtime
-            // functions. We do so after optimization to avoid cloning these functions.
-            injectCRTAlias(M, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
-                    FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-            injectCRTAlias(M, "__extendhfsf2", "julia__gnu_h2f_ieee",
-                    FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
-            injectCRTAlias(M, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
-                    FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-            injectCRTAlias(M, "__truncsfhf2", "julia__gnu_f2h_ieee",
-                    FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
-            injectCRTAlias(M, "__truncdfhf2", "julia__truncdfhf2",
-                    FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+#ifndef JL_USE_NEW_PM
+        legacy::PassManager optimizer;
+        addTargetPasses(&optimizer, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+        addOptimizationPasses(&optimizer, jl_options.opt_level, true, true);
+        addMachinePasses(&optimizer, jl_options.opt_level);
+#else
 
-#if defined(_OS_WINDOWS_)
-            // Windows expect that the function `_DllMainStartup` is present in an dll.
-            // Normal compilers use something like Zig's crtdll.c instead we provide a
-            // a stub implementation.
-            auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
-            auto T_int32 = Type::getInt32Ty(Context);
-            auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
-            auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", M);
-            F->setCallingConv(CallingConv::X86_StdCall);
-
-            llvm::IRBuilder<> builder(BasicBlock::Create(M.getContext(), "top", F));
-            builder.CreateRet(ConstantInt::get(T_int32, 1));
+        auto PMTM = std::unique_ptr<TargetMachine>(
+            SourceTM->getTarget().createTargetMachine(
+                SourceTM->getTargetTriple().str(),
+                SourceTM->getTargetCPU(),
+                SourceTM->getTargetFeatureString(),
+                SourceTM->Options,
+                SourceTM->getRelocationModel(),
+                SourceTM->getCodeModel(),
+                SourceTM->getOptLevel()));
+        NewPM optimizer{std::move(PMTM), getOptLevel(jl_options.opt_level), OptimizationOptions::defaults(true, true)};
 #endif
+        optimizer.run(M);
+        assert(!verifyModule(M, &errs()));
+
+        if (bc_fname) {
+            SmallVector<char, 0> Buffer;
+            raw_svector_ostream OS(Buffer);
+            PassBuilder PB;
+            AnalysisManagers AM{*TM, PB, OptimizationLevel::O0};
+            ModulePassManager MPM;
+            MPM.addPass(BitcodeWriterPass(OS));
+            emit_result(bc_Archive, Buffer, bc_Name, outputs);
         }
 
-        postopt.run(M, empty.MAM);
-
-        // Get target by snooping on multiversioning
-        GlobalVariable *target_ids = M.getNamedGlobal("jl_dispatch_target_ids");
-        if (s && target_ids) {
-            if(auto targets = dyn_cast<ConstantDataArray>(target_ids->getInitializer())) {
-                auto rawTargets = targets->getRawDataValues();
-                write_int32(s, rawTargets.size());
-                ios_write(s, rawTargets.data(), rawTargets.size());
-            };
+        if (obj_fname) {
+            SmallVector<char, 0> Buffer;
+            raw_svector_ostream OS(Buffer);
+            legacy::PassManager emitter;
+            addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+            if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_ObjectFile, false))
+                jl_safe_printf("ERROR: target does not support generation of object files\n");
+            emitter.run(M);
+            emit_result(obj_Archive, Buffer, obj_Name, outputs);
         }
 
-        emitter.run(M);
-
-        if (unopt_bc_fname)
-            emit_result(unopt_bc_Archive, unopt_bc_Buffer, unopt_bc_Name, outputs);
-        if (bc_fname)
-            emit_result(bc_Archive, bc_Buffer, bc_Name, outputs);
-        if (obj_fname)
-            emit_result(obj_Archive, obj_Buffer, obj_Name, outputs);
-        if (asm_fname)
-            emit_result(asm_Archive, asm_Buffer, asm_Name, outputs);
+        if (asm_fname) {
+            SmallVector<char, 0> Buffer;
+            raw_svector_ostream OS(Buffer);
+            legacy::PassManager emitter;
+            addTargetPasses(&emitter, TM->getTargetTriple(), TM->getTargetIRAnalysis());
+            if (TM->addPassesToEmitFile(emitter, OS, nullptr, CGFT_AssemblyFile, false))
+                jl_safe_printf("ERROR: target does not support generation of assembly files\n");
+            emitter.run(M);
+            emit_result(asm_Archive, Buffer, asm_Name, outputs);
+        }
     };
 
-    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s", true);
+    add_output(*dataM, "unopt.bc", "text.bc", "text.o", "text.s");
 
     orc::ThreadSafeModule sysimage(std::make_unique<Module>("sysimage", Context), TSCtx);
     auto sysimageM = sysimage.getModuleUnlocked();
@@ -699,6 +682,35 @@ void jl_dump_native_impl(void *native_code,
     sysimageM->setStackProtectorGuard(dataM->getStackProtectorGuard());
     sysimageM->setOverrideStackAlignment(dataM->getOverrideStackAlignment());
 #endif
+    // We would like to emit an alias or an weakref alias to redirect these symbols
+    // but LLVM doesn't let us emit a GlobalAlias to a declaration...
+    // So for now we inject a definition of these functions that calls our runtime
+    // functions. We do so after optimization to avoid cloning these functions.
+    injectCRTAlias(*sysimageM, "__gnu_h2f_ieee", "julia__gnu_h2f_ieee",
+            FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+    injectCRTAlias(*sysimageM, "__extendhfsf2", "julia__gnu_h2f_ieee",
+            FunctionType::get(Type::getFloatTy(Context), { Type::getHalfTy(Context) }, false));
+    injectCRTAlias(*sysimageM, "__gnu_f2h_ieee", "julia__gnu_f2h_ieee",
+            FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+    injectCRTAlias(*sysimageM, "__truncsfhf2", "julia__gnu_f2h_ieee",
+            FunctionType::get(Type::getHalfTy(Context), { Type::getFloatTy(Context) }, false));
+    injectCRTAlias(*sysimageM, "__truncdfhf2", "julia__truncdfhf2",
+            FunctionType::get(Type::getHalfTy(Context), { Type::getDoubleTy(Context) }, false));
+
+    if (TheTriple.isOSWindows()) {
+        // Windows expect that the function `_DllMainStartup` is present in an dll.
+        // Normal compilers use something like Zig's crtdll.c instead we provide a
+        // a stub implementation.
+        auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
+        auto T_int32 = Type::getInt32Ty(Context);
+        auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
+        auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", *sysimageM);
+        F->setCallingConv(CallingConv::X86_StdCall);
+
+        llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
+        builder.CreateRet(ConstantInt::get(T_int32, 1));
+    }
+    bool has_veccall = dataM->getModuleFlag("julia.mv.veccall");
     data->M = orc::ThreadSafeModule(); // free memory for data->M
 
     if (sysimg_data) {
@@ -712,7 +724,32 @@ void jl_dump_native_impl(void *native_code,
                                      GlobalVariable::ExternalLinkage,
                                      len, "jl_system_image_size"));
     }
-    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s", false);
+    if (imaging_mode) {
+        auto specs = jl_get_llvm_clone_targets();
+        const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
+        std::vector<uint8_t> data;
+        auto push_i32 = [&] (uint32_t v) {
+            uint8_t buff[4];
+            memcpy(buff, &v, 4);
+            data.insert(data.end(), buff, buff + 4);
+        };
+        push_i32(specs.size());
+        for (uint32_t i = 0; i < specs.size(); i++) {
+            push_i32(base_flags | (specs[i].flags & JL_TARGET_UNKNOWN_NAME));
+            auto &specdata = specs[i].data;
+            data.insert(data.end(), specdata.begin(), specdata.end());
+        }
+        auto value = ConstantDataArray::get(Context, data);
+        addComdat(new GlobalVariable(*sysimageM, value->getType(), true,
+                                      GlobalVariable::ExternalLinkage,
+                                      value, "jl_dispatch_target_ids"));
+
+        if (s) {
+            write_int32(s, data.size());
+            ios_write(s, (const char *)data.data(), data.size());
+        }
+    }
+    add_output(*sysimageM, "data.bc", "data.bc", "data.o", "data.s");
 
     object::Archive::Kind Kind = getDefaultForHost(TheTriple);
     if (unopt_bc_fname)
