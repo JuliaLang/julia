@@ -997,7 +997,7 @@ Represents the composition of two callable objects `outer::Outer` and `inner::In
 ```julia
 ComposedFunction(outer, inner)(args...; kw...) === outer(inner(args...; kw...))
 ```
-The preferred way to construct instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
+The preferred way to construct an instance of `ComposedFunction` is to use the composition operator [`∘`](@ref):
 ```jldoctest
 julia> sin ∘ cos === ComposedFunction(sin, cos)
 true

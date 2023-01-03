@@ -1433,25 +1433,18 @@ julia> v[p]
 ```
 """
 partialsortperm(v::AbstractVector, k::Union{Integer,OrdinalRange}; kwargs...) =
-    partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs..., initialized=false)
+    partialsortperm!(similar(Vector{eltype(k)}, axes(v,1)), v, k; kwargs...)
 
 """
-    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false, initialized=false)
+    partialsortperm!(ix, v, k; by=<transform>, lt=<comparison>, rev=false)
 
 Like [`partialsortperm`](@ref), but accepts a preallocated index vector `ix` the same size as
 `v`, which is used to store (a permutation of) the indices of `v`.
 
-If the index vector `ix` is initialized with the indices of `v` (or a permutation thereof), `initialized` should be set to
-`true`.
-
-If `initialized` is `false` (the default), then `ix` is initialized to contain the indices of `v`.
-
-If `initialized` is `true`, but `ix` does not contain (a permutation of) the indices of `v`, the behavior of
-`partialsortperm!` is undefined.
+`ix` is initialized to contain the indices of `v`.
 
 (Typically, the indices of `v` will be `1:length(v)`, although if `v` has an alternative array type
-with non-one-based indices, such as an `OffsetArray`, `ix` must also be an `OffsetArray` with the same
-indices, and must contain as values (a permutation of) these same indices.)
+with non-one-based indices, such as an `OffsetArray`, `ix` must share those same indices)
 
 Upon return, `ix` is guaranteed to have the indices `k` in their sorted positions, such that
 
@@ -1474,7 +1467,7 @@ julia> partialsortperm!(ix, v, 1)
 
 julia> ix = [1:4;];
 
-julia> partialsortperm!(ix, v, 2:3, initialized=true)
+julia> partialsortperm!(ix, v, 2:3)
 2-element view(::Vector{Int64}, 2:3) with eltype Int64:
  4
  3
@@ -1491,10 +1484,8 @@ function partialsortperm!(ix::AbstractVector{<:Integer}, v::AbstractVector,
         throw(ArgumentError("The index vector is used as scratch space and must have the " *
                             "same length/indices as the source vector, $(axes(ix,1)) != $(axes(v,1))"))
     end
-    if !initialized
-        @inbounds for i in eachindex(ix)
-            ix[i] = i
-        end
+    @inbounds for i in eachindex(ix)
+        ix[i] = i
     end
 
     # do partial quicksort
@@ -1560,8 +1551,14 @@ function sortperm(A::AbstractArray;
                   order::Ordering=Forward,
                   scratch::Union{Vector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
-    ordr = ord(lt,by,rev,order)
-    if ordr === Forward && isa(A,Vector) && eltype(A)<:Integer
+    if rev === true
+        _sortperm(A; alg, order=ord(lt, by, true, order), scratch, dims...)
+    else
+        _sortperm(A; alg, order=ord(lt, by, nothing, order), scratch, dims...)
+    end
+end
+function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
+    if order === Forward && isa(A,Vector) && eltype(A)<:Integer
         n = length(A)
         if n > 1
             min, max = extrema(A)
@@ -1573,15 +1570,15 @@ function sortperm(A::AbstractArray;
         end
     end
     ix = copymutable(LinearIndices(A))
-    sort!(ix; alg, order = Perm(ordr, vec(A)), scratch, dims...)
+    sort!(ix; alg, order = Perm(order, vec(A)), scratch, dims...)
 end
 
 
 """
-    sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, initialized::Bool=false, [dims::Integer])
+    sortperm!(ix, A; alg::Algorithm=DEFAULT_UNSTABLE, lt=isless, by=identity, rev::Bool=false, order::Ordering=Forward, [dims::Integer])
 
-Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.  If `initialized` is `false`
-(the default), `ix` is initialized to contain the values `LinearIndices(A)`.
+Like [`sortperm`](@ref), but accepts a preallocated index vector or array `ix` with the same `axes` as `A`.
+`ix` is initialized to contain the values `LinearIndices(A)`.
 
 !!! compat "Julia 1.9"
     The method accepting `dims` requires at least Julia 1.9.
@@ -1615,7 +1612,7 @@ julia> sortperm!(p, A; dims=2); p
  2  4
 ```
 """
-function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
+@inline function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
                    alg::Algorithm=DEFAULT_UNSTABLE,
                    lt=isless,
                    by=identity,
@@ -1627,10 +1624,12 @@ function sortperm!(ix::AbstractArray{T}, A::AbstractArray;
     (typeof(A) <: AbstractVector) == (:dims in keys(dims)) && throw(ArgumentError("Dims argument incorrect for type $(typeof(A))"))
     axes(ix) == axes(A) || throw(ArgumentError("index array must have the same size/axes as the source array, $(axes(ix)) != $(axes(A))"))
 
-    if !initialized
-        ix .= LinearIndices(A)
+    ix .= LinearIndices(A)
+    if rev === true
+        sort!(ix; alg, order=Perm(ord(lt, by, true, order), vec(A)), scratch, dims...)
+    else
+        sort!(ix; alg, order=Perm(ord(lt, by, nothing, order), vec(A)), scratch, dims...)
     end
-    sort!(ix; alg, order = Perm(ord(lt, by, rev, order), vec(A)), scratch, dims...)
 end
 
 # sortperm for vectors of few unique integers
