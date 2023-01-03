@@ -57,9 +57,7 @@ GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M)
 static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_name,
                             GlobalVariable *&lib, GlobalVariable *&sym)
 {
-    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
-    //Safe b/c emission context holds context lock
-    auto M = TSM.getModuleUnlocked();
+    auto M = &ctx.emission_context.shared_module(*jl_Module);
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
     jl_codegen_params_t::SymMapGV *symMap;
@@ -238,8 +236,7 @@ static GlobalVariable *emit_plt_thunk(
         bool runtime_lib)
 {
     ++PLTThunks;
-    auto &TSM = ctx.emission_context.shared_module(*jl_Module);
-    Module *M = TSM.getModuleUnlocked();
+    auto M = &ctx.emission_context.shared_module(*jl_Module);
     PointerType *funcptype = PointerType::get(functype, 0);
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);

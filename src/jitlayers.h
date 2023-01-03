@@ -211,8 +211,8 @@ typedef struct _jl_codegen_params_t {
     DenseMap<AttributeList, std::map<
         std::tuple<GlobalVariable*, FunctionType*, CallingConv::ID>,
         GlobalVariable*>> allPltMap;
-    orc::ThreadSafeModule _shared_module;
-    inline orc::ThreadSafeModule &shared_module(Module &from);
+    std::unique_ptr<Module> _shared_module;
+    inline Module &shared_module(Module &from);
     // inputs
     size_t world = 0;
     const jl_cgparams_t *params = &jl_default_cgparams;
@@ -544,16 +544,16 @@ inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafe
     return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), imaging_mode, DL, triple), ctx);
 }
 
-orc::ThreadSafeModule &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
+Module &jl_codegen_params_t::shared_module(Module &from) JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_ts_module("globals", tsctx, imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
+        _shared_module = jl_create_llvm_module("globals", getContext(), imaging, from.getDataLayout(), Triple(from.getTargetTriple()));
         assert(&from.getContext() == tsctx.getContext() && "Module context differs from codegen_params context!");
     } else {
-        assert(&from.getContext() == _shared_module.getContext().getContext() && "Module context differs from shared module context!");
-        assert(from.getDataLayout() == _shared_module.getModuleUnlocked()->getDataLayout() && "Module data layout differs from shared module data layout!");
-        assert(from.getTargetTriple() == _shared_module.getModuleUnlocked()->getTargetTriple() && "Module target triple differs from shared module target triple!");
+        assert(&from.getContext() == &getContext() && "Module context differs from shared module context!");
+        assert(from.getDataLayout() == _shared_module->getDataLayout() && "Module data layout differs from shared module data layout!");
+        assert(from.getTargetTriple() == _shared_module->getTargetTriple() && "Module target triple differs from shared module target triple!");
     }
-    return _shared_module;
+    return *_shared_module;
 }
 
 Pass *createLowerPTLSPass(bool imaging_mode) JL_NOTSAFEPOINT;

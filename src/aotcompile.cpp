@@ -56,6 +56,7 @@
 
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/Transforms/Utils/Cloning.h>
+#include <llvm/Linker/Linker.h>
 
 
 using namespace llvm;
@@ -400,6 +401,7 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
 
     // clones the contents of the module `m` to the shadow_output collector
     // while examining and recording what kind of function pointer we have
+    Linker L(*clone.getModuleUnlocked());
     for (auto &def : emitted) {
         jl_merge_module(clone, std::move(std::get<0>(def.second)));
         jl_code_instance_t *this_code = def.first;
@@ -427,7 +429,9 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
         data->jl_fvar_map[this_code] = std::make_tuple(func_id, cfunc_id);
     }
     if (params._shared_module) {
-        jl_merge_module(clone, std::move(params._shared_module));
+        bool error = L.linkInModule(std::move(params._shared_module));
+        assert(!error && "Error linking in shared module");
+        (void)error;
     }
 
     // now get references to the globals in the merged module

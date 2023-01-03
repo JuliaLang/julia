@@ -209,7 +209,7 @@ static jl_callptr_t _jl_compile_codeinst(
         }
 
         if (params._shared_module)
-            jl_ExecutionEngine->addModule(std::move(params._shared_module));
+            jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
         StringMap<orc::ThreadSafeModule*> NewExports;
         StringMap<void*> NewGlobals;
         for (auto &global : params.globals) {
@@ -334,7 +334,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
             jl_jit_globals(params.globals);
             assert(params.workqueue.empty());
             if (params._shared_module)
-                jl_ExecutionEngine->addModule(std::move(params._shared_module));
+                jl_ExecutionEngine->addModule(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
         }
         if (success && llvmmod == NULL)
             jl_ExecutionEngine->addModule(std::move(*into));
