@@ -3542,7 +3542,7 @@ int jl_has_concrete_subtype(jl_value_t *typ)
 JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 {
     jl_task_t *ct = jl_current_task;
-    if (ct->reentrant_inference == 1) {
+    if (!ct->reentrant_timing++) {
         ct->inference_start_time = jl_hrtime();
     }
 }
@@ -3550,7 +3550,7 @@ JL_DLLEXPORT void jl_typeinf_timing_begin(void)
 JL_DLLEXPORT void jl_typeinf_timing_end(void)
 {
     jl_task_t *ct = jl_current_task;
-    if (ct->reentrant_inference == 1) {
+    if (!--ct->reentrant_timing) {
         if (jl_atomic_load_relaxed(&jl_measure_compile_time_enabled)) {
             uint64_t inftime = jl_hrtime() - ct->inference_start_time;
             jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, inftime);
@@ -3562,16 +3562,10 @@ JL_DLLEXPORT void jl_typeinf_timing_end(void)
 JL_DLLEXPORT void jl_typeinf_lock_begin(void)
 {
     JL_LOCK(&jl_codegen_lock);
-    //Although this is claiming to be a typeinfer lock, it is actually
-    //affecting the codegen lock count, not type inference's inferencing count
-    jl_task_t *ct = jl_current_task;
-    ct->reentrant_codegen++;
 }
 
 JL_DLLEXPORT void jl_typeinf_lock_end(void)
 {
-    jl_task_t *ct = jl_current_task;
-    ct->reentrant_codegen--;
     JL_UNLOCK(&jl_codegen_lock);
 }
 

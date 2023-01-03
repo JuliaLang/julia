@@ -2728,14 +2728,9 @@ end |> only === Int
 # Equivalence of Const(T.instance) and T for singleton types
 @test Const(nothing) ⊑ Nothing && Nothing ⊑ Const(nothing)
 
-# `apply_type_tfunc` should always return accurate result for empty NamedTuple case
-import Core: Const
-let apply_type_tfunc(@nospecialize xs...) =
-        Core.Compiler.apply_type_tfunc(Core.Compiler.fallback_lattice, xs...)
-    @test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple{}) === Const(typeof((;)))
-    @test apply_type_tfunc(Const(NamedTuple), Const(()), Type{T} where T<:Tuple) === Const(typeof((;)))
-    @test apply_type_tfunc(Const(NamedTuple), Tuple{Vararg{Symbol}}, Type{Tuple{}}) === Const(typeof((;)))
-end
+# https://github.com/JuliaLang/julia/pull/47947
+# correct `apply_type` inference of `NamedTuple{(), <:Any}`
+@test (() -> NamedTuple{(), <:Any})() isa UnionAll
 
 # Don't pessimize apply_type to anything worse than Type and yield Bottom for invalid Unions
 @test only(Base.return_types(Core.apply_type, Tuple{Type{Union}})) == Type{Union{}}
@@ -4678,3 +4673,39 @@ bar47688() = foo47688()
 @test it_count47688 == 7
 @test isa(foo47688(), NTuple{6, Int})
 @test it_count47688 == 14
+
+# refine instantiation of partially-known NamedTuple that is known to be empty
+function empty_nt_values(Tpl)
+    T = NamedTuple{(),Tpl}
+    nt = T(())
+    values(nt)
+end
+function empty_nt_keys(Tpl)
+    T = NamedTuple{(),Tpl}
+    nt = T(())
+    keys(nt)
+end
+@test Base.return_types(empty_nt_values, (Any,)) |> only === Tuple{}
+@test Base.return_types(empty_nt_keys, (Any,)) |> only === Tuple{}
+g() = empty_nt_values(Base.inferencebarrier(Tuple{}))
+@test g() == () # Make sure to actually run this to test this in the inference world age
+
+let # jl_widen_core_extended_info
+    for (extended, widened) = [(Core.Const(42), Int),
+                               (Core.Const(Int), Type{Int}),
+                               (Core.Const(Vector), Type{Vector}),
+                               (Core.PartialStruct(Some{Any}, Any["julia"]), Some{Any}),
+                               (Core.InterConditional(2, Int, Nothing), Bool)]
+        @test @ccall(jl_widen_core_extended_info(extended::Any)::Any) ===
+              Core.Compiler.widenconst(extended) ===
+              widened
+    end
+end
+
+# This is somewhat sensitive to the exact recursion level that inference is willing to do, but the intention
+# is to test the case where inference limited a recursion, but then a forced constprop nevertheless managed
+# to terminate the call.
+@Base.constprop :aggressive type_level_recurse1(x...) = x[1] == 2 ? 1 : (length(x) > 100 ? x : type_level_recurse2(x[1] + 1, x..., x...))
+@Base.constprop :aggressive type_level_recurse2(x...) = type_level_recurse1(x...)
+type_level_recurse_entry() = Val{type_level_recurse1(1)}()
+@test Base.return_types(type_level_recurse_entry, ()) |> only == Val{1}

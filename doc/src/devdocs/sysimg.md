@@ -19,7 +19,7 @@ This operation is useful for multiple reasons.  A user may:
 The [`PackageCompiler.jl` package](https://github.com/JuliaLang/PackageCompiler.jl) contains convenient
 wrapper functions to automate this process.
 
-## System image optimized for multiple microarchitectures
+## [System image optimized for multiple microarchitectures](@id sysimg-multi-versioning)
 
 The system image can be compiled simultaneously for multiple CPU microarchitectures
 under the same instruction set architecture (ISA). Multiple versions of the same function

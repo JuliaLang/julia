@@ -98,9 +98,9 @@ end
 timesofar("conversions")
 
 @testset "Promotions for size $sz" for (sz, T) in allsizes
-    @test isequal(promote(falses(sz...), zeros(sz...)),
+    @test_broken isequal(promote(falses(sz...), zeros(sz...)),
                  (zeros(sz...), zeros(sz...)))
-    @test isequal(promote(trues(sz...), ones(sz...)),
+    @test_broken isequal(promote(trues(sz...), ones(sz...)),
                  (ones(sz...), ones(sz...)))
     ae = falses(1, sz...)
     ex = (@test_throws ErrorException promote(ae, ones(sz...))).value

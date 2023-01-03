@@ -841,6 +841,7 @@ LinearAlgebra.LAPACK.trexc!
 LinearAlgebra.LAPACK.trsen!
 LinearAlgebra.LAPACK.tgsen!
 LinearAlgebra.LAPACK.trsyl!
+LinearAlgebra.LAPACK.hseqr!
 ```
 
 ```@meta

@@ -135,6 +135,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     if const_call_result.rt ⊑ₚ rt
                         rt = const_call_result.rt
                         (; effects, const_result, edge) = const_call_result
+                    else
+                        add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                     end
                 end
                 all_effects = merge_effects(all_effects, effects)
@@ -169,6 +171,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(f),
                     this_conditional = this_const_conditional
                     this_rt = this_const_rt
                     (; effects, const_result, edge) = const_call_result
+                else
+                    add_remark!(interp, sv, "[constprop] Discarded because the result was wider than inference")
                 end
             end
             all_effects = merge_effects(all_effects, effects)
@@ -535,6 +539,7 @@ end
 
 const RECURSION_UNUSED_MSG = "Bounded recursion detected with unused result. Annotated return type may be wider than true result."
 const RECURSION_MSG = "Bounded recursion detected. Call was widened to force convergence."
+const RECURSION_MSG_HARDLIMIT = "Bounded recursion detected under hardlimit. Call was widened to force convergence."
 
 function abstract_call_method(interp::AbstractInterpreter, method::Method, @nospecialize(sig), sparams::SimpleVector, hardlimit::Bool, si::StmtInfo, sv::InferenceState)
     if method.name === :depwarn && isdefined(Main, :Base) && method.module === Main.Base
@@ -573,6 +578,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
             end
         end
     end
+    washardlimit = hardlimit
 
     if topmost !== nothing
         sigtuple = unwrap_unionall(sig)::DataType
@@ -611,7 +617,7 @@ function abstract_call_method(interp::AbstractInterpreter, method::Method, @nosp
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
                 return MethodCallResult(Any, true, true, nothing, Effects())
             end
-            add_remark!(interp, sv, RECURSION_MSG)
+            add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             topmost = topmost::InferenceState
             parentframe = topmost.parent
             poison_callstack(sv, parentframe === nothing ? topmost : parentframe)
@@ -1834,35 +1840,38 @@ end
 function abstract_call_unionall(argtypes::Vector{Any})
     if length(argtypes) == 3
         canconst = true
+        a2 = argtypes[2]
         a3 = argtypes[3]
+        nothrow = a2 ⊑ TypeVar && (
+                a3 ⊑ Type ||
+                a3 ⊑ TypeVar)
         if isa(a3, Const)
             body = a3.val
         elseif isType(a3)
             body = a3.parameters[1]
             canconst = false
         else
-            return Any
+            return CallMeta(Any, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
         end
         if !isa(body, Type) && !isa(body, TypeVar)
-            return Any
+            return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
         end
         if has_free_typevars(body)
-            a2 = argtypes[2]
             if isa(a2, Const)
                 tv = a2.val
             elseif isa(a2, PartialTypeVar)
                 tv = a2.tv
                 canconst = false
             else
-                return Any
+                return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             end
-            !isa(tv, TypeVar) && return Any
+            !isa(tv, TypeVar) && return CallMeta(Any, EFFECTS_THROWS, NoCallInfo())
             body = UnionAll(tv, body)
         end
         ret = canconst ? Const(body) : Type{body}
-        return ret
+        return CallMeta(ret, Effects(EFFECTS_TOTAL; nothrow), NoCallInfo())
     end
-    return Any
+    return CallMeta(Any, EFFECTS_UNKNOWN, NoCallInfo())
 end
 
 function abstract_invoke(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo, sv::InferenceState)
@@ -1974,9 +1983,11 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         elseif la == 3
             ub_var = argtypes[3]
         end
-        return CallMeta(typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var), EFFECTS_UNKNOWN, NoCallInfo())
+        pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+        return CallMeta(pT,
+            builtin_effects(𝕃ᵢ, Core._typevar, Any[n, lb_var, ub_var], pT), NoCallInfo())
     elseif f === UnionAll
-        return CallMeta(abstract_call_unionall(argtypes), EFFECTS_UNKNOWN, NoCallInfo())
+        return abstract_call_unionall(argtypes)
     elseif f === Tuple && la == 2
         aty = argtypes[2]
         ty = isvarargtype(aty) ? unwrapva(aty) : widenconst(aty)
@@ -2250,6 +2261,13 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
             merge_effects!(interp, sv, effects)
             if isa(sv, InferenceState)
                 sv.stmt_info[sv.currpc] = info
+                # mark this call statement as DCE-elgible
+                # TODO better to do this in a single pass based on the `info` object at the end of abstractinterpret?
+                if is_removable_if_unused(effects)
+                    add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+                else
+                    sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+                end
             end
         end
         t = rt
@@ -2309,6 +2327,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         else
             consistent = ALWAYS_FALSE
             nothrow = false
+            t = refine_partial_type(t)
         end
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
         merge_effects!(interp, sv, effects)
@@ -2327,6 +2346,8 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
                 nothrow = isexact
                 t = PartialStruct(t, at.fields::Vector{Any})
             end
+        else
+            t = refine_partial_type(t)
         end
         consistent = !ismutabletype(t) ? ALWAYS_TRUE : CONSISTENT_IF_NOTRETURNED
         effects = Effects(EFFECTS_TOTAL; consistent, nothrow)
@@ -2359,6 +2380,14 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         (;rt, effects) = abstract_eval_foreigncall(interp, e, vtypes, sv, mi)
         t = rt
         merge_effects!(interp, sv, effects)
+        if isa(sv, InferenceState)
+            # mark this call statement as DCE-elgible
+            if is_removable_if_unused(effects)
+                add_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            else
+                sub_curr_ssaflag!(sv, IR_FLAG_EFFECT_FREE)
+            end
+        end
     elseif ehead === :cfunction
         effects = EFFECTS_UNKNOWN
         merge_effects!(interp, sv, effects)
@@ -2419,6 +2448,19 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, vtyp
         t = abstract_eval_value_expr(interp, e, sv)
     end
     return RTEffects(t, effects)
+end
+
+# refine the result of instantiation of partially-known type `t` if some invariant can be assumed
+function refine_partial_type(@nospecialize t)
+    t′ = unwrap_unionall(t)
+    if isa(t′, DataType) && t′.name === _NAMEDTUPLE_NAME && length(t′.parameters) == 2 &&
+        (t′.parameters[1] === () || t′.parameters[2] === Tuple{})
+        # if the first/second parameter of `NamedTuple` is known to be empty,
+        # the second/first argument should also be empty tuple type,
+        # so refine it here
+        return Const(NamedTuple())
+    end
+    return t
 end
 
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable, Nothing}, sv::Union{InferenceState, IRCode}, mi::Union{MethodInstance, Nothing}=nothing)
@@ -2490,7 +2532,7 @@ function abstract_eval_globalref(g::GlobalRef)
         g.binding != C_NULL && return Const(ccall(:jl_binding_value, Any, (Ptr{Cvoid},), g.binding))
         return Const(getglobal(g.mod, g.name))
     end
-    ty = ccall(:jl_binding_type, Any, (Any, Any), g.mod, g.name)
+    ty = ccall(:jl_get_binding_type, Any, (Any, Any), g.mod, g.name)
     ty === nothing && return Any
     return ty
 end
